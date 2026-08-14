@@ -70,7 +70,10 @@ $PIP install --index-url https://download.pytorch.org/whl/cu128 torch torchvisio
 
 echo "==> ULIP-2 backbone"
 # open_clip >=2.24 才有 ViT-bigG-14 laion2b_s39b_b160k
-$PIP install "open_clip_torch>=2.24" "timm>=1.0" easydict pyyaml termcolor ftfy regex
+# h5py / matplotlib：ULIP 的 import 鏈需要（models/pointbert/misc.py、utils/io.py），
+#   不裝的話 ULIP2_PointBERT_Colored 會在 import 階段就掛掉。
+$PIP install "open_clip_torch>=2.24" "timm>=1.0" easydict pyyaml termcolor ftfy regex \
+             h5py matplotlib
 
 echo "==> 3D 資料處理"
 # numpy 不釘版本：torch 2.9 支援 numpy 2.x，硬釘反而可能造成 ABI 不合。

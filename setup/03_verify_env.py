@@ -25,7 +25,21 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 ULIP_REPO = Path("/home/kyzen/ULIP")
-EGNN_REPO = Path("/home/kyzen/egnn")
+EGNN_REPO = Path("/home/kyzen/egnn")  # reference only; EGNN is vendored (see t_vendor)
+
+# --------------------------------------------------------------------------- cache
+# Point every model cache at the data volume BEFORE importing torch, open_clip or
+# transformers -- they read these variables at import time, so setting them later
+# has no effect.
+#
+# This is not a convenience. `/` has ~100GB free while the data volume has ~780GB,
+# and ViT-bigG-14 alone is ~10GB. Relying on the user's shell to export HF_HOME
+# means the script silently fills the wrong disk when run from a non-login shell,
+# which is exactly what happened the first time this ran.
+_CACHE = REPO / "data" / "cache"
+if _CACHE.parent.exists():
+    os.environ.setdefault("HF_HOME", str(_CACHE / "hf"))
+    os.environ.setdefault("TORCH_HOME", str(_CACHE / "torch"))
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -126,8 +140,8 @@ def t_fps():
 def t_egnn():
     import torch
 
-    sys.path.insert(0, str(EGNN_REPO))
-    from models.egnn_clean.egnn_clean import EGNN
+    sys.path.insert(0, str(REPO))
+    from metafind.third_party.egnn_clean import EGNN
 
     n, d_h, d_e = 20, 1280, 64
     egnn = EGNN(in_node_nf=d_h, hidden_nf=128, out_node_nf=d_h, in_edge_nf=d_e, n_layers=4)
@@ -153,8 +167,8 @@ def t_equivar():
     """
     import torch
 
-    sys.path.insert(0, str(EGNN_REPO))
-    from models.egnn_clean.egnn_clean import EGNN
+    sys.path.insert(0, str(REPO))
+    from metafind.third_party.egnn_clean import EGNN
 
     torch.manual_seed(0)
     n, d_h, d_e = 12, 64, 16
@@ -193,6 +207,32 @@ def t_equivar():
     return f"coord err {coord_err:.2e}, h err {h_err:.2e}; Concat(x,t) injection breaks it as expected (F1)"
 
 
+@check("L1-VENDOR     vendored EGNN matches upstream, no `models` collision")
+def t_vendor():
+    """Guards the fix for the ULIP/egnn top-level `models` package collision.
+
+    Both clones ship a package called `models`. ULIP's lacks __init__.py
+    (namespace package) while egnn's has one (regular package), so Python
+    resolves `models` to egnn's regardless of sys.path order and
+    `models.pointbert` becomes unreachable. We vendor egnn's single
+    self-contained file so `models` belongs to ULIP alone.
+    """
+    vendored = (REPO / "metafind" / "third_party" / "egnn_clean.py").read_text()
+    upstream = (EGNN_REPO / "models" / "egnn_clean" / "egnn_clean.py").read_text()
+    assert vendored.endswith(upstream), "vendored EGNN has drifted from upstream"
+
+    # Companion assertion (V2): prove the drift check can fail.
+    assert not vendored.endswith(upstream + "\n# drift"), "drift check is vacuous"
+
+    # The vendored module must not pull in a top-level `models` package at all.
+    import metafind.third_party.egnn_clean as ve  # noqa: PLC0415
+
+    assert ve.__name__.startswith("metafind."), f"unexpected module name {ve.__name__}"
+    lic = REPO / "metafind" / "third_party" / "LICENSE.egnn"
+    assert "MIT" in lic.read_text(), "MIT licence text missing alongside vendored code"
+    return f"{len(upstream.splitlines())} lines vendored verbatim, MIT licence retained"
+
+
 @check("L1-ENV-DET    determinism capability recorded")
 def t_determinism():
     import torch
@@ -218,7 +258,17 @@ def t_storage():
 
     free_gb = shutil.disk_usage(target).free / 1024**3
     assert free_gb > 150, f"only {free_gb:.0f}GB free; need ~90GB plus headroom"
-    return f"{target}, {free_gb:.0f}GB free"
+
+    # Model caches must resolve onto the data volume, not `/`. Asserting the
+    # variable is merely SET would be verifying the wrong thing (rule V2) -- what
+    # matters is where it actually points.
+    for var in ("HF_HOME", "TORCH_HOME"):
+        val = os.environ.get(var)
+        assert val, f"{var} is unset; a download would land on /"
+        assert Path(val).resolve().is_relative_to(target), (
+            f"{var}={val} resolves outside {target}; ViT-bigG-14 (~10GB) would fill /"
+        )
+    return f"{target}, {free_gb:.0f}GB free, HF_HOME+TORCH_HOME on data volume"
 
 
 @check("L1-ENV-ULIP   ULIP-2 model builds, pc_projection is 1280-d")
@@ -244,7 +294,13 @@ def t_ulip():
     from models.pointbert import misc
 
     assert misc.fps.__module__.startswith("metafind"), "misc.fps was not patched"
-    return f"pc_projection {tuple(model.pc_projection.shape)}, misc.fps patched"
+
+    # The collision fix must hold: `models` belongs to ULIP, not egnn.
+    import models  # noqa: PLC0415
+
+    resolved = [pth for pth in models.__path__]
+    assert any("ULIP" in pth for pth in resolved), f"`models` resolved to {resolved}, not ULIP"
+    return f"pc_projection {tuple(model.pc_projection.shape)}, misc.fps patched, models -> ULIP"
 
 
 # --------------------------------------------------------------------------- main
@@ -255,7 +311,7 @@ def main() -> int:
     ap.add_argument("--full", action="store_true", help="include the ~10GB ViT-bigG-14 download")
     args = ap.parse_args()
 
-    for fn in (t_torch, t_patch, t_fps, t_egnn, t_equivar, t_determinism, t_storage):
+    for fn in (t_torch, t_patch, t_fps, t_vendor, t_egnn, t_equivar, t_determinism, t_storage):
         fn()
     if args.full:
         t_ulip()
