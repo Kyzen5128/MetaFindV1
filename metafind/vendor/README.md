@@ -1,52 +1,60 @@
 # `metafind/vendor/` — 上游第三方原始碼
 
-這個資料夾放的是**別人寫的程式碼**，我們原封不動搬進來（vendoring）。
-MetaFind 自己的程式碼在 `metafind/models/`、`metafind/data/`、`metafind/compat/`。
+MetaFind 是本專案要復現的東西，程式碼在 `metafind/models/`、`metafind/data/`、
+`metafind/compat/`。這個資料夾放的是 MetaFind **依賴**的別人的程式，
+只複製**實際用到的檔案**，不是整個 repo 搬過來。
 
-## 為什麼要搬進來而不是用外部路徑
+## 為什麼要放進 repo
 
-原本這些程式碼放在 `/home/kyzen/ULIP` 和 `/home/kyzen/egnn`，程式裡寫死絕對路徑。
-那樣的話 repo **不是自足的** —— 換一台機器、或那兩個 clone 被刪掉，整個模型就跑不起來，
-而且沒有任何紀錄說明當初用的是哪個版本。
-
-搬進來之後：clone 這個 repo 就有完整的模型，不需要任何外部前置。
+原本是寫死 `/home/kyzen/ULIP` 這種絕對路徑。那樣 repo 不是自足的 ——
+換機器或那些 clone 被刪掉就跑不起來，而且沒有紀錄當初用的是哪個版本。
 
 ## 內容
 
-| 路徑 | 來源 | 授權 | 我們怎麼用 |
+| 路徑 | 來源 | 授權 | 檔案數 |
 |---|---|---|---|
-| `ulip/` | [salesforce/ULIP](https://github.com/salesforce/ULIP) | BSD-3-Clause（`ulip/LICENSE.txt`） | ULIP-2 backbone。`metafind/models/ulip_backbone.py` 把這個目錄加到 `sys.path`，然後 `from models.ULIP_models import ULIP2_PointBERT_Colored` |
-| `egnn/` | [vgsatorras/egnn](https://github.com/vgsatorras/egnn) commit `e9ca6c0` | MIT（`egnn/LICENSE`） | 只作為出處存查，程式不直接 import 它 |
-| `egnn_clean.py` | 上面那份的 `models/egnn_clean/egnn_clean.py` | MIT（`LICENSE.egnn`） | **實際被 import 的檔案**。`metafind/models/essgnn.py` 從這裡取 `unsorted_segment_sum` 等函式 |
+| `ulip/` | [salesforce/ULIP](https://github.com/salesforce/ULIP) | BSD-3-Clause | **19** |
+| `egnn_clean.py` | [vgsatorras/egnn](https://github.com/vgsatorras/egnn) @ `e9ca6c0` 的 `models/egnn_clean/egnn_clean.py` | MIT（`LICENSE.egnn`） | **1** |
 
-## 為什麼 EGNN 要複製兩份
+### ULIP 為什麼是這 19 個
 
-因為 **套件名衝突**。
+用實際 import 追蹤（不是靜態分析）量出 `ULIP2_PointBERT_Colored` 建構 +
+`encode_pc` / `encode_text` 會載入哪些檔案，只留這些：
 
-ULIP 和 egnn **都有一個叫 `models` 的頂層套件**。ULIP 的沒有 `__init__.py`（namespace
-package），egnn 的有（regular package）—— Python 一律優先採用後者，**而且跟 `sys.path`
-順序無關**。所以只要 egnn 被 import 過一次，ULIP 的 `models.pointbert` 就永遠拿不到。
+```
+models/ULIP_models.py            models/losses.py
+models/pointbert/{point_encoder,dvae,misc,checkpoint,logger}.py
+models/pointbert/ULIP_2_PointBERT_10k_colored_pointclouds.yaml
+models/pointnet2/{pointnet2,pointnet2_utils}.py
+data/dataset_3d.py
+utils/{__init__,build,config,io,logger,registry,utils}.py
+LICENSE.txt
+```
 
-MetaFind 同時需要兩邊，所以這是結構性衝突，不是設定問題。
+`pointnet2` 我們沒用到 PointNet++，但 `ULIP_models.py` 在模組層級就
+`from models.pointnet2.pointnet2 import Pointnet2_Ssg`，不留著連 import 都會失敗。
 
-解法是把 egnn 唯一用到的那個檔案抽出來變成 `metafind.vendor.egnn_clean`
-（它只依賴 torch，沒有其他相依），這樣 `models` 就只屬於 ULIP。
-`egnn/` 全套仍然留著，用途是存查與 diff。
+**沒有搬的**：PointNeXt、PointMLP、`main.py`、`scripts/`、`assets/`（101 MB 的 GIF）、
+以及各種 CONTRIBUTING / CODE_OF_CONDUCT 等文件。從 450 個檔案（8.1 MB）縮到 19 個（200 KB）。
 
-`tests/test_essgnn.py` 有一條測試會比對 `egnn_clean.py` 與 `egnn/` 裡的原始檔
-**逐位元組相同**，避免哪天有人偷偷改了抽出來的那份而沒人發現。
+### EGNN 為什麼只有一個檔案
+
+`egnn_clean.py` 只依賴 torch，是唯一被 import 的。整個 egnn repo 的其他部分
+（qm9、n-body、autoencoder）跟 MetaFind 無關。
+
+完整性用**內容雜湊**釘住（`UPSTREAM_SHA256`），而不是留第二份副本來 diff ——
+留副本只是為了比對的話，那份副本本身就是冗餘。
+
+### 順帶解掉的一個坑
+
+ULIP 和 egnn **都有頂層 `models` 套件**。ULIP 的沒有 `__init__.py`（namespace package），
+egnn 的有（regular package）—— Python 一律優先採用後者，**而且與 `sys.path` 順序無關**。
+所以只要 egnn 被 import 過，ULIP 的 `models.pointbert` 就永遠拿不到。
+把 egnn 抽成單檔模組 `metafind.vendor.egnn_clean` 之後，`models` 就只屬於 ULIP。
 
 ## 修改原則
 
-**不要改這裡的檔案。** ULIP 在現代 PyTorch 上有相容性問題（`torch._six` 已移除、
-兩個 CUDA extension 裝不起來、config 路徑寫死相對路徑），全部由
-`metafind/compat/ulip_patch.py` 在 runtime 修補，而不是改動上游程式碼。
-
-這樣做的好處是：上游版本可以隨時重新同步，而我們的修補是一份可讀的清單，
-不會混在幾千行別人的程式碼裡。
-
-## 排除的內容
-
-`ulip/assets/`（101 MB 的 GIF 動畫）沒有搬，對模型無用。
-各 vendored repo 自帶的 `.gitignore` 也移除了 —— 它們是上游的 repo 衛生規則，
-留著會**靜默排除**我們想追蹤的 vendored 檔案（egnn 那份就擋掉了自己的 `models/egnn.png`）。
+**不要改這裡的檔案。** ULIP 在現代 PyTorch 上的相容性問題（`torch._six` 已移除、
+兩個 CUDA extension 裝不起來、config 寫死相對路徑）全部由
+`metafind/compat/ulip_patch.py` 在 runtime 修補。這樣上游可以隨時重新同步，
+而我們的修補是一份可讀的清單，不會混在別人的程式碼裡。

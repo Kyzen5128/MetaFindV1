@@ -25,7 +25,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 ULIP_REPO = REPO / "metafind" / "vendor" / "ulip"
-EGNN_REPO = REPO / "metafind" / "vendor" / "egnn"  # vendored upstream, for the drift check
 
 # --------------------------------------------------------------------------- cache
 # Point every model cache at the data volume BEFORE importing torch, open_clip or
@@ -207,30 +206,37 @@ def t_equivar():
     return f"coord err {coord_err:.2e}, h err {h_err:.2e}; Concat(x,t) injection breaks it as expected (F1)"
 
 
-@check("L1-VENDOR     vendored EGNN matches upstream, no `models` collision")
+@check("L1-VENDOR     vendored EGNN is unmodified, no `models` collision")
 def t_vendor():
     """Guards the fix for the ULIP/egnn top-level `models` package collision.
 
-    Both clones ship a package called `models`. ULIP's lacks __init__.py
-    (namespace package) while egnn's has one (regular package), so Python
-    resolves `models` to egnn's regardless of sys.path order and
-    `models.pointbert` becomes unreachable. We vendor egnn's single
-    self-contained file so `models` belongs to ULIP alone.
+    Both upstream repos ship a package called `models`. ULIP's lacks
+    __init__.py (namespace package) while egnn's has one (regular package), so
+    Python resolves `models` to egnn's regardless of sys.path order and
+    `models.pointbert` becomes unreachable. Only the single self-contained EGNN
+    file we actually use is vendored, so `models` belongs to ULIP alone.
+
+    Integrity is pinned by hashing the body against the recorded upstream digest,
+    rather than by keeping a second copy of the repo purely to diff against.
     """
-    vendored = (REPO / "metafind" / "vendor" / "egnn_clean.py").read_text()
-    upstream = (EGNN_REPO / "models" / "egnn_clean" / "egnn_clean.py").read_text()
-    assert vendored.endswith(upstream), "vendored EGNN has drifted from upstream"
+    import hashlib  # noqa: PLC0415
 
-    # Companion assertion (V2): prove the drift check can fail.
-    assert not vendored.endswith(upstream + "\n# drift"), "drift check is vacuous"
-
-    # The vendored module must not pull in a top-level `models` package at all.
     import metafind.vendor.egnn_clean as ve  # noqa: PLC0415
+
+    path = REPO / "metafind" / "vendor" / "egnn_clean.py"
+    body = path.read_text().split('"""\n', 2)[2]
+    digest = hashlib.sha256(body.encode()).hexdigest()
+    assert digest == ve.UPSTREAM_SHA256, (
+        f"vendored EGNN body has been modified: {digest} != {ve.UPSTREAM_SHA256}"
+    )
+
+    # Companion assertion (V2): prove the digest check can fail.
+    assert hashlib.sha256((body + "\n# drift").encode()).hexdigest() != ve.UPSTREAM_SHA256
 
     assert ve.__name__.startswith("metafind."), f"unexpected module name {ve.__name__}"
     lic = REPO / "metafind" / "vendor" / "LICENSE.egnn"
     assert "MIT" in lic.read_text(), "MIT licence text missing alongside vendored code"
-    return f"{len(upstream.splitlines())} lines vendored verbatim, MIT licence retained"
+    return f"{len(body.splitlines())} lines, sha256 {digest[:12]}, MIT licence retained"
 
 
 @check("L1-ENV-DET    determinism capability recorded")

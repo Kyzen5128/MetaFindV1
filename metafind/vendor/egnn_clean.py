@@ -1,6 +1,6 @@
 """EGNN reference implementation, vendored from github.com/vgsatorras/egnn.
 
-Source : metafind/vendor/egnn/models/egnn_clean/egnn_clean.py (upstream commit e9ca6c0)
+Source : github.com/vgsatorras/egnn @ e9ca6c0, models/egnn_clean/egnn_clean.py
 License: MIT -- Copyright (c) 2021 Victor Garcia Satorras
 Paper  : Satorras, Hoogeboom, Welling. "E(n) Equivariant Graph Neural Networks",
          ICML 2021.
@@ -18,9 +18,17 @@ Why vendored rather than imported from the clone:
     it anyway (semantic edge projection, coords_agg='sum' per paper Eq. 3), and
     metafind/models/essgnn.py builds on the classes below.
 
-The code below is UNMODIFIED. ESSGNN's changes live in metafind/models/essgnn.py
-so that this file stays diffable against upstream.
+The code below is UNMODIFIED; ESSGNN's changes live in metafind/models/essgnn.py
+so this file stays diffable against upstream.
+
+Only this one file is vendored, not the whole egnn repository -- the rest of it
+(qm9, n-body, autoencoders) is unrelated to MetaFind. Integrity is pinned by
+hashing the body rather than by keeping a second copy to diff against:
+
+    upstream_sha256 = 935bcb62ba920e15a47a2a53c88896276a923c6fd024a05f006c01d1745a918a
 """
+
+UPSTREAM_SHA256 = "935bcb62ba920e15a47a2a53c88896276a923c6fd024a05f006c01d1745a918a"
 
 from torch import nn
 import torch
