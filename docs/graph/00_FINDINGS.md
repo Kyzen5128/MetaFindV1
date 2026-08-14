@@ -372,35 +372,27 @@ ULIP-2 只是 embedding backbone（§2.2 "both leveraging the ULIP-2 embedding b
 「Fine-tuning the entire encoder outperformed training the fuser only」這條結論
 我們只能部分驗證）→ 列為 risk R-04 與 Required Audit RA-3。
 
-### D3 — Shard 串流式資料準備（保留串流，**取消強制刪檔**）
+### D3 — 原始 mesh 保留，不刪除
 
-**原本的理由**：F6 只有 108GB，必須邊做邊刪。
-**現在**：`/mnt/data1` 有 779GB，總需求 ~90GB → **不需要刪原始檔**。
+**先前的草稿寫成「下載 → 編碼 → 存向量 → 刪原始檔」，那是錯的。**
+
+論文的 Algorithm 1 是 iterative scene composition：檢索出資產之後要**放進場景**。
+放置需要真實幾何，只有 embedding 不夠。刪掉 mesh 之後 Table 2／3 就得重新下載一次。
+
+現在的做法：
 
 ```
-for shard in shards(48K assets, size=2000):
-    下載 shard 原始 mesh/pc
-    渲染 11 views → 標註 → 編碼成 1280-d
-    寫入 embedding + per-item sidecar
-    # 刪除原始檔：預設關閉（--keep-raw，預設 true）
+datasets/objaverse-lvis/glbs/   46,052 個 GLB，保留（~216 GB）
+outputs/pointclouds/            從 mesh 取樣
+outputs/renders/                從 mesh 渲染 11 視角
 ```
 
-**保留 shard 串流的理由（即使磁碟夠用）**：
-- 可中斷續跑的粒度：24 個 shard 各自 checkpoint，比一次 48K 好復原
-- backpressure 仍然有用（避免意外把 779GB 塞爆）
-- 保留原始渲染圖反而是**好事**：之後想換標註模型、換視角數，不用重渲染
+`datasets/` 與 `models/` 只下載不寫入；`outputs/` 全部可從它們重新生成。
+刪掉 outputs 只損失算力，刪掉 datasets 才要重新下載。
 
-**設計上的變更**：
-
-| 項目 | 原本 | 現在 |
-|---|---|---|
-| `sg1_delete_raw` 節點 | 必要，`mutate`，不可逆 | **可選**，預設關閉 |
-| 對應的 rollback | `compensating_action`（重下載） | 預設不需要；開啟刪檔時才啟用 |
-| `RESOURCE` 降級政策 | 縮 shard / `BLOCKED` 等空間 | 保留，但實務上不會觸發 |
-| 風險 **R-01** | RISK（最高） | **已解除** |
-
-> per-item sidecar 仍然必須記 `source_uri + sha256`（B3 provenance）——
-> 不是為了刪檔後補救，而是為了**產物可追溯**：每個 embedding 都要能指回它從哪來。
+**連帶的未定項 U-02**：ULIP-2 的 checkpoint 是在**它自己取樣**的點雲上訓練的。
+我們從 mesh 自行取樣，取樣方式若不一致，embedding 會偏離分布而且不會報錯。
+保留 500 個 ULIP 官方點雲當對照組，由 **G2 gate** 擋住，驗證通過才往下走。
 
 ---
 

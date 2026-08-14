@@ -1,498 +1,365 @@
-# MetaFind reproduction — Graph Specification
-# Framework-independent. Maps 1:1 to SKILL.md §15 items 1,2,3,5,6,7,8,13,14,15.
-# Human-readable companion: 01_GRAPH_SPEC.md   Findings that drove this: 00_FINDINGS.md
+# MetaFind reproduction -- Graph Specification
+#
+# 2026-08-15. Every claim re-checked against docs/metafind_paper.md rather
+# than from memory. An earlier draft carried six errors that would have changed the
+# experimental result; see 01_GRAPH_SPEC.md section 16.
+#
+# Three kinds of content are kept apart throughout and must not be conflated:
+#   [PAPER]    stated in the paper, with the quote
+#   [UNKNOWN]  the paper does not say; we chose one and recorded it
+#   [DEVIATION] differs from the paper; must be declared in the report
 
 spec_version: "1.0"
-graph_id: "metafind-reproduction-v1"
-title: "MetaFind paper reproduction pipeline (single RTX 4090)"
-authored_at: "2026-08-14"
-authored_by: "graph-engineering skill, §5 15-step process"
+graph_id: "metafind-reproduction"
+title: "MetaFind paper reproduction (single RTX 4090, Qwen in place of GPT-4o)"
+authored_at: "2026-08-15"
 
-# ---------------------------------------------------------------- §15.1
 classification:
   shapes: [hierarchical, dag, stateful, parallel, conditional, cyclic]
   shapes_note: >
-    Main line is a strict DAG with zero feedback edges. All three cycles are
-    confined to subgraphs (SG1 annotation repair, SG2 semantic-edge repair,
-    SG4 Algorithm-1 composition). A fourth cycle (budget re-approval) is an
-    escalation loop through a human node.
+    Main line is a strict DAG with zero feedback edges. All cycles are confined
+    to subgraphs: C1 annotation repair, C2 semantic-edge repair, C3 Algorithm 1.
 
   max_authority: "A1"
   max_authority_reason: >
-    No decision point anywhere in the graph lets a model choose the next node.
-    GPT-4o appears three times (asset annotation, semantic edge generation,
-    scene judging) but each time it only produces a PAYLOAD written into state;
-    routing is always a deterministic predicate over state (schema valid?
-    score >= threshold? i < N?). Per terminology.md: "agentic is about control
-    authority, not about whether a model is used".
+    No decision point lets a model choose the next node. Qwen appears three
+    times (asset annotation, semantic edges, scene judging) but each time only
+    produces a payload written into state; routing is always a deterministic
+    predicate over state.
 
   execution_mode: "probabilistic"
   execution_mode_reason: >
-    Authority is <= A1 but node outputs are NOT reproducible, so the second
+    Authority <= A1 but node outputs are not reproducible, so the second
     condition for `deterministic` fails.
 
   topology_class: "workflow"
   topology_class_reason: >
-    Entire graph <= A2, no A4 autonomous loop, and every fan-out has a
-    STATICALLY ENUMERATED destination set (7 modality conditions, 6 baselines,
-    10 ablation variants, 11 render views, 24 asset shards, 5 annotators).
-    Even the 48K-asset fan-out is a map over an existing catalog, not a
-    model-decided partition — so it is not A3.
+    Every fan-out has a statically enumerated destination set: 11 views,
+    7 modality conditions, 2 gallery protocols, 8 ablation variants.
 
   nondeterminism_sources:
-    - id: NS-1
-      source: "GPT-4o sampling (asset annotation)"
-      frozen_by: "annotation written once into a versioned artifact; never re-called downstream"
-    - id: NS-2
-      source: "GPT-4o sampling (semantic relation sentences)"
-      frozen_by: "sem_edge_cache keyed by (category_a, category_b), persistent across runs"
-    - id: NS-3
-      source: "GPT-4o sampling (scene judging)"
-      frozen_by: "temperature=0 + pinned prompt version + recorded model snapshot id"
-    - id: NS-4
-      source: "human annotator subjectivity"
-      frozen_by: "raw per-annotator per-scene scores persisted; never averaged-then-discarded"
-    - id: NS-5
-      source: "GPU atomics in scatter_add_ (egnn_clean.py:149-154)"
-      frozen_by: "NOT fully removable; equivariance test uses 1e-4 numeric tolerance, not exact"
-    - id: NS-6
-      source: "approximate nearest neighbour search"
-      frozen_by: "ELIMINATED — 48K x 1280 x 4B = 246MB, exact inner product is affordable"
-    - id: NS-7
-      source: "dataloader shuffling / parallel arrival order at fan-in"
-      frozen_by: "fixed seeds; all reduces use commutative merge policies"
+    - {id: NS-1, source: "Qwen asset annotation", frozen_by: "written once into a versioned artifact; never re-called downstream"}
+    - {id: NS-2, source: "Qwen semantic relation sentences", frozen_by: "cached by a hash over both object descriptions plus prompt/model/encoder versions"}
+    - {id: NS-3, source: "Qwen scene judging", frozen_by: "greedy decoding, pinned prompt version, recorded model revision"}
+    - {id: NS-4, source: "GPU atomics in scatter_add_", frozen_by: "NOT removable; equivariance tests use a numeric tolerance"}
+    - {id: NS-5, source: "training stochasticity (init, shuffling, dropout)", frozen_by: "fixed seeds; exact reproducibility not claimed"}
+    - {id: NS-6, source: "approximate nearest neighbour search", frozen_by: "ELIMINATED -- 46,052 x 1280 x 4B = 236 MB, exact inner product is affordable"}
 
-  runtime_candidates: [LangGraph, Prefect, plain-python-with-checkpoints]
-  runtime_note: "Informational only. This spec must not depend on any of these."
-
-# ---------------------------------------------------------------- §15.2
 goal:
   statement: >
-    Build MetaFind from scratch on a single RTX 4090 and produce results that can
-    be compared cell-by-cell against paper Tables 1, 2 and 3, giving every cell
-    exactly one of three verdicts: REPRODUCED / NOT_REPRODUCED / INSUFFICIENT_EVIDENCE.
-  consumers:
-    - "readers of the reproduction report"
-    - "future work building on MetaFind"
-    - "reviewers checking the paper's claims"
+    Reproduce MetaFind on a single RTX 4090 and produce results comparable
+    cell-by-cell against paper Tables 1, 2 and 3, giving every cell exactly one
+    of REPRODUCED / NOT_REPRODUCED / INSUFFICIENT_EVIDENCE.
 
   success_criteria:
     - id: SC-1
-      criterion: "All 14 MetaFind cells of Table 1 produced; R@1 within +/-3.0 absolute percentage points of the paper"
-      measured_by: n20_compare_to_paper
-      tolerance: "3.0 pp"
+      criterion: "All 14 MetaFind cells of Table 1 produced under BOTH gallery protocols; R@1 within +/-3.0 pp of the paper"
+      measured_by: n21_compare_to_paper
     - id: SC-2
-      criterion: "Relative ordering holds: MetaFind beats every baseline on Text/Image/T+I/T+PC/I+PC/T+I+PC"
-      measured_by: n20_compare_to_paper
-      tolerance: "strict inequality"
+      criterion: "PC-Only inversion reproduced: MetaFind lower than the baselines' published figures"
+      measured_by: n21_compare_to_paper
+      note: "A naive success criterion would call this cell a failure. Reproducing the paper includes reproducing its regressions."
     - id: SC-3
-      criterion: "PC-Only INVERSION reproduced: MetaFind (63-75) is LOWER than baselines (98-99)"
-      measured_by: n20_compare_to_paper
-      tolerance: "direction only"
-      note: "A naive success criterion would call this cell a failure. Reproducing the paper means reproducing its regressions."
+      criterion: "Table 2: w/ESSGNN > w/o ESSGNN on all four dimensions, DIRECTION ONLY"
+      measured_by: n21_compare_to_paper
+      note: "Absolute values are not comparable to the paper because the judge is Qwen, not GPT-4o (D-2)."
     - id: SC-4
-      criterion: "Table 2: w/ESSGNN > w/oESSGNN on all four dimensions, in BOTH the GPT-4o and human columns"
-      measured_by: n20_compare_to_paper
-      tolerance: "direction + gap >= 0.3"
+      criterion: "Per-layer coordinate EQUIVARIANCE: ||x^(l+1)(Rx+T) - (R x^(l+1)(x) + T)||inf < 1e-4"
+      measured_by: n14_equivariance_probe
     - id: SC-5
-      criterion: "SE(3) equivariance holds: coord channel L-inf error < 1e-4 and h channel exactly invariant"
-      measured_by: n11_equivariance_probe
-      tolerance: "1e-4"
+      criterion: "Per-layer feature INVARIANCE: h^(l+1)(Rx+T) == h^(l+1)(x)"
+      measured_by: n14_equivariance_probe
     - id: SC-6
-      criterion: "Four Table-3 takeaways reproduced by direction (ESSGNN>GAT, iterative>non-iterative, dropout 30% best, masked>zero-pad)"
-      measured_by: n20_compare_to_paper
-      tolerance: "direction only"
+      criterion: "Layout output INVARIANCE: e_layout(Rx+T) == e_layout(x)"
+      measured_by: n14_equivariance_probe
+      note: >
+        An earlier draft wrote a single criterion ||ESSGNN(Rx+T) - (R ESSGNN(x) + T)|| and called
+        it the coordinate channel. e_layout = Pooling({h_i^(L)}) is pooled from h,
+        which is INVARIANT; applying R and T to it has no geometric meaning.
     - id: SC-7
-      criterion: "Resume equivalence: killing any stage mid-run and restarting yields byte-identical artifacts"
-      measured_by: L2-RESUME
-      tolerance: "exact"
+      criterion: "Four Table-3 takeaways reproduced by direction"
+      measured_by: n21_compare_to_paper
     - id: SC-8
-      criterion: "Total spend stays within the cap approved at G1"
-      measured_by: cost_ledger
-      tolerance: "hard cap"
+      criterion: "Resume equivalence: killing any stage and restarting yields identical artifacts"
+      measured_by: L2-RESUME
 
 boundary:
   in_scope:
-    - "ULIP-2 backbone integration (frozen)"
-    - "dual-tower query/gallery encoders + modality-aware fusion"
+    - "ULIP-2 backbone integration"
+    - "dual-tower query/gallery encoders with modality-aware fusion"
     - "ESSGNN layout encoder"
-    - "two-stage training (alignment pretrain, layout fine-tune)"
-    - "Objaverse-LVIS and ProcTHOR-10K data pipelines"
+    - "two-stage training per paper section 2.6"
+    - "Objaverse-LVIS and ProcTHOR-10K pipelines"
     - "Tables 1, 2, 3"
-    - "SE(3) equivariance verification"
-    - "reproduction report"
+    - "SE(3) verification at three levels"
   out_of_scope:
-    - "pretraining ULIP-2 itself (decision D1 — use released checkpoint)"
-    - "reproducing the I-Design scene generator (treated as external black box)"
-    - "paper section 4 future work (RL, open-world dynamic catalogs)"
-    - "any improvement beyond what the paper claims"
+    - "pretraining ULIP-2 itself"
+    - "re-running the six baselines (D-3)"
+    - "the human preference study (D-4)"
+    - "reproducing I-Design itself"
+
+  deviations:
+    - id: D-1
+      what: "ViT-bigG-14 stays frozen; only the 3D encoder and fusion train"
+      why: "2.5B parameters do not train on a 24 GB card"
+      impact: >
+        The paper's "fine-tuning the entire encoder" is realised as
+        3D encoder + fusion. Must be stated in the report. Audited by RA-3.
+    - id: D-2
+      what: "Qwen2.5-VL replaces GPT-4o for annotation and scene judging"
+      why: "project decision"
+      impact: >
+        Captions are what the text tower trains on, so the text distribution
+        differs. Table 2's absolute values are no longer comparable to the
+        paper; only the direction survives (SC-3).
+    - id: D-3
+      what: "The six baselines are not re-run"
+      why: "scope is MetaFind only"
+      impact: "SC-2 compares against published values, under a different protocol"
+    - id: D-4
+      what: "No human preference study"
+      why: "no annotator capacity"
+      impact: "Table 2 human column reported as INSUFFICIENT_EVIDENCE"
 
   external_systems:
-    - name: "HuggingFace SFXX/ulip"
-      kind: model_provider
-      owner: Salesforce
-      failure_semantics: "unavailable => whole reproduction FAILED, no substitute exists"
-      trust: trusted
-      validated_by: "sha256 + L1-SRC-LOAD behavioural check (ModelNet40 top-1 ~= 50.6)"
-    - name: "Objaverse / Objaverse-LVIS"
-      kind: database
-      owner: AI2
-      failure_semantics: "partial unavailability => admitted_set shrinks => gallery denominator must be recomputed"
-      trust: trusted
-    - name: "ProcTHOR-10K"
-      kind: database
-      owner: AI2
-      failure_semantics: "unavailable => Tables 2 and 3 become BLOCKED_EVIDENCE (rc=3), not FAILED"
-      trust: trusted
-    - name: "OpenAI GPT-4o"
-      kind: model_provider
-      owner: OpenAI
-      failure_semantics: "429 => backoff retry; schema violation => repair loop; price change => BLOCKED pending re-approval"
-      trust: untrusted
-      validated_by: "every response passes structured schema validation before entering state"
-    - name: "5 expert human annotators"
-      kind: human
-      owner: "this project"
-      failure_semantics: "timeout => BLOCKED (NOT FAILED); <4 complete => Table 2 human column BLOCKED_EVIDENCE"
-      trust: trusted
-    - name: "I-Design pipeline"
-      kind: api
-      owner: third_party
-      failure_semantics: "unavailable => degrade to ProcTHOR native layout + degraded flag; if still unusable => Tables 2/3 BLOCKED_EVIDENCE"
-      trust: untrusted
+    - {name: "HuggingFace SFXX/ulip", kind: model_provider, failure_semantics: "unavailable => FAILED, no substitute", trust: trusted, validated_by: "sha256 plus a behavioural check"}
+    - {name: "Objaverse", kind: database, failure_semantics: "partial => admitted set shrinks; >2% missing fails G3", trust: trusted}
+    - {name: "ProcTHOR-10K via prior", kind: database, failure_semantics: "unavailable => Tables 2/3 BLOCKED_EVIDENCE", trust: trusted}
+    - {name: "Qwen2.5-VL (local)", kind: model_provider, failure_semantics: "schema violation => repair loop; OOM => reduce batch and record", trust: untrusted_output, validated_by: "structured schema validation before entering state"}
+    - {name: "I-Design", kind: api, failure_semantics: "UNVERIFIED (R-01); if unusable, Tables 2/3 => BLOCKED_EVIDENCE, not FAIL", trust: untrusted}
 
-  trust_boundary: >
-    GPT-4o output and I-Design output must pass schema validation before entering
-    state. Violations are DETERMINISTIC_INPUT -> quarantine, and must never be
-    written directly into a shared immutable artifact.
-
-# ---------------------------------------------------------------- §15.3
+# ---------------------------------------------------------------- state
 state:
   channels:
-    # ---- sources and provenance
-    - name: source_manifest
-      type: "map[str -> {uri, sha256, bytes}]"
-      writers: [n02_acquire_sources]
-      readers: [n01_env_bootstrap, n04_object_prep, n05_scene_prep, n07_train_stage1_align, n21_publish_report]
+    - name: asset_manifest
+      type: "map[uid -> source_path]"
+      writers: [n02_download]
+      readers: [n03_sample_pointclouds, n04_render_views, n09_build_splits, n11_gallery_index_staging]
       merge: write_once
       lifetime: persistent
-      visibility: internal
-      note: "Immutable identity of every external input. Mismatch => CONTRACT_VIOLATION, fail closed."
+      note: >
+        [UNKNOWN U-01] The paper says "approximately 48,000"; the released
+        manifest holds 46,052. The manifest is the truth. Nothing anywhere may
+        hardcode 48000 -- enforced by L1-MANIFEST.
 
-    - name: asset_catalog
-      type: "list[{asset_id, mesh_uri, sha256, source}]"
-      writers: [n02_acquire_sources]
-      readers: [n03_pilot_and_budget, n04_object_prep, n06_build_splits]
-      merge: write_once
-      lifetime: persistent
-      visibility: internal
-
-    - name: procthor_raw
-      type: "{uri, sha256, house_count}"
-      writers: [n02_acquire_sources]
-      readers: [n05_scene_prep]
-      merge: write_once
-      lifetime: persistent
-      visibility: internal
-
-    # ---- pilot / budget
-    - name: cost_projection
-      type: "{money, gpu_hours, bytes, seconds, schema_pass_rate}"
-      writers: [n03_pilot_and_budget]
-      readers: [G1_feasibility, n22_budget_approval]
-      merge: write_once
-      lifetime: run
-      visibility: internal
-      note: "Extrapolated from a 500-asset pilot. UNKNOWN is not allowed here — G1 checks it."
-
-    - name: budget_cap
-      type: "{money, gpu_hours, human_minutes}"
-      writers: [n22_budget_approval]
-      readers: [G1_feasibility, G4_human_study_commit, cost_ledger_monitor]
-      merge: replace
-      lifetime: persistent
-      visibility: input
-      note: "Single writer, so replace is legal. NEVER raised to make a gate green (GE)."
-
-    # ---- object prep (SG1)
-    - name: asset_artifacts
-      type: "map[asset_id -> {render_uris[11], pc_uri, annotation_uri, sha256s}]"
-      writers: [sg1_worker]
-      readers: [sg1_encode, n04_object_prep]
-      merge: upsert_by_key
-      merge_note: "N parallel shard workers. Key = asset_id, so writes are disjoint and commutative."
-      lifetime: persistent
-      visibility: internal
-      note: "S7 — large artifacts stored as {uri, sha256, bytes, content_type}, never inline."
-
-    - name: asset_embeddings
-      type: "map[asset_id -> {text_uri, image_uri, pc_uri, sha256, dim:1280}]"
-      writers: [sg1_encode]
-      readers: [n07_train_stage1_align, n08_build_gallery_staging, n10_train_headline, n17_train_ablations]
+    - name: asset_glb
+      type: "map[uid -> {path, sha256, bytes}]"
+      writers: [n02_download]
+      readers: [n03_sample_pointclouds, n04_render_views, n16_compose_scenes]
       merge: upsert_by_key
       lifetime: persistent
-      visibility: internal
-      note: "Decision D2 — the whole point. 48K x 3 x 1280 x 4B ~= 737MB, trains on a single 4090."
+      note: >
+        [REVERSED from an earlier draft] An earlier draft deleted meshes after rendering. Algorithm 1
+        places retrieved assets into a scene and needs real geometry, so they are
+        kept.
 
-    - name: asset_admitted
-      type: "set[asset_id]"
-      writers: [sg1_reduce]
-      readers: [n06_build_splits, G2_corpus_validity, n08_build_gallery_staging]
-      merge: set_union
-      lifetime: persistent
-      visibility: internal
-
-    - name: asset_quarantine
-      type: "list[{asset_id, source_uri, sha256, failure_class, exception_type, exception_msg, attempt, code_revision, timestamp}]"
-      writers: [sg1_worker]
-      readers: [G2_corpus_validity, n21_publish_report]
-      merge: append
-      lifetime: persistent
-      visibility: internal
-      note: "F3 — without the real exception recorded per item, a 300-asset shortfall is undiagnosable forever."
-
-    # ---- scene prep (SG2)
-    - name: scene_store
-      type: "map[house_id -> {nodes, positions, phys_edges, sem_edge_ids, uri, sha256}]"
-      writers: [sg2_worker]
-      readers: [n06_build_splits, n10_train_headline, n14_compose_scenes]
+    - name: pointclouds
+      type: "map[uid -> {path, sha256, n_points}]"
+      writers: [n03_sample_pointclouds]
+      readers: [n10_train_stage1, n11_gallery_index_staging, n15_eval_retrieval]
       merge: upsert_by_key
       lifetime: persistent
-      visibility: internal
+      note: "Sampled from the mesh, then pc_norm'd exactly as ULIP does. Gated by G2 (U-02)."
+
+    - name: renders
+      type: "map[uid -> {view_paths[11], view_sha256[11]}]"
+      writers: [n04_render_views]
+      readers: [n05_annotate, n06_encode_text_image]
+      merge: upsert_by_key
+      lifetime: persistent
+
+    - name: annotations
+      type: "map[uid -> {category, description, dimensions, materials, placement_constraints, annotator_model}]"
+      writers: [n05_annotate]
+      readers: [n06_encode_text_image, n07_scene_graphs, n08_semantic_edges]
+      merge: upsert_by_key
+      lifetime: persistent
+      note: >
+        [PAPER 2.3] "object category, size dimensions, materials, and placement
+        constraints". Frozen as an artifact once written (NS-1).
+
+    - name: text_image_embeddings
+      type: "map[uid -> {text: 1280-d uri, image: 1280-d uri}]"
+      writers: [n06_encode_text_image]
+      readers: [n10_train_stage1, n13_train_stage2, n11_gallery_index_staging]
+      merge: upsert_by_key
+      lifetime: persistent
+      note: >
+        Only text and image are cached. The point encoder is TRAINABLE in
+        Stage 1 (paper 2.6: "Both query and gallery encoders are trained"), so
+        point-cloud embeddings cannot be precomputed. An earlier draft cached all three, which
+        is what made it the "train fuser only" ablation by accident.
+
+    - name: scene_graphs
+      type: "map[house_id -> {nodes, positions, phys_edges, sem_edge_ids, uri}]"
+      writers: [n07_scene_graphs]
+      readers: [n09_build_splits, n13_train_stage2, n16_compose_scenes]
+      merge: upsert_by_key
+      lifetime: persistent
 
     - name: sem_edge_cache
-      type: "map[(category_a, category_b) -> {sentence, embedding_uri, sha256}]"
-      writers: [sg2_worker]
-      readers: [sg2_worker, n05_scene_prep]
+      type: "map[hash -> {sentence, embedding_uri}]"
+      writers: [n08_semantic_edges]
+      readers: [n08_semantic_edges, n13_train_stage2]
       merge: upsert_by_key
       lifetime: persistent
-      visibility: internal
       note: >
-        Cost lever. Without cache ~1.9M LLM calls; with cache ~50K. About 40x.
-        Persistent ACROSS runs, so re-runs are nearly free.
-
-    - name: scene_admitted
-      type: "set[house_id]"
-      writers: [sg2_reduce]
-      readers: [n06_build_splits, G2_corpus_validity]
-      merge: set_union
-      lifetime: persistent
-      visibility: internal
-
-    - name: scene_quarantine
-      type: "list[record]"
-      writers: [sg2_worker]
-      readers: [G2_corpus_validity]
-      merge: append
-      lifetime: persistent
-      visibility: internal
-
-    # ---- splits (the integrity core)
-    - name: split_seed
-      type: int
-      writers: [n06_build_splits]
-      readers: [n07_train_stage1_align, n10_train_headline, n17_train_ablations, n21_publish_report]
-      merge: write_once
-      lifetime: persistent
-      visibility: internal
+        [CORRECTED] key = sha256(desc_i, desc_j, prompt_version,
+        llm_model, text_encoder_version). An earlier draft keyed on (category_a, category_b),
+        which collapses "office chair + desk" and "dining chair + dining table"
+        into one relation. Paper 2.5 and Appendix C both say the LLM is prompted
+        with object DESCRIPTIONS.
 
     - name: splits
-      type: "{object: {train_ids, test_ids}, scene: {train_houses, test_houses}}"
-      writers: [n06_build_splits]
-      readers: [n07_train_stage1_align, n10_train_headline, n12_eval_object_retrieval, n13_run_baselines, n17_train_ablations]
+      type: "{object: {train, test}, scene: {train_houses, test_houses}}"
+      writers: [n09_build_splits]
+      readers: [n10_train_stage1, n13_train_stage2, n15_eval_retrieval, n18_train_ablations]
       merge: write_once
       lifetime: persistent
-      visibility: internal
-      note: "Leakage is G-INVALID. Once decided, immutable — otherwise no number is comparable."
-
-    - name: gallery_size_locked
-      type: int
-      writers: [n06_build_splits]
-      readers: [G2_corpus_validity, G3_gallery_freeze, n12_eval_object_retrieval, n13_run_baselines, n20_compare_to_paper]
-      merge: write_once
-      lifetime: persistent
-      visibility: internal
       note: >
-        U-04 is the one unknown that, if guessed wrong, makes all of Table 1
-        meaningless. Locking it write_once turns a silent assumption into a
-        recorded decision; a second differing write is an error, not an overwrite.
+        [PAPER 3.1] "80% of the data for training and reserve 20% for testing".
+        House sets must be disjoint. An earlier draft additionally forbade an asset appearing
+        in both a train and a test house; the paper does not ask for that, and
+        ProcTHOR's 12,000 houses draw on ~1,467 assets, so enforcing it would
+        change the scene distribution. Removed.
 
-    # ---- training artifacts
-    - name: stage1_ckpt
-      type: "{uri, sha256, config_hash, data_hash, seed, code_revision}"
-      writers: [n07_train_stage1_align]
-      readers: [n08_build_gallery_staging, n10_train_headline, n17_train_ablations]
+    - name: split_seed
+      type: int
+      writers: [n09_build_splits]
+      readers: [n10_train_stage1, n13_train_stage2, n22_publish_report]
       merge: write_once
       lifetime: persistent
-      visibility: internal
-      note: "Content-addressed path => never overwrites => naturally idempotent under retry."
+
+    - name: eval_protocols
+      type: "map[name -> {query_split, gallery_split, gallery_size}]"
+      writers: [n09_build_splits]
+      readers: [n15_eval_retrieval, n19_eval_ablations, n21_compare_to_paper]
+      merge: write_once
+      lifetime: persistent
+      note: >
+        [UNKNOWN U-09, CORRECTED] The paper says retrieval runs against a
+        "pre-encoded asset database" and separately that 80/20 splits are used,
+        without saying which the gallery is. An earlier draft locked a single integer and
+        planned to back-solve it from the baselines' 98-99% PC-Only figure --
+        impossible, since PC-Only uses a query embedding identical to its own
+        gallery entry, so self-retrieval approaches 100% at either size. Both
+        protocols now run:
+          A_test_gallery: query=test, gallery=test   (~9,210)
+          B_full_gallery: query=test, gallery=full   (46,052)
+
+    - name: stage1_ckpt
+      type: "{uri, sha256, config_hash, data_hash, seed, code_revision, train_scope}"
+      writers: [n10_train_stage1]
+      readers: [n11_gallery_index_staging, n13_train_stage2, n18_train_ablations]
+      merge: write_once
+      lifetime: persistent
 
     - name: gallery_index_staging
       type: "map[stage1_sha -> {uri, sha256, dim, count}]"
-      writers: [n08_build_gallery_staging]
-      readers: [G3_gallery_freeze, n09_promote_gallery_index]
+      writers: [n11_gallery_index_staging]
+      readers: [G4_gallery_freeze, n12_promote_index]
       merge: upsert_by_key
       lifetime: run
-      visibility: internal
 
     - name: gallery_index
       type: "map[stage1_sha -> {uri, sha256, dim, count, promoted_at}]"
-      writers: [n09_promote_gallery_index]
-      readers: [n12_eval_object_retrieval, n14_compose_scenes, n18_eval_ablations]
+      writers: [n12_promote_index]
+      readers: [n15_eval_retrieval, n16_compose_scenes, n19_eval_ablations]
       merge: upsert_by_key
-      merge_note: "write_once semantics PER KEY — a given stage1 checkpoint promotes exactly one index"
+      merge_note: "write_once semantics per key"
       lifetime: persistent
-      visibility: internal
-      note: "The immutable shared artifact everything downstream reads. Hence G3 is G-CONTAM."
+      note: "The immutable shared artifact every table reads. Hence G4 is G-CONTAM."
 
     - name: variant_registry
-      type: "list[{variant_id, fusion, dropout, layout_encoder, composition_mode, requires_stage1_retrain, table3_row}]"
-      writers: [n02_acquire_sources]
-      readers: [n10_train_headline, n17_train_ablations, n18_eval_ablations]
+      type: "list[{variant_id, train_scope, fusion, dropout, layout_encoder, composition_mode, table3_row}]"
+      writers: [n02_download]
+      readers: [n13_train_stage2, n18_train_ablations, n19_eval_ablations]
       merge: write_once
       lifetime: persistent
-      visibility: input
-      note: "STATIC registry of 10 variants. Declaring it in state is what makes the fan-out auditable and A1 rather than A3."
+      note: "Static registry. Declaring it in state is what makes the fan-out A1 rather than A3."
 
     - name: variant_ckpts
-      type: "map[variant_id -> {uri, sha256, config_hash}]"
+      type: "map[variant_id -> {uri, sha256}]"
       writers: [sg3_train]
-      readers: [n12_eval_object_retrieval, n14_compose_scenes, n18_eval_ablations]
+      readers: [n15_eval_retrieval, n16_compose_scenes, n19_eval_ablations]
       merge: upsert_by_key
-      merge_note: "Parallel variant trainers write disjoint keys."
       lifetime: persistent
-      visibility: internal
 
     - name: variant_status
-      type: "map[variant_id -> {status: SUCCESS|FAILED|EXHAUSTED, reason}]"
+      type: "map[variant_id -> {status, reason}]"
       writers: [sg3_train]
-      readers: [n18_eval_ablations, n19_aggregate_tables, n20_compare_to_paper]
+      readers: [n19_eval_ablations, n20_aggregate]
       merge: upsert_by_key
       lifetime: persistent
-      visibility: internal
 
-    # ---- results
     - name: retrieval_metrics
-      type: "map[(variant_id, condition) -> {R@1, R@5, n_gallery, n_query}]"
-      writers: [n12_eval_object_retrieval, n18_eval_ablations]
-      readers: [G4_human_study_commit, n19_aggregate_tables]
+      type: "map[(variant, condition, protocol) -> {R@1, R@5, n_gallery, n_query}]"
+      writers: [n15_eval_retrieval, n19_eval_ablations]
+      readers: [n20_aggregate]
       merge: upsert_by_key
       lifetime: persistent
-      visibility: internal
-
-    - name: baseline_metrics
-      type: "map[(baseline, condition) -> {R@1, R@5, n_gallery} | NA_DECLARED]"
-      writers: [n13_run_baselines]
-      readers: [n19_aggregate_tables, RA-2]
-      merge: upsert_by_key
-      lifetime: persistent
-      visibility: internal
-      note: "NA_DECLARED distinguishes 'baseline does not support this modality' from 'we failed to run it'."
+      note: "Keyed by PROTOCOL as well, so both gallery scopes are reported side by side."
 
     - name: equivariance_report
-      type: "{coord_linf_err, h_exact_invariant, n_scenes, n_transforms, variant}"
-      writers: [n11_equivariance_probe]
-      readers: [G4_human_study_commit, n20_compare_to_paper]
+      type: "{coord_linf_err, feat_max_delta, layout_max_delta, n_scenes, n_transforms, variant}"
+      writers: [n14_equivariance_probe]
+      readers: [n20_aggregate, n21_compare_to_paper]
       merge: upsert_by_key
       lifetime: persistent
-      visibility: internal
+      note: "Three separate quantities, one per level (SC-4/5/6)."
 
     - name: composed_scenes
-      type: "map[(variant_id, scene_id) -> {graph_uri, sha256, placed_count, incomplete}]"
+      type: "map[(variant, scene_id) -> {graph_uri, placed_count, incomplete}]"
       writers: [sg4_instance]
-      readers: [n15_judge_gpt4o, n16_human_study, G4_human_study_commit]
+      readers: [n17_judge_scenes, n20_aggregate]
       merge: upsert_by_key
       lifetime: persistent
-      visibility: internal
 
     - name: composition_incomplete
-      type: "set[(variant_id, scene_id)]"
+      type: "set[(variant, scene_id)]"
       writers: [sg4_instance]
-      readers: [G4_human_study_commit, n19_aggregate_tables]
+      readers: [n20_aggregate]
       merge: set_union
       lifetime: persistent
-      visibility: internal
-      note: "L3 — EXHAUSTED scenes are EXCLUDED from Table 2 means and reported separately. Never silently averaged in."
+      note: "EXHAUSTED scenes are excluded from Table 2 means and reported separately."
 
-    - name: gpt4o_scores
+    - name: judge_scores
       type: "map[(method, scene_id, dimension) -> float]"
-      writers: [n15_judge_gpt4o]
-      readers: [n19_aggregate_tables]
+      writers: [n17_judge_scenes]
+      readers: [n20_aggregate]
       merge: upsert_by_key
       lifetime: persistent
-      visibility: internal
 
-    - name: human_scores
-      type: "map[(annotator_hash, method, scene_id, dimension) -> float]"
-      writers: [n16_human_study]
-      readers: [n19_aggregate_tables]
-      merge: upsert_by_key
-      lifetime: persistent
-      visibility: internal
-      sensitive: true
-      note: "B5 — annotator identity replaced by hash; the mapping table is never logged and never published."
-
-    - name: human_study_status
-      type: "map[annotator_hash -> {completed, total, last_activity}]"
-      writers: [n16_human_study]
-      readers: [n19_aggregate_tables, G4_human_study_commit]
-      merge: upsert_by_key
-      lifetime: persistent
-      visibility: internal
-
-    - name: paper_reference
-      type: "map[(table, row, col) -> {value, tolerance}]"
-      writers: [n02_acquire_sources]
-      readers: [n20_compare_to_paper]
-      merge: write_once
-      lifetime: persistent
-      visibility: input
-      note: "Transcribed from docs/metafind_paper.md Tables 1/2/3. write_once so targets cannot drift to match results."
-
-    - name: result_tables
-      type: "{table1, table2, table3}"
-      writers: [n19_aggregate_tables]
-      readers: [n20_compare_to_paper, G5_report_release, n21_publish_report]
-      merge: write_once
-      lifetime: run
-      visibility: output
-
-    - name: reproduction_verdicts
-      type: "map[(table, row, col) -> {verdict: REPRODUCED|NOT_REPRODUCED|INSUFFICIENT_EVIDENCE, observed, expected, delta}]"
-      writers: [n20_compare_to_paper]
-      readers: [G5_report_release, n21_publish_report]
-      merge: write_once
-      lifetime: run
-      visibility: output
-
-    # ---- cross-cutting
-    - name: gate_records
-      type: "list[gate_record]"
-      writers: [G1_feasibility, G2_corpus_validity, G3_gallery_freeze, G4_human_study_commit, G5_report_release]
-      readers: [G5_report_release, n21_publish_report]
+    - name: quarantine
+      type: "list[{uid, stage, failure_class, exception_type, exception_msg, code_revision, timestamp}]"
+      writers: [n03_sample_pointclouds, n04_render_views, n05_annotate, n07_scene_graphs, n08_semantic_edges]
+      readers: [G3_corpus_valid, n22_publish_report]
       merge: append
       lifetime: persistent
-      visibility: internal
-      note: "GD — a gate may never backfill its own record. Missing record == not passed."
+      note: "Without the real exception per item, a shortfall is undiagnosable months later."
+
+    - name: gate_records
+      type: "list[gate_record]"
+      writers: [G1_sources_valid, G2_pc_distribution, G3_corpus_valid, G4_gallery_freeze, G5_report_release]
+      readers: [G5_report_release, n22_publish_report]
+      merge: append
+      lifetime: persistent
+      note: "GD -- a gate may never backfill its own record. Missing record == not passed."
 
     - name: audit_records
       type: "list[required_audit_record]"
       writers: [RA-1, RA-2, RA-3]
-      readers: [G5_report_release, n21_publish_report]
+      readers: [G5_report_release, n22_publish_report]
       merge: append
       lifetime: persistent
-      visibility: internal
-      note: "GH — separate channel from gate_records so an audit can never be misread as a gate verdict."
+      note: "Separate channel from gate_records so an audit can never be misread as a gate verdict."
 
     - name: cost_ledger
       type: "map[resource -> float]"
       writers: [ALL_NODES]
-      readers: [G1_feasibility, G4_human_study_commit, G5_report_release]
+      readers: [G5_report_release]
       merge: numeric_add
-      merge_note: "Commutative and associative — safe under arbitrary parallel arrival order."
       lifetime: persistent
-      visibility: internal
-      note: "O5. Resources: gpt4o_tokens, money_usd, gpu_seconds, wallclock_seconds, external_calls, human_minutes."
 
     - name: run_progress
       type: "map[stage -> {status, started_at, ended_at, attempt, rc, stdout_broken}]"
@@ -500,712 +367,295 @@ state:
       readers: [ALL_NODES]
       merge: upsert_by_key
       lifetime: persistent
-      visibility: internal
-      note: >
-        B1 — THIS is the canonical progress, not stdout. Atomic write:
-        tmp -> fsync -> rename. A broken stdout must never fail the work; it
-        only sets stdout_broken=true.
+      note: "B1 -- THIS is canonical progress, not stdout. Atomic tmp -> fsync -> rename."
 
     - name: degraded_flags
       type: "set[str]"
       writers: [ALL_NODES]
-      readers: [n19_aggregate_tables, n20_compare_to_paper, n21_publish_report]
+      readers: [n20_aggregate, n21_compare_to_paper, n22_publish_report]
       merge: set_union
       lifetime: persistent
-      visibility: output
-      note: >
-        Anti-pattern 'silent degradation'. Examples: batch_size_reduced_oom,
-        idesign_unavailable_native_layout, semantic_edge_missing,
-        ulip2_captions_reused_instead_of_gpt4o.
+      note: "e.g. batch_size_reduced_oom, semantic_edge_missing, idesign_unavailable."
 
-    # ---- SG4 internal (iteration-scoped)
-    - name: placed_assets
-      type: "list[{asset_id, position, step}]"
-      writers: [sg4_place]
-      readers: [sg4_encode_layout, sg4_advance]
-      merge: append
-      lifetime: run
-      visibility: private
-      note: "S1(b) — the evolving scene graph G is DERIVABLE from initial_scene_graph + this, so G itself is not stored."
+    # ---- SG4 internal
+    - {name: placed_assets, type: "list[{uid, position, step}]", writers: [sg4_place], readers: [sg4_encode_layout, sg4_advance], merge: append, lifetime: run, visibility: private}
+    - {name: placed_count, type: int, writers: [sg4_place], readers: [sg4_advance], merge: max, merge_note: "max, not numeric_add -- a retried iteration must not double-count", lifetime: run, visibility: private}
+    - {name: layout_embedding, type: "tensor[D]", writers: [sg4_encode_layout], readers: [sg4_fuse], merge: replace, lifetime: iteration, reset_on: loop_entry, visibility: private}
+    - {name: query_modality_embeds, type: "dict", writers: [sg4_encode_query], readers: [sg4_fuse], merge: replace, lifetime: iteration, reset_on: loop_entry, visibility: private}
+    - {name: retrieval_trace, type: "list[{step, top5_ids, top5_scores, chosen, layout_contribution}]", writers: [sg4_fuse], readers: [n17_judge_scenes], merge: append, lifetime: run, note: "O4 -- without layout_contribution you cannot explain why a scene is incoherent"}
 
-    - name: placed_count
-      type: int
-      writers: [sg4_place]
-      readers: [sg4_advance]
-      merge: max
-      merge_note: "max, not numeric_add — a retried iteration must not double-count. This is the cycle's progress measure."
-      lifetime: run
-      visibility: private
-
-    - name: layout_embedding
-      type: "tensor[1280]"
-      writers: [sg4_encode_layout]
-      readers: [sg4_fuse_retrieve]
-      merge: replace
-      lifetime: iteration
-      reset_on: loop_entry
-      visibility: private
-      note: "L5 — forgetting to clear this contaminates round i with round i-1's layout. Classic bug, hence an explicit L1 test."
-
-    - name: query_modality_embeds
-      type: "{text, image, pc} tensors[1280]"
-      writers: [sg4_encode_query]
-      readers: [sg4_fuse_retrieve]
-      merge: replace
-      lifetime: iteration
-      reset_on: loop_entry
-      visibility: private
-
-    - name: retrieval_trace
-      type: "list[{step, top5_ids, top5_scores, chosen_id, layout_contribution}]"
-      writers: [sg4_fuse_retrieve]
-      readers: [n15_judge_gpt4o, n21_publish_report]
-      merge: append
-      lifetime: run
-      visibility: internal
-      note: >
-        O4 decision log. layout_contribution = lambda * ||e_layout||.
-        Without this you cannot explain WHY a composed scene is incoherent.
-
-    # ---- SG1 internal (iteration-scoped)
-    - name: item_attempt
-      type: int
-      writers: [sg1_validate_annotation]
-      readers: [sg1_annotate, sg1_admit_or_quarantine]
-      merge: replace
-      lifetime: iteration
-      reset_on: item_entry
-      visibility: private
-
-    - name: annotation_error_feedback
-      type: str
-      writers: [sg1_validate_annotation]
-      readers: [sg1_annotate]
-      merge: replace
-      lifetime: iteration
-      reset_on: item_entry
-      visibility: private
-      note: "MODEL_RECOVERABLE feedback. Must reset per item — asset i-1's schema error must never reach asset i's prompt."
+    # ---- SG1 internal
+    - {name: item_attempt, type: int, writers: [sg1_validate], readers: [sg1_generate], merge: replace, lifetime: iteration, reset_on: item_entry, visibility: private}
+    - {name: annotation_error_feedback, type: str, writers: [sg1_validate], readers: [sg1_generate], merge: replace, lifetime: iteration, reset_on: item_entry, visibility: private, note: "asset i-1's schema error must never reach asset i's prompt"}
 
   excluded_from_state:
-    - item: "rendered prompt strings for GPT-4o"
-      reason: "S2 — recomputable from annotation_prompt_version + canonical data. Storing it means template changes become schema changes."
-    - item: "the 11 rendered images themselves"
-      reason: "S7 — large blobs. Only {uri, sha256, bytes, content_type}; and under D3 the raw files are deleted after verification."
-    - item: "the evolving scene graph G inside SG4"
-      reason: "S1(b) — derivable from initial_scene_graph + placed_assets. Storing it would blow up every checkpoint."
-    - item: "model clients, CUDA streams, file handles"
-      reason: "S9 — not serializable. These travel via runtime context, not state."
+    - {item: "rendered prompt strings", reason: "recomputable from the version tag plus canonical data"}
+    - {item: "render pixels and mesh bytes", reason: "large blobs; only {uri, sha256, bytes} is stored"}
+    - {item: "the evolving scene graph inside SG4", reason: "derivable from the initial graph plus placed_assets"}
+    - {item: "model clients, CUDA streams", reason: "not serializable; these travel via runtime context"}
 
-# ---------------------------------------------------------------- §15.4
 nodes_ref: "node_registry.yaml"
 
-# ---------------------------------------------------------------- §15.5
+# ---------------------------------------------------------------- edges
 edges:
-  - {id: e01, from: n01_env_bootstrap, to: n02_acquire_sources, kind: data, guard: "", join_group: default, carries: [], rationale: ""}
-  - {id: e02, from: n02_acquire_sources, to: n03_pilot_and_budget, kind: data, guard: "", join_group: default, carries: [asset_catalog, source_manifest], rationale: ""}
-  - {id: e03, from: n03_pilot_and_budget, to: G1_feasibility, kind: data, guard: "", join_group: default, carries: [cost_projection], rationale: ""}
+  - {id: e01, from: n01_env_bootstrap, to: n02_download, kind: data, guard: "", join_group: default, carries: []}
+  - {id: e02, from: n02_download, to: G1_sources_valid, kind: data, guard: "", join_group: default, carries: [asset_manifest, asset_glb]}
 
-  - {id: e04, from: G1_feasibility, to: n04_object_prep, kind: data, guard: "verdict == PASS", join_group: default, carries: [asset_catalog], rationale: ""}
-  - {id: e05, from: G1_feasibility, to: n05_scene_prep, kind: data, guard: "verdict == PASS", join_group: default, carries: [procthor_raw], rationale: ""}
-  - id: e06
-    from: G1_feasibility
-    to: n13_run_baselines
-    kind: data
-    guard: "verdict == PASS"
-    join_group: default
-    carries: [asset_catalog, splits]
-    rationale: >
-      OPTIMIZATION (§14): baselines do not depend on any MetaFind training, so
-      they run in parallel with data prep instead of sitting on the critical path.
+  - {id: e03, from: G1_sources_valid, to: n03_sample_pointclouds, kind: data, guard: "verdict == PASS", join_group: default, carries: [asset_glb]}
+  - {id: e04, from: G1_sources_valid, to: n04_render_views, kind: data, guard: "verdict == PASS", join_group: default, carries: [asset_glb]}
+  - {id: e05, from: G1_sources_valid, to: n07_scene_graphs, kind: data, guard: "verdict == PASS", join_group: default, carries: []}
 
-  - {id: e07, from: n04_object_prep, to: n06_build_splits, kind: data, guard: "", join_group: default, carries: [asset_admitted], rationale: ""}
-  - {id: e08, from: n05_scene_prep, to: n06_build_splits, kind: data, guard: "", join_group: default, carries: [scene_admitted], rationale: ""}
-  - {id: e09, from: n04_object_prep, to: G2_corpus_validity, kind: data, guard: "", join_group: default, carries: [asset_admitted, asset_quarantine], rationale: ""}
-  - {id: e10, from: n05_scene_prep, to: G2_corpus_validity, kind: data, guard: "", join_group: default, carries: [scene_admitted, scene_quarantine], rationale: ""}
-  - {id: e11, from: n06_build_splits, to: G2_corpus_validity, kind: data, guard: "", join_group: default, carries: [splits, gallery_size_locked], rationale: ""}
+  - {id: e06, from: n03_sample_pointclouds, to: G2_pc_distribution, kind: data, guard: "", join_group: default, carries: [pointclouds]}
+  - {id: e07, from: n04_render_views, to: n05_annotate, kind: data, guard: "", join_group: default, carries: [renders]}
+  - {id: e08, from: n07_scene_graphs, to: n08_semantic_edges, kind: data, guard: "", join_group: default, carries: [scene_graphs, annotations]}
+  - {id: e09, from: n05_annotate, to: n06_encode_text_image, kind: data, guard: "", join_group: default, carries: [annotations, renders]}
 
-  - {id: e12, from: G2_corpus_validity, to: n07_train_stage1_align, kind: data, guard: "verdict == PASS", join_group: default, carries: [asset_embeddings, splits], rationale: ""}
-  - {id: e13, from: n07_train_stage1_align, to: n08_build_gallery_staging, kind: data, guard: "", join_group: default, carries: [stage1_ckpt], rationale: ""}
-  - {id: e14, from: n08_build_gallery_staging, to: G3_gallery_freeze, kind: data, guard: "", join_group: default, carries: [gallery_index_staging], rationale: ""}
-  - {id: e15, from: G3_gallery_freeze, to: n09_promote_gallery_index, kind: data, guard: "verdict == PASS", join_group: default, carries: [gallery_index_staging], rationale: ""}
-  - id: e16
-    from: n07_train_stage1_align
-    to: n10_train_headline
+  - {id: e10, from: G2_pc_distribution, to: n09_build_splits, kind: data, guard: "verdict == PASS", join_group: default, carries: [pointclouds]}
+  - {id: e11, from: n06_encode_text_image, to: n09_build_splits, kind: data, guard: "", join_group: default, carries: [text_image_embeddings]}
+  - {id: e12, from: n08_semantic_edges, to: n09_build_splits, kind: data, guard: "", join_group: default, carries: [sem_edge_cache]}
+  - {id: e13, from: n09_build_splits, to: G3_corpus_valid, kind: data, guard: "", join_group: default, carries: [splits, eval_protocols]}
+
+  - {id: e14, from: G3_corpus_valid, to: n10_train_stage1, kind: data, guard: "verdict == PASS", join_group: default, carries: [splits, pointclouds, text_image_embeddings]}
+  - {id: e15, from: n10_train_stage1, to: n11_gallery_index_staging, kind: data, guard: "", join_group: default, carries: [stage1_ckpt]}
+  - {id: e16, from: n11_gallery_index_staging, to: G4_gallery_freeze, kind: data, guard: "", join_group: default, carries: [gallery_index_staging]}
+  - {id: e17, from: G4_gallery_freeze, to: n12_promote_index, kind: data, guard: "verdict == PASS", join_group: default, carries: [gallery_index_staging]}
+  - id: e18
+    from: n10_train_stage1
+    to: n13_train_stage2
     kind: data
     guard: ""
     join_group: default
-    carries: [stage1_ckpt]
-    rationale: >
-      Stage-2 needs the FROZEN GALLERY ENCODER, not the gallery INDEX. So n10
-      runs in parallel with n08/G3/n09 rather than after them.
-  - {id: e17, from: n06_build_splits, to: n10_train_headline, kind: data, guard: "", join_group: default, carries: [splits], rationale: ""}
-  - {id: e18, from: n05_scene_prep, to: n10_train_headline, kind: data, guard: "", join_group: default, carries: [scene_store], rationale: ""}
+    carries: [stage1_ckpt, scene_graphs, sem_edge_cache]
+    rationale: "Stage 2 needs the frozen gallery ENCODER, not the gallery INDEX, so it runs parallel to n11/G4/n12."
+  - {id: e19, from: n13_train_stage2, to: n14_equivariance_probe, kind: data, guard: "", join_group: default, carries: [variant_ckpts]}
 
-  - {id: e19, from: n10_train_headline, to: n11_equivariance_probe, kind: data, guard: "", join_group: default, carries: [variant_ckpts], rationale: ""}
-  - {id: e20, from: n09_promote_gallery_index, to: n12_eval_object_retrieval, kind: data, guard: "", join_group: default, carries: [gallery_index], rationale: ""}
-  - {id: e21, from: n10_train_headline, to: n12_eval_object_retrieval, kind: data, guard: "", join_group: default, carries: [variant_ckpts], rationale: ""}
-  - {id: e22, from: n09_promote_gallery_index, to: n14_compose_scenes, kind: data, guard: "", join_group: default, carries: [gallery_index], rationale: ""}
-  - {id: e23, from: n10_train_headline, to: n14_compose_scenes, kind: data, guard: "", join_group: default, carries: [variant_ckpts], rationale: ""}
-  - {id: e24, from: n14_compose_scenes, to: n15_judge_gpt4o, kind: data, guard: "", join_group: default, carries: [composed_scenes], rationale: ""}
+  - {id: e20, from: n12_promote_index, to: n15_eval_retrieval, kind: data, guard: "", join_group: default, carries: [gallery_index, eval_protocols]}
+  - {id: e21, from: n13_train_stage2, to: n15_eval_retrieval, kind: data, guard: "", join_group: default, carries: [variant_ckpts]}
+  - {id: e22, from: n12_promote_index, to: n16_compose_scenes, kind: data, guard: "", join_group: default, carries: [gallery_index, asset_glb]}
+  - {id: e23, from: n13_train_stage2, to: n16_compose_scenes, kind: data, guard: "", join_group: default, carries: [variant_ckpts]}
+  - {id: e24, from: n16_compose_scenes, to: n17_judge_scenes, kind: data, guard: "", join_group: default, carries: [composed_scenes]}
 
-  - {id: e25, from: n11_equivariance_probe, to: G4_human_study_commit, kind: data, guard: "", join_group: default, carries: [equivariance_report], rationale: ""}
-  - {id: e26, from: n12_eval_object_retrieval, to: G4_human_study_commit, kind: data, guard: "", join_group: default, carries: [retrieval_metrics], rationale: ""}
-  - {id: e27, from: n15_judge_gpt4o, to: G4_human_study_commit, kind: data, guard: "", join_group: default, carries: [gpt4o_scores, composition_incomplete], rationale: ""}
+  - {id: e25, from: n15_eval_retrieval, to: n18_train_ablations, kind: control, guard: "", join_group: default, carries: [], rationale: "Ablations start only once the headline numbers exist, so a broken headline is not multiplied by eight."}
+  - {id: e26, from: n18_train_ablations, to: n19_eval_ablations, kind: data, guard: "", join_group: default, carries: [variant_ckpts, variant_status]}
 
-  - {id: e28, from: G4_human_study_commit, to: n16_human_study, kind: data, guard: "verdict == PASS", join_group: default, carries: [composed_scenes], rationale: ""}
-  - {id: e29, from: G4_human_study_commit, to: n17_train_ablations, kind: data, guard: "verdict == PASS", join_group: default, carries: [variant_registry], rationale: ""}
-  - {id: e30, from: n17_train_ablations, to: n18_eval_ablations, kind: data, guard: "", join_group: default, carries: [variant_ckpts, variant_status], rationale: ""}
+  - {id: e27, from: n15_eval_retrieval, to: n20_aggregate, kind: data, guard: "", join_group: core, carries: [retrieval_metrics]}
+  - {id: e28, from: n17_judge_scenes, to: n20_aggregate, kind: data, guard: "", join_group: core, carries: [judge_scores]}
+  - {id: e29, from: n14_equivariance_probe, to: n20_aggregate, kind: data, guard: "", join_group: core, carries: [equivariance_report]}
+  - {id: e30, from: n19_eval_ablations, to: n20_aggregate, kind: data, guard: "", join_group: extended, carries: [retrieval_metrics, variant_status]}
 
-  - {id: e31, from: n12_eval_object_retrieval, to: n19_aggregate_tables, kind: data, guard: "", join_group: core, carries: [retrieval_metrics], rationale: ""}
-  - {id: e32, from: n13_run_baselines, to: n19_aggregate_tables, kind: data, guard: "", join_group: core, carries: [baseline_metrics], rationale: ""}
-  - {id: e33, from: n15_judge_gpt4o, to: n19_aggregate_tables, kind: data, guard: "", join_group: core, carries: [gpt4o_scores], rationale: ""}
-  - {id: e34, from: n16_human_study, to: n19_aggregate_tables, kind: data, guard: "", join_group: extended, carries: [human_scores, human_study_status], rationale: ""}
-  - {id: e35, from: n18_eval_ablations, to: n19_aggregate_tables, kind: data, guard: "", join_group: extended, carries: [retrieval_metrics, variant_status], rationale: ""}
+  - {id: e31, from: n20_aggregate, to: n21_compare_to_paper, kind: data, guard: "", join_group: default, carries: []}
+  - {id: e32, from: n21_compare_to_paper, to: G5_report_release, kind: data, guard: "", join_group: default, carries: []}
+  - {id: e33, from: G5_report_release, to: n22_publish_report, kind: data, guard: "verdict == PASS", join_group: default, carries: [gate_records, audit_records, degraded_flags]}
 
-  - {id: e36, from: n19_aggregate_tables, to: n20_compare_to_paper, kind: data, guard: "", join_group: default, carries: [result_tables], rationale: ""}
-  - {id: e37, from: n20_compare_to_paper, to: G5_report_release, kind: data, guard: "", join_group: default, carries: [reproduction_verdicts], rationale: ""}
-  - {id: e38, from: G5_report_release, to: n21_publish_report, kind: data, guard: "verdict == PASS", join_group: default, carries: [result_tables, reproduction_verdicts, gate_records, audit_records], rationale: ""}
+  # error paths -- an invisible failure path is an undesigned failure path (E9)
+  - {id: e34, from: G1_sources_valid, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records]}
+  - {id: e35, from: G2_pc_distribution, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records]}
+  - {id: e36, from: G3_corpus_valid, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records]}
+  - {id: e37, from: G4_gallery_freeze, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records], rationale: "Do NOT promote the staging index."}
+  - {id: e38, from: G5_report_release, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records]}
+  - {id: e39, from: n16_compose_scenes, to: HALT_BLOCKED, kind: escalation, guard: "idesign_unavailable", join_group: default, carries: [degraded_flags], rationale: "R-01: Tables 2/3 become BLOCKED_EVIDENCE, not FAIL."}
 
-  # ---- escalation and feedback
-  - {id: e39, from: G1_feasibility, to: n22_budget_approval, kind: escalation, guard: "rc == 3", join_group: default, carries: [cost_projection], rationale: "Insufficient evidence is not failure — a human decides."}
-  - {id: e40, from: G4_human_study_commit, to: n22_budget_approval, kind: escalation, guard: "rc == 3", join_group: default, carries: [cost_ledger], rationale: "Staffing/budget for the human study needs human approval."}
-  - id: e41
-    from: n22_budget_approval
-    to: G1_feasibility
-    kind: feedback
-    guard: "approved"
-    join_group: reapproval
-    carries: [budget_cap]
-    rationale: >
-      E4 — the feedback edge MUST be in its own join_group. If it shared
-      `default` with e03, G1 would wait forever for an n03 edge that will
-      never arrive again. Deadlock.
-  - {id: e42, from: n22_budget_approval, to: G4_human_study_commit, kind: feedback, guard: "approved", join_group: reapproval, carries: [budget_cap], rationale: "Same as e41."}
-
-  # ---- error paths (E9 — invisible failure paths are undesigned failure paths)
-  - {id: e43, from: G1_feasibility, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records], rationale: ""}
-  - {id: e44, from: G2_corpus_validity, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records], rationale: ""}
-  - {id: e45, from: G3_gallery_freeze, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records], rationale: "Do NOT promote the staging index."}
-  - {id: e46, from: G4_human_study_commit, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records], rationale: ""}
-  - {id: e47, from: G5_report_release, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records], rationale: ""}
-  - {id: e48, from: n04_object_prep, to: QUARANTINE_REPORT, kind: error, guard: "", join_group: default, carries: [asset_quarantine], rationale: ""}
-  - {id: e49, from: n16_human_study, to: HALT_BLOCKED, kind: escalation, guard: "timeout", join_group: default, carries: [human_study_status], rationale: "BLOCKED is resumable, NOT a failure (anti-pattern 24)."}
-  - {id: e50, from: n22_budget_approval, to: HALT_BLOCKED, kind: escalation, guard: "not approved && round <= 2", join_group: default, carries: [], rationale: ""}
-
-# ---------------------------------------------------------------- §15.5 join policies
-# J1 — every fan-in below is declared EXPLICITLY. No runtime default is inherited.
+# J1 -- every fan-in declared explicitly; no runtime default is inherited
 join_policies:
-  - node: n06_build_splits
+  - node: n09_build_splits
     groups: [{name: default, policy: all, k: null}]
     trigger: any_group_satisfied
-    rationale: "Both catalogs must be complete; a split computed from half the data is wrong, not partial."
-
-  - node: G2_corpus_validity
+    rationale: "Point clouds, embeddings and semantic edges must all be complete; a split computed from part of the data is wrong, not partial."
+  - node: G3_corpus_valid
     groups: [{name: default, policy: all, k: null}]
     trigger: any_group_satisfied
     rationale: "A gate needs complete evidence."
-
   - node: sg1_reduce
     groups: [{name: default, policy: all_settled, k: null}]
     trigger: any_group_satisfied
-    rationale: >
-      MUST know WHICH assets failed, not just how many. If 300 of 48K fail, the
-      gallery denominator changes from 48000 to 47700 and R@1 changes meaning.
-      `all` would deadlock on one bad mesh; `any` would lose completeness.
-
+    rationale: "Must know WHICH assets failed. The gallery denominator changes with the admitted set, and R@k changes meaning with it."
   - node: sg2_reduce
     groups: [{name: default, policy: all_settled, k: null}]
     trigger: any_group_satisfied
     rationale: "Same as sg1_reduce."
-
-  - node: n10_train_headline
+  - node: n15_eval_retrieval
     groups: [{name: default, policy: all, k: null}]
     trigger: any_group_satisfied
-    rationale: "Needs stage1 ckpt + splits + scene graphs together."
-
-  - node: n12_eval_object_retrieval
+    rationale: "Needs the promoted index and both headline variants."
+  - node: n16_compose_scenes
     groups: [{name: default, policy: all, k: null}]
     trigger: any_group_satisfied
-    rationale: "Needs the promoted index AND both headline variants."
-
-  - node: n14_compose_scenes
-    groups: [{name: default, policy: all, k: null}]
-    trigger: any_group_satisfied
-    rationale: >
-      Needs BOTH the promoted gallery index (to retrieve against) and the trained
-      variant checkpoints (to encode with). Composing against one without the
-      other is not a partial result, it is a wrong result.
-
-  - node: n22_budget_approval
-    groups: [{name: default, policy: any, k: null}]
-    trigger: any_group_satisfied
-    rationale: >
-      Two escalation edges arrive here (e39 from G1, e40 from G4) and they are
-      mutually exclusive in time. `any` is correct: whichever gate emitted rc=3
-      triggers the approval. `all` would deadlock — G4 has not run yet when G1
-      escalates.
-
-  - node: n13_run_baselines
-    groups: [{name: default, policy: all_settled, k: null}]
-    trigger: any_group_satisfied
-    rationale: >
-      Table 1 legitimately contains '-' cells (SCA3D and Uni3DL do not support
-      image queries). An expected missing cell must be representable, and must
-      be distinguishable from 'we failed to run it' (see baseline_metrics.NA_DECLARED).
-
-  - node: G4_human_study_commit
-    groups:
-      - {name: default, policy: all, k: null}
-      - {name: reapproval, policy: any, k: null}
-    trigger: any_group_satisfied
-    rationale: "E4 — the re-approval feedback edge is in its own group."
-
-  - node: G1_feasibility
-    groups:
-      - {name: default, policy: all, k: null}
-      - {name: reapproval, policy: any, k: null}
-    trigger: any_group_satisfied
-    rationale: "E4."
-
-  - node: n19_aggregate_tables
+    rationale: "Needs the index to retrieve against and the checkpoints to encode with."
+  - node: n20_aggregate
     groups:
       - {name: core, policy: all, k: null}
       - {name: extended, policy: all_settled, k: null}
     trigger: all_groups_satisfied
     rationale: >
-      THE most consequential join in this graph. Table 1 and the Table-2 GPT-4o
-      column are mandatory (`core`/`all`). The Table-2 human column and Table 3
-      may legitimately be partial (`extended`/`all_settled`) — a missing member
-      only narrows the claim. Using `all` everywhere would let one annotator's
-      absence block the whole report; using `all_settled` everywhere would let a
-      missing Table 1 cell pass silently.
-
-  - node: sg4_fuse_retrieve
+      Table 1 and the Table-2 model-judged column are mandatory; Table 3 may
+      legitimately be partial, and a missing member there only narrows the claim.
+      Using `all` everywhere would let one failed ablation block the report;
+      using `all_settled` everywhere would let a missing Table 1 cell pass.
+  - node: sg4_fuse
     groups: [{name: default, policy: all, k: null}]
     trigger: any_group_satisfied
-    rationale: "Fusion needs both the layout embedding and the query modality embeddings."
-
+    rationale: "Eq. 6 needs both the layout term and the fused query."
   - node: sg4_encode_layout
     groups:
       - {name: init, policy: any, k: null}
       - {name: loop_back, policy: any, k: null}
     trigger: any_group_satisfied
-    rationale: >
-      E4 — the Algorithm-1 feedback edge is in `loop_back`, separate from the
-      initial `init` edge from sg4_init. Merging them deadlocks the cycle.
-
-  - node: sg1_annotate
-    groups:
-      - {name: init, policy: any, k: null}
-      - {name: repair, policy: any, k: null}
+    rationale: "E4 -- the Algorithm 1 feedback edge must not share a group with the initial edge, or the cycle deadlocks."
+  - node: sg1_generate
+    groups: [{name: init, policy: any, k: null}, {name: repair, policy: any, k: null}]
     trigger: any_group_satisfied
-    rationale: "E4 — the C1 repair feedback edge gets its own group."
-
-  - node: sg2_semantic_edge
-    groups:
-      - {name: init, policy: any, k: null}
-      - {name: repair, policy: any, k: null}
+    rationale: "E4 -- the C1 repair edge gets its own group."
+  - node: sg2_generate
+    groups: [{name: init, policy: any, k: null}, {name: repair, policy: any, k: null}]
     trigger: any_group_satisfied
-    rationale: "E4 — the C2 repair feedback edge gets its own group."
+    rationale: "E4 -- the C2 repair edge gets its own group."
 
-# ---------------------------------------------------------------- §15.6
 dependencies:
   dag:
     - {node: n01_env_bootstrap, depends_on: []}
-    - {node: n02_acquire_sources, depends_on: [n01_env_bootstrap]}
-    - {node: n03_pilot_and_budget, depends_on: [n02_acquire_sources]}
-    - {node: G1_feasibility, depends_on: [n03_pilot_and_budget]}
-    - {node: n04_object_prep, depends_on: [G1_feasibility]}
-    - {node: n05_scene_prep, depends_on: [G1_feasibility]}
-    - {node: n13_run_baselines, depends_on: [G1_feasibility]}
-    - {node: n06_build_splits, depends_on: [n04_object_prep, n05_scene_prep]}
-    - {node: G2_corpus_validity, depends_on: [n04_object_prep, n05_scene_prep, n06_build_splits]}
-    - {node: n07_train_stage1_align, depends_on: [G2_corpus_validity]}
-    - {node: n08_build_gallery_staging, depends_on: [n07_train_stage1_align]}
-    - {node: G3_gallery_freeze, depends_on: [n08_build_gallery_staging]}
-    - {node: n09_promote_gallery_index, depends_on: [G3_gallery_freeze]}
-    - {node: n10_train_headline, depends_on: [n07_train_stage1_align, n06_build_splits, n05_scene_prep]}
-    - {node: n11_equivariance_probe, depends_on: [n10_train_headline]}
-    - {node: n12_eval_object_retrieval, depends_on: [n09_promote_gallery_index, n10_train_headline]}
-    - {node: n14_compose_scenes, depends_on: [n09_promote_gallery_index, n10_train_headline]}
-    - {node: n15_judge_gpt4o, depends_on: [n14_compose_scenes]}
-    - {node: G4_human_study_commit, depends_on: [n11_equivariance_probe, n12_eval_object_retrieval, n15_judge_gpt4o]}
-    - {node: n16_human_study, depends_on: [G4_human_study_commit]}
-    - {node: n17_train_ablations, depends_on: [G4_human_study_commit]}
-    - {node: n18_eval_ablations, depends_on: [n17_train_ablations]}
-    - {node: n19_aggregate_tables, depends_on: [n12_eval_object_retrieval, n13_run_baselines, n15_judge_gpt4o, n16_human_study, n18_eval_ablations]}
-    - {node: n20_compare_to_paper, depends_on: [n19_aggregate_tables]}
-    - {node: G5_report_release, depends_on: [n20_compare_to_paper]}
-    - {node: n21_publish_report, depends_on: [G5_report_release]}
+    - {node: n02_download, depends_on: [n01_env_bootstrap]}
+    - {node: G1_sources_valid, depends_on: [n02_download]}
+    - {node: n03_sample_pointclouds, depends_on: [G1_sources_valid]}
+    - {node: n04_render_views, depends_on: [G1_sources_valid]}
+    - {node: n07_scene_graphs, depends_on: [G1_sources_valid]}
+    - {node: G2_pc_distribution, depends_on: [n03_sample_pointclouds]}
+    - {node: n05_annotate, depends_on: [n04_render_views]}
+    - {node: n08_semantic_edges, depends_on: [n07_scene_graphs, n05_annotate]}
+    - {node: n06_encode_text_image, depends_on: [n05_annotate]}
+    - {node: n09_build_splits, depends_on: [G2_pc_distribution, n06_encode_text_image, n08_semantic_edges]}
+    - {node: G3_corpus_valid, depends_on: [n09_build_splits]}
+    - {node: n10_train_stage1, depends_on: [G3_corpus_valid]}
+    - {node: n11_gallery_index_staging, depends_on: [n10_train_stage1]}
+    - {node: G4_gallery_freeze, depends_on: [n11_gallery_index_staging]}
+    - {node: n12_promote_index, depends_on: [G4_gallery_freeze]}
+    - {node: n13_train_stage2, depends_on: [n10_train_stage1]}
+    - {node: n14_equivariance_probe, depends_on: [n13_train_stage2]}
+    - {node: n15_eval_retrieval, depends_on: [n12_promote_index, n13_train_stage2]}
+    - {node: n16_compose_scenes, depends_on: [n12_promote_index, n13_train_stage2]}
+    - {node: n17_judge_scenes, depends_on: [n16_compose_scenes]}
+    - {node: n18_train_ablations, depends_on: [n15_eval_retrieval]}
+    - {node: n19_eval_ablations, depends_on: [n18_train_ablations]}
+    - {node: n20_aggregate, depends_on: [n15_eval_retrieval, n17_judge_scenes, n14_equivariance_probe, n19_eval_ablations]}
+    - {node: n21_compare_to_paper, depends_on: [n20_aggregate]}
+    - {node: G5_report_release, depends_on: [n21_compare_to_paper]}
+    - {node: n22_publish_report, depends_on: [G5_report_release]}
 
-  feedback_edges: [e41, e42, fb_annot, fb_semedge, fb_compose]
-  feedback_note: "Main line contains ZERO feedback edges. All cycles live inside subgraphs or the escalation loop."
+  feedback_edges: [fb_annot, fb_semedge, fb_compose]
+  feedback_note: "Main line contains ZERO feedback edges. All cycles live inside subgraphs."
 
-  control_dependencies: []
-  control_dependencies_note: >
-    E1 — there are NO pure control edges in this graph. Every edge carries a real
-    data dependency. This was checked during §14 optimization: the only candidate
-    was 'run baselines after training for tidiness', which was removed (see e06).
+  v1_dependency_bug: >
+    An earlier draft scheduled the baseline node parallel with data preparation, reasoning that
+    baselines do not depend on MetaFind training. They do depend on the admitted
+    asset set, the preprocessing, the split and the gallery protocol -- without
+    those, baseline and MetaFind are not on the same evaluation protocol. It
+    could at most have run parallel to n10, never to n03. The node is removed
+    entirely under D-3.
 
-  transitive_edges_removed:
-    - "n02 -> G1 (implied by n02 -> n03 -> G1)"
-    - "G1 -> n06 (implied by G1 -> n04/n05 -> n06)"
-    - "n07 -> n12 (implied by n07 -> n10 -> n12)"
-
-# ---------------------------------------------------------------- §15.7
+# ---------------------------------------------------------------- routing
 routing:
-  - decision_point: G1_feasibility
-    authority: A1
-    owner: edge
-    inputs: [cost_projection, budget_cap, disk_free, gpu_hours_est]
-    destinations: [n04_object_prep, n05_scene_prep, n13_run_baselines, n22_budget_approval, HALT_FAILED]
-    cardinality_bound: null
-    over_bound_action: ""
-    default_destination: HALT_FAILED
-    escalation_reason: "N/A (A1)"
-    note: "fail closed — the default branch of every gate is HALT."
-
-  - decision_point: n03_annotation_route
-    authority: A1
-    owner: edge
-    inputs: [cost_projection.money, budget_cap.money, cost_projection.schema_pass_rate]
-    destinations: [gpt4o_annotate, reuse_ulip2_captions]
-    cardinality_bound: null
-    over_bound_action: ""
-    default_destination: reuse_ulip2_captions
-    escalation_reason: "N/A (A1)"
-    note: "The DEFAULT is the cheap branch, not the expensive one (F7)."
-
-  - decision_point: G2_corpus_validity
-    authority: A1
-    owner: edge
-    inputs: [leakage_count, admitted_size, quarantine_size, gallery_size_locked, schema_pass_rate]
-    destinations: [n07_train_stage1_align, HALT_FAILED]
-    default_destination: HALT_FAILED
-    escalation_reason: "N/A (A1)"
-
-  - decision_point: G3_gallery_freeze
-    authority: A1
-    owner: edge
-    inputs: [index_dim, index_count, nan_count, zero_vector_count, self_retrieval_recall]
-    destinations: [n09_promote_gallery_index, HALT_FAILED]
-    default_destination: HALT_FAILED
-    escalation_reason: "N/A (A1)"
-
-  - decision_point: G4_human_study_commit
-    authority: A1
-    owner: edge
-    inputs: [equivariance_report, retrieval_metrics, composition_incomplete, human_study_status, budget_cap]
-    destinations: [n16_human_study, n17_train_ablations, n22_budget_approval, HALT_FAILED]
-    default_destination: HALT_FAILED
-    escalation_reason: "N/A (A1)"
-
-  - decision_point: G5_report_release
-    authority: A1
-    owner: edge
-    inputs: [reproduction_verdicts, gate_records, audit_records, degraded_flags]
-    destinations: [n21_publish_report, HALT_FAILED]
-    default_destination: HALT_FAILED
-    escalation_reason: "N/A (A1)"
-
-  - decision_point: sg1_admit_or_quarantine
-    authority: A1
-    owner: edge
-    inputs: [schema_valid, item_attempt, failure_class]
-    destinations: [sg1_encode, sg1_annotate, sg1_quarantine]
-    default_destination: sg1_quarantine
-    escalation_reason: "N/A (A1)"
-
-  - decision_point: sg1_disk_backpressure
-    authority: A1
-    owner: edge
-    inputs: [disk_free, shard_bytes]
-    destinations: [proceed, shrink_shard, HALT_BLOCKED]
-    default_destination: HALT_BLOCKED
-    escalation_reason: "N/A (A1)"
-    note: "Out of disk is BLOCKED (resumable), not FAILED."
-
-  - decision_point: sg2_cache_lookup
-    authority: A1
-    owner: edge
-    inputs: ["sem_edge_cache.contains((cat_a, cat_b))"]
-    destinations: [use_cache, call_llm]
-    default_destination: call_llm
-    escalation_reason: "N/A (A1)"
-
-  - decision_point: sg3_retrain_scope
-    authority: A1
-    owner: edge
-    inputs: ["variant_registry[i].requires_stage1_retrain"]
-    destinations: [full_pipeline, stage2_only]
-    default_destination: stage2_only
-    escalation_reason: "N/A (A1)"
-
-  - decision_point: sg4_advance_or_exit
-    authority: A1
-    owner: edge
-    inputs: [placed_count, N, wallclock, retrieval_calls]
-    destinations: [sg4_encode_layout, DONE, EXHAUSTED]
-    default_destination: EXHAUSTED
-    escalation_reason: "N/A (A1)"
-
-  - decision_point: sg4_composition_mode
-    authority: A1
-    owner: edge
-    inputs: ["variant_registry[i].composition_mode"]
-    destinations: [iterative, parallel, region]
-    default_destination: iterative
-    escalation_reason: "N/A (A1)"
+  - {decision_point: G1_sources_valid, authority: A1, owner: edge, inputs: [manifest_count, glb_coverage, ckpt_behaviour], destinations: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs, HALT_FAILED], default_destination: HALT_FAILED}
+  - {decision_point: G2_pc_distribution, authority: A1, owner: edge, inputs: [pc_embedding_agreement, baseline_cross_similarity], destinations: [n09_build_splits, HALT_FAILED], default_destination: HALT_FAILED}
+  - {decision_point: G3_corpus_valid, authority: A1, owner: edge, inputs: [leakage_count, admitted_size, quarantine_rate, eval_protocols], destinations: [n10_train_stage1, HALT_FAILED], default_destination: HALT_FAILED}
+  - {decision_point: G4_gallery_freeze, authority: A1, owner: edge, inputs: [index_dim, index_count, nan_count, self_retrieval_recall], destinations: [n12_promote_index, HALT_FAILED], default_destination: HALT_FAILED}
+  - {decision_point: G5_report_release, authority: A1, owner: edge, inputs: [verdict_completeness, gate_records, audit_records, degraded_flags], destinations: [n22_publish_report, HALT_FAILED], default_destination: HALT_FAILED}
+  - {decision_point: sg1_admit_or_repair, authority: A1, owner: edge, inputs: [schema_valid, item_attempt], destinations: [sg1_admit, sg1_generate, sg1_quarantine], default_destination: sg1_quarantine}
+  - {decision_point: sg2_cache_lookup, authority: A1, owner: edge, inputs: ["sem_edge_cache.contains(hash)"], destinations: [use_cache, call_llm], default_destination: call_llm}
+  - {decision_point: sg3_train_scope, authority: A1, owner: edge, inputs: ["variant.train_scope"], destinations: [fuser_only, point_encoder_and_fuser, full], default_destination: point_encoder_and_fuser}
+  - {decision_point: sg4_advance, authority: A1, owner: edge, inputs: [placed_count, n_queries, wallclock], destinations: [sg4_encode_layout, DONE, EXHAUSTED], default_destination: EXHAUSTED}
+  - {decision_point: sg4_mode, authority: A1, owner: edge, inputs: ["variant.composition_mode"], destinations: [iterative, parallel, region], default_destination: iterative}
 
 static_fanouts:
-  - {name: asset_shards, cardinality: 24, source: "ceil(len(asset_catalog)/2000)", bound: 60000, over_bound_action: truncate_and_record}
-  - {name: render_views, cardinality: 11, source: "paper 2.3", bound: 11, over_bound_action: truncate_and_record}
-  - {name: modality_conditions, cardinality: 7, source: "paper Table 1 columns", bound: 7, over_bound_action: truncate_and_record}
-  - {name: baselines, cardinality: 6, source: "paper 3.1", bound: 6, over_bound_action: truncate_and_record}
-  - {name: headline_variants, cardinality: 2, source: "paper Table 1 last two rows", bound: 2, over_bound_action: truncate_and_record}
-  - {name: ablation_variants, cardinality: 8, source: "paper Table 3 minus 2 reusable rows", bound: 10, over_bound_action: truncate_and_record}
-  - {name: annotators, cardinality: 5, source: "paper 3.3", bound: 5, over_bound_action: truncate_and_record}
-  - {name: eval_scenes, cardinality: 200, source: "paper 3.3 (Table 3 uses 50 — see U-02)", bound: 200, over_bound_action: truncate_and_record}
+  - {name: render_views, cardinality: 11, source: "paper 2.3", bound: 11}
+  - {name: modality_conditions, cardinality: 7, source: "paper Table 1 columns", bound: 7}
+  - {name: eval_protocols, cardinality: 2, source: "U-09 -- both readings run", bound: 2}
+  - {name: headline_variants, cardinality: 2, source: "paper Table 1 last two rows", bound: 2}
+  - {name: ablation_variants, cardinality: 8, source: "paper Table 3 minus 2 reusable rows", bound: 10}
+  - {name: assets, cardinality: "len(asset_manifest)", source: "manifest, currently 46052", bound: 60000, over_bound_action: truncate_and_record}
+  - {name: eval_scenes, cardinality: 200, source: "paper 3.3", bound: 200}
 static_fanouts_note: >
-  E8 — every fan-out has a declared bound. All are STATICALLY enumerated, which
-  is exactly why max_authority is A1 and not A3.
+  Every fan-out is statically enumerated, which is why max_authority is A1.
+  Asset cardinality is len(manifest), never a literal 48000 (U-01, L1-MANIFEST).
 
-# ---------------------------------------------------------------- §15.8
+# ---------------------------------------------------------------- loops
 loops:
   - id: C1
     name: annotation_repair
     location: SG1
-    nodes: [sg1_annotate, sg1_validate_annotation]
-    progress_measure: "item_attempt (monotonically increasing)"
-    progress_channel: item_attempt
+    progress_measure: "item_attempt"
     semantic_exit: "annotation passes structured schema validation"
-    hard_bound: {iterations: 2, cost: null, wallclock_s: 120, external_calls: 3}
+    hard_bound: {iterations: 2, wallclock_s: 120}
     exhaustion_outcome: "quarantine the asset"
     exhaustion_marker: "terminated_by: repair_budget"
     iteration_channels_reset: [item_attempt, annotation_error_feedback]
-    note: "L3 — an exhausted repair is NOT a successful annotation. The asset leaves the admitted set."
+    note: "An exhausted repair is NOT a successful annotation; the asset leaves the admitted set."
 
   - id: C2
     name: semantic_edge_repair
     location: SG2
-    nodes: [sg2_semantic_edge, sg2_validate_edge]
-    progress_measure: "attempt"
-    progress_channel: item_attempt
+    progress_measure: "item_attempt"
     semantic_exit: "relation sentence non-empty and encodable"
-    hard_bound: {iterations: 2, cost: null, wallclock_s: 60, external_calls: 3}
-    exhaustion_outcome: "mark edge semantic_edge_missing, degrade to geometry-only edge"
+    hard_bound: {iterations: 2, wallclock_s: 60}
+    exhaustion_outcome: "mark the edge semantic_edge_missing, degrade to geometry-only"
     exhaustion_marker: "degraded_flags += semantic_edge_missing"
     iteration_channels_reset: [item_attempt]
-    note: "Must NOT silently zero-fill the embedding — that would look like a valid semantic edge."
+    note: "Must NOT zero-fill; a zero vector is indistinguishable downstream from a valid semantic edge."
 
   - id: C3
     name: iterative_composition
     location: SG4
-    nodes: [sg4_encode_layout, sg4_encode_query, sg4_fuse_retrieve, sg4_place, sg4_advance]
     progress_measure: "placed_count (merge=max, so retries never double-count)"
-    progress_channel: placed_count
-    semantic_exit: "placed_count == N (all queries in the list satisfied)"
-    hard_bound: {iterations: 25, cost: null, wallclock_s: 600, external_calls: 30}
-    exhaustion_outcome: "scene marked incomplete:true and added to composition_incomplete"
+    semantic_exit: "placed_count == n_queries"
+    hard_bound: {iterations: 25, wallclock_s: 600, external_calls: 30}
+    exhaustion_outcome: "scene marked incomplete and added to composition_incomplete"
     exhaustion_marker: "terminated_by: object_budget"
     iteration_channels_reset: [layout_embedding, query_modality_embeds]
-    note: >
-      L3 — incomplete scenes are EXCLUDED from Table 2 means and reported
-      separately. If the incomplete rate exceeds 10%, G4 fails.
-
-  - id: C4
-    name: budget_reapproval
-    location: main
-    nodes: [n22_budget_approval, G1_feasibility, G4_human_study_commit]
-    progress_measure: "approval_round"
-    progress_channel: run_progress
-    semantic_exit: "human approves or explicitly rejects"
-    hard_bound: {iterations: 2, cost: null, wallclock_s: null, external_calls: null}
-    exhaustion_outcome: "whole graph BLOCKED (resumable), never FAILED"
-    exhaustion_marker: "terminated_by: awaiting_human"
-    iteration_channels_reset: []
-    note: "Anti-pattern 24 — BLOCKED is not FAILED. Completed stages are not re-run."
-
-nested_loop_budget:
-  product: >
-    Table 2 worst case: 4 methods x 200 scenes x 25 objects x (1 ESSGNN forward
-    + 1 exact 48Kx1280 inner product) = 20,000 iterations.
-    Table 3 (U-02, 50 scenes): 8 variants x 50 scenes x 25 objects = 10,000 iterations.
-    SG1 worst case: 24 shards x 2000 assets x 3 annotation attempts = 144,000 API calls (ceiling).
-  cost_upper_bound: >
-    Pure compute for 20,000 iterations ~= 100 s (exact inner product ~3ms at
-    246MB; ESSGNN forward on a ~20-node graph ~2ms). The DOMINANT term is the
-    external I-Design layout call at an estimated 1-3 s/object => 6-17 hours.
-    SG1's 144,000-call ceiling is never reached in practice because the
-    cost_ledger cap trips BLOCKED far earlier.
-  unknown: "I-Design per-call latency is UNMEASURED (R-05). The 6-17h figure is an interval estimate, NOT an upper bound."
+    note: "Incomplete scenes are EXCLUDED from Table 2 means; above 10% incomplete, the stage fails."
 
 termination:
   states:
-    SUCCESS: "SC-1..SC-8 all met, G5 verdict PASS, report published"
-    FAILED: "any gate FAIL confirmed unrecoverable after diagnosis (e.g. ULIP-2 weights unobtainable; equivariance fails even with the correct h0=t implementation)"
-    EXHAUSTED: "cost_ledger hits the G1-approved cap while core tables are incomplete; carries terminated_by=budget"
-    BLOCKED: "awaiting budget re-approval / annotators / disk space / I-Design access. RESUMABLE — completed stages are not re-run."
-  terminal_nodes: [n21_publish_report, HALT_FAILED, HALT_BLOCKED, QUARANTINE_REPORT]
+    SUCCESS: "SC-1..SC-8 met, G5 PASS, report published"
+    FAILED: "a gate FAILed and diagnosis confirms it is unrecoverable"
+    EXHAUSTED: "budget exhausted with core tables incomplete; carries terminated_by=budget"
+    BLOCKED: "awaiting an external input (e.g. I-Design access). RESUMABLE, not a failure."
+  terminal_nodes: [n22_publish_report, HALT_FAILED, HALT_BLOCKED]
 
-# ---------------------------------------------------------------- §15.13
-diagram: "see 01_GRAPH_SPEC.md section 13 (mermaid, role-coloured, dashed error/feedback edges)"
-
-# ---------------------------------------------------------------- §15.14
+# ---------------------------------------------------------------- execution
 execution_order:
   layers:
-    - {layer: 1,  parallel_nodes: [n01_env_bootstrap], gates: [], human_pause: false, est_wallclock: "2-4 h"}
-    - {layer: 2,  parallel_nodes: [n02_acquire_sources], gates: [], human_pause: false, est_wallclock: "4-12 h"}
-    - {layer: 3,  parallel_nodes: [n03_pilot_and_budget], gates: [], human_pause: false, est_wallclock: "1-2 h"}
-    - {layer: 4,  parallel_nodes: [], gates: [G1_feasibility], human_pause: true, est_wallclock: "-"}
-    - {layer: 5,  parallel_nodes: [n04_object_prep, n05_scene_prep, n13_run_baselines], gates: [], human_pause: false, est_wallclock: "2-5 days (CRITICAL PATH)"}
-    - {layer: 6,  parallel_nodes: [n06_build_splits], gates: [], human_pause: false, est_wallclock: "<1 h"}
-    - {layer: 7,  parallel_nodes: [], gates: [G2_corpus_validity], human_pause: false, est_wallclock: "-"}
-    - {layer: 8,  parallel_nodes: [n07_train_stage1_align], gates: [], human_pause: false, est_wallclock: "2-6 h"}
-    - {layer: 9,  parallel_nodes: [n08_build_gallery_staging, n10_train_headline], gates: [], human_pause: false, est_wallclock: "1-3 h"}
-    - {layer: 10, parallel_nodes: [], gates: [G3_gallery_freeze], human_pause: false, est_wallclock: "-"}
-    - {layer: 11, parallel_nodes: [n09_promote_gallery_index, n11_equivariance_probe], gates: [], human_pause: false, est_wallclock: "<1 h"}
-    - {layer: 12, parallel_nodes: [n12_eval_object_retrieval, n14_compose_scenes], gates: [], human_pause: false, est_wallclock: "6-17 h"}
-    - {layer: 13, parallel_nodes: [n15_judge_gpt4o], gates: [], human_pause: false, est_wallclock: "2-4 h"}
-    - {layer: 14, parallel_nodes: [], gates: [G4_human_study_commit], human_pause: true, est_wallclock: "-"}
-    - {layer: 15, parallel_nodes: [n16_human_study, n17_train_ablations], gates: [], human_pause: true, est_wallclock: "3-7 days (CRITICAL PATH)"}
-    - {layer: 16, parallel_nodes: [n18_eval_ablations], gates: [], human_pause: false, est_wallclock: "3-8 h"}
-    - {layer: 17, parallel_nodes: [n19_aggregate_tables], gates: [], human_pause: false, est_wallclock: "<1 h"}
-    - {layer: 18, parallel_nodes: [n20_compare_to_paper], gates: [], human_pause: false, est_wallclock: "<1 h"}
-    - {layer: 19, parallel_nodes: [], gates: [G5_report_release], human_pause: false, est_wallclock: "-"}
-    - {layer: 20, parallel_nodes: [n21_publish_report], gates: [], human_pause: false, est_wallclock: "<1 h"}
-  notes: >
-    Critical path is layer 5 (data prep) + layer 15 (human study), together ~80%
-    of total elapsed time. n13_run_baselines was deliberately moved to layer 5:
-    it depends on no MetaFind training, so leaving it later would only lengthen
-    the critical path.
+    - {layer: 1, parallel_nodes: [n01_env_bootstrap], gates: [], est: "2-4 h"}
+    - {layer: 2, parallel_nodes: [n02_download], gates: [], est: "1-2 days (46K GLBs dominate) -- CRITICAL PATH"}
+    - {layer: 3, parallel_nodes: [], gates: [G1_sources_valid], est: "-"}
+    - {layer: 4, parallel_nodes: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs], gates: [], est: "1-3 h"}
+    - {layer: 5, parallel_nodes: [], gates: [G2_pc_distribution], est: "-"}
+    - {layer: 6, parallel_nodes: [n05_annotate, n08_semantic_edges], gates: [], est: "1-2 days (Qwen over 46K assets) -- CRITICAL PATH"}
+    - {layer: 7, parallel_nodes: [n06_encode_text_image], gates: [], est: "2-4 h"}
+    - {layer: 8, parallel_nodes: [n09_build_splits], gates: [], est: "<1 h"}
+    - {layer: 9, parallel_nodes: [], gates: [G3_corpus_valid], est: "-"}
+    - {layer: 10, parallel_nodes: [n10_train_stage1], gates: [], est: "hours to 1 day (trains the point encoder, unlike the earlier draft)"}
+    - {layer: 11, parallel_nodes: [n11_gallery_index_staging, n13_train_stage2], gates: [], est: "3-8 h"}
+    - {layer: 12, parallel_nodes: [], gates: [G4_gallery_freeze], est: "-"}
+    - {layer: 13, parallel_nodes: [n12_promote_index, n14_equivariance_probe], gates: [], est: "<1 h"}
+    - {layer: 14, parallel_nodes: [n15_eval_retrieval, n16_compose_scenes], gates: [], est: "6-17 h"}
+    - {layer: 15, parallel_nodes: [n17_judge_scenes], gates: [], est: "2-4 h"}
+    - {layer: 16, parallel_nodes: [n18_train_ablations], gates: [], est: "6-12 h"}
+    - {layer: 17, parallel_nodes: [n19_eval_ablations], gates: [], est: "3-8 h"}
+    - {layer: 18, parallel_nodes: [n20_aggregate, n21_compare_to_paper], gates: [], est: "<1 h"}
+    - {layer: 19, parallel_nodes: [], gates: [G5_report_release], est: "-"}
+    - {layer: 20, parallel_nodes: [n22_publish_report], gates: [], est: "<1 h"}
+  notes: "Critical path is layer 2 (GLB download) and layer 6 (Qwen annotation over 46,052 assets)."
 
-# ---------------------------------------------------------------- §14 optimization record
-optimization_passes:
-  - check: "nodes that always succeed/fail together with no useful checkpoint between => merge"
-    result: "Merged 'download mesh' and 'validate mesh' into sg1_validate_mesh. Kept n08/n09 SEPARATE despite the temptation — the split is what enables late commit."
-  - check: "nodes with mixed roles making retry policy unsolvable => split"
-    result: "Split sg1_write_vectors (compute) from sg1_delete_raw (mutate, irreversible). Merged, a retry would re-delete."
-  - check: "sequential sections with no data dependency => parallelize"
-    result: "MAIN WIN — moved n13_run_baselines to layer 5 (parallel with data prep). Also n08 || n10, and n09 || n11."
-  - check: "transitive redundant edges => remove"
-    result: "Removed 3 (see dependencies.transitive_edges_removed)."
-  - check: "repeated substructure => extract subgraph"
-    result: "SG1 reused by n03 (pilot) and n04 (full). SG3 reused by n10 (2 variants) and n17 (8 variants). SG4 reused by n14 and n18."
-  - check: "decision points with excessive authority => downgrade"
-    result: "The annotation-route choice was initially sketched as an A2 model call ('let the model decide if quality is good enough'). Downgraded to A1: compare measured cost against budget_cap. Cheaper, testable, reproducible."
-  - check: "pure nodes that could be cached"
-    result: "asset_embeddings cached with key [asset_sha256, code_revision, ulip2_ckpt_sha]. sem_edge_cache keyed by category pair, persistent across runs (~40x saving)."
-  - check: "join policies that are too strict"
-    result: "MAIN WIN — sg1_reduce and sg2_reduce changed from `all` to `all_settled` (one bad mesh would otherwise deadlock 48K assets). n19 split into core/extended groups."
-  - check: "gates that are really just tests => demote"
-    result: "Demoted 5 (see validation_plan.yaml rejected_gate_candidates). Notably 'baselines match published values' became Required Audit RA-2."
-  - check: "cycles that could be fixed-count parallel + pick best"
-    result: "C1 and C2 kept as cycles (error feedback genuinely improves the retry). C3 CANNOT be parallelized — that IS the paper's iterative claim, and 'w/o iterative retrieval' is Table 3 row 2, i.e. the parallel version is an ablation, not an optimization."
-
-# ---------------------------------------------------------------- §15.15
+# ---------------------------------------------------------------- risks
 risks_unknowns:
-  - id: R-01
-    item: "Only 108GB disk free (3.6T at 98%)"
-    marked: RISK
-    affects_decision: "D3 streaming architecture; G1 criterion"
-    missing_information: "none — measured"
-    resolution: "free space or attach external storage"
-    fallback_if_unresolved: "shrink shard to 500 assets; BLOCKED between shards awaiting space"
-
-  - id: R-02
-    item: "Single 24GB GPU vs the paper's 8-GPU script"
-    marked: RISK
-    affects_decision: "D1 and D2"
-    missing_information: "none — measured"
-    resolution: "not resolvable (hardware)"
-    fallback_if_unresolved: "D2 cached-embedding architecture; if contrastive batch is still too small, use gradient caching and declare it"
-
-  - id: R-03
-    item: "Using the released ULIP-2 checkpoint instead of pretraining it (D1)"
-    marked: ASSUMPTION
-    affects_decision: "absolute values in Table 1"
-    missing_information: "how much of the paper's numbers depend on their own pretraining run"
-    resolution: "would need 8xA100"
-    fallback_if_unresolved: "declare as a deviation in the report; SC-1's +/-3pp tolerance already accounts for it"
-
-  - id: R-04
-    item: "Frozen backbone (D2) prevents full verification of Table 3 row 9"
-    marked: ASSUMPTION
-    affects_decision: SC-6
-    missing_information: "none"
-    resolution: "same as R-03"
-    fallback_if_unresolved: "Required Audit RA-3 narrows the claim"
-
-  - id: R-05
-    item: "I-Design pipeline may be unobtainable or unrunnable"
-    marked: RISK
-    affects_decision: "the entire scene-level evaluation (Tables 2 and 3)"
-    missing_information: "I-Design availability and per-call latency"
-    resolution: "trial-run I-Design early (do this during layer 2)"
-    fallback_if_unresolved: "ProcTHOR native layout + degraded flag; if still unusable, Tables 2/3 => BLOCKED_EVIDENCE (rc=3), NOT FAIL"
-
-  - id: R-06
-    item: "GPT-4o annotation cost extrapolation may underestimate"
-    marked: RISK
-    affects_decision: "G1 criterion"
-    missing_information: "true cost per asset"
-    resolution: "n03 pilot measures it directly"
-    fallback_if_unresolved: "switch to the reuse_ulip2_captions branch (already built into the A1 decision point)"
-
-  - id: R-07
-    item: "scatter_add_ GPU atomics are non-deterministic (F9)"
-    marked: RISK
-    affects_decision: "equivariance test tolerance"
-    missing_information: "whether torch.use_deterministic_algorithms(True) is viable here"
-    resolution: "test during n01_env_bootstrap"
-    fallback_if_unresolved: "tolerance 1e-4 rather than exact; run 3x and take max error"
-
-  - id: R-08
-    item: "1280-dim semantic edge embeddings swamp the single geometric feature (F8)"
-    marked: RISK
-    affects_decision: "whether ESSGNN's gain is attributable to equivariance at all"
-    missing_information: "optimal projection dimension"
-    resolution: "L1-SEMEDGE-ZERO detects the degenerate case"
-    fallback_if_unresolved: "project to 64 dims; treat projection dim as a mandatory hyperparameter sweep"
-
-  - id: U-01
-    item: "Is the scene-level gallery the 48K Objaverse assets or the 3K+ ProcTHOR assets?"
-    marked: UNKNOWN
-    affects_decision: "the entire Table 2 evaluation protocol"
-    missing_information: "paper does not say"
-    resolution: "small-scale dual-version trial; or ask the authors"
-    fallback_if_unresolved: "main line uses the full 48K and records it; run the 3K version as a control"
-
-  - id: U-02
-    item: "How many scenes were used for the Table 3 scene-level scores?"
-    marked: UNKNOWN
-    affects_decision: "Table 3 cost and comparability"
-    missing_information: "paper only states 200 for Table 2 (3.3)"
-    resolution: "ask the authors"
-    fallback_if_unresolved: "use 50 scenes with widened tolerance, stated explicitly in the report"
-
-  - id: U-03
-    item: "Does the zero-padding ablation act on Stage 1 or on Stage-2 fusion?"
-    marked: UNKNOWN
-    affects_decision: "which stage that ablation re-runs"
-    missing_information: "paper is ambiguous"
-    resolution: "read the authors' code if released"
-    fallback_if_unresolved: "run BOTH versions — affordable after D2"
-
-  - id: U-04
-    item: "What is the gallery denominator for Table 1?"
-    marked: UNKNOWN
-    affects_decision: "comparability of EVERY Table 1 number"
-    missing_information: "paper does not state whether the gallery is all 48K or the 20% test split"
-    resolution: "back-solve from the baselines' PC-Only ~98-99% and verify"
-    fallback_if_unresolved: "lock into gallery_size_locked (write_once) and state it explicitly; G2 enforces that it has been written"
-
-  - id: U-05
-    item: "Does ProcTHOR's t_i come from its own metadata or from the GPT-4o annotation pipeline?"
-    marked: ASSUMPTION
-    affects_decision: "whether SG1 and SG2 can run in parallel"
-    missing_information: "completeness of ProcTHOR semantic metadata fields"
-    resolution: "inspect ProcTHOR metadata during layer 2"
-    fallback_if_unresolved: "if insufficient, SG2 becomes dependent on SG1 and layer 5 loses its parallelism (+1-2 days)"
+  - {id: U-01, marked: UNKNOWN, item: "asset count: paper says ~48,000, manifest holds 46,052", affects: "every denominator", resolution: "use len(manifest); record its sha256", fallback: "n/a"}
+  - {id: U-02, marked: UNKNOWN, item: "whether self-sampled point clouds match ULIP-2's training distribution", affects: "every PC embedding", resolution: "G2 blocks on a 500-asset comparison against ULIP's released clouds", fallback: "download ULIP's 185 GB of point clouds"}
+  - {id: U-03, marked: UNKNOWN, item: "camera placement for the 11 views", affects: "the image modality", resolution: "Fibonacci lattice by default, recorded per asset", fallback: "axis-aligned variant available"}
+  - {id: U-04, marked: UNKNOWN, item: "render resolution", affects: "image tower input", resolution: "224px, matching ULIP-2's convention", fallback: "512px if annotation quality suffers"}
+  - {id: U-05, marked: UNKNOWN, item: "adjacency criterion for physical edges", affects: "ESSGNN input", resolution: "kNN k=8, recorded with the artifact", fallback: "radius mode available"}
+  - {id: U-06, marked: UNKNOWN, item: "which object pairs get a semantic edge", affects: "ESSGNN input", resolution: "record the choice; list in the report", fallback: "n/a"}
+  - {id: U-07, marked: UNKNOWN, item: "ProcTHOR ships 10k/1k/1k but the paper says 80/20", affects: "scene splits", resolution: "main line follows the paper; both recorded", fallback: "n/a"}
+  - {id: U-08, marked: UNKNOWN, item: "how Stage 2 training samples are constructed from ProcTHOR", affects: "all of Table 2 and 3", resolution: "the paper never defines it; our protocol is stated explicitly in 02_BUILD_STEPS", fallback: "n/a"}
+  - {id: U-09, marked: UNKNOWN, item: "gallery scope for Table 1", affects: "every R@k", resolution: "run both protocols and report both", fallback: "n/a"}
+  - {id: U-10, marked: UNKNOWN, item: "which IDesign aspect maps to Table 2's Scene Coherence", affects: "Table 2 column mapping", resolution: "record the assumed mapping", fallback: "n/a"}
+  - {id: R-01, marked: RISK, item: "I-Design has not been verified to run", affects: "all of Tables 2 and 3", resolution: "trial-run it early -- cheap to check, expensive to discover late", fallback: "Tables 2/3 => BLOCKED_EVIDENCE"}
+  - {id: R-02, marked: RISK, item: "24 GB limits the trainable scope", affects: "D-1 and RA-3", resolution: "not resolvable on this hardware", fallback: "declare the scope actually trained"}
+  - {id: R-03, marked: RISK, item: "Qwen annotation quality is unmeasured", affects: "the text tower", resolution: "pilot then manual spot-check", fallback: "escalate model size"}
