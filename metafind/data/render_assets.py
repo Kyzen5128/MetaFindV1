@@ -245,7 +245,19 @@ def process_batch(uids: list[str], cfg, shard_name: str, keep_glb: bool = False)
                 rec["source_sha256"] = hashlib.sha256(Path(glb).read_bytes()).hexdigest()
                 rec["source_bytes"] = Path(glb).stat().st_size
 
-                frames = render_asset(glb, cfg)
+                # Record the true extents before normalisation. Rendering keeps
+                # aspect ratio but destroys absolute scale -- a 1.8 m table and a
+                # 0.1 m cup normalise to the same unit sphere -- so any "size
+                # dimensions" the annotator produces can only be a category
+                # prior. Capturing the real bounding box costs nothing here and
+                # makes that estimate auditable (finding F13).
+                import trimesh as _tm
+
+                _raw = _tm.load(glb, force="mesh")
+                rec["extents_m"] = [round(float(v), 6) for v in _raw.extents]
+                rec["volume_m3"] = round(float(abs(_raw.volume)), 9)
+
+                frames = render_asset(_raw, cfg)
                 rec["view_sha256"] = write_views(uid, frames)
                 rec["status"] = "admitted"
                 admitted += 1
