@@ -14,7 +14,7 @@
 | 標記 | 意思 |
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
-| **[未定]** | 論文沒說，我們選了一個並記錄（累積 10 條，U-01…U-10） |
+| **[未定]** | 論文沒說，我們選了一個並記錄（累積 15 條，其中 **U-08a／U-08b 為阻斷級**） |
 | **[偏離]** | 與論文不同，必須在報告聲明（4 條，D-1…D-4） |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
@@ -41,9 +41,9 @@
 | 1 | [`02_BUILD_STEPS.md`](02_BUILD_STEPS.md) | **從這裡開始**。逐步驟建置流程，每步標明論文怎麼說、我們怎麼做 |
 | 2 | [`01_GRAPH_SPEC.md`](01_GRAPH_SPEC.md) | 完整規格：分類、目標、state、節點、邊、路由、迴圈、失敗、驗證、gate、風險、修正紀錄 |
 | 3 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實測事實（F 系列）與架構決策（D 系列），**含論文的多處自相矛盾** |
-| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：35 個 state channel、39 條邊、11 組 join policy、10 個決策點、3 個 cycle |
+| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：37 個 state channel、39 條邊、11 組 join policy、10 個決策點、3 個 cycle |
 | 5 | [`node_registry.yaml`](node_registry.yaml) | 27 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
-| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 43 個 L1、15 個 L2、5 個 gate、3 個 Required Audit |
+| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 44 個 L1、15 個 L2、5 個 gate、3 個 Required Audit |
 
 ## 一頁摘要
 
@@ -66,7 +66,7 @@
 | id | 偏離 | 影響 |
 |---|---|---|
 | **D-1** | ViT-bigG-14 凍結（2.5B 參數在 24GB 上無法訓練） | 「entire encoder」在我們的設定下指 3D encoder + fusion（RA-3 記錄） |
-| **D-2** | Qwen2.5-VL 取代 GPT-4o | Table 2 絕對數字與論文不可比，只剩方向性 |
+| **D-2** | Qwen2.5-VL 取代 GPT-4o | **Table 1 與 Table 2 都受影響** —— 它不只換裁判，也換掉 46,052 筆標註（文字塔的訓練資料）。SC-1 因此只報告差距、不設門檻 |
 | **D-3** | 不重跑 6 個 baseline | 只能與論文公佈值比較，並註明協定不同 |
 | **D-4** | 不做人工評分 | Table 2 人工欄判 `INSUFFICIENT_EVIDENCE` |
 
@@ -86,7 +86,7 @@
 `G1` 來源有效（G-INVALID）→ `G2` 點雲分布（G-INVALID）→ `G3` 語料有效（G-INVALID）
 → `G4` gallery 凍結（G-CONTAM）→ `G5` 報告發布（G-IRREVERSIBLE）
 
-58 個測試對 5 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
+59 個測試對 5 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
 
 ### 兩個阻斷級的未解項 —— Stage 2 目前建不起來
 
