@@ -38,6 +38,7 @@ import collections
 import hashlib
 import json
 import os
+import random
 import tarfile
 import tempfile
 import time
@@ -150,6 +151,67 @@ def wanted_by_shard(lvis: dict[str, str]) -> dict[str, dict[str, str]]:
     return grouped
 
 
+# TRANSIENT per SKILL section 11.1: same input, retrying may well succeed.
+# A read timeout mid-download previously killed the whole run at shard 27 of 160.
+TRANSIENT_ERRORS = (
+    "ReadTimeout", "ConnectTimeout", "ConnectError", "ReadError", "WriteError",
+    "PoolTimeout", "RemoteProtocolError", "ChunkedEncodingError",
+    "ConnectionError", "IncompleteRead", "ProtocolError", "SSLError", "Timeout",
+)
+MAX_SHARD_ATTEMPTS = 5
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """Network hiccups are retryable; a 404 or a disk-full error is not.
+
+    Matching on class name rather than importing httpx/requests keeps this
+    working whichever HTTP stack huggingface_hub is built on, and it walks the
+    __cause__ chain because hub wraps the original error.
+    """
+    seen = 0
+    cur: BaseException | None = exc
+    while cur is not None and seen < 10:
+        if type(cur).__name__ in TRANSIENT_ERRORS:
+            return True
+        cur = cur.__cause__ or cur.__context__
+        seen += 1
+    return False
+
+
+def _download_with_retry(shard: str, max_attempts: int = MAX_SHARD_ATTEMPTS) -> str:
+    """Fetch one shard, retrying transient network failures with backoff + jitter.
+
+    Jitter matters: without it, several retries after a common upstream blip
+    would resynchronise and hammer the server together.
+    """
+    from huggingface_hub import hf_hub_download
+
+    last: BaseException | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return hf_hub_download(
+                HF_REPO,
+                f"{HF_PREFIX}/{shard}.tar.gz",
+                repo_type="dataset",
+                local_dir=str(WORK),
+            )
+        except Exception as exc:  # noqa: BLE001 -- classify, then decide
+            last = exc
+            if not _is_transient(exc):
+                raise
+            if attempt == max_attempts:
+                break
+            delay = min(2**attempt, 60) + random.uniform(0, 5)
+            print(
+                f"    {shard}: {type(exc).__name__} (第 {attempt}/{max_attempts} 次)，"
+                f"{delay:.0f}s 後重試",
+                flush=True,
+            )
+            time.sleep(delay)
+
+    raise RuntimeError(f"{shard}: {max_attempts} 次嘗試後仍失敗") from last
+
+
 def process_shard(shard: str, members: dict[str, str], keep_tar: bool = False) -> dict:
     from huggingface_hub import hf_hub_download
 
@@ -180,9 +242,7 @@ def process_shard(shard: str, members: dict[str, str], keep_tar: bool = False) -
         # denominator is right.
         return {"shard": shard, "admitted": 0, "quarantined": 0, "skipped": len(done)}
 
-    tar_path = hf_hub_download(
-        HF_REPO, f"{HF_PREFIX}/{shard}.tar.gz", repo_type="dataset", local_dir=str(WORK)
-    )
+    tar_path = _download_with_retry(shard)
 
     admitted = quarantined = 0
     seen: set[str] = set()
@@ -302,7 +362,25 @@ def main() -> int:
 
     for i, shard in enumerate(shards, 1):
         t_shard = time.time()
-        res = process_shard(shard, grouped[shard], keep_tar=args.keep_tar)
+        try:
+            res = process_shard(shard, grouped[shard], keep_tar=args.keep_tar)
+        except Exception as exc:  # noqa: BLE001
+            # all_settled: record the failure and carry on. One unreachable
+            # shard must not discard the other 159, and the reason has to
+            # survive so the shortfall stays diagnosable.
+            n_lost = len(grouped[shard])
+            print(f"[{i:3d}/{len(shards)}] {shard}  失敗: {type(exc).__name__}: {exc}", flush=True)
+            with open(SIDECAR_DIR / f"{shard}.jsonl", "a") as sc:
+                for member_path, uid in grouped[shard].items():
+                    sc.write(json.dumps({
+                        "uid": uid, "shard": shard, "member": member_path,
+                        "status": "quarantined", "failure_class": "TRANSIENT",
+                        "exception_type": type(exc).__name__,
+                        "exception_msg": str(exc)[:400],
+                        "code_revision": CODE_REVISION,
+                        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    }) + "\n")
+            res = {"shard": shard, "admitted": 0, "quarantined": n_lost, "skipped": 0}
         took = time.time() - t_shard
         if res["admitted"] or res["quarantined"]:
             recent.append(took)
