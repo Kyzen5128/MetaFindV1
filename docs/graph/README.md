@@ -41,9 +41,9 @@
 | 1 | [`02_BUILD_STEPS.md`](02_BUILD_STEPS.md) | **從這裡開始**。逐步驟建置流程，每步標明論文怎麼說、我們怎麼做 |
 | 2 | [`01_GRAPH_SPEC.md`](01_GRAPH_SPEC.md) | 完整規格：分類、目標、state、節點、邊、路由、迴圈、失敗、驗證、gate、風險、修正紀錄 |
 | 3 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實測事實（F 系列）與架構決策（D 系列），**含論文的多處自相矛盾** |
-| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：37 個 state channel、39 條邊、11 組 join policy、10 個決策點、3 個 cycle |
-| 5 | [`node_registry.yaml`](node_registry.yaml) | 27 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
-| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 44 個 L1、15 個 L2、5 個 gate、3 個 Required Audit |
+| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：39 個 state channel、43 條邊、12 組 join policy、11 個決策點、3 個 cycle |
+| 5 | [`node_registry.yaml`](node_registry.yaml) | 29 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
+| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 44 個 L1、15 個 L2、6 個 gate、3 個 Required Audit |
 
 ## 一頁摘要
 
@@ -81,12 +81,16 @@
 | **RA-2** | §2.5 的 `f_x → ℝ³` vs 證明需要 `φ_x` 為純量才能提出 `Q` | **失敗** |
 | **RA-3** | §3.4 的「fine-tune entire encoder」 vs 單卡 24GB | **不可行**，縮小 claim |
 
-### 五個 gate
+### 六個 gate
 
-`G1` 來源有效（G-INVALID）→ `G2` 點雲分布（G-INVALID）→ `G3` 語料有效（G-INVALID）
-→ `G4` gallery 凍結（G-CONTAM）→ `G5` 報告發布（G-IRREVERSIBLE）
+```
+G1 來源有效 → G2 點雲分布 → G3 語料有效 → G6 Stage 2 協定 → G4 gallery 凍結 → G5 報告發布
+```
 
-59 個測試對 5 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
+`G6` 是這一輪新增的：**`stage2_protocol.status` 未 `resolved` 之前，Stage 2 不准訓練。**
+未決回傳 `BLOCKED_EVIDENCE`(rc=3) 而非 FAIL —— 沒有東西壞掉，只是決定還沒做。
+
+59 個測試對 6 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
 
 ### 兩個阻斷級的未解項 —— Stage 2 目前建不起來
 
@@ -106,8 +110,9 @@ Objaverse uid    : 867dfc95e96a4987...            46,052 個
 **U-08b：目標物件的 text / image / point cloud 從哪來？**
 ProcTHOR 只提供 metadata 與座標，沒有渲染圖也沒有點雲，所以 Eq.6 的三個模態沒有來源。
 
-**這兩個決定之前不要實作 Stage 2。** 其餘階段（環境、下載、點雲、渲染、
-場景圖、ESSGNN、Stage 1）不受影響，可以照常進行。
+**這兩個決定之前不要實作 Stage 2** —— 而且現在由 `G6_stage2_protocol` 這道 gate
+強制，不靠自律。其餘階段（環境、下載、點雲、渲染、場景圖、ESSGNN、Stage 1）
+不受影響，可以照常進行。
 
 ### 其他重大未解項
 

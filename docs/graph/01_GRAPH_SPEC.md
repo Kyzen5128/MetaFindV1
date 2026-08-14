@@ -81,7 +81,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 
 ## 3. State schema
 
-完整 35 個 channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
+完整 39 個 channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
 
 | channel | merge | 為什麼 |
 |---|---|---|
@@ -93,7 +93,9 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 | `renders` | `upsert_by_key` | 11 視角 × 46,052 |
 | `objaverse_annotations` | `upsert_by_key` | **以 Objaverse uid 為 key**。ProcTHOR 物件屬於另一個命名空間，不得讀這條 |
 | `procthor_object_text` | `upsert_by_key` | **新增**。ProcTHOR 場景圖的 `t_i` 與語意邊的輸入，來自 ProcTHOR 自己的 metadata |
-| `stage2_pairing` | `write_once` | **新增，U-08a**。ProcTHOR 目標物件 → gallery 正樣本的對照。**沒有它 Eq.7a/7b 無正樣本** |
+| `procthor_dataset` | `write_once` | **新增**。先前 ProcTHOR 根本沒進 graph state，導致 G1 無從檢查它 |
+| `stage2_protocol` | `replace` | **新增**。決定本身，未決前保持可改 |
+| `stage2_pairing` | `write_once` | **U-08a**。只有在協定 `resolved` 之後才寫入，避免用空值把 channel 鎖死 |
 | `sem_edge_cache` | `upsert_by_key` | **key = `sha256(desc_i, desc_j, prompt_ver, llm, encoder_ver)`**，非 category pair |
 | `text_image_embeddings` | `upsert_by_key` | CLIP 凍結 → 可快取 |
 | `pc_embeddings` | **不存在** | **point encoder 可訓練 → 不可預先快取**，見 §4 |
@@ -117,8 +119,8 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 | id | role | 說明 |
 |---|---|---|
 | `n01_env_bootstrap` | compute | 修 `torch._six`、stub 兩個 CUDA extension、純 torch FPS、驗 ULIP-2 建模 |
-| `n02_download` | retrieve | manifest / ProcTHOR / ULIP-2 / ViT-bigG-14 / Qwen / **46,052 個 GLB（保留）** |
-| **`G1_sources_valid`** | evaluate | **G-INVALID**。manifest 完整、GLB 覆蓋率、checkpoint 行為驗證 |
+| `n02_download` | retrieve | manifest / **`procthor_dataset`** / ULIP-2 / ViT-bigG-14 / Qwen / **46,052 個 GLB（保留）** |
+| **`G1_sources_valid`** | evaluate | **G-INVALID**。manifest 完整、GLB 覆蓋率、checkpoint 行為驗證、**ProcTHOR 三個 split 齊全** |
 
 ### Phase 1 — 資料處理
 
@@ -126,12 +128,14 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 |---|---|---|
 | `n03_sample_pointclouds` | compute | 從 mesh 取樣 10,000 點 xyz+rgb，複製 ULIP 的 `pc_norm` |
 | **`G2_pc_distribution`** | evaluate | **G-INVALID**。U-02：自行取樣 vs ULIP 官方點雲的 embedding 一致性 |
-| `n04_render_views` | compute | 11 正交投影視角、224px |
+| `n04_render_views` | compute | 11 個視角、224px；**投影方式為設定值，預設正交（U-03a，不是論文明文）** |
 | `n05_annotate` | model | Qwen2.5-VL → category / dimensions / materials / placement_constraints |
 | `n06_encode_text_image` | model | CLIP 凍結 → 可快取；**PC 不在此列** |
 | `n07_scene_graphs` | compute | ProcTHOR → 節點（位置 + `t_i`）、物理邊（support 讀自 children 樹）。**`t_i` 來自 ProcTHOR metadata，不是 Objaverse 標註** |
 | `n08_semantic_edges` | model | Qwen 對 **ProcTHOR 物件描述**產生關係句 → frozen text encoder → `e_ij` |
 | `n09_build_splits` | compute | 物件 80/20、房屋 80/20 |
+| `n09b_resolve_stage2_protocol` | **human** | **決定 U-08a／U-08b** —— 正樣本對應與模態來源。論文沒說，只能由人決定 |
+| **`G6_stage2_protocol`** | evaluate | **G-INVALID**。未決 → `BLOCKED_EVIDENCE`(rc=3)，**不是 FAIL** |
 | **`G3_corpus_valid`** | evaluate | **G-INVALID**。零洩漏、集合完整性、協定已定義 |
 
 ### Phase 2 — 訓練

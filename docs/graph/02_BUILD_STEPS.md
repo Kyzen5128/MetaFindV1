@@ -49,6 +49,9 @@ python setup/03_verify_env.py --full
 驗 9 項：torch/CUDA、compat shim、純 torch FPS、vendored EGNN 未被竄改、EGNN forward shape、
 SE(3) 等變性 smoke、determinism、儲存區與快取落點、ULIP-2 建模且 `pc_projection` 為 `(768, 1280)`。
 
+**G1 的判準也包含 ProcTHOR 三個 split 齊全** —— 先前它的判準文字提到 ProcTHOR，
+但那條 channel 根本沒進 graph，所以 gate 看不到它：Objaverse 齊全而 ProcTHOR 不存在時會 PASS。
+
 ### Step 0.2　下載
 
 ```bash
@@ -59,8 +62,8 @@ python -m metafind.data.download --only glbs        # 只抓 mesh（最慢，~21
 | 項目 | 大小 | 用途 |
 |---|---|---|
 | Objaverse-LVIS manifest | 13 MB | 定義 46,052 個資產 |
+| ProcTHOR-10K → `procthor_dataset` | 395 MB | **必須進 graph state**，否則 G1 無從檢查它 |
 | Objaverse-LVIS GLB | ~216 GB | **保留不刪**，見下 |
-| ProcTHOR-10K | 395 MB | 12,000 間房 |
 | ULIP-2 checkpoint | 384 MB | frozen backbone |
 | ViT-bigG-14 | 9.5 GB | ULIP-2 的 text/image 編碼器 |
 | Qwen2.5-VL-7B | 16.6 GB | 取代 GPT-4o |
@@ -302,6 +305,23 @@ Eq.6 需要 `e_text`、`e_image`、`e_pc`。ProcTHOR 只提供 metadata 與座�
 也不知道正樣本是誰。
 
 **U-08a 與 U-08b 決定之前，不要實作這個階段。**
+
+這件事現在由 graph 強制，不靠自律：
+
+```
+n09b_resolve_stage2_protocol   ← human 節點，做出這兩個決定
+        ↓
+G6_stage2_protocol             ← G-INVALID gate
+        ↓
+n13_train_stage2
+```
+
+`stage2_protocol.status` 未達 `resolved` 之前，G6 回傳 **`BLOCKED_EVIDENCE`(rc=3)
+而不是 FAIL** —— 沒有東西壞掉，只是有個決定還沒做。Stage 2 以外的階段照常進行。
+
+先前把 `stage2_pairing` 交給 `n09_build_splits` 寫、而且是 `write_once`，
+在答案還不存在時寫入空值就會**把 channel 永久鎖死**。現在拆成
+「可改的決定（`stage2_protocol`）」與「決定後才落定的對照表（`stage2_pairing`）」。
 
 ---
 

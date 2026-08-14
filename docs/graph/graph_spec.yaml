@@ -147,7 +147,7 @@ state:
     - name: asset_manifest
       type: "map[uid -> source_path]"
       writers: [n02_download]
-      readers: [n03_sample_pointclouds, n04_render_views, n09_build_splits, n11_gallery_index_staging]
+      readers: [G1_sources_valid, n03_sample_pointclouds, n04_render_views, n09_build_splits, n11_gallery_index_staging]
       merge: write_once
       lifetime: persistent
       note: >
@@ -165,6 +165,19 @@ state:
         [REVERSED from an earlier draft] An earlier draft deleted meshes after rendering. Algorithm 1
         places retrieved assets into a scene and needs real geometry, so they are
         kept.
+
+    - name: procthor_dataset
+      type: "{path, sha256, train_count, val_count, test_count}"
+      writers: [n02_download]
+      readers: [G1_sources_valid, n07_scene_graphs, n09_build_splits]
+      merge: write_once
+      lifetime: persistent
+      note: >
+        [CORRECTED] ProcTHOR is one of the two datasets the paper names, but an
+        earlier draft never gave it a channel: n02 did not declare writing it,
+        n07 read nothing, and G1's reads covered only the Objaverse channels.
+        G1's criterion text mentioned ProcTHOR while the gate had no way to see
+        it, so a run with Objaverse complete and ProcTHOR absent could PASS.
 
     - name: pointclouds
       type: "map[uid -> {path, sha256, n_points}]"
@@ -196,7 +209,7 @@ state:
     - name: procthor_object_text
       type: "map[procthor_asset_id -> {text, source}]"
       writers: [n07_scene_graphs]
-      readers: [n07_scene_graphs, n08_semantic_edges, n13_train_stage2]
+      readers: [n08_semantic_edges, n09_build_splits, n09b_resolve_stage2_protocol, n13_train_stage2]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -245,9 +258,22 @@ state:
         into one relation. Paper 2.5 and Appendix C both say the LLM is prompted
         with object DESCRIPTIONS.
 
+    - name: stage2_protocol
+      type: "{status: unresolved|resolved, pairing_method, modality_source, decided_by, decided_at}"
+      writers: [n09b_resolve_stage2_protocol]
+      readers: [G6_stage2_protocol, n13_train_stage2]
+      merge: replace
+      lifetime: persistent
+      note: >
+        [U-08a / U-08b] Holds the decision itself, and stays mutable until it is
+        made. An earlier draft had n09_build_splits write stage2_pairing as
+        write_once while U-08a was still open -- writing an empty mapping would
+        have locked the channel before the answer existed. The decision is now
+        its own node, and only once status == resolved is the mapping committed.
+
     - name: stage2_pairing
       type: "map[procthor_asset_id -> {gallery_uid, method, confidence}]"
-      writers: [n09_build_splits]
+      writers: [n09b_resolve_stage2_protocol]
       readers: [n13_train_stage2]
       merge: write_once
       lifetime: persistent
@@ -265,7 +291,8 @@ state:
           (c) treat the target's own modalities as the positive, making Stage 2
               a self-retrieval objective
         Whichever is chosen must be recorded here with its method, and reported
-        as a choice rather than a paper requirement.
+        as a choice rather than a paper requirement. Written only after
+        stage2_protocol reaches status == resolved.
 
     - name: splits
       type: "{object: {train, test}, scene: {train_houses, test_houses}}"
@@ -397,7 +424,7 @@ state:
 
     - name: gate_records
       type: "list[gate_record]"
-      writers: [G1_sources_valid, G2_pc_distribution, G3_corpus_valid, G4_gallery_freeze, G5_report_release]
+      writers: [G1_sources_valid, G2_pc_distribution, G3_corpus_valid, G4_gallery_freeze, G6_stage2_protocol, G5_report_release]
       readers: [G5_report_release, n22_publish_report]
       merge: append
       lifetime: persistent
@@ -456,11 +483,11 @@ nodes_ref: "node_registry.yaml"
 # ---------------------------------------------------------------- edges
 edges:
   - {id: e01, from: n01_env_bootstrap, to: n02_download, kind: data, guard: "", join_group: default, carries: []}
-  - {id: e02, from: n02_download, to: G1_sources_valid, kind: data, guard: "", join_group: default, carries: [asset_manifest, asset_glb]}
+  - {id: e02, from: n02_download, to: G1_sources_valid, kind: data, guard: "", join_group: default, carries: [asset_manifest, asset_glb, procthor_dataset]}
 
   - {id: e03, from: G1_sources_valid, to: n03_sample_pointclouds, kind: data, guard: "verdict == PASS", join_group: default, carries: [asset_glb]}
   - {id: e04, from: G1_sources_valid, to: n04_render_views, kind: data, guard: "verdict == PASS", join_group: default, carries: [asset_glb]}
-  - {id: e05, from: G1_sources_valid, to: n07_scene_graphs, kind: data, guard: "verdict == PASS", join_group: default, carries: []}
+  - {id: e05, from: G1_sources_valid, to: n07_scene_graphs, kind: data, guard: "verdict == PASS", join_group: default, carries: [procthor_dataset]}
 
   - {id: e06, from: n03_sample_pointclouds, to: G2_pc_distribution, kind: data, guard: "", join_group: default, carries: [pointclouds]}
   - {id: e07, from: n04_render_views, to: n05_annotate, kind: data, guard: "", join_group: default, carries: [renders]}
@@ -472,6 +499,10 @@ edges:
   - {id: e12, from: n08_semantic_edges, to: n09_build_splits, kind: data, guard: "", join_group: default, carries: [sem_edge_cache]}
   - {id: e13, from: n09_build_splits, to: G3_corpus_valid, kind: data, guard: "", join_group: default, carries: [splits, eval_protocols]}
 
+  - {id: e13b, from: G3_corpus_valid, to: n09b_resolve_stage2_protocol, kind: data, guard: "verdict == PASS", join_group: default, carries: [scene_graphs, asset_manifest]}
+  - {id: e13c, from: n09b_resolve_stage2_protocol, to: G6_stage2_protocol, kind: data, guard: "", join_group: default, carries: [stage2_protocol, stage2_pairing]}
+  - {id: e13d, from: G6_stage2_protocol, to: n13_train_stage2, kind: data, guard: "verdict == PASS", join_group: protocol, carries: [stage2_protocol, stage2_pairing]}
+  - {id: e13e, from: G6_stage2_protocol, to: HALT_BLOCKED, kind: escalation, guard: "verdict == BLOCKED_EVIDENCE", join_group: default, carries: [stage2_protocol], rationale: "U-08a/U-08b unresolved is a pause awaiting a decision, not a failure."}
   - {id: e14, from: G3_corpus_valid, to: n10_train_stage1, kind: data, guard: "verdict == PASS", join_group: default, carries: [splits, pointclouds, text_image_embeddings]}
   - {id: e15, from: n10_train_stage1, to: n11_gallery_index_staging, kind: data, guard: "", join_group: default, carries: [stage1_ckpt]}
   - {id: e16, from: n11_gallery_index_staging, to: G4_gallery_freeze, kind: data, guard: "", join_group: default, carries: [gallery_index_staging]}
@@ -534,6 +565,16 @@ join_policies:
     groups: [{name: default, policy: all, k: null}]
     trigger: any_group_satisfied
     rationale: "Needs the promoted index and both headline variants."
+  - node: n13_train_stage2
+    groups:
+      - {name: default, policy: all, k: null}
+      - {name: protocol, policy: all, k: null}
+    trigger: all_groups_satisfied
+    rationale: >
+      Stage 2 needs both the Stage 1 checkpoint and a RESOLVED Stage 2 protocol.
+      Separating the groups makes the protocol a hard precondition rather than
+      something the trainer discovers missing at runtime.
+
   - node: n16_compose_scenes
     groups: [{name: default, policy: all, k: null}]
     trigger: any_group_satisfied
@@ -585,7 +626,9 @@ dependencies:
     - {node: n11_gallery_index_staging, depends_on: [n10_train_stage1]}
     - {node: G4_gallery_freeze, depends_on: [n11_gallery_index_staging]}
     - {node: n12_promote_index, depends_on: [G4_gallery_freeze]}
-    - {node: n13_train_stage2, depends_on: [n10_train_stage1]}
+    - {node: n09b_resolve_stage2_protocol, depends_on: [G3_corpus_valid]}
+    - {node: G6_stage2_protocol, depends_on: [n09b_resolve_stage2_protocol]}
+    - {node: n13_train_stage2, depends_on: [n10_train_stage1, G6_stage2_protocol]}
     - {node: n14_equivariance_probe, depends_on: [n13_train_stage2]}
     - {node: n15_eval_retrieval, depends_on: [n12_promote_index, n13_train_stage2]}
     - {node: n16_compose_scenes, depends_on: [n12_promote_index, n13_train_stage2]}
@@ -614,6 +657,7 @@ routing:
   - {decision_point: G2_pc_distribution, authority: A1, owner: edge, inputs: [pc_embedding_agreement, baseline_cross_similarity], destinations: [n09_build_splits, HALT_FAILED], default_destination: HALT_FAILED}
   - {decision_point: G3_corpus_valid, authority: A1, owner: edge, inputs: [leakage_count, admitted_size, quarantine_rate, eval_protocols], destinations: [n10_train_stage1, HALT_FAILED], default_destination: HALT_FAILED}
   - {decision_point: G4_gallery_freeze, authority: A1, owner: edge, inputs: [index_dim, index_count, nan_count, self_retrieval_recall], destinations: [n12_promote_index, HALT_FAILED], default_destination: HALT_FAILED}
+  - {decision_point: G6_stage2_protocol, authority: A1, owner: edge, inputs: [stage2_protocol.status, stage2_pairing], destinations: [n13_train_stage2, HALT_BLOCKED], default_destination: HALT_BLOCKED}
   - {decision_point: G5_report_release, authority: A1, owner: edge, inputs: [verdict_completeness, gate_records, audit_records, degraded_flags], destinations: [n22_publish_report, HALT_FAILED], default_destination: HALT_FAILED}
   - {decision_point: sg1_admit_or_repair, authority: A1, owner: edge, inputs: [schema_valid, item_attempt], destinations: [sg1_admit, sg1_generate, sg1_quarantine], default_destination: sg1_quarantine}
   - {decision_point: sg2_cache_lookup, authority: A1, owner: edge, inputs: ["sem_edge_cache.contains(hash)"], destinations: [use_cache, call_llm], default_destination: call_llm}
@@ -689,6 +733,7 @@ execution_order:
     - {layer: 8, parallel_nodes: [n09_build_splits], gates: [], est: "<1 h"}
     - {layer: 9, parallel_nodes: [], gates: [G3_corpus_valid], est: "-"}
     - {layer: 10, parallel_nodes: [n10_train_stage1], gates: [], est: "hours to 1 day (trains the point encoder, unlike the earlier draft)"}
+    - {layer: 10b, parallel_nodes: [n09b_resolve_stage2_protocol], gates: [G6_stage2_protocol], est: "human decision -- BLOCKS Stage 2 until U-08a and U-08b are answered"}
     - {layer: 11, parallel_nodes: [n11_gallery_index_staging, n13_train_stage2], gates: [], est: "3-8 h"}
     - {layer: 12, parallel_nodes: [], gates: [G4_gallery_freeze], est: "-"}
     - {layer: 13, parallel_nodes: [n12_promote_index, n14_equivariance_probe], gates: [], est: "<1 h"}

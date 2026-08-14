@@ -307,7 +307,13 @@ level_1:
     negative_injection: "re-centre positions"
     expected_on_injection: "the offset assertion fails"
     verified_blocks: false
-    note: "Normalising scene coordinates would defeat the equivariant encoder they feed."
+    note: >
+      The reason is NOT that centring breaks equivariance -- it does not;
+      x'_i = x_i - mean(x) leaves an EGNN equivariant. It is that paper 2.5
+      states the setting as "large and often unnormalized coordinate systems,
+      with no guarantee that scenes are aligned or centered". Pre-centring would
+      remove the very global translation the design claims robustness to, so the
+      claim would never be exercised.
 
   # ---- splits
   - id: L1-SPLIT-WRITEONCE
@@ -659,7 +665,7 @@ level_3_gates:
       manifest present and parseable
       AND len(glbs_on_disk) / len(manifest) >= 0.98
       AND the ULIP-2 checkpoint passes a behavioural check, not merely a sha256
-      AND ProcTHOR splits present with the expected house counts
+      AND procthor_dataset is populated with all three splits and their counts
     evidence: [L1-ENV-ULIP, L1-MANIFEST]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G1_sources_valid.yaml"
@@ -726,6 +732,34 @@ level_3_gates:
     on_fail: "Do NOT promote. Discard the staging index and rebuild; the promoted location stays untouched."
     downstream_blocked: [n12_promote_index, n15_eval_retrieval, n16_compose_scenes]
 
+  - gate_id: G6_stage2_protocol
+    gate_class: G-INVALID
+    justification: >
+      "If we carry this error forward, does the conclusion still hold?" -- no.
+      Eq. 7a/7b needs a gallery positive for the target object, and the target is
+      a ProcTHOR object while the gallery is Objaverse-LVIS. Measurement shows
+      the identifier spaces do not intersect at all: 995 ProcTHOR assetIds
+      against 46,052 Objaverse uids, empty intersection. Training Stage 2 with an
+      undefined or silently defaulted positive makes every Table 2 and Table 3
+      number meaningless, and nothing in the output would show it.
+    record_kind: gate
+    position: "between n09b_resolve_stage2_protocol and n13_train_stage2"
+    criterion: >
+      stage2_protocol.status == "resolved"
+      AND pairing_method is named and recorded
+      AND modality_source is named and recorded
+      AND every ProcTHOR asset used as a Stage 2 target resolves to exactly one
+          gallery entry in stage2_pairing
+    evidence: [L1-STAGE2-POSITIVE-DEFINED]
+    rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
+    record_path: "outputs/logs/gates/G6_stage2_protocol.yaml"
+    record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
+    on_fail: "Decide U-08a and U-08b, record the method, then re-run. Never fall back to a silent default positive."
+    on_blocked_evidence: >
+      Unresolved is rc=3, not rc=2: nothing is broken, a decision is outstanding.
+      Everything upstream of Stage 2 continues.
+    downstream_blocked: [n13_train_stage2]
+
   - gate_id: G5_report_release
     gate_class: G-IRREVERSIBLE
     justification: >
@@ -752,7 +786,7 @@ level_3_gates:
 gate_discipline:
   total_l1: 43
   total_l2: 15
-  total_gates: 5
+  total_gates: 6
   rejected_gate_candidates:
     - {candidate: "all 7 modality conditions produced", why_not_a_gate: "fails all four criteria -- nothing is invalidated, contaminated, expensively redone or irreversible", demoted_to: L2}
     - {candidate: "annotation schema pass rate", why_not_a_gate: "a criterion inside G3, not a separate checkpoint", demoted_to: "criterion of G3"}
