@@ -284,7 +284,12 @@ def t_ulip():
     from models.ULIP_models import ULIP2_PointBERT_Colored
 
     args = argparse.Namespace(npoints=10000)
-    model = ULIP2_PointBERT_Colored(args)
+    # ULIP hardcodes './models/pointbert/...yaml', so it must be built from the
+    # repo root. Companion assertion below proves we restored the CWD.
+    cwd_before = os.getcwd()
+    with ulip_patch.ulip_cwd():
+        model = ULIP2_PointBERT_Colored(args)
+    assert os.getcwd() == cwd_before, "ulip_cwd leaked the working directory"
 
     dim = model.pc_projection.shape[1]
     assert dim == 1280, f"expected ULIP-2 embed dim 1280, got {dim} (512 would mean ULIP-1)"

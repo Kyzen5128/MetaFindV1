@@ -22,12 +22,38 @@ so they stay re-clonable and their git status stays clean.
 
 from __future__ import annotations
 
+import contextlib
+import os
 import sys
 import types
+from pathlib import Path
 
 import torch
 
-__all__ = ["apply", "farthest_point_sample_idx", "fps"]
+__all__ = ["apply", "farthest_point_sample_idx", "fps", "ulip_cwd", "ULIP_ROOT"]
+
+ULIP_ROOT = Path("/home/kyzen/ULIP")
+
+
+@contextlib.contextmanager
+def ulip_cwd(repo: str | os.PathLike[str] = ULIP_ROOT):
+    """Run a block with the working directory set to the ULIP repo root.
+
+    ``ULIP_models.py`` builds its config path as a literal relative string::
+
+        config_addr = './models/pointbert/ULIP_2_PointBERT_10k_colored_pointclouds.yaml'
+
+    so constructing the model from anywhere else raises FileNotFoundError. The
+    same applies to ``./data/templates.json`` and ``./data/labels.json``. Wrap
+    every ULIP model construction in this context manager rather than requiring
+    callers to chdir, which would leak into unrelated code.
+    """
+    prev = os.getcwd()
+    os.chdir(os.fspath(repo))
+    try:
+        yield
+    finally:
+        os.chdir(prev)
 
 _APPLIED = False
 
