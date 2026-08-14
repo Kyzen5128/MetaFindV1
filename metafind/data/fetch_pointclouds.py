@@ -276,6 +276,10 @@ def main() -> int:
     args = ap.parse_args()
 
     os.environ.setdefault("HF_HOME", str(DATA / "cache/hf"))
+    # Authenticating switches the Hub onto its xet transfer backend, which
+    # measured at roughly 0.6 KB/s here -- effectively stalled -- against 6 MB/s
+    # over plain HTTP. Opt out unless the caller insists.
+    os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
     lvis = json.loads(LVIS_JSON.read_text())
     grouped = wanted_by_shard(lvis)
