@@ -265,6 +265,37 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 
 ---
 
+## F12. ProcTHOR-10K 實際只有 1,467 個 unique asset，論文說「3,000+」
+
+**實測**（`metafind/data/fetch_procthor.py`，2026-08-15）
+
+| | latest revision | 舊版 `ab3cacd`（pre-AI2THOR-5.0） |
+|---|---|---|
+| houses | 12,000（10k train + 1k val + 1k test） | 12,000 |
+| **unique assetId** | **1,467** | **1,467** |
+| unique 物件類型 | 93 | 93 |
+| objects/house | 69.3（最多 245） | 69.0 |
+
+把門、窗一起算進去也只有 1,467（`objects` 996 + `doors` 26 + `windows` 14，
+以 train 單獨計為 1,036）。**兩個 revision 完全一樣**，所以版本差異不是解釋。
+
+**最可能的解釋**：論文的
+*"constructed from a curated collection of more than 3,000 unique assets"*
+指的是 ProcTHOR **產生器可取用的資產庫**，而不是這 12,000 間房實際實例化的集合。
+無法在不取得完整 AI2-THOR 資產庫的情況下驗證 → 記為 **U-15**。
+
+**影響設計**
+
+- 若場景級檢索的 gallery 是 ProcTHOR 資產，實際只有 1,467 個而非 3,000+。
+  但 IDesign 的 `retrieve.py` 是對 **Objaverse** 檢索（見 §三），
+  所以主線不受影響；此數字只在報告中如實記錄。
+- **69 objects/house（最多 245）遠高於我原本的假設。** SG4 的
+  `N ≤ 25` 上限是針對 Algorithm 1 要放置的查詢數，不是房間總物件數，
+  但場景圖的節點數會到 245 → ESSGNN 的 batch 記憶體要照這個規劃，
+  而不是照「約 20 個節點」。
+
+---
+
 ## F9. 其他實作細節
 
 | 項目 | 事實 | 影響 |
