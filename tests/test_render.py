@@ -271,7 +271,17 @@ def test_valid_index_is_accepted(tmp_path):
 
     from metafind.data.render_assets import _object_paths_ok
 
+    # Real uids are 32 random hex chars, which barely compress. Sequential
+    # "uid0, uid1, ..." keys gzip to well under the 1 MB floor and would make
+    # this fixture unrepresentative of the file being guarded.
+    import secrets
+
+    entries = {}
+    for _ in range(200_000):
+        uid = secrets.token_hex(16)
+        entries[uid] = f"glbs/{uid[:3]}-{uid[3:6]}/{uid}.glb"
     good = tmp_path / "good.gz"
-    good.write_bytes(gzip.compress(_json.dumps({f"uid{i}": f"glbs/x/{i}.glb" for i in range(200_000)}).encode()))
-    assert good.stat().st_size > 1_000_000
+    good.write_bytes(gzip.compress(_json.dumps(entries).encode()))
+
+    assert good.stat().st_size > 1_000_000, f"fixture is only {good.stat().st_size} bytes"
     assert _object_paths_ok(good) is True
