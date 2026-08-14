@@ -1,531 +1,376 @@
-# MetaFind 復現 — 逐步建置流程（對照用）
+# MetaFind 復現 — 建置流程
 
-> 這份是 [`01_GRAPH_SPEC.md`](01_GRAPH_SPEC.md) 的**可執行版本**：把 graph 的節點翻成
-> 實際要寫的檔案、要跑的指令、以及**通過條件**。
-> 每一步的「驗證」欄都是對**內容**的斷言 —— 「跑完了」「檔案存在」「exit 0」一律不算通過（V3）。
+> 2026-08-15 全面改寫。前一版有六個會**實際改變實驗結果**的錯誤，逐條修正見末尾「修正紀錄」。
+> 每一步都標明：論文原文怎麼說 / 論文沒說什麼 / 我們怎麼做。
 >
-> 使用方式：實作時逐步對照，每步的 exit condition 沒過就不要進下一步。
+> **三種東西必須分開，不可混為一談：**
+> **[論文]** 原文明確規定 ｜ **[未定]** 論文沒說，我們選了一個並記錄 ｜ **[偏離]** 與論文不同，必須在報告中聲明
 
 ---
 
-## 專案結構（目標）
+## 資料與路徑
 
 ```
-MetaFindV1/
-├── docs/
-│   ├── metafind_paper.md
-│   └── graph/                     ← 本設計文件
-├── metafind/
-│   ├── state/
-│   │   ├── channels.py            # 40 個 channel 的 schema 與 merge policy
-│   │   └── checkpoint.py          # B1 durable progress（原子寫入）
-│   ├── data/
-│   │   ├── objaverse_stream.py    # SG1：shard 串流 + disk backpressure
-│   │   ├── render.py              # 11 視角渲染
-│   │   ├── annotate.py            # GPT-4o 標註 + C1 修復迴圈
-│   │   ├── procthor.py            # SG2：房屋 → scene graph
-│   │   └── sem_edges.py           # 語意邊 + 跨 run 快取
-│   ├── models/
-│   │   ├── ulip_backbone.py       # 凍結的 ULIP-2（D1）
-│   │   ├── fusion.py              # mean / mlp / masked_mlp / gated / transformer
-│   │   ├── essgnn.py              # EGNN + 語意邊投影（F8）
-│   │   ├── dual_tower.py          # query / gallery 雙塔
-│   │   └── losses.py              # MetaFindDualTowerLoss（F3，不可複用 ULIP）
-│   ├── train/
-│   │   ├── stage1_align.py
-│   │   └── stage2_layout.py
-│   ├── eval/
-│   │   ├── retrieval.py           # instance-level R@1/R@5（F3，自寫）
-│   │   ├── equivariance.py        # SC-5
-│   │   ├── compose.py             # SG4：Algorithm 1
-│   │   └── judge.py               # GPT-4o 四維度評分
-│   ├── gates/
-│   │   └── runner.py              # gate record + exit code contract
-│   └── baselines/                 # 6 個 baseline 的統一介面
-├── configs/
-│   ├── variants.yaml              # 10 個變體的靜態註冊表
-│   └── budget.yaml                # G1 的預算上限
-├── tests/
-│   ├── l1/                        # 47 條
-│   └── l2/                        # 15 條
-└── runs/                          # 所有產物（內容定址）
+data/ -> /mnt/data1/kyzen/MetaFind/
+├── datasets/          原始資料，只讀
+│   ├── objaverse-lvis/   manifest + 46,052 個 GLB
+│   └── procthor-10k/     train/val/test.jsonl
+├── models/            預訓練權重，不由我們訓練
+│   ├── ulip2/            ULIP-2 checkpoint
+│   └── hf-cache/         ViT-bigG-14、Qwen2.5-VL
+└── outputs/           全部可從上面重新生成
 ```
 
----
+路徑集中在 `metafind/paths.py`，模組內不寫死。
 
-## Phase 0 — 可行性（graph layers 1–4）
+### 論文只要兩個資料集
 
-### Step 0.1 — `n01_env_bootstrap`
+**[論文 §2.3]**
+> Object-Level Dataset: **Objaverse-LVIS** ... approximately 48,000 distinct 3D assets
+> Scene-Level Dataset: **ProcTHOR** ... over 10,000 generated houses
 
-**做什麼**
+**[未定 U-01]** 論文說「approximately 48,000」，釋出的 manifest 是 **46,052**。
+程式一律用 `len(manifest)`，**任何地方都不得寫死 48000**。manifest 的 sha256 記入報告。
 
-1. 建 conda/venv，鎖定與 torch 2.9.1 相容的版本組合（**不要照抄 ULIP `requirements.txt`**，見 F4）。
-2. Patch `dataset_3d.py:544` 的 `from torch._six import string_classes` → `string_classes = str`。
-   建議做成 `metafind/compat/ulip_patch.py`，**不直接改 clone 的 repo**（保持可重新 clone）。
-3. 驗證 open_clip `ViT-bigG-14` 可載入。
-
-**驗證（通過條件）**
-
-| 檢查 | 斷言 |
-|---|---|
-| L1-ENV-ULIP | `ULIP2_PointBERT_Colored` 能被實例化，且 `model.pc_projection.shape[1] == 1280` |
-| L1-ENV-EGNN | `EGNN(in_node_nf=1280, hidden_nf=128, out_node_nf=1280, in_edge_nf=64).forward()` 回傳 `h.shape==(n,1280)`, `x.shape==(n,3)` |
-| L1-ENV-DET | 記錄 `torch.use_deterministic_algorithms(True)` 是否可行；不可行則記入 `nondeterminism_sources` |
-
-**Exit**：三條 L1 全綠。**失敗不重試**（`DETERMINISTIC_INPUT`），印出版本衝突矩陣。
+**不下載**：ULIP-2 預先取樣的點雲（185 GB）、ULIP-2 的渲染圖（474 GB）、ShapeNet triplets（409 GB）。
+前兩者我們有 mesh 可以自己產，而且 ULIP 的渲染圖不是論文要的 11 正交視角。
 
 ---
 
-### Step 0.2 — `n02_acquire_sources`
+## Phase 0 — 環境與資料取得
 
-**做什麼**
+### Step 0.1　環境
 
-| 來源 | 取得 | 落點 |
+```bash
+bash setup/02_conda_env.sh && conda activate MetaFind
+python setup/03_verify_env.py --full
+```
+
+驗 9 項：torch/CUDA、compat shim、純 torch FPS、vendored EGNN 未被竄改、EGNN forward shape、
+SE(3) 等變性 smoke、determinism、儲存區與快取落點、ULIP-2 建模且 `pc_projection` 為 `(768, 1280)`。
+
+### Step 0.2　下載
+
+```bash
+python -m metafind.data.download                    # 全部
+python -m metafind.data.download --only glbs        # 只抓 mesh（最慢，~216 GB）
+```
+
+| 項目 | 大小 | 用途 |
 |---|---|---|
-| ULIP-2 checkpoint | HF `SFXX/ulip` → `initialize_models` + ULIP-2 PointBERT 10k-xyzrgb | `runs/sources/ulip2/` |
-| Objaverse-LVIS 清單 | `lvis.json` + `objaverse_lvis_metadata.json` | `runs/sources/objaverse-lvis/` |
-| ProcTHOR-10K | AI2 官方 | `runs/sources/procthor/` |
+| Objaverse-LVIS manifest | 13 MB | 定義 46,052 個資產 |
+| Objaverse-LVIS GLB | ~216 GB | **保留不刪**，見下 |
+| ProcTHOR-10K | 395 MB | 12,000 間房 |
+| ULIP-2 checkpoint | 384 MB | frozen backbone |
+| ViT-bigG-14 | 9.5 GB | ULIP-2 的 text/image 編碼器 |
+| Qwen2.5-VL-7B | 16.6 GB | 取代 GPT-4o |
 
-**驗證**
+**[偏離 D-1] GLB 不刪除。** 前一版設計「渲完就刪」是錯的：
+Algorithm 1 的 iterative composition 需要**真實幾何**才能放進場景，只有 embedding 不夠。
 
-| 檢查 | 斷言 |
-|---|---|
-| L1-SRC-HASH | 每個檔案的 sha256 寫入 `source_manifest`（`write_once`）；**不符即 `CONTRACT_VIOLATION` fail closed** |
-| L1-SRC-LOAD | ULIP-2 ckpt 能 `load_state_dict`，且 zero-shot ModelNet40 top-1 ≈ **50.6**（README 公佈值，±1.0） |
-
-> L1-SRC-LOAD 很重要：它是「我們拿到的是**對的**權重」的唯一證明。
-> 只驗 sha256 只能證明「檔案沒壞」，不能證明「是我們要的那個」（V2：驗不壞 ≠ 驗成立）。
-
-**Exit**：兩條全綠，`source_manifest` 已寫入。
+**[偏離 D-2] Qwen2.5-VL 取代 GPT-4o**（§2.3 明寫 GPT-4o）。
+標註是文字塔的訓練資料，換標註器等於換文字分布 → 每筆標註記錄 `annotator_model`，
+報告中列為偏離。
 
 ---
 
-### Step 0.3 — `n03_pilot_and_budget`（= SG1 mode=pilot，500 資產）
+## Phase 1 — 資料處理
 
-**做什麼**：用完整的 SG1 流程跑 **500 個資產**，實測三件事：
+### Step 1.1　點雲取樣
 
+**[論文]** 沒有規定點雲怎麼產生，只說資產是 3D assets。
+
+**[未定 U-02]** ULIP-2 checkpoint 是在**它自己取樣的點雲**上訓練的（10,000 點、xyz+rgb）。
+我們從 mesh 自行取樣，取樣方式若不一致，embedding 會偏離訓練分布。
+
+**做法**：保留 500 個 ULIP 官方點雲當**對照組**，比較「官方點雲」與「自行取樣」
+經過同一個 encoder 後的 embedding 餘弦相似度。相似度過低就必須調整取樣方式。
+**這個驗證要在全量處理之前做完。**
+
+前處理必須完全複製 ULIP 的 `pc_norm`：質心置中、除以最大半徑。
+checkpoint 是在這樣的點雲上訓練的，餵原始座標不會報錯，只會讓每個 embedding 偏離分布。
+
+### Step 1.2　渲染 11 視角
+
+**[論文 §2.3]**
+> Each asset is rendered from **11 orthogonal viewpoints**
+
+**[已解決]** 「orthogonal」不可能指 11 個互相正交的方向（三維最多 3 軸 6 向），
+必然指**正交投影**。測試驗證：相機從 3 拉到 30 單位，輪廓面積變化 ≤ 2 像素。
+
+**[未定 U-03]** 相機擺位論文沒說。11 不對應任何標準配置（立方體 6 面、二十面體 12 頂點），
+ULIP 自己的慣例是 30 個方位角，也對不上。預設 Fibonacci lattice（任意 N 都近似均勻），
+軸對齊版本保留為選項，選擇記入每筆 sidecar。
+
+**[未定 U-04]** 解析度論文沒說。用 224px 對齊 ULIP-2 慣例與 image tower 輸入。
+
+渲染前 mesh 置中、縮放到單位球，否則 image tower 學到的是**建模單位**而非形狀。
+代價是絕對尺度歸零（見 Step 1.3）。
+
+實測 31 ms/資產，46,052 個約 0.4 小時；瓶頸是下載不是渲染。
+
+### Step 1.3　結構化標註
+
+**[論文 §2.3]**
+> annotations provide rich textual descriptions detailing attributes such as
+> **object category, size dimensions, materials, and placement constraints**
+
+四個欄位全部必填，`placement_constraints` 用封閉詞彙表 —— 它是讓 layout-aware
+檢索成立的訊號，也是 ULIP-2 現成 caption 沒有、因此**不能拿來替代**的原因。
+
+**[偏離] 不提供 fallback 到 ULIP-2 captions。** 前一版把它設成便宜的預設分支是錯的：
+那會讓實驗變成別的實驗。若真的要用，整份結果標 `DEGRADED`，不得當成主線復現。
+
+**[已知限制 F13]** 渲染前的正規化摧毀絕對尺度（1.8 m 桌子與 0.1 m 杯子正規化後同大小），
+所以 `size dimensions` 只能是**類別先驗，不是量測**。
+prompt 明說渲染圖是 scale-normalised；同時把 mesh 的真實 `extents_m` 記進 sidecar，
+讓模型的估計可稽核。
+
+Schema 失敗走 bounded 修復迴圈（錯誤訊息餵回去，最多 2 次），
+格式問題（fences、前後贅字、數字字串）直接接受，不浪費修復額度。
+
+### Step 1.4　場景圖抽取
+
+**[論文 §2.5]**
+> nodes represent objects with 3D position $x_i$ and a text-derived feature $t_i$
+> Spatial edges are extracted from physical layout constraints (e.g., adjacency, support)
+> semantic edges are generated by prompting an LLM with **object descriptions**
+
+**物理邊**：ProcTHOR 的 `children` 樹本身就是支撐關係（`Apple_24` 是 `Countertop` 的 child），
+正是論文舉的「cup on table」，直接讀取而非用幾何推導。
+
+**[未定 U-05] adjacency 的判準論文沒給**（沒有半徑、沒有鄰居數）。
+房間平均 69 個物件、最多 245，全連接會是 6 萬條邊。預設 kNN（k=8）讓 degree 不隨房間大小暴增，
+參數記入產物。
+
+**語意邊 —— 前一版這裡錯了。**
+論文說是 **object descriptions**（Appendix C：「derived solely from **object-level textual
+descriptions**」），不是 category。前一版用 `(category_a, category_b)` 當 cache key，
+會把 `office chair + desk`、`dining chair + dining table` 壓成同一條關係，
+抹掉 object-level 的區別。
+
+**改為**：
 ```
-cost_per_asset      = GPT-4o 實際花費 / 500
-schema_pass_rate    = 首次通過 schema 的比例
-bytes_per_asset     = (渲染 + 點雲 + 標註) 峰值磁碟 / 500
-seconds_per_asset   = wallclock / 500
+key = sha256(desc_i, desc_j, prompt_version, llm_model, text_encoder_version)
 ```
+只有描述完全相同才重用。
 
-外推到 48K，寫入 `cost_projection`。
+**[未定 U-06] 語意邊要對哪些物件對，論文沒說。**
+§2.3 只寫「prompting an LLM on object pairs」—— 全部對？只有物理鄰居？某個 kNN？
+這直接影響 ESSGNN 的輸入。選一個並記錄，且列為報告中的未定項。
 
-**A1 決策點**：`cost_projection.money > budget_cap` → 走 `reuse_ulip2_captions` 分支（F7）。
-**預設分支是便宜的那個**，不是貴的那個。
+**座標不正規化。** 場景座標保持原始世界座標 —— 正規化就等於廢掉 ESSGNN 的等變性，
+而等變性是論文的核心賣點。測試釘住：整棟房子平移 100 公尺，座標必須跟著平移、邊結構必須不變。
 
-**驗證**
+### Step 1.5　資料劃分
 
-| 檢查 | 斷言 |
-|---|---|
-| L1-PILOT-SIDECAR | 500 筆 sidecar 全部落檔，且 `admitted + quarantined == 500` |
-| L1-PILOT-REASON | 每筆 quarantine 都有真實 `exception_type` + `message`（注入一個「只寫失敗」的版本必須被擋） |
-| L2-PILOT-EXTRAP | 外推公式對 500 筆自身回代誤差 <5% |
+**[論文 §3.1]**
+> We allocate **80% of the data for training and reserve 20% for testing**
 
-**Exit**：`cost_projection` 四個欄位皆已寫入且非 UNKNOWN。
+物件級 80/20、房屋級 80/20（依 `house_id` 切，不是依 room 或 object）。
+
+**[前一版錯誤] 不再強制「同一 asset 不得同時出現在 train 與 test 房屋」。**
+論文沒有這個要求，而 ProcTHOR 本來就是 12,000 間房共用約 1,467 個資產庫 —— 強制 disjoint
+會改變 ProcTHOR 原本的場景分布。房屋集合不相交是必要的；資產集合是否相交列為**額外協定**，
+不是必要驗證。
+
+**[未定 U-07]** ProcTHOR 官方自帶 10k/1k/1k 三個 split，與論文的 80/20 不一致。
+兩種切法都記錄，主線用論文的 80/20。
 
 ---
 
-### Step 0.4 — **G1_feasibility**（G-COST）
+## Phase 2 — 訓練
 
-```
-PASS ⟺ disk_free ≥ peak_shard_bytes × 3
-     ∧ cost_projection.money ≤ budget.money_cap
-     ∧ cost_projection.gpu_hours ≤ budget.gpu_cap
-     ∧ pilot_schema_pass_rate ≥ 0.95
-```
+### Step 2.1　Stage 1：跨模態對齊
 
-| verdict | rc | 動作 |
-|---|---|---|
-| PASS | 0 | → Phase 1 |
-| FAIL | 2 | **停**。縮小規模 / 改走 ULIP-2 captions / 清磁碟後重跑 Step 0.3。**不得調高 `money_cap` 讓它變綠**（GE） |
-| BLOCKED_EVIDENCE | 3 | 外推缺欄位 → 補跑 pilot；或預算需人核准 → `n22_budget_approval` |
+**[論文 §2.6]**
+> **Both query and gallery encoders are trained** on large-scale object-level data
+> from Objaverse-LVIS ... each modality in the query has a **30% probability of being
+> independently masked**. Rather than zero-padding, we apply **masked embeddings**
 
-**Gate record** 寫入 `runs/gates/G1_*.yaml`，含 `is_terminal: true`。
+**[論文 §3.4]**
+> **Fine-tuning the entire encoder outperformed training the fuser only**
 
-> ⚠️ **R-01 提醒**：目前 `disk_free = 108GB`。以 shard=2000 資產估算
-> `peak_shard_bytes ≈ 3GB`，`3×3=9GB` 是過得了的 ——
-> **但這是因為 D3 串流架構才過得了**。若沒有 D3、要一次落地 70GB+ 原始檔，這個 gate 會直接 FAIL。
+**[前一版最嚴重的錯誤]** 我原本設計成「凍結 backbone、預先算好 embedding、只訓練 head」。
+那正是 Table 3 的 `Train fuser only` 那一列 —— **論文明確報告它較差（8.7 vs 11.4）**。
+把它當主線等於一開始就跑錯實驗。
 
----
+**改為三個等級，主線是第二個：**
 
-## Phase 1 — 資料（graph layers 5–7）
-
-### Step 1.1 — `n04_object_prep`（SG1，24 shards，**可與 1.2 / 1.3 平行**）
-
-**每個 shard 的內部流程**
-
-```
-s1a validate_mesh      → 非流形/空幾何 → quarantine（不重試）
-     ├→ s1b render_11_views   (GPU)   ┐
-     └→ s1c sample_pointcloud (10000 pts, xyz+rgb) ┤ join=all
-s1d annotate_gpt4o     ← s1b          ┘
-s1e validate_annotation → schema 失敗 → C1 修復迴圈（bound 2）→ 仍失敗則 quarantine
-s1f encode_1280d       → text/image/pc 各一個 1280-d 向量（D2 的核心）
-s1g write_vectors_and_sidecar  → fsync
-s1h DELETE_RAW         ← 只有在 s1g 完成且 sha256 已驗證後才執行（不可逆，late commit）
-```
-
-**disk backpressure（A1）**：每個 shard 開始前檢查 `disk_free`；
-不足 → `shrink_shard` → 仍不足 → **`BLOCKED`**（等人清空間），**不是 FAILED**。
-
-**驗證**
-
-| 檢查 | 斷言 |
-|---|---|
-| **L2-COMPLETE** | `len(admitted) + len(quarantine) == len(asset_catalog)`，無重複、無非預期成員。**刪掉一筆結果，測試必須失敗** |
-| **L2-RESUME** | 在第 13 個 shard 中途 `kill -9`，重跑後 `asset_embeddings` 與不中斷版本**逐位元組相同**，且 GPT-4o 呼叫次數**不增加**（跳過判定依 sha256，不依檔案存在） |
-| L1-DELETE-ORDER | sidecar 未 fsync 時呼叫 `s1h` 必須 raise |
-| L1-MERGE-COMM | 打亂 shard 完成順序，`asset_embeddings` 結果相同 |
-| L1-EMB-DIM | 每個向量 `shape == (1280,)`，無 NaN，`norm > 0` |
-
-**Exit**：`asset_admitted` 已寫入，`quarantine_rate ≤ 2%`。
-
----
-
-### Step 1.2 — `n05_scene_prep`（SG2，**與 1.1 平行**）
-
-```
-s2a parse_house        → ProcTHOR house → rooms → objects{position, metadata}
-s2b physical_edges     → 幾何規則（adjacency / support），確定性
-s2c enumerate_pairs    → 同房間共現物件對，每房上限
-s2d semantic_edge_llm  → 先查 sem_edge_cache[(cat_a,cat_b)]，miss 才呼叫 LLM
-                          → C2 修復迴圈（bound 2）→ 仍失敗則標 semantic_edge_missing
-s2e encode_edge_text   → frozen text encoder → e_ij (1280-d)
-s2f project_edge       → Linear(1280 → 64)  ← F8，必要
-s2g assemble_graph     → edge_index（稀疏，自寫，不用 egnn 的 get_edges）
-```
-
-**驗證**
-
-| 檢查 | 斷言 |
-|---|---|
-| L1-CACHE-KEY | 同一 `(cat_a, cat_b)` 第二次查詢 **不觸發 LLM 呼叫**（用呼叫計數斷言，不是看時間） |
-| L1-EDGE-SPARSE | `edge_index` 是稀疏的；若退化成全連接（`n×(n-1)` 條邊）必須被擋 |
-| L1-EDGE-PROJ | `edge_mlp` 輸入維度 == `2×128 + 1 + 64 == 321`（F8） |
-| L2-CACHE-SAVING | 全量跑完後 `llm_calls / total_pairs < 0.1`（快取確實省下 ~40×） |
-
-**Exit**：`scene_admitted` 已寫入，`scene_quarantine_rate ≤ 5%`。
-
----
-
-### Step 1.3 — `n13_run_baselines`（**與 1.1 / 1.2 平行**）
-
-6 個 baseline × 7 種模態條件。**不依賴我方任何訓練**，所以放在這裡跑完，不佔關鍵路徑。
-
-**必須刻意重現的行為**：baseline 的 PC-Only 用**同一組 embedding** 當 query 與 gallery（F3）。
-
-**驗證**：`L2-PCONLY` —— 斷言 baseline PC-Only 的 query embedding 與 gallery embedding
-**逐位元組相同**。這不是 bug，是論文註腳描述的協定，必須忠實重現。
-
-**Required Audit RA-2** 在此產生紀錄（與各 baseline 原論文公佈值比對）。
-**它失敗不阻斷任何事**，只縮小「baseline 對照是忠實復現」這個 claim。
-
----
-
-### Step 1.4 — `n06_build_splits`
-
-```
-物件級 80/20（seed 寫入 split_seed，write_once）
-房屋級 80/20（依 house_id 切，不是依 room 或 object）
-鎖定 gallery_size_locked ← len(asset_admitted)   ⟵ U-04 的收斂點
-```
-
-**驗證**
-
-| 檢查 | 斷言 |
-|---|---|
-| **L2-LEAK** | `train_ids ∩ test_ids == ∅`（物件）∧ `train_houses ∩ test_houses == ∅`（房屋）∧ **同一資產不同時出現在 train 房屋與 test 房屋的節點裡** |
-| L1-WRITEONCE | `gallery_size_locked` 二次寫入不同值必須 raise |
-
----
-
-### Step 1.5 — **G2_corpus_validity**（G-INVALID）
-
-```
-PASS ⟺ leakage_count == 0
-     ∧ len(admitted) + len(quarantine) == len(catalog)
-     ∧ gallery_size_locked 已寫入且 > 0
-     ∧ quarantine_rate ≤ 0.02
-     ∧ schema_pass_rate ≥ 0.95
-```
-
-**on_fail**：停。修資料管線後重跑 Step 1.1–1.4。
-**帶著洩漏往下訓練，得到的 R@1 不算數** —— 這正是 G-INVALID 的檢驗問題。
-
----
-
-## Phase 2 — 訓練（graph layers 8–11）
-
-### Step 2.1 — `n07_train_stage1_align`
-
-在**快取的 1280-d 向量**上訓練雙塔（D2），不碰 ViT-bigG-14。
-
-- Query tower：各模態 30% 獨立遮罩（**masked embedding，不是 zero-padding**）→ Fusion → 1280-d
-- Gallery tower：modality-complete → 1280-d
-- Loss：**自寫** `MetaFindDualTowerLoss`（Eq.5），**不可複用** `ULIPWithImageLoss`（F3）
-
-**驗證**
-
-| 檢查 | 斷言 |
-|---|---|
-| L1-LOSS-SYMM | Eq.(7a)+(7b) 的雙向 loss 在 query/gallery 互換時數值相同 |
-| L1-MASK-NOTZERO | 遮罩後的 embedding **不等於零向量**（masked ≠ zero-pad，這是 Table 3 最後一列的對照組差異） |
-| L1-IDEMPOTENT | 同 config + 同 seed 跑兩次，ckpt sha256 相同（若不同 → 記錄非確定性來源） |
-
-**ckpt 路徑內容定址**：`runs/ckpt/{config_hash}_{data_hash}_{seed}_{code_rev}.pt` → 天然不覆蓋。
-
----
-
-### Step 2.2 — `n08_build_gallery_staging` → **G3** → `n09_promote_gallery_index`
-
-**這三步的順序是刻意的**（late commit）：
-
-```
-n08  寫入 runs/index/staging/{stage1_ckpt_sha}.faiss     ← staging，不是正式位置
-G3   驗證 staging 索引                                     ← G-CONTAM
-n09  驗證通過才 promote 到 runs/index/promoted/           ← write_once
-```
-
-**G3 判準**
-
-```
-PASS ⟺ dim == 1280
-     ∧ count == gallery_size_locked
-     ∧ 無 NaN、無零向量
-     ∧ 抽 1000 筆自我檢索 recall@1 == 1.0
-```
-
-最後一條是關鍵：**用 gallery 自己的 embedding 當 query，必須 100% 撈回自己**。
-撈不回自己 = 索引建構有問題。這也順便解釋了 F3 說的 baseline PC-Only 灌水現象。
-
-**on_fail**：**不 promote**。staging 索引作廢重建。
-壞索引一旦 promote，Table 1/2/3 全部被污染且事後分不出來 —— 這就是 G-CONTAM 的檢驗問題。
-
-**索引選擇**：48K × 1280 × 4B = 246MB，**用精確內積，不用 ANN**（消除一個不確定性來源）。
-
----
-
-### Step 2.3 — `n10_train_headline`（SG3 ×2）+ `n11_equivariance_probe`
-
-兩個 headline 變體：`w/ ESSGNN`、`w/o ESSGNN`。
-
-**ESSGNN 實作要點（F1/F2/F8/F9 全部落在這裡）**
-
-```python
-# ✅ 正確：h 只含語意，座標走 coord 通道
-h0 = t_i                                    # (n, 1280)，不是 Concat(x, t)
-e_ij_proj = Linear(1280, 64)(e_ij)          # F8：先降維
-egnn = EGNN(in_node_nf=1280, hidden_nf=128,
-            out_node_nf=1280, in_edge_nf=64,
-            coords_agg='sum')               # F9：論文 Eq.3 是 sum，不是預設的 mean
-h_out, x_out = egnn(h0, x, edge_index, e_ij_proj)
-e_layout = pool(h_out)                      # (1280,)，對齊 Eq.6 的殘差加法
-```
-
-**`n11_equivariance_probe`（SC-5）**
-
-```
-對 100 個隨機場景 × 100 組隨機 (R, T)：
-  座標通道：‖ESSGNN(Rx+T)_x − (R·ESSGNN(x)_x + T)‖∞ < 1e-4
-  特徵通道：ESSGNN(Rx+T)_h == ESSGNN(x)_h   （完全不變）
-```
-
-同時跑 **Required Audit RA-1**：用 `h0 = Concat(x, t)` 的版本跑同一個測試。
-**它預期會失敗**（F1）。失敗**不阻斷任何事**，只把 claim 縮小為
-「§2.5 的字面寫法與 Appendix C 的證明前提矛盾」。
-
-> 絕對不要因為 RA-1 過不了就放寬 `1e-4` 的容差 —— 那是 anti-pattern #13。
-
-**其他驗證**
-
-| 檢查 | 斷言 |
-|---|---|
-| L1-SEMEDGE-ZERO | 語意邊全置零時，兩個**幾何不同**的 layout 仍產生不同 `e_layout`（F8 退化偵測器） |
-| L1-LAMBDA | `λ` 是可學習純量且有梯度；固定成常數的版本必須被測出來 |
-| L1-DROPOUT-30 | scene dropout 在 30% 批次省略 `e_layout`，統計上可驗證 |
-
----
-
-## Phase 3 — 評估（graph layers 12–16）
-
-### Step 3.1 — `n12_eval_object_retrieval` → Table 1
-
-7 種模態條件 × 2 個變體 = 14 格。**自寫 instance-level 檢索評估器**（F3）。
-
-**驗證**：`L2-ROUTING-COV` —— 7 個條件每一個都被實際走到（不是只跑 full 然後推算）。
-
-**預期要看到 SC-3**：MetaFind 的 PC-Only（63–75）**低於** baseline（98–99）。
-**這是正確的復現結果，不是失敗。**
-
----
-
-### Step 3.2 — `n14_compose_scenes`（SG4）→ `n15_judge_gpt4o` → Table 2
-
-**SG4 = Algorithm 1**，四件套：
-
-| 項目 | 值 |
-|---|---|
-| progress measure | `placed_count`（merge=`max`，重試不重複計數） |
-| semantic exit | `placed_count == N` |
-| hard bound | `N ≤ 25` ∧ `wallclock ≤ 600s/場景` ∧ `retrieval_calls ≤ 30` |
-| **exhaustion** | 場景標 `incomplete: true`，**排除在 Table 2 平均之外並另行報告** |
-
-**每輪必須清空**：`layout_embedding`、`query_modality_embeds`（`reset_on: loop_entry`）。
-忘了清 = 上一個物件的 layout 污染這一輪。
-
-**O4 decision log**：每一步記 top-5 候選 + 分數 + 被選中者 + `λ·‖e_layout‖`。
-沒有這個，事後無法解釋「為什麼這個場景不協調」。
-
-**驗證**
-
-| 檢查 | 斷言 |
-|---|---|
-| L1-ITER-RESET | 第 2 輪進入時 `layout_embedding` 為空；注入殘留值必須被偵測 |
-| L1-EXHAUST-MARK | 觸發 bound 後狀態為 `EXHAUSTED` 且帶 `terminated_by`；被標成成功則測試失敗 |
-| **L2-DEADLOCK** | 故意把回邊併回 `init` join_group，**必須偵測到 deadlock**（E4 的負向證明） |
-
----
-
-### Step 3.3 — **G4_human_study_commit**（G-COST）
-
-```
-PASS ⟺ equivariance_max_err < 1e-4
-     ∧ all(table1_R@1_delta ≤ 3.0pp)
-     ∧ scene_complete_rate ≥ 0.90
-     ∧ annotator_staffing == 5
-```
-
-**為什麼這是 gate**：下一步是 **5 人 × 200 場景 × 4 方法 ≈ 67 人時**。
-人的時間花掉就退不回來。錯了要整段重來 —— 這正是 G-COST 的檢驗問題。
-
-`rc=3`（例如標註者還沒排定）→ `n22_budget_approval`，回程走 `reapproval` join_group。
-
----
-
-### Step 3.4 — `n16_human_study` ∥ `n17_train_ablations`
-
-**`n16`（human，會 `BLOCKED` 數天）**
-- 5 位專家 × 200 場景 × 4 維度（1–5 分）
-- 逾時 → 提醒 → `BLOCKED`（**不是 FAILED**，不重跑已完成階段）
-- **≥4 人完成** → 用完成者計算並記錄 n；**<4 人** → Table 2 人工欄 `BLOCKED_EVIDENCE`（rc=3）
-- annotator 身分以 `annotator_hash` 取代（B5）
-
-**`n17`（SG3 ×8）** —— 因為 D2，這 8 個變體從「各需一次完整預訓練」變成「各幾分鐘」：
-
-| # | 變體 | 需重訓 Stage-1？ |
-|---|---|---|
-| 1 | Full w/ iterative & ESSGNN | 複用 headline |
-| 2 | w/o iterative retrieval | **否**（只換 SG4 的 `composition_mode`） |
-| 3 | w/o Layout Context | 複用 headline |
-| 4 | w/ Layout Context (GAT) | 否（換 layout encoder） |
-| 5 | Fusion = Mean | 否 |
-| 6 | Fusion = MLPs | 否 |
-| 7 | Modality Dropout = 10% | **是**（但在快取向量上，很便宜） |
-| 8 | Modality Dropout = 50% | **是** |
-| 9 | Train fuser only | 否 |
-| 10 | Padding missing modalities with 0 | **是**（U-03：兩版都跑） |
-
-`configs/variants.yaml` 是**靜態註冊表**（cardinality 封閉 → 這是 A1 靜態 fan-out，不是 A3）。
-
-**Required Audit RA-3** 在第 9 列產生紀錄：因 D2 凍結 backbone，
-「Fine-tuning entire encoder > train fuser only」**預期無法完整驗證** → 縮小 claim，不阻斷。
-
----
-
-## Phase 4 — 報告（graph layers 17–20）
-
-### Step 4.1 — `n19_aggregate_tables`
-
-**雙 join_group**（本圖最值得注意的設計）：
-
-```
-core     = {n12, n13, n15}  policy=all           ← Table 1 與 Table 2 GPT-4o 欄必須齊
-extended = {n16, n18}       policy=all_settled   ← 人工欄與 Table 3 可以缺
-trigger  = all_groups_satisfied
-```
-
-缺 `extended` 的成員 → 正常產出報告，但**標記 claim 縮小**。
-一個標註者請假不該擋掉整份報告；但 Table 1 缺格必須擋。
-
-### Step 4.2 — `n20_compare_to_paper`
-
-逐格輸出三選一：**復現 / 復現失敗 / 證據不足**。對照 SC-1…SC-8。
-
-### Step 4.3 — **G5_report_release**（G-IRREVERSIBLE）
-
-```
-PASS ⟺ Table 1/2/3 每格都有明確判定（無留白）
-     ∧ 所有 gate record 齊全且 is_terminal == true
-     ∧ RA-1 / RA-2 / RA-3 三份紀錄都在
-     ∧ D1 / D2 / D3 三項偏離已在報告中明列
-     ∧ 所有 UNKNOWN（U-01…U-05）的處置已寫明
-```
-
-### Step 4.4 — `n21_publish_report`
-
-發布前建 git tag。**發布是不可逆的** —— 撤稿只能發勘誤 + 標記 tag `INVALIDATED`，
-已被讀取的內容撤不回（§11.2 的誠實界線）。
-
----
-
-## 貫穿全程的三條紀律
-
-### 1. 進度真相是 checkpoint，不是 stdout（B1）
-
-```
-原子寫入：tmp → fsync → rename
-stdout 失效不得讓工作失敗，但要記 stdout_broken: true
-```
-
-48K 資產標註要跑好幾天，SSH 一定會斷。若進度只在 stdout，
-斷線後你會看到「好像停了」但 worker 其實還在寫檔 —— 或者反過來，更糟。
-
-### 2. 每筆處理單位都有 sidecar（B2）
-
-```json
-{"asset_id":"...", "source_uri":"...", "source_sha256":"...",
- "embed_sha256":"...", "seed":..., "attempt":2,
- "status":"admitted|quarantined", "failure_class":null,
- "exception_type":null, "exception_msg":null,
- "code_revision":"...", "timestamp":"..."}
-```
-
-`source_uri + source_sha256` 是 D3 刪掉原始檔之後**唯一的補償路徑**。
-沒有它，刪錯了就真的沒了。
-
-### 3. 每個檢查都要有「它真的會擋」的證明（V1/V4）
-
-`validation_plan.yaml` 裡 62 條檢查的 `verified_blocks` **目前全是 `false`**。
-實作時每寫完一條檢查，就注入對應的違規，**親眼看到它失敗**，才可以改成 `true`。
-
-> 當一個檢查突然全綠時，第一個懷疑對象是檢查本身，不是被檢查的東西。
-
----
-
-## 進度追蹤表（實作時勾選）
-
-| Phase | Step | 節點 | 狀態 |
+| 等級 | 訓練什麼 | 4090 可行 | 定位 |
 |---|---|---|---|
-| 0 | 0.1 | `n01_env_bootstrap` | ☐ |
-| 0 | 0.2 | `n02_acquire_sources` | ☐ |
-| 0 | 0.3 | `n03_pilot_and_budget` | ☐ |
-| 0 | 0.4 | **G1_feasibility** | ☐ |
-| 1 | 1.1 | `n04_object_prep` | ☐ |
-| 1 | 1.2 | `n05_scene_prep` | ☐ |
-| 1 | 1.3 | `n13_run_baselines` | ☐ |
-| 1 | 1.4 | `n06_build_splits` | ☐ |
-| 1 | 1.5 | **G2_corpus_validity** | ☐ |
-| 2 | 2.1 | `n07_train_stage1_align` | ☐ |
-| 2 | 2.2 | `n08` → **G3** → `n09` | ☐ |
-| 2 | 2.3 | `n10_train_headline` + `n11_equivariance_probe` | ☐ |
-| 3 | 3.1 | `n12_eval_object_retrieval` | ☐ |
-| 3 | 3.2 | `n14_compose_scenes` + `n15_judge_gpt4o` | ☐ |
-| 3 | 3.3 | **G4_human_study_commit** | ☐ |
-| 3 | 3.4 | `n16_human_study` ∥ `n17_train_ablations` + `n18` | ☐ |
-| 4 | 4.1 | `n19_aggregate_tables` | ☐ |
-| 4 | 4.2 | `n20_compare_to_paper` | ☐ |
-| 4 | 4.3 | **G5_report_release** | ☐ |
-| 4 | 4.4 | `n21_publish_report` | ☐ |
+| `fuser_only` | 只有 fusion 層 | ✅ | **Table 3 的 ablation 列** |
+| `point_encoder+fuser` | PointBERT (32.5M) + fusion + 投影 | ✅ | **主線** |
+| `full` | 再加 ViT-bigG-14 (2.5B) | ❌ 單卡不可行 | 記為硬體限制 |
+
+**[偏離 D-3]** ViT-bigG-14 的 text/image 端保持凍結 —— 2.5B 參數在 24GB 上無法訓練。
+ULIP-2 原本的設計也是凍結 CLIP、訓練 point encoder，所以主線等級與 ULIP-2 一致。
+報告中須聲明「entire encoder」在我們的設定下指 3D encoder + fusion，不含 CLIP。
+
+**快取 embedding 只用於 `fuser_only` 這一列**（它本來就不更新 encoder，快取不改變結果），
+不得用於主線。
+
+Loss 為 Eq.5，**單向 query→gallery**。ULIP 現成的 `ULIPWithImageLoss` 是單塔 tri-modal，不能用。
+
+### Step 2.2　Gallery 索引
+
+**[論文 §2.7]** > all gallery asset embeddings are precomputed and cached
+
+Stage 1 完成後凍結 gallery 塔，對全部 admitted 資產編碼。
+先寫 staging，驗證後才 promote（late commit）—— gallery 索引是所有 Table 的共同基準，
+壞掉的索引一旦 promote，事後分不出哪些數字被污染。
+
+驗證判準：維度正確、數量等於 manifest、無 NaN／零向量、
+**抽 1000 筆自我檢索 recall@1 = 1.0**（撈不回自己就是索引壞了）。
+
+### Step 2.3　Stage 2：佈局感知微調
+
+**[論文 §2.6]**
+> `e_query = Fusion(e_text, e_image, e_pc) + λ · e_layout`（Eq.6，λ 可學）
+> stochastic scene dropout (30%)：30% 的批次省略 e_layout
+> **Only the query-side fuser and the ESSGNN module are updated; the gallery encoder is frozen**
+> 雙向對比 Eq.7a/7b，平均為 Eq.8
+
+注意 Stage 1 是**單向**、Stage 2 是**雙向**，這個差異是論文明寫的。
+
+**[未定 U-08 — 前一版完全漏掉，而且這是最大的缺口]**
+
+論文從未定義 Stage 2 的訓練樣本怎麼從 ProcTHOR 建構。一間房有 bed / desk / chair / lamp，
+訓練樣本是什麼？全部未定：
+
+- 目標物件怎麼選（隨機？依放置順序？）
+- 「current scene」是目標物件以外的全部，還是某個前綴？
+- 物件排序依什麼
+- 一間房產生幾筆樣本
+- 負樣本怎麼取（in-batch？全 gallery？）
+
+**我們採用的協定（必須在報告中明列，因為論文沒有規定）**：
+```
+對每間房，隨機抽 k 個物件當目標（k 依房間大小）
+  目標物件 o
+  current scene = 該房間扣掉 o 的其餘物件 → 建圖 → ESSGNN → e_layout
+  query        = o 的 text/image/pc（依 30% 遮罩）
+  positive     = o 的 gallery embedding
+  負樣本       = 同批次其他樣本（in-batch）
+```
+這是一個**選擇**，不是論文規定。不同選法會得到不同的 Table 2/3。
+
+---
+
+## Phase 3 — 評估
+
+### Step 3.1　Table 1：物件級檢索
+
+7 種模態組合 × 我們的變體。必須自寫 instance-level 檢索評估器 ——
+ULIP 的 `test_zeroshot_3d_core` 做的是 zero-shot **分類**（`pc @ text_prompt`，target 是類別 id），
+不是 48K gallery 的實例檢索。
+
+**[未定 U-09 — 前一版這裡錯了] Gallery 到底是什麼**
+
+**[論文 §2.1]** > retrieves the asset $A^*$ from a **pre-encoded asset database** $\mathcal{A}$
+**[論文 §3.1]** > 80% training / 20% testing
+
+論文沒說檢索時的 gallery 是全部 46,052 還是只有 20% 測試集。差別是隨機命中率 5 倍。
+
+**前一版打算「用 baseline PC-Only ≈ 98–99% 反推分母」—— 那是錯的。**
+PC-Only 是 query embedding 等於它自己的 gallery embedding，
+**無論 gallery 是 46K 還是 9.2K，自我檢索都會趨近 100%**，根本無法區分。
+
+**改為兩個協定都跑，都報**：
+```yaml
+protocol_A:  query = test split,  gallery = test split   (~9,210)
+protocol_B:  query = test split,  gallery = full         (46,052)
+```
+產出 `R@1_A / R@5_A / R@1_B / R@5_B`，不再鎖成單一數字。
+
+**預期要看到的**：MetaFind 的 PC-Only（63–75）**低於** baseline（98–99）。
+那是正確的復現結果，不是失敗 —— 論文自己註腳解釋了原因。
+
+### Step 3.2　等變性驗證
+
+**[論文 Eq.4]** > $(R x^{l+1} + T, h^{l+1}) = \text{ESSGNN}(R x^l + T, h^l, E)$
+**[論文 §2.5]** > $e_{\text{layout}} = \operatorname{Pooling}(\{h_i^{(L)}\})$
+
+**[前一版錯誤]** 我原本寫成
+`‖ESSGNN(Rx+T) − (R·ESSGNN(x)+T)‖ < 1e-4` 並稱之為「座標通道」。
+**這對 `e_layout` 沒有幾何意義** —— 它是從 `h` pooling 來的，`h` 是**不變量**，
+不能對它做 `R·(...)+T`。
+
+**改為三個分開的測試**：
+
+| 層級 | 斷言 |
+|---|---|
+| 層內座標 | `x^{l+1}(Rx+T) ≈ R·x^{l+1}(x) + T`　（**等變**） |
+| 層內特徵 | `h^{l+1}(Rx+T) ≈ h^{l+1}(x)`　（**不變**） |
+| layout 輸出 | `e_layout(Rx+T) ≈ e_layout(x)`　（**不變**） |
+
+（程式碼裡測的本來就是不變性、是對的；錯的是規格文字。）
+
+**另有兩個論文自身的矛盾要各自 audit，不得阻斷**：
+- **RA-1**：§2.5 的 `h⁰ = Concat(x, t)` 與 Appendix C 的「h⁰ 對 SE(3) 不變」前提衝突。字面版**預期失敗**。
+- **RA-2**：§2.5 的 `f_x → ℝ³` 與 Appendix C 的證明衝突（提出 `Q` 需要 `φ_x` 是純量）。已實作為純量。
+
+### Step 3.3　Table 2 / 3：場景級
+
+Algorithm 1 逐物件檢索並放置，需要 **I-Design** 與**真實 mesh 幾何**（所以 GLB 不刪）。
+
+**[未驗證 R-01]** I-Design 尚未測試能否執行。Table 2 全部與 Table 3 的場景欄全部依賴它。
+**這是目前最大的未知，而且查它很便宜。**
+
+**[偏離 D-2]** 場景評分用 Qwen2.5-VL 取代 GPT-4o。
+IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Table 2 是 4 個面向 1–5 分，
+論文沒有公佈它改過的 prompt → **[未定 U-10]**，其中 Scene Coherence 對應哪個面向不明。
+
+**換掉裁判之後，Table 2 的絕對數字與論文不再可比**，只有方向性（w/ESSGNN 是否優於 w/o）還成立。
+
+人工評分不做，該欄判 `INSUFFICIENT_EVIDENCE`。
+
+---
+
+## 維度一律不寫死
+
+**論文全文沒有出現任何維度數字**（`1280|768|512|128|64` 在論文中零命中）。
+論文只寫 `t_i ∈ ℝ^d`、`f_h : ℝ^(2d+1+e) → ℝ^d`。
+
+因此：
+
+| 參數 | 來源 |
+|---|---|
+| query/gallery embedding 寬度 | **由 ULIP-2 checkpoint 決定**（實測 `pc_projection` 為 `(768, 1280)`） |
+| 語意邊寬度 `e` | 由文字編碼器決定（論文只說 "e.g., CLIP or BERT"） |
+| ESSGNN hidden、層數、pooling | **超參數**，不是論文真值 |
+| 語意邊投影 | 論文**沒有**這一層，預設不投影 |
+
+前一版把 `Linear(1280→64)` 寫成「改掉就必須測試失敗」是錯的 —— 那是我加的，不是論文的。
+
+---
+
+## 修正紀錄（相對於前一版）
+
+| # | 前一版 | 現在 |
+|---|---|---|
+| 1 | Stage 1 凍結 backbone、只訓 head 當**主線** | 主線改為訓練 point encoder + fusion；凍結版降為 Table 3 的 ablation 列 |
+| 2 | `gallery_size_locked` 單一整數，用 PC-Only 反推 | 雙協定並行，兩組數字都報；PC-Only 無法反推分母 |
+| 3 | `e_layout` 寫成等變、可加 `R·(...)+T` | 分成層內座標等變 / 層內特徵不變 / `e_layout` 不變三個測試 |
+| 4 | 語意邊 cache key = `(category_a, category_b)` | key = 兩個 object description 的 hash |
+| 5 | Stage 2 訓練樣本建構**完全未提** | 列為 U-08，並明列我們採用的協定 |
+| 6 | 強制 train/test 房屋不得共用 asset | 移除；論文沒這要求，且會改變 ProcTHOR 分布 |
+| 7 | 渲染後**刪除 GLB** | 保留；Table 2 需要真實幾何 |
+| 8 | GPT-4o 可 fallback 成 ULIP captions（且是預設） | 移除 fallback；真要用則整份標 `DEGRADED` |
+| 9 | 多處寫死 `48000` | 一律 `len(manifest)`（實際 46,052） |
+| 10 | `1280 / 128 / 64` 當論文真值並設 L1 測試 | 改為 checkpoint 推導值與超參數 |
+
+## 未定項總表
+
+| id | 內容 |
+|---|---|
+| U-01 | 資產數：論文「約 48,000」vs manifest 46,052 |
+| U-02 | 自行取樣的點雲與 ULIP-2 訓練分布是否一致（**需先驗證**） |
+| U-03 | 11 個視角的相機擺位 |
+| U-04 | 渲染解析度 |
+| U-05 | adjacency 的判準 |
+| U-06 | 語意邊要對哪些物件對 |
+| U-07 | ProcTHOR 官方 split vs 論文 80/20 |
+| U-08 | **Stage 2 訓練樣本如何建構**（最大缺口） |
+| U-09 | Table 1 的 gallery 範圍 |
+| U-10 | Table 2 的 Scene Coherence 對應 IDesign 哪個面向 |
