@@ -24,8 +24,8 @@ import traceback
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-ULIP = Path("/home/kyzen/ULIP")
-EGNN = Path("/home/kyzen/egnn")
+ULIP_REPO = Path("/home/kyzen/ULIP")
+EGNN_REPO = Path("/home/kyzen/egnn")
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -68,9 +68,12 @@ def t_patch():
     from metafind.compat import ulip_patch
 
     ulip_patch.apply(patch_fps=False)
-    import torch._six  # noqa: PLC0415
+    from torch._six import string_classes  # noqa: PLC0415
 
-    assert torch._six.string_classes is str
+    assert string_classes is str
+    import torch  # noqa: PLC0415
+
+    assert torch._six.string_classes is str, "submodule not bound on parent package"
     import pointnet2_ops  # noqa: PLC0415
     import knn_cuda  # noqa: PLC0415
 
@@ -123,7 +126,7 @@ def t_fps():
 def t_egnn():
     import torch
 
-    sys.path.insert(0, str(EGNN))
+    sys.path.insert(0, str(EGNN_REPO))
     from models.egnn_clean.egnn_clean import EGNN
 
     n, d_h, d_e = 20, 1280, 64
@@ -150,7 +153,7 @@ def t_equivar():
     """
     import torch
 
-    sys.path.insert(0, str(EGNN))
+    sys.path.insert(0, str(EGNN_REPO))
     from models.egnn_clean.egnn_clean import EGNN
 
     torch.manual_seed(0)
@@ -223,7 +226,7 @@ def t_ulip():
     import torch
 
     sys.path.insert(0, str(REPO))
-    sys.path.insert(0, str(ULIP))
+    sys.path.insert(0, str(ULIP_REPO))
     from metafind.compat import ulip_patch
 
     ulip_patch.apply(patch_fps=True)

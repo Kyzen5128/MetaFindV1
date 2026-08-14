@@ -92,6 +92,11 @@ def _install_torch_six() -> None:
     mod.int_classes = int  # type: ignore[attr-defined]
     mod.container_abcs = __import__("collections.abc", fromlist=["abc"])  # type: ignore[attr-defined]
     sys.modules["torch._six"] = mod
+    # Registering in sys.modules alone is enough for ``from torch._six import X``
+    # (which is what dataset_3d.py does), but ``import torch._six`` followed by
+    # attribute access needs the submodule bound on the parent package too --
+    # normally the import machinery does this, and we bypassed it.
+    setattr(torch, "_six", mod)
 
 
 def _install_pointnet2_stub() -> None:
