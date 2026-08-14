@@ -24,8 +24,8 @@ import traceback
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-ULIP_REPO = Path("/home/kyzen/ULIP")
-EGNN_REPO = Path("/home/kyzen/egnn")  # reference only; EGNN is vendored (see t_vendor)
+ULIP_REPO = REPO / "metafind" / "vendor" / "ulip"
+EGNN_REPO = REPO / "metafind" / "vendor" / "egnn"  # vendored upstream, for the drift check
 
 # --------------------------------------------------------------------------- cache
 # Point every model cache at the data volume BEFORE importing torch, open_clip or
@@ -141,7 +141,7 @@ def t_egnn():
     import torch
 
     sys.path.insert(0, str(REPO))
-    from metafind.third_party.egnn_clean import EGNN
+    from metafind.vendor.egnn_clean import EGNN
 
     n, d_h, d_e = 20, 1280, 64
     egnn = EGNN(in_node_nf=d_h, hidden_nf=128, out_node_nf=d_h, in_edge_nf=d_e, n_layers=4)
@@ -168,7 +168,7 @@ def t_equivar():
     import torch
 
     sys.path.insert(0, str(REPO))
-    from metafind.third_party.egnn_clean import EGNN
+    from metafind.vendor.egnn_clean import EGNN
 
     torch.manual_seed(0)
     n, d_h, d_e = 12, 64, 16
@@ -217,7 +217,7 @@ def t_vendor():
     `models.pointbert` becomes unreachable. We vendor egnn's single
     self-contained file so `models` belongs to ULIP alone.
     """
-    vendored = (REPO / "metafind" / "third_party" / "egnn_clean.py").read_text()
+    vendored = (REPO / "metafind" / "vendor" / "egnn_clean.py").read_text()
     upstream = (EGNN_REPO / "models" / "egnn_clean" / "egnn_clean.py").read_text()
     assert vendored.endswith(upstream), "vendored EGNN has drifted from upstream"
 
@@ -225,10 +225,10 @@ def t_vendor():
     assert not vendored.endswith(upstream + "\n# drift"), "drift check is vacuous"
 
     # The vendored module must not pull in a top-level `models` package at all.
-    import metafind.third_party.egnn_clean as ve  # noqa: PLC0415
+    import metafind.vendor.egnn_clean as ve  # noqa: PLC0415
 
     assert ve.__name__.startswith("metafind."), f"unexpected module name {ve.__name__}"
-    lic = REPO / "metafind" / "third_party" / "LICENSE.egnn"
+    lic = REPO / "metafind" / "vendor" / "LICENSE.egnn"
     assert "MIT" in lic.read_text(), "MIT licence text missing alongside vendored code"
     return f"{len(upstream.splitlines())} lines vendored verbatim, MIT licence retained"
 
@@ -303,8 +303,11 @@ def t_ulip():
     # The collision fix must hold: `models` belongs to ULIP, not egnn.
     import models  # noqa: PLC0415
 
-    resolved = [pth for pth in models.__path__]
-    assert any("ULIP" in pth for pth in resolved), f"`models` resolved to {resolved}, not ULIP"
+    resolved = [str(pth) for pth in models.__path__]
+    expected = str(ULIP_REPO / "models")
+    assert any(pth == expected for pth in resolved), (
+        f"`models` resolved to {resolved}, expected the vendored {expected}"
+    )
     return f"pc_projection {tuple(model.pc_projection.shape)}, misc.fps patched, models -> ULIP"
 
 

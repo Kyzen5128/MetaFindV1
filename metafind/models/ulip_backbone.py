@@ -41,7 +41,7 @@ DEFAULT_CKPT = (
     / "data/sources/ulip2/ULIP-2/pretrained_models"
     / "ULIP-2-PointBERT-10k-xyzrgb-pc-vit_g-objaverse_shapenet-pretrained.pt"
 )
-ULIP_REPO = Path("/home/kyzen/ULIP")
+ULIP_REPO = Path(__file__).resolve().parents[1] / "vendor" / "ulip"
 
 EMBED_DIM = 1280  # open_clip ViT-bigG-14 (finding F2)
 PC_FEAT_DIM = 768  # PointBERT output, projected to EMBED_DIM
@@ -86,11 +86,11 @@ class ULIPBackbone:
                 "Fetch it from HF SFXX/ulip (ULIP-2/pretrained_models/)."
             )
 
-        for p in (str(Path(__file__).resolve().parents[2]), str(ULIP_REPO)):
+        from metafind.compat import ulip_patch
+
+        for p in (str(Path(__file__).resolve().parents[2]), str(ulip_patch.ULIP_ROOT)):
             if p not in sys.path:
                 sys.path.insert(0, p)
-
-        from metafind.compat import ulip_patch
 
         ulip_patch.apply(patch_fps=True)
         from models.ULIP_models import ULIP2_PointBERT_Colored

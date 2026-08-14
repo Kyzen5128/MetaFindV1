@@ -16,8 +16,9 @@ Rationale (see docs/graph/00_FINDINGS.md F4 and F9):
   We replace ``misc.fps`` with a pure-torch implementation of the same greedy
   algorithm, so no CUDA extension has to be compiled.
 
-The upstream clones at /home/kyzen/ULIP and /home/kyzen/egnn are never modified,
-so they stay re-clonable and their git status stays clean.
+ULIP itself is vendored at ``metafind/vendor/ulip`` so this repository is
+self-contained: nothing outside it is required to build or run the model. Set
+``METAFIND_ULIP_ROOT`` to develop against a live clone instead.
 """
 
 from __future__ import annotations
@@ -32,7 +33,16 @@ import torch
 
 __all__ = ["apply", "farthest_point_sample_idx", "fps", "ulip_cwd", "ULIP_ROOT"]
 
-ULIP_ROOT = Path("/home/kyzen/ULIP")
+
+def _ulip_root() -> Path:
+    """Vendored ULIP, overridable for development against an upstream clone."""
+    override = os.environ.get("METAFIND_ULIP_ROOT")
+    if override:
+        return Path(override)
+    return Path(__file__).resolve().parents[1] / "vendor" / "ulip"
+
+
+ULIP_ROOT = _ulip_root()
 
 
 @contextlib.contextmanager
@@ -54,6 +64,7 @@ def ulip_cwd(repo: str | os.PathLike[str] = ULIP_ROOT):
         yield
     finally:
         os.chdir(prev)
+
 
 _APPLIED = False
 

@@ -57,7 +57,7 @@ from typing import Literal
 import torch
 from torch import Tensor, nn
 
-from metafind.third_party.egnn_clean import unsorted_segment_mean, unsorted_segment_sum
+from metafind.vendor.egnn_clean import unsorted_segment_mean, unsorted_segment_sum
 
 __all__ = ["ESSGNNConfig", "ESSGCL", "ESSGNN"]
 
