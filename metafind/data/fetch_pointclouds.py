@@ -181,9 +181,21 @@ def process_shard(shard: str, members: dict[str, str], keep_tar: bool = False) -
     )
 
     admitted = quarantined = 0
-    with open(sidecar_path, "a") as sc, tarfile.open(tar_path) as tf:
-        index = {m.name: m for m in tf.getmembers() if m.isfile()}
-        for member_path, uid in todo.items():
+    seen: set[str] = set()
+
+    # MUST be a single sequential pass in stream mode ("r|gz").
+    #
+    # A .tar.gz has no random access: every extractfile() by member re-inflates
+    # the stream from the beginning. Measured on shard 000-000 (1228 wanted
+    # members): random access 2184 ms/item -> 45 min/shard -> 119 h for 160
+    # shards. One sequential pass does the same 1228 in 4.9 s. 542x.
+    with open(sidecar_path, "a") as sc, tarfile.open(tar_path, "r|gz") as tf:
+        for member in tf:
+            if not member.isfile() or member.name not in todo:
+                continue
+            member_path = member.name
+            uid = todo[member_path]
+            seen.add(member_path)
             rec = {
                 "uid": uid,
                 "shard": shard,
@@ -192,9 +204,6 @@ def process_shard(shard: str, members: dict[str, str], keep_tar: bool = False) -
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
             }
             try:
-                member = index.get(member_path)
-                if member is None:
-                    raise FileNotFoundError(f"{member_path} not present in {shard}.tar.gz")
                 fh = tf.extractfile(member)
                 if fh is None:
                     raise OSError(f"{member_path} is not a regular file")
@@ -222,6 +231,32 @@ def process_shard(shard: str, members: dict[str, str], keep_tar: bool = False) -
                 quarantined += 1
             sc.write(json.dumps(rec) + "\n")
             sc.flush()
+
+        # Members lvis.json referenced but the archive does not contain. In
+        # stream mode this can only be known after the pass, and it must be
+        # recorded: silently missing assets would shrink the gallery denominator
+        # without leaving any trace of why.
+        for member_path, uid in todo.items():
+            if member_path in seen:
+                continue
+            sc.write(
+                json.dumps(
+                    {
+                        "uid": uid,
+                        "shard": shard,
+                        "member": member_path,
+                        "status": "quarantined",
+                        "failure_class": "DETERMINISTIC_INPUT",
+                        "exception_type": "FileNotFoundError",
+                        "exception_msg": f"{member_path} not present in {shard}.tar.gz",
+                        "code_revision": CODE_REVISION,
+                        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    }
+                )
+                + "\n"
+            )
+            quarantined += 1
+        sc.flush()
 
     if not keep_tar:
         Path(tar_path).unlink(missing_ok=True)
