@@ -21,11 +21,26 @@
 
 ## 閱讀順序
 
+### 權威順序（衝突時以上位者為準）
+
+```
+1. docs/metafind_paper.md    論文本身
+2. 02_BUILD_STEPS.md         最新決策，人類可讀
+3. 01_GRAPH_SPEC.md          graph 設計
+4. graph_spec.yaml
+5. node_registry.yaml        機器可讀契約
+6. validation_plan.yaml
+7. 00_FINDINGS.md            實測事實（F 系列）與決策紀錄（D 系列）
+```
+
+`00_FINDINGS` 排最後是因為它的 **D 系列是決策，會隨新事實改變**（D1/D2 已於
+2026-08-15 大幅修正）。它的 F 系列是實測、可信；D 系列與上位文件衝突時以上位者為準。
+
 | # | 檔案 | 內容 |
 |---|---|---|
-| 1 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實際檢查論文與程式碼後的硬事實，**含論文的多處自相矛盾** |
-| 2 | [`01_GRAPH_SPEC.md`](01_GRAPH_SPEC.md) | 完整規格：分類、目標、state、節點、邊、路由、迴圈、失敗、驗證、gate、可觀測性、風險、修正紀錄 |
-| 3 | [`02_BUILD_STEPS.md`](02_BUILD_STEPS.md) | 逐步驟建置流程，每步標明論文怎麼說、我們怎麼做 |
+| 1 | [`02_BUILD_STEPS.md`](02_BUILD_STEPS.md) | **從這裡開始**。逐步驟建置流程，每步標明論文怎麼說、我們怎麼做 |
+| 2 | [`01_GRAPH_SPEC.md`](01_GRAPH_SPEC.md) | 完整規格：分類、目標、state、節點、邊、路由、迴圈、失敗、驗證、gate、風險、修正紀錄 |
+| 3 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實測事實（F 系列）與架構決策（D 系列），**含論文的多處自相矛盾** |
 | 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：35 個 state channel、39 條邊、11 組 join policy、10 個決策點、3 個 cycle |
 | 5 | [`node_registry.yaml`](node_registry.yaml) | 27 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
 | 6 | [`validation_plan.yaml`](validation_plan.yaml) | 43 個 L1、15 個 L2、5 個 gate、3 個 Required Audit |
@@ -73,11 +88,28 @@
 
 58 個測試對 5 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
 
-### 最大的未解項
+### 兩個阻斷級的未解項 —— Stage 2 目前建不起來
 
-**U-08：Stage 2 的訓練樣本怎麼從 ProcTHOR 建構，論文完全沒有定義。**
-哪個物件當目標、「current scene」是什麼、一間房產幾筆樣本、負樣本怎麼取 —— 全部未定。
-我們採用的協定明列在 `02_BUILD_STEPS`，但那是**選擇**，不是論文規定。
+**U-08a：Stage 2 的正樣本是哪一個 gallery 條目？**
+
+Eq.7a/7b 需要一個 positive。目標是 **ProcTHOR 物件**，gallery 是 **Objaverse-LVIS**，
+而兩者的識別碼**實測交集為 0**：
+
+```
+ProcTHOR assetId : Countertop_I_8x2, Fridge_19 ...   995 個
+Objaverse uid    : 867dfc95e96a4987...            46,052 個
+交集             : 0
+```
+
+論文完全沒有提到這個對應關係。**沒有它，loss 的正樣本不存在。**
+
+**U-08b：目標物件的 text / image / point cloud 從哪來？**
+ProcTHOR 只提供 metadata 與座標，沒有渲染圖也沒有點雲，所以 Eq.6 的三個模態沒有來源。
+
+**這兩個決定之前不要實作 Stage 2。** 其餘階段（環境、下載、點雲、渲染、
+場景圖、ESSGNN、Stage 1）不受影響，可以照常進行。
+
+### 其他重大未解項
 
 **R-01：I-Design 尚未驗證能否執行。** Table 2 全部與 Table 3 的場景欄全部依賴它。
 查它很便宜，應該盡早做。

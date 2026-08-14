@@ -44,7 +44,7 @@ cycle 僅存在於 subgraph 內。
 
 | id | 判準 | 量測者 |
 |---|---|---|
-| SC-1 | Table 1 的 14 個 MetaFind 格子全部產出（**兩種 gallery 協定各一組**），R@1 落在論文值 ±3.0 pp | `n21` |
+| SC-1 | Table 1 的 14 個格子全部產出（**兩種 gallery 協定各一組**）；與論文的差距**如實報告，不設門檻**（見 D-2） | `n21` |
 | SC-2 | Table 1 的 PC-Only **反向**現象重現：MetaFind 低於 baseline 公佈值 | `n21` |
 | SC-3 | Table 2 四維度上 `w/ESSGNN` > `w/o ESSGNN`（**僅方向性**，見偏離 D-2） | `n21` |
 | SC-4 | **層內座標等變**：`‖x^{l+1}(Rx+T) − (R·x^{l+1}(x)+T)‖∞ < 1e-4` | `n14` |
@@ -73,7 +73,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 | id | 偏離 | 理由 | 影響 |
 |---|---|---|---|
 | **D-1** | ViT-bigG-14 保持凍結 | 2.5B 參數在 24GB 上無法訓練 | 「entire encoder」在我們的設定下指 3D encoder + fusion |
-| **D-2** | Qwen2.5-VL 取代 GPT-4o | 專案決定 | 標註的文字分布改變；Table 2 絕對數字與論文不可比，只剩方向性 |
+| **D-2** | Qwen2.5-VL 取代 GPT-4o | 專案決定 | **Table 1 與 Table 2 都受影響** —— Qwen 不只換掉裁判，也換掉 46,052 筆資產標註（文字塔的訓練資料）。所以 SC-1 只報告差距、不設門檻 |
 | **D-3** | 不重跑 baseline | 只復現 MetaFind | SC-2 只能與論文公佈值比較 |
 | **D-4** | 不做人工評分 | 無標註人力 | Table 2 人工欄 `INSUFFICIENT_EVIDENCE` |
 
@@ -91,7 +91,9 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 | `asset_glb` | `upsert_by_key` | **保留不刪** —— Algorithm 1 需要真實幾何 |
 | `pointclouds` | `upsert_by_key` | 從 mesh 取樣；U-02 需先驗證分布一致性 |
 | `renders` | `upsert_by_key` | 11 視角 × 46,052 |
-| `annotations` | `upsert_by_key` | Qwen 產出，`write_once` 語意（凍結成 artifact） |
+| `objaverse_annotations` | `upsert_by_key` | **以 Objaverse uid 為 key**。ProcTHOR 物件屬於另一個命名空間，不得讀這條 |
+| `procthor_object_text` | `upsert_by_key` | **新增**。ProcTHOR 場景圖的 `t_i` 與語意邊的輸入，來自 ProcTHOR 自己的 metadata |
+| `stage2_pairing` | `write_once` | **新增，U-08a**。ProcTHOR 目標物件 → gallery 正樣本的對照。**沒有它 Eq.7a/7b 無正樣本** |
 | `sem_edge_cache` | `upsert_by_key` | **key = `sha256(desc_i, desc_j, prompt_ver, llm, encoder_ver)`**，非 category pair |
 | `text_image_embeddings` | `upsert_by_key` | CLIP 凍結 → 可快取 |
 | `pc_embeddings` | **不存在** | **point encoder 可訓練 → 不可預先快取**，見 §4 |
@@ -127,8 +129,8 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 | `n04_render_views` | compute | 11 正交投影視角、224px |
 | `n05_annotate` | model | Qwen2.5-VL → category / dimensions / materials / placement_constraints |
 | `n06_encode_text_image` | model | CLIP 凍結 → 可快取；**PC 不在此列** |
-| `n07_scene_graphs` | compute | ProcTHOR → 節點（位置 + 文字特徵）、物理邊（support 讀自 children 樹） |
-| `n08_semantic_edges` | model | Qwen 對物件**描述**產生關係句 → frozen text encoder → `e_ij` |
+| `n07_scene_graphs` | compute | ProcTHOR → 節點（位置 + `t_i`）、物理邊（support 讀自 children 樹）。**`t_i` 來自 ProcTHOR metadata，不是 Objaverse 標註** |
+| `n08_semantic_edges` | model | Qwen 對 **ProcTHOR 物件描述**產生關係句 → frozen text encoder → `e_ij` |
 | `n09_build_splits` | compute | 物件 80/20、房屋 80/20 |
 | **`G3_corpus_valid`** | evaluate | **G-INVALID**。零洩漏、集合完整性、協定已定義 |
 
@@ -177,8 +179,8 @@ n01_env_bootstrap
  └→ n02_download
      └→ G1_sources_valid
          ├→ n03_sample_pointclouds → G2_pc_distribution ─┐
-         ├→ n04_render_views ──→ n05_annotate ───────────┤
-         └→ n07_scene_graphs ──→ n08_semantic_edges ─────┤
+         ├→ n04_render_views ──→ n05_annotate ───────────┤   (Objaverse 標註)
+         └→ n07_scene_graphs ──→ n08_semantic_edges ─────┤   (ProcTHOR 描述，與上面互不相干)
                                                           ↓
                         n06_encode_text_image ←───────────┤
                                     ↓                     │
@@ -486,6 +488,11 @@ graph TD
 | **U-08** | UNKNOWN | **Stage 2 訓練樣本如何建構** | 論文完全未定義；明列我們採用的協定 |
 | **U-09** | UNKNOWN | Table 1 的 gallery 範圍 | **兩個協定都跑、都報** |
 | **U-10** | UNKNOWN | Table 2 的 Scene Coherence 對應 IDesign 哪個面向 | 記錄對應假設 |
+| **U-08a** | **UNKNOWN・阻斷** | **Stage 2 的正樣本是哪一個 gallery 條目**。實測 ProcTHOR assetId 與 Objaverse uid **交集為 0**（995 vs 46,052），論文完全沒有提及這個對應 | 必須先決定並記入 `stage2_pairing`，否則 Eq.7a/7b 無正樣本 |
+| **U-08b** | **UNKNOWN・阻斷** | ProcTHOR 目標物件的 text / image / point cloud 從哪來。ProcTHOR 只提供 metadata 與座標，沒有渲染圖也沒有點雲 | 同上，Eq.6 的三個模態沒有來源 |
+| **U-11** | UNKNOWN | 缺席模態怎麼表示。論文只排除 zero-padding，沒說是 learned mask token 還是 fusion 層遮罩 | 記錄我們的選擇 |
+| **U-12** | UNKNOWN | ProcTHOR metadata 怎麼變成 `t_i` 的句子 | 記錄我們的做法 |
+| **U-03a** | UNKNOWN | 11 視角用正交投影還是透視投影。論文只寫 "orthogonal viewpoints"，沒指定投影方式 | 兩種都保留，記錄選擇 |
 | **R-01** | RISK | **I-Design 尚未驗證能否執行** | Table 2/3 全靠它，**查它很便宜，應盡早做** |
 | **R-02** | RISK | 單卡 24GB 限制訓練範圍 | D-1 已聲明 |
 | **R-03** | RISK | Qwen 標註品質未知 | pilot 後人工抽查 |
@@ -508,3 +515,17 @@ graph TD
 | 10 | 多處寫死 `48000` | `len(manifest)`，並加 L1 測試禁止字面值 | 🟠 |
 | 11 | `1280/128/64` 當論文真值並設 L1 | **論文全文無任何維度數字**；改為 checkpoint 推導值與超參數 | 🟠 |
 | 12 | 語意邊強制投影到 64 維 | 論文無此層，預設不投影；投影保留為可量測的對照 | 🟠 |
+
+### 2026-08-15 第二輪（外部審查後）
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 13 | `00_FINDINGS` 的 D1/D2 還是舊的凍結+全快取設計，而 README 叫人先讀它、稱它「硬事實」 | D1/D2 重寫；文件頂端加上**權威順序**，並註明 D 系列是決策、會改變 | 🔴 **會讓 agent 寫回舊版** |
+| 14 | `n07`/`n08` 讀 `annotations`（Objaverse 標註），但 `n07` 不是它的 writer，且 ProcTHOR assetId 與 Objaverse uid **交集為 0** | 拆成 `objaverse_annotations` 與 `procthor_object_text` 兩條 channel | 🔴 **provenance 與概念雙重錯誤** |
+| 15 | Stage 2 的**正樣本身分沒有閉合** —— 目標是 ProcTHOR 物件、gallery 是 Objaverse，沒有對應關係；`n13` 的 reads 甚至湊不出 Eq.6 的輸入 | 新增 `stage2_pairing` channel、U-08a／U-08b 標為**阻斷級**、補齊 `n13` 的 reads | 🔴 **Stage 2 建不起來** |
+| 16 | `learned mask token` 被寫成論文要求 | 論文只排除 zero-padding → U-11，斷言改成「必須與 zero-padding 不同」 | 🔴 |
+| 17 | 「orthogonal = 正交投影」標成已解決 | 降為 U-03a，兩種投影都保留 | 🟠 |
+| 18 | 「size dimensions 只能是類別先驗」當成論文性質 | 那是**我們**加了 unit-sphere 正規化的後果，改成描述本實作 | 🟠 |
+| 19 | 「正規化座標會破壞等變性」 | 數學上不對。改成：**為忠實保留論文的 unnormalized 設定**而不做置中 | 🟠 |
+| 20 | SC-1 用 ±3pp 當門檻 | Qwen 也換掉了 46,052 筆標註（文字塔的訓練資料），Table 1 同樣受影響 → 改為如實報告差距 | 🟠 |
+| 21 | `00_FINDINGS` 寫「以論文的 L=4」 | 論文只寫 "After $L$ layers"，沒給值 | 🟠 |

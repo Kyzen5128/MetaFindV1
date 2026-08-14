@@ -87,14 +87,23 @@ level_1:
     verified_blocks: false
     note: "A mis-framed camera returns a plausible blank white image, which every shape assertion would accept."
 
-  - id: L1-RENDER-ORTHOGRAPHIC
+  - id: L1-RENDER-PROJECTION-CONSISTENT
     target: n04_render_views
     target_kind: node
-    asserts: "moving the camera from 3 to 30 units changes silhouette area by <= 2 px"
-    negative_injection: "swap in a perspective camera"
+    asserts: >
+      The configured projection behaves as configured: under orthographic,
+      moving the camera from 3 to 30 units changes silhouette area by <= 2 px.
+    negative_injection: "keep the orthographic setting but swap in a perspective camera"
     expected_on_injection: "apparent size changes with distance"
     verified_blocks: false
-    note: "This is the assertion behind reading 'orthogonal' as orthographic."
+    note: >
+      [UNKNOWN U-03a] The paper says "11 orthogonal viewpoints" without naming a
+      projection. Eleven mutually orthogonal directions do not exist in 3D,
+      which makes "orthographic projection" a plausible reading, but the author
+      may equally have meant "spread-out" loosely. An earlier draft marked this
+      RESOLVED and required a perspective camera to fail the test; it is a
+      choice, and it changes the image embedding distribution, so both
+      projections stay available and the choice is recorded per asset.
 
   - id: L1-RENDER-SCALE-INVARIANT
     target: n04_render_views
@@ -153,11 +162,22 @@ level_1:
   - id: L1-MASK-NOTZERO
     target: n10_train_stage1
     target_kind: node
-    asserts: "a masked modality uses a learned mask token, not a zero vector"
+    asserts: >
+      An absent modality is NOT represented by a zero vector: the fused output
+      must differ from what zero-padding produces.
     negative_injection: "zero-pad instead"
-    expected_on_injection: "the norm is 0 and the test fails"
+    expected_on_injection: "the two paths agree, so the distinction is unimplemented"
     verified_blocks: false
-    note: "[PAPER 2.6] 'Rather than zero-padding, we apply masked embeddings'. This IS the difference Table 3's last row measures."
+    note: >
+      [PAPER 2.6] "Rather than zero-padding, we apply masked embeddings", which
+      is what Table 3's last row measures. That rules zero-padding OUT but does
+      not say what is used instead.
+      [UNKNOWN U-11] An earlier draft asserted a learned mask token as a paper
+      requirement. Several implementations satisfy the sentence: a learned mask
+      token, a validity mask the fusion honours, an attention mask in the
+      Transformer variant, or gating the modality out. Our choice is a learned
+      mask token, recorded as a choice; the assertion here only pins the paper's
+      actual claim, that the result must differ from zero-padding.
 
   - id: L1-DROPOUT-30
     target: n10_train_stage1
@@ -317,6 +337,21 @@ level_1:
     negative_injection: "define only one"
     expected_on_injection: "the evaluation refuses to start"
     verified_blocks: false
+
+  - id: L1-STAGE2-POSITIVE-DEFINED
+    target: stage2_pairing
+    target_kind: channel
+    asserts: >
+      Every ProcTHOR asset used as a Stage 2 target resolves to exactly one
+      gallery entry, with the mapping method recorded.
+    negative_injection: "train Stage 2 with an empty stage2_pairing"
+    expected_on_injection: "the loss has no positive and the stage refuses to start"
+    verified_blocks: false
+    note: >
+      [U-08a] Measured: ProcTHOR assetIds and Objaverse uids have zero overlap
+      (995 vs 46,052 ids, empty intersection). Without this mapping Eq. 7a/7b is
+      undefined. This test exists so the gap fails loudly rather than being
+      papered over with a silent fallback.
 
   # ---- channels
   - id: L1-MERGE-COMM

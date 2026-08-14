@@ -53,8 +53,19 @@ goal:
 
   success_criteria:
     - id: SC-1
-      criterion: "All 14 MetaFind cells of Table 1 produced under BOTH gallery protocols; R@1 within +/-3.0 pp of the paper"
+      criterion: >
+        All 14 MetaFind cells of Table 1 produced under BOTH gallery protocols.
+        Deviation from the paper's R@1 is REPORTED, not thresholded as a
+        pass/fail on the model.
       measured_by: n21_compare_to_paper
+      note: >
+        An earlier draft required +/-3.0 pp. That is not a fair criterion here.
+        D-2 replaces GPT-4o with Qwen for the asset annotations, which are the
+        text tower's training data, so Table 1 is affected too -- not just
+        Table 2's judge. A cell outside 3 pp may reflect the annotation
+        distribution rather than a reproduction failure, and the two cannot be
+        separated without also running the GPT-4o annotation. The relative
+        ordering and the PC-Only inversion (SC-2) remain meaningful.
     - id: SC-2
       criterion: "PC-Only inversion reproduced: MetaFind lower than the baselines' published figures"
       measured_by: n21_compare_to_paper
@@ -109,9 +120,11 @@ boundary:
       what: "Qwen2.5-VL replaces GPT-4o for annotation and scene judging"
       why: "project decision"
       impact: >
-        Captions are what the text tower trains on, so the text distribution
-        differs. Table 2's absolute values are no longer comparable to the
-        paper; only the direction survives (SC-3).
+        Affects BOTH tables, not just Table 2. Qwen replaces the judge (Table 2)
+        AND the 46,052 asset annotations, which are the text tower's training
+        data, so Table 1's absolute values shift too. SC-1 therefore reports the
+        deviation rather than thresholding it; SC-2 and SC-3 keep only
+        directional claims.
     - id: D-3
       what: "The six baselines are not re-run"
       why: "scope is MetaFind only"
@@ -168,15 +181,37 @@ state:
       merge: upsert_by_key
       lifetime: persistent
 
-    - name: annotations
-      type: "map[uid -> {category, description, dimensions, materials, placement_constraints, annotator_model}]"
+    - name: objaverse_annotations
+      type: "map[objaverse_uid -> {category, description, dimensions, materials, placement_constraints, annotator_model}]"
       writers: [n05_annotate]
-      readers: [n06_encode_text_image, n07_scene_graphs, n08_semantic_edges]
+      readers: [n06_encode_text_image]
       merge: upsert_by_key
       lifetime: persistent
       note: >
         [PAPER 2.3] "object category, size dimensions, materials, and placement
         constraints". Frozen as an artifact once written (NS-1).
+        Keyed by OBJAVERSE uid. ProcTHOR objects live in a different namespace
+        and must not read this channel -- see procthor_object_text.
+
+    - name: procthor_object_text
+      type: "map[procthor_asset_id -> {text, source}]"
+      writers: [n07_scene_graphs]
+      readers: [n07_scene_graphs, n08_semantic_edges, n13_train_stage2]
+      merge: upsert_by_key
+      lifetime: persistent
+      note: >
+        [CORRECTED] The node feature t_i for a ProcTHOR scene graph, and the
+        object descriptions the semantic-edge LLM is prompted with.
+        MEASURED: ProcTHOR assetIds ("Countertop_I_8x2", "Fridge_19") and
+        Objaverse uids (32 hex chars) have ZERO overlap -- 995 vs 46,052 ids,
+        intersection empty. An earlier draft had n07 and n08 read the Objaverse
+        annotation channel, which is both a provenance bug (n07 is not its
+        writer) and a category error.
+        [PAPER 2.3] ProcTHOR "provides precise spatial coordinates and
+        comprehensive semantic metadata for each asset", so the text is built
+        from ProcTHOR's own metadata.
+        [UNKNOWN U-12] exactly how that metadata becomes a sentence is not
+        specified.
 
     - name: text_image_embeddings
       type: "map[uid -> {text: 1280-d uri, image: 1280-d uri}]"
@@ -209,6 +244,28 @@ state:
         which collapses "office chair + desk" and "dining chair + dining table"
         into one relation. Paper 2.5 and Appendix C both say the LLM is prompted
         with object DESCRIPTIONS.
+
+    - name: stage2_pairing
+      type: "map[procthor_asset_id -> {gallery_uid, method, confidence}]"
+      writers: [n09_build_splits]
+      readers: [n13_train_stage2]
+      merge: write_once
+      lifetime: persistent
+      note: >
+        [UNKNOWN U-08a -- BLOCKING] Stage 2's positive for Eq. 7a/7b is the
+        gallery embedding of the target object. But the target is a ProcTHOR
+        object and the gallery is Objaverse-LVIS, and their identifier spaces do
+        not intersect at all (measured: 0 of 995 ProcTHOR assetIds appear among
+        the 46,052 Objaverse uids). Without a stated mapping the positive is
+        undefined and Stage 2 cannot be built.
+        The paper never addresses this. Candidate readings, none confirmed:
+          (a) map each ProcTHOR asset to a nearest Objaverse asset by category
+              or embedding, and use that as the positive
+          (b) build a separate gallery from ProcTHOR's own ~1,467 assets
+          (c) treat the target's own modalities as the positive, making Stage 2
+              a self-retrieval objective
+        Whichever is chosen must be recorded here with its method, and reported
+        as a choice rather than a paper requirement.
 
     - name: splits
       type: "{object: {train, test}, scene: {train_houses, test_houses}}"
@@ -280,14 +337,14 @@ state:
 
     - name: variant_ckpts
       type: "map[variant_id -> {uri, sha256}]"
-      writers: [sg3_train]
+      writers: [n13_train_stage2, n18_train_ablations, sg3_train]
       readers: [n15_eval_retrieval, n16_compose_scenes, n19_eval_ablations]
       merge: upsert_by_key
       lifetime: persistent
 
     - name: variant_status
       type: "map[variant_id -> {status, reason}]"
-      writers: [sg3_train]
+      writers: [n13_train_stage2, n18_train_ablations, sg3_train]
       readers: [n19_eval_ablations, n20_aggregate]
       merge: upsert_by_key
       lifetime: persistent
@@ -310,14 +367,14 @@ state:
 
     - name: composed_scenes
       type: "map[(variant, scene_id) -> {graph_uri, placed_count, incomplete}]"
-      writers: [sg4_instance]
+      writers: [n16_compose_scenes, n19_eval_ablations, sg4_instance]
       readers: [n17_judge_scenes, n20_aggregate]
       merge: upsert_by_key
       lifetime: persistent
 
     - name: composition_incomplete
       type: "set[(variant, scene_id)]"
-      writers: [sg4_instance]
+      writers: [n16_compose_scenes, sg4_instance]
       readers: [n20_aggregate]
       merge: set_union
       lifetime: persistent
@@ -325,7 +382,7 @@ state:
 
     - name: judge_scores
       type: "map[(method, scene_id, dimension) -> float]"
-      writers: [n17_judge_scenes]
+      writers: [n17_judge_scenes, n19_eval_ablations]
       readers: [n20_aggregate]
       merge: upsert_by_key
       lifetime: persistent
@@ -348,7 +405,7 @@ state:
 
     - name: audit_records
       type: "list[required_audit_record]"
-      writers: [RA-1, RA-2, RA-3]
+      writers: [n14_equivariance_probe, RA-1, RA-2, RA-3]
       readers: [G5_report_release, n22_publish_report]
       merge: append
       lifetime: persistent
@@ -382,7 +439,7 @@ state:
     - {name: placed_count, type: int, writers: [sg4_place], readers: [sg4_advance], merge: max, merge_note: "max, not numeric_add -- a retried iteration must not double-count", lifetime: run, visibility: private}
     - {name: layout_embedding, type: "tensor[D]", writers: [sg4_encode_layout], readers: [sg4_fuse], merge: replace, lifetime: iteration, reset_on: loop_entry, visibility: private}
     - {name: query_modality_embeds, type: "dict", writers: [sg4_encode_query], readers: [sg4_fuse], merge: replace, lifetime: iteration, reset_on: loop_entry, visibility: private}
-    - {name: retrieval_trace, type: "list[{step, top5_ids, top5_scores, chosen, layout_contribution}]", writers: [sg4_fuse], readers: [n17_judge_scenes], merge: append, lifetime: run, note: "O4 -- without layout_contribution you cannot explain why a scene is incoherent"}
+    - {name: retrieval_trace, type: "list[{step, top5_ids, top5_scores, chosen, layout_contribution}]", writers: [n16_compose_scenes, sg4_fuse], readers: [n17_judge_scenes], merge: append, lifetime: run, note: "O4 -- without layout_contribution you cannot explain why a scene is incoherent"}
 
     # ---- SG1 internal
     - {name: item_attempt, type: int, writers: [sg1_validate], readers: [sg1_generate], merge: replace, lifetime: iteration, reset_on: item_entry, visibility: private}
@@ -407,8 +464,8 @@ edges:
 
   - {id: e06, from: n03_sample_pointclouds, to: G2_pc_distribution, kind: data, guard: "", join_group: default, carries: [pointclouds]}
   - {id: e07, from: n04_render_views, to: n05_annotate, kind: data, guard: "", join_group: default, carries: [renders]}
-  - {id: e08, from: n07_scene_graphs, to: n08_semantic_edges, kind: data, guard: "", join_group: default, carries: [scene_graphs, annotations]}
-  - {id: e09, from: n05_annotate, to: n06_encode_text_image, kind: data, guard: "", join_group: default, carries: [annotations, renders]}
+  - {id: e08, from: n07_scene_graphs, to: n08_semantic_edges, kind: data, guard: "", join_group: default, carries: [scene_graphs, procthor_object_text]}
+  - {id: e09, from: n05_annotate, to: n06_encode_text_image, kind: data, guard: "", join_group: default, carries: [objaverse_annotations, renders]}
 
   - {id: e10, from: G2_pc_distribution, to: n09_build_splits, kind: data, guard: "verdict == PASS", join_group: default, carries: [pointclouds]}
   - {id: e11, from: n06_encode_text_image, to: n09_build_splits, kind: data, guard: "", join_group: default, carries: [text_image_embeddings]}
@@ -520,7 +577,7 @@ dependencies:
     - {node: n07_scene_graphs, depends_on: [G1_sources_valid]}
     - {node: G2_pc_distribution, depends_on: [n03_sample_pointclouds]}
     - {node: n05_annotate, depends_on: [n04_render_views]}
-    - {node: n08_semantic_edges, depends_on: [n07_scene_graphs, n05_annotate]}
+    - {node: n08_semantic_edges, depends_on: [n07_scene_graphs]}
     - {node: n06_encode_text_image, depends_on: [n05_annotate]}
     - {node: n09_build_splits, depends_on: [G2_pc_distribution, n06_encode_text_image, n08_semantic_edges]}
     - {node: G3_corpus_valid, depends_on: [n09_build_splits]}

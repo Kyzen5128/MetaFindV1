@@ -95,8 +95,10 @@ checkpoint 是在這樣的點雲上訓練的，餵原始座標不會報錯，只
 **[論文 §2.3]**
 > Each asset is rendered from **11 orthogonal viewpoints**
 
-**[已解決]** 「orthogonal」不可能指 11 個互相正交的方向（三維最多 3 軸 6 向），
-必然指**正交投影**。測試驗證：相機從 3 拉到 30 單位，輪廓面積變化 ≤ 2 像素。
+**[未定 U-03a]** 「orthogonal」不可能指 11 個互相正交的方向（三維最多 3 軸 6 向），
+所以**正交投影**是合理的讀法 —— 但論文並沒有寫 "orthographic camera"，作者也可能只是
+用詞不精確地指「分散的多視角」。**這不是已解決，是選擇**，而且它會改變 image embedding 的分布。
+兩種投影都保留，選擇記入每筆 sidecar。
 
 **[未定 U-03]** 相機擺位論文沒說。11 不對應任何標準配置（立方體 6 面、二十面體 12 頂點），
 ULIP 自己的慣例是 30 個方位角，也對不上。預設 Fibonacci lattice（任意 N 都近似均勻），
@@ -121,8 +123,13 @@ ULIP 自己的慣例是 30 個方位角，也對不上。預設 Fibonacci lattic
 **[偏離] 不提供 fallback 到 ULIP-2 captions。** 前一版把它設成便宜的預設分支是錯的：
 那會讓實驗變成別的實驗。若真的要用，整份結果標 `DEGRADED`，不得當成主線復現。
 
-**[已知限制 F13]** 渲染前的正規化摧毀絕對尺度（1.8 m 桌子與 0.1 m 杯子正規化後同大小），
-所以 `size dimensions` 只能是**類別先驗，不是量測**。
+**[本實作的限制 F13]** 我們在渲染前做了 unit-sphere 正規化（否則 image tower 學到的是建模單位），
+代價是絕對尺度歸零 —— 1.8 m 桌子與 0.1 m 杯子正規化後同大小。
+因此**在本實作中**，標註模型只看渲染圖，`size dimensions` 只能是類別先驗。
+
+**這是我們的前處理造成的，不是論文的性質。** 論文沒有說 GPT-4o 只看得到渲染圖，
+也沒有說渲染前要正規化 —— 它可能同時提供了 mesh 的尺寸 metadata。不能反推
+「論文的 dimensions 也是猜的」。
 prompt 明說渲染圖是 scale-normalised；同時把 mesh 的真實 `extents_m` 記進 sidecar，
 讓模型的估計可稽核。
 
@@ -143,11 +150,25 @@ Schema 失敗走 bounded 修復迴圈（錯誤訊息餵回去，最多 2 次）�
 房間平均 69 個物件、最多 245，全連接會是 6 萬條邊。預設 kNN（k=8）讓 degree 不隨房間大小暴增，
 參數記入產物。
 
-**語意邊 —— 前一版這裡錯了。**
-論文說是 **object descriptions**（Appendix C：「derived solely from **object-level textual
-descriptions**」），不是 category。前一版用 `(category_a, category_b)` 當 cache key，
-會把 `office chair + desk`、`dining chair + dining table` 壓成同一條關係，
-抹掉 object-level 的區別。
+**語意邊 —— 這裡有兩個先前的錯誤。**
+
+**其一，cache key。** 論文說是 **object descriptions**（Appendix C：「derived solely from
+**object-level textual descriptions**」），不是 category。先前用
+`(category_a, category_b)` 會把 `office chair + desk`、`dining chair + dining table`
+壓成同一條關係。
+
+**其二，描述從哪來。** 先前讓場景圖去讀 `annotations` —— 那是 **Objaverse-LVIS 的
+資產標註**。但實測：
+
+```
+ProcTHOR assetId : Countertop_I_8x2, Fridge_19, Houseplant_11   (995 個)
+Objaverse uid    : 867dfc95e96a4987...                          (46,052 個)
+交集             : 0
+```
+
+**兩個命名空間完全不相交。** ProcTHOR 的節點特徵 `t_i` 必須來自 ProcTHOR
+自己的 semantic metadata（§2.3 說它有提供），拆成獨立的 `procthor_object_text` channel。
+**[未定 U-12]** metadata 怎麼變成句子，論文沒說。
 
 **改為**：
 ```
@@ -159,8 +180,15 @@ key = sha256(desc_i, desc_j, prompt_version, llm_model, text_encoder_version)
 §2.3 只寫「prompting an LLM on object pairs」—— 全部對？只有物理鄰居？某個 kNN？
 這直接影響 ESSGNN 的輸入。選一個並記錄，且列為報告中的未定項。
 
-**座標不正規化。** 場景座標保持原始世界座標 —— 正規化就等於廢掉 ESSGNN 的等變性，
-而等變性是論文的核心賣點。測試釘住：整棟房子平移 100 公尺，座標必須跟著平移、邊結構必須不變。
+**座標不正規化。** 場景座標保持原始世界座標。
+
+理由不是「正規化會破壞等變性」—— 那在數學上不成立，單純置中 `x'_i = x_i − x̄`
+不會讓 EGNN 變成非等變。真正的理由是：**論文明確以 unnormalized、未對齊的開放世界座標
+為前提**（§2.5 "large and often unnormalized coordinate systems, with no guarantee that
+scenes are aligned or centered"）。預先置中等於把它想解決的那個全域平移先消掉，
+之後就測不到論文宣稱的能力。
+
+測試釘住：整棟房子平移 100 公尺，座標必須跟著平移、邊結構必須不變。
 
 ### Step 1.5　資料劃分
 
@@ -233,27 +261,47 @@ Stage 1 完成後凍結 gallery 塔，對全部 admitted 資產編碼。
 
 注意 Stage 1 是**單向**、Stage 2 是**雙向**，這個差異是論文明寫的。
 
-**[未定 U-08 — 前一版完全漏掉，而且這是最大的缺口]**
+**[未定 U-08／U-08a／U-08b — 阻斷級，這是整個復現最大的架構缺口]**
 
-論文從未定義 Stage 2 的訓練樣本怎麼從 ProcTHOR 建構。一間房有 bed / desk / chair / lamp，
-訓練樣本是什麼？全部未定：
+論文從未定義 Stage 2 的訓練樣本怎麼從 ProcTHOR 建構。拆成三個缺口，
+**第二個讓這個階段根本建不起來**：
+
+### U-08　樣本怎麼組
 
 - 目標物件怎麼選（隨機？依放置順序？）
-- 「current scene」是目標物件以外的全部，還是某個前綴？
-- 物件排序依什麼
-- 一間房產生幾筆樣本
-- 負樣本怎麼取（in-batch？全 gallery？）
+- 「current scene」是目標以外的全部，還是某個前綴？
+- 一間房產生幾筆樣本、負樣本怎麼取
 
-**我們採用的協定（必須在報告中明列，因為論文沒有規定）**：
-```
-對每間房，隨機抽 k 個物件當目標（k 依房間大小）
-  目標物件 o
-  current scene = 該房間扣掉 o 的其餘物件 → 建圖 → ESSGNN → e_layout
-  query        = o 的 text/image/pc（依 30% 遮罩）
-  positive     = o 的 gallery embedding
-  負樣本       = 同批次其他樣本（in-batch）
-```
-這是一個**選擇**，不是論文規定。不同選法會得到不同的 Table 2/3。
+### U-08a　**正樣本是哪一個 gallery 條目**（阻斷）
+
+Eq.7a/7b 需要一個 positive。目標是 **ProcTHOR 物件**，gallery 是 **Objaverse-LVIS**，
+而兩者的識別碼**交集為 0**（實測 995 vs 46,052，完全不相交）。
+
+**沒有這個對應關係，loss 的正樣本就不存在。** 論文完全沒有提到這件事。
+可能的讀法（都未經證實）：
+
+| | 做法 |
+|---|---|
+| (a) | 把每個 ProcTHOR 資產對應到最接近的 Objaverse 資產（依類別或 embedding） |
+| (b) | 場景階段另外用 ProcTHOR 自己的 ~1,467 個資產建一個 gallery |
+| (c) | 用目標物件自己的模態當正樣本，讓 Stage 2 變成自我檢索目標 |
+
+選定之後必須寫進 `stage2_pairing` channel 並記錄方法，且**在報告中列為選擇而非論文規定**。
+
+### U-08b　**目標物件的三個模態從哪來**（阻斷）
+
+Eq.6 需要 `e_text`、`e_image`、`e_pc`。ProcTHOR 只提供 metadata 與座標 ——
+**沒有渲染圖，也沒有點雲**。所以這三個模態沒有現成來源。
+若走 U-08a 的 (a)，可以用對應到的 Objaverse 資產的模態；走 (b) 則要為 ProcTHOR
+的 1,467 個資產另外產生點雲與渲染圖。
+
+### 因此
+
+`n13_train_stage2` 的 `reads` 已補上 `stage2_pairing`、`pointclouds`、
+`text_image_embeddings`、`procthor_object_text` —— 先前的清單根本湊不出 Eq.6 的輸入，
+也不知道正樣本是誰。
+
+**U-08a 與 U-08b 決定之前，不要實作這個階段。**
 
 ---
 
@@ -371,6 +419,11 @@ IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Ta
 | U-05 | adjacency 的判準 |
 | U-06 | 語意邊要對哪些物件對 |
 | U-07 | ProcTHOR 官方 split vs 論文 80/20 |
-| U-08 | **Stage 2 訓練樣本如何建構**（最大缺口） |
+| U-08 | Stage 2 樣本怎麼組（目標選擇、partial scene、負樣本） |
+| **U-08a** | **正樣本是哪一個 gallery 條目** —— ProcTHOR 與 Objaverse 識別碼交集為 0（**阻斷**） |
+| **U-08b** | **目標物件的 text/image/pc 從哪來** —— ProcTHOR 沒有渲染圖也沒有點雲（**阻斷**） |
+| U-11 | 缺席模態怎麼表示（論文只排除 zero-padding） |
+| U-12 | ProcTHOR metadata 怎麼變成 `t_i` 的句子 |
+| U-03a | 11 視角用正交還是透視投影 |
 | U-09 | Table 1 的 gallery 範圍 |
 | U-10 | Table 2 的 Scene Coherence 對應 IDesign 哪個面向 |

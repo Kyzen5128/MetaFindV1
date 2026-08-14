@@ -174,7 +174,7 @@ nodes:
     purpose: "Structured captions from the 11 views."
     decomposition_rationale: [N1_distinct_failure_mode, N8_reusable]
     reads: [renders]
-    writes: [annotations, quarantine, run_progress, cost_ledger]
+    writes: [objaverse_annotations, quarantine, run_progress, cost_ledger]
     precondition: "renders complete for the asset"
     postcondition: >
       Every admitted asset has category, description, dimensions, materials and
@@ -204,7 +204,7 @@ nodes:
     role: model
     purpose: "Cache the frozen CLIP halves of every asset's embedding."
     decomposition_rationale: [N3_checkpoint_needed, N7_parallelizable]
-    reads: [annotations, renders]
+    reads: [objaverse_annotations, renders]
     writes: [text_image_embeddings, run_progress, cost_ledger]
     postcondition: "Every admitted asset has a text and an image embedding at the checkpoint's width"
     deterministic: false
@@ -228,8 +228,8 @@ nodes:
     role: compute
     purpose: "ProcTHOR houses into spatial-semantic graphs."
     decomposition_rationale: [N1_distinct_failure_mode, N7_parallelizable]
-    reads: [annotations]
-    writes: [scene_graphs, quarantine, run_progress]
+    reads: []
+    writes: [scene_graphs, procthor_object_text, quarantine, run_progress]
     postcondition: >
       Nodes carry a world-frame position and a text-derived feature; support
       edges are read from ProcTHOR's object tree; positions are NOT normalised.
@@ -244,14 +244,24 @@ nodes:
     notes: >
       Support comes free: ProcTHOR nests a cup as a child of its table, which is
       exactly the paper's example. [UNKNOWN U-05] adjacency has no stated
-      criterion; kNN k=8 by default. Coordinates stay raw -- normalising would
-      defeat the equivariant encoder they feed.
+      criterion; kNN k=8 by default.
+      [CORRECTED] An earlier draft had this node read the Objaverse annotation
+      channel, which it does not write and which is keyed by a different
+      namespace: ProcTHOR assetIds and Objaverse uids have zero overlap
+      (measured, 995 vs 46,052 ids, empty intersection). The node feature t_i
+      comes from ProcTHOR's own semantic metadata, which paper 2.3 says it
+      supplies. [UNKNOWN U-12] how that metadata becomes a sentence is not
+      specified.
+      Coordinates stay raw. Not because centring would break the network's
+      equivariance -- it would not -- but because the paper's stated setting is
+      unnormalised open-world coordinates, and pre-centring would remove the
+      very global translation the design is meant to be robust to.
 
   - id: n08_semantic_edges
     role: subgraph
     purpose: "LLM relation sentences between objects, encoded into edge features."
     decomposition_rationale: [N1_distinct_failure_mode, N8_reusable]
-    reads: [scene_graphs, annotations]
+    reads: [scene_graphs, procthor_object_text]
     writes: [sem_edge_cache, quarantine, run_progress, cost_ledger]
     postcondition: "Every selected object pair has an edge embedding or an explicit semantic_edge_missing flag"
     deterministic: false
@@ -277,8 +287,8 @@ nodes:
     role: compute
     purpose: "Fix the 80/20 partitions and define both evaluation protocols."
     decomposition_rationale: [N5_gate_point, N3_checkpoint_needed]
-    reads: [asset_manifest, pointclouds, text_image_embeddings, sem_edge_cache, scene_graphs]
-    writes: [splits, split_seed, eval_protocols, run_progress]
+    reads: [asset_manifest, pointclouds, text_image_embeddings, sem_edge_cache, scene_graphs, procthor_object_text]
+    writes: [splits, split_seed, eval_protocols, stage2_pairing, run_progress]
     precondition: "all upstream preparation complete (join = all)"
     postcondition: >
       Object and house splits are disjoint at their own level; both evaluation
@@ -420,7 +430,8 @@ nodes:
     role: mutate
     purpose: "Layout-aware fine-tuning of the fuser and ESSGNN."
     decomposition_rationale: [N3_checkpoint_needed, N6_side_effects, N8_reusable]
-    reads: [stage1_ckpt, scene_graphs, sem_edge_cache, splits, variant_registry]
+    reads: [stage1_ckpt, scene_graphs, sem_edge_cache, procthor_object_text,
+            stage2_pairing, pointclouds, text_image_embeddings, splits, variant_registry]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger, degraded_flags]
     precondition: "G3 verdict == PASS; stage1_ckpt exists"
     postcondition: >

@@ -1,8 +1,13 @@
 # 前置調查發現（在設計 graph 之前必須先知道的事）
 
-> 這份文件記錄實際檢查 `docs/metafind_paper.md`、`/home/kyzen/ULIP`、`/home/kyzen/egnn`
-> 與本機環境後得到的**硬事實**。§15 的 graph spec 是從這些事實長出來的，不是從模板套出來的。
-> 每一條都標了「影響哪個設計決策」。
+> 這份文件記錄實際檢查論文與程式碼後得到的**實測事實**（F 系列）與由此推導的**架構決策**（D 系列）。
+>
+> **權威順序**：`docs/metafind_paper.md`（論文本身）> `02_BUILD_STEPS.md`（最新決策）
+> > `01_GRAPH_SPEC.md` > 三個 YAML > 本文件。
+>
+> F 系列是實測，可信；**D 系列是決策，會隨新事實改變** —— 本文件的 D1/D2 已於 2026-08-15
+> 大幅修正（先前的版本把論文列為較差的 ablation 當成主線）。
+> 若本文件與 `02_BUILD_STEPS.md` 衝突，**以後者為準**。
 
 ---
 
@@ -258,7 +263,8 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 實測（`tests/test_essgnn.py::test_gradients_reach_every_parameter_except_the_final_f_x`）：
 `layers.{L-1}.f_x.*` 的梯度全為 `None`，其餘參數都有梯度。
 
-以論文的 `L=4` 計算，**四分之一的座標參數從未被訓練**。
+論文只寫 "After $L$ layers"，**沒有給 L 的值**（`L=4` 是先前草稿自己填的）。
+以常見的 `L=4` 為例，四分之一的座標參數從未被訓練；比例是 `1/L`。
 
 **影響設計**：這是論文架構本身的性質，不是缺陷。**不修**（修了就是偏離論文），
 改以測試釘住這個確切模式 —— 若日後 readout 改動，測試會抓到而不是默默吸收。
@@ -341,36 +347,45 @@ GPT-4o 當初產生的那些尺寸數字，性質上也是同一回事。
 
 ## 由 F1–F9 推導出的三個架構決策
 
-### D1 — 不重訓 ULIP-2，直接用官方 released checkpoint 當 frozen backbone
+### D1 — 不重訓 ULIP-2 本身，用官方 released checkpoint 當起點
 
 **理由**：F5（單卡）。ULIP-2 在 ensembled Objaverse+ShapeNet 上的預訓練需要 8×A100 等級資源。
-論文 §2.6 Stage 1 訓練的是 **MetaFind 自己的雙塔**（"both query and gallery encoders"），
-ULIP-2 只是 embedding backbone（§2.2 "both leveraging the ULIP-2 embedding backbone"）。
-→ 凍結 ULIP-2 的 text/image/point encoder，只訓練 projection + fusion。
 
-**這是與論文的偏離，必須在報告中明說**，並列為 risk R-03。
+論文 §2.6 Stage 1 訓練的是 **MetaFind 自己的雙塔**（"Both query and gallery encoders are
+trained"），ULIP-2 是它的起點（§2.2 "both leveraging the ULIP-2 embedding backbone"）。
+所以「不重訓 ULIP-2」指的是不從頭做 ULIP-2 的預訓練，**不等於凍結它的全部權重**。
 
-### D2 — 把 frozen backbone 的輸出**預先算好並快取**，訓練只在 1280-d 向量上進行
+### D2 — Stage 1 訓練 point encoder + fusion；只有 CLIP 側凍結
 
-**理由**：F2 + F5。既然 backbone 全程 frozen，每個 epoch 重跑 ViT-bigG-14 是純浪費。
+> **2026-08-15 修正。先前的草稿在這裡是錯的，而且是最嚴重的一個錯。**
+>
+> 先前寫成「凍結全部 backbone、把三個模態的 embedding 全部預先快取、
+> Stage 1／Stage 2 都只在 1280-d 向量上訓練」。
+>
+> 那正是論文 Table 3 的 **`Train fuser only`** 那一列 —— 論文明確報告它較差
+> （**8.7** vs Full **11.4**），§3.4 也直接寫
+> "Fine-tuning the entire encoder outperformed training the fuser only"。
+> 把它裝成主線等於一開始就跑錯實驗。
+
+**現在的做法**，`train_scope` 三個等級：
+
+| 等級 | 訓練什麼 | 24GB 可行 | 定位 |
+|---|---|---|---|
+| `fuser_only` | 只有 fusion 層 | ✅ | **Table 3 的 ablation 列** |
+| `point_encoder+fuser` | PointBERT (32.5M) + fusion + 投影 | ✅ | **主線** |
+| `full` | 再加 ViT-bigG-14 (2.5B) | ❌ | 硬體限制，由 RA-3 記錄 |
+
+**快取的範圍也跟著改**：
 
 ```
-一次性：48K assets → (text, image, pc) → 3 × 1280-d float32 → 48K × 3 × 1280 × 4B ≈ 737 MB
-之後：Stage-1 / Stage-2 / 10 個 ablation 變體全部在這 737MB 上訓練
+text / image  →  CLIP 側凍結，可以預先快取
+point cloud   →  point encoder 主線可訓練，不可預先快取
 ```
 
-**這是整個設計最重要的一個決策，它同時解決三件事**：
+先前「三個模態全部快取」正是讓設計退化成 `fuser_only` 的直接原因。
 
-1. **單卡可行**：訓練對象縮成 MLP 級別，batch size 可以開到論文等級甚至更大
-   （對比學習的 in-batch negatives 直接受益 → F5 的風險被消掉）。
-2. **Ablation 從不可行變成 trivial**：Table 3 的 10 個變體（含需要重跑 Stage-1 的
-   `Modality Dropout=10%/50%`、`Padding missing modalities with 0`）
-   原本各需一次完整預訓練；快取後每個只是幾分鐘的 head 訓練。**成本下降約兩個數量級。**
-3. **磁碟壓力解除**：見 D3。
-
-**代價**：無法微調 point encoder（論文 Table 3 的
-「Fine-tuning the entire encoder outperformed training the fuser only」這條結論
-我們只能部分驗證）→ 列為 risk R-04 與 Required Audit RA-3。
+**[偏離 D-1]** ViT-bigG-14 的 text/image 端保持凍結 —— 2.5B 參數在 24GB 上無法訓練。
+報告中須聲明：「entire encoder」在我們的設定下指 3D encoder + fusion，不含 CLIP。
 
 ### D3 — 原始 mesh 保留，不刪除
 
