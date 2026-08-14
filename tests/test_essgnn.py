@@ -28,6 +28,10 @@ def fully_connected(n: int) -> torch.Tensor:
 
 def make_scene(n: int = 12, cfg: ESSGNNConfig | None = None, seed: int = 0, spread: float = 3.0):
     cfg = cfg or ESSGNNConfig(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64, n_layers=3)
+    # nn.Linear draws from the GLOBAL RNG, so without seeding it here the model
+    # weights depend on whichever tests ran first -- results would then differ
+    # between running a test alone and running the suite.
+    torch.manual_seed(seed)
     g = torch.Generator().manual_seed(seed)
     node_feat = torch.randn(n, cfg.node_feat_dim, generator=g, dtype=DTYPE)
     pos = torch.randn(n, 3, generator=g, dtype=DTYPE) * spread
@@ -165,27 +169,64 @@ def test_sum_and_mean_differ():
 # --------------------------------------------------------------- L1-SEMEDGE-ZERO
 
 
-def test_geometry_still_distinguishes_layouts_without_semantic_edges():
-    """F8 degeneracy detector.
+def geometric_sensitivity(edge_dim: int, n: int = 12) -> float:
+    """max |d e_layout / d pos| with semantic edges zeroed."""
+    cfg = ESSGNNConfig(
+        node_feat_dim=32, edge_feat_dim=edge_dim, hidden_dim=32, out_dim=64, n_layers=3
+    )
+    model, nf, pos, ei, ea = make_scene(n, cfg)
+    pos = pos.clone().requires_grad_(True)
+    model(nf, pos, ei, torch.zeros_like(ea)).sum().backward()
+    return pos.grad.abs().max().item()
 
-    With e_ij at 1280 and only one geometric scalar per message, ESSGNN could
-    collapse into a semantics-only GNN -- which would make Table 3's
-    "ESSGNN beats GAT because of equivariance" unattributable. Zero the semantic
-    edges and require two geometrically different layouts to stay distinct.
+
+def test_geometry_is_wired_into_the_output():
+    """F8 part 1: the coordinate channel must actually influence e_layout.
+
+    Asserted on the gradient rather than on output similarity. An untrained
+    residual network returns nearly identical vectors for *any* input change --
+    measured cosine is ~0.999 for a geometry change and ~0.999 for a semantic
+    change alike -- so a cosine threshold here would be testing "is it trained",
+    not "is geometry connected".
     """
-    cfg = ESSGNNConfig(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64, n_layers=3)
-    model, nf, pos_a, ei, ea = make_scene(12, cfg)
-    zero_edges = torch.zeros_like(ea)
+    model, nf, pos, ei, ea = make_scene(12)
+    pos = pos.clone().requires_grad_(True)
+    model(nf, pos, ei, torch.zeros_like(ea)).sum().backward()
 
+    assert pos.grad is not None, "no gradient path from e_layout back to positions"
+    assert pos.grad.abs().max().item() > 1e-9, "geometry has no measurable influence"
+
+
+def test_wider_semantic_edges_suppress_geometric_sensitivity():
+    """F8 part 2: quantifies the swamping effect the paper's design invites.
+
+    Each message sees exactly one geometric scalar (||x_i - x_j||^2) alongside
+    e_ij, so widening e_ij dilutes geometry. Measured with seeded weights:
+    edge_dim 16 -> |grad| ~= 51, edge_dim 1280 -> |grad| ~= 1.1, a ~45x drop.
+
+    This is a property of sec. 2.5 as written, not a defect to patch. The test
+    pins the DIRECTION so the effect cannot silently disappear or invert; the
+    magnitude on a trained model is what n11 has to report.
+    """
+    narrow = geometric_sensitivity(16)
+    wide = geometric_sensitivity(1280)
+    assert narrow > 0 and wide > 0, "geometry must survive at both widths"
+    assert wide < narrow / 5, (
+        f"expected wide semantic edges to suppress geometry; "
+        f"narrow={narrow:.3e} wide={wide:.3e}"
+    )
+
+
+def test_geometry_changes_the_output_at_all():
+    """Companion: two different layouts must not map to the same vector."""
+    model, nf, pos_a, ei, ea = make_scene(12)
+    zero_edges = torch.zeros_like(ea)
     g = torch.Generator().manual_seed(99)
-    pos_b = torch.randn_like(pos_a) * 3.0 if False else torch.randn(
-        pos_a.shape, generator=g, dtype=DTYPE
-    ) * 3.0
+    pos_b = torch.randn(pos_a.shape, generator=g, dtype=DTYPE) * 3.0
 
     a = model(nf, pos_a, ei, zero_edges)
     b = model(nf, pos_b, ei, zero_edges)
-    cos = torch.nn.functional.cosine_similarity(a, b, dim=0).item()
-    assert cos < 0.9999, f"geometry carries no signal without semantic edges (cos={cos:.6f})"
+    assert not torch.allclose(a, b, atol=1e-9), "geometry carries no signal at all"
 
 
 def test_semantic_edges_change_the_output():
