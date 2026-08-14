@@ -1,0 +1,32 @@
+# Large data lives on /mnt/data1/kyzen/MetaFind, reached via this symlink.
+# Never commit it.
+/data
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Artifacts that must never enter git (they belong under /data)
+*.pt
+*.pth
+*.ckpt
+*.npy
+*.npz
+*.faiss
+*.parquet
+runs/
+outputs/
+
+# Env / secrets
+.env
+*.key
+credentials.json
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

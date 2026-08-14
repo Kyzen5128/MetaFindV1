@@ -1,0 +1,1076 @@
+# MetaFind reproduction — Node Registry
+# SKILL.md §15.4 + §15.9 (failure policy is per-node, so it lives here).
+# Node != Agent. There is not a single `agent` role in this graph.
+
+spec_version: "1.0"
+graph_id: "metafind-reproduction-v1"
+
+# Registry-level invariants (verified in SKILL.md §16):
+#   - every node has exactly one role                                    OK
+#   - every node has >= 1 decomposition_rationale                        OK
+#   - every node has >= 1 failure class (NONE requires a reason)         OK
+#   - role == mutate => idempotent AND rollback != N/A                   OK (5 mutate nodes)
+#   - authority >= A2 => decision_log true                               N/A (max authority is A1)
+#   - all mutating operations ordered after every relevant gate          OK (see mutate_ordering_proof)
+
+mutate_ordering_proof:
+  - node: n07_train_stage1_align
+    after_gates: [G1_feasibility, G2_corpus_validity]
+    why: "GPU spend is gated by G1 (budget) and G2 (corpus validity — training on leaked splits is wasted spend)"
+  - node: n08_build_gallery_staging
+    after_gates: [G1_feasibility, G2_corpus_validity]
+    why: "writes to a STAGING path only; the shared immutable artifact is written by n09"
+  - node: n09_promote_gallery_index
+    after_gates: [G1_feasibility, G2_corpus_validity, G3_gallery_freeze]
+    why: "G-CONTAM. This is the late-commit point for the shared gallery index."
+  - node: sg1_delete_raw
+    after_gates: [G1_feasibility]
+    after_local_check: "sg1_write_vectors fsync + sha256 verified for this shard"
+    why: "irreversible deletion; the only compensation is refetch via sidecar source_uri"
+  - node: n21_publish_report
+    after_gates: [G1_feasibility, G2_corpus_validity, G3_gallery_freeze, G4_human_study_commit, G5_report_release]
+    why: "G-IRREVERSIBLE. Publication cannot be undone; every gate precedes it."
+
+nodes:
+
+# ============================================================ PHASE 0
+  - id: n01_env_bootstrap
+    title: "Environment bootstrap and compatibility patching"
+    role: compute
+    authority: A0
+    purpose: >
+      Pin a dependency set compatible with torch 2.9.1, patch the removed
+      torch._six import, and prove both backbones actually load and run.
+    decomposition_rationale: [N1_distinct_failure_mode, N4_independent_observability]
+    decomposition_note: >
+      N1 — its failures are version conflicts, which share no retry policy with
+      anything else in the graph. Without this as its own node, every downstream
+      node fails in a way that LOOKS like a data problem (F4).
+    reads: []
+    writes: [run_progress, cost_ledger, degraded_flags]
+    precondition: "clone of ULIP and egnn present at /home/kyzen/ULIP and /home/kyzen/egnn"
+    postcondition: >
+      ULIP2_PointBERT_Colored instantiates with pc_projection.shape[1] == 1280;
+      EGNN(in_node_nf=1280, hidden_nf=128, out_node_nf=1280, in_edge_nf=64)
+      forward returns h.shape==(n,1280) and x.shape==(n,3);
+      determinism capability recorded.
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: natural
+    cacheable: false
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 14400, tokens: 0, money: 0, gpu_s: 60, external_calls: 0}
+    failure:
+      classes: [DETERMINISTIC_INPUT, RESOURCE]
+      policies:
+        - class: DETERMINISTIC_INPUT
+          action: fail_closed
+          max_attempts: 1
+          backoff: none
+          on_exhausted: HALT_FAILED
+          record_fields: [conflicting_packages, resolved_versions, python_version, torch_version]
+          note: "Anti-pattern 8 — retrying a version conflict 10,000 times yields the same error. Do NOT retry."
+        - class: RESOURCE
+          action: fail_closed
+          max_attempts: 1
+          backoff: none
+          on_exhausted: HALT_FAILED
+          record_fields: [disk_free, cuda_version, driver_version]
+      partial_failure_semantics: halt
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: false, per_item_sidecar: false, cost_metered: true, sensitive_redaction: []}
+    notes: "Do NOT edit the cloned repos in place. Patch via metafind/compat/ulip_patch.py so the clones stay re-clonable."
+
+  - id: n02_acquire_sources
+    title: "Acquire ULIP-2 checkpoint, Objaverse-LVIS, ProcTHOR-10K"
+    role: retrieve
+    authority: A0
+    purpose: "Fetch every external input and pin its immutable identity."
+    decomposition_rationale: [N1_distinct_failure_mode, N3_checkpoint_needed]
+    reads: []
+    writes: [source_manifest, asset_catalog, procthor_raw, variant_registry, paper_reference, cost_ledger, run_progress]
+    precondition: "n01 postcondition holds; network reachable"
+    postcondition: >
+      Every source has a recorded sha256 in source_manifest AND the ULIP-2
+      checkpoint reproduces ModelNet40 zero-shot top-1 of ~50.6 (+/-1.0).
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    cacheable: true
+    cache_key: [source_uri, expected_sha256]
+    checkpoint_after: true
+    parallelizable: true
+    cost: {wallclock_s: 43200, tokens: 0, money: 0, gpu_s: 300, external_calls: 20}
+    failure:
+      classes: [TRANSIENT, DETERMINISTIC_INPUT, CONTRACT_VIOLATION, RESOURCE]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 5, backoff: exponential_jitter, on_exhausted: HALT_BLOCKED, record_fields: [url, http_status, bytes_received]}
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [expected_sha256, actual_sha256, uri]}
+        - {class: RESOURCE, action: degrade, max_attempts: 1, backoff: none, on_exhausted: HALT_BLOCKED, record_fields: [disk_free, required_bytes]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: false, per_item_sidecar: true, cost_metered: true, sensitive_redaction: [api_tokens]}
+    notes: >
+      The behavioural check (ModelNet40 ~50.6) matters more than the hash.
+      A hash proves the file is not corrupt; only behaviour proves it is the
+      RIGHT file (V2 — verifying not-broken is not verifying correct).
+
+  - id: n03_pilot_and_budget
+    title: "500-asset pilot and cost extrapolation"
+    role: subgraph
+    authority: A1
+    purpose: "Measure real cost/throughput/schema-pass-rate before committing to 48K assets."
+    decomposition_rationale: [N8_reusable, N5_gate_point]
+    decomposition_note: "N8 — this IS SG1 with mode=pilot, limit=500. Same code path, so the extrapolation is valid."
+    reads: [asset_catalog, source_manifest]
+    writes: [cost_projection, asset_quarantine, cost_ledger, run_progress]
+    precondition: "asset_catalog non-empty; GPT-4o credentials available OR reuse_ulip2_captions selected"
+    postcondition: "cost_projection has all five fields populated with real measurements (no UNKNOWN)"
+    deterministic: false
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    cacheable: false
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 7200, tokens: 6000000, money: 20, gpu_s: 3600, external_calls: 500}
+    failure:
+      classes: [TRANSIENT, MODEL_RECOVERABLE, RESOURCE]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 4, backoff: exponential_jitter, on_exhausted: quarantine, record_fields: [asset_id, http_status]}
+        - {class: MODEL_RECOVERABLE, action: feedback_loop, max_attempts: 2, backoff: none, on_exhausted: quarantine, record_fields: [asset_id, schema_errors, raw_response]}
+        - {class: RESOURCE, action: degrade, max_attempts: 1, backoff: none, on_exhausted: HALT_BLOCKED, record_fields: [disk_free]}
+      partial_failure_semantics: proceed_with_admitted
+      rollback: quarantine_forward
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: true, cost_metered: true, sensitive_redaction: []}
+    subgraph:
+      spec_ref: "SG1 (mode=pilot, limit=500)"
+      state_contract:
+        reads_parent: [asset_catalog, source_manifest]
+        writes_parent: [cost_projection, asset_quarantine, cost_ledger]
+        sharing: io_mapping
+      failure_surface: transparent
+      internal_gate_blocks_parent: false
+
+  - id: G1_feasibility
+    title: "GATE — feasibility and budget commitment"
+    role: evaluate
+    authority: A1
+    purpose: "Refuse to start the expensive data phase unless disk, money and GPU budget all check out."
+    decomposition_rationale: [N5_gate_point]
+    reads: [cost_projection, budget_cap, source_manifest]
+    writes: [gate_records, run_progress]
+    precondition: "cost_projection fully populated"
+    postcondition: "a gate_record exists with is_terminal=true and an rc in {0,2,3}"
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: natural
+    cacheable: false
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 10, tokens: 0, money: 0, gpu_s: 0, external_calls: 0}
+    failure:
+      classes: [CONTRACT_VIOLATION]
+      policies:
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [missing_evidence]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: false, cost_metered: false, sensitive_redaction: []}
+    notes: "GE — if this fails, the fix is to shrink scope, NOT to raise budget_cap until it turns green."
+
+# ============================================================ PHASE 1
+  - id: n04_object_prep
+    title: "Object asset preparation (24-shard streaming)"
+    role: subgraph
+    authority: A1
+    purpose: "Turn 48K raw meshes into cached 1280-d tri-modal embeddings without exceeding disk."
+    decomposition_rationale: [N2_independent_retry, N3_checkpoint_needed, N7_parallelizable, N6_side_effects]
+    decomposition_note: >
+      N6 — contains the only irreversible file deletion in the graph (D3), which
+      must be its own inner node so a retry cannot re-delete.
+    reads: [asset_catalog, source_manifest, cost_projection]
+    writes: [asset_artifacts, asset_embeddings, asset_admitted, asset_quarantine, cost_ledger, run_progress, degraded_flags]
+    precondition: "G1 verdict == PASS; disk_free >= peak_shard_bytes * 3"
+    postcondition: >
+      len(asset_admitted) + len(asset_quarantine) == len(asset_catalog);
+      every admitted asset has three 1280-d embeddings with recorded sha256;
+      every quarantined asset has a real exception_type and message.
+    deterministic: false
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    idempotency_note: "Skip decision is based on CONTENT sha256, never on file existence (V3)."
+    cacheable: true
+    cache_key: [asset_sha256, code_revision, ulip2_ckpt_sha, annotation_prompt_version]
+    checkpoint_after: true
+    parallelizable: true
+    cost: {wallclock_s: 432000, tokens: 600000000, money: 2000, gpu_s: 400000, external_calls: 48000}
+    failure:
+      classes: [TRANSIENT, DETERMINISTIC_INPUT, MODEL_RECOVERABLE, RESOURCE, CONTRACT_VIOLATION]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 3, backoff: exponential_jitter, on_exhausted: quarantine, record_fields: [asset_id, exception_type, exception_msg, attempt]}
+        - class: DETERMINISTIC_INPUT
+          action: quarantine
+          max_attempts: 1
+          backoff: none
+          on_exhausted: quarantine
+          record_fields: [asset_id, source_uri, source_sha256, exception_type, exception_msg, code_revision, timestamp]
+          note: "Non-manifold or empty meshes will fail identically forever. Do NOT retry (anti-pattern 8)."
+        - {class: MODEL_RECOVERABLE, action: feedback_loop, max_attempts: 2, backoff: none, on_exhausted: quarantine, record_fields: [asset_id, schema_errors, raw_response]}
+        - class: RESOURCE
+          action: degrade
+          max_attempts: 1
+          backoff: none
+          on_exhausted: HALT_BLOCKED
+          record_fields: [disk_free, shard_bytes, shard_id, degraded_flags]
+          note: "Shrink the shard, or BLOCK awaiting space. Degradation must be RECORDED, never silent."
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [shard_id, reason]}
+      partial_failure_semantics: proceed_with_admitted
+      partial_failure_note: >
+        F4 — written down here, not decided at runtime. Gallery denominator
+        becomes len(asset_admitted). If quarantine_rate > 2%, G2 fails, because
+        a denominator that far from 48K makes Table 1 incomparable.
+      rollback: compensating_action
+      compensating_node: sg1_refetch
+      rollback_note: >
+        Raw files are deleted (D3). The ONLY recovery path is refetch via the
+        sidecar's source_uri + source_sha256. This is precisely why the sidecar
+        must be fsynced BEFORE the delete.
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: true, cost_metered: true, sensitive_redaction: [api_tokens]}
+    subgraph:
+      spec_ref: "SG1 (mode=full)"
+      state_contract:
+        reads_parent: [asset_catalog, source_manifest]
+        writes_parent: [asset_artifacts, asset_embeddings, asset_admitted, asset_quarantine, cost_ledger, degraded_flags]
+        sharing: shared_state
+      failure_surface: transparent
+      failure_surface_note: "Per-asset failures stay visible as individual quarantine records; they are NOT collapsed into a single boolean."
+      internal_gate_blocks_parent: false
+      internal_gate_note: "A single asset failing must not stop the run — it only shrinks the admitted set."
+
+  - id: n05_scene_prep
+    title: "ProcTHOR house -> scene graph preparation"
+    role: subgraph
+    authority: A1
+    purpose: "Build spatial-semantic scene graphs with physical and LLM-generated semantic edges."
+    decomposition_rationale: [N1_distinct_failure_mode, N7_parallelizable]
+    decomposition_note: "N7 — runs in parallel with n04 under assumption U-05 (ProcTHOR supplies its own t_i metadata)."
+    reads: [procthor_raw, source_manifest]
+    writes: [scene_store, sem_edge_cache, scene_admitted, scene_quarantine, cost_ledger, run_progress, degraded_flags]
+    precondition: "G1 verdict == PASS"
+    postcondition: >
+      len(scene_admitted) + len(scene_quarantine) == house_count;
+      every admitted house has a SPARSE edge_index (not fully connected);
+      every semantic edge embedding is projected to 64 dims.
+    deterministic: false
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    cacheable: true
+    cache_key: [house_id, code_revision, sem_edge_prompt_version]
+    checkpoint_after: true
+    parallelizable: true
+    cost: {wallclock_s: 86400, tokens: 50000000, money: 60, gpu_s: 7200, external_calls: 50000}
+    failure:
+      classes: [TRANSIENT, DETERMINISTIC_INPUT, MODEL_RECOVERABLE]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 3, backoff: exponential_jitter, on_exhausted: quarantine, record_fields: [house_id, exception_type, exception_msg]}
+        - {class: DETERMINISTIC_INPUT, action: quarantine, max_attempts: 1, backoff: none, on_exhausted: quarantine, record_fields: [house_id, missing_fields]}
+        - class: MODEL_RECOVERABLE
+          action: feedback_loop
+          max_attempts: 2
+          backoff: none
+          on_exhausted: degrade
+          record_fields: [category_pair, schema_errors]
+          note: >
+            On exhaustion the edge is marked semantic_edge_missing and degrades
+            to geometry-only. It must NOT be silently zero-filled — a zero vector
+            is indistinguishable from a valid semantic edge downstream.
+      partial_failure_semantics: proceed_with_admitted
+      partial_failure_note: "If scene quarantine_rate > 5%, G2 fails."
+      rollback: quarantine_forward
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: true, cost_metered: true, sensitive_redaction: []}
+    subgraph:
+      spec_ref: SG2
+      state_contract:
+        reads_parent: [procthor_raw]
+        writes_parent: [scene_store, sem_edge_cache, scene_admitted, scene_quarantine, cost_ledger, degraded_flags]
+        sharing: shared_state
+      failure_surface: transparent
+      internal_gate_blocks_parent: false
+
+  - id: n13_run_baselines
+    title: "Run 6 baselines x 7 modality conditions"
+    role: evaluate
+    authority: A0
+    purpose: "Produce the baseline rows of Table 1 under our evaluation protocol."
+    decomposition_rationale: [N1_distinct_failure_mode, N7_parallelizable]
+    decomposition_note: >
+      N7 — OPTIMIZATION: depends on no MetaFind training, so it is scheduled at
+      layer 5 in parallel with data prep rather than sitting on the critical path.
+    reads: [asset_embeddings, splits, gallery_size_locked, source_manifest]
+    writes: [baseline_metrics, audit_records, cost_ledger, run_progress]
+    precondition: "G1 verdict == PASS; splits available"
+    postcondition: >
+      Every (baseline, condition) cell holds either a metric or the explicit
+      sentinel NA_DECLARED. A cell is never left blank.
+    deterministic: false
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    cacheable: true
+    cache_key: [baseline_name, condition, splits_hash, code_revision]
+    checkpoint_after: true
+    parallelizable: true
+    cost: {wallclock_s: 172800, tokens: 0, money: 0, gpu_s: 100000, external_calls: 0}
+    failure:
+      classes: [TRANSIENT, DETERMINISTIC_INPUT, RESOURCE]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 3, backoff: exponential_jitter, on_exhausted: quarantine, record_fields: [baseline, condition, exception_type]}
+        - {class: DETERMINISTIC_INPUT, action: quarantine, max_attempts: 1, backoff: none, on_exhausted: quarantine, record_fields: [baseline, condition, reason]}
+        - {class: RESOURCE, action: degrade, max_attempts: 2, backoff: fixed, on_exhausted: quarantine, record_fields: [baseline, gpu_mem_required]}
+      partial_failure_semantics: proceed_with_admitted
+      partial_failure_note: >
+        A baseline that fails to run gets '-' in the table PLUS an explicit
+        reason in the report. It must never be left blank, because the paper's
+        Table 1 already contains legitimate '-' cells and a reader could not
+        otherwise tell the two apart.
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: true, cost_metered: true, sensitive_redaction: []}
+    notes: >
+      Must deliberately reproduce the PC-Only inflation described in the paper's
+      Table 1 footnote: baselines use IDENTICAL embeddings for query and gallery
+      (F3). This is the protocol, not a bug. Verified by L2-PCONLY, and the
+      published-value comparison is Required Audit RA-2 (never a gate).
+
+  - id: n06_build_splits
+    title: "Build object-level and house-level 80/20 splits; lock gallery size"
+    role: compute
+    authority: A0
+    purpose: "Fix the experimental partition immutably and resolve unknown U-04."
+    decomposition_rationale: [N5_gate_point, N3_checkpoint_needed]
+    reads: [asset_admitted, scene_admitted, asset_catalog]
+    writes: [splits, split_seed, gallery_size_locked, run_progress]
+    precondition: "both admitted sets available (join policy = all)"
+    postcondition: >
+      train/test disjoint at BOTH object and house level; no asset appears in
+      both a train house and a test house; gallery_size_locked written.
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: natural
+    cacheable: true
+    cache_key: [asset_admitted_hash, scene_admitted_hash, split_seed]
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 600, tokens: 0, money: 0, gpu_s: 0, external_calls: 0}
+    failure:
+      classes: [CONTRACT_VIOLATION]
+      policies:
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [leaked_ids, leak_type]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: false, cost_metered: false, sensitive_redaction: []}
+    notes: "House-level splitting is what prevents the subtle leak where the same asset appears in both a train house and a test house."
+
+  - id: G2_corpus_validity
+    title: "GATE — corpus validity"
+    role: evaluate
+    authority: A1
+    purpose: "Refuse to train on a leaked or incomplete corpus."
+    decomposition_rationale: [N5_gate_point]
+    reads: [splits, gallery_size_locked, asset_admitted, asset_quarantine, scene_admitted, scene_quarantine, asset_catalog]
+    writes: [gate_records, run_progress]
+    precondition: "n04, n05, n06 all complete (join = all)"
+    postcondition: "gate_record with is_terminal=true"
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: natural
+    cacheable: false
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 300, tokens: 0, money: 0, gpu_s: 0, external_calls: 0}
+    failure:
+      classes: [CONTRACT_VIOLATION]
+      policies:
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [criterion, observed, expected]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: false, cost_metered: false, sensitive_redaction: []}
+
+# ============================================================ PHASE 2
+  - id: n07_train_stage1_align
+    title: "Stage-1 cross-modal alignment pretraining (on cached embeddings)"
+    role: mutate
+    authority: A0
+    purpose: "Train the dual-tower projection + fusion with 30% stochastic modality masking (Eq. 5)."
+    decomposition_rationale: [N3_checkpoint_needed, N6_side_effects]
+    decomposition_note: "N6 — training writes a durable checkpoint, which SKILL.md §4.4 classifies as a mutate side effect."
+    reads: [asset_embeddings, splits, split_seed, stage1_config]
+    writes: [stage1_ckpt, cost_ledger, run_progress, degraded_flags]
+    precondition: "G2 verdict == PASS; asset_embeddings complete for all admitted assets"
+    postcondition: >
+      stage1_ckpt written at a content-addressed path; masked embeddings are
+      NOT zero vectors; bidirectional loss is symmetric under query/gallery swap.
+    deterministic: false
+    deterministic_note: "GPU atomics + dataloader shuffling. Seeds fixed, but bit-exactness is not guaranteed (NS-5, NS-7)."
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    idempotency_note: "Path = runs/ckpt/{config_hash}_{data_hash}_{seed}_{code_rev}.pt — never overwrites."
+    cacheable: true
+    cache_key: [config_hash, data_hash, seed, code_revision]
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 21600, tokens: 0, money: 0, gpu_s: 21600, external_calls: 0}
+    failure:
+      classes: [TRANSIENT, RESOURCE, CATASTROPHIC]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 2, backoff: fixed, on_exhausted: fail_closed, record_fields: [epoch, step, exception_type]}
+        - class: RESOURCE
+          action: degrade
+          max_attempts: 3
+          backoff: fixed
+          on_exhausted: HALT_BLOCKED
+          record_fields: [batch_size_before, batch_size_after, gpu_mem_free]
+          note: >
+            OOM => reduce batch size, but RECORD it in degraded_flags. Batch size
+            directly controls in-batch negatives in Eq. 5, so a silent reduction
+            would quietly change the science.
+        - {class: CATASTROPHIC, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [traceback, loss_history, step]}
+      partial_failure_semantics: halt
+      rollback: checkpoint_restore
+      rollback_note: "Content-addressed paths mean a restore never clobbers a good checkpoint."
+    observability: {emits_trace: true, state_diff: true, decision_log: false, per_item_sidecar: false, cost_metered: true, sensitive_redaction: []}
+    notes: >
+      Loss MUST be a new MetaFindDualTowerLoss. ULIP's ULIPWithImageLoss is a
+      SINGLE-tower tri-modal loss (pc<->text, pc<->image) and does not implement
+      Eq. 5 / 7a / 7b (F3).
+
+  - id: n08_build_gallery_staging
+    title: "Build STAGING gallery embedding index"
+    role: mutate
+    authority: A0
+    purpose: "Embed every admitted asset with the frozen gallery tower into a staging index."
+    decomposition_rationale: [N6_side_effects, N5_gate_point]
+    decomposition_note: >
+      Deliberately separate from n09. The split is what makes late commit
+      possible: G3 inspects the staging artifact before it becomes shared.
+    reads: [stage1_ckpt, asset_embeddings, asset_admitted, gallery_size_locked]
+    writes: [gallery_index_staging, cost_ledger, run_progress]
+    precondition: "stage1_ckpt exists"
+    postcondition: "staging index has dim==1280 and count==gallery_size_locked"
+    deterministic: false
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    cacheable: true
+    cache_key: [stage1_ckpt_sha, asset_admitted_hash, code_revision]
+    checkpoint_after: true
+    parallelizable: true
+    cost: {wallclock_s: 3600, tokens: 0, money: 0, gpu_s: 3600, external_calls: 0}
+    failure:
+      classes: [TRANSIENT, RESOURCE, CONTRACT_VIOLATION]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 3, backoff: exponential_jitter, on_exhausted: fail_closed, record_fields: [asset_id, exception_type]}
+        - {class: RESOURCE, action: degrade, max_attempts: 2, backoff: fixed, on_exhausted: HALT_BLOCKED, record_fields: [gpu_mem_free]}
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [expected_count, actual_count, expected_dim, actual_dim]}
+      partial_failure_semantics: halt
+      partial_failure_note: "A partial index is worthless — a missing gallery entry silently lowers R@k for every query."
+      rollback: checkpoint_restore
+    observability: {emits_trace: true, state_diff: true, decision_log: false, per_item_sidecar: false, cost_metered: true, sensitive_redaction: []}
+    notes: "Use EXACT inner product, not ANN. 48K x 1280 x 4B = 246MB — affordable, and it removes nondeterminism source NS-6."
+
+  - id: G3_gallery_freeze
+    title: "GATE — gallery index freeze"
+    role: evaluate
+    authority: A1
+    purpose: "Prevent a bad index from becoming the shared immutable artifact."
+    decomposition_rationale: [N5_gate_point]
+    reads: [gallery_index_staging, gallery_size_locked]
+    writes: [gate_records, run_progress]
+    precondition: "staging index exists"
+    postcondition: "gate_record with is_terminal=true"
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: natural
+    cacheable: false
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 600, tokens: 0, money: 0, gpu_s: 300, external_calls: 0}
+    failure:
+      classes: [CONTRACT_VIOLATION]
+      policies:
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [criterion, observed]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: false, cost_metered: false, sensitive_redaction: []}
+    notes: >
+      Key criterion: sample 1000 gallery vectors, use each as its own query, and
+      require recall@1 == 1.0. If the index cannot retrieve itself, it is broken.
+      This also demonstrates the mechanism behind the baselines' inflated PC-Only.
+
+  - id: n09_promote_gallery_index
+    title: "Promote staging index to the shared immutable location"
+    role: mutate
+    authority: A0
+    purpose: "Late commit of the artifact every downstream evaluation reads."
+    decomposition_rationale: [N6_side_effects]
+    reads: [gallery_index_staging, gate_records]
+    writes: [gallery_index, run_progress]
+    precondition: "G3 verdict == PASS with is_terminal=true"
+    postcondition: "gallery_index[stage1_sha] written; a second differing write is an error"
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: late_commit
+    cacheable: false
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 300, tokens: 0, money: 0, gpu_s: 0, external_calls: 0}
+    failure:
+      classes: [CONTRACT_VIOLATION, RESOURCE]
+      policies:
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [existing_sha, new_sha, key]}
+        - {class: RESOURCE, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_BLOCKED, record_fields: [disk_free]}
+      partial_failure_semantics: halt
+      rollback: quarantine_forward
+      rollback_note: >
+        A promoted index is NEVER deleted — it is marked INVALIDATED (rc=4) and
+        downstream reads only the admitted version. Deleting it would orphan any
+        experiment record that already cites it.
+    observability: {emits_trace: true, state_diff: true, decision_log: false, per_item_sidecar: false, cost_metered: false, sensitive_redaction: []}
+
+  - id: n10_train_headline
+    title: "Stage-2 layout-aware fine-tuning (2 headline variants)"
+    role: subgraph
+    authority: A1
+    purpose: "Train `w/ ESSGNN` and `w/o ESSGNN` for Tables 1 and 2."
+    decomposition_rationale: [N7_parallelizable, N8_reusable]
+    decomposition_note: "N8 — same SG3 body is reused by n17 for the 8 ablation variants."
+    reads: [stage1_ckpt, scene_store, splits, asset_embeddings, variant_registry]
+    writes: [variant_ckpts, variant_status, cost_ledger, run_progress, degraded_flags]
+    precondition: "stage1_ckpt exists; scene_store populated"
+    postcondition: >
+      Both headline variants have a checkpoint and a status; ESSGNN pooled output
+      is 1280-d; coords_agg == 'sum'; semantic edges projected 1280 -> 64.
+    deterministic: false
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    cacheable: true
+    cache_key: [variant_config_hash, stage1_ckpt_sha, splits_hash, seed, code_revision]
+    checkpoint_after: true
+    parallelizable: true
+    cost: {wallclock_s: 10800, tokens: 0, money: 0, gpu_s: 10800, external_calls: 0}
+    failure:
+      classes: [TRANSIENT, RESOURCE, CATASTROPHIC]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 2, backoff: fixed, on_exhausted: fail_closed, record_fields: [variant_id, step, exception_type]}
+        - {class: RESOURCE, action: degrade, max_attempts: 3, backoff: fixed, on_exhausted: HALT_BLOCKED, record_fields: [variant_id, batch_size_before, batch_size_after]}
+        - {class: CATASTROPHIC, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [variant_id, traceback, loss_history]}
+      partial_failure_semantics: halt
+      partial_failure_note: "Both headline variants are REQUIRED — Table 1's last two rows. Unlike ablations, a failure here halts."
+      rollback: checkpoint_restore
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: false, cost_metered: true, sensitive_redaction: []}
+    subgraph:
+      spec_ref: "SG3 (variants: with_essgnn, without_essgnn)"
+      state_contract:
+        reads_parent: [stage1_ckpt, scene_store, splits, asset_embeddings, variant_registry]
+        writes_parent: [variant_ckpts, variant_status, cost_ledger, degraded_flags]
+        sharing: io_mapping
+      failure_surface: transparent
+      internal_gate_blocks_parent: true
+      internal_gate_note: "Unlike n17, a headline variant failure DOES block the parent."
+
+  - id: n11_equivariance_probe
+    title: "SE(3) equivariance verification (SC-5) + Required Audit RA-1"
+    role: evaluate
+    authority: A0
+    purpose: "Prove the central ESSGNN claim numerically, and record the paper's internal contradiction."
+    decomposition_rationale: [N4_independent_observability, N5_gate_point]
+    reads: [variant_ckpts, scene_store]
+    writes: [equivariance_report, audit_records, run_progress]
+    precondition: "w/ESSGNN variant checkpoint exists"
+    postcondition: >
+      For 100 scenes x 100 random (R,T): coord-channel L-inf error < 1e-4 and
+      the h channel is exactly invariant. RA-1 record written for the
+      h0=Concat(x,t) variant regardless of its outcome.
+    deterministic: false
+    deterministic_note: "scatter_add_ atomics (NS-5) — hence a numeric tolerance rather than exact equality."
+    idempotent: true
+    idempotency_mechanism: natural
+    cacheable: true
+    cache_key: [variant_ckpt_sha, probe_seed, code_revision]
+    checkpoint_after: true
+    parallelizable: true
+    cost: {wallclock_s: 1800, tokens: 0, money: 0, gpu_s: 1800, external_calls: 0}
+    failure:
+      classes: [CONTRACT_VIOLATION, TRANSIENT]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 3, backoff: fixed, on_exhausted: fail_closed, record_fields: [exception_type]}
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [max_coord_err, h_delta, variant]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: false, cost_metered: true, sensitive_redaction: []}
+    notes: >
+      RA-1 runs the SAME probe on the literal §2.5 formulation h0=Concat(x,t),
+      which is EXPECTED TO FAIL (F1). Its failure writes an audit_record and
+      narrows one claim. It must NEVER block, and the 1e-4 tolerance must NEVER
+      be loosened to accommodate it (anti-pattern 13, rule GE).
+
+# ============================================================ PHASE 3
+  - id: n12_eval_object_retrieval
+    title: "Instance-level retrieval evaluation -> Table 1 MetaFind rows"
+    role: evaluate
+    authority: A0
+    purpose: "Compute R@1/R@5 for 7 modality conditions x 2 variants."
+    decomposition_rationale: [N4_independent_observability, N7_parallelizable]
+    reads: [gallery_index, variant_ckpts, asset_embeddings, splits, gallery_size_locked]
+    writes: [retrieval_metrics, cost_ledger, run_progress]
+    precondition: "gallery_index promoted; both headline variants trained"
+    postcondition: "all 14 cells populated; each records n_gallery and n_query alongside the metric"
+    deterministic: false
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    cacheable: true
+    cache_key: [gallery_index_sha, variant_ckpt_sha, condition, splits_hash]
+    checkpoint_after: true
+    parallelizable: true
+    cost: {wallclock_s: 21600, tokens: 0, money: 0, gpu_s: 21600, external_calls: 0}
+    failure:
+      classes: [TRANSIENT, RESOURCE, CONTRACT_VIOLATION]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 3, backoff: exponential_jitter, on_exhausted: fail_closed, record_fields: [condition, variant, exception_type]}
+        - {class: RESOURCE, action: degrade, max_attempts: 2, backoff: fixed, on_exhausted: HALT_BLOCKED, record_fields: [gpu_mem_free]}
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [n_gallery, gallery_size_locked]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: true, cost_metered: true, sensitive_redaction: []}
+    notes: >
+      Must be written from scratch. ULIP's test_zeroshot_3d_core is zero-shot
+      CLASSIFICATION over LVIS categories (pc_features @ text_features.t() with a
+      class-id target), not instance-level retrieval over the 48K gallery (F3).
+
+  - id: n14_compose_scenes
+    title: "Iterative layout-aware scene composition (Algorithm 1)"
+    role: subgraph
+    authority: A1
+    purpose: "Build 200 scenes per method by retrieving and placing one object at a time."
+    decomposition_rationale: [N7_parallelizable, N8_reusable, N3_checkpoint_needed]
+    decomposition_note: "N8 — reused by n18 for the ablation variants, including the `parallel` composition mode."
+    reads: [gallery_index, variant_ckpts, scene_store, splits]
+    writes: [composed_scenes, composition_incomplete, retrieval_trace, cost_ledger, run_progress, degraded_flags]
+    precondition: "gallery_index promoted; variant checkpoints available"
+    postcondition: >
+      Each (variant, scene) produces either a complete scene or an entry in
+      composition_incomplete with terminated_by=object_budget. Never both, never neither.
+    deterministic: false
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    cacheable: true
+    cache_key: [variant_ckpt_sha, scene_id, gallery_index_sha, composition_mode]
+    checkpoint_after: true
+    parallelizable: true
+    cost: {wallclock_s: 61200, tokens: 0, money: 0, gpu_s: 20000, external_calls: 20000}
+    failure:
+      classes: [TRANSIENT, DETERMINISTIC_INPUT, RESOURCE]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 3, backoff: exponential_jitter, on_exhausted: quarantine, record_fields: [scene_id, step, exception_type]}
+        - {class: DETERMINISTIC_INPUT, action: quarantine, max_attempts: 1, backoff: none, on_exhausted: quarantine, record_fields: [scene_id, reason]}
+        - class: RESOURCE
+          action: degrade
+          max_attempts: 1
+          backoff: none
+          on_exhausted: degrade
+          record_fields: [scene_id, idesign_available]
+          note: "I-Design unavailable => fall back to ProcTHOR native layout and set degraded_flags (R-05)."
+      partial_failure_semantics: proceed_with_admitted
+      partial_failure_note: >
+        Incomplete scenes are EXCLUDED from Table 2 means and reported
+        separately. If the incomplete rate exceeds 10%, G4 fails.
+      rollback: quarantine_forward
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: true, cost_metered: true, sensitive_redaction: []}
+    subgraph:
+      spec_ref: SG4
+      state_contract:
+        reads_parent: [gallery_index, variant_ckpts, scene_store]
+        writes_parent: [composed_scenes, composition_incomplete, retrieval_trace, cost_ledger, degraded_flags]
+        sharing: io_mapping
+      failure_surface: transparent
+      internal_gate_blocks_parent: false
+    notes: >
+      O4 requirement: retrieval_trace records top-5 candidates, their scores, the
+      chosen id, and lambda*||e_layout|| at every step. Without the last field
+      you cannot explain WHY a composed scene is incoherent.
+
+  - id: n15_judge_gpt4o
+    title: "GPT-4o aesthetic and alignment judging (4 dimensions)"
+    role: model
+    authority: A0
+    purpose: "Produce the GPT-4o column of Table 2."
+    decomposition_rationale: [N1_distinct_failure_mode, N6_side_effects]
+    reads: [composed_scenes, composition_incomplete]
+    writes: [gpt4o_scores, cost_ledger, run_progress]
+    precondition: "composed_scenes populated"
+    postcondition: "every (method, scene, dimension) has a score in [1,5]; incomplete scenes excluded"
+    deterministic: false
+    deterministic_note: "temperature=0 + pinned prompt version + recorded model snapshot id (NS-3)."
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    cacheable: true
+    cache_key: [scene_sha256, judge_prompt_version, model_snapshot_id]
+    checkpoint_after: true
+    parallelizable: true
+    cost: {wallclock_s: 14400, tokens: 40000000, money: 150, gpu_s: 0, external_calls: 3200}
+    failure:
+      classes: [TRANSIENT, MODEL_RECOVERABLE, RESOURCE]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 4, backoff: exponential_jitter, on_exhausted: quarantine, record_fields: [scene_id, http_status]}
+        - {class: MODEL_RECOVERABLE, action: feedback_loop, max_attempts: 2, backoff: none, on_exhausted: quarantine, record_fields: [scene_id, raw_response, schema_errors]}
+        - {class: RESOURCE, action: degrade, max_attempts: 1, backoff: none, on_exhausted: HALT_BLOCKED, record_fields: [quota_remaining]}
+      partial_failure_semantics: proceed_with_admitted
+      rollback: quarantine_forward
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: true, cost_metered: true, sensitive_redaction: [api_tokens]}
+    notes: "A score outside [1,5] is a schema violation, not a valid score. It goes to the repair loop."
+
+  - id: G4_human_study_commit
+    title: "GATE — commit to the human study and ablation sweep"
+    role: evaluate
+    authority: A1
+    purpose: "Do not spend ~67 person-hours on a pipeline whose central claim is broken."
+    decomposition_rationale: [N5_gate_point]
+    reads: [equivariance_report, retrieval_metrics, composition_incomplete, human_study_status, budget_cap, cost_ledger]
+    writes: [gate_records, run_progress]
+    precondition: "n11, n12, n15 complete (join group `default` = all) OR re-approval arrived (group `reapproval` = any)"
+    postcondition: "gate_record with is_terminal=true"
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: natural
+    cacheable: false
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 60, tokens: 0, money: 0, gpu_s: 0, external_calls: 0}
+    failure:
+      classes: [CONTRACT_VIOLATION]
+      policies:
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [criterion, observed]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: false, cost_metered: false, sensitive_redaction: []}
+    notes: "G-COST: 5 annotators x 200 scenes x 4 methods. Human time, once spent, is not refundable."
+
+  - id: n16_human_study
+    title: "Expert human preference study (5 annotators x 200 scenes)"
+    role: human
+    authority: A0
+    purpose: "Produce the human column of Table 2."
+    decomposition_rationale: [N5_gate_point, N1_distinct_failure_mode]
+    reads: [composed_scenes]
+    writes: [human_scores, human_study_status, cost_ledger, run_progress]
+    precondition: "G4 verdict == PASS; the interrupt point is at the very START of this node"
+    postcondition: ">= 4 annotators complete => scores usable with recorded n; < 4 => BLOCKED_EVIDENCE"
+    deterministic: false
+    idempotent: false
+    idempotency_mechanism: N/A
+    idempotency_note: "Not applicable — a human cannot be asked twice and give the same answer. Hence scores are persisted immediately per response."
+    cacheable: false
+    checkpoint_after: true
+    parallelizable: true
+    cost: {wallclock_s: 604800, tokens: 0, money: 0, gpu_s: 0, external_calls: 0, human_minutes: 4000}
+    failure:
+      classes: [HUMAN_RECOVERABLE]
+      policies:
+        - class: HUMAN_RECOVERABLE
+          action: interrupt
+          max_attempts: 3
+          backoff: fixed
+          on_exhausted: HALT_BLOCKED
+          record_fields: [annotator_hash, completed, total, last_activity]
+          note: >
+            Anti-pattern 24 — a waiting annotator is BLOCKED, not FAILED.
+            Completed stages must NOT be re-run when they return.
+      partial_failure_semantics: proceed_with_admitted
+      partial_failure_note: ">=4 complete => compute with the completed set and record n. <4 => Table 2 human column = BLOCKED_EVIDENCE (rc=3)."
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: false, per_item_sidecar: true, cost_metered: true, sensitive_redaction: [annotator_identity]}
+    notes: >
+      The interrupt MUST be the first thing this node does. On resume the whole
+      node re-executes, so anything before the interrupt would run twice.
+      B5 — annotator identity is stored as annotator_hash; the mapping table is
+      never logged and never published.
+
+  - id: n17_train_ablations
+    title: "Stage-2 ablation variants (8 configs)"
+    role: subgraph
+    authority: A1
+    purpose: "Produce the 8 non-reusable rows of Table 3."
+    decomposition_rationale: [N7_parallelizable, N8_reusable]
+    reads: [variant_registry, stage1_ckpt, asset_embeddings, scene_store, splits]
+    writes: [variant_ckpts, variant_status, cost_ledger, run_progress, degraded_flags]
+    precondition: "G4 verdict == PASS"
+    postcondition: "every variant has a status in {SUCCESS, FAILED, EXHAUSTED} with a reason"
+    deterministic: false
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    cacheable: true
+    cache_key: [variant_config_hash, stage1_ckpt_sha, splits_hash, seed, code_revision]
+    checkpoint_after: true
+    parallelizable: true
+    cost: {wallclock_s: 28800, tokens: 0, money: 0, gpu_s: 28800, external_calls: 0}
+    failure:
+      classes: [TRANSIENT, RESOURCE, CATASTROPHIC]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 2, backoff: fixed, on_exhausted: quarantine, record_fields: [variant_id, exception_type]}
+        - {class: RESOURCE, action: degrade, max_attempts: 3, backoff: fixed, on_exhausted: quarantine, record_fields: [variant_id, batch_size_before, batch_size_after]}
+        - {class: CATASTROPHIC, action: quarantine, max_attempts: 1, backoff: none, on_exhausted: quarantine, record_fields: [variant_id, traceback]}
+      partial_failure_semantics: proceed_with_admitted
+      partial_failure_note: >
+        DIFFERENT from n10. A failed ablation marks its Table 3 row
+        'N/A (reproduction failed)' and narrows SC-6. It does not halt the run,
+        because a single ablation row is a narrower claim than the headline result.
+      rollback: checkpoint_restore
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: true, cost_metered: true, sensitive_redaction: []}
+    subgraph:
+      spec_ref: "SG3 (8 ablation variants)"
+      state_contract:
+        reads_parent: [variant_registry, stage1_ckpt, asset_embeddings, scene_store, splits]
+        writes_parent: [variant_ckpts, variant_status, cost_ledger, degraded_flags]
+        sharing: io_mapping
+      failure_surface: transparent
+      internal_gate_blocks_parent: false
+      internal_gate_note: "Contrast with n10 where it IS true. Same subgraph, different parent-level blocking semantics — this is a scoping decision, not a relaxed gate."
+    notes: >
+      Because of D2, the three variants that need a Stage-1 re-run (dropout 10%,
+      dropout 50%, zero-padding) are cheap: Stage-1 trains only small heads over
+      cached 1280-d vectors. Without D2 each would need a full pretraining run.
+
+  - id: n18_eval_ablations
+    title: "Evaluate ablation variants -> Table 3"
+    role: evaluate
+    authority: A0
+    purpose: "Compute R@1 and scene-level scores for each ablation row."
+    decomposition_rationale: [N4_independent_observability]
+    reads: [variant_ckpts, variant_status, gallery_index, scene_store, splits]
+    writes: [retrieval_metrics, composed_scenes, gpt4o_scores, cost_ledger, run_progress]
+    precondition: "n17 complete (all_settled)"
+    postcondition: "every SUCCESS variant has metrics; every FAILED/EXHAUSTED variant is explicitly marked N/A with a reason"
+    deterministic: false
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    cacheable: true
+    cache_key: [variant_ckpt_sha, gallery_index_sha, condition]
+    checkpoint_after: true
+    parallelizable: true
+    cost: {wallclock_s: 28800, tokens: 10000000, money: 40, gpu_s: 20000, external_calls: 2000}
+    failure:
+      classes: [TRANSIENT, RESOURCE]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 3, backoff: exponential_jitter, on_exhausted: quarantine, record_fields: [variant_id, exception_type]}
+        - {class: RESOURCE, action: degrade, max_attempts: 2, backoff: fixed, on_exhausted: quarantine, record_fields: [gpu_mem_free]}
+      partial_failure_semantics: proceed_with_admitted
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: true, cost_metered: true, sensitive_redaction: []}
+    notes: "Uses 50 scenes rather than 200 (U-02) with a widened tolerance, stated explicitly in the report."
+
+# ============================================================ PHASE 4
+  - id: n19_aggregate_tables
+    title: "Assemble Tables 1, 2 and 3"
+    role: compute
+    authority: A0
+    purpose: "Collect all metrics into the three paper tables."
+    decomposition_rationale: [N4_independent_observability]
+    reads: [retrieval_metrics, baseline_metrics, gpt4o_scores, human_scores, human_study_status, variant_status, composition_incomplete, degraded_flags]
+    writes: [result_tables, run_progress]
+    precondition: "join: core={n12,n13,n15} all AND extended={n16,n18} all_settled"
+    postcondition: >
+      Every cell holds a value, an explicit NA_DECLARED, or an explicit
+      INSUFFICIENT_EVIDENCE marker. No cell is blank.
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: natural
+    cacheable: true
+    cache_key: [metrics_hash, code_revision]
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 300, tokens: 0, money: 0, gpu_s: 0, external_calls: 0}
+    failure:
+      classes: [CONTRACT_VIOLATION]
+      policies:
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [missing_cells]}
+      partial_failure_semantics: proceed_with_admitted
+      partial_failure_note: "Missing `extended` members narrow the claim and are recorded in degraded_flags; missing `core` members block."
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: false, cost_metered: false, sensitive_redaction: [annotator_identity]}
+
+  - id: n20_compare_to_paper
+    title: "Cell-by-cell reproduction comparison"
+    role: evaluate
+    authority: A0
+    purpose: "Give every table cell exactly one of REPRODUCED / NOT_REPRODUCED / INSUFFICIENT_EVIDENCE."
+    decomposition_rationale: [N4_independent_observability, N5_gate_point]
+    reads: [result_tables, paper_reference, degraded_flags, variant_status, human_study_status]
+    writes: [reproduction_verdicts, run_progress]
+    precondition: "result_tables complete"
+    postcondition: "SC-1..SC-8 each evaluated with a recorded observed value and delta"
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: natural
+    cacheable: true
+    cache_key: [result_tables_hash, paper_reference_hash, code_revision]
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 300, tokens: 0, money: 0, gpu_s: 0, external_calls: 0}
+    failure:
+      classes: [CONTRACT_VIOLATION]
+      policies:
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [criterion, observed, expected]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: false, cost_metered: false, sensitive_redaction: []}
+    notes: >
+      SC-3 deserves care: the PC-Only cell EXPECTS MetaFind to be WORSE than the
+      baselines. Reproducing the paper means reproducing its regressions, so the
+      comparator must check direction, not superiority.
+
+  - id: G5_report_release
+    title: "GATE — reproduction report release"
+    role: evaluate
+    authority: A1
+    purpose: "Last check before an irreversible publication."
+    decomposition_rationale: [N5_gate_point]
+    reads: [reproduction_verdicts, gate_records, audit_records, degraded_flags, result_tables]
+    writes: [gate_records, run_progress]
+    precondition: "n20 complete"
+    postcondition: "gate_record with is_terminal=true"
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: natural
+    cacheable: false
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 60, tokens: 0, money: 0, gpu_s: 0, external_calls: 0}
+    failure:
+      classes: [CONTRACT_VIOLATION]
+      policies:
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [missing_item]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: false, cost_metered: false, sensitive_redaction: []}
+    notes: "Criteria include that all three Required Audit records exist and that deviations D1/D2/D3 are stated in the report."
+
+  - id: n21_publish_report
+    title: "Publish the reproduction report and artifacts"
+    role: mutate
+    authority: A0
+    purpose: "The single outward-facing, irreversible action in this graph."
+    decomposition_rationale: [N6_side_effects]
+    reads: [result_tables, reproduction_verdicts, gate_records, audit_records, degraded_flags, source_manifest]
+    writes: [run_progress]
+    precondition: "G5 verdict == PASS with is_terminal=true"
+    postcondition: "report published; a git tag records the exact revision and artifact hashes"
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: idempotency_key
+    idempotency_note: "Key = (report_content_sha256). Re-publishing identical content is a no-op."
+    cacheable: false
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 600, tokens: 0, money: 0, gpu_s: 0, external_calls: 5}
+    failure:
+      classes: [TRANSIENT, CONTRACT_VIOLATION]
+      policies:
+        - {class: TRANSIENT, action: retry, max_attempts: 3, backoff: exponential_jitter, on_exhausted: HALT_BLOCKED, record_fields: [target, http_status]}
+        - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, backoff: none, on_exhausted: HALT_FAILED, record_fields: [missing_gate_record]}
+      partial_failure_semantics: halt
+      rollback: compensating_action
+      compensating_node: n21b_publish_erratum
+      rollback_note: >
+        HONEST LIMIT (§11.2): a compensating action can publish an erratum and
+        mark the tag INVALIDATED, but content already read by others cannot be
+        recalled. This is why G5 exists.
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: false, cost_metered: true, sensitive_redaction: [annotator_identity]}
+
+  - id: n22_budget_approval
+    title: "Human budget / staffing approval"
+    role: human
+    authority: A0
+    purpose: "Escalation target for G1 and G4 when the verdict is BLOCKED_EVIDENCE (rc=3)."
+    decomposition_rationale: [N5_gate_point]
+    reads: [cost_projection, cost_ledger, gate_records]
+    writes: [budget_cap, run_progress]
+    precondition: "a gate emitted rc=3"
+    postcondition: "budget_cap updated with an explicit human decision, or the graph enters BLOCKED"
+    deterministic: false
+    idempotent: false
+    idempotency_mechanism: N/A
+    cacheable: false
+    checkpoint_after: true
+    parallelizable: false
+    cost: {wallclock_s: 86400, tokens: 0, money: 0, gpu_s: 0, external_calls: 0, human_minutes: 30}
+    failure:
+      classes: [HUMAN_RECOVERABLE]
+      policies:
+        - {class: HUMAN_RECOVERABLE, action: interrupt, max_attempts: 2, backoff: fixed, on_exhausted: HALT_BLOCKED, record_fields: [approval_round, decision, rationale]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    observability: {emits_trace: true, state_diff: true, decision_log: true, per_item_sidecar: false, cost_metered: true, sensitive_redaction: []}
+    notes: >
+      Raising budget_cap here is legitimate ONLY as an explicit, recorded human
+      decision to spend more. It is NOT legitimate as a way to turn a red gate
+      green (GE). The gate_record and the approval record are separate entries,
+      so the distinction stays auditable.
+
+# ==================================================================
+# Subgraph internals (compact). Each is a full graph in its own right.
+# ==================================================================
+subgraph_nodes:
+
+  SG1_object_prep_stream:
+    purpose: "Shard-streaming asset prep with disk backpressure and irreversible cleanup (D3)."
+    cycle: C1
+    nodes:
+      - {id: sg1_shard_gate, role: decide, authority: A1, purpose: "disk backpressure: proceed | shrink_shard | BLOCKED", writes: [degraded_flags]}
+      - {id: sg1_validate_mesh, role: compute, purpose: "manifold / non-empty / licence checks", failure: [DETERMINISTIC_INPUT]}
+      - {id: sg1_render_views, role: compute, purpose: "11 orthogonal views", failure: [TRANSIENT, RESOURCE], parallel_with: sg1_sample_pc}
+      - {id: sg1_sample_pc, role: compute, purpose: "10000 points, xyz+rgb, pc_norm", failure: [DETERMINISTIC_INPUT]}
+      - {id: sg1_annotate, role: model, purpose: "GPT-4o structured annotation from 11 views", failure: [TRANSIENT, MODEL_RECOVERABLE], join_groups: [init, repair]}
+      - {id: sg1_validate_annotation, role: evaluate, authority: A1, purpose: "schema + required fields + category in LVIS vocab"}
+      - {id: sg1_admit_or_quarantine, role: decide, authority: A1, purpose: "admit | repair | quarantine", default: quarantine}
+      - {id: sg1_encode, role: model, purpose: "frozen ULIP-2 -> three 1280-d vectors (D2)"}
+      - {id: sg1_write_vectors, role: mutate, purpose: "write embeddings + sidecar, fsync", idempotency: read_before_write}
+      - {id: sg1_delete_raw, role: mutate, purpose: "IRREVERSIBLE: delete this shard's raw files", precondition: "sg1_write_vectors fsynced AND sha256 verified", rollback: compensating_action, compensating_node: sg1_refetch}
+      - {id: sg1_refetch, role: retrieve, purpose: "compensating action: re-download via sidecar source_uri + sha256"}
+      - {id: sg1_reduce, role: compute, purpose: "all_settled reduce -> admitted set + quarantine ledger"}
+    edges_note: "sg1_validate_annotation -> sg1_annotate is the C1 feedback edge, join_group=repair (E4)."
+
+  SG2_scene_graph_prep:
+    purpose: "ProcTHOR houses -> sparse spatial-semantic graphs."
+    cycle: C2
+    nodes:
+      - {id: sg2_parse_house, role: compute, purpose: "house -> rooms -> objects{position, metadata}"}
+      - {id: sg2_physical_edges, role: compute, purpose: "geometric rules: adjacency, support", deterministic: true}
+      - {id: sg2_enumerate_pairs, role: compute, purpose: "co-occurring object pairs per room, capped"}
+      - {id: sg2_semantic_edge, role: model, purpose: "cache lookup then LLM relation sentence", join_groups: [init, repair]}
+      - {id: sg2_validate_edge, role: evaluate, authority: A1, purpose: "non-empty and encodable"}
+      - {id: sg2_encode_edge_text, role: model, purpose: "frozen text encoder -> 1280-d"}
+      - {id: sg2_project_edge, role: compute, purpose: "Linear(1280 -> 64) — F8, prevents semantics swamping geometry"}
+      - {id: sg2_assemble_graph, role: compute, purpose: "build SPARSE edge_index (do NOT use egnn get_edges, which is fully connected)"}
+      - {id: sg2_reduce, role: compute, purpose: "all_settled reduce"}
+
+  SG3_train_variant:
+    purpose: "Train one variant config. Reused by n10 (2 headline) and n17 (8 ablations)."
+    cycle: none
+    nodes:
+      - {id: sg3_route, role: decide, authority: A1, purpose: "requires_stage1_retrain ? full : stage2_only", default: stage2_only}
+      - {id: sg3_stage1_head, role: mutate, purpose: "optional Stage-1 head retrain on cached embeddings (cheap thanks to D2)"}
+      - {id: sg3_stage2, role: mutate, purpose: "train fuser + ESSGNN; 30% scene dropout; learnable lambda; gallery frozen"}
+      - {id: sg3_record_status, role: compute, purpose: "write variant_status with SUCCESS | FAILED | EXHAUSTED + reason"}
+
+  SG4_iterative_composition:
+    purpose: "Algorithm 1 — retrieve and place one object at a time."
+    cycle: C3
+    nodes:
+      - {id: sg4_init, role: compute, purpose: "load G_0 and the query list Q_1..Q_N"}
+      - {id: sg4_mode, role: decide, authority: A1, purpose: "iterative | parallel | region", default: iterative}
+      - {id: sg4_encode_layout, role: model, purpose: "ESSGNN(G) -> e_layout (1280-d)", join_groups: [init, loop_back], writes: [layout_embedding]}
+      - {id: sg4_encode_query, role: model, purpose: "encode available modalities of Q_i", join_groups: [init, loop_back], writes: [query_modality_embeds]}
+      - {id: sg4_fuse_retrieve, role: retrieve, purpose: "Eq.6 fusion then EXACT inner product over the gallery index", join: all, writes: [retrieval_trace]}
+      - {id: sg4_place, role: compute, purpose: "place asset via I-Design or native layout; update placed_assets", writes: [placed_assets, placed_count]}
+      - {id: sg4_advance, role: decide, authority: A1, purpose: "loop_back | DONE | EXHAUSTED", default: EXHAUSTED}
+    edges_note: >
+      sg4_advance -> {sg4_encode_layout, sg4_encode_query} is the C3 feedback,
+      join_group=loop_back, kept strictly separate from the init edges out of
+      sg4_init (E4). Merging them deadlocks the cycle.

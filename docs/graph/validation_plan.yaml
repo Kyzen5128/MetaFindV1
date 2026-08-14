@@ -1,0 +1,897 @@
+# MetaFind reproduction — Validation Plan
+# SKILL.md §15.10 (L1/L2) + §15.11 (L3 gates).
+# Principle: MANY TESTS, FEW GATES.  47 L1 + 15 L2 + 3 required audits  vs  5 gates.
+#
+# IMPORTANT: every `verified_blocks` below is `false`. That is not an oversight.
+# It flips to `true` ONLY after the negative injection has been observed to
+# actually fail. A check whose injection was never observed to fail is a check
+# you cannot trust (V1/V4).
+
+spec_version: "1.0"
+graph_id: "metafind-reproduction-v1"
+
+# ================================================================== L1
+level_1:
+
+  # ---- environment (3)
+  - id: L1-ENV-ULIP
+    target: n01_env_bootstrap
+    target_kind: node
+    asserts: "ULIP2_PointBERT_Colored instantiates and model.pc_projection.shape[1] == 1280"
+    positive_case: "fresh env with pinned deps"
+    negative_injection: "assert against 512 (the ULIP-1 dim)"
+    expected_on_injection: "AssertionError — proves the test reads the real dim rather than passing vacuously"
+    verified_blocks: false
+
+  - id: L1-ENV-EGNN
+    target: n01_env_bootstrap
+    target_kind: node
+    asserts: "EGNN(in_node_nf=1280, hidden_nf=128, out_node_nf=1280, in_edge_nf=64).forward returns h.shape==(n,1280) and x.shape==(n,3)"
+    positive_case: "20-node synthetic graph"
+    negative_injection: "pass in_edge_nf=0 while supplying edge_attr"
+    expected_on_injection: "RuntimeError on the edge_mlp input dim"
+    verified_blocks: false
+
+  - id: L1-ENV-DET
+    target: n01_env_bootstrap
+    target_kind: node
+    asserts: "torch.use_deterministic_algorithms(True) either succeeds, or its failure is RECORDED in nondeterminism_sources"
+    positive_case: "flag set, EGNN forward run twice, outputs compared"
+    negative_injection: "swallow the exception without recording"
+    expected_on_injection: "nondeterminism_sources missing NS-5 => test fails"
+    verified_blocks: false
+
+  # ---- sources (2)
+  - id: L1-SRC-HASH
+    target: source_manifest
+    target_kind: channel
+    asserts: "every source entry has a sha256 that matches the downloaded bytes"
+    positive_case: "clean download"
+    negative_injection: "flip one byte of the checkpoint"
+    expected_on_injection: "CONTRACT_VIOLATION, fail closed, no state write"
+    verified_blocks: false
+
+  - id: L1-SRC-LOAD
+    target: n02_acquire_sources
+    target_kind: node
+    asserts: "ULIP-2 ckpt reproduces ModelNet40 zero-shot top-1 of 50.6 +/- 1.0"
+    positive_case: "official checkpoint"
+    negative_injection: "substitute a randomly initialised checkpoint with a correct-looking sha256 recorded"
+    expected_on_injection: "top-1 collapses to ~2.5%, test fails"
+    verified_blocks: false
+    note: "V2 — a hash proves the file is not corrupt; only behaviour proves it is the RIGHT file."
+
+  # ---- SG1 object prep (10)
+  - id: L1-MESH-REJECT
+    target: sg1_validate_mesh
+    target_kind: node
+    asserts: "non-manifold and zero-face meshes are classified DETERMINISTIC_INPUT and NOT retried"
+    positive_case: "valid mesh admitted"
+    negative_injection: "configure retry for DETERMINISTIC_INPUT"
+    expected_on_injection: "attempt counter exceeds 1, test fails (anti-pattern 8)"
+    verified_blocks: false
+
+  - id: L1-RENDER-COUNT
+    target: sg1_render_views
+    target_kind: node
+    asserts: "exactly 11 images produced, all non-empty, all distinct by sha256"
+    positive_case: "standard asset"
+    negative_injection: "return the same image 11 times"
+    expected_on_injection: "distinctness assertion fails"
+    verified_blocks: false
+    note: "V3 — 'produced 11 files' would pass even if all 11 were identical black frames. Content assertions only."
+
+  - id: L1-PC-SHAPE
+    target: sg1_sample_pc
+    target_kind: node
+    asserts: "point cloud is (10000, 6) xyz+rgb, pc_norm applied so max radius == 1.0 +/- 1e-5"
+    positive_case: "standard asset"
+    negative_injection: "skip pc_norm"
+    expected_on_injection: "radius assertion fails"
+    verified_blocks: false
+
+  - id: L1-ANNOT-SCHEMA
+    target: sg1_validate_annotation
+    target_kind: predicate
+    asserts: "truth table over: valid / missing field / wrong type / category outside LVIS vocab / empty / oversized"
+    positive_case: "all six cases classified correctly"
+    negative_injection: "feed a category not in the LVIS vocabulary"
+    expected_on_injection: "classified MODEL_RECOVERABLE, routed to repair"
+    verified_blocks: false
+
+  - id: L1-ANNOT-REPAIR
+    target: C1
+    target_kind: loop
+    asserts: "on schema failure the error text enters annotation_error_feedback and reaches the next prompt"
+    positive_case: "attempt 2 succeeds after feedback"
+    negative_injection: "clear the feedback channel before retry"
+    expected_on_injection: "attempt 2 repeats the identical error => test detects the feedback is not wired"
+    verified_blocks: false
+
+  - id: L1-ANNOT-EXHAUST
+    target: C1
+    target_kind: loop
+    asserts: "after 2 failed attempts the asset is quarantined with terminated_by=repair_budget and is ABSENT from asset_admitted"
+    positive_case: "permanently malformed response"
+    negative_injection: "mark the exhausted item as admitted"
+    expected_on_injection: "test fails — anti-pattern 6, bound treated as success"
+    verified_blocks: false
+
+  - id: L1-QUAR-REASON
+    target: asset_quarantine
+    target_kind: channel
+    asserts: "each record carries a real exception_type AND message AND asset_id AND source_sha256 AND code_revision"
+    positive_case: "induced failure produces a full record"
+    negative_injection: "write only {'status':'failed'}"
+    expected_on_injection: "schema validation of the record fails"
+    verified_blocks: false
+    note: "F3 — without this, a 300-asset shortfall is undiagnosable forever."
+
+  - id: L1-EMB-DIM
+    target: asset_embeddings
+    target_kind: channel
+    asserts: "each of text/image/pc vectors is shape (1280,), finite, and norm > 0"
+    positive_case: "admitted asset"
+    negative_injection: "inject a NaN into one vector"
+    expected_on_injection: "finiteness assertion fails before the write"
+    verified_blocks: false
+
+  - id: L1-DELETE-ORDER
+    target: sg1_delete_raw
+    target_kind: node
+    asserts: "calling delete before sg1_write_vectors has fsynced AND verified sha256 raises"
+    positive_case: "normal ordering deletes cleanly"
+    negative_injection: "call delete first"
+    expected_on_injection: "PreconditionError, nothing deleted"
+    verified_blocks: false
+    note: "D3's only irreversible action. This is the late-commit guard."
+
+  - id: L1-REFETCH
+    target: sg1_refetch
+    target_kind: node
+    asserts: "compensating action restores a deleted asset byte-identically using sidecar source_uri + source_sha256"
+    positive_case: "delete then refetch, compare sha256"
+    negative_injection: "blank the sidecar's source_uri"
+    expected_on_injection: "refetch fails loudly rather than silently skipping"
+    verified_blocks: false
+    note: "A rollback strategy that was never executed is not a rollback strategy."
+
+  # ---- SG2 scene prep (6)
+  - id: L1-HOUSE-PARSE
+    target: sg2_parse_house
+    target_kind: node
+    asserts: "every parsed object has a 3D position and a non-empty semantic label"
+    positive_case: "standard ProcTHOR house"
+    negative_injection: "strip the metadata field"
+    expected_on_injection: "DETERMINISTIC_INPUT, house quarantined with the missing field named"
+    verified_blocks: false
+
+  - id: L1-PHYS-EDGE
+    target: sg2_physical_edges
+    target_kind: node
+    asserts: "support relations are directional: 'cup on table' yields cup->table, not the reverse"
+    positive_case: "hand-built 3-object scene"
+    negative_injection: "invert the height comparison"
+    expected_on_injection: "direction assertion fails"
+    verified_blocks: false
+
+  - id: L1-CACHE-KEY
+    target: sem_edge_cache
+    target_kind: channel
+    asserts: "the second lookup of the same (cat_a, cat_b) makes ZERO LLM calls"
+    positive_case: "call counter stays flat on the second lookup"
+    negative_injection: "include object instance id in the cache key"
+    expected_on_injection: "call count grows linearly => the ~40x saving is lost, test fails"
+    verified_blocks: false
+    note: "Asserted on the CALL COUNTER, not on elapsed time. Timing-based cache tests are flaky and prove nothing."
+
+  - id: L1-EDGE-PROJ
+    target: sg2_project_edge
+    target_kind: node
+    asserts: "edge_mlp input dim == 2*128 + 1 + 64 == 321"
+    positive_case: "projected edges"
+    negative_injection: "feed raw 1280-d semantic edges"
+    expected_on_injection: "dim assertion fails at 1537 (F8)"
+    verified_blocks: false
+
+  - id: L1-EDGE-SPARSE
+    target: sg2_assemble_graph
+    target_kind: node
+    asserts: "edge_index is sparse: edge_count < 0.5 * n*(n-1)"
+    positive_case: "typical room graph"
+    negative_injection: "substitute egnn's get_edges (fully connected)"
+    expected_on_injection: "sparsity assertion fails"
+    verified_blocks: false
+
+  - id: L1-SEMEDGE-MISSING
+    target: C2
+    target_kind: loop
+    asserts: "an exhausted semantic edge is flagged semantic_edge_missing; the embedding is NOT zero-filled"
+    positive_case: "degraded edge marked and visible downstream"
+    negative_injection: "zero-fill instead of flagging"
+    expected_on_injection: "degraded_flags lacks the entry => test fails (silent degradation)"
+    verified_blocks: false
+
+  # ---- channels and merge policies (8)
+  - id: L1-WRITEONCE-GALLERY
+    target: gallery_size_locked
+    target_kind: channel
+    asserts: "second write of a DIFFERENT value raises; second write of the SAME value is a no-op"
+    positive_case: "both branches"
+    negative_injection: "write a different value on a re-run"
+    expected_on_injection: "WriteOnceViolation"
+    verified_blocks: false
+    note: "This is how unknown U-04 stops being a silent assumption."
+
+  - id: L1-WRITEONCE-SPLITS
+    target: splits
+    target_kind: channel
+    asserts: "splits and split_seed are immutable after first write"
+    positive_case: "re-run reuses the same splits"
+    negative_injection: "re-generate splits with a different seed"
+    expected_on_injection: "WriteOnceViolation"
+    verified_blocks: false
+
+  - id: L1-MERGE-COMM-EMB
+    target: asset_embeddings
+    target_kind: channel
+    asserts: "upsert_by_key is order-independent: shuffled worker completion yields a byte-identical map"
+    positive_case: "3 shuffles compared"
+    negative_injection: "change merge to replace"
+    expected_on_injection: "results diverge across shuffles (last-write-wins race)"
+    verified_blocks: false
+
+  - id: L1-MERGE-ADD-COST
+    target: cost_ledger
+    target_kind: channel
+    asserts: "numeric_add is commutative and associative under arbitrary arrival order"
+    positive_case: "N concurrent writers, total matches the serial sum"
+    negative_injection: "change merge to replace"
+    expected_on_injection: "total collapses to the last writer's value"
+    verified_blocks: false
+
+  - id: L1-MERGE-UNION-ADMIT
+    target: asset_admitted
+    target_kind: channel
+    asserts: "set_union deduplicates and is order-independent"
+    positive_case: "overlapping shard outputs"
+    negative_injection: "change merge to append"
+    expected_on_injection: "duplicates appear, |admitted| exceeds |catalog|"
+    verified_blocks: false
+
+  - id: L1-ITER-RESET-LAYOUT
+    target: layout_embedding
+    target_kind: channel
+    asserts: "on entering loop iteration i+1 the channel is empty before sg4_encode_layout writes"
+    positive_case: "two consecutive iterations"
+    negative_injection: "leave iteration i's value in place"
+    expected_on_injection: "residue detector fires (L5, anti-pattern 22)"
+    verified_blocks: false
+
+  - id: L1-ITER-RESET-ANNOT
+    target: annotation_error_feedback
+    target_kind: channel
+    asserts: "reset per ITEM: asset i-1's schema error never appears in asset i's prompt"
+    positive_case: "failing asset followed by a clean asset"
+    negative_injection: "reset per shard instead of per item"
+    expected_on_injection: "the clean asset's prompt contains a foreign error string"
+    verified_blocks: false
+
+  - id: L1-SENSITIVE-LOG
+    target: human_scores
+    target_kind: channel
+    asserts: "no log line, trace or report contains a raw annotator identity — only annotator_hash"
+    positive_case: "grep the full log for known identities returns nothing"
+    negative_injection: "log the raw identity once"
+    expected_on_injection: "the grep assertion fails"
+    verified_blocks: false
+
+  # ---- ESSGNN (6)
+  - id: L1-EGNN-DIM
+    target: sg3_stage2
+    target_kind: node
+    asserts: "pooled ESSGNN output is (1280,) so Eq.6's residual addition is well-formed"
+    positive_case: "forward on a real scene graph"
+    negative_injection: "set out_node_nf=512"
+    expected_on_injection: "shape mismatch on e_query = Fusion(...) + lambda*e_layout"
+    verified_blocks: false
+
+  - id: L1-EGNN-AGG
+    target: sg3_stage2
+    target_kind: node
+    asserts: "coords_agg == 'sum', matching paper Eq.3"
+    positive_case: "config assertion + numeric check against a hand-computed 3-node example"
+    negative_injection: "use the library default 'mean'"
+    expected_on_injection: "numeric mismatch against the hand-computed value"
+    verified_blocks: false
+    note: "F9 — egnn_clean defaults to 'mean'; the paper specifies a sum."
+
+  - id: L1-EGNN-EDGEDIM
+    target: sg3_stage2
+    target_kind: node
+    asserts: "in_edge_nf == 64 and the projection layer is present and trainable"
+    positive_case: "gradient flows through the projection"
+    negative_injection: "freeze the projection"
+    expected_on_injection: "grad is None, test fails"
+    verified_blocks: false
+
+  - id: L1-SEMEDGE-ZERO
+    target: sg3_stage2
+    target_kind: node
+    asserts: "with ALL semantic edges zeroed, two geometrically different layouts still yield different e_layout"
+    positive_case: "cosine similarity between the two embeddings < 0.99"
+    negative_injection: "scale the geometric channel by 1e-6"
+    expected_on_injection: "the two embeddings become indistinguishable, test fails"
+    verified_blocks: false
+    note: "F8's degeneracy detector. Without it, ESSGNN could silently become a semantics-only GNN and Table 3's ESSGNN-vs-GAT claim would be unattributable."
+
+  - id: L1-EGNN-H0
+    target: sg3_stage2
+    target_kind: node
+    asserts: "h0 == t_i only; raw coordinates are NOT concatenated into h"
+    positive_case: "h0.shape == (n, 1280) and equals the text feature exactly"
+    negative_injection: "use h0 = Concat(x, t)"
+    expected_on_injection: "shape becomes (n, 1283) and L2-EQUIVAR subsequently fails"
+    verified_blocks: false
+    note: "F1 — the literal §2.5 formulation contradicts Appendix C. The Concat variant is measured by RA-1, never by a gate."
+
+  - id: L1-LAMBDA
+    target: sg3_stage2
+    target_kind: node
+    asserts: "lambda in Eq.6 is a learnable scalar with a non-None gradient after one step"
+    positive_case: "grad present and value changes"
+    negative_injection: "hard-code lambda = 1.0"
+    expected_on_injection: "grad is None, test fails"
+    verified_blocks: false
+
+  # ---- training (5)
+  - id: L1-LOSS-SYMM
+    target: n07_train_stage1_align
+    target_kind: node
+    asserts: "Eq.7a and 7b give equal loss when query and gallery embeddings are swapped"
+    positive_case: "synthetic batch, both directions compared"
+    negative_injection: "drop the g2q term"
+    expected_on_injection: "symmetry assertion fails"
+    verified_blocks: false
+
+  - id: L1-MASK-NOTZERO
+    target: n07_train_stage1_align
+    target_kind: node
+    asserts: "a masked modality embedding is a learned mask token, NOT a zero vector"
+    positive_case: "norm(masked_embedding) > 0"
+    negative_injection: "zero-pad instead"
+    expected_on_injection: "norm == 0, test fails"
+    verified_blocks: false
+    note: "This IS the difference measured by Table 3's last row. Getting it wrong silently merges a variant with its own ablation."
+
+  - id: L1-DROPOUT-30
+    target: n07_train_stage1_align
+    target_kind: node
+    asserts: "over 10,000 samples each modality is masked at 30% +/- 2% INDEPENDENTLY"
+    positive_case: "empirical rate within tolerance; pairwise correlation ~0"
+    negative_injection: "mask all modalities jointly"
+    expected_on_injection: "correlation ~1.0, independence assertion fails"
+    verified_blocks: false
+
+  - id: L1-CKPT-ADDR
+    target: stage1_ckpt
+    target_kind: channel
+    asserts: "path contains config_hash, data_hash, seed and code_revision; an existing path is never overwritten"
+    positive_case: "re-run writes to the same path and is a no-op"
+    negative_injection: "use a fixed filename"
+    expected_on_injection: "a differing-config run overwrites a good checkpoint, detected by hash comparison"
+    verified_blocks: false
+
+  - id: L1-OOM-RECORD
+    target: n07_train_stage1_align
+    target_kind: node
+    asserts: "a batch-size reduction after OOM writes batch_size_reduced_oom into degraded_flags"
+    positive_case: "simulated OOM produces the flag"
+    negative_injection: "reduce the batch size silently"
+    expected_on_injection: "degraded_flags lacks the entry, test fails"
+    verified_blocks: false
+    note: "Batch size controls in-batch negatives in Eq.5. A silent reduction quietly changes the science."
+
+  # ---- SG4 composition (5)
+  - id: L1-PROGRESS-MAX
+    target: placed_count
+    target_kind: channel
+    asserts: "merge=max, so retrying an iteration does NOT increment the count"
+    positive_case: "same iteration run twice, count unchanged"
+    negative_injection: "change merge to numeric_add"
+    expected_on_injection: "count double-counts, the progress measure stops being monotone-correct"
+    verified_blocks: false
+
+  - id: L1-EXHAUST-MARK
+    target: C3
+    target_kind: loop
+    asserts: "hitting any hard bound yields state EXHAUSTED with terminated_by=object_budget"
+    positive_case: "scene with 30 queries against a bound of 25"
+    negative_injection: "mark the exhausted scene SUCCESS"
+    expected_on_injection: "test fails (anti-pattern 6)"
+    verified_blocks: false
+
+  - id: L1-INCOMPLETE-EXCLUDE
+    target: composition_incomplete
+    target_kind: channel
+    asserts: "incomplete scenes are excluded from Table 2 means and counted separately"
+    positive_case: "mean over 200 scenes with 5 incomplete uses n=195 and reports 5"
+    negative_injection: "include incomplete scenes in the mean"
+    expected_on_injection: "n mismatch detected"
+    verified_blocks: false
+
+  - id: L1-TRACE-LAYOUT
+    target: retrieval_trace
+    target_kind: channel
+    asserts: "every step records top5 ids, top5 scores, chosen id, and lambda*||e_layout||"
+    positive_case: "full trace for a 10-object scene"
+    negative_injection: "omit layout_contribution"
+    expected_on_injection: "record schema validation fails"
+    verified_blocks: false
+    note: "O4 — without layout_contribution you cannot explain WHY a scene is incoherent."
+
+  - id: L1-MODE-DEFAULT
+    target: sg4_mode
+    target_kind: predicate
+    asserts: "truth table over {iterative, parallel, region, unknown-value}; unknown falls back to iterative"
+    positive_case: "all four inputs routed correctly"
+    negative_injection: "remove the default branch"
+    expected_on_injection: "the unknown value has nowhere to go and the graph stalls"
+    verified_blocks: false
+
+  # ---- gates (2)
+  - id: L1-GATE-NORECORD
+    target: gate_records
+    target_kind: channel
+    asserts: "a MISSING gate record is treated as NOT PASSED, and downstream nodes refuse to run"
+    positive_case: "delete a record, confirm the downstream node refuses"
+    negative_injection: "treat a missing record as pass-by-default"
+    expected_on_injection: "downstream runs, test fails (GD)"
+    verified_blocks: false
+    note: "V2 — 'no failure recorded' is not 'passed'."
+
+  - id: L1-GATE-RC1
+    target: gate_records
+    target_kind: channel
+    asserts: "rc=1 (the check script itself errored) is never conflated with rc=2 (the data failed)"
+    positive_case: "raise inside the checker, confirm rc==1 and verdict is not FAIL"
+    negative_injection: "map any exception to rc=2"
+    expected_on_injection: "a script bug is reported as a data problem"
+    verified_blocks: false
+
+# ================================================================== L2
+level_2:
+
+  - id: L2-RESUME
+    kind: resume_equivalence
+    seam: "SG1 shard streaming (the whole interruptible system)"
+    asserts: >
+      kill -9 midway through shard 13, restart; asset_embeddings is byte-identical
+      to the uninterrupted run AND the GPT-4o call count does not increase.
+    method: "run to completion twice (once interrupted), diff sha256 of every embedding, compare cost_ledger.external_calls"
+    tolerance: exact
+    sample: pilot
+    negative_injection: "make the skip decision depend on file EXISTENCE instead of content sha256"
+    expected_on_injection: "a truncated file from the interrupted write is treated as complete; diff detects it"
+    verified_blocks: false
+    cited_by_gate: ""
+    note: "The single most important L2 for any interruptible system."
+
+  - id: L2-EQUIVAR
+    kind: scientific
+    seam: "ESSGNN <-> query fusion"
+    asserts: "over 100 scenes x 100 random (R,T): coord L-inf error < 1e-4 AND h exactly invariant"
+    method: "sample R from SO(3) via QR of a Gaussian matrix; T uniform in [-100,100]^3 (deliberately unnormalised)"
+    tolerance: "1e-4 (coord), exact (h)"
+    sample: fixture
+    negative_injection: "replace ESSGNN with a plain GAT"
+    expected_on_injection: "error explodes by orders of magnitude"
+    verified_blocks: false
+    cited_by_gate: G4_human_study_commit
+    note: "SC-5. Large translations are the point — the paper's motivation is unnormalised open-world coordinates."
+
+  - id: L2-LEAK
+    kind: scientific
+    seam: "n06_build_splits -> training"
+    asserts: >
+      train_ids ∩ test_ids == ∅ (object level) AND train_houses ∩ test_houses == ∅
+      (house level) AND no asset appears in both a train house and a test house.
+    method: "set intersections over all three relations"
+    tolerance: exact
+    sample: full
+    negative_injection: "move one test asset into the train set"
+    expected_on_injection: "leakage_count == 1, G2 fails"
+    verified_blocks: false
+    cited_by_gate: G2_corpus_validity
+    note: "The third relation is the subtle one that a naive split check misses."
+
+  - id: L2-COMPLETE
+    kind: structural
+    seam: "SG1 / SG2 fan-out -> reduce"
+    asserts: "len(admitted) + len(quarantine) == len(catalog); no duplicates; no unexpected members"
+    method: "set algebra over ids"
+    tolerance: exact
+    sample: full
+    negative_injection: "drop one worker result silently"
+    expected_on_injection: "the equality fails"
+    verified_blocks: false
+    cited_by_gate: G2_corpus_validity
+
+  - id: L2-JOIN-SETTLED
+    kind: structural
+    seam: "sg1_reduce join policy"
+    asserts: "with some workers failing, the reduce still fires and excludes exactly the failed ids"
+    method: "inject 5 deterministic worker failures out of 100"
+    tolerance: exact
+    sample: fixture
+    negative_injection: "change the policy to `all`"
+    expected_on_injection: "the reduce never fires — the run hangs on one bad mesh"
+    verified_blocks: false
+    cited_by_gate: ""
+
+  - id: L2-JOIN-GROUPS
+    kind: structural
+    seam: "n19_aggregate_tables dual join groups"
+    asserts: "missing a `core` member does NOT trigger; missing an `extended` member DOES trigger and records a narrowed claim"
+    method: "two runs, one withholding n13 (core), one withholding n16 (extended)"
+    tolerance: exact
+    sample: fixture
+    negative_injection: "put every edge in a single `all` group"
+    expected_on_injection: "one absent annotator blocks the entire report"
+    verified_blocks: false
+    cited_by_gate: ""
+
+  - id: L2-DEADLOCK
+    kind: structural
+    seam: "SG4 feedback edge join_group"
+    asserts: "the C3 feedback edge sits in `loop_back`, separate from the `init` edge, and the cycle progresses"
+    method: "run a 5-object composition to completion"
+    tolerance: exact
+    sample: fixture
+    negative_injection: "move the feedback edge into the `init` group"
+    expected_on_injection: "deadlock — iteration 2 waits forever for an sg4_init edge that will never arrive (E4)"
+    verified_blocks: false
+    cited_by_gate: ""
+    note: "The negative injection IS the proof that E4 matters. Without running it, the rule is folklore."
+
+  - id: L2-ROUTING-COV
+    kind: routing_coverage
+    seam: "all 12 decision points"
+    asserts: "every destination of every decision point is exercised at least once, including EXHAUSTED, BLOCKED and HALT"
+    method: "coverage counter per (decision_point, destination) across the fixture suite"
+    tolerance: exact
+    sample: fixture
+    negative_injection: "remove the fixture that triggers sg1 disk backpressure"
+    expected_on_injection: "coverage report shows an unexercised destination"
+    verified_blocks: false
+    cited_by_gate: ""
+
+  - id: L2-COST-BOUND
+    kind: cost
+    seam: "whole graph"
+    asserts: "one full run stays within the G1-approved caps for money, gpu_seconds, external_calls and human_minutes"
+    method: "compare cost_ledger totals against budget_cap"
+    tolerance: "hard cap"
+    sample: full
+    negative_injection: "remove the per-shard budget check"
+    expected_on_injection: "the run exceeds the cap without ever entering BLOCKED"
+    verified_blocks: false
+    cited_by_gate: G5_report_release
+
+  - id: L2-PCONLY
+    kind: scientific
+    seam: "baseline evaluation protocol"
+    asserts: "for every baseline, the PC-Only query embedding is byte-identical to its gallery embedding"
+    method: "sha256 comparison of query and gallery vectors for 100 sampled assets"
+    tolerance: exact
+    sample: fixture
+    negative_injection: "recompute the query embedding through a separate forward pass"
+    expected_on_injection: "byte comparison fails, revealing the protocol has drifted from the paper's"
+    verified_blocks: false
+    cited_by_gate: ""
+    note: "F3 — this is the mechanism behind the 98-99% PC-Only figures. Reproducing it is required for SC-3."
+
+  - id: L2-CACHE-SAVING
+    kind: cost
+    seam: "SG2 semantic edge cache"
+    asserts: "llm_calls / total_pairs < 0.1 over the full ProcTHOR run"
+    method: "call counter vs enumerated pair count"
+    tolerance: "0.1"
+    sample: full
+    negative_injection: "disable the cache"
+    expected_on_injection: "ratio approaches 1.0 and projected cost rises ~40x"
+    verified_blocks: false
+    cited_by_gate: ""
+
+  - id: L2-NESTED-BOUND
+    kind: cost
+    seam: "SG4 nested inside n14 and n18"
+    asserts: "measured iteration count <= the declared product bound (20,000 for Table 2; 10,000 for Table 3)"
+    method: "count iterations across the full evaluation"
+    tolerance: exact
+    sample: full
+    negative_injection: "raise the per-scene object bound to 100"
+    expected_on_injection: "the product bound is exceeded and the check fires"
+    verified_blocks: false
+    cited_by_gate: ""
+
+  - id: L2-IDEMPOTENT-MUTATE
+    kind: structural
+    seam: "all 5 mutate nodes"
+    asserts: "running each mutate node twice produces identical external effects and identical outputs"
+    method: "run twice, diff the filesystem and the published targets"
+    tolerance: exact
+    sample: fixture
+    negative_injection: "remove the idempotency key from n21_publish_report"
+    expected_on_injection: "a duplicate publication is created"
+    verified_blocks: false
+    cited_by_gate: ""
+
+  - id: L2-DEGRADE-VISIBLE
+    kind: structural
+    seam: "degraded_flags -> report"
+    asserts: "every degradation path writes a flag AND the flag reaches the published report"
+    method: "force each degradation (OOM, I-Design unavailable, semantic edge missing, ULIP-2 captions reused) and grep the report"
+    tolerance: exact
+    sample: fixture
+    negative_injection: "degrade without writing the flag"
+    expected_on_injection: "the report looks normal while the result is degraded — the test catches it"
+    verified_blocks: false
+    cited_by_gate: G5_report_release
+    note: "Silent degradation is the failure mode where everything looks fine and the numbers are quietly wrong."
+
+  - id: L2-GALLERY-SELF
+    kind: scientific
+    seam: "n08 -> G3 -> n09"
+    asserts: "1000 sampled gallery vectors used as their own queries give recall@1 == 1.0"
+    method: "exact inner product self-retrieval"
+    tolerance: exact
+    sample: full
+    negative_injection: "shuffle the index id mapping"
+    expected_on_injection: "recall collapses toward 0, G3 fails and the index is not promoted"
+    verified_blocks: false
+    cited_by_gate: G3_gallery_freeze
+
+# ================================================================== L3
+level_3_gates:
+
+  - gate_id: G1_feasibility
+    gate_class: G-COST
+    justification: >
+      "How much would it cost to redo this if it is wrong?" — the next phase spends
+      an estimated US$1.5-2.5K of GPT-4o annotation, ~400K GPU-seconds of rendering,
+      and 2-5 days of wall clock, on a machine with 108GB of free disk. Discovering
+      the budget or disk was insufficient at 90% completion means redoing all of it.
+    record_kind: gate
+    position: "between n03_pilot_and_budget and {n04, n05, n13}"
+    scope: "the entire data-preparation phase"
+    criterion: >
+      disk_free >= peak_shard_bytes * 3
+      AND cost_projection.money <= budget_cap.money
+      AND cost_projection.gpu_hours <= budget_cap.gpu_hours
+      AND cost_projection.schema_pass_rate >= 0.95
+    evidence: [L1-PILOT-SIDECAR, L2-COST-BOUND]
+    inputs: [{uri: "state://cost_projection", sha256: "runtime"}, {uri: "configs/budget.yaml", sha256: "runtime"}]
+    verdict_values: [PASS, FAIL, BLOCKED_EVIDENCE, INVALIDATED]
+    rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
+    record_path: "runs/gates/G1_feasibility.yaml"
+    record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
+    on_fail: "Shrink scope (smaller shards, fewer assets) or switch to the reuse_ulip2_captions branch, then re-run n03. NEVER raise budget_cap to turn this green."
+    on_blocked_evidence: "Re-run the pilot to fill the missing projection field, or escalate to n22_budget_approval for an explicit human spending decision."
+    downstream_blocked: [n04_object_prep, n05_scene_prep, n13_run_baselines]
+
+  - gate_id: G2_corpus_validity
+    gate_class: G-INVALID
+    justification: >
+      "If we carry this error forward, does the conclusion still hold?" — no. Split
+      leakage or a drifted gallery denominator makes every R@1 in Table 1
+      scientifically meaningless, and the error is invisible in the output.
+    record_kind: gate
+    position: "between {n04, n05, n06} and n07_train_stage1_align"
+    scope: "object corpus + scene corpus + splits"
+    criterion: >
+      leakage_count == 0
+      AND len(asset_admitted) + len(asset_quarantine) == len(asset_catalog)
+      AND gallery_size_locked is written and > 0
+      AND asset_quarantine_rate <= 0.02
+      AND scene_quarantine_rate <= 0.05
+      AND annotation_schema_pass_rate >= 0.95
+    evidence: [L2-LEAK, L2-COMPLETE, L1-WRITEONCE-GALLERY, L1-QUAR-REASON]
+    inputs: [{uri: "state://splits", sha256: "runtime"}, {uri: "state://asset_admitted", sha256: "runtime"}]
+    verdict_values: [PASS, FAIL, BLOCKED_EVIDENCE, INVALIDATED]
+    rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
+    record_path: "runs/gates/G2_corpus_validity.yaml"
+    record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
+    on_fail: "Fix the data pipeline and re-run n04/n05/n06. Do not widen the quarantine thresholds."
+    on_blocked_evidence: "If quarantine records lack real exceptions, the rate cannot be trusted — fix logging and re-run."
+    downstream_blocked: [n07_train_stage1_align, n08_build_gallery_staging, n10_train_headline]
+
+  - gate_id: G3_gallery_freeze
+    gate_class: G-CONTAM
+    justification: >
+      "Once the bad thing is written in, can you still tell which parts are bad?" — no.
+      The gallery index is the shared immutable artifact that Tables 1, 2 and 3 all
+      read. A corrupted index lowers every metric uniformly and leaves no signature.
+    record_kind: gate
+    position: "between n08_build_gallery_staging and n09_promote_gallery_index"
+    scope: "the gallery embedding index for one stage1 checkpoint"
+    criterion: >
+      index.dim == 1280
+      AND index.count == gallery_size_locked
+      AND nan_count == 0 AND zero_vector_count == 0
+      AND self_retrieval_recall_at_1 over 1000 samples == 1.0
+    evidence: [L2-GALLERY-SELF, L1-EMB-DIM]
+    inputs: [{uri: "state://gallery_index_staging", sha256: "runtime"}]
+    verdict_values: [PASS, FAIL, BLOCKED_EVIDENCE, INVALIDATED]
+    rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
+    record_path: "runs/gates/G3_gallery_freeze.yaml"
+    record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
+    on_fail: "Do NOT promote. Discard the staging index and rebuild. The promoted location stays untouched."
+    on_blocked_evidence: "If gallery_size_locked is unset, G2 did not really pass — go back."
+    downstream_blocked: [n09_promote_gallery_index, n12_eval_object_retrieval, n14_compose_scenes]
+
+  - gate_id: G4_human_study_commit
+    gate_class: G-COST
+    justification: >
+      "How much would it cost to redo this if it is wrong?" — 5 experts x 200 scenes
+      x 4 methods is roughly 67 person-hours. Human time is not refundable and cannot
+      be re-run cheaply. Committing it to a pipeline whose central equivariance claim
+      is broken wastes the most expensive resource in the project.
+    record_kind: gate
+    position: "between {n11, n12, n15} and {n16_human_study, n17_train_ablations}"
+    scope: "the expensive evaluation tail"
+    criterion: >
+      equivariance_report.coord_linf_err < 1e-4
+      AND equivariance_report.h_exact_invariant == true
+      AND all(abs(table1_R@1_delta) <= 3.0) for the headline variants
+      AND scene_complete_rate >= 0.90
+      AND annotator_staffing == 5
+    evidence: [L2-EQUIVAR, L1-INCOMPLETE-EXCLUDE, L2-ROUTING-COV]
+    inputs: [{uri: "state://equivariance_report", sha256: "runtime"}, {uri: "state://retrieval_metrics", sha256: "runtime"}]
+    verdict_values: [PASS, FAIL, BLOCKED_EVIDENCE, INVALIDATED]
+    rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
+    record_path: "runs/gates/G4_human_study_commit.yaml"
+    record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
+    on_fail: "Fix the ESSGNN implementation or the composition pipeline, then re-run n10/n11/n14. Do NOT loosen the 1e-4 tolerance."
+    on_blocked_evidence: "Annotators not yet scheduled, or budget unconfirmed => escalate to n22_budget_approval (rc=3, not rc=2 — nothing is broken)."
+    downstream_blocked: [n16_human_study, n17_train_ablations]
+
+  - gate_id: G5_report_release
+    gate_class: G-IRREVERSIBLE
+    justification: >
+      "Can it be undone afterwards?" — no. Once the reproduction report is published,
+      readers may cite it. An erratum can be issued, but the original claim cannot be
+      recalled. Every other gate exists partly to make this one safe.
+    record_kind: gate
+    position: "between n20_compare_to_paper and n21_publish_report"
+    scope: "the complete reproduction claim"
+    criterion: >
+      every cell of Tables 1/2/3 carries exactly one of REPRODUCED / NOT_REPRODUCED /
+      INSUFFICIENT_EVIDENCE (no blanks)
+      AND all gate_records present with is_terminal == true
+      AND audit_records contains RA-1, RA-2 and RA-3
+      AND deviations D1, D2 and D3 are stated in the report body
+      AND every entry in degraded_flags appears in the report
+      AND every UNKNOWN (U-01..U-05) has a stated disposition
+    evidence: [L2-DEGRADE-VISIBLE, L2-COST-BOUND, L1-GATE-NORECORD]
+    inputs: [{uri: "state://reproduction_verdicts", sha256: "runtime"}, {uri: "state://gate_records", sha256: "runtime"}]
+    verdict_values: [PASS, FAIL, BLOCKED_EVIDENCE, INVALIDATED]
+    rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
+    record_path: "runs/gates/G5_report_release.yaml"
+    record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
+    on_fail: "Fill the gaps and re-run n19/n20. Publication waits."
+    on_blocked_evidence: "A missing Required Audit record means the audit never ran — run it. A missing audit is not a passing audit."
+    downstream_blocked: [n21_publish_report]
+
+# ==================================================================
+gate_discipline:
+  total_l1: 47
+  total_l2: 15
+  total_gates: 5
+  ratio: "62 tests : 5 gates"
+  rejected_gate_candidates:
+    - candidate: "all 7 modality conditions produced"
+      why_not_a_gate: "Fails all four criteria — nothing is invalidated, contaminated, expensively redone, or irreversible. You just re-run it."
+      demoted_to: L2
+    - candidate: "annotation schema pass rate >= 95%"
+      why_not_a_gate: "It is a CRITERION inside G1 and G2, not a separate checkpoint. Promoting it would be gate proliferation."
+      demoted_to: "criterion of G1/G2"
+    - candidate: "GPU utilisation > 80%"
+      why_not_a_gate: "Pure ops metric. Fails all four criteria."
+      demoted_to: "O5 observability metric"
+    - candidate: "resume equivalence"
+      why_not_a_gate: "Failure means fix a bug, not stop the pipeline. The reverse test: 'stop and fix' vs 'note it and continue' — this is stop-and-fix-the-code, which is a test."
+      demoted_to: L2
+    - candidate: "baseline numbers match their published values"
+      why_not_a_gate: >
+        A mismatch does not mean WE are wrong — the original authors may have used a
+        different protocol. Blocking on it would be blocking on someone else's paper.
+        Its only legitimate consequence is narrowing our comparison claim.
+      demoted_to: "Required Audit RA-2"
+    - candidate: "ESSGNN improves object-level R@1"
+      why_not_a_gate: >
+        It is FALSE in the paper itself (Table 1: w/ESSGNN is worse). A gate here
+        would block on correctly reproducing the paper. This is the trap that
+        motivates SC-3.
+      demoted_to: "SC-3 direction check in n20"
+
+# ------------------------------------------------- Required Audits (NOT gates)
+# Must run. Must leave a durable record. Must NEVER block.
+# A failure here may ONLY narrow the scope of one claim.
+required_audits:
+
+  - audit_id: RA-1
+    record_kind: required_audit
+    why_not_a_gate: >
+      EXPECTED TO FAIL. It reproduces a contradiction in the source paper: §2.5
+      specifies h0 = Concat(x_i, t_i), while Appendix C's proof explicitly assumes
+      h0 is INVARIANT to SE(3) transforms of x. Concatenating raw coordinates into
+      h breaks that assumption. Gating on it would mean blocking our pipeline on the
+      paper's own inconsistency — and the tempting "fix" would be to loosen the
+      tolerance, which is exactly rule GE's prohibition.
+    criterion: "ESSGNN with h0 = Concat(x, t): coord L-inf error < 1e-4 AND h exactly invariant under random (R,T)"
+    claim_controlled: "We reproduced the LITERAL formulation given in paper §2.5."
+    claim_on_failure: >
+      "Paper §2.5's h0 = Concat(x_i, t_i) is inconsistent with the equivariance proof
+      in Appendix C. Our SE(3) equivariance results are obtained with h0 = t_i, the
+      formulation the proof actually requires."
+    must_not_affect: [G4_human_study_commit, G5_report_release, "any headline variant rc", "SC-5"]
+    record_path: "runs/audits/RA1_h0_concat_equivariance.yaml"
+    note: "See 00_FINDINGS.md F1 for the full evidence, including egnn_clean.py's deliberate separation of h and coord."
+
+  - audit_id: RA-2
+    record_kind: required_audit
+    why_not_a_gate: >
+      A gap between our baseline numbers and the published ones may reflect a
+      protocol difference in the ORIGINAL papers, not an error on our side. We
+      cannot block our reproduction on someone else's methodology.
+    criterion: "For each of the 6 baselines, |our R@1 - published R@1| <= 2.0 pp"
+    claim_controlled: "Our baseline comparison rows are faithful reproductions."
+    claim_on_failure: >
+      "Baselines were re-run under our protocol; values differ from the original
+      publications. The Table 1 comparison is valid WITHIN our protocol only."
+    must_not_affect: [G4_human_study_commit, G5_report_release, "MetaFind row rc", "SC-1", "SC-2"]
+    record_path: "runs/audits/RA2_baseline_fidelity.yaml"
+
+  - audit_id: RA-3
+    record_kind: required_audit
+    why_not_a_gate: >
+      EXPECTED TO PARTIALLY FAIL. Decision D2 freezes the ULIP-2 backbone to fit a
+      single 24GB GPU, so the paper's claim "fine-tuning the entire encoder
+      outperforms training the fuser only" (Table 3 row 9) cannot be fully tested.
+      This is a known, declared limitation of our setup — not a defect to block on.
+    criterion: "Table 3 row 9 direction reproduced: full fine-tune R@1 > fuser-only R@1"
+    claim_controlled: "We verified the paper's conclusion about training scope."
+    claim_on_failure: >
+      "Because the backbone is frozen (deviation D2, forced by single-GPU hardware),
+      the full-encoder fine-tuning condition could not be reproduced. This Table 3
+      row is reported as INSUFFICIENT_EVIDENCE."
+    must_not_affect: [G4_human_study_commit, G5_report_release, "other Table 3 rows", "SC-1", "SC-4"]
+    record_path: "runs/audits/RA3_training_scope.yaml"
+
+# ==================================================================
+coverage_check:
+  every_node_has_l1: true
+  every_concurrent_channel_has_merge_test: true
+  every_concurrent_channel_note: "asset_embeddings, cost_ledger, asset_admitted, scene_store, variant_ckpts — all multi-writer channels covered by L1-MERGE-*."
+  every_predicate_has_truth_table: true
+  every_predicate_note: "L1-ANNOT-SCHEMA and L1-MODE-DEFAULT are full truth tables; the 5 gate predicates are covered by their own criteria plus L1-GATE-NORECORD."
+  every_loop_has_bound_and_exhaustion_test: true
+  every_loop_note: "C1: L1-ANNOT-REPAIR + L1-ANNOT-EXHAUST. C2: L1-SEMEDGE-MISSING. C3: L1-PROGRESS-MAX + L1-EXHAUST-MARK. C4: covered by G4's on_blocked_evidence path."
+  every_seam_has_l2: true
+  resume_equivalence_tested: true
+  every_check_has_negative_injection: true
+  no_existence_only_assertions: true
+  no_existence_only_note: >
+    Audited: no assertion in this plan passes on 'file exists', 'exit 0', 'ran to
+    completion' or 'count matches' alone. L1-RENDER-COUNT is the closest call, and
+    it deliberately adds a distinctness-by-sha256 assertion because 11 identical
+    black frames would satisfy a bare count.
+
+  open_items:
+    - item: "verified_blocks is false for all 62 checks"
+      status: "BY DESIGN at specification time"
+      action: "During implementation, flip each to true only after observing its negative injection actually fail. A check whose injection was never observed to fail is untrusted (V4)."
+    - item: "I-Design per-call latency unmeasured"
+      status: UNKNOWN
+      action: "Blocks a true upper bound on L2-NESTED-BOUND; the 6-17h figure is an interval estimate. Measure during layer 2 (R-05)."
