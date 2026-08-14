@@ -34,6 +34,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import collections
 import hashlib
 import json
 import os
@@ -41,7 +42,6 @@ import tarfile
 import tempfile
 import time
 import traceback
-from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -88,7 +88,7 @@ def load_progress() -> dict:
             # A corrupt checkpoint must fail closed, not be silently treated as
             # "nothing done yet" -- that would redo work and could double-write.
             raise RuntimeError(f"progress file is corrupt: {PROGRESS}. Inspect it before rerunning.")
-    return {"shards_done": {}, "admitted": 0, "quarantined": 0}
+    return {"shards_done": {}, "admitted": 0, "skipped": 0, "quarantined": 0}
 
 
 # ---------------------------------------------------------------- verification
@@ -143,7 +143,7 @@ def verify_pointcloud(raw: bytes) -> tuple[str, dict]:
 
 def wanted_by_shard(lvis: dict[str, str]) -> dict[str, dict[str, str]]:
     """Group the referenced members by shard: {shard: {member_path: uid}}."""
-    grouped: dict[str, dict[str, str]] = defaultdict(dict)
+    grouped: dict[str, dict[str, str]] = collections.defaultdict(dict)
     for uid, rel in lvis.items():
         shard = str(rel).split("/")[0]
         grouped[shard][str(rel)] = uid
@@ -174,7 +174,11 @@ def process_shard(shard: str, members: dict[str, str], keep_tar: bool = False) -
 
     todo = {m: u for m, u in members.items() if u not in done}
     if not todo:
-        return {"shard": shard, "admitted": len(done), "quarantined": 0, "skipped": len(done)}
+        # "admitted" means newly written by THIS run; reporting len(done) here as
+        # well double-counted every resumed shard and inflated the completeness
+        # equation, which is the one number that tells us the gallery
+        # denominator is right.
+        return {"shard": shard, "admitted": 0, "quarantined": 0, "skipped": len(done)}
 
     tar_path = hf_hub_download(
         HF_REPO, f"{HF_PREFIX}/{shard}.tar.gz", repo_type="dataset", local_dir=str(WORK)
@@ -291,32 +295,49 @@ def main() -> int:
     total_wanted = sum(len(grouped[s]) for s in shards)
     print(f"{len(shards)} shards, {total_wanted} point clouds referenced by lvis.json")
 
-    t0 = time.time()
+    # Rate over a rolling window of shards that actually did work. A cumulative
+    # average is badly misleading on resume: shards already complete finish
+    # instantly and inflate the estimate for the rest of the run.
+    recent: collections.deque[float] = collections.deque(maxlen=8)
+
     for i, shard in enumerate(shards, 1):
+        t_shard = time.time()
         res = process_shard(shard, grouped[shard], keep_tar=args.keep_tar)
+        took = time.time() - t_shard
+        if res["admitted"] or res["quarantined"]:
+            recent.append(took)
+
         progress["shards_done"][shard] = res
-        progress["admitted"] = sum(v["admitted"] + v["skipped"] for v in progress["shards_done"].values())
+        # admitted = newly written this run; skipped = already present. Their sum
+        # is what must reconcile against lvis.json, so they are tracked apart.
+        progress["admitted"] = sum(v["admitted"] for v in progress["shards_done"].values())
+        progress["skipped"] = sum(v["skipped"] for v in progress["shards_done"].values())
         progress["quarantined"] = sum(v["quarantined"] for v in progress["shards_done"].values())
         _atomic_write_json(PROGRESS, progress)
 
-        elapsed = time.time() - t0
-        rate = i / elapsed * 3600
+        have = progress["admitted"] + progress["skipped"] + progress["quarantined"]
+        if recent:
+            eta = (len(shards) - i) * (sum(recent) / len(recent)) / 60
+            eta_s = f"剩餘約 {eta:.0f} 分"
+        else:
+            eta_s = "剩餘 待測"
         print(
             f"[{i:3d}/{len(shards)}] {shard}  "
             f"admitted={res['admitted']:4d} skipped={res['skipped']:4d} quar={res['quarantined']:2d}  "
-            f"總計 {progress['admitted']}/{total_wanted}  "
-            f"({rate:.0f} shard/h, 剩餘約 {(len(shards)-i)/max(rate,1e-9)*60:.0f} 分)",
+            f"完成 {have}/{total_wanted}  ({eta_s})",
             flush=True,
         )
 
-    print(f"\n完成: admitted={progress['admitted']} quarantined={progress['quarantined']}")
+    have = progress["admitted"] + progress["skipped"] + progress["quarantined"]
+    print(
+        f"\n完成: admitted={progress['admitted']} skipped={progress['skipped']} "
+        f"quarantined={progress['quarantined']}  合計 {have}/{total_wanted}"
+    )
+    print("以 sidecar 為準的驗證請跑: python -m metafind.data.verify_pointclouds")
     # Completeness equation (L2-COMPLETE). Not an assertion here -- the gate owns
     # that judgement -- but the numbers are surfaced so a mismatch is visible.
-    if progress["admitted"] + progress["quarantined"] != total_wanted:
-        print(
-            f"警告: admitted + quarantined = "
-            f"{progress['admitted'] + progress['quarantined']} != {total_wanted}"
-        )
+    if have != total_wanted:
+        print(f"警告: 合計 {have} != {total_wanted}")
         return 2
     return 0
 
