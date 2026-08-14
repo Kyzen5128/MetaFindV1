@@ -228,3 +228,50 @@ def test_orthographic_projection_ignores_camera_distance():
     assert area_near > 0 and abs(area_near - area_far) <= 2, (
         f"apparent size changed with distance ({area_near} vs {area_far}); not orthographic"
     )
+
+
+# --------------------------------------------------------------- poisoned cache
+
+
+def test_zero_byte_index_is_not_treated_as_cached(tmp_path):
+    """objaverse's own check is `if not os.path.exists(...)`, so a truncated
+    download counts as a valid cache and the next run gets a gzip error instead
+    of a retry. Existence is not correctness.
+    """
+    from metafind.data.render_assets import _object_paths_ok
+
+    empty = tmp_path / "object-paths.json.gz"
+    empty.write_bytes(b"")
+    assert _object_paths_ok(empty) is False
+    assert empty.exists(), "the file exists, which is exactly why existence is the wrong test"
+
+
+def test_truncated_and_malformed_indexes_are_rejected(tmp_path):
+    import gzip
+    import json as _json
+
+    from metafind.data.render_assets import _object_paths_ok
+
+    short = tmp_path / "short.gz"
+    short.write_bytes(gzip.compress(_json.dumps({"a": "b"}).encode()))
+    assert _object_paths_ok(short) is False, "a valid but tiny index must be rejected"
+
+    garbage = tmp_path / "garbage.gz"
+    garbage.write_bytes(b"\x00" * 2_000_000)
+    assert _object_paths_ok(garbage) is False, "non-gzip content must be rejected"
+
+    missing = tmp_path / "nope.gz"
+    assert _object_paths_ok(missing) is False
+
+
+def test_valid_index_is_accepted(tmp_path):
+    """Negative injections above prove nothing unless the positive case passes."""
+    import gzip
+    import json as _json
+
+    from metafind.data.render_assets import _object_paths_ok
+
+    good = tmp_path / "good.gz"
+    good.write_bytes(gzip.compress(_json.dumps({f"uid{i}": f"glbs/x/{i}.glb" for i in range(200_000)}).encode()))
+    assert good.stat().st_size > 1_000_000
+    assert _object_paths_ok(good) is True
