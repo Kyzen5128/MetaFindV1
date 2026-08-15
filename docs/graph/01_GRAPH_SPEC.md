@@ -577,8 +577,10 @@ graph TD
 |---|---|---|---|
 | **U-01** | UNKNOWN | 資產數：論文「約 48,000」vs manifest 46,052 | 用 `len(manifest)`，報告記錄 sha256 |
 | **U-02** | UNKNOWN | 自行取樣點雲與 ULIP 官方點雲是否一致 | **降為 L2-PC-ULIP-REF 診斷**（見 §11 G2） |
-| **U-03** | UNKNOWN | 11 視角的相機擺位 | 預設 Fibonacci，記錄選擇 |
+| **U-03** | UNKNOWN | **11 個相機怎麼擺**。**論文事實只有數字 11**，§2.3 沒有座標、沒有軸、沒有仰角、沒有圖。**找不到官方 MetaFind 渲染實作**；MetaSpatial（同組，arXiv:2503.18470）雖有公開 Blender 程式，但沒有能還原 11-view 物件 rig 的東西，**不能當證據** | **主線改為等方位角環繞 11 視角，Δazimuth = 360/11 ≈ 32.727°**，標記為 **UPSTREAM-INFORMED CHOICE 而非論文真值** —— MetaFind 明文建立在 ULIP-2 上，而 ULIP-2 對 Objaverse 是「12 張、每 30 度」的單軸環繞；把 12 換成論文明定的 11，是從已記載的上游方法出發最小的一步。**變體**：`fibonacci_sphere_11`（先前的主線）。<br>**實測 100 個資產**：剪影覆蓋率幾乎相同（0.1667 vs 0.1653，配對中位數 +0.0009），但**視圖間相似度 0.507 vs 0.442，53/100 個資產差超過 0.05** —— 固定仰角的環繞永遠看不到頂底，11 張視圖系統性地更冗餘。**所以這個歧義不是可忽略的**，有預算就該做成正式 ablation |
 | **U-03a** | UNKNOWN | 11 視角用正交投影還是透視投影。論文只寫 "orthogonal viewpoints"，而 ℝ³ 裡不存在 11 個互相正交的方向 | 兩種都保留，記錄選擇 |
+| **U-03a** | UNKNOWN | **正交投影還是透視投影**。§2.3 只寫 "11 orthogonal viewpoints"。ℝ³ 裡不存在 11 個互相正交的方向，所以字面不成立 —— **但那不構成 orthographic 的證據**。viewpoint 講的是相機姿態，orthographic 講的是投影模型；作者若真要表達後者，更自然的寫法是 "orthographic views" | 主線 orthographic，標記為 **CURRENT IMPLEMENTATION CHOICE**，**明確不記為「orthogonal 的較可能讀法」**。perspective 保持可執行。<br>**[已更正]** 先前這條寫「orthogonal 被讀為一種投影型別」，那是把工程選擇升格成對論文的推論 |
+| **U-03b** | UNKNOWN | **環繞軌道的仰角**。MetaFind 沒說，**ULIP-2 也沒說**（它只給方位角間隔 30°），任何公開程式都推不出來 | 固定 20°，寫進 `renderer_version` 版本並逐筆記錄為實作選擇。**不加頂視角** —— 沒有任何來源支持 |
 | **U-04** | UNKNOWN | 渲染解析度 | 224px 對齊 ULIP-2 慣例 |
 | **U-05** | UNKNOWN | adjacency 判準 | 預設 kNN k=8，參數記入產物 |
 | **U-06** | UNKNOWN | 語意邊要對哪些物件對；`e_ij` 的寬度 | 選一個並記錄；列入報告未定項 |
@@ -1278,6 +1280,30 @@ registry 說 n03 寫 `run_progress`，channel 說 writers 包含 n03，兩邊完
 Table 3 variant 的 gallery index lifecycle（`n18`／`n19` 前）、
 `scene_semantic_edges` 的 pair→embedding 映射（`n08` 前）、
 C2 loop 的 progress counter 指向 SG1 私有 channel（`n08` 前）。
+
+### 2026-08-15 U-03／U-03a 外部查證（MetaFind / ULIP-2 / MetaSpatial 公開資源）
+
+把「11 orthogonal viewpoints 該怎麼讀」送出去查。回覆的結論是**公開證據不足以還原
+MetaFind 的 11 個相機 pose**，但同時指出我的兩個問題。
+
+| # | 問題 | 現在 |
+|---|---|---|
+| 261 | **`orthogonal` → orthographic 是過度推論。** 我的第一步是對的（ℝ³ 沒有 11 個互相正交的方向，字面不成立），**但第二步不成立**：viewpoint 講相機姿態、orthographic 講投影模型，作者若真要表達後者更自然會寫 "orthographic views"。我把工程選擇升格成了對論文的推論 | U-03a 改寫：orthographic 是 **CURRENT IMPLEMENTATION CHOICE**，**明確不記為「orthogonal 的較可能讀法」**。sidecar 加 `projection_source: implementation_choice` |
+| 262 | **主線 layout 的 provenance 選錯了。** Fibonacci 是我自己想的；而 MetaFind 明文建立在 ULIP-2 之上，ULIP-2 對 Objaverse 是**「12 張、每 30 度」的單軸環繞**。把 12 換成論文明定的 11，是從**已記載的上游方法**出發最小的一步 | 主線改為 **`ulip2_azimuth_orbit_11`**（Δazimuth = 360/11 ≈ 32.727°），標為 **UPSTREAM-INFORMED CHOICE 而非論文真值**。Fibonacci 降為變體、仍可執行 |
+| 263 | 環繞軌道的**仰角**我原本沒有登記 —— 而 ULIP-2 只給方位角間隔，仰角任何來源都推不出來 | 新增 **U-03b**：固定 20°、寫進 `renderer_version`、逐筆記錄為實作選擇。**不加頂視角**，沒有任何來源支持 |
+| 264 | 建議先量兩種 layout 的差異再決定要不要當正式 ablation。**量了，結果不支持「差異很小」** | 100 個資產：剪影覆蓋率幾乎相同（0.1667 vs 0.1653，配對中位數 +0.0009），但**視圖間相似度 0.507（orbit）vs 0.442（fibonacci），53/100 個資產差超過 0.05**。固定仰角的環繞永遠看不到頂底，**11 張視圖系統性地更冗餘**。所以這個歧義**不是可忽略的**，寫進 U-03，有預算就做成正式 ablation |
+
+**同時確認的否定結果**（照抄回覆，不擴大解讀）：
+公開 ULIP repo 沒有能鎖定 Objaverse 相機 elevation／projection 的官方 rendering script；
+MetaSpatial（同組，arXiv:2503.18470）有公開 Blender 程式，但**沒有能還原 11-view 物件 rig 的東西**，
+不能當作 U-03 的證據；也**未找到**官方 MetaFind 實作。
+精確說法是「截至這次搜尋沒有找到」，不是「作者一定沒公開」——若日後 repo 上線，U-03／U-03a 可直接重開。
+
+**這一格的教訓**：我把 Fibonacci 當主線，理由是「11 個方向盡量分散」——那是我對**問題**的解法，
+不是對**作者做了什麼**的推測。**論文明文說它建立在 ULIP-2 之上，那句話本身就是 provenance**，
+而我沒有拿它來選預設值。
+
+---
 
 ### 2026-08-15 `n04_render_views` 實作（node-by-node 的第一個節點）
 

@@ -44,6 +44,42 @@ def _asset(tmp_path, scale=1.0, name="a.glb"):
 # --------------------------------------------------------------- camera layout
 
 
+def test_primary_layout_is_the_ulip2_style_orbit():
+    """[U-03] The primary must be the layout with upstream provenance.
+
+    MetaFind says only "11 orthogonal viewpoints". It states it builds on
+    ULIP-2, whose Objaverse pipeline is "12 images per shape, spaced equally by
+    30 degrees" -- a single-axis orbit. Fibonacci was the earlier primary and
+    is now the variant; this pins which one a default render uses, because the
+    two are measurably different (inter-view similarity 0.507 vs 0.442 over 100
+    assets, 53 of them differing by more than 0.05).
+    """
+    from metafind.data.renders import LAYOUTS, ORBIT_ELEVATION_DEG, azimuth_orbit_directions
+
+    assert CAMERA_LAYOUT == "ulip2_azimuth_orbit_11"
+    assert LAYOUTS[CAMERA_LAYOUT] is azimuth_orbit_directions
+
+    d = azimuth_orbit_directions(N_VIEWS)
+    assert np.allclose(np.linalg.norm(d, axis=1), 1.0)
+    # One orbit at one elevation: every direction shares a z component.
+    assert np.allclose(d[:, 2], d[0, 2])
+    assert abs(np.degrees(np.arcsin(d[0, 2])) - ORBIT_ELEVATION_DEG) < 1e-6
+    # Equal azimuth steps of 360/11.
+    az = np.degrees(np.arctan2(d[:, 1], d[:, 0])) % 360.0
+    steps = np.diff(np.sort(az))
+    assert np.allclose(steps, 360.0 / N_VIEWS, atol=1e-6)
+
+
+def test_both_layouts_stay_executable():
+    """[U-03] A variant nobody can run is not a variant."""
+    from metafind.data.renders import LAYOUTS
+
+    for name, fn in LAYOUTS.items():
+        d = fn(N_VIEWS)
+        assert d.shape == (N_VIEWS, 3), name
+        assert np.allclose(np.linalg.norm(d, axis=1), 1.0), name
+
+
 def test_fibonacci_directions_are_unit_and_spread():
     d = fibonacci_directions(N_VIEWS)
     assert d.shape == (N_VIEWS, 3)

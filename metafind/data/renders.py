@@ -5,13 +5,24 @@
 Paper 2.3 gives one number and nothing else: assets are "rendered from 11
 orthogonal viewpoints". Everything below that is a recorded choice.
 
-  U-03a  projection.   Eleven mutually orthogonal directions do not exist in
-         R^3, so "orthogonal" cannot be literal. Orthographic is the reading we
-         run, and it is recorded per asset; perspective stays selectable
-         because the two produce different image-embedding distributions.
-  U-03   camera placement. A Fibonacci lattice, which spreads 11 directions
-         about as evenly as 11 directions can be spread. Axis-aligned is the
-         alternative and is also selectable.
+  U-03a  projection.   UNRESOLVED. Eleven mutually orthogonal directions do
+         not exist in R^3, so "orthogonal" cannot be literal -- but that does
+         NOT make it evidence for orthographic projection. "Viewpoint"
+         describes a camera pose; "orthographic" describes a projection model,
+         and an author meaning the latter would more naturally have written
+         "orthographic views". Orthographic is our CURRENT IMPLEMENTATION
+         CHOICE, recorded as such. It is not the most likely reading of
+         "orthogonal", because there is no evidence for one.
+  U-03   camera placement. UNRESOLVED. The primary is an equal-azimuth orbit
+         of 11 views, Δazimuth = 360/11, because MetaFind states it builds on
+         ULIP-2 and ULIP-2's Objaverse pipeline is "12 images per shape,
+         spaced equally by 30 degrees" -- a single-axis orbit. Swapping 12 for
+         the 11 MetaFind requires is the smallest step from a documented
+         upstream method. Labelled UPSTREAM-INFORMED CHOICE, not paper truth.
+         Fibonacci-11 was the previous primary and stays as a variant.
+         The orbit's ELEVATION is not derivable from anything and is a
+         versioned implementation choice; no top view is added, because
+         nothing supports one.
   U-04   resolution. 224px, matching what the image tower consumes.
 
 Scale is destroyed on purpose, and recorded on the way past
@@ -61,18 +72,41 @@ os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
 
 N_VIEWS = 11
 RESOLUTION = 224  # U-04
-PROJECTION = "orthographic"  # U-03a
-CAMERA_LAYOUT = "fibonacci"  # U-03
-RENDERER_VERSION = 1
+PROJECTION = "orthographic"  # U-03a -- implementation choice, not an inference
+CAMERA_LAYOUT = "ulip2_azimuth_orbit_11"  # U-03 -- upstream-informed choice
+# Not derivable from any source. Fixed and versioned so the images are
+# reproducible, and labelled so nobody later reads it as the paper's value.
+ORBIT_ELEVATION_DEG = 20.0
+RENDERER_VERSION = 2  # 1 = fibonacci; 2 = ULIP-2-style azimuth orbit
+
+
+def azimuth_orbit_directions(n: int = N_VIEWS,
+                             elevation_deg: float = ORBIT_ELEVATION_DEG) -> np.ndarray:
+    """``n`` directions on one horizontal orbit -- the PRIMARY layout.
+
+    ULIP-2's Objaverse pipeline renders "12 images per shape, spaced equally by
+    30 degrees", which is a single-axis orbit, and MetaFind states it builds on
+    ULIP-2. Using 11 equally spaced azimuths is the smallest change from a
+    documented upstream method that satisfies MetaFind's stated count.
+
+    This is provenance, not proof. The paper says only "11 orthogonal
+    viewpoints"; nothing in it names an orbit, an axis or an elevation. The
+    elevation below is ours and is versioned, not inferred.
+    """
+    az = np.arange(n, dtype=np.float64) * (2.0 * np.pi / n)
+    el = np.deg2rad(elevation_deg)
+    return np.stack(
+        [np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.full(n, np.sin(el))],
+        axis=1,
+    )
 
 
 def fibonacci_directions(n: int = N_VIEWS) -> np.ndarray:
-    """``n`` unit vectors spread over the sphere, deterministically.
+    """``n`` unit vectors spread evenly over the sphere -- the VARIANT.
 
-    The paper's "11 orthogonal viewpoints" cannot be taken literally -- R^3 has
-    at most 3 mutually orthogonal directions -- so this reads it as "11 evenly
-    spread", which is what a Fibonacci lattice gives. Recorded as
-    camera_layout so a reader knows which reading produced the images.
+    Was the primary until the provenance argument above moved it. Kept
+    executable because the two layouts give different multi-view coverage, and
+    which one MetaFind used is genuinely unknown.
     """
     i = np.arange(n, dtype=np.float64) + 0.5
     phi = np.arccos(1.0 - 2.0 * i / n)
@@ -184,8 +218,14 @@ def _flatten_texture(geom) -> None:
                 return
 
 
+LAYOUTS = {
+    "ulip2_azimuth_orbit_11": azimuth_orbit_directions,
+    "fibonacci": fibonacci_directions,
+}
+
+
 def render_views(path: Path, n_views: int = N_VIEWS, resolution: int = RESOLUTION,
-                 projection: str = PROJECTION):
+                 projection: str = PROJECTION, layout: str = CAMERA_LAYOUT):
     """``(images, raw_bbox_extents)`` -- ``n_views`` HxWx3 uint8 arrays."""
     import pyrender
 
@@ -205,7 +245,7 @@ def render_views(path: Path, n_views: int = N_VIEWS, resolution: int = RESOLUTIO
     images = []
     renderer = pyrender.OffscreenRenderer(resolution, resolution)
     try:
-        for d in fibonacci_directions(n_views):
+        for d in LAYOUTS[layout](n_views):
             pose = look_at(d * 3.0)
             cam_node = scene.add(camera, pose=pose)
             # Light rides with the camera, so every view is lit the same way. A
@@ -287,8 +327,14 @@ def process_one(uid: str, glb: Path, out_dir: Path) -> dict:
         "raw_bbox_extents": [float(v) for v in extents],
         "projection": PROJECTION,
         "camera_layout": CAMERA_LAYOUT,
+        "orbit_elevation_deg": ORBIT_ELEVATION_DEG,
         "resolution": RESOLUTION,
         "renderer_version": RENDERER_VERSION,
+        # How each choice was arrived at, so a reader never has to guess which
+        # of these the paper actually specifies. Only n_views does.
+        "camera_layout_source": "upstream_informed_choice",
+        "projection_source": "implementation_choice",
+        "n_views_source": "paper",
         "blank_views": blank,
     }
     sc_tmp = sidecar_path(out_dir, uid).with_suffix(".json.part")
