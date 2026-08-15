@@ -82,7 +82,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 
 ## 3. State schema
 
-完整 42 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
+完整 43 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
 
 | channel | merge | 為什麼 |
 |---|---|---|
@@ -90,7 +90,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 | `splits` / `split_seed` | `write_once` | **物件級**。洩漏是 G-INVALID，定案後不得改 |
 | `scene_splits` | `write_once` | **新增**。ProcTHOR 房屋 split 從 `splits` 拆出來，讓 Stage 1 不再等 ProcTHOR 分支 |
 | `composition_protocol` | `replace` | **新增**。U-18／U-21，未決前保持可改 |
-| `idesign_scenes` | `write_once` | **新增**。Table 2 的 200 個評估場景（`G_0` + query list），先前根本沒有這條 channel |
+| `evaluation_scene_inputs` | `write_once` | **新增**。Table 2 的 200 個評估場景（`G_0` + query list），先前根本沒有這條 channel |
 | `eval_protocols` | `write_once` | **取代先前的 `gallery_size_locked` 單一整數**，見 §7 |
 | `asset_glb` | `upsert_by_key` | **保留不刪** —— Algorithm 1 需要真實幾何 |
 | `pointclouds` | `upsert_by_key` | 從 mesh 取樣；`G2_pc_sanity` 檢查結構有效性，U-02 降為診斷 |
@@ -98,6 +98,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 | `objaverse_annotations` | `upsert_by_key` | **以 Objaverse uid 為 key**。ProcTHOR 物件屬於另一個命名空間，不得讀這條 |
 | `procthor_object_text` | `upsert_by_key` | **新增**。ProcTHOR 場景圖的 `t_i` 與語意邊的輸入，來自 ProcTHOR 自己的 metadata |
 | `procthor_dataset` | `write_once` | **新增**。先前 ProcTHOR 根本沒進 graph state，導致 G1 無從檢查它 |
+| `stage1_protocol` | `replace` | **新增**。Stage 1 的 U-13／14／15／16／22／23／24 原本只寫在散文裡，`n10` 仍可用程式預設開跑。**發現 UNKNOWN 不等於把它放進 graph。** 不另設 gate（每項都有合理預設，風險是沉默不是矛盾），由 `G3` 檢查記錄完整 |
 | `stage2_protocol` | `replace` | **新增**。決定本身，未決前保持可改 |
 | `stage2_pairing` | `write_once` | **U-08a**。只有在協定 `resolved` 之後才寫入，避免用空值把 channel 鎖死 |
 | `sem_edge_cache` | `upsert_by_key` | **key = `sha256(desc_i, desc_j, prompt_ver, llm, encoder_ver)`**，非 category pair |
@@ -162,7 +163,7 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 | `n15b_resolve_composition_protocol` | **human** | **決定 U-18／U-21** —— `G_0` 來源與放置後的圖更新規則 |
 | **`G7_composition_protocol`** | evaluate | **G-INVALID**。未決 → `BLOCKED_EVIDENCE`(rc=3)。Table 1 不經過它 |
 | `n15c_prepare_eval_scenes` | compute | **新增**。I-Design → 200 個評估場景（R-01 未驗證） |
-| `n16_compose_scenes` | subgraph | Algorithm 1，讀 `idesign_scenes`（**不是** ProcTHOR 房屋）+ 真實 GLB 幾何 |
+| `n16_compose_scenes` | subgraph | Algorithm 1，讀 `evaluation_scene_inputs`（**不是** ProcTHOR 房屋）+ 真實 GLB 幾何 |
 | `n17_judge_scenes` | model | Qwen2.5-VL 四維度評分 |
 | `n18_train_ablations` | subgraph | Table 3 中**真的是不同模型**的變體。`w/o iterative retrieval` 不在此列 |
 | `n19_eval_ablations` | evaluate | Table 3 指標，**含 inference-only 那列**（Full checkpoint + `composition_mode: parallel`） |
@@ -586,7 +587,10 @@ graph TD
 | **U-25** | UNKNOWN | **「adaptive freezing strategies」**。§2.2 說 Stage 2「with adaptive freezing strategies」，但 §2.6 給的是**固定**凍結。什麼東西是 adaptive、隨什麼變，全文沒有 | 實作 §2.6 的固定凍結，並記錄 §2.2 的 adaptive 因未定義而未實作 |
 | **U-27** | UNKNOWN | **I-Design 自己的輸入**。它的 API 是 `IDesign(no_of_objects, user_input, room_dimensions)`；§3.3 只說「200 個隨機取樣的場景」，沒給 prompt 清單、房間尺寸、物件數。**實測：I-Design 根本沒有吃 ProcTHOR 房屋的入口**，所以 U-21 的讀法 A 字面上不可執行 | 記錄我們用的 prompt／尺寸／物件數，並聲明那是我們的 |
 | **U-28** | UNKNOWN | **Table 1 在 layout-free 的 Objaverse-LVIS 上評 `w/ ESSGNN` 時，`e_layout` 是什麼**。§3.2 承認有這件事（"feature-attribution mismatch when evaluating on layout-free datasets"）卻沒說 `λ·e_layout` 是省略、歸零還是別的；它提的 "two fusion heads" 也沒說有沒有實作 | 記錄選擇。30% scene-dropout 已定義了「省略」的行為，是最可能的讀法。**two fusion heads 不實作** |
-| **U-26** | UNKNOWN | **`f_h` 與 `f_x` 是否共用一條訊息**。§2.5 是兩個獨立 MLP 吃同樣的輸入；Appendix C (10)(13)(14) 是先算一條 `m_ij = φ_e(...)`，再由 `φ_h`／`φ_x` 各自吃它。**這是不同的參數化，不只是輸入不同**，原始 EGNN 走 Appendix C 那種 | 實作依 §2.5（兩個獨立 MLP），記錄為選擇 |
+| **U-26** | UNKNOWN | **兩處差異，不是一處**。(a) 參數化：§2.5 是兩個獨立 MLP 吃同樣輸入；Appendix C (10)(13)(14) 先算一條 `m_ij = φ_e(...)` 再分給 `φ_h`／`φ_x`（原始 EGNN 走這種）。(b) **更新順序**：Eq.3 餵給 `f_x` 的是**已更新的** `h^{l+1}`，Appendix C 的 `m_ij` 是用**舊的** `h^l`。等變性兩種都成立，但數值不同 | 實作依 §2.5，記錄為選擇 |
+| **U-29** | UNKNOWN | **物理邊到底怎麼進 ESSGNN**。§2.3 定義 physical（support／adjacency）與 semantic 兩種邊，但 §2.5 的 `f_h`／`f_x` 只吃**一個**邊參數 `e_ij`，而 §2.5 與 Appendix C 都把 `e_ij` 定義成**語意**邊（LLM 關係句 → frozen text encoder）。物理邊是只決定 `N(i)`？自己帶 feature？與語意邊合併成一條？還是平行的另一條？support 與 adjacency 進網路後分不分得出來？全部沒說 | 記錄選擇 —— **這是架構決定，不是超參數** |
+| **U-30** | UNKNOWN | **沒有語意嵌入的邊，`e_ij` 的張量契約是什麼**。`f_h : ℝ^(2d+1+e) → ℝ^d` 輸入寬度**固定**，所以缺 `e_ij` 的邊仍要填滿那 `e` 格。規格禁止補零（零向量與真實嵌入無法區分）並記 `semantic_edge_missing`，但**記旗標不等於說明 MLP 收到什麼** | 記錄機制；必須與合法嵌入可區分 |
+| **U-31** | UNKNOWN | **ESSGNN 的 L 層是否共用參數**。§2.5 寫 `θ_h`、`θ_x` 都沒有層索引。這會改變參數量，也改變 F11：獨立層時最後一層座標頭沒有 loss path，**共用參數時同一個 `f_x` 仍會從前 L−1 層收到梯度** | 實作用每層獨立權重，記錄為選擇 |
 | **R-01** | RISK・**部分實測** | **I-Design 裝得起來、初始設計會成功，但 5 次嘗試 0 個場景完成**。詳見下方 | Table 2/3 全靠它 |
 | **R-02** | RISK | 單卡 24GB 限制訓練範圍 | D-1 已聲明 |
 | **R-03** | RISK | Qwen 標註品質未知 | pilot 後人工抽查 |
@@ -685,7 +689,7 @@ graph TD
 | 27 | 標註 schema 的「四欄必填 / 封閉詞彙表 / 公尺」被寫成論文要求，但原文是 "attributes **such as**" | 改標為**實作契約**，保留規定但不再宣稱是論文要求 | 🟠 |
 | 28 | **query / gallery 兩塔是否共享權重沒鎖** | 新增 **U-16** | 🔴 |
 | 29 | **`d_ij` vs `d_ij²`**：§2.5 寫 `‖·‖₂`，Appendix C (10)–(12) 用 `‖·‖²` | 新增 **U-17**。**不設 RA** —— 兩者都不變、都不破壞證明，但數值不同 | 🟠 |
-| 30 | **Table 2 的資料流從未閉合** —— §3.3 說 200 個場景來自 I-Design，`n16` 卻讀 ProcTHOR 房屋（房屋是完成的佈局，不是生成請求），graph 裡沒有 I-Design 的 channel | 新增 `composition_protocol` / `idesign_scenes` channel、`n15b`（human）、**`G7`**、`n15c` | 🔴 **Table 2 建不起來** |
+| 30 | **Table 2 的資料流從未閉合** —— §3.3 說 200 個場景來自 I-Design，`n16` 卻讀 ProcTHOR 房屋（房屋是完成的佈局，不是生成請求），graph 裡沒有 I-Design 的 channel | 新增 `composition_protocol` / `evaluation_scene_inputs` channel、`n15b`（human）、**`G7`**、`n15c` | 🔴 **Table 2 建不起來** |
 | 31 | **Algorithm 1 第 7 行「放進場景、更新圖」沒有定義**，但下一輪立刻要 `ESSGNN(G)`，需要新節點的 `t_i`／位置／朝向／尺度／物理邊／語意邊 | 新增 **U-18**（阻斷），由 `G7` 擋 | 🔴 |
 | 32 | U-09 只涵蓋 gallery 範圍，但 §3.1 也沒說 **query 就是那 20%** | U-09 擴大涵蓋 query set，`query=test` 明列為假設 | 🟠 |
 | 33 | `n18_train_ablations` 宣稱訓練「八個變體」，但 `w/o iterative retrieval` 是**推論期**策略（§2.7），不是另一個模型 | `variant_registry` 新增 `requires_training` / `reuses_ckpt`；由 `n19` 直接評估；`L1-ABLATION-INFERENCE-ONLY` 釘住 | 🔴 **會比較到兩個不同的 checkpoint** |
@@ -746,3 +750,23 @@ graph TD
 | 68 | `e18` 宣告 carries `scene_graphs`／`sem_edge_cache`，但來源 `n10` 不寫這兩條 | 修正為只 carry `stage1_ckpt` |
 | 69 | `02_BUILD_STEPS` 的 U-19／U-20 被插進 cache key 的「其一／其二」與結論之間，論證被切斷；`§15` 與未定項總表各有一個孤兒表頭 | 重排；刪除孤兒表頭 |
 | 70 | `00_FINDINGS` 多處引用已刪除的檔案（`fetch_procthor.py`、`render.py`）、已改名的節點（`n02_acquire_sources`）、不存在的節點（`n03_preflight_budget`）與斷掉的交叉引用（「見 §三」）；儲存表用 48K；`F9` 排在 `F13` 之後 | 全部修正，`F9` 改編號為 `F14` |
+
+### 2026-08-15 第六輪（外部逐字審查後）
+
+審查者固定在 `b79cbe4`，未使用任何腳本，逐檔逐段對論文。判定「MetaFind 大架構目前是對的」，
+剩下的是 paper ambiguity 沒完全封裝、以及幾個 machine contract 偷偷替 UNKNOWN 做了決定。
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 71 | **U-21 在 machine contract 被寫死成 I-Design 來源。** README 正確並列兩種讀法，但 channel 叫 `idesign_scenes`、`graph_spec` 寫「paper 3.3 says both G0 and query list come from I-Design」（論文沒這樣說）、`node_registry` 寫「ProcTHOR houses cannot serve as G0」。更關鍵：**`n15c` 只讀 `composition_protocol`**，Reading A 在文字上說可選，**machine graph 實際跑不了** | channel 改名 `evaluation_scene_inputs`（依角色而非依候選產生者命名）；`composition_protocol.source ∈ {procthor_via_idesign, idesign_generated}`；`n15c` 補上 `procthor_dataset`／`scene_graphs`／`scene_splits` | 🔴 **靠命名決定 UNKNOWN** |
+| 72 | **物理邊怎麼進 ESSGNN 從未登記。** §2.3 定義兩種邊，但 §2.5 的 `f_h`／`f_x` 只吃一個 `e_ij`，而 `e_ij` 被定義成**語意**邊 | 新增 **U-29** —— 這是架構決定，不是超參數 | 🔴 |
+| 73 | **缺 `e_ij` 時的張量契約不完整。** 規格只說「不准補零、記 `semantic_edge_missing`」，但 `f_h : ℝ^(2d+1+e) → ℝ^d` 輸入寬度固定，**記旗標不等於說明 MLP 收到什麼** | 新增 **U-30** | 🔴 |
+| 74 | **沒有任何契約禁止座標進入 `t_i` 與 `e_ij`。** Appendix C 的前提是兩者都與 `x` 無關；`h⁰ = t_i` 修好了 RA-1，但若描述寫成「red chair located at (4.1, 0.0, −2.6)」，前提在下一層又被破壞 | 新增 `L1-NODE-TEXT-POS-INDEPENDENT` 與 `L1-SEMEDGE-POS-INDEPENDENT`，**跑在訓練前**（n14 抓得到後果，但要先燒掉一次完整 Stage 2） | 🔴 |
+| 75 | **RA-4 只存在於 validation，沒接進 graph。** `audit_records` 的 writers 沒有它、`n14` 沒跑它、`G5` 沒要求它 | 三處全部接上 | 🔴 **audit 不會被執行** |
+| 76 | **Table 2 排除 incomplete 場景會產生選擇偏差。** 論文只說「200 randomly sampled scenes」，從未授權丟棄任何一個；若困難場景更容易 EXHAUSTED，只平均成功場景會系統性偏高 | 必須同時報 `n_total / n_complete / n_incomplete / completion_rate`，並註明我們的均值只涵蓋完成的場景；`25 / 600s / 30 calls / 10%` 明列為**我們的預算選擇** | 🔴 **對我們有利的偏差** |
+| 77 | **RA-4 措辭過強。** 寫成「architecture cannot deliver scale robustness」「expected to fail」 | 改為「**沒有結構性保證**」—— SE(3) 不含縮放是事實，但 MLP 仍可能學到對尺度不敏感的行為。**缺乏保證 ≠ 證明做不到** | 🟠 |
+| 78 | `graph_spec` 的 SC-8 仍寫 "killing any stage ... identical artifacts"，與同檔的 NS-4／NS-5 衝突 | 同步為分階段定義 | 🟠 **自相矛盾** |
+| 79 | **F11 把「最後一層 `f_x` 沒梯度」講成論文架構的必然。** 論文的 `θ_h`／`θ_x` **沒有層索引**，共用權重時該結論不成立 | 新增 **U-31**（層間是否共用參數）；F11 改為「在目前採用的獨立層實作下」 | 🟠 |
+| 80 | U-26 只寫了一半 | 補上第二處差異：`f_x` 吃**已更新的** `h^{l+1}`（Eq.3）vs Appendix C 的 `m_ij` 用**舊的** `h^l` | 🟠 |
+| 81 | **Stage 1 的 UNKNOWN 沒進 graph state。** Stage 2 有 `stage2_protocol` + `G6` 擋著，Stage 1 的 U-13/14/15/16/22/23/24 只寫在散文裡，`n10` 仍可用程式預設開跑 | 新增 `stage1_protocol` channel，由 `G3_object_corpus` 檢查完整性。**不另設 gate** —— 每項都有合理預設，風險是沉默不是矛盾 | 🟠 **發現 ≠ 進入 graph** |
+| 82 | 文件說「G7 未決只擋 Table 2，其餘照常」，但 `n20` 的 `core` join 含 `n17`，**報告其實也發不出去** | 改寫為「Table 1 **算得出來但發不出去**」，並說明要單獨發布 Table 1 需要 `n17` 產出明確的 `INSUFFICIENT_EVIDENCE` 終端紀錄 —— 那是政策改動，此處不做 | 🟠 **誤導** |

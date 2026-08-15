@@ -91,8 +91,18 @@ goal:
       criterion: "Four Table-3 takeaways reproduced by direction"
       measured_by: n21_compare_to_paper
     - id: SC-8
-      criterion: "Resume equivalence: killing any stage and restarting yields identical artifacts"
+      criterion: >
+        Resume equivalence, scoped by stage kind. Killing a PREPROCESSING stage
+        and restarting yields byte-identical artifacts and no extra external
+        calls. Killing a TRAINING stage resumes from the saved optimizer and RNG
+        state with the step counter continuing and no sample consumed twice in
+        an epoch.
       measured_by: L2-RESUME
+      note: >
+        [CORRECTED] This said "killing any stage ... yields identical
+        artifacts", which contradicts NS-4 and NS-5 in this same file: GPU
+        atomics and training stochasticity are declared non-removable and exact
+        reproducibility is explicitly not claimed. A checkpoint cannot be both.
 
 boundary:
   in_scope:
@@ -182,7 +192,7 @@ state:
     - name: procthor_dataset
       type: "{path, sha256, train_count, val_count, test_count}"
       writers: [n02_download]
-      readers: [G1_sources_valid, n07_scene_graphs, n09c_build_scene_splits]
+      readers: [G1_sources_valid, n07_scene_graphs, n09c_build_scene_splits, n15c_prepare_eval_scenes]
       merge: write_once
       lifetime: persistent
       note: >
@@ -257,7 +267,7 @@ state:
     - name: scene_graphs
       type: "map[house_id -> {nodes, positions, phys_edges, sem_edge_ids, uri}]"
       writers: [n07_scene_graphs]
-      readers: [n08_semantic_edges, n09b_resolve_stage2_protocol, n09c_build_scene_splits, n13_train_stage2, n14_equivariance_probe, n15b_resolve_composition_protocol, n18_train_ablations]
+      readers: [n08_semantic_edges, n09b_resolve_stage2_protocol, n09c_build_scene_splits, n13_train_stage2, n14_equivariance_probe, n15b_resolve_composition_protocol, n15c_prepare_eval_scenes, n18_train_ablations]
       merge: upsert_by_key
       lifetime: persistent
 
@@ -273,6 +283,25 @@ state:
         which collapses "office chair + desk" and "dining chair + dining table"
         into one relation. Paper 2.5 and Appendix C both say the LLM is prompted
         with object DESCRIPTIONS.
+
+    - name: stage1_protocol
+      type: "{status: unresolved|resolved, fusion, image_aggregation, text_serialization, tower_sharing, allow_all_masked, similarity, hyperparameter_config_hash, decided_by, decided_at}"
+      writers: [n09_build_splits]
+      readers: [G3_object_corpus, n10_train_stage1, n11_gallery_index_staging, n15_eval_retrieval, n18_train_ablations]
+      merge: replace
+      lifetime: persistent
+      note: >
+        [ADDED] Stage 2's unknowns are held in stage2_protocol and enforced by
+        G6, so Stage 2 cannot start on defaults. Stage 1's unknowns had no such
+        home: U-13 (fusion), U-14 (multi-view aggregation), U-15 (text
+        serialization), U-16 (tower sharing), U-22 (hyperparameters), U-23
+        (all-masked query) and U-24 (similarity) were all recorded in prose
+        while n10 could still begin training on whatever the code defaulted to.
+        Finding an UNKNOWN is not the same as putting it in the graph.
+        Unlike stage2_protocol this does NOT get its own gate -- every value
+        has a defensible default, so the risk is silence, not incoherence.
+        G3_object_corpus checks that the record is complete and that each field
+        names a choice, which makes the choices appear in the report.
 
     - name: stage2_protocol
       type: "{status: unresolved|resolved, pairing_method, modality_source, decided_by, decided_at}"
@@ -327,7 +356,7 @@ state:
     - name: scene_splits
       type: "{train_houses, test_houses}"
       writers: [n09c_build_scene_splits]
-      readers: [G6_stage2_ready, n13_train_stage2, n18_train_ablations, n19_eval_ablations]
+      readers: [G6_stage2_ready, n13_train_stage2, n15c_prepare_eval_scenes, n18_train_ablations, n19_eval_ablations]
       merge: write_once
       lifetime: persistent
       note: >
@@ -443,7 +472,7 @@ state:
       note: "Three separate quantities, one per level (SC-4/5/6)."
 
     - name: composition_protocol
-      type: "{status: unresolved|resolved, g0_source, query_list_source, placement_rule, new_node_t_i, new_phys_edges, new_sem_edges, decided_by, decided_at}"
+      type: "{status: unresolved|resolved, source: procthor_via_idesign|idesign_generated, g0_source, query_list_source, placement_rule, new_node_t_i, new_phys_edges, new_sem_edges, decided_by, decided_at}"
       writers: [n15b_resolve_composition_protocol]
       readers: [G7_composition_protocol, n15c_prepare_eval_scenes, n16_compose_scenes, n19_eval_ablations]
       merge: replace
@@ -487,20 +516,30 @@ state:
         making Table 3's "w/o iterative retrieval" row measure nothing. That is
         a derivation from the ablation having to be meaningful, not a guess.
 
-    - name: idesign_scenes
-      type: "map[scene_id -> {g0_uri, query_list, room_type, source_revision}]"
+    - name: evaluation_scene_inputs
+      type: "map[scene_id -> {g0_uri, query_list, room_type, source, source_revision}]"
       writers: [n15c_prepare_eval_scenes]
       readers: [n16_compose_scenes, n19_eval_ablations]
       merge: write_once
       lifetime: persistent
       note: >
-        [PAPER 3.3] The 200 evaluation scenes. Written only after
-        G7_composition_protocol passes, because what a "scene" contains is
-        exactly what the protocol decides.
-        [R-01] I-Design has not yet been verified to run here. If it cannot,
-        every Table 2 cell and Table 3's two scene columns become
-        INSUFFICIENT_EVIDENCE -- they are not substitutable with ProcTHOR
-        houses, which are layouts rather than generation requests.
+        [PAPER 3.3] The 200 evaluation scenes.
+        [RENAMED from idesign_scenes] The old name decided U-21 by wording. The
+        paper gives two statements that do not settle the source:
+          3.1 "Scene-level layout-aware retrieval is conducted on ProcTHOR-10K"
+          3.3 "the scene generation pipeline of I-Design on a set of 200
+               randomly sampled scenes"
+        Both readings stay open, so the channel is named for its ROLE (the input
+        Algorithm 1 consumes) rather than for one candidate producer.
+        `source` records which reading was taken:
+          procthor_via_idesign  -- Reading A: sample ProcTHOR scenes, run them
+                                   through I-Design's pipeline
+          idesign_generated     -- Reading B: I-Design generates from a prompt
+        [R-01, MEASURED] I-Design installs and its first stage runs, but five
+        attempts with a 7B planner completed zero scenes. There is no baseline
+        for what a normal completion rate is, so that is not yet a verdict.
+        If no source can produce the scenes, every Table 2 cell and Table 3's
+        two scene columns become INSUFFICIENT_EVIDENCE.
 
     - name: composed_scenes
       type: "map[(variant, scene_id) -> {graph_uri, placed_count, incomplete}]"
@@ -515,7 +554,20 @@ state:
       readers: [n17_judge_scenes, n20_aggregate]
       merge: set_union
       lifetime: persistent
-      note: "EXHAUSTED scenes are excluded from Table 2 means and reported separately."
+      note: >
+        [SELECTION BIAS -- REPORTING CONTRACT] EXHAUSTED scenes are excluded
+        from the mean, which biases it upward if harder scenes are likelier to
+        exhaust. The paper says only "200 randomly sampled scenes"; it never
+        licenses dropping any.
+        Table 2 must therefore report, per method:
+          n_total (200), n_complete, n_incomplete, completion_rate,
+          mean_over_complete
+        and the comparison against the paper's figures must state that ours is
+        a mean over completed scenes only. A single unqualified number is not
+        an acceptable output of this channel.
+        The bounds that decide "incomplete" -- 25 objects, 600 s, 30 external
+        calls, and the 10% stage-failure threshold -- are OUR budget choices,
+        not paper values.
 
     - name: judge_scores
       type: "map[(method, scene_id, dimension) -> float]"
@@ -542,7 +594,7 @@ state:
 
     - name: audit_records
       type: "list[required_audit_record]"
-      writers: [RA-1, RA-2, RA-3, n14_equivariance_probe]
+      writers: [RA-1, RA-2, RA-3, RA-4, n14_equivariance_probe]
       readers: [G5_report_release, n22_publish_report]
       merge: append
       lifetime: persistent
@@ -640,14 +692,14 @@ edges:
   - {id: e22b, from: n12_promote_index, to: n15b_resolve_composition_protocol, kind: data, guard: "", join_group: default, carries: [gallery_index]}
   - {id: e22c, from: n15b_resolve_composition_protocol, to: G7_composition_protocol, kind: data, guard: "", join_group: default, carries: [composition_protocol]}
   - {id: e22d, from: G7_composition_protocol, to: n15c_prepare_eval_scenes, kind: data, guard: "verdict == PASS", join_group: default, carries: [composition_protocol]}
-  - {id: e22e, from: n15c_prepare_eval_scenes, to: n16_compose_scenes, kind: data, guard: "", join_group: protocol, carries: [idesign_scenes, composition_protocol]}
+  - {id: e22e, from: n15c_prepare_eval_scenes, to: n16_compose_scenes, kind: data, guard: "", join_group: protocol, carries: [evaluation_scene_inputs, composition_protocol]}
   - {id: e22f, from: G7_composition_protocol, to: HALT_BLOCKED, kind: escalation, guard: "verdict == BLOCKED_EVIDENCE", join_group: default, carries: [composition_protocol], rationale: "U-18/U-21 unresolved pauses Table 2 only; Table 1 is unaffected."}
   - {id: e23, from: n13_train_stage2, to: n16_compose_scenes, kind: data, guard: "", join_group: default, carries: [variant_ckpts]}
   - {id: e24, from: n16_compose_scenes, to: n17_judge_scenes, kind: data, guard: "", join_group: default, carries: [composed_scenes]}
 
   - {id: e25, from: n15_eval_retrieval, to: n18_train_ablations, kind: control, guard: "", join_group: default, carries: [], rationale: "Ablations start only once the headline numbers exist, so a broken headline is not multiplied by eight."}
   - {id: e26, from: n18_train_ablations, to: n19_eval_ablations, kind: data, guard: "", join_group: default, carries: [variant_ckpts, variant_status]}
-  - {id: e26b, from: n15c_prepare_eval_scenes, to: n19_eval_ablations, kind: data, guard: "", join_group: protocol, carries: [idesign_scenes, composition_protocol]}
+  - {id: e26b, from: n15c_prepare_eval_scenes, to: n19_eval_ablations, kind: data, guard: "", join_group: protocol, carries: [evaluation_scene_inputs, composition_protocol]}
 
   - {id: e27, from: n15_eval_retrieval, to: n20_aggregate, kind: data, guard: "", join_group: core, carries: [retrieval_metrics]}
   - {id: e28, from: n17_judge_scenes, to: n20_aggregate, kind: data, guard: "", join_group: core, carries: [judge_scores]}
@@ -741,6 +793,15 @@ join_policies:
       legitimately be partial, and a missing member there only narrows the claim.
       Using `all` everywhere would let one failed ablation block the report;
       using `all_settled` everywhere would let a missing Table 1 cell pass.
+      [CONSEQUENCE, STATED EXPLICITLY] `core` includes n17, so a BLOCKED G7 or
+      an unavailable scene source stops the REPORT, not just Table 2. Table 1
+      is still computed -- n15 does not pass through G7 -- but it cannot be
+      published while Table 2 is outstanding. Documentation that said
+      "everything else proceeds as normal" was misleading about this.
+      To publish Table 1 alone, n17 must emit an explicit
+      INSUFFICIENT_EVIDENCE terminal record rather than nothing, and this group
+      must accept it; that is a policy change, not a bug fix, and is not made
+      here.
   - node: sg4_fuse
     groups: [{name: default, policy: all, k: null}]
     trigger: any_group_satisfied
@@ -868,10 +929,20 @@ loops:
     progress_measure: "placed_count (merge=max, so retries never double-count)"
     semantic_exit: "placed_count == n_queries"
     hard_bound: {iterations: 25, wallclock_s: 600, external_calls: 30}
+    hard_bound_provenance: >
+      OUR budget choices. The paper states no per-scene object limit, time
+      limit or call limit, and F12 measures ProcTHOR houses at 69 objects on
+      average (245 maximum), well above 25 -- so this bound is not derived from
+      the data either. It caps a scene we are willing to pay for.
     exhaustion_outcome: "scene marked incomplete and added to composition_incomplete"
     exhaustion_marker: "terminated_by: object_budget"
     iteration_channels_reset: [layout_embedding, query_modality_embeds]
-    note: "Incomplete scenes are EXCLUDED from Table 2 means; above 10% incomplete, the stage fails."
+    note: >
+      Incomplete scenes are excluded from the Table 2 mean, which introduces
+      selection bias in our favour if difficulty correlates with exhaustion.
+      The completion rate and the counts are therefore reported alongside every
+      mean; see composed_scenes. Above 10% incomplete the stage fails -- also
+      our threshold, not the paper's.
 
 termination:
   states:
@@ -943,8 +1014,11 @@ risks_unknowns:
   - {id: U-22, marked: UNKNOWN, blocking: false, item: "training hyperparameters. The paper reports none: no optimizer, learning rate, batch size, epoch count, weight decay, scheduler, tau initialisation, lambda initialisation, ESSGNN depth L ('After L layers'), ESSGNN hidden width, or pooling type.", affects: "every trained number; without this list a mismatch cannot be attributed between architecture and recipe", resolution: "maintain the explicit table in 01_GRAPH_SPEC section 15; every value there is ours and is reported as such", fallback: "n/a"}
   - {id: U-27, marked: UNKNOWN, blocking: false, item: "I-Design's own inputs. Its API is IDesign(no_of_objects, user_input, room_dimensions); paper 3.3 says only '200 randomly sampled scenes' and gives no prompt list, no room dimensions and no object counts. MEASURED: I-Design cannot consume a ProcTHOR house at all -- there is no such entry point -- so U-21's Reading A is not executable as literally stated.", affects: "what the 200 evaluation scenes actually are, hence all of Table 2", resolution: "record the prompt list, room dimensions and object counts we use; they are ours, not the paper's", fallback: "n/a"}
   - {id: U-28, marked: UNKNOWN, blocking: false, item: "what e_layout is when Table 1 evaluates 'MetaFind w/ ESSGNN' on Objaverse-LVIS, which has no scenes. Paper 3.2 acknowledges the situation ('feature-attribution mismatch when evaluating on layout-free datasets') without saying whether lambda*e_layout is omitted, zeroed, or something else. It also floats 'two fusion heads, selected at inference by context availability' as a mitigation without saying whether MetaFind implements it.", affects: "the entire MetaFind w/ ESSGNN row of Table 1 -- 7 of its 14 cells", resolution: "record the choice; the 30% scene-dropout path already defines an omit behaviour, which is the most likely reading. Two fusion heads are NOT implemented.", fallback: "n/a"}
+  - {id: U-29, marked: UNKNOWN, blocking: false, item: "how PHYSICAL edges enter ESSGNN at all. Paper 2.3 defines two edge types, physical-relation (support, adjacency) and semantic-relation. But 2.5's f_h and f_x take exactly one edge argument, e_ij, and 2.5 plus Appendix C both define e_ij as the LLM relation sentence encoded by a frozen text encoder -- i.e. the SEMANTIC edge. Nothing says whether a physical edge (a) only determines the neighbourhood N(i), (b) carries a feature of its own, (c) is unioned with the semantic edge on the same edge, or (d) is a parallel edge. Nor whether support and adjacency are distinguishable once inside the network.", affects: "the ESSGNN architecture itself, hence every Table 2 and Table 3 scene number", resolution: "record the choice explicitly; it is an architecture decision, not a hyperparameter", fallback: "n/a"}
+  - {id: U-30, marked: UNKNOWN, blocking: false, item: "the tensor contract for an edge with no semantic embedding. f_h : R^(2d+1+e) -> R^d has a FIXED input width, so an edge that reaches the network without an e_ij still needs e slots filled. The spec forbids zero-filling (a zero vector is indistinguishable from a real embedding) and records semantic_edge_missing, but recording a flag does not say what the MLP receives. Candidates: a learned missing-edge embedding, an appended validity bit, a separate geometry-only MLP, an edge-type embedding, or excluding the edge from message passing entirely.", affects: "every scene graph where a semantic edge failed or was never requested -- including all physical-only edges, if U-29 resolves that way", resolution: "record the mechanism; it must be distinguishable from a valid embedding", fallback: "n/a"}
+  - {id: U-31, marked: UNKNOWN, blocking: false, item: "whether ESSGNN's L layers share one set of parameters. Paper 2.5 writes f_h(...; theta_h) and f_x(...; theta_x) with no layer index on theta, and never says whether each layer has its own weights or all L layers share one. The choice changes the parameter count and changes F11: with independent layers the final layer's coordinate head has no loss path, but with shared weights the same f_x still receives gradient from layers 1..L-1.", affects: "parameter count, and whether F11's observation generalises", resolution: "implementation uses independent per-layer weights (metafind/models/essgnn.py builds one ESSGCL per layer); recorded as a choice", fallback: "n/a"}
   - {id: U-25, marked: UNKNOWN, blocking: false, item: "'adaptive freezing strategies'. Paper 2.2 says Stage 2 fine-tunes the query encoder 'with adaptive freezing strategies', but 2.6 states a single fixed freeze ('Only the query-side fuser and the ESSGNN module are updated'). Nothing anywhere says what is adaptive about it, or what varies.", affects: "Stage 2 optimisation", resolution: "implement the fixed freeze that 2.6 specifies, and record that 2.2's 'adaptive' is unimplemented because it is undefined", fallback: "n/a"}
-  - {id: U-26, marked: UNKNOWN, blocking: false, item: "whether f_h and f_x share a message. Paper 2.5 gives two independent MLPs over the same inputs (Eq. 2 and Eq. 3); Appendix C Eq. 10/13/14 computes ONE message m_ij = phi_e(...) and then applies phi_h(m_ij) and phi_x(m_ij) to it. That is a different parameterisation, not just different inputs, and the original EGNN follows the Appendix C form.", affects: "ESSGNN parameter count and what the coordinate head can see", resolution: "implementation follows 2.5 (two independent MLPs, metafind/models/essgnn.py f_h and f_x); recorded as a choice", fallback: "n/a"}
+  - {id: U-26, marked: UNKNOWN, blocking: false, item: "whether f_h and f_x share a message, AND which h the coordinate head sees. Two differences, not one. (a) Parameterisation: 2.5 gives two independent MLPs over the same inputs (Eq. 2, Eq. 3); Appendix C Eq. 10/13/14 computes ONE message m_ij = phi_e(...) then applies phi_h(m_ij) and phi_x(m_ij) to it, as the original EGNN does. (b) Update ordering: Eq. 3 feeds f_x the ALREADY-UPDATED h_i^(l+1), h_j^(l+1), while Appendix C's m_ij is built from the OLD h^l. Equivariance survives either way, but the numbers differ.", affects: "ESSGNN parameter count and what the coordinate head can see", resolution: "implementation follows 2.5 (two independent MLPs, metafind/models/essgnn.py f_h and f_x); recorded as a choice", fallback: "n/a"}
   - {id: U-23, marked: UNKNOWN, blocking: false, item: "what a query with all three modalities masked means. Paper 2.6 masks each modality INDEPENDENTLY at 30%, so 2.7% of queries carry no information at all, yet Eq. 5 still matches them against a gallery item.", affects: "Stage 1 training signal", resolution: "the literal reading is implemented (allow_empty=True); a flag forces at least one modality, and the choice is recorded", fallback: "n/a"}
   - {id: U-24, marked: UNKNOWN, blocking: false, item: "the similarity function. Eq. 5 and Eq. 7a/7b write sim(.,.) and never define it.", affects: "every loss and every retrieval ranking", resolution: "cosine, matching CLIP and ULIP convention; recorded as a choice", fallback: "n/a"}
   - id: R-01

@@ -56,7 +56,7 @@ all_nodes = {**nodes, **subgraph_nodes}
 edges = spec["edges"]
 
 WILDCARD = {"ALL_NODES"}
-PSEUDO = {"RA-1", "RA-2", "RA-3"}  # audits write records but are not graph nodes
+PSEUDO = {"RA-1", "RA-2", "RA-3", "RA-4"}  # audits write records but are not graph nodes
 TERMINALS = {"HALT_FAILED", "HALT_BLOCKED", "HALT_INVALIDATED"}
 
 

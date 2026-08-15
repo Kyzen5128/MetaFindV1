@@ -317,7 +317,7 @@ nodes:
     purpose: "Fix the object-level 80/20 partition and define both evaluation protocols."
     decomposition_rationale: [N5_gate_point, N3_checkpoint_needed]
     reads: [asset_manifest, pointclouds, text_image_embeddings]
-    writes: [splits, split_seed, eval_protocols, run_progress]
+    writes: [splits, split_seed, eval_protocols, stage1_protocol, run_progress]
     precondition: "Objaverse preparation complete (join = all)"
     postcondition: >
       Object train/test are disjoint; both evaluation protocols are defined with
@@ -346,7 +346,7 @@ nodes:
     role: evaluate
     purpose: "Refuse to run Stage 1 on a leaked or incomplete object corpus."
     decomposition_rationale: [N5_gate_point]
-    reads: [splits, eval_protocols, asset_manifest, quarantine]
+    reads: [splits, eval_protocols, stage1_protocol, asset_manifest, quarantine]
     writes: [gate_records, run_progress]
     postcondition: "gate_record with is_terminal=true"
     deterministic: true
@@ -452,7 +452,7 @@ nodes:
     role: mutate
     purpose: "Cross-modal alignment: train the point encoder and the fusion modules."
     decomposition_rationale: [N3_checkpoint_needed, N6_side_effects]
-    reads: [pointclouds, text_image_embeddings, splits, split_seed, variant_registry]
+    reads: [pointclouds, text_image_embeddings, splits, split_seed, stage1_protocol, variant_registry]
     writes: [stage1_ckpt, run_progress, cost_ledger, degraded_flags]
     precondition: "G3_object_corpus verdict == PASS"
     postcondition: >
@@ -496,7 +496,7 @@ nodes:
     role: mutate
     purpose: "Encode every admitted asset with the frozen gallery tower into a staging index."
     decomposition_rationale: [N6_side_effects, N5_gate_point]
-    reads: [stage1_ckpt, pointclouds, text_image_embeddings, asset_manifest]
+    reads: [stage1_ckpt, pointclouds, text_image_embeddings, asset_manifest, stage1_protocol]
     writes: [gallery_index_staging, run_progress, cost_ledger]
     postcondition: "Staging index has the checkpoint's embedding width and len(admitted) rows"
     deterministic: false
@@ -604,7 +604,7 @@ nodes:
 
   - id: n14_equivariance_probe
     role: evaluate
-    purpose: "Verify SE(3) behaviour at all three levels, and record the paper's two contradictions."
+    purpose: "Verify SE(3) behaviour at all three levels, and record the paper's contradictions and overclaims."
     decomposition_rationale: [N4_independent_observability, N5_gate_point]
     reads: [variant_ckpts, scene_graphs]
     writes: [equivariance_report, audit_records, run_progress]
@@ -628,16 +628,21 @@ nodes:
       pooled from h, which is INVARIANT; applying R and T to it is meaningless.
       Split into SC-4 (coords equivariant), SC-5 (features invariant),
       SC-6 (layout invariant).
-      Also runs RA-1 (h0 = Concat(x,t), expected to fail) and RA-2 (f_x -> R^3,
-      expected to fail). Neither may block, and the tolerance is never relaxed to
+      Also runs RA-1 (h0 = Concat(x,t)), RA-2 (f_x -> R^3) and RA-4 (global
+      scaling). None may block, and the tolerance is never relaxed to
       accommodate them.
+      RA-4 measures ||e_layout(s*x) - e_layout(x)|| for several scale factors.
+      Sections 2.5 and 3.4 motivate ESSGNN by GAT's sensitivity to translation
+      AND SCALING, but the property proved is SE(3), which does not contain
+      scaling. The audit records how much the layout embedding actually moves;
+      it bounds the claim rather than predicting a specific outcome.
 
 # ============================================================ PHASE 3
   - id: n15_eval_retrieval
     role: evaluate
     purpose: "Table 1: instance-level retrieval, 7 modality conditions x 2 gallery protocols."
     decomposition_rationale: [N4_independent_observability, N7_parallelizable]
-    reads: [gallery_index, variant_ckpts, eval_protocols, splits, pointclouds, text_image_embeddings]
+    reads: [gallery_index, variant_ckpts, eval_protocols, splits, pointclouds, text_image_embeddings, stage1_protocol]
     writes: [retrieval_metrics, run_progress, cost_ledger]
     postcondition: "Every (variant, condition, protocol) cell holds a metric with its n_gallery and n_query"
     deterministic: false
@@ -719,8 +724,8 @@ nodes:
     role: compute
     purpose: "Produce the 200 evaluation scenes: initial graph plus asset query list."
     decomposition_rationale: [N1_distinct_failure_mode, N3_checkpoint_needed]
-    reads: [composition_protocol]
-    writes: [idesign_scenes, run_progress, cost_ledger, degraded_flags]
+    reads: [composition_protocol, procthor_dataset, scene_graphs, scene_splits]
+    writes: [evaluation_scene_inputs, run_progress, cost_ledger, degraded_flags]
     precondition: "G7_composition_protocol verdict == PASS"
     postcondition: "200 scenes, each with a G_0 and a non-empty query list, recorded with the generator revision"
     deterministic: false
@@ -737,17 +742,29 @@ nodes:
       rollback: N/A
     notes: >
       [PAPER 3.3] "200 randomly sampled scenes".
-      [R-01 -- UNRESOLVED] I-Design has not been verified to run in this
-      environment. This is the cheapest thing on the critical path to check and
-      the most expensive to discover late: all four Table 2 columns and both of
-      Table 3's scene columns come through here. ProcTHOR houses are not a
-      substitute -- they are layouts, not generation requests.
+      [U-21 -- BOTH READINGS MUST REMAIN EXECUTABLE] An earlier version read
+      only composition_protocol, which silently committed to Reading B: with no
+      ProcTHOR channel in its reads, "sample ProcTHOR scenes and run them
+      through I-Design" could be written in prose but never actually run. The
+      ProcTHOR channels are now among the reads so the decision recorded in
+      composition_protocol.source is one the graph can honour either way:
+        procthor_via_idesign -> sample from scene_graphs within scene_splits
+        idesign_generated    -> generate from prompts, ProcTHOR reads unused
+      Declaring reads it may not use is the correct trade here: a node that
+      cannot reach the data for a live reading is a node that has decided the
+      UNKNOWN.
+      [R-01 -- MEASURED, NOT SETTLED] I-Design installs and its first stage
+      runs; five attempts with a 7B planner completed zero scenes, each failing
+      in a different downstream path. There is no baseline for a normal
+      completion rate -- I-Design has not been run here with its original
+      planner, and neither paper names one -- so this is not yet grounds to
+      call those failures defects.
 
   - id: n16_compose_scenes
     role: subgraph
     purpose: "Algorithm 1: retrieve and place one object at a time."
     decomposition_rationale: [N7_parallelizable, N8_reusable, N3_checkpoint_needed]
-    reads: [gallery_index, variant_ckpts, asset_glb, composition_protocol, idesign_scenes]
+    reads: [gallery_index, variant_ckpts, asset_glb, composition_protocol, evaluation_scene_inputs]
     writes: [composed_scenes, composition_incomplete, retrieval_trace, run_progress, degraded_flags]
     postcondition: "Each (variant, scene) yields either a complete scene or an entry in composition_incomplete -- never both, never neither"
     deterministic: false
@@ -768,7 +785,7 @@ nodes:
       O4: retrieval_trace records top-5 candidates, scores, the chosen id and
       lambda*||e_layout|| at every step -- without the last, an incoherent scene
       cannot be explained.
-      [CORRECTED] Reads idesign_scenes, not scene_graphs. ProcTHOR houses are
+      [CORRECTED] Reads evaluation_scene_inputs, not scene_graphs. ProcTHOR houses are
       finished layouts and cannot serve as Algorithm 1's G_0; paper 3.3 sources
       the 200 scenes from I-Design. See U-21.
 
@@ -804,8 +821,8 @@ nodes:
     purpose: "Train the Table 3 variants that are genuinely different models."
     decomposition_rationale: [N7_parallelizable, N8_reusable]
     reads: [variant_registry, stage1_ckpt, splits, scene_splits, scene_graphs,
-            sem_edge_cache, procthor_object_text, stage2_protocol, stage2_pairing,
-            pointclouds, text_image_embeddings, split_seed]
+            sem_edge_cache, procthor_object_text, stage1_protocol, stage2_protocol,
+            stage2_pairing, pointclouds, text_image_embeddings, split_seed]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger]
     precondition: "headline numbers exist; variant.requires_training is true"
     postcondition: "Every variant has a status in {SUCCESS, FAILED, EXHAUSTED} with a reason"
@@ -841,7 +858,7 @@ nodes:
     purpose: "Table 3 metrics per variant, including the inference-only row."
     decomposition_rationale: [N4_independent_observability]
     reads: [variant_ckpts, variant_status, gallery_index, eval_protocols,
-            scene_splits, variant_registry, composition_protocol, idesign_scenes]
+            scene_splits, variant_registry, composition_protocol, evaluation_scene_inputs]
     writes: [retrieval_metrics, composed_scenes, judge_scores, run_progress, cost_ledger]
     postcondition: "Every SUCCESS variant has metrics; every failed one is explicitly N/A with a reason"
     deterministic: false

@@ -543,7 +543,7 @@ Algorithm 1 的 `Require:` 需要**初始場景圖 `G_0`** 與 **asset query lis
 **ProcTHOR 房屋是已經完成的佈局，不是生成請求**，兩者不是同一種東西。
 graph 裡從來沒有 I-Design 輸出的 channel，所以也沒有任何 gate 會發現這件事。
 
-現在補上 `idesign_scenes` channel（`{g0_uri, query_list, room_type, source_revision}`），
+現在補上 `evaluation_scene_inputs` channel（`{g0_uri, query_list, room_type, source_revision}`），
 由 `n15c_prepare_eval_scenes` 產生，而它排在 `G7_composition_protocol` 之後。
 
 **[未定 U-18 — 阻斷級] 「放進場景、更新場景圖」到底產生什麼，論文一個字都沒說。**

@@ -504,6 +504,44 @@ level_1:
       failure this guards against is not choosing wrong -- it is choosing
       differently in two places.
 
+  - id: L1-NODE-TEXT-POS-INDEPENDENT
+    target: procthor_object_text
+    target_kind: channel
+    asserts: >
+      No object description used to build t_i contains world-frame coordinates,
+      an orientation, or any other function of x: no numeric triples, no
+      "at (x, y, z)", no "facing north", no distances in metres. Rebuilding the
+      text after translating and rotating the whole house yields byte-identical
+      strings.
+    negative_injection: "append the object's position to its description"
+    expected_on_injection: "the translated house produces different text and the assertion fails"
+    verified_blocks: false
+    note: >
+      [APPENDIX C PREMISE] The proof assumes h^0 is invariant to SE(3)
+      transforms of x. We satisfy that by setting h^0 = t_i (RA-1) -- but only
+      if t_i itself does not depend on x. A description like "red chair located
+      at (4.1, 0.0, -2.6)" makes t_i = t_i(x) and silently breaks the premise
+      again, one level down.
+      This runs BEFORE training. n14 would catch the consequence, but only
+      after a full Stage 2 run has been spent.
+
+  - id: L1-SEMEDGE-POS-INDEPENDENT
+    target: sem_edge_cache
+    target_kind: channel
+    asserts: >
+      The prompt that produces a relation sentence, and the sentence itself,
+      contain no world-frame coordinates or orientations. Two houses identical
+      up to a rigid transform produce the same cache key and the same e_ij.
+    negative_injection: "include both objects' positions in the relation prompt"
+    expected_on_injection: "the transformed house produces a different cache key and a different embedding"
+    verified_blocks: false
+    note: >
+      [APPENDIX C] "these semantic edge embeddings are invariant to the input
+      node positions x, as they depend solely on object-level text
+      descriptions". That is stated as a PREMISE of the proof, not as something
+      the implementation gets for free -- the descriptions are ours to build,
+      and nothing stops coordinates entering them.
+
   # ---- gates
   - id: L1-GATE-NORECORD
     target: gate_records
@@ -944,9 +982,10 @@ level_3_gates:
     record_kind: gate
     position: "between n15b_resolve_composition_protocol and n15c_prepare_eval_scenes"
     criterion: >
-      composition_protocol.status == resolved AND g0_source, query_list_source,
-      placement_rule, new_node_t_i, new_phys_edges and new_sem_edges are all
-      populated with a stated method
+      composition_protocol.status == resolved AND source is one of
+      {procthor_via_idesign, idesign_generated} AND g0_source,
+      query_list_source, placement_rule, new_node_t_i, new_phys_edges and
+      new_sem_edges are all populated with a stated method
     evidence: [L1-GATE-NORECORD]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G7_composition_protocol.yaml"
@@ -969,7 +1008,7 @@ level_3_gates:
       every table cell carries exactly one of REPRODUCED / NOT_REPRODUCED /
       INSUFFICIENT_EVIDENCE, with none blank
       AND all gate records present with is_terminal == true
-      AND audit records for RA-1, RA-2 and RA-3 all present
+      AND audit records for RA-1, RA-2, RA-3 and RA-4 all present
       AND deviations D-1 through D-4 are stated in the report body
       AND every degraded_flags entry appears in the report
       AND every id in graph_spec.yaml `risks_unknowns` has a stated disposition,
@@ -988,7 +1027,7 @@ level_3_gates:
 
 # ==================================================================
 gate_discipline:
-  total_l1: 48
+  total_l1: 50
   total_l2: 17
   total_gates: 7
   rejected_gate_candidates:
@@ -1060,17 +1099,21 @@ required_audits:
     record_kind: required_audit
     blocks: false
     why_not_a_gate: >
-      EXPECTED TO FAIL, and the failure is a property of the paper's own claim.
-      Section 2.5 motivates ESSGNN by saying "Standard Graph Attention Networks
-      (GATs) are highly sensitive to global translation AND SCALING", and 3.4's
-      takeaway repeats it: "GAT is sensitive to translation/scaling, whereas
-      ESSGNN's equivariant property provides substantial improvements".
-      But the property the paper proves, and the only one it can prove, is
-      SE(3) equivariance -- rotation and translation. SE(3) does not contain
-      scaling, and the architecture cannot be scale-invariant: under x -> s*x
-      the message input ||x_i - x_j||^2 becomes s^2 ||x_i - x_j||^2, so every
-      message changes. The remedy does not cover half of the stated motivation.
-      Gating on this would mean blocking on the paper's own overclaim.
+      Measures a gap between what the paper claims and what it proves. Section
+      2.5 motivates ESSGNN by saying "Standard Graph Attention Networks (GATs)
+      are highly sensitive to global translation AND SCALING", and 3.4's
+      takeaway repeats it. The property proved in Appendix C is SE(3)
+      equivariance -- rotation and translation. SE(3) does not contain scaling.
+      There is therefore NO STRUCTURAL GUARANTEE of scale robustness: under
+      x -> s*x the message input ||x_i - x_j||^2 becomes s^2 ||x_i - x_j||^2,
+      so every message changes by construction.
+      [WORDING CORRECTED] An earlier version said the architecture "cannot be
+      scale-invariant" and that this audit was "expected to fail". That is too
+      strong. Absence of a structural guarantee is not proof of absence of the
+      behaviour: the MLPs could still learn responses that are insensitive to
+      scale over the range seen in training. This audit measures how much
+      e_layout actually moves; it does not predict the answer.
+      Gating on it would mean blocking on the paper's own overclaim.
     criterion: >
       Scale a scene by s in {0.5, 2, 10} with no other change and measure
       ||e_layout(s*x) - e_layout(x)||. Report it beside the translation and
@@ -1078,10 +1121,11 @@ required_audits:
     claim_controlled: "ESSGNN is robust to the global scaling that section 2.5 names."
     claim_on_failure: >
       "ESSGNN is equivariant to rotation and translation, as Appendix C proves
-      and as we verify (SC-4/5/6). It is NOT invariant to global scaling, which
-      section 2.5 also lists among the failure modes it addresses. Our Table 3
-      ESSGNN-vs-GAT comparison therefore supports the translation/rotation half
-      of the paper's claim only."
+      and as we verify (SC-4/5/6). Scale robustness has no structural guarantee
+      -- SE(3) excludes scaling -- and we measure e_layout's sensitivity to it
+      rather than assuming either way. Our Table 3 ESSGNN-vs-GAT comparison
+      supports the translation/rotation half of section 2.5's motivation with a
+      proof; any scale-related benefit is empirical only."
     must_not_affect: [G3_object_corpus, G4_gallery_freeze, G6_stage2_ready, G5_report_release, "SC-4", "SC-5", "SC-6"]
     record_path: "outputs/logs/audits/RA4_scale_sensitivity.yaml"
     note: >
@@ -1098,7 +1142,7 @@ coverage_check:
   every_check_has_negative_injection: true
   no_existence_only_assertions: true
   open_items:
-    - item: "verified_blocks is false for all 65 checks"
+    - item: "verified_blocks is false for all 67 checks"
       status: "BY DESIGN at specification time"
       action: "During implementation, flip each to true only after its negative injection has been observed to fail."
     - item: "I-Design has not been verified to run"
