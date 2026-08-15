@@ -83,7 +83,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 
 ## 3. State schema
 
-完整 46 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
+完整 48 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
 
 | channel | merge | 為什麼 |
 |---|---|---|
@@ -99,7 +99,10 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 | `objaverse_annotations` | `upsert_by_key` | **以 Objaverse uid 為 key**。ProcTHOR 物件屬於另一個命名空間，不得讀這條 |
 | `procthor_object_text` | `upsert_by_key` | **新增**。ProcTHOR 場景圖的 `t_i` 與語意邊的輸入，來自 ProcTHOR 自己的 metadata |
 | `procthor_dataset` | `write_once` | **新增**。先前 ProcTHOR 根本沒進 graph state，導致 G1 無從檢查它 |
-| `stage1_protocol` | `replace` | **新增**。Stage 1 的 U-13／14／15／16／22／23／24 原本只寫在散文裡，`n10` 仍可用程式預設開跑。**發現 UNKNOWN 不等於把它放進 graph。** 不另設 gate（每項都有合理預設，風險是沉默不是矛盾），由 `G3` 檢查記錄完整 |
+| `stage1_encoding_protocol` | `replace` | **決定 `n06` 該編碼什麼，由 `n05b`（層 6b）產出，早於 `n06`**。U-15（`text_serialization`）／U-14（`image_aggregation`）／**U-34 拆成 `paper_clip_train_scope` 與 `actual_clip_train_scope`**／U-11（`missing_modality_representation`）。<br>**U-34 為什麼要兩個欄位**：D-1 的內容是「論文要訓 CLIP 而我們凍了」——那是**兩者之間的落差**，一個欄位寫不出來。單欄位時把它設成 `trainable` 反而在 run **沒有偏離**的時候標記 D-1 為 active，而 D-1 真正描述的狀態根本無法表示。只有 `actual` 會分支 graph |
+| `stage1_hyperparameters` | `replace` | **U-22 的實體 artifact**（`uri` / `sha256` / `values`），由 `n05b` 產出。先前只有 `stage1_protocol` 裡的一個 hash，而**沒有任何 channel 存放被它指涉的東西** —— constructor 從 graph 外收一個 dict，G3 宣稱要 dereference 卻沒有可讀的來源。`sha256` 必須等於 `hyperparameter_config_hash` |
+| `stage1_protocol` | `replace` | **訓練期才用到的那一半**：U-13（`fusion`）／U-16（`tower_sharing`）／U-23（`allow_all_masked`）／U-24（`similarity`）／U-22（`hyperparameter_config_hash`）。原本 U-13…U-24 只寫在散文裡，`n10` 仍可用程式預設開跑。**發現 UNKNOWN 不等於把它放進 graph。** 由 `G3` 檢查記錄完整，**`G6` 另外檢查 `tower_sharing != fully_shared`** |
+| `post_stage1_embeddings` | `replace` | **新增**。`n11`／`n13`／`n15`／`n18` 原本無條件讀 `text_image_embeddings`，但 `actual=trainable` 時 `n06` 根本不跑 —— **那條路訓得完卻無處可去**。改由 `n10b`（層 10c）在 Stage 1 之後產出，且 **query／gallery 分開存**，因為 `fully_separate + trainable` 時兩塔握有不同的 CLIP 權重 |
 | `essgnn_arch_protocol` | `replace` | **新增**。U-33／U-17／U-26／U-31／U-22。**`use_io_projections: bool = True` 這種預設不是決定，是官方 EGNN 的慣例靠繼承勝出**，而且改的是**架構**不是超參數。由 `G6` 強制 |
 | `essgnn_edge_protocol` | `replace` | **新增**。U-29／U-30／U-19。登記成 UNKNOWN 還不夠 —— `essgnn.py` **已經替它們做了決定**（假定每條邊都有固定寬度的語意嵌入），而 G6 沒擋。由 `G6` 強制 |
 | `stage2_protocol` | `replace` | **新增**。決定本身，未決前保持可改 |
@@ -573,10 +576,10 @@ graph TD
 | **U-08b** | **UNKNOWN・阻斷** | ProcTHOR 目標物件的 text / image / point cloud 從哪來 | 同上，Eq.6 的三個模態沒有來源 |
 | **U-09** | UNKNOWN | Table 1 的 gallery 範圍**以及 query 範圍**。§3.1 只寫 80/20，從未說 query 就是那 20% | gallery 兩個協定都跑；query=test **列為假設** |
 | **U-10** | UNKNOWN | Table 2 的 Scene Coherence 對應 IDesign 哪個面向 | 記錄對應假設 |
-| **U-11** | UNKNOWN | 缺席模態怎麼表示。論文只排除 zero-padding | 記錄我們的選擇 |
+| **U-11** | UNKNOWN | **缺席模態怎麼表示**。§2.6 只排除 zero-padding，從沒說用什麼取代 | `stage1_encoding_protocol.missing_modality_representation` 記錄，`G3` 檢查。三個讀法：`learned_token`（目前唯一實作）／`validity_mask`／`drop_slot`。**先前這是 `FusionConfig` 的預設在決定** —— 登記成 UNKNOWN 卻讓 dataclass 選，而它影響 Table 1 每一個 partial-modality 欄位 |
 | **U-12** | UNKNOWN | ProcTHOR metadata 怎麼變成 `t_i` 的句子 | 記錄我們的做法 |
 | **U-13** | UNKNOWN | **Full model 用哪一種 fusion**。論文給了**兩份不同的候選清單** —— §2.2 三種（mean pooling / MLP / Transformer）、§2.4 五種（多了 masked MLP 與 gated）—— 都沒說是哪個。Table 3 排除 Mean(9.4) 與 MLPs(9.9)；`Padding with 0`(10.5) 與 §3.4「Masked modality fusion outperformed zero-padding」顯示 Full 會遮罩 → 剩 masked MLP / gated / Transformer | 主線 `masked_mlp`（程式現行預設），另兩種可選並列為對照 |
-| **U-14** | UNKNOWN | **11 張渲染圖怎麼變成一個 `e_image`**。§2.3 只說 render 11 views | 記錄選擇；影響 Table 1 七個條件中的四個 |
+| **U-14** | UNKNOWN | **11 張渲染圖怎麼變成一個 `e_image`**。§2.3 只說 render 11 views | `stage1_encoding_protocol.image_aggregation`。**目前可執行的只有 `fixed_view`／`mean`／`max`／`random_single_view`**；`learned multi-view fusion` 是合理候選但**尚未實作，選了會 `UnsupportedProtocol` 拒絕**，不是所有候選都跑得起來。影響 Table 1 七個條件中的四個 |
 | **U-15** | UNKNOWN | **結構化標註怎麼序列化成 text encoder 的輸入字串**。§2.3 只給欄位，沒給格式 | 釘住模板，加 golden-string 測試 |
 | **U-16** | UNKNOWN | **query / gallery 兩塔是否共享權重**。§2.4 說 "a dedicated query encoder"、§2.6 說兩者都訓練，但沒說共享關係 | `stage1_protocol.tower_sharing` 記錄，**三個讀法都可執行**：`shared_backbone_separate_fusion`（共用 ULIP、各自 fusion）／`fully_shared`（連 fusion 都是同一個 module）／`fully_separate`（兩份 backbone、兩份 fusion）。<br>**`fully_shared` 被 §2.6 排除在 Stage 2 之外** —— 兩塔是同一個 module 時，「gallery 凍結」與「訓練 query fuser」不可能同時成立，`freeze_gallery()` 因此直接拒絕。這是從論文推得的，不是實作限制 |
 | **U-17** | UNKNOWN・**可執行** | **`d_ij` 還是 `d_ij²`**。§2.5 寫 `d_ij = ‖x_i − x_j‖₂`，Appendix C (10)–(12) 用 `‖·‖²`，原始 EGNN 也是平方 | 實作用平方（`essgnn.py` 的 `radial`）；兩者都 SE(3) 不變，不破壞證明，記錄為選擇 |
@@ -1046,6 +1049,13 @@ preposition 對齊 enum（無法映射者落到 "on"）
 | 186 | `losses.py` 把「τ 可學習」與「τ 初值 0.07」綁成同一個 ULIP-2 慣例 | 拆開，因為兩者權威等級不同：**「learnable」ULIP-2 論文 Eq. 1/2 直接寫了**（"tau is a learnable temperature parameter"），是 Level 1 論文證據；**「0.07」論文沒給**，那是 CLIP 慣例與 ULIP 程式。綁在一起就是第 155 項那個錯誤的縮小版 | 🟠 |
 | 187 | `graph_spec.yaml` 的 U-34 `resolution` 還寫 `stage1_protocol.clip_train_scope` | 改為 `stage1_encoding_protocol`（n05b 決定，早於 n06） | 🟡 |
 
+> **[第十九輪登記的 Stage 2 protocol debt]** `U-12`（ProcTHOR metadata 怎麼變成 `t_i` 的文字）
+> 與 `U-20`（哪個 text encoder 產生 `t_i`）**都還沒進 `essgnn_arch_protocol`**，
+> 現在是 `n07` 直接產 `procthor_object_text`、程式挑 encoder。
+> Stage 2 目前被 U-08a／U-08b 擋著，所以這兩項不是當前最高優先，
+> 但**在 `n13` 真正實作前必須進 `n09b`／`G6`** —— 否則就是 Stage 1 剛修完的同一個錯，
+> 換到 Stage 2 重演一次。
+
 **沒有發現的東西也值得記**：`h⁰` 必須對 SE(3) 不變這個前提，EGNN Appendix A 與
 MetaFind Appendix C **兩邊都寫了**，所以 RA-1 與 `h0_mode="semantic"` 的立論比原本更穩；
 `φ_x` 輸出純量在 EGNN 正文與附錄都寫死，F10 的 audit-only 定位不變；
@@ -1070,3 +1080,29 @@ MetaFind Appendix C **兩邊都寫了**，所以 RA-1 與 `h0_mode="semantic"` �
 ULIP-2 是把改寫當引文，EGNN 是沉默預設，I-Design 是編造輸入。
 三者都不是「讀錯論文」，而是**在論文有寫的地方沒去查**。
 第十五輪把依賴方論文加進權威階層是對的，但加進階層不等於讀過。
+
+### 2026-08-15 第十九輪（外部審查，沿 Stage1 → Gallery → Stage2 → Table 1 走）
+
+上一輪把 Stage 1 的**入口**修對了，審查者接著往**訓完之後**走。
+結論一句話：**開了前門，後門還是關的。**
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 192 | **`actual=trainable` 訓得完，卻無處可去。** `n11`／`n13`／`n15`／`n18` 全部無條件讀 `text_image_embeddings`，而那是 `n06` 寫的 —— `trainable` 下 `n06` 根本不跑。所以第 171 項只解開了 `n06 → n09`，Stage 1 之後每一個消費者仍然要求一份那條路不會產生的 cache。<br>更糟的是 **`fully_separate + trainable` 用單一 cache schema 表達不出來**：兩塔各自握有**不同的**已訓練 CLIP 權重，「資產 X 的文字嵌入」是兩個不同向量 | 新增 **`n10b_post_stage1_encode`**（層 10c）與 **`post_stage1_embeddings`** channel，四個消費者改讀它。`actual=frozen` 時 `source=cache_passthrough`（CLIP 沒動過，n06 的 cache 仍然正確，重編只是白燒 2–4 小時）；`actual=trainable` 時用**訓練後的** encoder 重編。channel **query／gallery 分開存**，並記 `towers_are_identical` 讓 reader 可以斷言而不是假設 | 🔴 **跨階段斷鏈** |
+| 193 | **D-1 用一個欄位表達不出來。** `clip_train_scope` 同時扮演「我們對論文的解讀」與「這次實驗實際怎麼跑」。可是 D-1 的內容是**兩者之間的落差** —— 把欄位設成 `trainable` 會在 run **確實訓了 CLIP、根本沒有偏離**的時候標記 D-1 為 active，而 `paper=trainable, actual=frozen`（D-1 真正描述的那個狀態）**完全無法表示** | 拆成 **`paper_clip_train_scope`** 與 **`actual_clip_train_scope`**。`active_if` 改為兩者的合取；**只有 `actual` 會分支 graph、只有 `actual` 會到 backbone**。四種組合都有明確語意，其中 `paper=frozen, actual=trainable` 不是偏離而是**超出論文的變體**，一樣要報告。`d1_is_active` 與 `exceeds_paper` 現在是可計算的 property，不是散文 | 🔴 **偏離語意不成立** |
+| 194 | **`fully_shared` 過得了 G3，卻一定違反 Stage 2。** `freeze_gallery()` 拒絕得對，但它是在 **`n13` 裡面**拒絕 —— 那時 Stage 1 已經訓了好幾個小時，產出一個從一開始就不可用的 checkpoint。而 G6 根本看不到 Stage 1 的 sharing mode | `G6` 增讀 `stage1_protocol`，criterion 加 `tower_sharing != "fully_shared"`，`e13c` 補 carry。**這是可在閘上判定的確定性不相容**，不該等到花完錢才發現 | 🔴 **閘位置錯誤** |
+| 195 | **U-22 的 artifact 不在 graph 裡。** hash 驗證寫得對，但 graph 只有 `stage1_protocol.hyperparameter_config_hash`，**沒有任何 channel 存放被它指涉的東西**；constructor 從 graph 外收一個 dict，而 G3 宣稱要 dereference 卻沒有可讀的來源。hash 只能抓「傳錯的 dict」，不能回答「對的那份從哪來」 | 新增 **`stage1_hyperparameters`** channel（`uri` / `sha256` / `values`），由 `n05b` 產出，`G3`／`n10`／`n18`／`n22` 讀。G3 改驗 `sha256 == hyperparameter_config_hash` 且 `values` 逐項齊全 | 🔴 **graph 外的執行輸入** |
+| 196 | **`p_mask` 被當成自由超參數。** §2.6 明文 *"each modality in the query has a **30%** probability of being independently masked"* —— 那是**論文寫死的**，Table 3 的 10%／50% 才是 ablation。可是把它放進 U-22 的 artifact，等於讓一個論文常數看起來像論文沒給的值：artifact 寫 0.50 照樣 hash 得過，主線就直接跑成 Table 3 的 dropout ablation | 主線強制 `p_mask == 0.30`；要跑 0.10／0.50 必須明確傳 `variant=`，且 variant 與值必須對得上。**論文寫死的常數與論文沒給的配方不能混在同一個容器裡** | 🔴 **主線被換成 ablation** |
+| 197 | **U-11 仍由 `FusionConfig` 的預設偷偷決定。** 登記表承認缺席模態的表示法是 UNKNOWN（§2.6 只排除 zero-padding，從沒說用什麼取代），可是 protocol 沒有這個欄位，程式直接用 `learned mask token + absent slot 仍參與聚合`。選擇本身可能完全合理 —— **問題是自己登記成 UNKNOWN 卻讓 dataclass 決定**，而它影響 Table 1 每一個 partial-modality 欄位 | 新增 `stage1_encoding_protocol.missing_modality_representation`，三個讀法 `learned_token`／`validity_mask`／`drop_slot`。只實作第一個，另外兩個**明確拒絕**（`UnsupportedProtocol`）而不是沉默 | 🔴 **沉默預設** |
+| 198 | `L1-STAGE1-PROTOCOL-APPLIED` 的文字**超前實作** —— 沒有 Stage 1 trainer，就驗不了 optimizer／DataLoader／scheduler／RNG，也驗不了 backbone 層的 sharing | 加 `status: partially_implementable` 與 `pending_until_n10`，逐項列出「現在成立的」與「等 n10 才成立的」。**列出不存在的物件會被讀成覆蓋率** | 🟠 |
+| 199 | `01_GRAPH_SPEC` 的 state summary 還把 `stage1_protocol` 描述成負責 U-13/14/15/16/22/23/24 | 重寫四列（新增 `stage1_encoding_protocol`／`stage1_hyperparameters`／`post_stage1_embeddings`），並寫明 U-34 為什麼要兩個欄位 | 🟠 |
+| 200 | U-14 的候選清單讀起來像全部可跑，但 `learned multi-view fusion` 沒實作 | registry 標明目前可執行的四個，其餘會被 `UnsupportedProtocol` 拒絕 | 🟡 |
+| 201 | **U-12／U-20 是 Stage 2 版的同一筆債** —— ProcTHOR metadata 怎麼變成 `t_i`、哪個 encoder 產生 `t_i`，都還沒進 `essgnn_arch_protocol` | 登記在 §15 前面。Stage 2 目前被 U-08a／U-08b 擋著，但**在 `n13` 實作前必須進 `n09b`／`G6`**，否則就是 Stage 1 剛修完的錯換到 Stage 2 重演 | 🟡 |
+
+**三條新測試都做過負向注入**：backbone 改讀 `paper` 而非 `actual` → 紅；
+拿掉 `p_mask` 的釘住 → 紅；拿掉 U-11 的拒絕 → 紅。
+
+**這輪要記住的**：第十六輪學到「protocol 要真的被執行的東西讀走」，
+這輪學到的是**它得在整條路徑上都被讀走**。
+`actual=trainable` 在 `n10` 的入口是通的、出口是斷的 ——
+一個只在半條路徑上成立的合約，看起來與成立的合約一模一樣。

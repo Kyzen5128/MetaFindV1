@@ -383,10 +383,22 @@ level_1:
                                        string and computing cosine anyway
         hyperparameter_config_hash  -> canonical sha256 of the hyperparameter
                                        artifact the run loaded
-        clip_train_scope            -> backbone train_scope, and whether a cache
+        actual_clip_train_scope            -> backbone train_scope, and whether a cache
                                        may be read at all
         image_aggregation           -> cache layout (one vector vs eleven)
         text_serialization          -> the template the encoder was given
+    status: partially_implementable
+    pending_until_n10: >
+      Six of these cannot be checked yet because there is no Stage 1 trainer:
+      learning_rate / weight_decay -> optimizer.param_groups, scheduler ->
+      the actual scheduler, batch_size -> the DataLoader, epochs -> the loop,
+      seed -> the sampler and RNG, and tower_sharing's BACKBONE half ->
+      whether query_backbone is gallery_backbone. What holds today is the
+      config-construction half: fusion, tower_sharing's FUSION parameters,
+      allow_all_masked, similarity, the hash, both clip scopes,
+      image_aggregation and missing_modality_representation.
+      Recorded rather than left implied, because an assertion listing objects
+      that do not exist reads as coverage.
     negative_injection: "resolve tower_sharing=fully_shared, then build the towers with independent fusion modules"
     expected_on_injection: "parameter identity fails and Stage 1 does not start"
     verified_blocks: false
@@ -1035,14 +1047,26 @@ level_3_gates:
       AND quarantine_rate <= 0.02
       AND both evaluation protocols are defined with explicit query and gallery scopes
       AND stage1_encoding_protocol.status == "resolved", with text_serialization,
-          image_aggregation and clip_train_scope each naming a choice
+          image_aggregation and actual_clip_train_scope each naming a choice
           (U-15, U-14, U-34)
       AND stage1_protocol.status == "resolved", with fusion, tower_sharing,
           allow_all_masked, similarity and hyperparameter_config_hash each
           naming a choice (U-13, U-16, U-23, U-24, U-22)
-      AND hyperparameter_config_hash resolves to a hyperparameter artifact whose
-          canonical sha256 equals it -- presence of the field is not enough,
-          because a hash nothing dereferences leaves the run on library defaults
+      AND stage1_hyperparameters.sha256 == stage1_protocol.hyperparameter_config_hash,
+          and stage1_hyperparameters.values names every field of U-22
+          (optimizer, learning_rate, weight_decay, scheduler, batch_size,
+           epochs, p_mask, init_temperature, learnable_temperature,
+           max_logit_scale, seed) -- presence of the hash is not enough,
+          because a hash nothing dereferences leaves the run on library
+          defaults. [CORRECTED] This clause used to demand a dereference G3 had
+          no channel to perform: the artifact existed only as a dict passed
+          into Python from outside the graph.
+      AND stage1_hyperparameters.values.p_mask == 0.30 unless the run is a
+          declared Table 3 modality-dropout variant
+          (paper 2.6 fixes 30%; Table 3 ablates 10% and 50%. Carrying p_mask
+           in the U-22 artifact made a paper-stated constant look like one of
+           the values the paper omits, so an artifact saying 0.50 would hash
+           correctly and silently run the ablation as the main line.)
     evidence: [L2-LEAK-OBJECT, L2-COMPLETE, L1-PROTOCOLS-DEFINED, L1-QUAR-REASON, L1-STAGE1-PROTOCOL-APPLIED]
     scope_note: >
       [CORRECTED] The criterion said "at object and house level" and cited
@@ -1056,7 +1080,7 @@ level_3_gates:
       defaults; an earlier attempt to add the first did not match the file text
       and was lost.
       [CORRECTED] This criterion still demanded image_aggregation,
-      text_serialization and clip_train_scope FROM stage1_protocol after those
+      text_serialization and actual_clip_train_scope FROM stage1_protocol after those
       three fields had been moved to stage1_encoding_protocol. The gate was
       validating a schema that no longer existed -- it would have failed a
       correctly resolved pair, and it checked nothing about the channel that
@@ -1129,6 +1153,14 @@ level_3_gates:
             Appendix C specifies a DIFFERENT shape for each of its three
             functions, so one shared Linear-SiLU-Linear was a silent choice
             rather than the reference architecture)
+      AND stage1_protocol.tower_sharing != "fully_shared"
+          (U-16: 2.6 requires the gallery encoder frozen while the query-side
+           fuser trains. If the towers are ONE module those cannot both hold,
+           so `fully_shared` is a Table 1-only variant and must not enter a
+           run that reaches Stage 2. MetaFindDualTower.freeze_gallery already
+           refuses -- but it refuses inside n13, AFTER Stage 1 has spent hours
+           training a checkpoint that was never usable. This is a
+           deterministic incompatibility knowable at the gate.)
       AND essgnn_edge_protocol.status == "resolved", naming topology,
           physical_relation_encoding, semantic_missing_representation and
           directionality (U-29, U-30, U-19) -- without these the ESSGNN edge

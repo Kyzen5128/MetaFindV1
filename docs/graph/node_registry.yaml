@@ -234,11 +234,12 @@ nodes:
     purpose: "Decide what n06 should produce, before it produces it."
     decomposition_rationale: [N5_gate_point, N1_distinct_failure_mode]
     reads: [objaverse_annotations, renders]
-    writes: [stage1_encoding_protocol, run_progress]
+    writes: [stage1_encoding_protocol, stage1_hyperparameters, run_progress]
     precondition: "annotations and renders exist for the admitted set"
     postcondition: >
       stage1_encoding_protocol.status == resolved, naming text_serialization,
-      image_aggregation and clip_train_scope.
+      image_aggregation, paper_clip_train_scope, actual_clip_train_scope and
+      missing_modality_representation.
     deterministic: false
     idempotent: false
     idempotency_mechanism: N/A
@@ -246,7 +247,7 @@ nodes:
     failure:
       classes: [HUMAN_RECOVERABLE]
       policies:
-        - {class: HUMAN_RECOVERABLE, action: interrupt, max_attempts: 3, backoff: fixed, on_exhausted: HALT_BLOCKED, record_fields: [status, text_serialization, image_aggregation, clip_train_scope]}
+        - {class: HUMAN_RECOVERABLE, action: interrupt, max_attempts: 3, backoff: fixed, on_exhausted: HALT_BLOCKED, record_fields: [status, text_serialization, image_aggregation, paper_clip_train_scope, actual_clip_train_scope, missing_modality_representation]}
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
@@ -257,8 +258,15 @@ nodes:
         U-15 text_serialization  the exact string the encoder sees
         U-14 image_aggregation   how 11 views become one e_image; a per-step
              choice cannot be honoured once the cache holds one vector
-        U-34 clip_train_scope    under `trainable` nothing may be cached at
-             all, because gradient has to reach OpenCLIP
+        U-34 paper_clip_train_scope   our reading of what MetaFind requires
+        U-34 actual_clip_train_scope  what this run does. Under `trainable`
+             nothing may be cached at all, because gradient has to reach
+             OpenCLIP. Only this one branches the graph; D-1 is the GAP
+             between the two and was inexpressible while they were one field
+        U-11 missing_modality_representation  how an absent modality is
+             represented. 2.6 only rules out zero-padding; it never says what
+             replaces it, and `learned_token` was being chosen by a
+             FusionConfig default while the registry called it UNKNOWN
       No separate gate: n06 simply cannot start without the channel, which is
       the enforcement. Unresolved therefore halts the Objaverse branch at n06
       rather than being discovered at training time.
@@ -283,11 +291,11 @@ nodes:
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
-      SKIPPED ENTIRELY under clip_train_scope == trainable -- e09's guard, not
+      SKIPPED ENTIRELY under actual_clip_train_scope == trainable -- e09's guard, not
       an internal branch. Gradient must reach OpenCLIP under that reading, so
       there is nothing a cache could contribute, and n09 gets its text/image
       completeness from e11b instead.
-      ONLY text and image, and only under clip_train_scope == frozen. The point
+      ONLY text and image, and only under actual_clip_train_scope == frozen. The point
       encoder is trainable in Stage 1, so point-cloud embeddings cannot be
       precomputed -- caching all three is what made an earlier draft the "train
       fuser only" ablation by accident, and the same reasoning binds CLIP under
@@ -387,7 +395,7 @@ nodes:
       Writes the TRAINING half of the Stage 1 protocol only. The encoding half
       (U-14/U-15/U-34) is resolved earlier, at n05b, because n06 needs it.
       [BRANCH] The text/image completeness this node requires arrives on ONE of
-      two guarded edges: e11 (text_image_embeddings) under clip_train_scope ==
+      two guarded edges: e11 (text_image_embeddings) under actual_clip_train_scope ==
       frozen, e11b (objaverse_annotations + renders) under trainable. An
       unconditional e11 made the trainable reading of U-34 unreachable -- the
       join demanded a cache that reading forbids producing. `n06` is therefore
@@ -398,7 +406,7 @@ nodes:
     role: evaluate
     purpose: "Refuse to run Stage 1 on a leaked or incomplete object corpus."
     decomposition_rationale: [N5_gate_point]
-    reads: [splits, eval_protocols, stage1_protocol, stage1_encoding_protocol, asset_manifest, quarantine]
+    reads: [splits, eval_protocols, stage1_protocol, stage1_encoding_protocol, stage1_hyperparameters, asset_manifest, quarantine]
     writes: [gate_records, run_progress]
     postcondition: "gate_record with is_terminal=true"
     deterministic: true
@@ -476,7 +484,7 @@ nodes:
     role: evaluate
     purpose: "Refuse to train Stage 2 until its positive, its modalities and its scene corpus are all in place."
     decomposition_rationale: [N5_gate_point]
-    reads: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits]
+    reads: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits, stage1_protocol]
     writes: [gate_records, run_progress]
     postcondition: "gate_record with is_terminal=true"
     deterministic: true
@@ -507,7 +515,7 @@ nodes:
     role: mutate
     purpose: "Cross-modal alignment: train the point encoder and the fusion modules."
     decomposition_rationale: [N3_checkpoint_needed, N6_side_effects]
-    reads: [pointclouds, text_image_embeddings, renders, objaverse_annotations,
+    reads: [pointclouds, text_image_embeddings, renders, objaverse_annotations, stage1_hyperparameters,
             splits, split_seed, stage1_protocol, stage1_encoding_protocol,
             variant_registry]
     writes: [stage1_ckpt, run_progress, cost_ledger, degraded_flags]
@@ -549,7 +557,7 @@ nodes:
       Loss is Eq. 5, one-directional. ULIP's ULIPWithImageLoss is a single-tower
       tri-modal objective and cannot be reused.
       [U-34] Reads renders and objaverse_annotations as well as the cache,
-      because clip_train_scope decides which it consumes:
+      because actual_clip_train_scope decides which it consumes:
         frozen     -> text_image_embeddings; renders/annotations unused
         trainable  -> renders and annotations, encoded every step so gradient
                       reaches OpenCLIP; the cache MUST NOT be read, since a
@@ -558,11 +566,49 @@ nodes:
       earlier version read only the cache, so a protocol resolving to
       `trainable` passed G3 and then had no raw inputs to train on.
 
+  - id: n10b_post_stage1_encode
+    role: model
+    purpose: "Produce the text/image embeddings every downstream consumer reads, using the FINAL Stage 1 encoders."
+    decomposition_rationale: [N3_checkpoint_needed, N1_distinct_failure_mode]
+    reads: [stage1_ckpt, stage1_encoding_protocol, stage1_protocol, text_image_embeddings, renders, objaverse_annotations]
+    writes: [post_stage1_embeddings, run_progress, cost_ledger]
+    postcondition: >
+      post_stage1_embeddings holds a query map and a gallery map over the
+      admitted set, tagged with the checkpoint sha they were produced from.
+    deterministic: false
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    cacheable: true
+    cache_key: [stage1_ckpt_sha, render_sha256, annotation_sha256, text_serialization, image_aggregation]
+    failure:
+      classes: [RESOURCE, TRANSIENT]
+      policies:
+        - {class: RESOURCE, action: degrade, max_attempts: 3, backoff: fixed, on_exhausted: HALT_BLOCKED, record_fields: [batch_size_before, batch_size_after]}
+        - {class: TRANSIENT, action: retry, max_attempts: 3, backoff: fixed, on_exhausted: quarantine}
+      partial_failure_semantics: halt
+      rollback: N/A
+    notes: >
+      [ADDED] n11, n13, n15 and n18 read text_image_embeddings, which n06
+      writes -- and n06 is skipped when actual_clip_train_scope is `trainable`.
+      That reading of U-34 could therefore be trained and then went nowhere:
+      every consumer after Stage 1 required a cache that route never produces.
+      Two behaviours, decided by actual_clip_train_scope:
+        frozen     -> passthrough. CLIP never moved during Stage 1, so n06's
+                      cache is still correct and re-encoding would only burn
+                      2-4 h to reproduce it.
+        trainable  -> re-encode from renders and annotations with the trained
+                      encoders. n06's cache does not exist, and even if it did
+                      it would be the pre-training weights.
+      Writes SEPARATE query and gallery maps. Under tower_sharing =
+      fully_separate with actual = trainable the two towers hold different
+      trained CLIP weights, so one map per asset is not expressible -- that
+      combination is exactly what a single cache silently got wrong.
+
   - id: n11_gallery_index_staging
     role: mutate
     purpose: "Encode every admitted asset with the frozen gallery tower into a staging index."
     decomposition_rationale: [N6_side_effects, N5_gate_point]
-    reads: [stage1_ckpt, pointclouds, text_image_embeddings, asset_manifest, stage1_protocol, stage1_encoding_protocol]
+    reads: [stage1_ckpt, pointclouds, post_stage1_embeddings, asset_manifest, stage1_protocol, stage1_encoding_protocol]
     writes: [gallery_index_staging, run_progress, cost_ledger]
     postcondition: "Staging index has the checkpoint's embedding width and len(admitted) rows"
     deterministic: false
@@ -629,7 +675,7 @@ nodes:
     decomposition_rationale: [N3_checkpoint_needed, N6_side_effects, N8_reusable]
     reads: [stage1_ckpt, scene_graphs, sem_edge_cache, procthor_object_text,
             stage2_protocol, stage2_pairing, essgnn_edge_protocol,
-            essgnn_arch_protocol, pointclouds, text_image_embeddings, splits,
+            essgnn_arch_protocol, pointclouds, post_stage1_embeddings, splits,
             scene_splits, split_seed, variant_registry]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger, degraded_flags]
     precondition: "G3_object_corpus verdict == PASS; stage1_ckpt exists; G6_stage2_ready verdict == PASS (stage2_protocol.status == resolved AND essgnn_edge_protocol.status == resolved AND scene_splits valid)"
@@ -709,7 +755,7 @@ nodes:
     role: evaluate
     purpose: "Table 1: instance-level retrieval, 7 modality conditions x 2 gallery protocols."
     decomposition_rationale: [N4_independent_observability, N7_parallelizable]
-    reads: [gallery_index, variant_ckpts, eval_protocols, splits, pointclouds, text_image_embeddings, stage1_protocol, stage1_encoding_protocol]
+    reads: [gallery_index, variant_ckpts, eval_protocols, splits, pointclouds, post_stage1_embeddings, stage1_protocol, stage1_encoding_protocol]
     writes: [retrieval_metrics, run_progress, cost_ledger]
     postcondition: "Every (variant, condition, protocol) cell holds a metric with its n_gallery and n_query"
     deterministic: false
@@ -890,7 +936,7 @@ nodes:
     reads: [variant_registry, stage1_ckpt, splits, scene_splits, scene_graphs,
             sem_edge_cache, procthor_object_text, stage1_protocol, stage2_protocol,
             stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol,
-            pointclouds, text_image_embeddings, split_seed]
+            pointclouds, post_stage1_embeddings, split_seed, stage1_hyperparameters]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger]
     precondition: "headline numbers exist; variant.requires_training is true"
     postcondition: "Every variant has a status in {SUCCESS, FAILED, EXHAUSTED} with a reason"
@@ -1004,7 +1050,7 @@ nodes:
     role: mutate
     purpose: "The single outward-facing, irreversible action."
     decomposition_rationale: [N6_side_effects]
-    reads: [gate_records, audit_records, degraded_flags, asset_manifest, split_seed, quarantine]
+    reads: [gate_records, audit_records, degraded_flags, asset_manifest, split_seed, quarantine, stage1_hyperparameters]
     writes: [run_progress]
     precondition: "G5 verdict == PASS with is_terminal=true"
     postcondition: "Report published; a git tag records the revision and artifact hashes"

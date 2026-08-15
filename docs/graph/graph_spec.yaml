@@ -201,17 +201,23 @@ boundary:
   conditional_deviations:
     - id: D-1
       what: "ViT-bigG-14 stays frozen; only the 3D encoder and fusion train"
-      active_if: "stage1_encoding_protocol.clip_train_scope == 'trainable'"
+      active_if: "stage1_encoding_protocol.paper_clip_train_scope == 'trainable' AND stage1_encoding_protocol.actual_clip_train_scope == 'frozen'"
       why: "2.5B parameters do not train on a 24 GB card"
       impact: >
         Listed separately from boundary.deviations because it is not currently
         established as one, and enumerating it among the active deviations
         would assert something we cannot support.
-          U-34 resolves to `frozen`     -> NOT a deviation. ULIP-2's paper 3.3
-            freezes OpenCLIP and MetaFind builds on ULIP-2, so the main line
-            agrees with its own backbone's specification.
-          U-34 resolves to `trainable`  -> IS a deviation, forced by 24 GB, and
-            RA-3 is the evidence that the alternative could not run here.
+          paper=frozen                  -> NOT a deviation whatever we run.
+            ULIP-2's paper 3.3 freezes OpenCLIP and MetaFind builds on ULIP-2,
+            so the main line agrees with its own backbone's specification.
+          paper=trainable, actual=frozen -> IS a deviation, forced by 24 GB,
+            and RA-3 is the evidence that the alternative could not run here.
+          paper=trainable, actual=trainable -> NOT a deviation; we did what we
+            read the paper to require. Requires RA-3 to have succeeded.
+          paper=frozen, actual=trainable -> not a deviation either, but a
+            VARIANT beyond the paper. Must be reported as such.
+        [CORRECTED] The condition used to be a single field being `trainable`,
+        which marked D-1 active exactly when the run was NOT deviating.
         The earlier justification is withdrawn, and why matters: it rested on
         ULIP-2's public ULIP2_PointBERT_Colored calling eval() without setting
         requires_grad=False, so main.py's optimizer would have included those
@@ -283,14 +289,14 @@ state:
     - name: renders
       type: "map[uid -> {view_paths[11], view_sha256[11]}]"
       writers: [n04_render_views]
-      readers: [n05_annotate, n05b_resolve_stage1_encoding, n06_encode_text_image, n09_build_splits, n10_train_stage1]
+      readers: [n05_annotate, n05b_resolve_stage1_encoding, n06_encode_text_image, n09_build_splits, n10_train_stage1, n10b_post_stage1_encode]
       merge: upsert_by_key
       lifetime: persistent
 
     - name: objaverse_annotations
       type: "map[objaverse_uid -> {category, description, dimensions, materials, placement_constraints, annotator_model}]"
       writers: [n05_annotate]
-      readers: [n05b_resolve_stage1_encoding, n06_encode_text_image, n09_build_splits, n09b_resolve_stage2_protocol, n10_train_stage1]
+      readers: [n05b_resolve_stage1_encoding, n06_encode_text_image, n09_build_splits, n09b_resolve_stage2_protocol, n10_train_stage1, n10b_post_stage1_encode]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -322,11 +328,11 @@ state:
     - name: text_image_embeddings
       type: "map[uid -> {text: uri, image: uri | list[uri] per view, aggregation, n_views}]"
       writers: [n06_encode_text_image]
-      readers: [n09_build_splits, n10_train_stage1, n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations]
+      readers: [n09_build_splits, n10_train_stage1, n10b_post_stage1_encode]
       merge: upsert_by_key
       lifetime: persistent
       note: >
-        Cached ONLY when stage1_encoding_protocol.clip_train_scope == frozen.
+        Cached ONLY when stage1_encoding_protocol.actual_clip_train_scope == frozen.
         The point encoder is TRAINABLE in Stage 1 (paper 2.6: "Both query and
         gallery encoders are trained"), so point-cloud embeddings cannot be
         precomputed -- an earlier draft cached all three, which made it the
@@ -359,10 +365,35 @@ state:
         into one relation. Paper 2.5 and Appendix C both say the LLM is prompted
         with object DESCRIPTIONS.
 
+    - name: post_stage1_embeddings
+      type: "{query: map[uid -> {text: uri, image: uri | list[uri] per view, aggregation, n_views}], gallery: map[uid -> same], towers_are_identical: bool, source: cache_passthrough|reencoded, produced_from_ckpt_sha}"
+      writers: [n10b_post_stage1_encode]
+      readers: [n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations]
+      merge: replace
+      lifetime: persistent
+      note: >
+        [ADDED] n11, n13, n15 and n18 all read text_image_embeddings, which
+        n06 writes -- and n06 does not run when actual_clip_train_scope is
+        `trainable`. So the trainable reading of U-34 could be trained and then
+        had nowhere to go: Stage 1 finished, and every consumer downstream
+        demanded a cache that route never produces. Fixing the n06/n09 branch
+        opened the front door and left the back one shut.
+        This channel is what those four read instead. It is produced AFTER
+        Stage 1, when the encoders are final either way:
+          actual=frozen     -> source=cache_passthrough. CLIP never moved, so
+                               n06's cache is still exactly right.
+          actual=trainable  -> source=reencoded from renders and annotations
+                               with the trained encoders.
+        SEPARATE query and gallery maps, because one map cannot express
+        tower_sharing=fully_separate under actual=trainable: the two towers
+        then hold DIFFERENT trained CLIP weights, so "the text embedding of
+        asset X" is two different vectors. towers_are_identical records
+        whether they coincided, so a reader can assert rather than assume.
+
     - name: stage1_encoding_protocol
-      type: "{status: unresolved|resolved, text_serialization, image_aggregation, clip_train_scope: frozen|trainable, decided_by, decided_at}"
+      type: "{status: unresolved|resolved, text_serialization, image_aggregation, paper_clip_train_scope: frozen|trainable, actual_clip_train_scope: frozen|trainable, missing_modality_representation: learned_token|validity_mask|drop_slot, decided_by, decided_at}"
       writers: [n05b_resolve_stage1_encoding]
-      readers: [G3_object_corpus, n06_encode_text_image, n10_train_stage1, n11_gallery_index_staging, n15_eval_retrieval]
+      readers: [G3_object_corpus, n06_encode_text_image, n10_train_stage1, n10b_post_stage1_encode, n11_gallery_index_staging, n15_eval_retrieval]
       merge: replace
       lifetime: persistent
       note: >
@@ -378,7 +409,18 @@ state:
             protocol resolving to "random single view per training step" was
             declarable and unexecutable, because the cache had already
             collapsed 11 embeddings into one vector.
-          clip_train_scope (U-34)    frozen or trainable. Under `trainable`
+          paper_clip_train_scope (U-34)   what we read MetaFind as REQUIRING.
+          actual_clip_train_scope (U-34)  what this run actually does.
+            [SPLIT] These were ONE field, which made D-1 inexpressible. The
+            deviation is "the paper wants CLIP trained and we froze it anyway",
+            a statement about the GAP between the two -- so a single field
+            could never carry it. Setting the old field to `trainable` marked
+            D-1 active while the run trained CLIP and therefore did NOT
+            deviate; and the state that D-1 actually describes, paper=trainable
+            with actual=frozen, had no representation at all. Interpreting
+            evidence and executing an experiment are different acts and now
+            have different fields. Only `actual` branches the graph, because
+            only `actual` decides whether a cache exists. Under `trainable`
             there must be NO frozen cache at all -- gradient has to reach
             OpenCLIP -- so this decides whether n06 runs in this form.
 
@@ -386,10 +428,30 @@ state:
         protocols: these are readings of an underspecified paper, not values a
         default may supply.
 
+    - name: stage1_hyperparameters
+      type: "{uri, sha256, values: {optimizer, learning_rate, weight_decay, scheduler, batch_size, epochs, p_mask, init_temperature, learnable_temperature, max_logit_scale, seed}, decided_by, decided_at}"
+      writers: [n05b_resolve_stage1_encoding]
+      readers: [G3_object_corpus, n10_train_stage1, n18_train_ablations, n22_publish_report]
+      merge: replace
+      lifetime: persistent
+      note: >
+        [ADDED] U-22's values had a hash in stage1_protocol and no artifact
+        anywhere. Stage1RuntimeConfig.from_protocols therefore took a dict from
+        outside the graph and checked it against that hash -- which catches a
+        WRONG dict but says nothing about where the right one comes from, and
+        G3 claimed to verify a dereference it had no channel to perform.
+        The paper gives none of these values (U-22), so every one of them is
+        ours and has to be recorded as such. sha256 must equal
+        stage1_protocol.hyperparameter_config_hash; the two exist separately
+        because the protocol is the decision and this is the artifact, and
+        L1-STAGE1-PROTOCOL-APPLIED compares them.
+        p_mask is here for provenance but is NOT free: paper 2.6 fixes it at
+        0.30 on the main line -- see the note on stage1_protocol.
+
     - name: stage1_protocol
       type: "{status: unresolved|resolved, fusion, tower_sharing: shared_backbone_separate_fusion|fully_shared|fully_separate, allow_all_masked, similarity, hyperparameter_config_hash, decided_by, decided_at}"
       writers: [n09_build_splits]
-      readers: [G3_object_corpus, n10_train_stage1, n11_gallery_index_staging, n15_eval_retrieval, n18_train_ablations]
+      readers: [G3_object_corpus, G6_stage2_ready, n10_train_stage1, n10b_post_stage1_encode, n11_gallery_index_staging, n15_eval_retrieval, n18_train_ablations]
       merge: replace
       lifetime: persistent
       note: >
@@ -585,7 +647,7 @@ state:
     - name: stage1_ckpt
       type: "{uri, sha256, config_hash, data_hash, seed, code_revision, train_scope}"
       writers: [n10_train_stage1]
-      readers: [n11_gallery_index_staging, n13_train_stage2, n18_train_ablations]
+      readers: [n10b_post_stage1_encode, n11_gallery_index_staging, n13_train_stage2, n18_train_ablations]
       merge: write_once
       lifetime: persistent
 
@@ -860,22 +922,24 @@ edges:
   - {id: e07, from: n04_render_views, to: n05_annotate, kind: data, guard: "", join_group: default, carries: [renders]}
   - {id: e08, from: n07_scene_graphs, to: n08_semantic_edges, kind: data, guard: "", join_group: default, carries: [scene_graphs, procthor_object_text]}
   - {id: e09a, from: n05_annotate, to: n05b_resolve_stage1_encoding, kind: data, guard: "", join_group: default, carries: [objaverse_annotations, renders]}
-  - {id: e09, from: n05b_resolve_stage1_encoding, to: n06_encode_text_image, kind: data, guard: "stage1_encoding_protocol.clip_train_scope == 'frozen'", join_group: default, carries: [objaverse_annotations, renders, stage1_encoding_protocol], rationale: "n06 cannot start before U-14/U-15/U-34 are answered: they decide what it should produce. Under `trainable` n06 does not run at all -- a cache is by construction the output of a network nobody is updating, so producing one would be 2-4 h spent on an artifact that reading would silently turn the run back into the frozen variant."}
+  - {id: e09, from: n05b_resolve_stage1_encoding, to: n06_encode_text_image, kind: data, guard: "stage1_encoding_protocol.actual_clip_train_scope == 'frozen'", join_group: default, carries: [objaverse_annotations, renders, stage1_encoding_protocol], rationale: "n06 cannot start before U-14/U-15/U-34 are answered: they decide what it should produce. Under `trainable` n06 does not run at all -- a cache is by construction the output of a network nobody is updating, so producing one would be 2-4 h spent on an artifact that reading would silently turn the run back into the frozen variant."}
 
   - {id: e10, from: G2_pc_sanity, to: n09_build_splits, kind: data, guard: "verdict == PASS", join_group: pointclouds, carries: [pointclouds]}
-  - {id: e11, from: n06_encode_text_image, to: n09_build_splits, kind: data, guard: "stage1_encoding_protocol.clip_train_scope == 'frozen'", join_group: stage1_text_image, carries: [text_image_embeddings]}
-  - {id: e11b, from: n05b_resolve_stage1_encoding, to: n09_build_splits, kind: data, guard: "stage1_encoding_protocol.clip_train_scope == 'trainable'", join_group: stage1_text_image, carries: [objaverse_annotations, renders], rationale: "[BRANCH] Under `trainable` there is no embedding cache, and an unconditional n06 -> n09 made that reading unreachable: n09's join required text_image_embeddings, so the route U-34 explicitly allows could never reach n10. What n09 actually needs is that every admitted asset HAS its text/image inputs, which under this reading is the raw annotations and renders."}
+  - {id: e11, from: n06_encode_text_image, to: n09_build_splits, kind: data, guard: "stage1_encoding_protocol.actual_clip_train_scope == 'frozen'", join_group: stage1_text_image, carries: [text_image_embeddings]}
+  - {id: e11b, from: n05b_resolve_stage1_encoding, to: n09_build_splits, kind: data, guard: "stage1_encoding_protocol.actual_clip_train_scope == 'trainable'", join_group: stage1_text_image, carries: [objaverse_annotations, renders], rationale: "[BRANCH] Under `trainable` there is no embedding cache, and an unconditional n06 -> n09 made that reading unreachable: n09's join required text_image_embeddings, so the route U-34 explicitly allows could never reach n10. What n09 actually needs is that every admitted asset HAS its text/image inputs, which under this reading is the raw annotations and renders."}
   - {id: e12, from: n08_semantic_edges, to: n09c_build_scene_splits, kind: data, guard: "", join_group: default, carries: [sem_edge_cache]}
   - {id: e12b, from: n07_scene_graphs, to: n09c_build_scene_splits, kind: data, guard: "", join_group: default, carries: [scene_graphs, procthor_object_text, procthor_dataset]}
   - {id: e12c, from: n09c_build_scene_splits, to: G6_stage2_ready, kind: data, guard: "", join_group: corpus, carries: [scene_splits]}
-  - {id: e13, from: n09_build_splits, to: G3_object_corpus, kind: data, guard: "", join_group: default, carries: [splits, eval_protocols, stage1_protocol, stage1_encoding_protocol, asset_manifest]}
+  - {id: e13, from: n09_build_splits, to: G3_object_corpus, kind: data, guard: "", join_group: default, carries: [splits, eval_protocols, stage1_protocol, stage1_encoding_protocol, stage1_hyperparameters, asset_manifest]}
 
   - {id: e13b, from: G3_object_corpus, to: n09b_resolve_stage2_protocol, kind: data, guard: "verdict == PASS", join_group: default, carries: [scene_graphs, asset_manifest]}
-  - {id: e13c, from: n09b_resolve_stage2_protocol, to: G6_stage2_ready, kind: data, guard: "", join_group: default, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol]}
-  - {id: e13d, from: G6_stage2_ready, to: n13_train_stage2, kind: data, guard: "verdict == PASS", join_group: protocol, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits]}
+  - {id: e13c, from: n09b_resolve_stage2_protocol, to: G6_stage2_ready, kind: data, guard: "", join_group: default, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, stage1_protocol], rationale: "G6 must see Stage 1's tower_sharing: fully_shared cannot satisfy 2.6's Stage 2 freezing, and finding that out inside n13 wastes the whole Stage 1 run."}
+  - {id: e13d, from: G6_stage2_ready, to: n13_train_stage2, kind: data, guard: "verdict == PASS", join_group: protocol, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits, stage1_protocol]}
   - {id: e13e, from: G6_stage2_ready, to: HALT_BLOCKED, kind: escalation, guard: "verdict == BLOCKED_EVIDENCE", join_group: default, carries: [stage2_protocol], rationale: "U-08a/U-08b unresolved is a pause awaiting a decision, not a failure."}
-  - {id: e14, from: G3_object_corpus, to: n10_train_stage1, kind: data, guard: "verdict == PASS", join_group: default, carries: [splits, pointclouds, text_image_embeddings, renders, objaverse_annotations, stage1_protocol, stage1_encoding_protocol]}
-  - {id: e15, from: n10_train_stage1, to: n11_gallery_index_staging, kind: data, guard: "", join_group: default, carries: [stage1_ckpt]}
+  - {id: e14, from: G3_object_corpus, to: n10_train_stage1, kind: data, guard: "verdict == PASS", join_group: default, carries: [splits, pointclouds, text_image_embeddings, renders, objaverse_annotations, stage1_protocol, stage1_encoding_protocol, stage1_hyperparameters]}
+  - {id: e14b, from: n10_train_stage1, to: n10b_post_stage1_encode, kind: data, guard: "", join_group: default, carries: [stage1_ckpt, stage1_encoding_protocol, stage1_protocol, text_image_embeddings, renders, objaverse_annotations], rationale: "n10b needs the final encoders AND both possible sources: under actual=frozen it passes n06's cache through, under actual=trainable it re-encodes from renders and annotations."}
+  - {id: e15, from: n10_train_stage1, to: n11_gallery_index_staging, kind: data, guard: "", join_group: ckpt, carries: [stage1_ckpt]}
+  - {id: e15b, from: n10b_post_stage1_encode, to: n11_gallery_index_staging, kind: data, guard: "", join_group: embeddings, carries: [post_stage1_embeddings]}
   - {id: e16, from: n11_gallery_index_staging, to: G4_gallery_freeze, kind: data, guard: "", join_group: default, carries: [gallery_index_staging, asset_manifest]}
   - {id: e17, from: G4_gallery_freeze, to: n12_promote_index, kind: data, guard: "verdict == PASS", join_group: default, carries: [gallery_index_staging]}
   - id: e18
@@ -1055,7 +1119,8 @@ dependencies:
     - {node: n09_build_splits, depends_on: [G2_pc_sanity, n06_encode_text_image, n05b_resolve_stage1_encoding]}
     - {node: G3_object_corpus, depends_on: [n09_build_splits]}
     - {node: n10_train_stage1, depends_on: [G3_object_corpus]}
-    - {node: n11_gallery_index_staging, depends_on: [n10_train_stage1]}
+    - {node: n10b_post_stage1_encode, depends_on: [n10_train_stage1]}
+    - {node: n11_gallery_index_staging, depends_on: [n10_train_stage1, n10b_post_stage1_encode]}
     - {node: G4_gallery_freeze, depends_on: [n11_gallery_index_staging]}
     - {node: n12_promote_index, depends_on: [G4_gallery_freeze]}
     - {node: n09b_resolve_stage2_protocol, depends_on: [G3_object_corpus]}
@@ -1182,6 +1247,7 @@ execution_order:
     - {layer: 9, parallel_nodes: [], gates: [G3_object_corpus], est: "-"}
     - {layer: 10, parallel_nodes: [n10_train_stage1], gates: [], est: "hours to 1 day (trains the point encoder, unlike the earlier draft)"}
     - {layer: 10b, parallel_nodes: [n09b_resolve_stage2_protocol], gates: [G6_stage2_ready], est: "human decision -- BLOCKS Stage 2 until U-08a and U-08b are answered"}
+    - {layer: 10c, parallel_nodes: [n10b_post_stage1_encode], gates: [], est: "0 h under actual=frozen (passthrough); 2-4 h under actual=trainable (re-encode)"}
     - {layer: 11, parallel_nodes: [n11_gallery_index_staging, n13_train_stage2], gates: [], est: "3-8 h"}
     - {layer: 12, parallel_nodes: [], gates: [G4_gallery_freeze], est: "-"}
     - {layer: 13, parallel_nodes: [n12_promote_index, n14_equivariance_probe], gates: [], est: "<1 h"}
@@ -1233,7 +1299,7 @@ risks_unknowns:
   - {id: U-29, marked: UNKNOWN, blocking: false, item: "how PHYSICAL edges enter ESSGNN at all. Paper 2.3 defines two edge types, physical-relation (support, adjacency) and semantic-relation. But 2.5's f_h and f_x take exactly one edge argument, e_ij, and 2.5 plus Appendix C both define e_ij as the LLM relation sentence encoded by a frozen text encoder -- i.e. the SEMANTIC edge. Nothing says whether a physical edge (a) only determines the neighbourhood N(i), (b) carries a feature of its own, (c) is unioned with the semantic edge on the same edge, or (d) is a parallel edge. Nor whether support and adjacency are distinguishable once inside the network.", affects: "the ESSGNN architecture itself, hence every Table 2 and Table 3 scene number", resolution: "record the choice explicitly; it is an architecture decision, not a hyperparameter", fallback: "n/a"}
   - {id: U-30, marked: UNKNOWN, blocking: false, item: "the tensor contract for an edge with no semantic embedding. f_h : R^(2d+1+e) -> R^d has a FIXED input width, so an edge that reaches the network without an e_ij still needs e slots filled. The spec forbids zero-filling (a zero vector is indistinguishable from a real embedding) and records semantic_edge_missing, but recording a flag does not say what the MLP receives. Candidates: a learned missing-edge embedding, an appended validity bit, a separate geometry-only MLP, an edge-type embedding, or excluding the edge from message passing entirely.", affects: "every scene graph where a semantic edge failed or was never requested -- including all physical-only edges, if U-29 resolves that way", resolution: "record the mechanism; it must be distinguishable from a valid embedding", fallback: "n/a"}
   - {id: U-31, marked: UNKNOWN, blocking: false, item: "whether ESSGNN's L layers share one set of parameters. Paper 2.5 writes f_h(...; theta_h) and f_x(...; theta_x) with no layer index on theta, and never says whether each layer has its own weights or all L layers share one. The choice changes the parameter count and changes F11: with independent layers the final layer's coordinate head has no loss path, but with shared weights the same f_x still receives gradient from layers 1..L-1.", affects: "parameter count, and whether F11's observation generalises", resolution: "BOTH executable via ESSGNNConfig.layer_sharing. Current primary: independent. MEASURED consequence: under shared the final layer f_x DOES receive gradient, from its use at layers 1..L-1, so F11 holds only for independent layers.", fallback: "n/a"}
-  - {id: U-34, marked: UNKNOWN, blocking: false, item: "whether MetaFind's Stage 1 trains the OpenCLIP text and image encoders. EVIDENCE FOR FROZEN: MetaFind builds on ULIP-2, whose paper 3.3 states 'We adopt the largest version of encoders from OpenCLIP (ViT-G/14) ... and freeze it during pre-training' and extracts features 'based on the frozen encoders', with Eq. 3's objective min_{E_P} training the 3D encoder only. (An earlier version of this entry quoted 'the pre-aligned and frozen image encoder and text encoder', which is a paraphrase fusing two separate sentences and appears nowhere in the paper.) EVIDENCE FOR TRAINABLE: MetaFind 2.6 says 'Both query and gallery encoders are trained', 3.4 says 'Fine-tuning the entire encoder outperformed training the fuser only', and 2.4 explicitly contrasts MetaFind with prior work that freezes text and image encoders in a fixed CLIP space. MetaFind never enumerates which modules train, so neither reading is settled.", affects: "whether text/image embeddings may be cached, whether ViT-bigG-14 enters the optimizer, and therefore whether Stage 1 fits on 24 GB at all -- every Table 1 number", resolution: "stage1_encoding_protocol.clip_train_scope (resolved at n05b, before n06 encodes) records the reading used; the main line is frozen, which ULIP-2's paper supports directly. RA-3 measures whether the trainable reading is executable here.", fallback: "n/a"}
+  - {id: U-34, marked: UNKNOWN, blocking: false, item: "whether MetaFind's Stage 1 trains the OpenCLIP text and image encoders. EVIDENCE FOR FROZEN: MetaFind builds on ULIP-2, whose paper 3.3 states 'We adopt the largest version of encoders from OpenCLIP (ViT-G/14) ... and freeze it during pre-training' and extracts features 'based on the frozen encoders', with Eq. 3's objective min_{E_P} training the 3D encoder only. (An earlier version of this entry quoted 'the pre-aligned and frozen image encoder and text encoder', which is a paraphrase fusing two separate sentences and appears nowhere in the paper.) EVIDENCE FOR TRAINABLE: MetaFind 2.6 says 'Both query and gallery encoders are trained', 3.4 says 'Fine-tuning the entire encoder outperformed training the fuser only', and 2.4 explicitly contrasts MetaFind with prior work that freezes text and image encoders in a fixed CLIP space. MetaFind never enumerates which modules train, so neither reading is settled.", affects: "whether text/image embeddings may be cached, whether ViT-bigG-14 enters the optimizer, and therefore whether Stage 1 fits on 24 GB at all -- every Table 1 number", resolution: "stage1_encoding_protocol.actual_clip_train_scope (resolved at n05b, before n06 encodes) records the reading used; the main line is frozen, which ULIP-2's paper supports directly. RA-3 measures whether the trainable reading is executable here.", fallback: "n/a"}
   - {id: U-35, marked: UNKNOWN, blocking: false, item: "the internal structure of f_h and f_x. MetaFind 2.5 says only 'approximated using MLPs' and gives neither depth, activation, nor whether the output carries one. Our code uses ONE shape for both -- Linear -> SiLU -> Linear -- which was never a decision, just what _mlp happened to be. The EGNN paper's Appendix C specifies THREE DIFFERENT shapes: phi_e is Linear -> Swish -> Linear -> Swish (activation on the output), phi_x is Linear -> Swish -> Linear (none), phi_h is Linear -> Swish -> Linear plus a residual add of h_i. So our f_x matches EGNN's phi_x exactly and our f_h matches none of them. SiLU and Swish are the same function, so only the trailing activation and the residual actually differ.", affects: "every ESSGNN number, and Table 1's w/ ESSGNN rows in particular", resolution: "essgnn_arch_protocol.mlp_structure records the choice, enforced by G6 like the other architecture fields. EGNN Appendix C supplies the VARIANT LIST, not the answer: a dependency paper cannot fill in what MetaFind leaves unsaid, and MetaFind here is genuinely silent rather than ambiguous.", fallback: "n/a"}
   - {id: U-33, marked: UNKNOWN, blocking: false, item: "whether ESSGNN keeps EGNN's input/output projections. Paper 2.5 goes t_i -> h^(0) -> L layers -> Pooling({h^(L)}) = e_layout, with no projection on either side. The reference EGNN (vgsatorras/egnn, egnn_clean.py) wraps its layers in embedding_in and embedding_out, and this implementation inherited that. Two extra learnable layers is not the same architecture, and upstream convention is not MetaFind paper truth.", affects: "ESSGNN parameter count and what e_layout is a function of", resolution: "use_io_projections flag; True follows the reference EGNN and is the current primary, False reproduces 2.5 literally and requires node_feat_dim == hidden_dim == out_dim. Report which was run.", fallback: "n/a"}
   - {id: U-32, marked: UNKNOWN, blocking: false, item: "scene-dropout granularity. Paper 2.6 says the layout vector 'is omitted in 30% of BATCHES', which reads as one Bernoulli draw per batch applied to the whole batch. The implementation now follows the literal reading: DualTowerConfig.scene_dropout_granularity defaults to `batch` and sample_scene_dropout takes one draw per batch. `sample` remains selectable as a variant, and L1-SCENE-DROPOUT-30 checks whichever the protocol names. The two give different training distributions for an in-batch contrastive loss: batch-level means every negative in a batch shares the layout condition, sample-level means they do not.", affects: "Stage 2 training distribution", resolution: "Paper literal: batch. Current primary: batch (DualTowerConfig.scene_dropout_granularity). Alternative variant: sample.", fallback: "n/a"}

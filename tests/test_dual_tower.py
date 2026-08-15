@@ -267,7 +267,9 @@ def _protocols(**over):
 
     hp = {**HP, **over.pop("hp", {})}
     enc = dict(status="resolved", text_serialization="labelled_lines",
-               image_aggregation="mean", clip_train_scope="frozen")
+               image_aggregation="mean", paper_clip_train_scope="frozen",
+               actual_clip_train_scope="frozen",
+               missing_modality_representation="learned_token")
     tr = dict(status="resolved", fusion="gated", tower_sharing="fully_separate",
               allow_all_masked=True, similarity="cosine",
               hyperparameter_config_hash=canonical_hyperparameter_hash(hp))
@@ -275,13 +277,13 @@ def _protocols(**over):
     return enc, tr, hp
 
 
-def _runtime(**over):
+def _runtime(variant=None, **over):
     from metafind.models.stage1_config import Stage1RuntimeConfig
 
     enc, tr, hp = _protocols(**over)
     return Stage1RuntimeConfig.from_protocols(
         enc, tr, dim=D, checkpoint="/nonexistent/ckpt.pt",
-        hyperparameters=hp, device="cpu",
+        hyperparameters=hp, variant=variant, device="cpu",
     )
 
 
@@ -307,7 +309,7 @@ def test_stage1_builds_no_layout_branch():
 
 def test_trainable_clip_selects_the_full_scope_and_forbids_the_cache():
     """[U-34] Reading a frozen cache under `trainable` would silently be the frozen run."""
-    rt = _runtime(enc={"clip_train_scope": "trainable"})
+    rt = _runtime(enc={"actual_clip_train_scope": "trainable"})
     assert rt.backbone.train_scope == "full"
     assert rt.may_use_cached_text_image is False
     assert rt.cache_layout == "none"
@@ -355,8 +357,8 @@ def test_allow_all_masked_reaches_the_sampler():
     g = torch.Generator().manual_seed(0)
     forbidden = _runtime(tr={"allow_all_masked": False}).sample_present_mask(512, generator=g)
     assert forbidden.any(dim=-1).all(), "allow_all_masked=False did not reach sample_modality_mask"
-    allowed = _runtime(tr={"allow_all_masked": True},
-                       hp={"p_mask": 0.9}).sample_present_mask(512, generator=g)
+    allowed = _runtime(tr={"allow_all_masked": True}, variant="dropout_50",
+                       hp={"p_mask": 0.50}).sample_present_mask(4096, generator=g)
     assert (~allowed.any(dim=-1)).any(), "allow_all_masked=True never produced an empty query"
 
 
@@ -405,3 +407,47 @@ def test_unresolved_or_partial_protocols_are_refused():
             Stage1RuntimeConfig.from_protocols(
                 bad_enc, bad_tr, dim=D, checkpoint="/nonexistent/ckpt.pt",
                 hyperparameters=hp, device="cpu")
+
+
+def test_d1_needs_both_readings_not_one_field():
+    """[U-34/D-1] The deviation is the GAP; one field could not express it."""
+    main = _runtime()
+    assert not main.d1_is_active and not main.exceeds_paper
+
+    # paper says train, 24 GB says no -> this and only this is D-1
+    dev = _runtime(enc={"paper_clip_train_scope": "trainable"})
+    assert dev.d1_is_active
+    assert dev.backbone.train_scope == "point_encoder_and_fuser", (
+        "the backbone must follow ACTUAL, not our reading of the paper"
+    )
+
+    # we read it as frozen and trained anyway: not a deviation, a variant
+    beyond = _runtime(enc={"actual_clip_train_scope": "trainable"})
+    assert beyond.exceeds_paper and not beyond.d1_is_active
+
+    # both trainable: we did what we read the paper to require
+    agree = _runtime(enc={"paper_clip_train_scope": "trainable",
+                          "actual_clip_train_scope": "trainable"})
+    assert not agree.d1_is_active and agree.backbone.train_scope == "full"
+
+
+def test_paper_stated_p_mask_is_not_a_free_hyperparameter():
+    """[2.6] 30% is stated; 10%/50% are Table 3 variants, not artifact values."""
+    assert _runtime().hyperparameters["p_mask"] == 0.30
+    with pytest.raises(ValueError, match="paper 2.6 states 30%"):
+        _runtime(hp={"p_mask": 0.50})
+    # declaring the variant makes it legal, and mislabelling it does not
+    assert _runtime(variant="dropout_50", hp={"p_mask": 0.50}).variant == "dropout_50"
+    with pytest.raises(ValueError, match="does not match p_mask"):
+        _runtime(variant="dropout_10", hp={"p_mask": 0.50})
+
+
+def test_missing_modality_representation_comes_from_the_protocol():
+    """[U-11] 2.6 only rules out zero-padding; FusionConfig was deciding the rest."""
+    from metafind.models.stage1_config import UnsupportedProtocol
+
+    assert _runtime().missing_modality_representation == "learned_token"
+    with pytest.raises(UnsupportedProtocol, match="not implemented"):
+        _runtime(enc={"missing_modality_representation": "validity_mask"})
+    with pytest.raises(ValueError, match="not one of U-11"):
+        _runtime(enc={"missing_modality_representation": "zero_pad"})

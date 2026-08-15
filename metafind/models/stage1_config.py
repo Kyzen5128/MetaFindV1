@@ -75,7 +75,23 @@ __all__ = [
     "PER_VIEW_AGGREGATIONS",
 ]
 
-ENCODING_FIELDS = ("text_serialization", "image_aggregation", "clip_train_scope")
+ENCODING_FIELDS = (
+    "text_serialization",
+    "image_aggregation",
+    # U-34, split in two. `paper_` is our reading of what MetaFind requires;
+    # `actual_` is what this run does. Only `actual_` reaches the backbone.
+    # One field could not express D-1, whose whole content is the GAP: "the
+    # paper wants CLIP trained and we froze it anyway". With a single field,
+    # setting it to `trainable` marked the deviation active precisely when the
+    # run was NOT deviating, and the state D-1 describes had no encoding.
+    "paper_clip_train_scope",
+    "actual_clip_train_scope",
+    # U-11. 2.6 rules out zero-padding and never says what replaces it. This
+    # was being decided by FusionConfig's defaults while the registry called it
+    # an open UNKNOWN -- the same silent-default failure this project keeps
+    # closing, and it moves every partial-modality column of Table 1.
+    "missing_modality_representation",
+)
 TRAINING_FIELDS = (
     "fusion",
     "tower_sharing",
@@ -89,6 +105,19 @@ TRAINING_FIELDS = (
 # normalises both sides unconditionally, so a protocol saying `dot_product`
 # would have produced cosine numbers under a dot-product label.
 SUPPORTED_SIMILARITY = ("cosine",)
+
+# U-11. Only the first is implemented. The other two are named so a protocol
+# can record them and be REFUSED, rather than being silently unrepresentable.
+SUPPORTED_MISSING_MODALITY = ("learned_token",)
+KNOWN_MISSING_MODALITY = ("learned_token", "validity_mask", "drop_slot")
+
+# Paper 2.6: "each modality in the query has a 30% probability of being
+# independently masked". That is STATED, not one of U-22's omissions -- Table 3
+# ablates 0.10 and 0.50 as variants. Carrying p_mask in the U-22 artifact made
+# a paper constant look like a free hyperparameter, so an artifact saying 0.50
+# would hash correctly and run the ablation as if it were the main line.
+PAPER_P_MASK = 0.30
+ABLATION_P_MASK = {0.10: "dropout_10", 0.50: "dropout_50"}
 
 # U-14. `n06` now caches all eleven per-view embeddings, so the split is no
 # longer "can this be cached" but "how many vectors does the cache hold".
@@ -147,11 +176,38 @@ class Stage1RuntimeConfig:
     loss: ContrastiveConfig
     text_serialization: str
     image_aggregation: str
-    clip_train_scope: Literal["frozen", "trainable"]
+    paper_clip_train_scope: Literal["frozen", "trainable"]
+    actual_clip_train_scope: Literal["frozen", "trainable"]
+    missing_modality_representation: str
+    variant: str | None
     tower_sharing: TowerSharing
     similarity: str
     allow_all_masked: bool
     hyperparameters: dict[str, Any] = field(repr=False, default_factory=dict)
+
+    @property
+    def d1_is_active(self) -> bool:
+        """Whether deviation D-1 actually applies to THIS run.
+
+        D-1 is "the paper wants CLIP trained and we froze it anyway", which is
+        a claim about the gap between an interpretation and an execution --
+        so it cannot be read off either one alone. The four combinations:
+
+            paper=frozen,    actual=frozen     no deviation (main line)
+            paper=frozen,    actual=trainable  no deviation, but a VARIANT
+                                               beyond the paper; report it
+            paper=trainable, actual=frozen     D-1
+            paper=trainable, actual=trainable  no deviation; needs RA-3 to
+                                               have shown this is executable
+        """
+        return (self.paper_clip_train_scope == "trainable"
+                and self.actual_clip_train_scope == "frozen")
+
+    @property
+    def exceeds_paper(self) -> bool:
+        """True when we train CLIP although we read the paper as freezing it."""
+        return (self.paper_clip_train_scope == "frozen"
+                and self.actual_clip_train_scope == "trainable")
 
     @property
     def may_use_cached_text_image(self) -> bool:
@@ -164,7 +220,7 @@ class Stage1RuntimeConfig:
         per training step is answerable from the cache. ``cache_layout`` says
         how many vectors that cache holds.
         """
-        return self.clip_train_scope == "frozen"
+        return self.actual_clip_train_scope == "frozen"
 
     @property
     def cache_layout(self) -> Literal["aggregated", "per_view", "none"]:
@@ -176,7 +232,7 @@ class Stage1RuntimeConfig:
         now carries `image: uri | list[uri] per view`, so eleven frozen CLIP
         embeddings computed once serve a per-step random view exactly.
         """
-        if self.clip_train_scope != "frozen":
+        if self.actual_clip_train_scope != "frozen":
             return "none"
         return "per_view" if self.image_aggregation in PER_VIEW_AGGREGATIONS else "aggregated"
 
@@ -210,14 +266,32 @@ class Stage1RuntimeConfig:
         dim: int,
         checkpoint,
         hyperparameters: dict[str, Any],
+        variant: str | None = None,
         device: str = "cuda",
     ) -> Stage1RuntimeConfig:
         _require(encoding_protocol, ENCODING_FIELDS, "stage1_encoding_protocol")
         _require(training_protocol, TRAINING_FIELDS, "stage1_protocol")
 
-        clip_scope = encoding_protocol["clip_train_scope"]
-        if clip_scope not in ("frozen", "trainable"):
-            raise ValueError(f"clip_train_scope must be frozen or trainable, got {clip_scope!r}")
+        paper_scope = encoding_protocol["paper_clip_train_scope"]
+        actual_scope = encoding_protocol["actual_clip_train_scope"]
+        for name, v in (("paper_clip_train_scope", paper_scope),
+                        ("actual_clip_train_scope", actual_scope)):
+            if v not in ("frozen", "trainable"):
+                raise ValueError(f"{name} must be frozen or trainable, got {v!r}")
+
+        missing_repr = encoding_protocol["missing_modality_representation"]
+        if missing_repr not in KNOWN_MISSING_MODALITY:
+            raise ValueError(
+                f"missing_modality_representation={missing_repr!r} is not one of "
+                f"U-11's readings {KNOWN_MISSING_MODALITY}"
+            )
+        if missing_repr not in SUPPORTED_MISSING_MODALITY:
+            raise UnsupportedProtocol(
+                f"missing_modality_representation={missing_repr!r} is a legitimate "
+                f"reading of U-11 but is not implemented; only "
+                f"{SUPPORTED_MISSING_MODALITY} runs. Implement it before resolving "
+                "the protocol this way."
+            )
 
         aggregation = encoding_protocol["image_aggregation"]
         if aggregation not in PRECOMPUTABLE_AGGREGATIONS + PER_VIEW_AGGREGATIONS:
@@ -249,6 +323,20 @@ class Stage1RuntimeConfig:
                 f"hyperparameter artifact is missing {sorted(missing)}; U-22 says the "
                 "paper gives none of these, so each must be named explicitly"
             )
+        p_mask = float(hyperparameters["p_mask"])
+        if variant is None and p_mask != PAPER_P_MASK:
+            raise ValueError(
+                f"p_mask={p_mask} on the main line, but paper 2.6 states 30%. "
+                f"{ABLATION_P_MASK.get(p_mask, 'this value')} is a Table 3 variant: "
+                "pass variant= to run it, so the report cannot call an ablation the "
+                "main result."
+            )
+        if variant is not None and ABLATION_P_MASK.get(p_mask) != variant:
+            raise ValueError(
+                f"variant={variant!r} does not match p_mask={p_mask}; "
+                f"Table 3's dropout variants are {ABLATION_P_MASK}"
+            )
+
         actual = canonical_hyperparameter_hash(hyperparameters)
         if actual != training_protocol["hyperparameter_config_hash"]:
             raise ValueError(
@@ -257,9 +345,9 @@ class Stage1RuntimeConfig:
                 f"{actual}. The run would train on values the gate never saw."
             )
 
-        # U-34 maps onto the backbone's freeze scope. `trainable` is the reading
-        # RA-3 measures; it is not known to fit on 24 GB.
-        train_scope = "full" if clip_scope == "trainable" else "point_encoder_and_fuser"
+        # ACTUAL, not paper: the backbone runs the experiment, not the reading.
+        # `trainable` is what RA-3 measures; it is not known to fit on 24 GB.
+        train_scope = "full" if actual_scope == "trainable" else "point_encoder_and_fuser"
         backbone = BackboneConfig(checkpoint=checkpoint, device=device, train_scope=train_scope)
 
         fusion = FusionConfig(dim=dim, kind=training_protocol["fusion"])
@@ -297,7 +385,10 @@ class Stage1RuntimeConfig:
             ),
             text_serialization=encoding_protocol["text_serialization"],
             image_aggregation=aggregation,
-            clip_train_scope=clip_scope,
+            paper_clip_train_scope=paper_scope,
+            actual_clip_train_scope=actual_scope,
+            missing_modality_representation=missing_repr,
+            variant=variant,
             tower_sharing=sharing,
             similarity=similarity,
             allow_all_masked=bool(training_protocol["allow_all_masked"]),
