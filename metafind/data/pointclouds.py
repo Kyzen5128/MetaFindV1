@@ -247,6 +247,11 @@ def process_one(uid: str, glb: Path, out: Path) -> dict:
 
     return {
         "uid": uid,
+        "path": str(out),
+        # L2-RESUME asserts preprocessing artifacts are byte-identical after a
+        # kill -9 and restart. Without a digest that assertion has nothing to
+        # compare, and the channel type promised one.
+        "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
         "n_points": int(len(normed)),
         "seed": seed,
         "sampler_version": SAMPLER_VERSION,

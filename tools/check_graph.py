@@ -278,11 +278,16 @@ FIELD_RE = re.compile(r"\b([a-z][a-z0-9_]*)\.([a-z][a-z0-9_]*)\b")
 channel_fields: dict[str, set[str]] = {}
 for name, ch in channels.items():
     t = str(ch.get("type", ""))
-    if not t.startswith("{"):
+    # Take the {...} wherever it sits. Requiring the type to START with "{"
+    # skipped every `map[uid -> {...}]` channel, which is most of them -- so
+    # this check and 8a3 silently covered nothing for pointclouds, renders,
+    # text_image_embeddings, post_stage1_embeddings and the rest.
+    m = re.search(r"\{(.*)\}", t, re.S)
+    if not m:
         continue
     channel_fields[name] = {
         part.split(":")[0].strip()
-        for part in t.strip("{}").split(",")
+        for part in m.group(1).split(",")
         if part.split(":")[0].strip().isidentifier()
     }
 
@@ -302,12 +307,60 @@ for g in plan["level_3_gates"]:
 for dp in spec["routing"]:
     for inp in dp.get("inputs", []):
         chan, _, fld = str(inp).partition(".")
-        if fld and chan in channel_fields:
+        # `sem_edge_cache.contains(hash)` is a PREDICATE over the channel, not
+        # a field of it. Anything with a call is a computation and is checked
+        # only for naming a real channel.
+        if "(" in str(inp):
+            check(
+                f"routing {dp['decision_point']} predicate {inp}",
+                chan in channels,
+                f"predicate is over `{chan}`, which is not a channel",
+            )
+        elif fld and chan in channel_fields:
             check(
                 f"routing {dp['decision_point']} input {inp}",
                 fld in channel_fields[chan],
                 f"channel `{chan}` has no field `{fld}`",
             )
+
+
+# --- 8a3. every routing input must be traceable to something -------------
+# G2 routes on centroid_offset, max_radius and per_axis_variance while the
+# pointclouds channel type declared only {path, sha256, n_points} -- and the
+# producer wrote neither path nor sha256. A gate was configured to decide on
+# quantities that no channel declared and no node produced, and check 8a could
+# not see it because routing names them as bare identifiers rather than
+# `channel.field`.
+# Three legitimate origins, and a routing input must have one of them:
+#   * the name of a channel the gate reads
+#   * a field of a channel the gate reads
+#   * a quantity the gate COMPUTES, declared in derived_inputs
+# The third exists so that "the gate works it out" is written down rather than
+# assumed; without it this check would either be wrong or unenforceable.
+for dp in spec["routing"]:
+    gid = dp["decision_point"]
+    if gid not in nodes:
+        continue
+    reads = set(nodes[gid].get("reads", []) or [])
+    available = set(reads)
+    for ch in reads:
+        available |= channel_fields.get(ch, set())
+    declared_derived = set(dp.get("derived_inputs", []) or [])
+    for inp in dp.get("inputs", []):
+        base = str(inp).split(".")[0]
+        check(
+            f"routing input {gid}/{inp}",
+            base in available or str(inp) in declared_derived,
+            f"is neither a channel {gid} reads, nor a field of one, nor listed "
+            f"in derived_inputs",
+        )
+    for d in declared_derived:
+        check(
+            f"derived_inputs {gid}/{d}",
+            d not in available,
+            "is declared as computed by the gate but is also a channel or a "
+            "field of one; one of the two is wrong",
+        )
 
 
 # --- 8a2. an `any` join group must have >1 edge and all of them guarded ---

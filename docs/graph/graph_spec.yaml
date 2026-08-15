@@ -294,12 +294,27 @@ state:
         it, so a run with Objaverse complete and ProcTHOR absent could PASS.
 
     - name: pointclouds
-      type: "map[uid -> {path, sha256, n_points}]"
+      type: "map[uid -> {path, sha256, n_points, seed, sampler_version, rgb_scale, colour_source, coloured_point_fraction, extents_m, volume_m3, centroid_offset, max_radius, per_axis_variance}]"
       writers: [n03_sample_pointclouds]
       readers: [G2_pc_sanity, n09_build_splits, n10_train_stage1, n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations, n19_eval_ablations]
       merge: upsert_by_key
       lifetime: persistent
       note: >
+        [TYPE CORRECTED against the implementation] This declared
+        {path, sha256, n_points} while n03 produced neither `path` nor
+        `sha256`, and omitted the three fields G2 actually routes on --
+        centroid_offset, max_radius and per_axis_variance. The gate's routing
+        inputs name them as bare identifiers, so the `channel.field` check
+        could not see the gap: a gate was configured to decide on fields the
+        channel did not declare and the producer did not write.
+        `sha256` is now produced rather than dropped from the type, because
+        L2-RESUME asserts byte-identical preprocessing artifacts across a
+        restart and has nothing to compare without a digest.
+        `colour_source` and `coloured_point_fraction` are here because a cloud
+        whose colour channel silently collapsed to a constant is structurally
+        valid: it passes every shape and normalisation check, trains, embeds,
+        and shows up only as a lower Table 1 number. Three separate defects in
+        the first implementation did exactly that -- see F20.
         Sampled from the mesh, then pc_norm'd exactly as ULIP does.
         G2_pc_sanity gates STRUCTURAL validity. The comparison against ULIP's
         released clouds (U-02) is L2-PC-ULIP-REF, a diagnostic that does not gate.
@@ -1207,13 +1222,13 @@ dependencies:
 
 # ---------------------------------------------------------------- routing
 routing:
-  - {decision_point: G1_sources_valid, authority: A1, owner: edge, inputs: [manifest_count, glb_coverage, ckpt_behaviour], destinations: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs, HALT_FAILED], default_destination: HALT_FAILED}
-  - {decision_point: G2_pc_sanity, authority: A1, owner: edge, inputs: [cloud_shape, finiteness, centroid_offset, max_radius, per_axis_variance, self_retrieval_rank], destinations: [n09_build_splits, HALT_FAILED], default_destination: HALT_FAILED}
-  - {decision_point: G3_object_corpus, authority: A1, owner: edge, inputs: [leakage_count, admitted_size, quarantine_rate, eval_protocols, "stage1_encoding_protocol.status", "stage1_protocol.status"], destinations: [n10_train_stage1, HALT_FAILED], default_destination: HALT_FAILED}
-  - {decision_point: G4_gallery_freeze, authority: A1, owner: edge, inputs: [index_dim, index_count, nan_count, target_is_argmax, target_in_tie_set], destinations: [n12_promote_index, HALT_FAILED], default_destination: HALT_FAILED}
-  - {decision_point: G6_stage2_ready, authority: A1, owner: edge, inputs: ["stage2_protocol.status", stage2_pairing, "essgnn_edge_protocol.status", "essgnn_arch_protocol.status", scene_splits], destinations: [n13_train_stage2, HALT_BLOCKED], default_destination: HALT_BLOCKED}
-  - {decision_point: G7_composition_protocol, authority: A1, owner: edge, inputs: [composition_protocol.status, g0_source, query_list_source, placement_rule], destinations: [n15c_prepare_eval_scenes, HALT_BLOCKED], default_destination: HALT_BLOCKED}
-  - {decision_point: G5_report_release, authority: A1, owner: edge, inputs: [verdict_completeness, gate_records, audit_records, degraded_flags], destinations: [n22_publish_report, HALT_FAILED], default_destination: HALT_FAILED}
+  - {decision_point: G1_sources_valid, authority: A1, owner: edge, inputs: [manifest_count, glb_coverage, ckpt_behaviour], destinations: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: ['manifest_count', 'glb_coverage', 'ckpt_behaviour']}
+  - {decision_point: G2_pc_sanity, authority: A1, owner: edge, inputs: [cloud_shape, finiteness, centroid_offset, max_radius, per_axis_variance, self_retrieval_rank], destinations: [n09_build_splits, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: ['cloud_shape', 'finiteness', 'self_retrieval_rank']}
+  - {decision_point: G3_object_corpus, authority: A1, owner: edge, inputs: [leakage_count, admitted_size, quarantine_rate, eval_protocols, "stage1_encoding_protocol.status", "stage1_protocol.status"], destinations: [n10_train_stage1, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: ['leakage_count', 'admitted_size', 'quarantine_rate']}
+  - {decision_point: G4_gallery_freeze, authority: A1, owner: edge, inputs: [index_dim, index_count, nan_count, target_is_argmax, target_in_tie_set], destinations: [n12_promote_index, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: ['index_dim', 'index_count', 'nan_count', 'target_is_argmax', 'target_in_tie_set']}
+  - {decision_point: G6_stage2_ready, authority: A1, owner: edge, inputs: ["stage2_protocol.status", stage2_pairing, "essgnn_edge_protocol.status", "essgnn_arch_protocol.status", scene_splits], destinations: [n13_train_stage2, HALT_BLOCKED], default_destination: HALT_BLOCKED, derived_inputs: []}
+  - {decision_point: G7_composition_protocol, authority: A1, owner: edge, inputs: [composition_protocol.status, g0_source, query_list_source, placement_rule], destinations: [n15c_prepare_eval_scenes, HALT_BLOCKED], default_destination: HALT_BLOCKED, derived_inputs: []}
+  - {decision_point: G5_report_release, authority: A1, owner: edge, inputs: [verdict_completeness, gate_records, audit_records, degraded_flags], destinations: [n22_publish_report, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: ['verdict_completeness']}
   - {decision_point: sg1_admit_or_repair, authority: A1, owner: edge, inputs: [schema_valid, item_attempt], destinations: [sg1_admit, sg1_generate, sg1_quarantine], default_destination: sg1_quarantine}
   - {decision_point: sg2_cache_lookup, authority: A1, owner: edge, inputs: ["sem_edge_cache.contains(hash)"], destinations: [use_cache, call_llm], default_destination: call_llm}
   - {decision_point: sg3_train_scope, authority: A1, owner: edge, inputs: ["variant.train_scope"], destinations: [fuser_only, point_encoder_and_fuser, full], default_destination: point_encoder_and_fuser}
