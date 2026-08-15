@@ -196,7 +196,13 @@ def _colourise(geom) -> str:
             if vc is not None and len(vc) == n:
                 geom.visual = converted
                 return "texture"
-            if vc is not None and len(vc) == 4:
+            # `len(vc) == 4` was the test here and it is ambiguous: a single
+            # RGBA has length 4, and so does a four-vertex mesh's per-vertex
+            # array. `ndim == 1` says what was meant. The check above
+            # (`len(vc) == n`) already catches the four-vertex case first, so
+            # this is tightening a latent ambiguity rather than the fix for the
+            # 8.1% failure -- that fix is _vertex_rgb.
+            if vc is not None and np.asarray(vc).ndim == 1:
                 return _uniform(vc, "flat")
         except (IndexError, ValueError, TypeError, AttributeError):
             pass
@@ -220,6 +226,27 @@ def _colourise(geom) -> str:
             return "face"
 
     return _uniform([int(DEFAULT_GREY * 255)] * 3 + [255], "fallback_grey")
+
+
+def _vertex_rgb(geom) -> np.ndarray:
+    """``(n_vertices, 3)`` uint8 colours, whatever shape trimesh handed back.
+
+    trimesh COLLAPSES a uniform vertex_colors array to a single RGBA, so a mesh
+    whose vertices all share one colour returns shape (4,) rather than (n, 4).
+    Indexing that by a face array raises IndexError, and the asset is
+    quarantined as though its geometry were broken.
+
+    Missed entirely by a 60-asset smoke run -- it needs a small uniform-coloured
+    part, and it cost 8.1% of an 800-asset sample, every one of them with the
+    same message. Four times G3's quarantine ceiling, from one shape assumption.
+    """
+    vc = np.asarray(geom.visual.vertex_colors)
+    n = len(geom.vertices)
+    if vc.ndim == 1:  # one RGBA for the whole geometry
+        return np.tile(vc[:3], (n, 1))
+    if vc.shape[0] != n:  # per-face, or otherwise not per-vertex
+        return np.tile(vc.reshape(-1, vc.shape[-1])[0, :3], (n, 1))
+    return vc[:, :3]
 
 
 def _allocate(areas: np.ndarray, n_points: int) -> np.ndarray:
@@ -260,7 +287,7 @@ def sample_mesh(path: Path, seed: int, n_points: int = N_POINTS):
         # the parts before it happened to receive.
         pts, face_idx = trimesh.sample.sample_surface(part, int(k), seed=int(seed) + i)
         tri = part.faces[face_idx]
-        cols = part.visual.vertex_colors[tri][:, :, :3].mean(axis=1)
+        cols = _vertex_rgb(part)[tri].mean(axis=1)
         if sources_per_part[i] != "fallback_grey":
             coloured += int(k)
         xyz_chunks.append(np.asarray(pts, dtype=np.float32))

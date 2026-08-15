@@ -228,7 +228,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 |---|---|---|
 | `n01_env_bootstrap` | **可執行** | `setup/01_storage.sh`、`02_conda_env.sh`、`03_verify_env.py`（7/7 通過） |
 | `n02_download` | **執行中** | `metafind/data/download.py`。GLB 下載進行中 |
-| `n03_sample_pointclouds` | **可執行** | `metafind/data/pointclouds.py`。60 個資產通過 G2 形狀／正規化判準，顏色對照官方 ULIP 雲平均差 0.0021；16 條測試 |
+| `n03_sample_pointclouds` | **可執行** | `metafind/data/pointclouds.py`。60 個資產通過 G2 形狀／正規化判準，顏色對照官方 ULIP 雲平均差 0.0021；19 條測試 |
 | `n04_render_views` | **可執行** | `metafind/data/renders.py`。300 個資產、**隔離率 0.33%**（G3 門檻 2%）、837/min；11 張視圖全相異且無空白；11 條測試 |
 | 其餘 **二十四個**節點 | **只有規格** | 無 |
 
@@ -242,7 +242,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 `metafind/models/`（`essgnn` / `dual_tower` / `fusion` / `losses` / `ulip_backbone` /
 `stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身 ——
 `n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer。
-124 個測試函式涵蓋六個模型模組、取樣器與渲染器（pytest 參數化後展開成 153 個 case），**沒有一條涵蓋任何節點的執行**。
+126 個測試函式涵蓋六個模型模組、取樣器與渲染器（pytest 參數化後展開成 155 個 case），**沒有一條涵蓋任何節點的執行**。
 
 ---
 

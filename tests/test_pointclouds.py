@@ -162,6 +162,51 @@ def test_allocation_sums_to_exactly_n_points(areas):
     assert (counts >= 0).all()
 
 
+def test_vertex_colours_of_any_rank_are_normalised():
+    """The fix for an 8.1% quarantine rate, tested where it actually lives.
+
+    Real assets produced geometries whose ``visual.vertex_colors`` came back
+    1-D -- shape (4,) for a four-vertex part -- and indexing that by a face
+    array raises "too many indices for array", so the asset was quarantined as
+    though its geometry were broken. 65 of 800, every one the same message; the
+    60-asset smoke run had shown zero.
+
+    The exact upstream condition inside trimesh was NOT reproduced
+    synthetically: every construction tried here returns (n, 4). So this tests
+    the defence rather than the trigger, which is the honest thing a test can
+    assert -- and the defence is what took the sampled rate from 8.1% to 0.0%
+    over 1,500 assets.
+    """
+    from metafind.data.pointclouds import _vertex_rgb
+
+    class _Fake:
+        def __init__(self, verts, colours):
+            self.vertices = np.zeros((verts, 3))
+            self.visual = type("V", (), {"vertex_colors": colours})()
+
+    # 1-D: one RGBA for the whole geometry, which is what was observed.
+    rgb = _vertex_rgb(_Fake(4, np.array([40, 60, 80, 255], dtype=np.uint8)))
+    assert rgb.shape == (4, 3) and (rgb == [40, 60, 80]).all()
+
+    # 2-D but the wrong length: not per-vertex, so it cannot be indexed by faces.
+    rgb = _vertex_rgb(_Fake(6, np.tile([10, 20, 30, 255], (2, 1)).astype(np.uint8)))
+    assert rgb.shape == (6, 3)
+
+    # The ordinary case must pass through untouched.
+    per_vertex = np.tile([1, 2, 3, 255], (5, 1)).astype(np.uint8)
+    assert (_vertex_rgb(_Fake(5, per_vertex)) == [1, 2, 3]).all()
+
+
+def test_vertex_rgb_normalises_whatever_shape_it_is_given():
+    """The defence behind the fix: never index a colour array of unknown rank."""
+    from metafind.data.pointclouds import _vertex_rgb
+
+    m = trimesh.creation.box()
+    m.visual = trimesh.visual.ColorVisuals(mesh=m)
+    m.visual.vertex_colors = np.tile([40, 60, 80, 255], (len(m.vertices), 1))
+    assert _vertex_rgb(m).shape == (len(m.vertices), 3)
+
+
 def test_allocation_is_area_weighted():
     counts = _allocate(np.array([9.0, 1.0]), 1000)
     assert counts[0] > counts[1] * 5
