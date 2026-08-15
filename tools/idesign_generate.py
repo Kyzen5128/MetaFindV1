@@ -22,6 +22,7 @@ four filter sites across three files -- so the model name is honest end to end.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import traceback
 import os
@@ -53,6 +54,34 @@ def endpoint_model_id(base_url: str) -> str:
         return ",".join(sorted({m["id"] for m in data.get("data", [])}))
     except Exception as exc:  # noqa: BLE001 -- recorded, never fatal
         return f"unavailable: {exc}"
+
+
+def verify_patches(patch_dir: Path, repo: Path) -> list[dict]:
+    """Which patches are ACTUALLY applied in the external checkout.
+
+    Listing the .patch files in this repository says what we ship, not what the
+    clone contains -- a sidecar built from that would claim provenance the
+    artifacts may not have. `git apply --reverse --check` succeeds only if the
+    change is already present, so it answers the question that matters. The
+    hash is recorded too, because a patch file can change under a stable name.
+    """
+    out = []
+    for patch in sorted(patch_dir.glob("idesign-*.patch")):
+        applied = (
+            subprocess.run(
+                ["git", "-C", str(repo), "apply", "--reverse", "--check", str(patch)],
+                capture_output=True,
+            ).returncode
+            == 0
+        )
+        out.append(
+            {
+                "name": patch.stem,
+                "applied": applied,
+                "sha256": hashlib.sha256(patch.read_bytes()).hexdigest()[:16],
+            }
+        )
+    return out
 
 
 def write_config(workdir: Path, base_url: str, api_key: str, model: str) -> None:
@@ -139,18 +168,47 @@ def main() -> int:
         capture_output=True,
         text=True,
     ).stdout.strip()
-    patch_dir = Path(__file__).resolve().parents[1] / "setup" / "patches"
-    applied_patches = sorted(p.stem for p in patch_dir.glob("idesign-*.patch"))
+    applied_patches = verify_patches(
+        Path(__file__).resolve().parents[1] / "setup" / "patches", args.idesign_repo
+    )
     served = endpoint_model_id(args.base_url)
     print(f"I-Design {revision[:8]} | endpoint serves: {served}")
-    print(f"patches applied: {', '.join(applied_patches) or 'none'}")
+    for rec in applied_patches:
+        mark = "applied" if rec["applied"] else "NOT APPLIED"
+        print(f"  patch {rec['name']}: {mark} ({rec['sha256']})")
+    if not all(r["applied"] for r in applied_patches):
+        print(
+            "Refusing to generate: the clone is missing patches this repo ships. "
+            "Run setup/04_idesign_env.sh.",
+            file=sys.stderr,
+        )
+        return 2
 
     args.out.mkdir(parents=True, exist_ok=True)
     records, failures = [], 0
 
     if args.scene_spec_file:
-        specs = [json.loads(line) for line in args.scene_spec_file.read_text().splitlines() if line.strip()]
-        scenes = [(d["prompt"], d["room_dimensions"], d["n_objects"]) for d in specs][: args.n_scenes]
+        specs = [
+            json.loads(line)
+            for line in args.scene_spec_file.read_text().splitlines()
+            if line.strip()
+        ]
+        required = {"prompt", "room_dimensions", "n_objects", "seed", "source"}
+        for i, d in enumerate(specs):
+            if missing := required - d.keys():
+                print(f"spec line {i}: missing {sorted(missing)}", file=sys.stderr)
+                return 2
+        # Never silently deliver fewer scenes than asked for. Paper 3.3's figure
+        # is 200; a run that quietly produced 150 and reported a mean would be
+        # answering a different question.
+        if len(specs) < args.n_scenes:
+            print(
+                f"--n-scenes {args.n_scenes} but {args.scene_spec_file} has "
+                f"{len(specs)} specs. Refusing to truncate.",
+                file=sys.stderr,
+            )
+            return 2
+        specs = specs[: args.n_scenes]
     else:
         # Refuse to stretch two smoke prompts into an evaluation set. Cycling
         # them would hand back 100 copies of each and call it "200 randomly
@@ -165,9 +223,14 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 2
-        scenes = SMOKE_PROMPTS[: args.n_scenes]
+        specs = [
+            {"prompt": p, "room_dimensions": d, "n_objects": n, "seed": None,
+             "source": "smoke"}
+            for p, d, n in SMOKE_PROMPTS[: args.n_scenes]
+        ]
 
-    for i, (prompt, dims, n_obj) in enumerate(scenes):
+    for i, spec in enumerate(specs):
+        prompt, dims, n_obj = spec["prompt"], spec["room_dimensions"], spec["n_objects"]
         scene_id = f"scene_{i:04d}"
         workdir = args.out / scene_id
         write_config(workdir, args.base_url, args.api_key, args.model)
@@ -192,6 +255,8 @@ def main() -> int:
             # what they contain, so a sidecar naming only patch 01 would tell a
             # later reader the scenes came from near-stock I-Design.
             "idesign_patches": applied_patches,
+            "scene_source": spec["source"],
+            "seed": spec["seed"],
             # D-5: I-Design's planner is GPT-4 upstream; here it is Qwen.
             "planner_model": args.model,
             "planner_endpoint_serves": served,

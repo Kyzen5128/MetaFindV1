@@ -163,7 +163,7 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 | `n15_eval_retrieval` | evaluate | 7 模態組合 × **2 gallery 協定** × 2 變體 |
 | `n15b_resolve_composition_protocol` | **human** | **決定 U-18／U-21** —— `G_0` 來源與放置後的圖更新規則 |
 | **`G7_composition_protocol`** | evaluate | **G-INVALID**。未決 → `BLOCKED_EVIDENCE`(rc=3)。Table 1 不經過它 |
-| `n15c_prepare_eval_scenes` | compute | **新增**。I-Design → 200 個評估場景（R-01 未驗證） |
+| `n15c_prepare_eval_scenes` | compute | **新增**。→ 200 個評估場景。來源由 `composition_protocol.source` 決定；**Reading A 目前不是合法值**（無 ProcTHOR→I-Design adapter） |
 | `n16_compose_scenes` | subgraph | Algorithm 1，讀 `evaluation_scene_inputs`（**不是** ProcTHOR 房屋）+ 真實 GLB 幾何 |
 | `n17_judge_scenes` | model | Qwen2.5-VL 四維度評分 |
 | `n18_train_ablations` | subgraph | Table 3 中**真的是不同模型**的變體。`w/o iterative retrieval` 不在此列 |
@@ -402,7 +402,7 @@ eval_protocols:
 | **G6_stage2_ready** | G-INVALID | `stage2_protocol.status == resolved`（U-08a／U-08b）**且** `scene_splits` 房屋不重疊 | 未決 → `BLOCKED_EVIDENCE`；洩漏 → `FAIL` |
 | **G4_gallery_freeze** | G-CONTAM | 索引維度／數量正確、無 NaN、**目標相似度 == 最大相似度且在 argmax tie set 內** | **不 promote**，staging 作廢重建 |
 | **G7_composition_protocol** | G-INVALID | `composition_protocol.status == resolved`（U-18／U-21）：`G_0` 來源、query list 來源、放置規則、新節點的 `t_i`／物理邊／語意邊 | 未決 → `BLOCKED_EVIDENCE`。Table 1 不受影響 |
-| **G5_report_release** | G-IRREVERSIBLE | 每格有明確判定；gate record 齊全且 `is_terminal`；RA-1/2/3 紀錄齊全；D-1~D-4 已在報告聲明；**`risks_unknowns` 逐項有處置（逐項列舉，不得用區間）** | 停，補齊 |
+| **G5_report_release** | G-IRREVERSIBLE | 每格有明確判定；gate record 齊全且 `is_terminal`；**RA-1～RA-4** 紀錄齊全；**`boundary.deviations` 逐項**已在報告聲明（不得用區間 —— D-5 就是被 `D-1..D-4` 漏掉的）；**`risks_unknowns` 逐項有處置** | 停，補齊 |
 
 **G2 為什麼縮小判準。** 舊判準要求自取樣點雲必須與 **ULIP 官方釋出的點雲**一致，
 否則整條線停掉。那在檢驗一個論文從未主張的命題 —— MetaFind 沒說它沿用 ULIP 預取樣的點雲，
@@ -420,7 +420,7 @@ eval_protocols:
 | **RA-1** | `h⁰ = Concat(x,t)` 版本的等變性 | 「我們復現了 §2.5 的字面寫法」 | **預期失敗**。四條獨立證據：Appendix C 的前提、**Eq.(2) 自己的型別**（`f_h → ℝ^d` 但 `Concat ∈ ℝ^{d+3}`，殘差加不起來）、Introduction 說「separating spatial and semantic channels」、官方 EGNN 把 `h` 與 `coord` 分開兩個參數 |
 | **RA-2** | `f_x → ℝ³` 版本的等變性 | 同上 | **預期失敗** —— 證明要求 `φ_x` 為純量才能提出 `Q` |
 | **RA-3** | `train_scope=full`（含 CLIP）的可行性 | 「我們驗證了論文關於訓練範圍的結論」 | 單卡不可行 → claim 縮小為「3D encoder + fusion 範圍內」 |
-| **RA-4** | **全域縮放**下 `e_layout` 的變化量 | 「ESSGNN 解決 §2.5 所述的 scaling 敏感」 | **預期失敗** —— §2.5／§3.4 宣稱處理 translation **與 scaling**，但論文證的是 SE(3)，**不含縮放**；`x → s·x` 時 `‖x_i−x_j‖² → s²‖x_i−x_j‖²`，每條訊息都變。claim 縮小為「僅 translation／rotation」 |
+| **RA-4** | **全域縮放**下 `e_layout` 的變化量 | 「ESSGNN 解決 §2.5 所述的 scaling 敏感」 | **量測，不預測**。SE(3) 不含縮放 → **沒有結構性保證**；但 MLP 仍可能學到尺度不敏感，**缺乏保證 ≠ 證明做不到**。結果決定 claim 縮到多小 |
 
 ---
 
@@ -532,7 +532,7 @@ graph TD
 | 12 | | **G4** | — |
 | 13 | `n12` ∥ `n14` | | <1 h |
 | 13b | `n15b`（人決定） | **G7** | 未決則 Table 2 停在這裡 |
-| 13c | `n15c`（I-Design ×200） | | 1–3 h，**R-01 未驗證** |
+| 13c | `n15c`（產 200 個評估場景） | | 1–3 h，**R-01 部分實測：5 次 0 完成、無基準** |
 | 14 | `n15` ∥ `n16` | | 6–17 h |
 | 15 | `n17` | | 2–4 h |
 | 16 | `n18` | | 6–12 h |
@@ -591,6 +591,7 @@ graph TD
 | **U-26** | UNKNOWN | **兩處差異，不是一處**。(a) 參數化：§2.5 是兩個獨立 MLP 吃同樣輸入；Appendix C (10)(13)(14) 先算一條 `m_ij = φ_e(...)` 再分給 `φ_h`／`φ_x`（原始 EGNN 走這種）。(b) **更新順序**：Eq.3 餵給 `f_x` 的是**已更新的** `h^{l+1}`，Appendix C 的 `m_ij` 是用**舊的** `h^l`。等變性兩種都成立，但數值不同 | 實作依 §2.5，記錄為選擇 |
 | **U-29** | UNKNOWN | **物理邊到底怎麼進 ESSGNN**。§2.3 定義 physical（support／adjacency）與 semantic 兩種邊，但 §2.5 的 `f_h`／`f_x` 只吃**一個**邊參數 `e_ij`，而 §2.5 與 Appendix C 都把 `e_ij` 定義成**語意**邊（LLM 關係句 → frozen text encoder）。物理邊是只決定 `N(i)`？自己帶 feature？與語意邊合併成一條？還是平行的另一條？support 與 adjacency 進網路後分不分得出來？全部沒說 | 記錄選擇 —— **這是架構決定，不是超參數** |
 | **U-30** | UNKNOWN | **沒有語意嵌入的邊，`e_ij` 的張量契約是什麼**。`f_h : ℝ^(2d+1+e) → ℝ^d` 輸入寬度**固定**，所以缺 `e_ij` 的邊仍要填滿那 `e` 格。規格禁止補零（零向量與真實嵌入無法區分）並記 `semantic_edge_missing`，但**記旗標不等於說明 MLP 收到什麼** | 記錄機制；必須與合法嵌入可區分 |
+| **U-32** | UNKNOWN | **scene dropout 的粒度**。§2.6 寫 "omitted in 30% of **batches**"，字面是**整批**一起丟；實作是**每個 sample 獨立**抽（`sample_scene_dropout` 回傳 `(B,)` 遮罩），`L1-SCENE-DROPOUT-30` 也驗 per-sample。對 in-batch 對比 loss 而言兩者的訓練分布不同 | 字面版是 batch-level；記錄採用哪個，另一個保留為變體 |
 | **U-31** | UNKNOWN | **ESSGNN 的 L 層是否共用參數**。§2.5 寫 `θ_h`、`θ_x` 都沒有層索引。這會改變參數量，也改變 F11：獨立層時最後一層座標頭沒有 loss path，**共用參數時同一個 `f_x` 仍會從前 L−1 層收到梯度** | 實作用每層獨立權重，記錄為選擇 |
 | **R-01** | RISK・**部分實測** | **I-Design 裝得起來、初始設計會成功，但 5 次嘗試 0 個場景完成**。詳見下方 | Table 2/3 全靠它 |
 | **R-02** | RISK | 單卡 24GB 限制訓練範圍 | D-1 已聲明 |
@@ -794,3 +795,29 @@ graph TD
 | 94 | `validation_plan` 尾端 `open_items` 仍寫 "I-Design has not been verified to run" | 改為 `PARTIALLY MEASURED`，並把待辦改成「建立基準」而非「試跑」 | 🟠 |
 | 95 | **`idesign_generate.py --n-scenes 200` 會靜默產出 100×A + 100×B**，然後被當成「200 randomly sampled scenes」 | 超過 smoke prompt 數量即 **fail closed**，要求 `--scene-spec-file` | 🟠 **會產生假的評估集** |
 | 96 | `04_idesign_env.sh` 寫「目前只有一個 patch」（實際三個）；`IDESIGN_COMMIT` 宣稱釘住卻從未檢查 HEAD；patch 套用把「已套用」與「套不上去」印成同一句 | 三者全修：HEAD 不符即 fail；`apply --check` / `apply --reverse --check` / 失敗，三種狀態分開 | 🟠 **provenance 假象** |
+
+### 2026-08-15 第八輪（外部逐字審查後）
+
+審查者固定在 `784c029`，未跑腳本，並直接讀 `ulip_backbone.py`／`dual_tower.py`／
+`essgnn.py`／`losses.py`／I-Design generator／setup。判定
+**「論文理解與 graph 設計主體大致正確；最大問題是文件已改成新架構，實際 model code 還停在舊的 frozen-backbone 架構」**。
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 97 | **`ulip_backbone.py` 仍然把整個 backbone 凍死。** docstring 寫「the backbone never trains, so every asset is encoded once ... everything downstream reads the cache」，所有參數 `requires_grad_(False)`，三個 encoder 全包 `@torch.no_grad()`。**這正是 Table 3 的 `Train fuser only`（8.7 vs 11.4）**——第一輪就判定為最嚴重的錯誤，**文件修了七輪，程式一次都沒修** | 改為分離凍結：CLIP 側凍結＋`no_grad`，**PointBERT 與 `pc_projection` 依 `train_scope` 可訓練**；新增 `trainable_parameters()`；`encode_pc` 拿掉 `no_grad` | 🔴 **會跑成已淘汰的實驗** |
+| 98 | `dual_tower.py` 的 docstring 同樣還寫「Both towers consume pre-computed embeddings」「the point encoder cannot be fine-tuned」 | 改寫；並寫明**快取三個模態就等於做 `fuser_only` ablation，不管設定寫什麼** | 🔴 |
+| 99 | **我上一輪把 `ESSGNNConfig` 三個寬度改必填，卻沒檢查呼叫端** —— `DualTowerConfig()` 與 `ESSGNN()` 實測直接 `TypeError`。91 個測試沒抓到，因為它們都自己傳完整 config | 移除假的 optional config；`dim` 也改必填（1280 是 ULIP checkpoint 的實測值，不是論文值）；`query_fusion`／`gallery_fusion` 由 `dim` 導出 | 🔴 **我改壞的** |
+| 100 | **`essgnn_edge_protocol` 與 `stage1_protocol` 加了 channel 與 reads，但 edge 的 `carries` 與 routing inputs 沒同步** —— gate 要看的東西沒有任何 incoming edge 載運 | 補齊 `e13`／`e13c`／`e13d` 與 routing；**檢查器新增「gate 讀的 channel 必須由 incoming edge 載運」**，一加上就當場又抓到 `asset_manifest` 在 G3／G4 的同類漏洞兩處 | 🔴 |
+| 101 | **U-21 的 Reading A 文件說可執行，實際沒有 adapter。** 把 ProcTHOR channel 放進 `n15c` 的 `reads` 只是讓它「看得到」，不等於知道怎麼把已完成的房屋轉成 I-Design 的生成請求 —— 而 U-27 已實測 I-Design 沒有這個入口 | `procthor_via_idesign` **暫時不是 G7 可 PASS 的合法值**，需先定義 `procthor_to_idesign_adapter`。Reading A 仍是 U-21 的候選，被拒絕的是「在轉換未定義時 resolve 到它」 | 🔴 |
+| 102 | R-01 的失敗邊掛在 `n16`，但 `n16` 沒有 `evaluation_scene_inputs` 根本啟動不了，**那條 escalation 永遠不可能從那裡觸發** | 改掛 `n15c`，guard 改為 `scene_source_unavailable` | 🟠 |
+| 103 | root `README.md` 第一段還寫「frozen ULIP-2 backbone」，偏離表還是 `D1/D2` 舊定義（D2＝全部預先快取） | 全面同步為 D-1…D-5，並保留一句說明舊表錯在哪 | 🟠 **repo 入口誤導** |
+| 104 | `graph_spec` 的 D-5 還說用 `--served-model-name gpt-4` 別名；`external_systems` 還寫 I-Design `UNVERIFIED` | 兩處都更正 | 🟠 |
+| 105 | `01_GRAPH_SPEC` 前段的 gate 表與 `node_registry` 的 notes 沒跟上（G6 只列兩種失敗、G5 仍 `RA-1/2/3` + `D-1..D-4`、RA-4 仍寫「預期失敗」、`n15c` 仍「R-01 未驗證」） | 全部同步 | 🟠 |
+| 106 | **scene dropout 粒度**：§2.6 寫 "omitted in 30% of **batches**"，實作是每 sample 獨立抽 | 新增 **U-32**。對 in-batch 對比 loss 而言兩者訓練分布不同 | 🟠 |
+| 107 | `--scene-spec-file` 會**靜默截斷**（要 200、給 100 就跑 100），且丟掉 `seed`／`source`；`idesign_patches` 記的是「本 repo 有哪些 patch 檔」而非「外部 clone 真的套了哪些」 | 三者全修：不足即拒絕、缺欄位即拒絕、改用 `git apply --reverse --check` 驗證實際套用並記 SHA256；**未全部套用就拒絕產生** | 🟠 **provenance 假象** |
+| 108 | `evaluation_scene_inputs` 只記 `g0_uri/query_list/room_type/source`，重建得了 Algorithm 1 的輸入，重建不了「這個輸入是怎麼生成的」 | schema 補上 prompt/hash、房間尺寸、物件數、seed、planner model、generator revision 與 patch hash | 🟠 |
+| 109 | **U-28 只存在於散文**，而 code 已選了「omit layout」，影響 Table 1 那一列 7 格 | `eval_protocols` 新增 `layout_free_context` 欄位 | 🟠 |
+| 110 | `L1-EGNN-DIMS-NOT-HARDCODED` 的措辭會連 `hidden_dim=128` 一起判死 | 精確化：**runtime 推導的維度**不得寫死；**實作超參數**可有預設但須寫進 run config | 🟡 |
+
+新增兩條會真正抓到 #97 的測試：`L1-STAGE1-POINT-ENCODER-TRAINS`（一步之後 PointBERT 必須變、ViT-bigG 必須不變）與
+`L1-STAGE1-CACHE-DISCIPLINE`（主線不得讀 pc embedding 快取 —— 快取三個模態就等於做 `fuser_only`）。

@@ -251,8 +251,11 @@ level_1:
     target: metafind/models/essgnn.py
     target_kind: node
     asserts: >
-      Embedding width derives from the loaded checkpoint; hidden width, layer
-      count and any edge projection are configuration, not constants.
+      Dimensions that a checkpoint or protocol determines -- node_feat_dim,
+      edge_feat_dim, out_dim, and the tower's `dim` -- are REQUIRED arguments
+      with no defaults, so no call site can inherit a paper-looking constant.
+      Implementation hyperparameters (hidden_dim, n_layers) may keep defaults,
+      but must be written into the run config and reported (U-22).
     negative_injection: "hardcode 1280 or 128 as a module-level constant"
     expected_on_injection: "the source scan fails"
     verified_blocks: false
@@ -454,6 +457,40 @@ level_1:
       Stage 1 trains it (train_scope: point_encoder_and_fuser), so it arrives at
       Stage 2 with requires_grad already True and will keep training unless
       explicitly frozen. Nothing would have caught that.
+
+  - id: L1-STAGE1-POINT-ENCODER-TRAINS
+    target: n10_train_stage1
+    target_kind: node
+    asserts: >
+      Under train_scope=point_encoder_and_fuser, one Stage 1 optimizer step
+      changes PointBERT's parameters and pc_projection, while every
+      ViT-bigG-14 parameter is bit-identical. Under fuser_only, PointBERT is
+      bit-identical too.
+    negative_injection: "freeze the point encoder while leaving train_scope on the main line"
+    expected_on_injection: "PointBERT parameters are unchanged, revealing the fuser_only ablation running as the main line"
+    verified_blocks: false
+    note: >
+      [PAPER 2.6 / 3.4] "Both query and gallery encoders are trained";
+      "Fine-tuning the entire encoder outperformed training the fuser only"
+      (8.7 against 11.4).
+      This exists because the specification said one thing and the code did
+      another for several rounds: ulip_backbone.py froze every parameter and
+      wrapped all three encoders in no_grad, which IS the 8.7 row. Documents
+      were corrected; the module was not. L2-TRAIN-SCOPE measures the same
+      property at the training level -- this one pins it at the module, where
+      the regression actually lived.
+
+  - id: L1-STAGE1-CACHE-DISCIPLINE
+    target: text_image_embeddings
+    target_kind: channel
+    asserts: >
+      No cached point-cloud embedding is read on the main line. A cache of an
+      encoder's output is only valid while that encoder is frozen, so a
+      pc-embedding cache under train_scope=point_encoder_and_fuser is the
+      fuser_only ablation by construction, whatever the config says.
+    negative_injection: "add a pc_embeddings cache and read it in Stage 1"
+    expected_on_injection: "the scan finds a cached pc read on the main line"
+    verified_blocks: false
 
   - id: L1-ABLATION-INFERENCE-ONLY
     target: n18_train_ablations
@@ -1056,7 +1093,7 @@ level_3_gates:
 
 # ==================================================================
 gate_discipline:
-  total_l1: 50
+  total_l1: 52
   total_l2: 17
   total_gates: 7
   rejected_gate_candidates:
@@ -1171,7 +1208,7 @@ coverage_check:
   every_check_has_negative_injection: true
   no_existence_only_assertions: true
   open_items:
-    - item: "verified_blocks is false for all 67 checks"
+    - item: "verified_blocks is false for all 69 checks"
       status: "BY DESIGN at specification time"
       action: "During implementation, flip each to true only after its negative injection has been observed to fail."
     - item: "I-Design's completion rate has no baseline"

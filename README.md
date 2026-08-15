@@ -3,7 +3,7 @@
 復現 *MetaFind: Scene-Aware 3D Asset Retrieval for Coherent Metaverse Scene Generation*
 （論文全文在 [`docs/metafind_paper.md`](docs/metafind_paper.md)）。
 
-單張 RTX 4090、frozen ULIP-2 backbone、本地 Qwen 取代 GPT-4o。
+單張 RTX 4090。**Stage 1 訓練 PointBERT + fusion**，只有 ViT-bigG-14 凍結；本地 Qwen 取代 GPT-4o／GPT-4。
 
 ## 快速開始
 
@@ -45,16 +45,22 @@ scratch/             參考用的雜項腳本
 
 ## 已知偏離論文之處
 
+**正式偏離五項**，編號以 [`docs/graph/graph_spec.yaml`](docs/graph/graph_spec.yaml) 的 `boundary.deviations` 為準：
+
 | id | 內容 |
 |---|---|
-| **D1** | 用官方釋出的 ULIP-2 checkpoint，不自行預訓練（官方腳本假設 8 張 GPU） |
-| **D2** | frozen backbone 的輸出預先算好快取，訓練只在 1280-d 向量上進行 |
-| **F1** | 論文 §2.5 的 `h⁰=Concat(x,t)` 與 Appendix C 的等變性證明前提矛盾 |
-| **F10** | 論文 §2.5 的 `f_x → ℝ³` 與證明矛盾（必須是純量，否則旋轉提不出來） |
-| **F11** | `e_layout` 只讀 `h`，最後一層的座標 MLP 收不到梯度 |
-| **F12** | ProcTHOR 實測 1,467 個 unique asset，論文說「3,000+」 |
+| **D-1** | ViT-bigG-14 凍結（2.5B 參數在 24GB 上訓不動）。「fine-tune entire encoder」在我們的設定下指 3D encoder + fusion |
+| **D-2** | Qwen2.5-VL 取代 **GPT-4o**（資產標註與場景評分） |
+| **D-3** | 不重跑 6 個 baseline |
+| **D-4** | 不做人工評分 |
+| **D-5** | I-Design 的規劃 agent 用 Qwen2.5-7B-Instruct 取代 **GPT-4** |
 
-完整清單與證據在 [`docs/graph/00_FINDINGS.md`](docs/graph/00_FINDINGS.md)。
+> **早期版本的這張表寫著「D2＝frozen backbone 全部預先快取、訓練只在 1280-d 向量上」。**
+> 那正是論文 Table 3 的 `Train fuser only` 那一列（8.7 vs Full 11.4），
+> 與 §2.6 的 "Both query and gallery encoders are trained" 相反。已更正。
+
+論文自身的矛盾（F 系列、RA 系列）另見 [`docs/graph/00_FINDINGS.md`](docs/graph/00_FINDINGS.md)
+與 [`01_GRAPH_SPEC.md` §11](docs/graph/01_GRAPH_SPEC.md)。
 
 ## 授權
 

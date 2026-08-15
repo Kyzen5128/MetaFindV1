@@ -207,6 +207,29 @@ for dep in spec["dependencies"]["dag"]:
     )
 
 
+# --- 8b2. what a gate reads must actually arrive on an incoming edge ------
+# essgnn_edge_protocol was added to G6's `reads` and to its criterion while
+# e13c still carried only stage2_protocol and stage2_pairing. Channel
+# declarations said one thing and the edge payload another, and nothing
+# compared them.
+incoming_payload = defaultdict(set)
+for e in edges:
+    if e["to"] in nodes:
+        incoming_payload[e["to"]].update(e.get("carries", []))
+
+BROADCAST = {"run_progress", "cost_ledger", "degraded_flags", "gate_records",
+             "audit_records", "quarantine"}
+for gid in {g["gate_id"] for g in plan["level_3_gates"]}:
+    if gid not in nodes:
+        continue
+    for ch in set(nodes[gid].get("reads", []) or []) - BROADCAST:
+        check(
+            f"gate {gid} receives {ch}",
+            ch in incoming_payload[gid],
+            "is read by the gate but no incoming edge carries it",
+        )
+
+
 # --- 8c. gate evidence must name checks that exist -----------------------
 # G3 cited L2-LEAK for a whole round after that check was split into
 # L2-LEAK-OBJECT and L2-LEAK-SCENE. A gate resting on a check that does not

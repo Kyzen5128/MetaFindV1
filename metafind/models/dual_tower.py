@@ -12,18 +12,22 @@ Two towers over a shared ULIP-2 embedding space:
   with ``lambda`` a learnable scalar so layout reasoning is a residual on top of
   the existing embedding space rather than a replacement for it.
 
-Operating on cached embeddings
+What is cached and what is not
 ------------------------------
 
-Both towers consume **pre-computed 1280-d modality embeddings**, not raw meshes
-or text. This is decision D2: the ULIP-2 backbone is frozen (D1), so running
-ViT-bigG-14 every epoch would be pure waste. Encoding all 46,052 assets once
-costs ~0.7 GB and turns training into an MLP-scale problem that fits a single
-24 GB card, which is what makes the Table 3 sweep affordable at all.
+[CORRECTED] This said both towers consume pre-computed embeddings and that
+"the point encoder cannot be fine-tuned". That describes Table 3's
+`Train fuser only` row (8.7 against the full model's 11.4), not the main line.
+Paper 2.6 says "Both query and gallery encoders are trained".
 
-The consequence to keep in view: the point encoder cannot be fine-tuned, so
-Table 3's "fine-tuning the entire encoder outperforms training the fuser only"
-cannot be fully reproduced. That is Required Audit RA-3.
+    text, image   frozen ViT-bigG-14 (D-1, forced by 24 GB) -> cached once
+    point cloud   trainable PointBERT -> encoded every step, never cached
+
+Only the `fuser_only` ablation may consume a cached point-cloud embedding: an
+embedding cache is by construction the output of a network that is not being
+updated, so caching all three IS the ablation, whatever the configuration says.
+RA-3 records the remaining gap, which is ViT-bigG-14 (2.5B parameters) staying
+frozen on a single card -- not the point encoder.
 """
 
 from __future__ import annotations
@@ -59,13 +63,31 @@ class DualTowerConfig:
             during training (sec. 2.6, "stochastic scene dropout (30%)").
     """
 
-    dim: int = 1280
-    query_fusion: FusionConfig = field(default_factory=lambda: FusionConfig(dim=1280))
-    gallery_fusion: FusionConfig = field(default_factory=lambda: FusionConfig(dim=1280))
+    # REQUIRED, no defaults. `dim` is the loaded checkpoint's embedding width
+    # (1280 for ULIP-2 -- a measured fact about a backbone, not a value the
+    # paper states), and ESSGNN's widths additionally depend on the still-open
+    # U-06 / U-20 encoder choices. Defaulting either would reintroduce a
+    # paper-looking constant one level above the module that just stopped
+    # doing it. Build both after the checkpoint and stage1_protocol resolve.
+    dim: int
+    essgnn: ESSGNNConfig
+    # Derived from `dim` when not given, so callers need not restate the width.
+    query_fusion: FusionConfig | None = None
+    gallery_fusion: FusionConfig | None = None
     use_layout: bool = True
-    essgnn: ESSGNNConfig = field(default_factory=lambda: ESSGNNConfig(out_dim=1280))
     init_lambda: float = 1.0
     scene_dropout: float = 0.30
+
+    def __post_init__(self) -> None:
+        if self.query_fusion is None:
+            self.query_fusion = FusionConfig(dim=self.dim)
+        if self.gallery_fusion is None:
+            self.gallery_fusion = FusionConfig(dim=self.dim)
+        if self.essgnn.out_dim != self.dim:
+            raise ValueError(
+                f"essgnn.out_dim ({self.essgnn.out_dim}) must equal dim ({self.dim}); "
+                "Eq. 6 adds lambda * e_layout to the fused query"
+            )
 
 
 class GalleryTower(nn.Module):
@@ -185,7 +207,7 @@ class QueryTower(nn.Module):
 class MetaFindDualTower(nn.Module):
     """Both towers plus the freezing schedule the two training stages need."""
 
-    def __init__(self, cfg: DualTowerConfig | None = None) -> None:
+    def __init__(self, cfg: DualTowerConfig) -> None:
         super().__init__()
         self.cfg = cfg = cfg or DualTowerConfig()
         self.query = QueryTower(cfg)

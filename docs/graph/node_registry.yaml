@@ -436,13 +436,16 @@ nodes:
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
-      Two distinct failure modes, deliberately in one gate because they guard
+      Three distinct failure modes, deliberately in one gate because they guard
       the same spend:
-        stage2_protocol.status != resolved  -> BLOCKED_EVIDENCE (rc=3). Nothing
-          is broken; a decision is simply outstanding, and everything upstream
-          keeps running.
-        scene_splits leaked or absent       -> FAIL (rc=2). Something is wrong
-          and must be fixed.
+        stage2_protocol.status != resolved      -> BLOCKED_EVIDENCE (rc=3)
+        essgnn_edge_protocol.status != resolved -> BLOCKED_EVIDENCE (rc=3).
+          U-29/U-30/U-19. Without it the ESSGNN edge semantics are whatever
+          essgnn.py happens to do, which currently assumes every edge carries a
+          fixed-width semantic embedding.
+        scene_splits leaked or absent           -> FAIL (rc=2)
+      BLOCKED_EVIDENCE means nothing is broken and a decision is outstanding;
+      FAIL means something is wrong and must be fixed.
       [WIDENED from G6_stage2_ready] Scene-corpus validity used to sit inside
       G3, which forced Stage 1 to wait on the ProcTHOR branch. It belongs here,
       in front of the spend that actually needs it.
@@ -565,7 +568,7 @@ nodes:
             stage2_protocol, stage2_pairing, essgnn_edge_protocol, pointclouds,
             text_image_embeddings, splits, scene_splits, split_seed, variant_registry]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger, degraded_flags]
-    precondition: "G3_object_corpus verdict == PASS; stage1_ckpt exists; G6_stage2_ready verdict == PASS (stage2_protocol.status == resolved AND scene_splits valid)"
+    precondition: "G3_object_corpus verdict == PASS; stage1_ckpt exists; G6_stage2_ready verdict == PASS (stage2_protocol.status == resolved AND essgnn_edge_protocol.status == resolved AND scene_splits valid)"
     postcondition: >
       Both headline variants trained; lambda is a learnable scalar with gradient;
       the gallery tower received no gradient.

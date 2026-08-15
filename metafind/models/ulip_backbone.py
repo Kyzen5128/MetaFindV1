@@ -1,11 +1,30 @@
-"""Frozen ULIP-2 backbone wrapper (decisions D1 and D2).
+"""ULIP-2 backbone wrapper with a SPLIT freeze (decisions D1 and D2).
 
 D1: the released ULIP-2 checkpoint is used rather than pretraining it, because
 the official script assumes 8 GPUs and this machine has one 24 GB card (F5).
 
-D2: the backbone never trains, so every asset is encoded **once** into three
-1280-d vectors and everything downstream reads the cache. That turns training
-into an MLP-scale problem and makes the Table 3 sweep affordable.
+D2: the CLIP half is frozen; the POINT ENCODER IS TRAINABLE in Stage 1.
+
+    paper 2.6  "Both query and gallery encoders are trained"
+    paper 3.4  "Fine-tuning the entire encoder outperformed training the
+                fuser only" -- Table 3 puts that row at 8.7 against 11.4
+
+[CORRECTED] This module previously froze everything and said so: "the backbone
+never trains, so every asset is encoded once into three 1280-d vectors and
+everything downstream reads the cache". That IS the Table 3 `Train fuser only`
+row, installed as the primary path. The specification was corrected rounds ago;
+this file was not, so the documents described one experiment while the code
+could only run the other.
+
+What follows from the split:
+
+    text, image   frozen ViT-bigG-14 (D-1, forced by 24 GB) -> cacheable
+    point cloud   trainable PointBERT + pc_projection       -> NOT cacheable,
+                  because a cached embedding is by definition the output of a
+                  network that is not being updated
+
+`train_scope` selects which of the three levels in 02_BUILD_STEPS is active.
+Only `fuser_only` may consume cached point-cloud embeddings.
 
 Why loading needs assertions
 ----------------------------
@@ -27,6 +46,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from typing import Literal
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -48,11 +68,17 @@ PC_FEAT_DIM = 768  # PointBERT output, projected to EMBED_DIM
 N_POINTS = 10000
 
 
+TrainScope = Literal["fuser_only", "point_encoder_and_fuser", "full"]
+
+
 @dataclass
 class BackboneConfig:
     checkpoint: Path = DEFAULT_CKPT
     device: str = "cuda"
     dtype: torch.dtype = torch.float32
+    # The main line. `fuser_only` is the Table 3 ablation; `full` also unfreezes
+    # ViT-bigG-14 and does not fit on 24 GB (D-1, audited by RA-3).
+    train_scope: TrainScope = "point_encoder_and_fuser"
 
 
 def pc_norm(xyz: np.ndarray) -> np.ndarray:
@@ -76,7 +102,11 @@ def pc_norm(xyz: np.ndarray) -> np.ndarray:
 
 
 class ULIPBackbone:
-    """Loads ULIP-2 once, exposes the three modality encoders, never trains."""
+    """Loads ULIP-2 once and exposes its three modality encoders.
+
+    The CLIP halves are frozen and evaluated under no_grad. The point encoder
+    follows `cfg.train_scope` and, on the main line, trains.
+    """
 
     def __init__(self, cfg: BackboneConfig | None = None) -> None:
         self.cfg = cfg = cfg or BackboneConfig()
@@ -100,9 +130,8 @@ class ULIPBackbone:
 
         self._load_and_verify(model, cfg.checkpoint)
 
-        self.model = model.to(cfg.device, dtype=cfg.dtype).eval()
-        for p in self.model.parameters():
-            p.requires_grad_(False)
+        self.model = model.to(cfg.device, dtype=cfg.dtype)
+        self._apply_train_scope()
 
         self.tokenizer = model.tokenizer
         # open_clip's preprocess pipeline lives on the constructed model, but the
@@ -112,6 +141,45 @@ class ULIPBackbone:
         _, _, self.preprocess = open_clip.create_model_and_transforms(
             "ViT-bigG-14", pretrained=None
         )
+
+    # ------------------------------------------------------------------ freezing
+
+    def _point_parameters(self) -> list:
+        """PointBERT plus the projection that maps it into the shared space."""
+        params = list(self.model.point_encoder.parameters())
+        if isinstance(getattr(self.model, "pc_projection", None), torch.nn.Parameter):
+            params.append(self.model.pc_projection)
+        return params
+
+    def _apply_train_scope(self) -> None:
+        """Freeze by scope, and put only the frozen halves in eval mode.
+
+        eval() matters independently of requires_grad: it changes dropout and
+        normalisation behaviour, so a module left in eval mode trains
+        differently even with gradients enabled.
+        """
+        scope = self.cfg.train_scope
+        for p in self.model.parameters():
+            p.requires_grad_(False)
+        self.model.eval()
+
+        if scope == "fuser_only":
+            return
+
+        for p in self._point_parameters():
+            p.requires_grad_(True)
+        self.model.point_encoder.train()
+
+        if scope == "full":
+            # RA-3 records that this does not fit; the flag exists so the audit
+            # can attempt it rather than assert infeasibility without trying.
+            for p in self.model.parameters():
+                p.requires_grad_(True)
+            self.model.train()
+
+    def trainable_parameters(self) -> list:
+        """Exactly the parameters an optimizer should receive."""
+        return [p for p in self.model.parameters() if p.requires_grad]
 
     @staticmethod
     def _load_and_verify(model, ckpt_path: Path) -> None:
@@ -163,15 +231,18 @@ class ULIPBackbone:
 
     # ------------------------------------------------------------------ encoders
 
-    @torch.no_grad()
     def encode_pc(self, clouds: np.ndarray | Tensor) -> Tensor:
-        """Encode point clouds.
+        """Encode point clouds. NOT wrapped in no_grad.
+
+        This is the one encoder Stage 1 trains, so gradient must flow back into
+        PointBERT. Callers that only need embeddings (the gallery index, the
+        fuser_only ablation) wrap their own `torch.no_grad()`.
 
         Args:
             clouds: ``(B, N_POINTS, 6)`` of pre-normalised xyz plus rgb.
 
         Returns:
-            ``(B, 1280)`` float32 on CPU.
+            ``(B, 1280)``.
         """
         x = torch.as_tensor(clouds) if not isinstance(clouds, Tensor) else clouds
         if x.dim() != 3 or x.shape[1:] != (N_POINTS, 6):
