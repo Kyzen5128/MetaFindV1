@@ -1051,3 +1051,22 @@ MetaFind Appendix C **兩邊都寫了**，所以 RA-1 與 `h0_mode="semantic"` �
 `φ_x` 輸出純量在 EGNN 正文與附錄都寫死，F10 的 audit-only 定位不變；
 `‖x_i − x_j‖²` 在 EGNN Eq. 3 是平方，與 MetaFind Appendix C 一致、與 §2.5 的 `‖·‖₂` 不一致
 —— **U-17 仍然是 MetaFind 自己內部的矛盾**，EGNN 幫不上忙，也不該被拿來當裁決。
+
+### 2026-08-15 第十八輪（逐字讀 I-Design 原論文）
+
+第三份依賴論文。抓到的東西比前兩份更直接 —— 因為 I-Design 是唯一一個**我們已經在跑**的依賴。
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 188 | **`idesign_generate.py` 的 smoke prompt 是我編的，而同一個檔案上面寫著「不在這裡編造」。** 「A creative vibrant livingroom」「An aged archive room」都不是論文的東西。**I-Design 論文 Table 4 列了 20 條 minimal prompt 與房間尺寸，Table 5 列了 40 條 elaborate prompt** —— 一直都有 | 換成 Table 4 #1／#11 的**原文與原尺寸**。同時標明兩件仍然未知：**MetaFind §3.3 的「200 randomly sampled scenes」不是這份清單**（論文總共只有 60 條），來源仍是 U-21；**`n`（物件數）論文沒給**，Table 1 的 NObj 是**產出**不是輸入，我們填的值仍是我們的 | 🔴 **編造，且與自身宣稱矛盾** |
+| 189 | **R-01 的解讀要改。** 論文 §5.2 第一項限制就是 *"The pipeline **may fail** to find a solution for object placements when handling **many objects in a relatively small scene**"* —— 而先前的 smoke 是 **15 件放進 16 m²**，比論文 Table 1 任何一個臥室場景都密（臥室平均 12.7 件；客廳 23.6 件但房間 48 m²） | 仍然**沒有完成率基準**，那個保留不變。但結論從「跑不出來 ⇒ 有東西壞了」改成「**可能就是論文描述的行為，而且我們挑了最容易觸發它的設定**」。記為 **F18** | 🟠 **證據解讀** |
+| 190 | **`JSON mode` 沒有被繼承，而 D-5 沒記這件事。** 補充材料 §7：*"All agents utilize GPT-4's **JSON mode** to restrict outputs exclusively to valid JSON"*。我們的 vLLM 沒開任何 guided decoding，所以 **Qwen 在結構上可能吐出不合法 JSON，GPT-4 在那個模式下不可能** —— 而那會落進 Engineer 的 schema 驗證重試迴圈，正是我們失敗的路徑之一 | 寫進 D-5 的 `impact`。**D-5 不只是換模型** | 🟠 **偏離描述不完整** |
+| 191 | **F19**：§3.4 說 I-Design 自己就用 CLIP text encoder ＋ OpenShape 從 Objaverse 檢索資產 —— **那正是 MetaFind 換掉的那一段** | 這讓「MinkowskiEngine／dgl 不需要」從**試出來的**變成**有論文根據的**：它們只被 `retrieve.py` 用，而 `retrieve.py` 就是 §3.4。我們要 §3.2／§3.3（多代理人 → 場景圖 → backtracking），不要 §3.4 | 🟡 **新發現** |
+
+**對上的一件事**：`temperature 0.7`／`top_p 1.0` 是論文 §4.1 明定的，
+而 I-Design 自己的 `agents.py` 就設了這兩個值 —— 我們是**繼承**，不是假設，也不是偏離。
+
+**三份依賴論文讀完後的總結**：三份各抓到**同一類**錯誤 ——
+ULIP-2 是把改寫當引文，EGNN 是沉默預設，I-Design 是編造輸入。
+三者都不是「讀錯論文」，而是**在論文有寫的地方沒去查**。
+第十五輪把依賴方論文加進權威階層是對的，但加進階層不等於讀過。

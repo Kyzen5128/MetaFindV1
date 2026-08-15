@@ -601,8 +601,14 @@ Algorithm 1 逐物件檢索並放置，需要 **I-Design** 與**真實 mesh 幾�
 | 能不能啟動 | **能**。`create_initial_design` 完成並通過 I-Design 自己的 schema 驗證 |
 | 能不能產出場景 | **不能**。Qwen2.5-7B 跑 5 次、**0 個完成**，每次失敗在不同的下游路徑 |
 
-**但沒有基準，所以不能斷定那 5 次是缺陷。** I-Design 沒用它原本的規劃器在本機跑過，
-論文也沒說那是什麼。`setup/patches/` 的三個 patch 是**為了讓場景跑得完而做的工程決定，
+**但沒有基準，所以不能斷定那 5 次是缺陷。** I-Design 沒用它原本的規劃器在本機跑過。
+
+**[2026-08-15 補充，讀 I-Design 原論文後]** 論文 §5.2 把這件事列為第一項已知限制：
+*"The pipeline **may fail** to find a solution for object placements when handling
+**many objects in a relatively small scene**."* 而先前的 smoke 設定（`n=15` 放進
+16 m²）正好落在那個區間 —— 比論文 Table 1 任何一個臥室場景都密。
+仍然沒有完成率基準，但結論從「有東西壞了」改成「可能就是論文描述的行為」。
+prompt 已改用論文 Table 4 的原文（先前那兩條是我編的）。詳見 **F18**。`setup/patches/` 的三個 patch 是**為了讓場景跑得完而做的工程決定，
 沒有論文依據**，其中 02、03 會改變場景與完成率（不是格式調整）。
 
 **[未定 U-21 — 阻斷級] Table 2 的資料流先前根本沒有閉合。**

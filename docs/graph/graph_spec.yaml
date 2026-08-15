@@ -181,6 +181,14 @@ boundary:
         interior architect, engineer, spatial corrector, object deletion, layout
         refiner) plus the GroupChat managers that share those configs; an
         earlier version of this entry said "five planning agents".
+        [ADDED after reading I-Design's paper] Rerouting the model is not the
+        whole of D-5. Supplementary 7 states "All agents utilize GPT-4's JSON
+        mode to restrict outputs exclusively to valid JSON"; our vLLM endpoint
+        runs without any guided-decoding equivalent, so Qwen can emit
+        structurally invalid JSON where GPT-4 could not, and that lands in the
+        Engineer's schema-validation retry loop -- one of the paths our runs
+        fail on. Conversely temperature 0.7 and top_p 1.0, which paper 4.1
+        specifies, ARE inherited: I-Design's own agents.py sets both.
         All are text-only. Implemented by PATCHING I-Design's filter_dict
         (setup/patches/idesign-01), not by aliasing Qwen as "gpt-4" in vLLM --
         that was the first approach and was abandoned because every log line

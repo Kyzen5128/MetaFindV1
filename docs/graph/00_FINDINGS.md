@@ -477,6 +477,61 @@ MetaFind 的 backbone 論文明文說自己沒驗過場景級資料。
 
 ---
 
+## F18. I-Design 論文自己就把「放不下就失敗」列為已知限制 —— R-01 的解讀要改
+
+R-01 記的是「Qwen2.5-7B 跑 5 次、0 個完成」，並註明**沒有基準所以不能斷定是缺陷**。
+那個保留是對的。讀完 I-Design 原論文後，多了三件事：
+
+**其一，失敗是論文寫明的已知失敗模式。** §5.2 Limitations 第一項：
+
+> **Placement Termination Problems:** The pipeline may fail to find a solution for
+> object placements when handling **many objects in a relatively small scene**.
+> Spatial conflicts may persist, or there may not be enough space for furniture
+> placements.
+
+**而我們的 smoke 設定正好落在那個區間。** 先前用的是 `n=15` 放進 `[4.0, 4.0, 2.5]`
+—— 16 m² 放 15 件，比論文 Table 1 任何一個臥室場景都密（臥室平均 12.7 件，
+客廳 23.6 件但房間開到 `[6.0, 8.0, 3.0]` = 48 m²）。
+
+這仍然**不構成完成率基準**，但它把結論從「跑不出來 ⇒ 有東西壞了」
+改成「跑不出來**可能就是論文描述的行為**，而且我們挑了最容易觸發它的設定」。
+
+**其二，prompt 與房間尺寸論文其實有給，是我編的。** Table 4 列了 20 條 minimal
+prompt 與尺寸，Table 5 列了 40 條 elaborate prompt。而 `idesign_generate.py`
+用的是「A creative vibrant livingroom」「An aged archive room」—— **我編的**，
+而且同一個檔案上面還寫著「不在這裡編造」。已換成 Table 4 的原文。
+
+**`n`（物件數）論文沒給。** Table 1 的 NObj 是**產出**不是輸入。我們填的值仍是我們的。
+
+**其三，`JSON mode` 沒有被繼承。** 補充材料 §7：
+
+> All agents utilize GPT-4's **"JSON mode"** to restrict outputs exclusively to
+> valid JSON, which significantly reduces token consumption.
+
+我們的 vLLM 沒有開任何 guided decoding，所以 Qwen **在結構上可能吐出不合法的 JSON，
+而 GPT-4 在那個模式下不可能**。那會落進 Engineer 的 schema 驗證重試迴圈，
+正是我們失敗的路徑之一。**這是 D-5 的一部分，讀論文前沒有記下來。**
+
+對上的一件事：**temperature 0.7 / top_p 1.0 是論文 §4.1 明定的**，
+而 I-Design 自己的 `agents.py` 就設了這兩個值，所以我們是**繼承**而不是假設。
+
+---
+
+## F19. I-Design 自己也做檢索，而那正是 MetaFind 換掉的那一段
+
+§3.4：I-Design 用 **CLIP text encoder** 產生描述嵌入，靠 **OpenShape** 與 CLIP 的對齊，
+從 **Objaverse** 取回最接近的資產。
+
+這解釋了 R-01 裡那個「MinkowskiEngine／dgl 其實不需要」的觀察 —— 它們只被 `retrieve.py`
+用到，而 `retrieve.py` 實作的就是 §3.4。**MetaFind 取代的正是這一步**，
+所以我們呼叫到 `to_json()` 產出場景圖就停，不走 I-Design 的檢索。
+
+記下來是因為它讓那個安裝決定從「試出來不需要」變成**有論文根據**：
+我們要的是 I-Design 的 §3.2／§3.3（多代理人 → 場景圖 → backtracking 佈局），
+不要 §3.4。
+
+---
+
 ## 由 F1–F13 推導出的三個架構決策
 
 ### D1 — 不重訓 ULIP-2 本身，用官方 released checkpoint 當起點

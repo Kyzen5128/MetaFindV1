@@ -11,6 +11,18 @@ on disk, so they never need to share an interpreter.
 
 The LLM is Qwen served over an OpenAI-compatible endpoint (deviation D-5).
 
+Two properties of the upstream setup, checked against I-Design's paper 4.1:
+
+* temperature 0.7 and top_p 1.0 are what the paper specifies, and I-Design's
+  own agents.py already sets both, so they are inherited rather than assumed.
+* GPT-4's "JSON mode" is NOT inherited. Supplementary 7 says "All agents
+  utilize GPT-4's JSON mode to restrict outputs exclusively to valid JSON".
+  Our vLLM endpoint is launched without any guided-decoding equivalent, so
+  Qwen may emit non-conforming JSON where GPT-4 structurally could not. That
+  lands in the Engineer's schema-validation retry loop, which is one of the
+  paths our runs fail on -- see finding F18. This is part of D-5 and was not
+  recorded until the I-Design paper was read.
+
 An earlier version served Qwen under the alias `gpt-4` so that I-Design's
 hardcoded `filter_dict={"model": ["gpt-4"]}` would resolve without touching its
 source. That was a bad trade: every log line and config file then said `gpt-4`
@@ -36,12 +48,26 @@ from pathlib import Path
 
 DEFAULT_OUT = Path("/mnt/data1/kyzen/MetaFind/outputs/idesign")
 
-# Paper 3.3 gives no prompt list -- it says only "200 randomly sampled scenes".
-# These two exist to prove the pipeline runs (R-01); the real list is part of
-# the composition protocol decision (U-21) and is not invented here.
+# [CORRECTED] These used to be "A creative vibrant livingroom" and "An aged
+# archive room" at [4.0, 4.0, 2.5] with n=15 and n=12 -- invented, while the
+# file claimed nothing was being invented here.
+#
+# I-Design's paper PUBLISHES its evaluation prompts: Table 4 lists 20 minimal
+# prompts with room dimensions, Table 5 lists 40 elaborate ones across four
+# categories. Two of those are used below verbatim, so the smoke run exercises
+# the pipeline on inputs its authors actually ran.
+#
+# Still UNKNOWN, and still not invented here:
+#   * MetaFind 3.3's "200 randomly sampled scenes" is NOT this list -- the paper
+#     publishes 60 prompts in total. Where MetaFind's 200 came from is U-21.
+#   * `n`, the object count I-Design requires, is given nowhere. Table 1 reports
+#     NObj (12.7 bedroom, 23.6 living room) as an OUTPUT of the runs, not an
+#     input to them. The values below are ours and are labelled as such.
 SMOKE_PROMPTS = [
-    ("A creative vibrant livingroom", [4.0, 4.0, 2.5], 15),
-    ("An aged archive room", [4.0, 4.0, 2.5], 12),
+    # I-Design Table 4 #1 (minimal), verbatim prompt and dimensions. n is ours.
+    ("Design me a bedroom.", [3.0, 4.0, 2.4], 10),
+    # I-Design Table 4 #11 (minimal), verbatim prompt and dimensions. n is ours.
+    ("Design me a living room.", [4.0, 5.0, 2.8], 10),
 ]
 
 
