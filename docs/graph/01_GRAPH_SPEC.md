@@ -141,7 +141,8 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 | **`G2_pc_sanity`** | evaluate | **G-INVALID**。形狀／有限／`pc_norm`／非退化／自我可辨識。**與 ULIP 官方點雲的比較降為 L2 診斷** |
 | `n04_render_views` | compute | 11 個視角、224px；**投影方式為設定值，預設正交（U-03a，不是論文明文）** |
 | `n05_annotate` | model | Qwen2.5-VL → category / dimensions / materials / placement_constraints |
-| `n06_encode_text_image` | model | CLIP 凍結 → 可快取；**PC 不在此列** |
+| `n05b_resolve_stage1_encoding` | **human** | **決定 `n06` 該編碼什麼**（層 6b，早於 `n06`）：U-15 序列化／U-14 視圖聚合／U-34 的 `paper_`＋`actual_clip_train_scope`／U-11 缺席模態表示；並產出 `stage1_hyperparameters` 與 `variant_registry` |
+| `n06_encode_text_image` | model | CLIP 凍結 → 可快取；**PC 不在此列**。**`actual=trainable` 時整個不執行**（`e09` 的 guard），此時 `n09` 改由 `e11b` 取得原始 renders／annotations |
 | `n07_scene_graphs` | compute | ProcTHOR → 節點（位置 + `t_i`）、物理邊（support 讀自 children 樹）。**`t_i` 來自 ProcTHOR metadata，不是 Objaverse 標註** |
 | `n08_semantic_edges` | model | Qwen 對 **ProcTHOR 物件描述**產生關係句 → frozen text encoder → `e_ij` |
 | `n09_build_splits` | compute | **物件 80/20，只讀 Objaverse** |
@@ -155,6 +156,7 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 | id | role | 說明 |
 |---|---|---|
 | `n10_train_stage1` | mutate | **訓練 point encoder + fusion**（Eq.5，單向），30% 模態遮罩 |
+| `n10b_post_stage1_encode` | model | **Stage 1 之後**用最終 encoder 產出 `post_stage1_embeddings`（`frozen` 走 passthrough、`trainable` 重編）。**query／gallery 分開存** —— `fully_separate + trainable` 下兩塔權重不同 |
 | `n11_gallery_index_staging` | mutate | 凍結 gallery 塔，編碼全部 admitted 資產 → staging |
 | **`G4_gallery_freeze`** | evaluate | **G-CONTAM**。維度、數量、無 NaN、**目標相似度 == 最大相似度且在 argmax tie set 內** |
 | `n12_promote_index` | mutate | late commit，`write_once` |
@@ -257,7 +259,8 @@ n01_env_bootstrap → n02_download → G1_sources_valid
 
 | 節點 | group | policy | 理由 |
 |---|---|---|---|
-| `n09_build_splits` | default | **`all`** | 點雲與 embedding 都要齊，否則算出的 split 是錯的 |
+| `n09_build_splits` | `pointclouds` | **`all`** | 點雲無條件必須齊 |
+| `n09_build_splits` | `stage1_text_image` | **`any`** | text/image 側由兩條**互斥且都有 guard** 的路徑之一送達：`e11`（`actual=frozen`，帶 cache）或 `e11b`（`actual=trainable`，帶原始 renders／annotations）。<br>**先前這裡是單一 `all` 群組**，於是 `trainable` 讀法在結構上不可達 —— 它要求一份那條路不會產生的 cache。trigger 仍是 `all_groups_satisfied` |
 | `n09c_build_scene_splits` | default | **`all`** | 場景圖與語意邊都要齊，理由同上 |
 | `SG1/SG2 reduce` | default | **`all_settled`** | 必須知道**誰**失敗 —— gallery 分母改變會使 R@k 失去意義 |
 | `G3_object_corpus` | default | **`all`** | gate 需要完整證據 |
@@ -1217,3 +1220,27 @@ grey 是個合理的顏色，跳過不認識的型別是合理的解析，
 registry 說 n03 寫 `run_progress`，channel 說 writers 包含 n03，兩邊完全對得上。
 **只有把規格和「真的跑起來的程式」對照，落差才會出現。**
 這也是為什麼繼續純讀規格的邊際效益在下降。
+
+### 2026-08-15 第二十三輪（外部審查，11 份 docs 再次全讀 ＋ 首次讀實作）
+
+審查者這輪把 `metafind/data/pointclouds.py` 與 `tests/test_pointclouds.py`
+一起讀了。**最重的兩項都不是文件問題，是我實作的問題，而且其中一個當場就發生了。**
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 235 | **n03 的完成判定是 `out.exists()`，會產生永久孤兒。** 寫入順序是「rename npz → 回傳 → 主執行緒 append 共用 JSONL」，中間 kill 掉就得到一個有 npz、沒有紀錄的資產；重啟時 `out.exists()` 為真 → 跳過 → **那筆 canonical metadata 永遠補不回來**。而 G2 routing 依據的 `centroid_offset`／`max_radius`／`per_axis_variance` 只存在於該紀錄。<br>**不是假設：我為了這輪停掉全量跑，當場就製造出 18 個孤兒（10,568 npz vs 10,550 筆）** | 每個資產改成 `(npz, json)` 一組，**完成標記最後寫**；`is_complete()` 要求兩者都在且 **sha256 對得上**（順帶抓到截斷的 npz）。中途掛掉只損失一次重算，而重算是決定性的，得到 byte-identical 的雲。聚合索引改為**衍生**，不再 append —— 舊寫法在 resume 時會長出重複列 | 🔴 **資料一致性** |
+| 236 | **GLB 的 scene transform 被完全忽略。** 審查者說「沒有證據說大量使用」所以列 P1。**量了：400 個抽樣中 263 個（65.8%）帶 non-identity transform，最大平移 1.2e4**；重新取樣 40 個，**16 個尺寸差超過 1%，比值 0.008× 到 77×**。那些點雲仍是 (10000,6)、仍正規化到單位球、仍通過 G2 每一項 —— **只是形狀是錯的** | 改為走 `scene.graph.nodes_geometry`，逐 node 套用 transform 後才取樣。`SAMPLER_VERSION` 升到 3。<br>順帶：同一 geometry 被多 node 實例化的情況**在這個語料庫是 0/300** —— 走 graph 順便處理掉，但**不能寫成已測到的問題** | 🔴 **幾何錯誤（升級自 P1）** |
+| 237 | **`depends_on` 沒有「條件相依」這個型別。** `n09` 依賴 `n06`，但 `actual=trainable` 下 `n06` 根本不跑 —— 照字面執行的 scheduler 會永遠等下去。我先前是用散文註解寫「僅供排序」，**註解不會被執行** | schema 新增 `conditional_depends_on: [{node, when}]`。並新增檢查：**條件相依的 payload 必須落在 `any` join 群組**，否則 guard 擋掉 `n06`、join 照樣等它 —— 那是同一個死結，只是多了一個宣稱不會死結的欄位。負向注入確認會紅 | 🔴 |
+| 238 | **G2 完全不驗 RGB**，而 RGB 是這輪壞最多次的東西（40/40 全灰 → 14/40 遺失 → 27/60 灰）。那些雲全部通過 G2 現有每一項 | 新增 `L1-PC-RGB-SCALE`、`L1-PC-COLOUR-PROVENANCE`、`L2-PC-COLOUR-COVERAGE`，並進 G2 criterion。**覆蓋率門檻取自 smoke corpus 實測，不憑空定** —— 事前編一個數字沒人能辯護 | 🟠 |
+| 239 | **「RGB 在 [0,1]」我寫成 decisive evidence，那過頭了。** `0.4` fallback 那兩行在 **ModelNet** 路徑；`Objaverse_Lvis_Colored` 是直接 concat released `.npy` 的 rgb、**不除不夾**，所以它繼承的是檔案本身的尺度 | 改寫成「強烈指向、尚未證實」，並說明要一個官方 `.npy` 才能封掉（歸 U-02）。測試改名為 `test_rgb_is_written_at_unit_scale`——它釘的是**我們寫出什麼**，不是與 ULIP 相符 | 🟠 |
+| 240 | texture 顏色其實是**三頂點平均**（面平坦化），不是 per-point UV 插值 | 註解與 `sampler_version` 講清楚，不得描述成 per-point texture sampling。屬 U-02 的復現選擇 | 🟠 |
+| 241 | `extents_m`／`volume_m3` 語意過強：那是**軸對齊包圍盒**、不是 mesh 體積，單位也未經驗證（Objaverse 作者各自定尺度） | 改名 `raw_bbox_extents`／`raw_bbox_volume`，並註明它是**弱 ground truth**，不能拿來當強證據評分標註器 | 🟠 |
+| 242 | `01_GRAPH_SPEC` 正文（節點表、join policy）仍是舊拓撲：沒有 `n05b`／`n10b`，`n09` 還寫「點雲與 embedding 都要齊」 | 回灌。並新增檢查：**registry 裡每個節點都必須出現在正文**（Mermaid 那條已經有了，這條補文字表） | 🟠 |
+| 243 | root `README` 標題已改六項偏離、D-1 那列卻還是舊條件；`02_BUILD_STEPS` 的 `n13` 還讀 `text_image_embeddings`；`docs/README` 把檢查數寫死成 1,349 | 全部同步；檢查數改為「跑一次就知道」，不再手寫 | 🟠 |
+| 244 | **D-5 與 D-7 重複歸因** JSON mode | 從 D-5 移除，只留一句指向 D-7 | 🟠 |
+| 245 | **D-1 把「24GB 跑不動」寫成已知事實，但 RA-3 還沒跑** | 改為「硬體可行性未量測，由 RA-3 量」。`paper=trainable, actual=frozen` 是偏離，**但「是否被迫」取決於 RA-3** —— 在它跑之前，紀錄只能寫「我們選了 frozen」，不能寫「我們訓不動」 | 🟠 |
+
+**這輪要記住的**：審查者對 GLB transform 說「沒有證據，所以不升 P0」，
+**而正確的回應是去量，不是接受那個等級**。量完是 65.8%、最壞 77 倍。
+同樣地，孤兒 state 我原本可以說「理論上才會發生」——結果我自己停一次全量跑就造出 18 個。
+**兩件事都是：只要去量，等級就自己決定了。**

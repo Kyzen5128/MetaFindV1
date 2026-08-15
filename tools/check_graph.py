@@ -240,6 +240,16 @@ for nid in nodes:
     check(f"mermaid shows {nid}", re.search(rf"\b{re.escape(short)}\b", mermaid) is not None,
           "node is in the registry but absent from the flow diagram")
 
+# The node summary table in 01_GRAPH_SPEC is the human-readable index of the
+# graph, and it sat three rounds behind the registry -- no n05b, no n10b. The
+# Mermaid check below covers the picture; this covers the table.
+spec_md_body = (DOCS / "01_GRAPH_SPEC.md").read_text()
+for nid in nodes:
+    if nid.startswith("G"):
+        continue
+    check(f"node table lists {nid}", f"`{nid}`" in spec_md_body,
+          "node is in the registry but absent from 01_GRAPH_SPEC's prose")
+
 dev_ids = {d["id"] for d in spec["boundary"]["deviations"]}
 cond_ids = {d["id"] for d in spec["boundary"].get("conditional_deviations", [])}
 for name in ("README.md", "02_BUILD_STEPS.md"):
@@ -428,8 +438,17 @@ for e in edges:
     if e["from"] in nodes and e["to"] in nodes and e.get("kind") not in ("feedback", "error", "escalation"):
         edge_preds[e["to"]].add(e["from"])
 
+def _deps(dep) -> tuple[set[str], set[str]]:
+    """(required, conditional) predecessors of one DAG entry."""
+    req = set(dep.get("depends_on", []) or [])
+    cond = {c["node"] for c in dep.get("conditional_depends_on", []) or []}
+    return req, cond
+
+
 for dep in spec["dependencies"]["dag"]:
-    n, declared = dep["node"], set(dep["depends_on"])
+    n = dep["node"]
+    required, conditional = _deps(dep)
+    declared = required | conditional
     check(
         f"dag matches edges for {n}",
         declared == edge_preds[n],
@@ -470,7 +489,9 @@ for gid in {g["gate_id"] for g in plan["level_3_gates"]}:
 # neither writer among its ancestors. Each worked only because the execution
 # layering happened to put the writer earlier -- an accident of scheduling,
 # not a contract.
-dag_pred = {d["node"]: set(d["depends_on"]) for d in spec["dependencies"]["dag"]}
+dag_pred = {d["node"]: (set(d.get("depends_on", []) or [])
+                        | {c["node"] for c in d.get("conditional_depends_on", []) or []})
+            for d in spec["dependencies"]["dag"]}
 
 
 def ancestors(n, _seen=None):
@@ -498,6 +519,33 @@ for nid, n in nodes.items():
             bool(writers & anc) or nid in writers,
             f"reads `{ch}` but none of its writers {sorted(writers)} is a "
             f"dependency ancestor; the value is available only by scheduling luck",
+        )
+
+
+# --- 8b4. a conditional dependency must actually be skippable -------------
+# Declaring n06 conditional is only meaningful if n09 can run without it. If
+# every arm carrying n06's payload sits in an `all` join group, the guard stops
+# n06 and the join then waits for it regardless -- the same deadlock, now with
+# a schema field asserting otherwise.
+for dep in spec["dependencies"]["dag"]:
+    node = dep["node"]
+    policies = {j["node"]: j for j in spec["join_policies"]}
+    for cond in dep.get("conditional_depends_on", []) or []:
+        pred = cond["node"]
+        arms = [e for e in edges if e["to"] == node and e["from"] == pred]
+        check(
+            f"conditional dep {node}<-{pred} guarded",
+            all(e.get("guard") for e in arms) and bool(arms),
+            "a conditional dependency needs at least one incoming edge and "
+            "every one of them guarded",
+        )
+        groups = {e.get("join_group", "default") for e in arms}
+        declared = {g["name"]: g for g in policies.get(node, {}).get("groups", [])}
+        check(
+            f"conditional dep {node}<-{pred} skippable",
+            all(declared.get(g, {}).get("policy") == "any" for g in groups),
+            f"its payload arrives in join group(s) {sorted(groups)} whose policy "
+            f"is not `any`, so {node} waits for a node that will not run",
         )
 
 

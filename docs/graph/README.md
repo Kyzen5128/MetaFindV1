@@ -15,7 +15,7 @@
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
 | **[未定]** | 論文沒說，我們選了一個並記錄（累積 38 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**） |
-| **[偏離]** | 與論文不同，必須在報告聲明（**5 條 D-2…D-6**，外加 **1 條條件式 D-1** —— 它是否成立取決於 U-34） |
+| **[偏離]** | 與論文不同，必須在報告聲明（**6 條 D-2…D-7**，外加 **1 條條件式 D-1** —— 它是否成立取決於 U-34） |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
 
@@ -90,7 +90,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | 3 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實測事實（F 系列）與架構決策（D 系列），**含論文的多處自相矛盾** |
 | 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：48 個 state channel、62 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
 | 5 | [`node_registry.yaml`](node_registry.yaml) | 35 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
-| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 55 個 L1、17 個 L2、7 個 gate、4 個 Required Audit |
+| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 57 個 L1、18 個 L2、7 個 gate、4 個 Required Audit |
 
 ## 一頁摘要
 
@@ -112,7 +112,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 
 | id | 偏離 | 影響 |
 |---|---|---|
-| **D-1** *(條件式)* | ViT-bigG-14 的 CLIP 側保持凍結。`active_if: stage1_encoding_protocol.clip_train_scope == 'trainable'` | **U-34 未解前不算偏離** —— ULIP-2 §3.3 明文凍結 OpenCLIP，主線的凍結有其論文直接支持。RA-3 量測的是**另一個讀法**在本機是否可執行 |
+| **D-1** *(條件式)* | ViT-bigG-14 的 CLIP 側保持凍結。`active_if: paper_clip_train_scope == 'trainable' AND actual_clip_train_scope == 'frozen'` | **U-34 未解前不算偏離** —— ULIP-2 §3.3 明文凍結 OpenCLIP，主線的凍結有其論文直接支持。RA-3 量測的是**另一個讀法**在本機是否可執行 |
 | **D-2** | Qwen2.5-VL 取代 GPT-4o | **Table 1 與 Table 2 都受影響** —— 它不只換裁判，也換掉 46,052 筆標註（文字塔的訓練資料）。SC-1 因此只報告差距、不設門檻 |
 | **D-3** | 不重跑 6 個 baseline | 只能與論文公佈值比較，並註明協定不同 |
 | **D-4** | 不做人工評分 | Table 2 人工欄判 `INSUFFICIENT_EVIDENCE` |
@@ -155,7 +155,7 @@ G1 來源有效 → G2 點雲健全 → G3 物件語料 → G4 gallery 凍結 �
 - **G6**：`stage2_protocol`（U-08a／U-08b）**或 `essgnn_edge_protocol`（U-29／U-30／U-19）**未 `resolved`、或 `scene_splits` 有洩漏之前，Stage 2 不准訓練。
 - **G7**：`composition_protocol.status` 未 `resolved`（U-18／U-21）之前，不准合成場景。**Table 1 不經過它。**
 
-72 個檢查（55 個 L1 ＋ 17 個 L2）對 7 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
+75 個檢查（57 個 L1 ＋ 18 個 L2）對 7 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
 
 `G2` 這一輪**縮小了判準**：它原本要求自取樣點雲必須與 ULIP 官方釋出的點雲一致，
 但論文從未說 MetaFind 沿用 ULIP 預取樣的點雲，而 Stage 1 本來就會 fine-tune point encoder。
@@ -235,13 +235,13 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 
 | 元件 | 用途 |
 |---|---|
-| `tools/check_graph.py` | 六份規格文件的一致性檢查（1,349 項） |
+| `tools/check_graph.py` | 六份規格文件的一致性檢查（跑一次就知道項數，此處不寫死） |
 | `setup/04_idesign_env.sh` ＋ `tools/idesign_generate.py` ＋ 三個 patch | I-Design 場景生成，R-01 的量測對象。**目前 0 個場景完成**（見 **F18**） |
 
 `metafind/models/`（`essgnn` / `dual_tower` / `fusion` / `losses` / `ulip_backbone` /
 `stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身 ——
 `n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer。
-111 個測試函式涵蓋這六個模組與取樣器（pytest 參數化後展開成 140 個 case），**沒有一條涵蓋任何節點的執行**。
+112 個測試函式涵蓋這六個模組與取樣器（pytest 參數化後展開成 140 個 case），**沒有一條涵蓋任何節點的執行**。
 
 ---
 

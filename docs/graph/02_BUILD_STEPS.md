@@ -507,7 +507,7 @@ Eq.6 需要 `e_text`、`e_image`、`e_pc`。ProcTHOR 只提供 metadata 與座�
 ### 因此
 
 `n13_train_stage2` 的 `reads` 已補上 `stage2_pairing`、`pointclouds`、
-`text_image_embeddings`、`procthor_object_text` —— 先前的清單根本湊不出 Eq.6 的輸入，
+`post_stage1_embeddings`（**不是 `text_image_embeddings`** —— `actual=trainable` 下 `n06` 不執行，那個 channel 不存在；Stage 1 之後由 `n10b` 產出）、`procthor_object_text` —— 先前的清單根本湊不出 Eq.6 的輸入，
 也不知道正樣本是誰。
 
 **U-08a 與 U-08b 決定之前，不要實作這個階段。**

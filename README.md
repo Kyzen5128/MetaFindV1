@@ -46,9 +46,9 @@ scratch/             參考用的雜項腳本
 ## 已知偏離論文之處
 
 **正式偏離六項（D-2…D-7）＋條件式一項（D-1）**，編號以
-[`docs/graph/graph_spec.yaml`](docs/graph/graph_spec.yaml) 為準：D-2…D-6 在
+[`docs/graph/graph_spec.yaml`](docs/graph/graph_spec.yaml) 為準：D-2…D-7 在
 `boundary.deviations`，D-1 在 `boundary.conditional_deviations`，
-`active_if: stage1_encoding_protocol.clip_train_scope == 'trainable'`。
+`active_if: paper_clip_train_scope == 'trainable' AND actual_clip_train_scope == 'frozen'`。
 
 | id | 內容 |
 |---|---|

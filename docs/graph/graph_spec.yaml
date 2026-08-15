@@ -181,14 +181,11 @@ boundary:
         interior architect, engineer, spatial corrector, object deletion, layout
         refiner) plus the GroupChat managers that share those configs; an
         earlier version of this entry said "five planning agents".
-        [ADDED after reading I-Design's paper] Rerouting the model is not the
-        whole of D-5. Supplementary 7 states "All agents utilize GPT-4's JSON
-        mode to restrict outputs exclusively to valid JSON"; our vLLM endpoint
-        runs without any guided-decoding equivalent, so Qwen can emit
-        structurally invalid JSON where GPT-4 could not, and that lands in the
-        Engineer's schema-validation retry loop -- one of the paths our runs
-        fail on. Conversely temperature 0.7 and top_p 1.0, which paper 4.1
-        specifies, ARE inherited: I-Design's own agents.py sets both.
+        The JSON-mode difference is tracked separately as D-7, not here: the
+        two are independently fixable, and describing both in this entry made
+        the report attribute one behavioural deviation to two ids.
+        temperature 0.7 and top_p 1.0, which paper 4.1 specifies, ARE
+        inherited: I-Design's own agents.py sets both.
         All are text-only. Implemented by PATCHING I-Design's filter_dict
         (setup/patches/idesign-01), not by aliasing Qwen as "gpt-4" in vLLM --
         that was the first approach and was abandoned because every log line
@@ -220,7 +217,7 @@ boundary:
     - id: D-1
       what: "ViT-bigG-14 stays frozen; only the 3D encoder and fusion train"
       active_if: "stage1_encoding_protocol.paper_clip_train_scope == 'trainable' AND stage1_encoding_protocol.actual_clip_train_scope == 'frozen'"
-      why: "2.5B parameters do not train on a 24 GB card"
+      why: "hardware feasibility of training ViT-bigG-14 on 24 GB is UNMEASURED; RA-3 measures it. Stating it as a known fact was getting ahead of the audit that exists to establish it."
       impact: >
         Listed separately from boundary.deviations because it is not currently
         established as one, and enumerating it among the active deviations
@@ -228,8 +225,9 @@ boundary:
           paper=frozen                  -> NOT a deviation whatever we run.
             ULIP-2's paper 3.3 freezes OpenCLIP and MetaFind builds on ULIP-2,
             so the main line agrees with its own backbone's specification.
-          paper=trainable, actual=frozen -> IS a deviation, forced by 24 GB,
-            and RA-3 is the evidence that the alternative could not run here.
+          paper=trainable, actual=frozen -> IS a deviation. Whether it was
+            FORCED depends on RA-3, which has not run. Until it does, the run
+            record must say "we chose frozen", not "we could not train it".
           paper=trainable, actual=trainable -> NOT a deviation; we did what we
             read the paper to require. Requires RA-3 to have succeeded.
           paper=frozen, actual=trainable -> not a deviation either, but a
@@ -294,7 +292,7 @@ state:
         it, so a run with Objaverse complete and ProcTHOR absent could PASS.
 
     - name: pointclouds
-      type: "map[uid -> {path, sha256, n_points, seed, sampler_version, rgb_scale, colour_source, coloured_point_fraction, extents_m, volume_m3, centroid_offset, max_radius, per_axis_variance}]"
+      type: "map[uid -> {path, sha256, n_points, seed, sampler_version, rgb_scale, colour_source, coloured_point_fraction, raw_bbox_extents, raw_bbox_volume, centroid_offset, max_radius, per_axis_variance}]"
       writers: [n03_sample_pointclouds]
       readers: [G2_pc_sanity, n09_build_splits, n10_train_stage1, n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations, n19_eval_ablations]
       merge: upsert_by_key
@@ -1184,7 +1182,17 @@ dependencies:
     # The edges and n09's reads had been decoupled, but this line had not, so the
     # machine-readable dependency still said Stage 1 waits for Qwen semantic-edge
     # generation over ProcTHOR. Two of the three places were fixed; this was the third.
-    - {node: n09_build_splits, depends_on: [G2_pc_sanity, n06_encode_text_image, n05b_resolve_stage1_encoding]}
+    - node: n09_build_splits
+      depends_on: [G2_pc_sanity, n05b_resolve_stage1_encoding]
+      # [SCHEMA EXTENDED] n06 cannot be a plain dependency. Under
+      # actual_clip_train_scope == trainable it does not run at all, so a
+      # scheduler reading `depends_on` literally would wait forever for a node
+      # that was never going to start. The previous version listed it anyway
+      # and explained in prose that it was "for ORDERING only" -- a comment
+      # cannot be executed, and the set-equality DAG check passed because the
+      # guarded edge exists.
+      conditional_depends_on:
+        - {node: n06_encode_text_image, when: "stage1_encoding_protocol.actual_clip_train_scope == 'frozen'"}
     - {node: G3_object_corpus, depends_on: [n09_build_splits]}
     - {node: n10_train_stage1, depends_on: [G3_object_corpus]}
     - {node: n10b_post_stage1_encode, depends_on: [n10_train_stage1]}

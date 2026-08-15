@@ -78,12 +78,15 @@ def test_pc_norm_touches_xyz_only():
 # ------------------------------------------------------------------ colour
 
 
-def test_rgb_is_unit_scale_not_0_255():
-    """[U-02] ULIP's own grey stand-in is 0.4, which fixes the scale.
+def test_rgb_is_written_at_unit_scale():
+    """[U-02] What we WRITE is [0, 1]; whether that matches ULIP is measured elsewhere.
 
-    dataset_3d.py 292 and 297 substitute np.ones_like(pc) * 0.4 where a dataset
-    has no colour. On a 0-255 scale that would be about 102. Getting this wrong
-    is silent and moves every point-cloud embedding.
+    ULIP substitutes np.ones_like(pc) * 0.4 for uncoloured datasets, which on a
+    0-255 scale would be ~102 -- strong evidence about its colour convention,
+    but those lines are the ModelNet path. Objaverse_Lvis_Colored concatenates
+    the released rgb with no division, so it inherits whatever the .npy holds.
+    This test pins OUR output; the comparison against an official cloud is
+    U-02's job and is not asserted here.
     """
     assert 0.0 < DEFAULT_GREY < 1.0
     xyz, rgb, _, _, _ = sample_mesh_from(_box(colour=(200, 100, 50, 255)))
@@ -143,6 +146,29 @@ def test_allocation_survives_degenerate_areas():
 # -------------------------------------------------------------- determinism
 
 
+def test_scene_graph_transform_is_applied(tmp_path):
+    """[MEASURED] 65.8% of sampled Objaverse GLBs carry a non-identity transform.
+
+    Sampling raw geometry drops it, so multi-part objects assemble collapsed on
+    top of each other. The cloud still has 10,000 points, still normalises to a
+    unit sphere, and still passes every G2 check -- it is just the wrong shape.
+    On 40 re-sampled assets, 16 changed extent by more than 1%, up to 77x.
+    """
+    a = trimesh.creation.box(extents=(1, 1, 1))
+    b = trimesh.creation.box(extents=(1, 1, 1))
+    scene = trimesh.Scene()
+    scene.add_geometry(a, node_name="a")
+    scene.add_geometry(b, node_name="b", transform=trimesh.transformations.translation_matrix([10, 0, 0]))
+    p = tmp_path / "two.glb"
+    p.write_bytes(scene.export(file_type="glb"))
+
+    _, _, extents, _, _ = sample_mesh(p, seed=0, n_points=256)
+    assert max(extents) > 10.0, (
+        f"extent {max(extents):.2f} -- the 10-unit offset was dropped, so the "
+        "two boxes were sampled on top of each other"
+    )
+
+
 def test_seed_depends_on_uid_only():
     """A counter-based seed makes a resumed run a different dataset."""
     assert uid_seed("abc") == uid_seed("abc")
@@ -188,12 +214,13 @@ def test_sidecar_records_what_g2_will_check(tmp_path):
     m.export(glb)
     rec = process_one("u", glb, tmp_path / "u.npz")
     for field in ("centroid_offset", "max_radius", "per_axis_variance",
-                  "extents_m", "volume_m3", "colour_source", "coloured_point_fraction"):
+                  "raw_bbox_extents", "raw_bbox_volume", "colour_source",
+                  "coloured_point_fraction", "sha256"):
         assert field in rec, field
     assert rec["centroid_offset"] < 1e-5
     assert abs(rec["max_radius"] - 1.0) < 1e-5
     # F13: the only place the pre-normalisation scale survives.
-    assert np.allclose(sorted(rec["extents_m"]), [1.0, 2.0, 3.0], atol=1e-6)
+    assert np.allclose(sorted(rec["raw_bbox_extents"]), [1.0, 2.0, 3.0], atol=1e-6)
 
 
 def sample_mesh_from(mesh):

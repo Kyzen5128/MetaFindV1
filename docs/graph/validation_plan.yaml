@@ -53,6 +53,33 @@ level_1:
       An earlier draft hardcoded 48000 in shard arithmetic and in the gallery denominator.
 
   # ---- point clouds
+  - id: L1-PC-RGB-SCALE
+    target: pointclouds
+    target_kind: channel
+    asserts: >
+      Every cloud's rgb columns lie in [0, 1], and every sidecar records
+      rgb_scale == "unit". The ULIP-2 checkpoint was trained on colour at that
+      scale, and xyz is unit-normalised, so a 0-255 channel would dominate the
+      input by two orders of magnitude.
+    negative_injection: "store rgb as uint8 0-255"
+    expected_on_injection: "the range assertion fails before any encoding runs"
+    verified_blocks: false
+
+  - id: L1-PC-COLOUR-PROVENANCE
+    target: pointclouds
+    target_kind: channel
+    asserts: >
+      Every sidecar names a colour_source in {texture, flat, vertex, face,
+      fallback_grey} and a coloured_point_fraction in [0, 1], and the corpus
+      distribution of both is reported.
+    negative_injection: "drop colour_source from the sidecar"
+    expected_on_injection: "the field check fails"
+    verified_blocks: false
+    note: >
+      Provenance, not a threshold. What fraction of Objaverse assets carry
+      readable colour is a property of the dataset, and inventing a floor for
+      it would be a number we made up.
+
   - id: L1-PC-NORM
     target: n03_sample_pointclouds
     target_kind: node
@@ -703,6 +730,26 @@ level_1:
 # ================================================================== L2
 level_2:
 
+  - id: L2-PC-COLOUR-COVERAGE
+    target: pointclouds
+    target_kind: channel
+    asserts: >
+      The corpus-wide rate of colour_source == fallback_grey, and the mean
+      coloured_point_fraction, are within tolerance of the values measured on
+      the smoke corpus with the same sampler_version. A regression that
+      silently turns the colour channel constant changes these and nothing
+      else.
+    negative_injection: "revert to reading colours after trimesh concatenates the scene"
+    expected_on_injection: "the grey rate jumps to ~100% while every shape and normalisation check still passes"
+    verified_blocks: false
+    note: >
+      This exists because it already happened three times while implementing
+      n03: 40 of 40 grey, then 14 of 40 lost, then 27 of 60 grey. Each produced
+      clouds that were (10000, 6), finite, correctly normalised and
+      non-degenerate -- everything G2 checked -- and would have trained.
+      Baseline comes from the smoke corpus, not from a guess; a threshold
+      invented before measuring would be a number nobody could defend.
+
   - id: L2-PC-SELF-CONSISTENT
     kind: scientific
     seam: "n03 -> the frozen ULIP-2 point encoder"
@@ -1011,10 +1058,13 @@ level_3_gates:
     criterion: >
       Every admitted cloud is (10000, 6), finite, pc_norm'd (centroid within
       1e-5 of the origin, max radius within 1e-5 of 1) and non-degenerate
-      (per-axis variance above a floor); and a sampled cloud encoded by the
-      frozen checkpoint retrieves its own asset far above chance against a
-      1,000-asset probe set.
-    evidence: [L1-PC-SHAPE, L1-PC-NORM, L2-PC-SELF-CONSISTENT]
+      (per-axis variance above a floor); its rgb columns lie in [0, 1] with
+      rgb_scale == "unit" and a recorded colour_source; the corpus-wide
+      fallback_grey rate and mean coloured_point_fraction are within tolerance
+      of the smoke-corpus baseline for this sampler_version; and a sampled
+      cloud encoded by the frozen checkpoint retrieves its own asset far above
+      chance against a 1,000-asset probe set.
+    evidence: [L1-PC-SHAPE, L1-PC-NORM, L1-PC-RGB-SCALE, L1-PC-COLOUR-PROVENANCE, L2-PC-COLOUR-COVERAGE, L2-PC-SELF-CONSISTENT]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G2_pc_sanity.yaml"
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
@@ -1265,8 +1315,8 @@ level_3_gates:
 
 # ==================================================================
 gate_discipline:
-  total_l1: 55
-  total_l2: 17
+  total_l1: 57
+  total_l2: 18
   total_gates: 7
   rejected_gate_candidates:
     - {candidate: "all 7 modality conditions produced", why_not_a_gate: "fails all four criteria -- nothing is invalidated, contaminated, expensively redone or irreversible", demoted_to: L2}
@@ -1391,7 +1441,7 @@ coverage_check:
   every_check_has_negative_injection: true
   no_existence_only_assertions: true
   open_items:
-    - item: "verified_blocks is false for all 71 checks"
+    - item: "verified_blocks is false for all 75 checks"
       status: "BY DESIGN at specification time"
       action: "During implementation, flip each to true only after its negative injection has been observed to fail."
     - item: "I-Design's completion rate has no baseline"

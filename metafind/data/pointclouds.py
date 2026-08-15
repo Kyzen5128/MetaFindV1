@@ -11,15 +11,22 @@ coordinates -- centroid to the origin, largest radius to 1 -- and *then*
 concatenates rgb. Normalising all six columns together would rescale colour by
 the object's physical extent, which is a different tensor with the same shape.
 
-**rgb lives in [0, 1], not [0, 255].** The paper says nothing, and neither does
-ULIP-2's. The decisive evidence is in ULIP's code: where a dataset has no
-colour it substitutes ``np.ones_like(point_set) * 0.4`` (``dataset_3d.py`` 292
-and 297) -- a mid grey. On a 0-255 scale that stand-in would be about 102. A
-2.5-order-of-magnitude error here would not raise anything; it would just move
-every point-cloud embedding, and the only symptom would be bad retrieval
-numbers we would then go looking for elsewhere. Recorded as
-``rgb_scale: "unit"`` in every sidecar so a later reader can check rather than
-re-derive.
+**rgb lives in [0, 1], not [0, 255] -- STRONGLY INDICATED, not proven.**
+Neither paper says. The evidence is that ULIP substitutes
+``np.ones_like(point_set) * 0.4`` (``dataset_3d.py`` 292 and 297) where a
+dataset has no colour, and on a 0-255 scale that stand-in would be about 102.
+
+But note exactly what that shows and what it does not. Those two lines are in
+the *ModelNet* path. ``Objaverse_Lvis_Colored.__getitem__`` reads ``rgb`` out
+of the released .npy and concatenates it with no division and no clamp, so it
+inherits whatever scale the released file already uses. The 0.4 fallback is
+evidence about ULIP's colour CONVENTION, not a measurement of the Objaverse
+release. Settling it needs one official .npy read directly -- that measurement
+is tracked with U-02 and the result belongs here.
+
+Getting it wrong is silent and costs a factor of 255 on the colour channel of
+every asset, so ``rgb_scale: "unit"`` goes in every sidecar: a later reader can
+check what was assumed instead of re-deriving it.
 
 **10,000 points, xyzrgb.** ULIP-2's Appendix A.1 measures 10k xyzrgb at
 50.6/79.1 on Objaverse-LVIS against 8k xyz at 48.9, and 50.6 is the abstract's
@@ -40,10 +47,12 @@ claims MetaFind reuses them and Stage 1 trains the point encoder anyway.
 from __future__ import annotations
 
 import argparse
+import collections
 import concurrent.futures as cf
 import hashlib
 import json
 import sys
+import os
 import time
 import traceback
 from pathlib import Path
@@ -53,7 +62,12 @@ import numpy as np
 from metafind import paths, runlog
 
 N_POINTS = 10_000
-SAMPLER_VERSION = 2  # bump whenever sampling changes; part of the cache key
+# 3: apply the scene-graph transform before sampling. Measured on 400 random
+# assets, 65.8% carry a non-identity transform, and on 40 re-sampled assets 16
+# changed extent by more than 1% -- ratios from 0.008x to 77x. Versions 1-2
+# produced geometrically wrong clouds for a large fraction of the corpus while
+# passing every G2 check.
+SAMPLER_VERSION = 3
 RGB_SCALE = "unit"  # [0, 1]; see the module docstring
 DEFAULT_GREY = 0.4  # ULIP's own stand-in for an uncoloured mesh
 
@@ -95,12 +109,31 @@ def load_parts(path: Path):
 
     scene = trimesh.load(path, force="scene", process=False)
     parts, sources = [], []
-    for geom in scene.geometry.values():
+    # Iterate the scene GRAPH, not scene.geometry. Two reasons, both measured:
+    #
+    #   * 65.8% of 400 sampled Objaverse GLBs place their geometry with a
+    #     non-identity node transform, translations up to 1.2e4. Sampling the
+    #     raw geometry drops it and assembles the object collapsed on itself.
+    #     On 40 re-sampled assets, 16 changed extent by over 1%, up to 77x.
+    #   * One geometry can be INSTANCED at several nodes -- four identical
+    #     chairs around a table are one mesh and four transforms, and looping
+    #     over scene.geometry would see one chair. NOT observed in this corpus:
+    #     0 of 300 sampled assets instance anything. Iterating the graph gets
+    #     it for free, so it is handled, but it is not a measured problem here
+    #     and must not be reported as one.
+    #
+    # Either way the cloud keeps 10,000 points, normalises to a unit sphere and
+    # passes every G2 check. It is simply the wrong object.
+    for node in scene.graph.nodes_geometry:
+        transform, geom_name = scene.graph[node]
+        geom = scene.geometry.get(geom_name)
         if not isinstance(geom, trimesh.Trimesh) or len(geom.faces) == 0:
             continue
         geom = geom.copy()
+        geom.apply_transform(transform)
         sources.append(_colourise(geom))
         parts.append(geom)
+
     if not parts:
         raise ValueError("no triangulated geometry in this GLB")
     order = ("fallback_grey", "flat", "vertex", "face", "texture")
@@ -226,6 +259,37 @@ def sample_mesh(path: Path, seed: int, n_points: int = N_POINTS):
             colour_source, coloured / max(n_points, 1))
 
 
+def sidecar_path(out: Path) -> Path:
+    return out.with_suffix(".json")
+
+
+def is_complete(out: Path) -> bool:
+    """Whether this asset is finished, in the only sense that survives a crash.
+
+    A present .npz proves nothing. The old check was `out.exists()`, and the
+    write order was: rename the npz, return, and let the main thread append to
+    a shared JSONL. Kill -9 between those two and the asset is permanently
+    skipped on restart with its canonical metadata missing -- measured, not
+    hypothetical: interrupting the first full run left 18 clouds with no
+    record. G2 routes on centroid_offset, max_radius and per_axis_variance,
+    which live only in that record.
+
+    The per-asset sidecar is therefore the completion marker and is written
+    LAST, after the npz is already in place. Crashing between them costs one
+    re-sample, and re-sampling is deterministic (uid_seed), so the recovered
+    cloud is byte-identical to the lost one.
+    """
+    sc = sidecar_path(out)
+    if not (out.exists() and sc.exists()):
+        return False
+    try:
+        rec = json.loads(sc.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    # Also catches a truncated npz: a half-written file has a different digest.
+    return rec.get("sha256") == hashlib.sha256(out.read_bytes()).hexdigest()
+
+
 def process_one(uid: str, glb: Path, out: Path) -> dict:
     seed = uid_seed(uid)
     xyz, rgb, extents, colour_source, coloured_fraction = sample_mesh(glb, seed)
@@ -243,9 +307,11 @@ def process_one(uid: str, glb: Path, out: Path) -> dict:
     tmp = out.with_name(out.name + ".part")
     with tmp.open("wb") as fh:
         np.savez_compressed(fh, xyz=normed, rgb=rgb)
+        fh.flush()
+        os.fsync(fh.fileno())
     tmp.replace(out)
 
-    return {
+    record = {
         "uid": uid,
         "path": str(out),
         # L2-RESUME asserts preprocessing artifacts are byte-identical after a
@@ -258,15 +324,52 @@ def process_one(uid: str, glb: Path, out: Path) -> dict:
         "rgb_scale": RGB_SCALE,
         "colour_source": colour_source,
         "coloured_point_fraction": round(coloured_fraction, 4),
-        # F13: the only place the real size survives. Once xyz is unit-normed,
-        # nothing downstream can recover it, and paper 2.3 wants "size
-        # dimensions" in the annotations.
-        "extents_m": [float(v) for v in extents],
-        "volume_m3": float(np.prod(extents)),
+        # [RENAMED from extents_m / volume_m3] This is the axis-aligned
+        # BOUNDING BOX in the GLB's own units, not the mesh volume and not a
+        # verified physical size: Objaverse authors set their own scale, and
+        # nothing here checks that a metre is a metre. The old names asserted
+        # both. It still matters -- once xyz is unit-normed nothing downstream
+        # can recover any scale at all, and paper 2.3 wants "size dimensions"
+        # in the annotations -- but it is a weak ground truth and must not be
+        # used to score the annotator as if it were a strong one.
+        "raw_bbox_extents": [float(v) for v in extents],
+        "raw_bbox_volume": float(np.prod(extents)),
         "centroid_offset": float(np.abs(normed.mean(axis=0)).max()),
         "max_radius": float(np.sqrt((normed**2).sum(axis=1)).max()),
         "per_axis_variance": [float(v) for v in normed.var(axis=0)],
     }
+
+    # The completion marker, written last and atomically. Order matters: npz
+    # first, sidecar second, so a sidecar can never describe a file that is
+    # not there.
+    sc_tmp = sidecar_path(out).with_suffix(".json.part")
+    with sc_tmp.open("w") as fh:
+        json.dump(record, fh)
+        fh.flush()
+        os.fsync(fh.fileno())
+    sc_tmp.replace(sidecar_path(out))
+    return record
+
+
+def rebuild_index(index_path: Path) -> int:
+    """Regenerate pointclouds_index.jsonl from the per-asset sidecars.
+
+    Derived, so it is always exactly what is on disk. The previous version was
+    appended to as work completed, which meant a resumed run duplicated rows
+    and an interrupted one left the index short -- and the index is what a
+    reader treats as the record of the corpus.
+    """
+    tmp = index_path.with_suffix(".jsonl.part")
+    n = 0
+    with tmp.open("w") as f:
+        for sc in sorted(paths.POINTCLOUDS.glob("*.json")):
+            try:
+                f.write(json.dumps(json.loads(sc.read_text())) + "\n")
+                n += 1
+            except (OSError, json.JSONDecodeError):
+                continue
+    tmp.replace(index_path)
+    return n
 
 
 def main() -> int:
@@ -288,7 +391,7 @@ def main() -> int:
         out = paths.POINTCLOUDS / f"{uid}.npz"
         if glb is None:
             continue  # n02 has not fetched it yet; not this node's failure
-        if out.exists() and not args.force:
+        if is_complete(out) and not args.force:
             continue
         todo.append((uid, glb, out))
     # `--limit` truncates the WORK, not the manifest: while n02 is still
@@ -299,28 +402,35 @@ def main() -> int:
 
     print(f"{len(uids):,} in manifest, {len(todo):,} to sample", flush=True)
     paths.POINTCLOUDS.mkdir(parents=True, exist_ok=True)
-    sidecar_path = paths.LOGS / "pointclouds_index.jsonl"
-    sidecar_path.parent.mkdir(parents=True, exist_ok=True)
+    index_path = paths.LOGS / "pointclouds_index.jsonl"
+    index_path.parent.mkdir(parents=True, exist_ok=True)
 
     # DETERMINISTIC_INPUT -> quarantine, max_attempts 1: a non-manifold or empty
     # mesh fails identically forever, so retrying only spends time.
     quarantine, done, started = [], 0, time.time()
-    with runlog.run_progress("n03_sample_pointclouds"), cf.ThreadPoolExecutor(max_workers=args.workers) as pool, \
-            sidecar_path.open("a") as sidecar:
+    with runlog.run_progress("n03_sample_pointclouds"), \
+            cf.ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {pool.submit(process_one, u, g, o): u for u, g, o in todo}
         for fut in cf.as_completed(futures):
             uid = futures[fut]
             try:
                 rec = fut.result()
             except Exception as exc:  # noqa: BLE001 -- one bad mesh must not stop the run
+                # The registry declares two classes with DIFFERENT policies:
+                # DETERMINISTIC_INPUT quarantines after one attempt because a
+                # non-manifold mesh fails identically forever, while RESOURCE
+                # degrades and retries. Collapsing both into "quarantine" threw
+                # away recoverable assets on a transient memory spike and
+                # reported them as broken geometry.
+                cls = ("RESOURCE" if isinstance(exc, (MemoryError, OSError))
+                       else "DETERMINISTIC_INPUT")
                 quarantine.append(
-                    {"uid": uid, "failure_class": "DETERMINISTIC_INPUT",
+                    {"uid": uid, "failure_class": cls,
                      "exception_type": type(exc).__name__,
                      "exception_msg": str(exc)[:400],
                      "traceback": traceback.format_exc()[-1500:]}
                 )
                 continue
-            sidecar.write(json.dumps(rec) + "\n")
             done += 1
             if done % 500 == 0:
                 rate = done / max(time.time() - started, 1e-9) * 60
@@ -328,6 +438,10 @@ def main() -> int:
                 print(f"  [{done:6d}/{len(todo)}] {rate:.0f}/min, "
                       f"剩餘約 {left:.0f} 分, quarantine {len(quarantine)}", flush=True)
 
+    # The aggregate index is DERIVED from the per-asset sidecars, never
+    # appended to. Appending made it grow duplicates on every resumed run and
+    # made it disagree with the filesystem the moment one was interrupted.
+    n_indexed = rebuild_index(index_path)
     runlog.quarantine("n03_sample_pointclouds", quarantine)
     runlog.cost_ledger(
         cpu_seconds=round(time.time() - started, 1),
@@ -338,7 +452,9 @@ def main() -> int:
         ),
     )
 
-    print(f"\n{done:,} sampled, {len(quarantine):,} quarantined -> {paths.POINTCLOUDS}")
+    by_class = collections.Counter(q["failure_class"] for q in quarantine)
+    print(f"\n{done:,} sampled this run, {n_indexed:,} complete on disk, "
+          f"{len(quarantine):,} quarantined {dict(by_class)} -> {paths.POINTCLOUDS}")
     # proceed_with_admitted: a partial corpus is a legitimate outcome here, and
     # G2_pc_sanity decides whether what survived is usable. Only an empty result
     # is a failure of this node.
