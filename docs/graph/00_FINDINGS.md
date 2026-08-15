@@ -537,6 +537,37 @@ prompt 與尺寸，Table 5 列了 40 條 elaborate prompt。而 `idesign_generat
 
 ---
 
+## F20. ULIP-2 的點雲 RGB 在 **[0, 1]**，而這是靠 ULIP **程式**定下來的
+
+MetaFind 沒說，**ULIP-2 的論文也沒說**。checkpoint 名字只寫 `10k-xyzrgb`。
+
+**決定性證據在 ULIP 的程式裡**：資料集沒有顏色時它填
+
+```python
+rgb_data = np.ones_like(point_set) * 0.4      # dataset_3d.py:292, 297
+```
+
+—— 一個中灰。若尺度是 0–255，那個替代值會是 ~102 而不是 0.4。
+
+**這一次用 Level 2（依賴方實作）作為答案是正當的**，與第 155 項那個錯誤不同：
+當時我拿 ULIP-2 的**程式**去論證它的**設計**（該不該凍結 CLIP），那是設計問題；
+這裡問的是「**這個 checkpoint 的輸入介面吃什麼尺度**」——
+那是關於依賴方**介面**的事實，程式就是最終權威，論文反而答不了。
+
+**弄錯不會有任何錯誤訊息**：xyz 經 `pc_norm` 後落在 [-1, 1]，
+若 rgb 是 0–255，顏色通道會大兩個數量級地主宰輸入，
+症狀只會是檢索數字偏低，而我們會跑去別處找原因。
+每個 sidecar 都記 `rgb_scale: "unit"`。
+
+**另外兩件同樣抄自 ULIP loader 的事**：
+
+- **`pc_norm` 只作用在 xyz**（`dataset_3d.py:496`），rgb 是**之後**才 concat。
+  六欄一起正規化會讓顏色被物體實際尺寸縮放——形狀一樣，張量不同。
+- **不做 FPS**。`Objaverse_Lvis_Colored` 讀的是已經恰好 10,000 點的雲，
+  再用打亂的 permutation 取；FPS 出現在 ShapeNet 那條路徑。
+
+---
+
 ## 由 F1–F13 推導出的三個架構決策
 
 ### D1 — 不重訓 ULIP-2 本身，用官方 released checkpoint 當起點
