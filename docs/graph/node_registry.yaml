@@ -367,7 +367,7 @@ nodes:
     role: compute
     purpose: "Fix the object-level 80/20 partition and define both evaluation protocols."
     decomposition_rationale: [N5_gate_point, N3_checkpoint_needed]
-    reads: [asset_manifest, pointclouds, text_image_embeddings, objaverse_annotations, renders]
+    reads: [asset_manifest, pointclouds, text_image_embeddings, objaverse_annotations, renders, stage1_hyperparameters]
     writes: [splits, split_seed, eval_protocols, stage1_protocol, run_progress]
     precondition: "Objaverse preparation complete (join = all)"
     postcondition: >
@@ -855,14 +855,22 @@ nodes:
       rollback: N/A
     notes: >
       [PAPER 3.3] "200 randomly sampled scenes".
-      [U-21 -- BOTH READINGS MUST REMAIN EXECUTABLE] An earlier version read
+      [U-21 -- BOTH READINGS REMAIN EPISTEMIC CANDIDATES; ONLY ONE IS EXECUTABLE]
+      An earlier version read
       only composition_protocol, which silently committed to Reading B: with no
       ProcTHOR channel in its reads, "sample ProcTHOR scenes and run them
       through I-Design" could be written in prose but never actually run. The
       ProcTHOR channels are now among the reads so the decision recorded in
       composition_protocol.source is one the graph can honour either way:
-        procthor_via_idesign -> sample from scene_graphs within scene_splits
-        idesign_generated    -> generate from prompts, ProcTHOR reads unused
+        procthor_via_idesign -> sample from scene_graphs within scene_splits.
+          NOT CURRENTLY EXECUTABLE, and G7 refuses it: I-Design's entry point
+          is IDesign(no_of_objects, user_input, room_dimensions), which takes a
+          PROMPT, not a house. No ProcTHOR-house adapter exists upstream or
+          here. The reading stays registered because MetaFind 3.3 does not rule
+          it out -- but "registered" and "runnable" are different claims, and
+          this note used to assert the second.
+        idesign_generated    -> generate from prompts, ProcTHOR reads unused.
+          The only executable reading today.
       Declaring reads it may not use is the correct trade here: a node that
       cannot reach the data for a live reading is a node that has decided the
       UNKNOWN.
@@ -972,7 +980,8 @@ nodes:
     purpose: "Table 3 metrics per variant, including the inference-only row."
     decomposition_rationale: [N4_independent_observability]
     reads: [variant_ckpts, variant_status, gallery_index, eval_protocols,
-            scene_splits, variant_registry, composition_protocol, evaluation_scene_inputs]
+            scene_splits, variant_registry, composition_protocol, evaluation_scene_inputs,
+            splits, pointclouds, post_stage1_embeddings, asset_glb]
     writes: [retrieval_metrics, composed_scenes, judge_scores, run_progress, cost_ledger]
     postcondition: "Every SUCCESS variant has metrics; every failed one is explicitly N/A with a reason"
     deterministic: false
@@ -986,6 +995,14 @@ nodes:
       partial_failure_semantics: proceed_with_admitted
       rollback: N/A
     notes: >
+      [INPUTS CORRECTED] This read only variant_ckpts, variant_status,
+      gallery_index and the protocols -- which cannot produce a single number
+      in Table 3. A variant's R@1 needs the QUERY side encoded through that
+      variant's checkpoint, so it needs splits, pointclouds and
+      post_stage1_embeddings exactly as n15 does; a checkpoint plus an index
+      answers nothing on its own. And the two scene columns need asset_glb,
+      because `w/o iterative retrieval` composes real meshes.
+      The gap was invisible because the node declared the right OUTPUTS.
       Evaluates two kinds of row. Trained variants come from n18. The
       inference-only row ("w/o iterative retrieval") reuses the Full checkpoint
       named by variant.reuses_ckpt and simply runs SG4 with
@@ -1044,7 +1061,12 @@ nodes:
       policies: [{class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, record_fields: [missing_item]}]
       partial_failure_semantics: halt
       rollback: N/A
-    notes: "Criteria include that RA-1/2/3 records exist and that D-1..D-4 are stated in the report body."
+    notes: >
+      Criteria are enumerated in validation_plan.yaml, not here. This note used
+      to hard-code "RA-1/2/3" and "D-1..D-4", both of which went stale: there
+      are four Required Audits, and the deviations are D-2..D-6 with D-1 held
+      in boundary.conditional_deviations and EVALUATED rather than listed. A
+      hard-coded range in a second place is a second thing to forget.
 
   - id: n22_publish_report
     role: mutate

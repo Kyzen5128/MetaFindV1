@@ -464,24 +464,33 @@ graph TD
   n04 --> n05[[n05 annotate<br/>Qwen · SG1 · C1]]:::sub
   n07 --> n08[[n08 semantic_edges<br/>Qwen · SG2 · C2]]:::sub
   G2 --> n09[n09 build_splits<br/>Objaverse only]:::compute
-  n05 --> n06[n06 encode_text_image<br/>CLIP frozen]:::model
-  n06 --> n09
+  n05 --> n05b[/n05b resolve_stage1_encoding<br/>HUMAN · U-14/U-15/U-34/U-11/]:::term
+  n05b -->|actual=frozen| n06[n06 encode_text_image<br/>CLIP frozen · SKIPPED if trainable]:::model
+  n06 -->|actual=frozen| n09
+  n05b -->|actual=trainable| n09
   n07 --> n09c[n09c build_scene_splits<br/>ProcTHOR only]:::compute
   n08 --> n09c
   n09 --> G3{{G3 object_corpus<br/>G-INVALID}}:::gate
   G3 --> n10[n10 train_stage1<br/>point_encoder + fusion]:::mutate
   G3 --> n09b[/n09b resolve_stage2_protocol<br/>HUMAN · U-08a/U-08b/]:::term
+  n07 --> n09b
   n09b --> G6{{G6 stage2_ready<br/>G-INVALID}}:::gate
   n09c --> G6
+  n10 --> n10b[n10b post_stage1_encode<br/>passthrough or re-encode]:::model
   n10 --> n11[n11 gallery_staging]:::mutate
+  n10b --> n11
   n11 --> G4{{G4 gallery_freeze<br/>G-CONTAM}}:::gate
   G4 --> n12[n12 promote_index]:::mutate
   n10 --> n13[n13 train_stage2<br/>fuser + ESSGNN]:::mutate
+  n10b --> n13
   G6 --> n13
   n13 --> n14[n14 equivariance_probe]:::compute
   n12 --> n15[n15 eval_retrieval<br/>7 modes x 2 protocols]:::compute
   n13 --> n15
+  n10b --> n15
   n12 --> n15b[/n15b resolve_composition_protocol<br/>HUMAN · U-18/U-21/]:::term
+  n09b --> n15b
+  n07 --> n15b
   n15b --> G7{{G7 composition_protocol<br/>G-INVALID}}:::gate
   G7 --> n15c[n15c prepare_eval_scenes<br/>I-Design x200 · R-01]:::compute
   n12 --> n16[[n16 compose_scenes<br/>SG4 · C3 · needs GLB]]:::sub
@@ -591,7 +600,7 @@ graph TD
 | **U-23** | UNKNOWN | 三個模態同時被遮罩時代表什麼。§2.6 是**獨立** 30%，所以 2.7% 的 query 完全沒有資訊，Eq.5 仍要它去對上 gallery 條目 | 實作照字面（`allow_empty=True`），另有旗標可強制至少留一個模態 |
 | **U-24** | UNKNOWN | `sim(·,·)` 的定義。Eq.5 與 Eq.7a/7b 都只寫 `sim`，從未定義 | 用 cosine（CLIP／ULIP 慣例），記錄為選擇 |
 | **U-25** | UNKNOWN | **「adaptive freezing strategies」**。§2.2 說 Stage 2「with adaptive freezing strategies」，但 §2.6 給的是**固定**凍結。什麼東西是 adaptive、隨什麼變，全文沒有 | 實作 §2.6 的固定凍結，並記錄 §2.2 的 adaptive 因未定義而未實作 |
-| **U-27** | UNKNOWN | **I-Design 自己的輸入**。它的 API 是 `IDesign(no_of_objects, user_input, room_dimensions)`；§3.3 只說「200 個隨機取樣的場景」，沒給 prompt 清單、房間尺寸、物件數。**實測：I-Design 根本沒有吃 ProcTHOR 房屋的入口**，所以 U-21 的讀法 A 字面上不可執行 | 記錄我們用的 prompt／尺寸／物件數，並聲明那是我們的 |
+| **U-27** | UNKNOWN | **I-Design 自己的輸入**。它的 API 是 `IDesign(no_of_objects, user_input, room_dimensions)`；**MetaFind** §3.3 只說「200 個隨機取樣的場景」，沒給 prompt 清單、房間尺寸、物件數。<br>**注意區分**：**I-Design 的**論文 Table 4／5 有給 60 條 prompt 與房間尺寸（smoke run 已改用其中兩條原文），但那**不是** MetaFind 那 200 個場景的來源——論文總共只有 60 條。物件數 `n` 兩篇都沒給（I-Design Table 1 的 NObj 是**產出**不是輸入）。**實測：I-Design 根本沒有吃 ProcTHOR 房屋的入口**，所以 U-21 的讀法 A 字面上不可執行 | 記錄我們用的 prompt／尺寸／物件數，並聲明那是我們的 |
 | **U-28** | UNKNOWN | **Table 1 在 layout-free 的 Objaverse-LVIS 上評 `w/ ESSGNN` 時，`e_layout` 是什麼**。§3.2 承認有這件事（"feature-attribution mismatch when evaluating on layout-free datasets"）卻沒說 `λ·e_layout` 是省略、歸零還是別的；它提的 "two fusion heads" 也沒說有沒有實作 | 記錄選擇。30% scene-dropout 已定義了「省略」的行為，是最可能的讀法。**two fusion heads 不實作** |
 | **U-26** | UNKNOWN | **兩處差異，不是一處**。(a) 參數化：§2.5 是兩個獨立 MLP 吃同樣輸入；Appendix C (10)(13)(14) 先算一條 `m_ij = φ_e(...)` 再分給 `φ_h`／`φ_x`（原始 EGNN 走這種）。(b) **更新順序**：Eq.3 餵給 `f_x` 的是**已更新的** `h^{l+1}`，Appendix C 的 `m_ij` 是用**舊的** `h^l`。等變性兩種都成立，但數值不同 | 實作依 §2.5，記錄為選擇 |
 | **U-29** | UNKNOWN | **物理邊到底怎麼進 ESSGNN**。§2.3 定義 physical（support／adjacency）與 semantic 兩種邊，但 §2.5 的 `f_h`／`f_x` 只吃**一個**邊參數 `e_ij`，而 §2.5 與 Appendix C 都把 `e_ij` 定義成**語意**邊（LLM 關係句 → frozen text encoder）。物理邊是只決定 `N(i)`？自己帶 feature？與語意邊合併成一條？還是平行的另一條？support 與 adjacency 進網路後分不分得出來？全部沒說 | 記錄選擇 —— **這是架構決定，不是超參數** |
@@ -1133,3 +1142,36 @@ Table 1 與 Table 3 對不上的那四個數字（11.4/11.3、13.5/13.8）在第
 
 **查了 591 段英文引文、2 筆帶行號的程式碼引用、12 個被引用但不存在的路徑**
 （其中 11 個是尚未執行的 gate `record_path`，正確）。
+
+### 2026-08-15 第二十輪（外部審查，11 份 docs 從第一行讀到檔尾）
+
+審查者這次不看 diff，整份重讀。抓到的核心是**檢查器有一整類盲區**：
+`8b2`（讀到的 channel 必須由 incoming edge 帶進來）**只對 gate 跑**，
+普通節點完全沒有等價保證。所以 1,355 項檢查全過，底下卻躺著四個沒閉合的資料依賴。
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 209 | **普通節點的 read 沒有 producer 保證。** 四個節點宣告讀某個 channel，而它的 writer**不在自己的 dependency 祖先裡**：`n13`／`n18` 讀 `post_stage1_embeddings` 但 `depends_on` 沒有 `n10b`；`n09b` 讀 `scene_graphs` 卻只依賴 `G3`，而 **G3 是刻意與 ProcTHOR 分支解耦的**，它作證不了 `n07` 跑過；`n15b` 讀 `stage2_protocol`／`scene_graphs`、`n15c` 讀 `scene_splits`，writer 都不是祖先。**每一個都只是因為 execution layer 剛好排得比較晚才「大概存在」** | 新增 **`NODE-READ-ANCESTOR`** 結構檢查：每個節點 `reads` 的每個 channel，其 writer 必須是 dependency 祖先（或全域不可變輸入）。**加下去立刻抓出 7 筆**，全部補上真實的 producer 邊與 DAG。負向注入（拿掉 `n13` 的 `n10b` 依賴）確認會紅 | 🔴 **檢查器盲區** |
+| 210 | **`e13b` 宣稱的 provenance 不成立** —— 它從 `G3` 帶 `scene_graphs`，可是 **G3 既不寫也不讀 `scene_graphs`** | `e13b` 改為只帶 Objaverse 側；新增 **`e13b2`（`n07 → n09b`）**由真正的 producer 帶 ProcTHOR 側 | 🔴 |
+| 211 | **`post_stage1_embeddings` 只接到 `n11`。** channel 宣告 reader 有 `n11`／`n13`／`n15`／`n18`，edge list 卻只有 `e15b`。**而且 gate 要求 edge carry、普通節點不要求 —— 兩種 semantics 混用** | 補 `e15c`／`e15d`／`e15e`。並**明文定義兩者的分工**寫進 `graph_spec.yaml`：`edge.carries` 是 **join 契約**（什麼必須到達才觸發），`node.reads` 是**可存取範圍**（由 `NODE-READ-ANCESTOR` 保證）。**gate 額外要求 edge carry，因為它要出終局裁決，必須只用被交到手上的證據**，否則紀錄寫不出裁決依據 | 🔴 **語意混用** |
+| 212 | **`n09` 寫 `hyperparameter_config_hash`，卻沒讀那份 artifact。** `stage1_hyperparameters` 由 `n05b` 產出，`n09` 的 reads 裡沒有它 —— 它憑什麼知道那個 hash | `n09.reads` 補上。程式端的 hash 比對本來就對，**斷掉的是 graph provenance** | 🔴 |
+| 213 | **`n19_eval_ablations` 產不出它宣告的 Table 3。** 它只讀 `variant_ckpts`／`gallery_index`／協定 —— **一個 checkpoint 加一個索引算不出任何 R@1**，缺 query 側的 `splits`／`pointclouds`／`post_stage1_embeddings`（`n15` 都有）；場景欄還要 `asset_glb`，因為 `w/o iterative retrieval` 要擺真的 mesh。**缺口被藏住是因為它宣告的 OUTPUT 是對的** | 四個輸入全部補上 | 🔴 |
+| 214 | G3 只驗 `stage1_encoding_protocol` 五個欄位裡的三個，漏 `paper_clip_train_scope` 與 `missing_modality_representation` | 補齊。**gate 說 PASS、executor 說不能跑，那不是擋板，是沒人問的第二意見** | 🟠 |
+| 215 | `01_GRAPH_SPEC` 的 Mermaid 落後三輪：沒有 `n05b`、沒有 frozen/trainable 分支、沒有 `n10b`、`n09b` 只掛在 G3 | 重畫。並新增檢查：**registry 裡每個節點都必須出現在流程圖裡**。負向注入（整個移除 `n10b`）確認會紅。**一張漏掉節點的圖比沒有圖更糟，因為它答得很有自信** | 🟠 |
+| 216 | `02_BUILD_STEPS` 的 D-1 條件還是**邏輯反的**舊版（`clip_train_scope == 'trainable'`），而它是 Level 3 的入口文件 | 改為 `paper == trainable AND actual == frozen`，並說明舊條件錯在哪 | 🟠 |
+| 217 | `02_BUILD_STEPS`／`00_FINDINGS` 仍把 `point_encoder+fuser` 寫成「主線」、`full`寫成「單卡不可行」 | 改為「目前選定的 `actual=frozen` 執行方式」與「**未量測**，RA-3 的量測對象」。**把一個解讀寫成事實正是 U-34 存在的理由** | 🟠 |
+| 218 | D-5 只寫換模型，漏了 I-Design 補充材料 §7 的 **JSON mode** | 新增 **D-7**（JSON-constrained decoding 未重現）。**分開編號而非擴大 D-5**，因為兩者可獨立修復：開了 guided JSON 就退掉 D-7，D-5 原封不動 | 🟠 |
+| 219 | `n15c` 寫「兩種讀法都必須可執行」，但 G7 已正確拒絕 `procthor_via_idesign` | 改為「兩種都是**認識論上的候選**，目前只有 `idesign_generated` 可執行」。**「已登記」與「跑得起來」是兩種不同的主張** | 🟠 |
+| 220 | `node_registry` 的 G5 note 硬寫 `RA-1/2/3` 與 `D-1..D-4` | 刪掉硬編碼範圍，指向 `validation_plan`。**在第二個地方硬寫範圍，就是第二個會忘記更新的地方** | 🟠 |
+| 221 | README 寫「UNKNOWN 累積 36 條」（實際 38）、「71 個測試」（實際 55 L1 ＋ 17 L2 = 72） | 更正，**並讓兩個數字改由檢查器重算**。另新增偏離編號跨文件一致性檢查 —— D-7 一加上去，三份文件立刻全部 stale | 🟠 |
+| 222 | `02_BUILD_STEPS` 的「未定項總表」只到 U-33，卻叫總表 | 改名「主要未定項摘要」，並註明權威登記表在 §15 與 `graph_spec.yaml`（38 條） | 🟡 |
+| 223 | U-27 寫「論文沒給 prompt」，但 I-Design 論文其實有給 | 明確區分：**MetaFind** §3.3 沒給它那 200 個場景的 prompt；**I-Design** Table 4／5 有 60 條，但那不是同一批。`n` 兩篇都沒給 | 🟡 |
+
+**四條新檢查全部做過負向注入**：拿掉 `n13` 的 `n10b` 依賴 → 紅；
+整個移除 Mermaid 裡的 `n10b` → 紅；把 D-7 改成 D-8 → 紅；把 38 改回 36 → 紅。
+檢查數 1,355 → **1,574**。
+
+**這輪要記住的**：前幾輪修的都是**內容**，這輪修的是**檢查器的涵蓋範圍**。
+`8b2` 寫得完全正確，只是**只套在 gate 上** ——
+而「1,355 項檢查全過」讀起來與「這張圖是對的」一模一樣。
+一個正確但涵蓋不全的檢查，比沒有檢查更容易讓人停止懷疑。

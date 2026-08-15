@@ -14,7 +14,7 @@
 | 標記 | 意思 |
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
-| **[未定]** | 論文沒說，我們選了一個並記錄（累積 36 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**） |
+| **[未定]** | 論文沒說，我們選了一個並記錄（累積 38 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**） |
 | **[偏離]** | 與論文不同，必須在報告聲明（**5 條 D-2…D-6**，外加 **1 條條件式 D-1** —— 它是否成立取決於 U-34） |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
@@ -88,7 +88,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | 1 | [`02_BUILD_STEPS.md`](02_BUILD_STEPS.md) | **從這裡開始**。逐步驟建置流程，每步標明論文怎麼說、我們怎麼做 |
 | 2 | [`01_GRAPH_SPEC.md`](01_GRAPH_SPEC.md) | 完整規格：分類、目標、state、節點、邊、路由、迴圈、失敗、驗證、gate、風險、修正紀錄 |
 | 3 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實測事實（F 系列）與架構決策（D 系列），**含論文的多處自相矛盾** |
-| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：48 個 state channel、55 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
+| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：48 個 state channel、62 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
 | 5 | [`node_registry.yaml`](node_registry.yaml) | 35 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
 | 6 | [`validation_plan.yaml`](validation_plan.yaml) | 55 個 L1、17 個 L2、7 個 gate、4 個 Required Audit |
 
@@ -108,7 +108,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 **不下載**：ULIP-2 預先取樣的點雲（185 GB）、ULIP-2 的渲染圖（474 GB，而且不是論文要的
 11 正交視角）、ShapeNet triplets（409 GB）。
 
-### 五項偏離（D-2…D-6）＋一項條件式（D-1）
+### 六項偏離（D-2…D-7）＋一項條件式（D-1）
 
 | id | 偏離 | 影響 |
 |---|---|---|
@@ -118,6 +118,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | **D-4** | 不做人工評分 | Table 2 人工欄判 `INSUFFICIENT_EVIDENCE` |
 | **D-5** | I-Design 中所有設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` | **與 D-2 不同**（那是 GPT-4o／標註與評分）。換規劃器改變**場景本身** → Table 2 全部與 Table 3 場景欄位移；**Table 1 不受影響**。做法是 patch `filter_dict`，**沒有別名** |
 | **D-6** | 對 I-Design 的**行為性**修改（patch 02／03）：佈局引用正規化、丟棄懸空引用、合併重複 id、修正迴圈上限、重試換 seed、耗盡放棄場景 | 改的是管線**產出什麼**，不只是誰產出。**偏離的是公開實作** —— 論文作者的整合程式從未公開，不能斷言他們沒做類似修改 |
+| **D-7** | I-Design 的 **JSON-constrained decoding 未重現**。補充材料 §7：*"All agents utilize GPT-4's JSON mode to restrict outputs exclusively to valid JSON"*，而我們的 vLLM 沒開任何 guided decoding。**與 D-5 不同**——D-5 是誰回答，D-7 是回答受不受結構約束。Qwen 因此**可能吐出結構上不合法的 JSON，GPT-4 在那個模式下不可能**，那會落進 Engineer 的 schema 驗證重試迴圈。分開編號是因為兩者可獨立修復：開了 guided JSON 就能退掉 D-7，D-5 原封不動  影響同 D-5：Table 2 全部與 Table 3 場景欄；Table 1 不受影響 |
 
 ### 論文自身的四個矛盾
 
@@ -154,7 +155,7 @@ G1 來源有效 → G2 點雲健全 → G3 物件語料 → G4 gallery 凍結 �
 - **G6**：`stage2_protocol`（U-08a／U-08b）**或 `essgnn_edge_protocol`（U-29／U-30／U-19）**未 `resolved`、或 `scene_splits` 有洩漏之前，Stage 2 不准訓練。
 - **G7**：`composition_protocol.status` 未 `resolved`（U-18／U-21）之前，不准合成場景。**Table 1 不經過它。**
 
-71 個測試對 7 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
+72 個檢查（55 個 L1 ＋ 17 個 L2）對 7 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
 
 `G2` 這一輪**縮小了判準**：它原本要求自取樣點雲必須與 ULIP 官方釋出的點雲一致，
 但論文從未說 MetaFind 沿用 ULIP 預取樣的點雲，而 Stage 1 本來就會 fine-tune point encoder。

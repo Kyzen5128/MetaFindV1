@@ -45,7 +45,7 @@ scratch/             參考用的雜項腳本
 
 ## 已知偏離論文之處
 
-**正式偏離五項（D-2…D-6）＋條件式一項（D-1）**，編號以
+**正式偏離六項（D-2…D-7）＋條件式一項（D-1）**，編號以
 [`docs/graph/graph_spec.yaml`](docs/graph/graph_spec.yaml) 為準：D-2…D-6 在
 `boundary.deviations`，D-1 在 `boundary.conditional_deviations`，
 `active_if: stage1_encoding_protocol.clip_train_scope == 'trainable'`。
@@ -58,6 +58,7 @@ scratch/             參考用的雜項腳本
 | **D-4** | 不做人工評分 |
 | **D-5** | I-Design 中所有設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` |
 | **D-6** | 對 I-Design 的**行為性**修改（patch 02／03）：偏離的是**公開實作**，不是「論文所做的事」 |
+| **D-7** | I-Design 的 **JSON-constrained decoding 未重現**。補充材料 §7：*"All agents utilize GPT-4's JSON mode to restrict outputs exclusively to valid JSON"*，而我們的 vLLM 沒開任何 guided decoding。**與 D-5 不同**——D-5 是誰回答，D-7 是回答受不受結構約束。Qwen 因此**可能吐出結構上不合法的 JSON，GPT-4 在那個模式下不可能**，那會落進 Engineer 的 schema 驗證重試迴圈。分開編號是因為兩者可獨立修復：開了 guided JSON 就能退掉 D-7，D-5 原封不動 |
 
 > **兩次更正記在這裡。**
 > 早期這張表寫「D2＝frozen backbone 全部預先快取、訓練只在 1280-d 向量上」——

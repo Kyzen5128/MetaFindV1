@@ -198,6 +198,24 @@ boundary:
         qwen2.5-7b-instruct everywhere -- vLLM, the config, the patched filter
         and every scene sidecar. No alias exists.
 
+    - id: D-7
+      what: "I-Design's JSON-constrained decoding is not reproduced"
+      why: "no guided-decoding equivalent is configured on the local vLLM endpoint"
+      impact: >
+        SEPARATE from D-5, which is only which model answers. I-Design's
+        supplementary 7 states "All agents utilize GPT-4's JSON mode to
+        restrict outputs exclusively to valid JSON, which significantly
+        reduces token consumption". Our endpoint serves Qwen with ordinary
+        sampling, so a structurally invalid response is POSSIBLE here and was
+        not possible upstream. That lands in the Engineer agent's schema
+        validation retry loop, which changes how many rounds a scene takes and
+        which scenes survive at all -- one of the paths our runs fail on.
+        Numbered separately rather than folded into D-5 because they are
+        independently fixable: enabling guided JSON would retire D-7 while
+        leaving D-5 exactly as it is.
+        Affects the same surface as D-5: all of Table 2 and Table 3's scene
+        columns. Table 1 never runs the planner.
+
   conditional_deviations:
     - id: D-1
       what: "ViT-bigG-14 stays frozen; only the 3D encoder and fusion train"
@@ -254,7 +272,7 @@ state:
     - name: asset_glb
       type: "map[uid -> {path, sha256, bytes}]"
       writers: [n02_download]
-      readers: [G1_sources_valid, n03_sample_pointclouds, n04_render_views, n16_compose_scenes]
+      readers: [G1_sources_valid, n03_sample_pointclouds, n04_render_views, n16_compose_scenes, n19_eval_ablations]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -278,7 +296,7 @@ state:
     - name: pointclouds
       type: "map[uid -> {path, sha256, n_points}]"
       writers: [n03_sample_pointclouds]
-      readers: [G2_pc_sanity, n09_build_splits, n10_train_stage1, n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations]
+      readers: [G2_pc_sanity, n09_build_splits, n10_train_stage1, n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations, n19_eval_ablations]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -368,7 +386,7 @@ state:
     - name: post_stage1_embeddings
       type: "{query: map[uid -> {text: uri, image: uri | list[uri] per view, aggregation, n_views}], gallery: map[uid -> same], towers_are_identical: bool, source: cache_passthrough|reencoded, produced_from_ckpt_sha}"
       writers: [n10b_post_stage1_encode]
-      readers: [n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations]
+      readers: [n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations, n19_eval_ablations]
       merge: replace
       lifetime: persistent
       note: >
@@ -431,7 +449,7 @@ state:
     - name: stage1_hyperparameters
       type: "{uri, sha256, values: {optimizer, learning_rate, weight_decay, scheduler, batch_size, epochs, p_mask, init_temperature, learnable_temperature, max_logit_scale, seed}, decided_by, decided_at}"
       writers: [n05b_resolve_stage1_encoding]
-      readers: [G3_object_corpus, n10_train_stage1, n18_train_ablations, n22_publish_report]
+      readers: [G3_object_corpus, n09_build_splits, n10_train_stage1, n18_train_ablations, n22_publish_report]
       merge: replace
       lifetime: persistent
       note: >
@@ -581,7 +599,7 @@ state:
     - name: splits
       type: "{object: {train, test}}"
       writers: [n09_build_splits]
-      readers: [G3_object_corpus, n10_train_stage1, n13_train_stage2, n15_eval_retrieval, n18_train_ablations]
+      readers: [G3_object_corpus, n10_train_stage1, n13_train_stage2, n15_eval_retrieval, n18_train_ablations, n19_eval_ablations]
       merge: write_once
       lifetime: persistent
       note: >
@@ -932,7 +950,8 @@ edges:
   - {id: e12c, from: n09c_build_scene_splits, to: G6_stage2_ready, kind: data, guard: "", join_group: corpus, carries: [scene_splits]}
   - {id: e13, from: n09_build_splits, to: G3_object_corpus, kind: data, guard: "", join_group: default, carries: [splits, eval_protocols, stage1_protocol, stage1_encoding_protocol, stage1_hyperparameters, asset_manifest]}
 
-  - {id: e13b, from: G3_object_corpus, to: n09b_resolve_stage2_protocol, kind: data, guard: "verdict == PASS", join_group: default, carries: [scene_graphs, asset_manifest]}
+  - {id: e13b, from: G3_object_corpus, to: n09b_resolve_stage2_protocol, kind: data, guard: "verdict == PASS", join_group: objaverse, carries: [asset_manifest, objaverse_annotations], rationale: "[CORRECTED] This carried scene_graphs, which G3 neither writes nor reads -- G3 was deliberately decoupled from the ProcTHOR branch, so it cannot testify that n07 has run. The ProcTHOR half now arrives on e13b2 from its actual producer."}
+  - {id: e13b2, from: n07_scene_graphs, to: n09b_resolve_stage2_protocol, kind: data, guard: "", join_group: procthor, carries: [scene_graphs, procthor_object_text], rationale: "n09b decides how ProcTHOR assets pair to gallery entries (U-08a) and where the Stage 2 modalities come from (U-08b); both need the scene graphs themselves, from the node that builds them."}
   - {id: e13c, from: n09b_resolve_stage2_protocol, to: G6_stage2_ready, kind: data, guard: "", join_group: default, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, stage1_protocol], rationale: "G6 must see Stage 1's tower_sharing: fully_shared cannot satisfy 2.6's Stage 2 freezing, and finding that out inside n13 wastes the whole Stage 1 run."}
   - {id: e13d, from: G6_stage2_ready, to: n13_train_stage2, kind: data, guard: "verdict == PASS", join_group: protocol, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits, stage1_protocol]}
   - {id: e13e, from: G6_stage2_ready, to: HALT_BLOCKED, kind: escalation, guard: "verdict == BLOCKED_EVIDENCE", join_group: default, carries: [stage2_protocol], rationale: "U-08a/U-08b unresolved is a pause awaiting a decision, not a failure."}
@@ -957,12 +976,18 @@ edges:
       ProcTHOR branch via G6, not from Stage 1 training.
   - {id: e19, from: n13_train_stage2, to: n14_equivariance_probe, kind: data, guard: "", join_group: default, carries: [variant_ckpts]}
 
+  - {id: e15c, from: n10b_post_stage1_encode, to: n13_train_stage2, kind: data, guard: "", join_group: embeddings, carries: [post_stage1_embeddings]}
+  - {id: e15d, from: n10b_post_stage1_encode, to: n15_eval_retrieval, kind: data, guard: "", join_group: embeddings, carries: [post_stage1_embeddings]}
+  - {id: e15e, from: n10b_post_stage1_encode, to: n18_train_ablations, kind: data, guard: "", join_group: embeddings, carries: [post_stage1_embeddings]}
   - {id: e20, from: n12_promote_index, to: n15_eval_retrieval, kind: data, guard: "", join_group: default, carries: [gallery_index, eval_protocols]}
   - {id: e21, from: n13_train_stage2, to: n15_eval_retrieval, kind: data, guard: "", join_group: default, carries: [variant_ckpts]}
   - {id: e22, from: n12_promote_index, to: n16_compose_scenes, kind: data, guard: "", join_group: default, carries: [gallery_index, asset_glb]}
   - {id: e22b, from: n12_promote_index, to: n15b_resolve_composition_protocol, kind: data, guard: "", join_group: default, carries: [gallery_index]}
+  - {id: e22b2, from: n09b_resolve_stage2_protocol, to: n15b_resolve_composition_protocol, kind: data, guard: "", join_group: protocol, carries: [stage2_protocol]}
+  - {id: e22b3, from: n07_scene_graphs, to: n15b_resolve_composition_protocol, kind: data, guard: "", join_group: procthor, carries: [scene_graphs]}
   - {id: e22c, from: n15b_resolve_composition_protocol, to: G7_composition_protocol, kind: data, guard: "", join_group: default, carries: [composition_protocol]}
   - {id: e22d, from: G7_composition_protocol, to: n15c_prepare_eval_scenes, kind: data, guard: "verdict == PASS", join_group: default, carries: [composition_protocol]}
+  - {id: e22d2, from: n09c_build_scene_splits, to: n15c_prepare_eval_scenes, kind: data, guard: "", join_group: procthor, carries: [scene_splits, scene_graphs], rationale: "U-21's procthor_via_idesign reading needs the held-out houses; sampling them from anything but the test split would leak."}
   - {id: e22e, from: n15c_prepare_eval_scenes, to: n16_compose_scenes, kind: data, guard: "", join_group: protocol, carries: [evaluation_scene_inputs, composition_protocol]}
   - {id: e22f, from: G7_composition_protocol, to: HALT_BLOCKED, kind: escalation, guard: "verdict == BLOCKED_EVIDENCE", join_group: default, carries: [composition_protocol], rationale: "U-18/U-21 unresolved pauses Table 2 only; Table 1 is unaffected."}
   - {id: e23, from: n13_train_stage2, to: n16_compose_scenes, kind: data, guard: "", join_group: default, carries: [variant_ckpts]}
@@ -988,6 +1013,31 @@ edges:
   - {id: e37, from: G4_gallery_freeze, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records], rationale: "Do NOT promote the staging index."}
   - {id: e38, from: G5_report_release, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records]}
   - {id: e39, from: n15c_prepare_eval_scenes, to: HALT_BLOCKED, kind: escalation, guard: "scene_source_unavailable", join_group: default, carries: [degraded_flags], rationale: "R-01: the scene source is what can be unavailable, and n15c is the node that calls it. This edge hung off n16, one node too late -- n16 cannot even start without evaluation_scene_inputs, so the escalation could never fire from there. Tables 2/3 become BLOCKED_EVIDENCE, not FAIL."}
+
+# --- what `reads` means versus what an edge `carries` -----------------------
+# These were being used interchangeably, which left two different availability
+# semantics in one graph. They are now distinct and each has its own check:
+#
+#   edge.carries  the JOIN contract -- what must ARRIVE before the node fires.
+#                 Checked by the join policies below.
+#   node.reads    what the node may ACCESS. Every one of these must be written
+#                 by a dependency ANCESTOR (check 8b3, NODE-READ-ANCESTOR), so
+#                 availability follows from the DAG rather than from where the
+#                 execution_order table happens to put things.
+#
+# Gates carry the stricter obligation: every channel a gate reads must ALSO
+# arrive on an incoming edge (check 8b2). A gate issues a terminal verdict from
+# evidence, so it must decide on what it was handed and must not reach into
+# ambient state -- otherwise the record cannot say what the verdict was based
+# on. Ordinary nodes have no such requirement; requiring it of them would mean
+# restating every long-lived channel on every edge that passes near it.
+#
+# [WHY THIS IS WRITTEN DOWN] Four ordinary nodes declared reads whose writers
+# were not ancestors -- n09b (scene_graphs, from a G3 that is deliberately
+# decoupled from the ProcTHOR branch), n13 and n18 (post_stage1_embeddings,
+# with n10b absent from depends_on), n15b and n15c (scene_graphs,
+# stage2_protocol, scene_splits). Each worked only because the layering put
+# the writer earlier. Scheduling that happens to be right is not a contract.
 
 # J1 -- every fan-in declared explicitly; no runtime default is inherited
 join_policies:
@@ -1019,13 +1069,16 @@ join_policies:
     trigger: any_group_satisfied
     rationale: "Same as sg1_reduce."
   - node: n15_eval_retrieval
-    groups: [{name: default, policy: all, k: null}]
-    trigger: any_group_satisfied
-    rationale: "Needs the promoted index and both headline variants."
+    groups:
+      - {name: default, policy: all, k: null}
+      - {name: embeddings, policy: all, k: null}
+    trigger: all_groups_satisfied
+    rationale: "Needs the promoted index, both headline variants, AND the post-Stage-1 text/image embeddings -- Table 1's query side is built from them, and under actual=trainable they are the only place the trained CLIP's output exists."
   - node: n13_train_stage2
     groups:
       - {name: default, policy: all, k: null}
       - {name: protocol, policy: all, k: null}
+      - {name: embeddings, policy: all, k: null}
     trigger: all_groups_satisfied
     rationale: >
       Stage 2 needs both the Stage 1 checkpoint and a RESOLVED Stage 2 protocol.
@@ -1123,18 +1176,18 @@ dependencies:
     - {node: n11_gallery_index_staging, depends_on: [n10_train_stage1, n10b_post_stage1_encode]}
     - {node: G4_gallery_freeze, depends_on: [n11_gallery_index_staging]}
     - {node: n12_promote_index, depends_on: [G4_gallery_freeze]}
-    - {node: n09b_resolve_stage2_protocol, depends_on: [G3_object_corpus]}
+    - {node: n09b_resolve_stage2_protocol, depends_on: [G3_object_corpus, n07_scene_graphs]}
     - {node: n09c_build_scene_splits, depends_on: [n07_scene_graphs, n08_semantic_edges]}
     - {node: G6_stage2_ready, depends_on: [n09b_resolve_stage2_protocol, n09c_build_scene_splits]}
-    - {node: n13_train_stage2, depends_on: [n10_train_stage1, G6_stage2_ready]}
+    - {node: n13_train_stage2, depends_on: [n10_train_stage1, n10b_post_stage1_encode, G6_stage2_ready]}
     - {node: n14_equivariance_probe, depends_on: [n13_train_stage2]}
-    - {node: n15_eval_retrieval, depends_on: [n12_promote_index, n13_train_stage2]}
-    - {node: n15b_resolve_composition_protocol, depends_on: [n12_promote_index]}
+    - {node: n15_eval_retrieval, depends_on: [n12_promote_index, n13_train_stage2, n10b_post_stage1_encode]}
+    - {node: n15b_resolve_composition_protocol, depends_on: [n12_promote_index, n09b_resolve_stage2_protocol, n07_scene_graphs]}
     - {node: G7_composition_protocol, depends_on: [n15b_resolve_composition_protocol]}
-    - {node: n15c_prepare_eval_scenes, depends_on: [G7_composition_protocol]}
+    - {node: n15c_prepare_eval_scenes, depends_on: [G7_composition_protocol, n09c_build_scene_splits]}
     - {node: n16_compose_scenes, depends_on: [n12_promote_index, n13_train_stage2, n15c_prepare_eval_scenes]}
     - {node: n17_judge_scenes, depends_on: [n16_compose_scenes]}
-    - {node: n18_train_ablations, depends_on: [n15_eval_retrieval]}
+    - {node: n18_train_ablations, depends_on: [n15_eval_retrieval, n10b_post_stage1_encode]}
     - {node: n19_eval_ablations, depends_on: [n18_train_ablations, n15c_prepare_eval_scenes]}
     - {node: n20_aggregate, depends_on: [n15_eval_retrieval, n17_judge_scenes, n14_equivariance_probe, n19_eval_ablations]}
     - {node: n21_compare_to_paper, depends_on: [n20_aggregate]}

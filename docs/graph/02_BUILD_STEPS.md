@@ -6,9 +6,15 @@
 > **三種東西必須分開，不可混為一談：**
 > **[論文]** 原文明確規定 ｜ **[未定]** 論文沒說，我們選了一個並記錄 ｜ **[偏離]** 與論文不同，必須在報告中聲明
 
-**正式偏離五項（D-2…D-6）＋條件式一項（D-1）**，編號與 `README.md`、
+**正式偏離六項（D-2…D-7）＋條件式一項（D-1）**，編號與 `README.md`、
 `graph_spec.yaml` 一致，不得另編。D-1 放在 `boundary.conditional_deviations`，
-`active_if: stage1_encoding_protocol.clip_train_scope == 'trainable'`：
+`active_if: paper_clip_train_scope == 'trainable' AND actual_clip_train_scope == 'frozen'`。
+
+> **舊條件是反的。** 先前寫 `clip_train_scope == 'trainable'` —— 那會在 run
+> **確實訓了 CLIP、根本沒有偏離**的時候標記 D-1 為 active，
+> 而 D-1 真正描述的狀態（論文要訓、我們凍了）**完全無法表示**。
+> U-34 現在拆成兩個欄位：`paper_` 是我們對論文的解讀，`actual_` 是這次實驗怎麼跑，
+> **只有 `actual_` 會分支 graph、只有它會到 backbone**。
 
 | id | 偏離 |
 |---|---|
@@ -18,6 +24,7 @@
 | **D-4** | 不做人工評分 |
 | **D-5** | I-Design 中**所有**設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` |
 | **D-6** | 對 I-Design 的**行為性**修改（patch 02／03） |
+| **D-7** | I-Design 的 **JSON-constrained decoding 未重現**。補充材料 §7：*"All agents utilize GPT-4's JSON mode to restrict outputs exclusively to valid JSON"*，而我們的 vLLM 沒開任何 guided decoding。**與 D-5 不同**——D-5 是誰回答，D-7 是回答受不受結構約束。Qwen 因此**可能吐出結構上不合法的 JSON，GPT-4 在那個模式下不可能**，那會落進 Engineer 的 schema 驗證重試迴圈。分開編號是因為兩者可獨立修復：開了 guided JSON 就能退掉 D-7，D-5 原封不動 |
 
 **D-6 改的是「產出什麼」，不是「誰產出」。** patch 02／03 會正規化佈局引用、
 丟棄懸空引用、合併重複 id、給修正迴圈上限、每次重試換 seed、耗盡時放棄場景 ——
@@ -324,13 +331,14 @@ ProcTHOR 分支的任何故障都會停掉一個不依賴它的訓練。兩條�
 那正是 Table 3 的 `Train fuser only` 那一列 —— **論文明確報告它較差（8.7 vs 11.4）**。
 把它當主線等於一開始就跑錯實驗。
 
-**改為三個等級，主線是第二個：**
+**改為三個等級。第二個是 `actual_clip_train_scope = frozen` 目前選定的執行方式 ——
+不是「MetaFind 必然如此」。** U-34 未解前，把它寫成主線就是把一個解讀寫成事實：
 
 | 等級 | 訓練什麼 | 4090 可行 | 定位 |
 |---|---|---|---|
 | `fuser_only` | 只有 fusion 層 | ✅ | **Table 3 的 ablation 列** |
 | `point_encoder+fuser` | PointBERT (32.5M) + fusion + 投影 | ✅ | **主線** |
-| `full` | 再加 ViT-bigG-14 (2.5B) | ❌ 單卡不可行 | 記為硬體限制 |
+| `full` | 再加 ViT-bigG-14 (2.5B) | ❓ **未量測** | `actual=trainable` 的執行對象，由 **RA-3** 量測 |
 
 **[D-1 —— 條件式偏離，取決於 U-34]** ViT-bigG-14 的 text/image 端保持凍結。
 **ULIP-2 論文明文凍結 CLIP。** §3.3：
@@ -370,7 +378,9 @@ text encoder** in OpenCLIP」，那**不是原文**——它把上面兩句併�
 報告中須聲明「entire encoder」在我們的設定下指 3D encoder + fusion，不含 CLIP。
 
 **只有「點雲」的 embedding 快取限定 `fuser_only` 那一列。**
-text／image 走凍結的 ViT-bigG-14，主線本來就該快取——那是 D-1 之下的正確做法，不是妥協。
+text／image 走凍結的 ViT-bigG-14 時本來就該快取——那是 `actual=frozen` 之下的正確做法，
+不是妥協，也不預設 D-1 成立。`actual=trainable` 時**不得快取**，
+而 Stage 1 之後由 `n10b_post_stage1_encode` 用訓練後的 encoder 重編（見 `post_stage1_embeddings`）。
 
 ```
 text / image   凍結 → 主線就該快取，省掉每個 epoch 重跑 2.5B 參數
@@ -718,7 +728,11 @@ IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Ta
 | 9 | 多處寫死 `48000` | 一律 `len(manifest)`（實際 46,052） |
 | 10 | `1280 / 128 / 64` 當論文真值並設 L1 測試 | 改為 checkpoint 推導值與超參數 |
 
-## 未定項總表
+## 主要未定項摘要
+
+> **這不是完整清單。** 權威登記表是 `01_GRAPH_SPEC.md` §15 與
+> `graph_spec.yaml` 的 `risks_unknowns`（目前 38 條，含 U-34／U-35）。
+> 本節只摘錄與建置步驟直接相關者。
 
 完整登記表在 `01_GRAPH_SPEC.md` §15，機器可讀版在 `graph_spec.yaml` 的 `risks_unknowns`；
 `G5_report_release` **逐項**檢查處置（不得用區間表示）。

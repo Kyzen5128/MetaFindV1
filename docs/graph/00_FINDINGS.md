@@ -564,14 +564,15 @@ trained"），ULIP-2 是它的起點（§2.2 "both leveraging the ULIP-2 embeddi
 | 等級 | 訓練什麼 | 24GB 可行 | 定位 |
 |---|---|---|---|
 | `fuser_only` | 只有 fusion 層 | ✅ | **Table 3 的 ablation 列** |
-| `point_encoder+fuser` | PointBERT (32.5M) + fusion + 投影 | ✅ | **主線** |
-| `full` | 再加 ViT-bigG-14 (2.5B) | ❌ | 硬體限制，由 RA-3 記錄 |
+| `point_encoder+fuser` | PointBERT (32.5M) + fusion + 投影 | ✅ | **目前選定的 `actual=frozen` 執行方式**（不是「論文必然如此」，見 U-34） |
+| `full` | 再加 ViT-bigG-14 (2.5B) | ❓ **未量測** | `actual_clip_train_scope=trainable` 的執行對象，由 RA-3 量測 |
 
 **快取的範圍也跟著改**：
 
 ```
-text / image  →  CLIP 側凍結，可以預先快取
-point cloud   →  point encoder 主線可訓練，不可預先快取
+actual=frozen     text / image  →  CLIP 側凍結，可以預先快取
+                  point cloud   →  point encoder 可訓練，不可預先快取
+actual=trainable  三者皆不可快取；Stage 1 之後由 n10b 用訓練後的 encoder 重編
 ```
 
 先前「三個模態全部快取」正是讓設計退化成 `fuser_only` 的直接原因。

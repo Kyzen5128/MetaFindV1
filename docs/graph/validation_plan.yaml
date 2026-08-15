@@ -1047,8 +1047,16 @@ level_3_gates:
       AND quarantine_rate <= 0.02
       AND both evaluation protocols are defined with explicit query and gallery scopes
       AND stage1_encoding_protocol.status == "resolved", with text_serialization,
-          image_aggregation and actual_clip_train_scope each naming a choice
-          (U-15, U-14, U-34)
+          image_aggregation, paper_clip_train_scope, actual_clip_train_scope and
+          missing_modality_representation each naming a choice
+          (U-15, U-14, U-34 x2, U-11)
+          [CORRECTED] This listed three fields after the channel grew to five.
+          A protocol missing paper_clip_train_scope or
+          missing_modality_representation therefore PASSED the gate and was
+          then rejected by Stage1RuntimeConfig.from_protocols. Failing closed
+          at the executor is right, but a gate that says PASS on something the
+          executor refuses is not a barrier -- it is a second opinion nobody
+          asked for.
       AND stage1_protocol.status == "resolved", with fusion, tower_sharing,
           allow_all_masked, similarity and hyperparameter_config_hash each
           naming a choice (U-13, U-16, U-23, U-24, U-22)

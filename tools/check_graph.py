@@ -214,6 +214,44 @@ if m:
     check("README implemented-node count", len(implemented) == int(m.group(1)),
           f"table says {m.group(1)}, filesystem shows {len(implemented)}: {sorted(implemented)}")
 
+_ru = spec["risks_unknowns"]
+_ru_items = _ru["unknowns"] if isinstance(_ru, dict) else _ru
+unknown_ids = {u["id"] for u in _ru_items
+               if isinstance(u, dict) and str(u.get("id", "")).startswith("U-")}
+m3 = re.search(r"累積 (\d+) 條", readme_txt)
+check("README UNKNOWN count", m3 is not None and int(m3.group(1)) == len(unknown_ids),
+      f"README says {m3.group(1) if m3 else '?'}, registry has {len(unknown_ids)}")
+
+# Deviation ids must agree across the machine spec and every human table that
+# lists them. This went stale the moment D-7 was added: three documents said
+# "five deviations" while graph_spec held six, and a reader following the
+# README would have omitted a real behavioural deviation from the report.
+# The Mermaid flow in 01_GRAPH_SPEC is the only picture anyone actually looks
+# at, and nothing kept it honest. It sat three rounds behind: no n05b, no
+# frozen/trainable branch, no n10b, and n09b hanging off G3 alone. A diagram
+# that omits a node is worse than no diagram, because it answers the question
+# confidently.
+spec_md = (DOCS / "01_GRAPH_SPEC.md").read_text()
+mermaid = "\n".join(
+    blk for blk in re.findall(r"```mermaid(.*?)```", spec_md, re.S)
+)
+for nid in nodes:
+    short = nid.split("_")[0]
+    check(f"mermaid shows {nid}", re.search(rf"\b{re.escape(short)}\b", mermaid) is not None,
+          "node is in the registry but absent from the flow diagram")
+
+dev_ids = {d["id"] for d in spec["boundary"]["deviations"]}
+cond_ids = {d["id"] for d in spec["boundary"].get("conditional_deviations", [])}
+for name in ("README.md", "02_BUILD_STEPS.md"):
+    body = (DOCS / name).read_text()
+    listed = set(re.findall(r"\|\s*\*\*(D-[0-9])\*\*", body))
+    check(f"{name} deviation ids", listed == dev_ids | cond_ids,
+          f"lists {sorted(listed)}, graph_spec has {sorted(dev_ids | cond_ids)}")
+root = (DOCS.parents[1] / "README.md").read_text()
+listed = set(re.findall(r"\|\s*\*\*(D-[0-9])\*\*", root))
+check("root README deviation ids", listed == dev_ids | cond_ids,
+      f"lists {sorted(listed)}, graph_spec has {sorted(dev_ids | cond_ids)}")
+
 test_count = sum(
     len(re.findall(r"^def test_", p.read_text(), re.M))
     for p in (DOCS.parents[1] / "tests").glob("test_*.py")
@@ -341,6 +379,47 @@ for gid in {g["gate_id"] for g in plan["level_3_gates"]}:
             f"gate {gid} receives {ch}",
             ch in incoming_payload[gid],
             "is read by the gate but no incoming edge carries it",
+        )
+
+
+# --- 8b3. NODE-READ-ANCESTOR: every node's reads must be produced upstream -
+# The check above runs only over gates, and that gap hid a whole class of
+# defect: an ordinary node could declare `reads: [X]` while nothing in its
+# dependency closure writes X. n13_train_stage2 read post_stage1_embeddings
+# with n10b absent from its depends_on; n09b read scene_graphs with only G3
+# upstream, and G3 was deliberately decoupled from the ProcTHOR branch so it
+# cannot imply n07 has run; n15b read stage2_protocol and scene_graphs with
+# neither writer among its ancestors. Each worked only because the execution
+# layering happened to put the writer earlier -- an accident of scheduling,
+# not a contract.
+dag_pred = {d["node"]: set(d["depends_on"]) for d in spec["dependencies"]["dag"]}
+
+
+def ancestors(n, _seen=None):
+    _seen = _seen if _seen is not None else set()
+    for p_ in dag_pred.get(n, ()):
+        if p_ not in _seen:
+            _seen.add(p_)
+            ancestors(p_, _seen)
+    return _seen
+
+
+# Channels every node may read without a producer edge: append-only telemetry
+# and the global immutable inputs that exist before the graph starts.
+GLOBAL_INPUTS = {"asset_manifest", "variant_registry"}
+for nid, n in nodes.items():
+    if nid not in dag_pred:
+        continue  # sources and subgraph-internal nodes
+    anc = ancestors(nid)
+    for ch in set(n.get("reads", []) or []) - BROADCAST - GLOBAL_INPUTS:
+        writers = set(channels.get(ch, {}).get("writers", []) or [])
+        if not writers:
+            continue
+        check(
+            f"read-ancestor {nid}/{ch}",
+            bool(writers & anc) or nid in writers,
+            f"reads `{ch}` but none of its writers {sorted(writers)} is a "
+            f"dependency ancestor; the value is available only by scheduling luck",
         )
 
 
