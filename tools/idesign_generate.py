@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import traceback
 import os
 import shutil
 import subprocess
@@ -56,6 +57,7 @@ def endpoint_model_id(base_url: str) -> str:
 
 def write_config(workdir: Path, base_url: str, api_key: str, model: str) -> None:
     """I-Design's agents.py reads OAI_CONFIG_LIST.json from the CWD at import."""
+    workdir.mkdir(parents=True, exist_ok=True)
     models = [model]
     (workdir / "OAI_CONFIG_LIST.json").write_text(
         json.dumps(
@@ -149,7 +151,9 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001 -- one bad scene must not stop the batch
             failures += 1
             print(f"  FAILED: {type(exc).__name__}: {exc}", file=sys.stderr)
-            (workdir / "failure.txt").write_text(f"{type(exc).__name__}: {exc}")
+            (workdir / "failure.txt").write_text(
+                f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()}"
+            )
             continue
         rec |= {
             "scene_id": scene_id,

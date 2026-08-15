@@ -587,9 +587,34 @@ graph TD
 | **U-27** | UNKNOWN | **I-Design 自己的輸入**。它的 API 是 `IDesign(no_of_objects, user_input, room_dimensions)`；§3.3 只說「200 個隨機取樣的場景」，沒給 prompt 清單、房間尺寸、物件數。**實測：I-Design 根本沒有吃 ProcTHOR 房屋的入口**，所以 U-21 的讀法 A 字面上不可執行 | 記錄我們用的 prompt／尺寸／物件數，並聲明那是我們的 |
 | **U-28** | UNKNOWN | **Table 1 在 layout-free 的 Objaverse-LVIS 上評 `w/ ESSGNN` 時，`e_layout` 是什麼**。§3.2 承認有這件事（"feature-attribution mismatch when evaluating on layout-free datasets"）卻沒說 `λ·e_layout` 是省略、歸零還是別的；它提的 "two fusion heads" 也沒說有沒有實作 | 記錄選擇。30% scene-dropout 已定義了「省略」的行為，是最可能的讀法。**two fusion heads 不實作** |
 | **U-26** | UNKNOWN | **`f_h` 與 `f_x` 是否共用一條訊息**。§2.5 是兩個獨立 MLP 吃同樣的輸入；Appendix C (10)(13)(14) 是先算一條 `m_ij = φ_e(...)`，再由 `φ_h`／`φ_x` 各自吃它。**這是不同的參數化，不只是輸入不同**，原始 EGNN 走 Appendix C 那種 | 實作依 §2.5（兩個獨立 MLP），記錄為選擇 |
-| **R-01** | RISK | **I-Design 尚未驗證能否執行** | Table 2/3 全靠它，**查它很便宜，應盡早做** |
+| **R-01** | RISK・**部分實測** | **I-Design 裝得起來、初始設計會成功，但 5 次嘗試 0 個場景完成**。詳見下方 | Table 2/3 全靠它 |
 | **R-02** | RISK | 單卡 24GB 限制訓練範圍 | D-1 已聲明 |
 | **R-03** | RISK | Qwen 標註品質未知 | pilot 後人工抽查 |
+
+### R-01 實測結果（2026-08-15）
+
+**測到的：**
+
+| 項目 | 結果 |
+|---|---|
+| 能不能裝 | **能**。README／Dockerfile 要的 MinkowskiEngine、dgl、torch 1.12 **全部不需要** —— 追 import graph 後那些只從 `retrieve.py` 可達，而那正是 MetaFind 取代的元件。另：`requirements.txt` 的 `ag2==0.2.0` **PyPI 上不存在**，要用改名前的 `pyautogen==0.2.0` |
+| 能不能啟動 | **能**。`create_initial_design`（designer → architect → engineer）完成並通過 I-Design 自己的 schema 驗證 |
+| 能不能產出場景 | **不能**。Qwen2.5-7B-Instruct 跑 5 次，**0 個完成**，每次失敗在**不同的**下游路徑 |
+
+五次失敗分別是：修正迴圈無上限（236 輪相同回應）、牆 id 被放進 `objects_in_room`、preposition 不在 enum 內、引用不存在的物件、以及**物件 id 重複**（corrector 改第一個，`build_graph` 走訪全部，第二個一直把邊加回去，衝突無論如何都重生）。
+
+**沒測到、而且現在無法判斷的：**
+
+> **正常的成功率應該是多少。我們沒有基準。**
+> I-Design 沒有用它原本的規劃器在本機跑過，兩篇論文也都沒說那是什麼。
+> 所以**目前無法斷定這 5 次失敗是缺陷，還是本來就有的失敗率**
+> （亦即「多跑幾次、留下成功的」這種正常作法）。
+
+**論文說了什麼：** §3.3 只有一句 —— "the scene generation pipeline of I-Design on a set of 200 randomly sampled scenes"。沒有規劃器模型、沒有 I-Design 設定、沒有 prompt、沒有房間尺寸、沒有物件數、沒說失敗場景怎麼處理、也沒說那 200 個是不是從更多次嘗試裡留下來的。
+
+**`setup/patches/` 裡的五個 patch 是為了「讓場景跑得完」而做的工程決定，沒有任何論文依據，報告中必須如此聲明。** 要把這件事從「開放問題」變成「量測」，需要先建立基準 —— 聯繫作者，或用 I-Design 原本的規劃器跑一次。
+
+---
 
 ### 未公佈的訓練超參數（U-22）
 

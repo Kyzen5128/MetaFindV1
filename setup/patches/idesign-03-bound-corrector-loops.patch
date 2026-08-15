@@ -1,0 +1,128 @@
+diff --git a/IDesign.py b/IDesign.py
+index f9e19f4..6796111 100644
+--- a/IDesign.py
++++ b/IDesign.py
+@@ -10,12 +10,40 @@ from refiner_agents import get_refiner_agents
+ 
+ from chats import GroupChat, ChatWithEngineer, LayoutCorrectorGroupChat, ObjectDeletionGroupChat, LayoutRefinerGroupChat 
+ 
+-from utils import get_room_priors, extract_list_from_json
++import os
++from utils import get_room_priors, extract_list_from_json, normalize_layout_references, sanitize_object
+ from utils import preprocess_scene_graph, build_graph, remove_unnecessary_edges, handle_under_prepositions, get_conflicts, get_size_conflicts, get_object_from_scene_graph
+ from utils import get_object_from_scene_graph, get_rotation, get_cluster_objects, clean_and_extract_edges
+ from utils import get_cluster_size
+ from utils import get_possible_positions, is_point_bbox, calculate_overlap, get_topological_ordering, place_object, get_depth, get_visualization
+ 
++# ---------------------------------------------------------------------------
++# [MetaFind patch, not upstream] Bounds for the two correction loops.
++#
++# Upstream writes `while len(conflicts) > 0:` with no iteration limit. It
++# terminates only if the corrector shrinks the conflict set. Measured with
++# Qwen2.5-7B: the corrector returned schema-valid JSON that did not resolve the
++# conflict, so the loop ran without end -- 236 identical rounds and a 34 MB log
++# inside 25 seconds, with the GPU idle because nothing new was being generated.
++#
++# In the graph-engineering terms this project uses, the loop had a semantic exit
++# but no progress measure, no hard bound and no exhaustion outcome. This adds
++# the missing three.
++#
++# The exhaustion outcome deliberately RAISES rather than repairing the layout
++# by hand. Inventing a resolution would mean inventing I-Design's spatial
++# semantics; abandoning the scene keeps the failure visible and countable. If
++# the drop rate turns out high, that is evidence for a larger planner model,
++# not something to paper over.
++IDESIGN_DEBUG = os.environ.get("IDESIGN_DEBUG") == "1"
++MAX_CORRECTION_ROUNDS = 12
++MAX_ATTEMPTS_PER_CONFLICT = 3
++
++
++class CorrectionNotConverging(RuntimeError):
++    """The corrector agent stopped making progress; abandon this scene."""
++
++
+ class IDesign:
+     def __init__(self, no_of_objects, user_input, room_dimensions):
+         self.no_of_objects = no_of_objects
+@@ -118,14 +146,35 @@ class IDesign:
+ 
+         user_proxy, spatial_corrector_agent, json_schema_debugger, object_deletion_agent = get_corrector_agents()
+ 
++        rounds = 0
++        seen = {}
+         while len(conflicts) > 0:
++            # [MetaFind patch] see CorrectionNotConverging below.
++            sig = str(conflicts[0])
++            seen[sig] = seen.get(sig, 0) + 1
++            rounds += 1
++            if rounds > MAX_CORRECTION_ROUNDS or seen[sig] > MAX_ATTEMPTS_PER_CONFLICT:
++                raise CorrectionNotConverging(
++                    f"spatial corrector did not converge: {rounds} rounds, "
++                    f"conflict seen {seen[sig]}x, {len(conflicts)} outstanding. "
++                    f"First: {sig[:200]}"
++                )
+             spatial_corrector_agent.reset(), json_schema_debugger.reset()
+             groupchat = LayoutCorrectorGroupChat(
+                 agents  =[user_proxy, spatial_corrector_agent, json_schema_debugger],
+                 messages=[],
+                 max_round=15
+             )
+-            manager = GroupChatManager(groupchat=groupchat, llm_config=gpt4_config, is_termination_msg=is_termination_msg)
++            # [MetaFind patch] A retry must be an INDEPENDENT sample.
++            # autogen keys its response cache on (prompt, config). The loop
++            # resends conflicts[0] verbatim, so an unfixed conflict produces a
++            # byte-identical prompt, the cache returns the byte-identical reply,
++            # and temperature 0.7 becomes decorative. Measured: 236 rounds with
++            # the GPU at 0% -- nothing was generated after the first attempt.
++            # Varying the seed by round keeps the run reproducible while making
++            # each retry a genuinely new draw.
++            round_config = dict(gpt4_config, cache_seed=gpt4_config.get("cache_seed", 42) + rounds)
++            manager = GroupChatManager(groupchat=groupchat, llm_config=round_config, is_termination_msg=is_termination_msg)
+             user_proxy.initiate_chat(
+                 manager,
+                 message=f"""
+@@ -140,8 +189,24 @@ class IDesign:
+             corr_obj["is_on_the_floor"] = correction_json["corrected_object"]["is_on_the_floor"]
+             corr_obj["facing"] = correction_json["corrected_object"]["facing"]
+             corr_obj["placement"] = correction_json["corrected_object"]["placement"]
++            # [MetaFind patch] Normalise the CORRECTION too. preprocess_scene_graph
++            # runs once, before this loop, so every placement the corrector
++            # returns re-enters the graph unchecked -- including prepositions
++            # outside the schema's enum, e.g. "in front of" where
++            # room_layout_elements allows only {on, in the corner}.
++            sanitize_object(corr_obj, scene_graph)
+             G = build_graph(scene_graph)
+             conflicts = get_conflicts(G, scene_graph)
++            if IDESIGN_DEBUG:
++                print(f"[patch] round {rounds}: {corr_obj['new_object_id']} -> "
++                      f"{corr_obj['placement']['room_layout_elements']} | "
++                      f"objs={[e.get('object_id') for e in corr_obj['placement']['objects_in_room']]}",
++                      flush=True)
++                print(f"[patch] conflicts now: {len(conflicts)}", flush=True)
++                for ci, c in enumerate(conflicts):
++                    print(f"[patch]   c{ci}: {str(c)[:110]}", flush=True)
++                _cp = list(G.predecessors(corr_obj["new_object_id"])) if corr_obj["new_object_id"] in G else "N/A"
++                print(f"[patch]   G parents of {corr_obj['new_object_id']}: {_cp}", flush=True)
+ 
+         if auto_prune:
+             size_conflicts = get_size_conflicts(G, scene_graph, self.user_input, self.room_priors, verbose)
+@@ -152,7 +217,19 @@ class IDesign:
+                     print(conflict)
+                     print("\n\n")
+ 
++            size_rounds = 0
++            size_seen = {}
+             while len(size_conflicts) > 0:
++                # [MetaFind patch] same bound as the spatial loop.
++                sig = str(size_conflicts[0])
++                size_seen[sig] = size_seen.get(sig, 0) + 1
++                size_rounds += 1
++                if size_rounds > MAX_CORRECTION_ROUNDS or size_seen[sig] > MAX_ATTEMPTS_PER_CONFLICT:
++                    raise CorrectionNotConverging(
++                        f"size corrector did not converge: {size_rounds} rounds, "
++                        f"conflict seen {size_seen[sig]}x, {len(size_conflicts)} outstanding. "
++                        f"First: {sig[:200]}"
++                    )
+                 object_deletion_agent.reset()
+                 groupchat = ObjectDeletionGroupChat(
+                     agents  =[user_proxy, object_deletion_agent],

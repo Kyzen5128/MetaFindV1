@@ -1,0 +1,252 @@
+diff --git a/utils.py b/utils.py
+index bafc3a4..390ce59 100644
+--- a/utils.py
++++ b/utils.py
+@@ -94,7 +94,247 @@ def get_size_conflicts(G, scene_graph, user_input, room_priors, verbose=False):
+     conflicts_size = check_size_conflicts(G, scene_graph, user_input, room_priors, verbose)
+     return conflicts_size
+ 
++# Reuse upstream's own list (defined at the top of this file) rather than
++# restating it; it already matches engineer_schema's enum for layout_element_id.
++LAYOUT_ELEMENT_IDS = set(ROOM_LAYOUT_ELEMENTS)
++
++# Spellings observed in practice that are unambiguously one of the above.
++#
++# "middle of the floor" is not model sloppiness -- it is UPSTREAM'S OWN BUG.
++# IDesign.py prompts the designer with 'middle of the room' (line ~79) but
++# prompts the ENGINEER, the agent that emits the final objects_in_room JSON,
++# with 'middle of the floor' (line ~110), while engineer_schema's enum accepts
++# only 'middle of the room'. The model is being told to produce a value its
++# own schema forbids. Why this does not break upstream is UNKNOWN -- we have
++# not run I-Design with its original planner and have no basis to guess.
++_LAYOUT_ALIASES = {
++    "middle_of_the_room": "middle of the room",
++    "middle of the floor": "middle of the room",
++    "middle_of_the_floor": "middle of the room",
++    "floor": "middle of the room",
++    "the_floor": "middle of the room",
++    "the floor": "middle of the room",
++}
++
++
++def _canonical_layout_id(raw):
++    """Map a written-out id onto the schema's enum, or return it unchanged."""
++    if not isinstance(raw, str):
++        return raw
++    key = raw.strip().lower()
++    if key in LAYOUT_ELEMENT_IDS:
++        return key
++    return _LAYOUT_ALIASES.get(key, raw)
++
++
++def normalize_layout_references(scene_graph):
++    """Put layout elements in the list the schema says they belong in.
++
++    [MetaFind patch, not upstream]
++
++    engineer_schema splits an object's placement into two lists:
++    room_layout_elements, whose layout_element_id has an enum, and
++    objects_in_room, whose object_id must name another object. A model that
++    writes a wall into objects_in_room produces a graph whose edges point at a
++    node that is not an object, and get_rotation() then raises
++        ValueError: Object not found in scene graph!
++    which kills the whole scene.
++
++    Measured on one Qwen2.5-7B scene: 7 of 42 wall references landed in the
++    wrong list, plus 4 uses of "middle of the floor" (absent from the enum, and
++    the value upstream's own engineer prompt asks for) and 3 underscore
++    spellings. Rare per object, but a 200-scene batch of ~15 objects each makes
++    it a certainty.
++
++    This does not invent placements. The enum already defines which ids are
++    layout elements; this moves such an id into the list that accepts it and
++    canonicalises its spelling. Upstream already does the same for one case --
++    it drops "middle of the room" from objects_in_room -- so this extends an
++    existing normalisation rather than introducing a new policy.
++
++    Prepositions differ between the two lists: objects_in_room allows
++    {on, left of, right of, in front, behind, under} while room_layout_elements
++    allows only {on, in the corner}. "in the corner" is preserved; everything
++    else becomes "on", which is what placing an object against a wall means in
++    I-Design's constraint functions.
++    """
++    for obj in scene_graph:
++        placement = obj.get("placement", {})
++        layout = placement.setdefault("room_layout_elements", [])
++        objects = placement.setdefault("objects_in_room", [])
++
++        for elem in layout:
++            elem["layout_element_id"] = _canonical_layout_id(elem.get("layout_element_id"))
++
++        already = {e.get("layout_element_id") for e in layout}
++        kept = []
++        for elem in objects:
++            canon = _canonical_layout_id(elem.get("object_id"))
++            if canon not in LAYOUT_ELEMENT_IDS:
++                kept.append(elem)
++                continue
++            if canon not in already:
++                prep = elem.get("preposition")
++                layout.append({
++                    "layout_element_id": canon,
++                    "preposition": "in the corner" if prep == "in the corner" else "on",
++                })
++                already.add(canon)
++        placement["objects_in_room"] = kept
++
++        facing = _canonical_layout_id(obj.get("facing"))
++        if facing != obj.get("facing"):
++            obj["facing"] = facing
++    return scene_graph
++
++
++# engineer_schema's two preposition enums.
++LAYOUT_PREPOSITIONS = {"on", "in the corner"}
++OBJECT_PREPOSITIONS = {"on", "left of", "right of", "in front", "behind", "under"}
++
++_PREP_ALIASES = {
++    "in front of": "in front",
++    "infront of": "in front",
++    "in-front": "in front",
++    "to the left of": "left of",
++    "to the right of": "right of",
++    "left": "left of",
++    "right": "right of",
++    "beneath": "under",
++    "below": "under",
++    "underneath": "under",
++    "above": "on",
++    "on top of": "on",
++    "in the corner of": "in the corner",
++}
++
++
++def _canonical_preposition(raw, allowed, fallback=None):
++    """Map a preposition onto one of `allowed`.
++
++    `fallback` is used when the value cannot be mapped into `allowed` at all.
++    For room_layout_elements that is "on": the enum offers only
++    {on, in the corner}, and every directional phrase a model reaches for
++    ("in front of the south wall", "against the west wall") means the object
++    sits at that wall, which is what "on" denotes in the constraint functions.
++    Leaving the raw value in place is not an option -- it silently fails to
++    clear the very conflict the corrector was asked to fix.
++    """
++    if not isinstance(raw, str):
++        return fallback if fallback is not None else raw
++    key = raw.strip().lower()
++    if key in allowed:
++        return key
++    mapped = _PREP_ALIASES.get(key)
++    if mapped in allowed:
++        return mapped
++    return fallback if fallback is not None else raw
++
++
++def sanitize_object(obj, scene_graph):
++    """Make one object's placement satisfy engineer_schema.
++
++    [MetaFind patch, not upstream]
++
++    preprocess_scene_graph runs ONCE, before the correction loop. Every
++    placement the corrector returns afterwards re-enters the scene graph with
++    no validation at all, so the loop can be fed values the schema forbids and
++    ids that name nothing. Three failures were observed this way, each in a
++    different upstream code path:
++
++      * a wall in objects_in_room       -> get_rotation raises
++                                            "Object not found in scene graph!"
++      * preposition "in front of" in room_layout_elements, where the enum
++        allows only {on, in the corner} -> the conflict it was asked to fix is
++                                            never actually cleared
++      * an object_id naming nothing     -> get_rotation(None) raises
++                                            AttributeError: 'NoneType' has no
++                                            attribute 'keys'
++
++    None of these is specific to a model: each is reachable whenever a returned
++    placement is not already in the exact shape the downstream code assumes.
++    Whether upstream's original planner produces such placements is UNKNOWN --
++    we have not run it.
++
++    This only maps values onto the enums the schema already declares, and
++    drops references that name nothing -- using upstream's own substring
++    fallback first, exactly as preprocess_scene_graph does.
++    """
++    normalize_layout_references([obj])
++    placement = obj.get("placement", {})
++
++    for elem in placement.get("room_layout_elements", []):
++        elem["preposition"] = _canonical_preposition(
++            elem.get("preposition"), LAYOUT_PREPOSITIONS, fallback="on"
++        )
++
++    known = {x["new_object_id"] for x in scene_graph}
++    kept = []
++    for elem in placement.get("objects_in_room", []):
++        oid = elem.get("object_id")
++        if oid not in known:
++            # Upstream's fallback: an id that is a substring of a real one.
++            closest = next((k for k in known if oid and oid in k), None)
++            if closest is None:
++                print(f"[sanitize] dropping dangling reference {oid!r} from {obj['new_object_id']}")
++                continue
++            elem["object_id"] = closest
++        elem["preposition"] = _canonical_preposition(
++            elem.get("preposition"), OBJECT_PREPOSITIONS, fallback="on"
++        )
++        kept.append(elem)
++    placement["objects_in_room"] = kept
++    return obj
++
++
++def deduplicate_objects(scene_graph):
++    """Collapse repeated new_object_id entries, keeping the first.
++
++    [MetaFind patch, not upstream]
++
++    create_initial_design builds the object list by concatenating the
++    engineer's output across designer/architect blocks:
++
++        json_data["objects_in_room"] += json.loads(...)["objects_in_room"]
++
++    It tries to prevent collisions by passing the ids placed so far into the
++    next prompt, but nothing enforces it. When a model repeats an id, the list
++    holds two dicts with the same new_object_id and DIFFERENT placements.
++
++    That makes the correction loop unfixable, and it is invisible without
++    instrumentation. get_object_from_scene_graph returns the FIRST match, so
++    the corrector edits one dict, while build_graph iterates ALL of them and
++    keeps re-adding the other one's edges. Measured: after the corrector
++    correctly reduced coffee_table_1 to a single parent, the rebuilt graph
++    still reported
++
++        G parents of coffee_table_1: ['south_wall', 'west_wall']
++
++    so the same conflict was re-raised forever no matter what the LLM answered.
++    Whether upstream hits this depends on whether its planner ever repeats an
++    id; we have not measured that and do not assume either way.
++
++    Keeping the first occurrence matches get_object_from_scene_graph, so the
++    entry the corrector edits is the entry that survives.
++    """
++    seen = {}
++    deduped = []
++    for obj in scene_graph:
++        oid = obj.get("new_object_id")
++        if oid in seen:
++            seen[oid] += 1
++            continue
++        seen[oid] = 1
++        deduped.append(obj)
++    dupes = {k: v for k, v in seen.items() if v > 1}
++    if dupes:
++        print(f"[dedup] dropped duplicate object ids: {dupes}")
++    return deduped
++
++
+ def preprocess_scene_graph(scene_graph):
++    scene_graph = deduplicate_objects(scene_graph)
++    scene_graph = normalize_layout_references(scene_graph)
+     # Correct the preposition for objects in the middle of the room
+     for obj in scene_graph:
+         if not obj["is_on_the_floor"] and "middle of the room" in [x["layout_element_id"] for x in obj["placement"]["room_layout_elements"]]:

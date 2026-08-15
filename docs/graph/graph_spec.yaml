@@ -947,6 +947,50 @@ risks_unknowns:
   - {id: U-26, marked: UNKNOWN, blocking: false, item: "whether f_h and f_x share a message. Paper 2.5 gives two independent MLPs over the same inputs (Eq. 2 and Eq. 3); Appendix C Eq. 10/13/14 computes ONE message m_ij = phi_e(...) and then applies phi_h(m_ij) and phi_x(m_ij) to it. That is a different parameterisation, not just different inputs, and the original EGNN follows the Appendix C form.", affects: "ESSGNN parameter count and what the coordinate head can see", resolution: "implementation follows 2.5 (two independent MLPs, metafind/models/essgnn.py f_h and f_x); recorded as a choice", fallback: "n/a"}
   - {id: U-23, marked: UNKNOWN, blocking: false, item: "what a query with all three modalities masked means. Paper 2.6 masks each modality INDEPENDENTLY at 30%, so 2.7% of queries carry no information at all, yet Eq. 5 still matches them against a gallery item.", affects: "Stage 1 training signal", resolution: "the literal reading is implemented (allow_empty=True); a flag forces at least one modality, and the choice is recorded", fallback: "n/a"}
   - {id: U-24, marked: UNKNOWN, blocking: false, item: "the similarity function. Eq. 5 and Eq. 7a/7b write sim(.,.) and never define it.", affects: "every loss and every retrieval ranking", resolution: "cosine, matching CLIP and ULIP convention; recorded as a choice", fallback: "n/a"}
-  - {id: R-01, marked: RISK, item: "I-Design has not been verified to run", affects: "all of Tables 2 and 3", resolution: "trial-run it early -- cheap to check, expensive to discover late", fallback: "Tables 2/3 => BLOCKED_EVIDENCE"}
+  - id: R-01
+    marked: RISK
+    status: "PARTIALLY MEASURED 2026-08-15 -- installs and starts; no scene completed"
+    item: >
+      Whether I-Design can produce the 200 evaluation scenes paper 3.3 needs.
+    affects: "all of Table 2 and Table 3's two scene columns"
+    measured:
+      installs: >
+        Yes. Its README and Dockerfile call for MinkowskiEngine, dgl and
+        torch 1.12, but tracing the import graph shows those are reachable only
+        from retrieve.py -- the OpenShape retrieval step MetaFind replaces. The
+        scene-generation half needs autogen, networkx, jsonschema, matplotlib
+        and opencv. Note requirements.txt pins ag2==0.2.0, which does not exist
+        on PyPI; pyautogen==0.2.0 is the package the code was written against.
+      runs: >
+        Yes to the first stage. create_initial_design (designer, architect,
+        engineer) completes and passes I-Design's own schema validation.
+      completes_a_scene: >
+        NO. Five attempts with Qwen2.5-7B-Instruct produced zero finished
+        scenes. Each attempt failed in a different downstream code path:
+        an unbounded corrector loop (236 identical rounds); a wall id placed in
+        objects_in_room; a preposition outside the schema's enum; a reference
+        to a nonexistent object; and duplicate new_object_id entries, where the
+        corrector edits the first while build_graph keeps re-adding the second's
+        edges, so the same conflict is regenerated regardless of the answer.
+    not_measured: >
+      WHAT A NORMAL SUCCESS RATE LOOKS LIKE. We have no baseline. I-Design has
+      not been run with its original planner here, and nothing in either paper
+      states one. So we CANNOT currently classify the five failures as defects
+      rather than an ordinary failure rate that is handled by generating more
+      attempts than are kept.
+    paper_says: >
+      NOTHING beyond "the scene generation pipeline of I-Design on a set of 200
+      randomly sampled scenes" (3.3). No planner model, no I-Design
+      configuration, no prompts, no room dimensions, no object counts, and no
+      statement of how failed scenes were handled or whether 200 is a kept
+      subset of a larger number of attempts.
+    resolution: >
+      Undecided, and deliberately not decided by guessing. The five patches in
+      setup/patches/ were written to get a scene to complete; they are
+      engineering choices with no basis in either paper and must be reported as
+      such. Establishing a baseline -- by contacting the authors, or by running
+      I-Design's original planner -- is what would turn this from an open
+      question into a measurement.
+    fallback: "Tables 2/3 => INSUFFICIENT_EVIDENCE"
   - {id: R-02, marked: RISK, item: "24 GB limits the trainable scope", affects: "D-1 and RA-3", resolution: "not resolvable on this hardware", fallback: "declare the scope actually trained"}
   - {id: R-03, marked: RISK, item: "Qwen annotation quality is unmeasured", affects: "the text tower", resolution: "pilot then manual spot-check", fallback: "escalate model size"}

@@ -28,7 +28,9 @@ finished one.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures as cf
 import json
+import random
 import time
 from pathlib import Path
 
@@ -79,36 +81,113 @@ def fetch_lvis_manifest() -> dict[str, str]:
     return manifest
 
 
-def fetch_objaverse_glbs(uids: list[str], batch: int = 64, processes: int = 8) -> dict:
+OBJAVERSE_HF = "https://huggingface.co/datasets/allenai/objaverse/resolve/main"
+
+
+def _fetch_one_glb(uid: str, rel_path: str, dest_root: Path, attempts: int = 4) -> str:
+    """One GLB, written atomically. Returns "" on success or the failure reason.
+
+    Downloads to a .part file and renames only after the whole body arrives, so
+    an interrupted fetch can never leave a truncated file that the resume scan
+    would count as present.
+    """
+    import httpx
+
+    dest = dest_root / rel_path
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(".glb.part")
+
+    for attempt in range(attempts):
+        try:
+            with httpx.stream(
+                "GET", f"{OBJAVERSE_HF}/{rel_path}", follow_redirects=True, timeout=60.0
+            ) as r:
+                r.raise_for_status()
+                expected = int(r.headers.get("content-length", 0))
+                written = 0
+                with tmp.open("wb") as fh:
+                    for block in r.iter_bytes(1 << 20):
+                        fh.write(block)
+                        written += len(block)
+            if expected and written != expected:
+                raise OSError(f"truncated: {written} of {expected} bytes")
+            if written <= 1024:
+                raise OSError(f"implausibly small: {written} bytes")
+            tmp.replace(dest)
+            return ""
+        except Exception as exc:  # noqa: BLE001 -- retried, then recorded
+            tmp.unlink(missing_ok=True)
+            if attempt == attempts - 1:
+                return f"{type(exc).__name__}: {exc}"
+            time.sleep(2**attempt + random.random())
+    return "unreachable"
+
+
+def fetch_objaverse_glbs(uids: list[str], workers: int = 16) -> dict:
     """Fetch the GLB meshes, keeping them.
 
     Resumable: an asset counts as present only if its file is on disk and
     non-trivial in size, so a truncated fetch is redone.
+
+    Deliberately does NOT use objaverse.load_objects. That helper runs a
+    multiprocessing.Pool, and a single truncated HTTP response deadlocks the
+    whole download permanently:
+
+        worker raises urllib.error.ContentTooShortError
+          -> the pool pickles it back to the parent
+          -> ContentTooShortError.__init__(msg, content) needs two arguments,
+             but unpickling supplies one
+          -> TypeError inside the pool's _handle_results THREAD, which dies
+          -> the parent blocks in futex_wait forever, waiting for results that
+             will never be delivered
+
+    Measured 2026-08-15: the run wedged after 2,047 of 46,052 assets and sat
+    there for six hours. An enclosing try/except cannot catch it, because
+    nothing is ever raised in the caller -- the call simply never returns.
+    Threads keep the exception in-process where it can actually be handled.
     """
     import objaverse
 
     paths.OBJAVERSE_GLB.mkdir(parents=True, exist_ok=True)
     objaverse.BASE_PATH = str(paths.OBJAVERSE_GLB)
     objaverse._VERSIONED_PATH = str(paths.OBJAVERSE_GLB / "hf-objaverse-v1")
+    object_paths = objaverse._load_object_paths()
 
     have = {p.stem for p in paths.OBJAVERSE_GLB.rglob("*.glb") if p.stat().st_size > 1024}
     todo = [u for u in uids if u not in have]
-    print(f"  glbs: {len(have)} present, {len(todo)} to fetch")
+    print(f"  glbs: {len(have)} present, {len(todo)} to fetch, {workers} threads")
 
-    t0 = time.time()
-    for start in range(0, len(todo), batch):
-        chunk = todo[start : start + batch]
-        try:
-            objaverse.load_objects(uids=chunk, download_processes=processes)
-        except Exception as exc:  # noqa: BLE001 -- keep going, record at the end
-            print(f"    batch {start // batch}: {type(exc).__name__}: {exc}", flush=True)
-        seen = start + len(chunk)
-        rate = seen / max(time.time() - t0, 1e-9)
-        print(
-            f"  [{seen:6d}/{len(todo)}] {rate * 60:.0f}/min, "
-            f"剩餘約 {(len(todo) - seen) / max(rate, 1e-9) / 60:.0f} 分",
-            flush=True,
-        )
+    unmapped = [u for u in todo if u not in object_paths]
+    if unmapped:
+        print(f"  {len(unmapped)} uids absent from object-paths.json.gz; skipped")
+
+    failures: dict[str, str] = {}
+    t0, done = time.time(), 0
+    with cf.ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(_fetch_one_glb, u, object_paths[u], paths.OBJAVERSE_GLB): u
+            for u in todo
+            if u in object_paths
+        }
+        for fut in cf.as_completed(futures):
+            uid = futures[fut]
+            if reason := fut.result():
+                failures[uid] = reason
+            done += 1
+            if done % 200 == 0 or done == len(futures):
+                rate = done / max(time.time() - t0, 1e-9)
+                print(
+                    f"  [{done:6d}/{len(futures)}] {rate * 60:.0f}/min, "
+                    f"剩餘約 {(len(futures) - done) / max(rate, 1e-9) / 60:.0f} 分, "
+                    f"失敗 {len(failures)}",
+                    flush=True,
+                )
+
+    if failures:
+        report = paths.OUTPUTS / "logs" / "glb_failures.json"
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(json.dumps(failures, indent=2))
+        print(f"  {len(failures)} failed; reasons in {report}")
 
     got = {p.stem for p in paths.OBJAVERSE_GLB.rglob("*.glb") if p.stat().st_size > 1024}
     return {"requested": len(uids), "present": len(got), "missing": len(set(uids) - got)}
@@ -197,8 +276,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--only", nargs="*", choices=list(STEPS), help="run only these steps")
     ap.add_argument("--limit", type=int, default=0, help="cap the number of GLBs, for a smoke run")
-    ap.add_argument("--batch", type=int, default=64)
-    ap.add_argument("--processes", type=int, default=8)
+    ap.add_argument("--workers", type=int, default=16, help="download threads")
     args = ap.parse_args()
 
     paths.setup_env()
@@ -223,7 +301,7 @@ def main() -> int:
             uids = sorted(json.loads(paths.LVIS_MANIFEST.read_text()))
             if args.limit:
                 uids = uids[: args.limit]
-            stats = fetch_objaverse_glbs(uids, batch=args.batch, processes=args.processes)
+            stats = fetch_objaverse_glbs(uids, workers=args.workers)
             print(f"  {stats}")
 
     print("\n" + "=" * 60)
