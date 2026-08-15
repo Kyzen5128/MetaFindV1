@@ -278,6 +278,25 @@ state:
         places retrieved assets into a scene and needs real geometry, so they are
         kept.
 
+    - name: pretrained_weights
+      type: "map[name -> {uri, sha256, revision, behavioural_check: {probe, expected, observed, passed}}]"
+      writers: [n02_download]
+      readers: [G1_sources_valid, n06_encode_text_image, n10_train_stage1, n10b_post_stage1_encode, n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations, n22_publish_report]
+      merge: upsert_by_key
+      lifetime: persistent
+      note: >
+        [ADDED] The frozen weights every stage runs on -- the ULIP-2
+        checkpoint, ViT-bigG-14, Qwen2.5-VL -- were not graph state at all.
+        n02 downloaded them, G1's criterion said "the ULIP-2 checkpoint passes
+        a behavioural check, not merely a sha256", and G1 read no channel that
+        could hold one. Every node that loads them reached outside the graph
+        for a path in paths.py.
+        Surfaced by the check requiring a derived routing input to name the
+        channel it comes from: G1 routes on ckpt_behaviour and had nowhere to
+        derive it. A sha256 is deliberately not enough here -- the failure this
+        guards against is a checkpoint that loads and produces plausible
+        garbage, which hashes fine.
+
     - name: procthor_dataset
       type: "{path, sha256, train_count, val_count, test_count}"
       writers: [n02_download]
@@ -318,7 +337,7 @@ state:
         released clouds (U-02) is L2-PC-ULIP-REF, a diagnostic that does not gate.
 
     - name: renders
-      type: "map[uid -> {view_paths[11], view_sha256[11]}]"
+      type: "map[uid -> {view_paths[11], view_sha256[11], raw_bbox_extents, projection, camera_layout, resolution}]"
       writers: [n04_render_views]
       readers: [n05_annotate, n05b_resolve_stage1_encoding, n06_encode_text_image, n09_build_splits, n10_train_stage1, n10b_post_stage1_encode]
       merge: upsert_by_key
@@ -905,6 +924,46 @@ state:
       merge: numeric_add
       lifetime: persistent
 
+    - name: aggregated_tables
+      type: "map[table -> {rows: list[{label, cells: map[condition -> {value, unit, n, source_metric}]}], produced_from: {variant_ckpts, gallery_index_key, eval_protocol}}]"
+      writers: [n20_aggregate]
+      readers: [G5_report_release, n21_compare_to_paper, n22_publish_report]
+      merge: replace
+      lifetime: persistent
+      note: >
+        [ADDED] n20's purpose is "assemble Tables 1, 2 and 3" and it declared
+        `writes: [run_progress]` -- a stage record, not a table. The tables
+        existed only inside the process that built them.
+
+    - name: comparison_results
+      type: "map[(table, row, condition) -> {ours, paper, delta, verdict: REPRODUCED|NOT_REPRODUCED|INSUFFICIENT_EVIDENCE, reason}]"
+      writers: [n21_compare_to_paper]
+      readers: [G5_report_release, n22_publish_report]
+      merge: replace
+      lifetime: persistent
+      note: >
+        [ADDED] Same defect as aggregated_tables: n21 gives every cell exactly
+        one of three verdicts and then wrote none of them anywhere. G5's
+        criterion is stated over these verdicts, so it was checking a value it
+        could not read.
+
+    - name: report_staging
+      type: "{uri, sha256, deviations_stated: list[deviation_id], unknowns_disposed: list[unknown_id], cells_covered: int}"
+      writers: [n21_compare_to_paper]
+      readers: [G5_report_release, n22_publish_report]
+      merge: replace
+      lifetime: persistent
+      note: >
+        [ADDED] G5's criterion required "every deviation is stated in the
+        report body" while the body was produced by n22, AFTER G5. The gate was
+        validating a document that did not exist yet, and n22 was then free to
+        publish something G5 had never seen.
+        This copies the pattern that already works for the gallery index:
+        n11 stages, G4 verifies, n12 promotes. n21 stages the report, G5
+        verifies THIS artifact by sha256, and n22 publishes that exact sha256 --
+        the only irreversible node in the graph now publishes bytes a gate
+        approved rather than bytes it regenerates.
+
     - name: run_progress
       type: "map[stage -> {status, started_at, ended_at, attempt, rc, stdout_broken}]"
       writers: [ALL_NODES]
@@ -943,7 +1002,7 @@ nodes_ref: "node_registry.yaml"
 # ---------------------------------------------------------------- edges
 edges:
   - {id: e01, from: n01_env_bootstrap, to: n02_download, kind: data, guard: "", join_group: default, carries: []}
-  - {id: e02, from: n02_download, to: G1_sources_valid, kind: data, guard: "", join_group: default, carries: [asset_manifest, asset_glb, procthor_dataset]}
+  - {id: e02, from: n02_download, to: G1_sources_valid, kind: data, guard: "", join_group: default, carries: [asset_manifest, asset_glb, procthor_dataset, pretrained_weights]}
 
   - {id: e03, from: G1_sources_valid, to: n03_sample_pointclouds, kind: data, guard: "verdict == PASS", join_group: default, carries: [asset_glb]}
   - {id: e04, from: G1_sources_valid, to: n04_render_views, kind: data, guard: "verdict == PASS", join_group: default, carries: [asset_glb]}
@@ -1015,9 +1074,9 @@ edges:
   - {id: e29, from: n14_equivariance_probe, to: n20_aggregate, kind: data, guard: "", join_group: core, carries: [equivariance_report]}
   - {id: e30, from: n19_eval_ablations, to: n20_aggregate, kind: data, guard: "", join_group: extended, carries: [retrieval_metrics, variant_status]}
 
-  - {id: e31, from: n20_aggregate, to: n21_compare_to_paper, kind: data, guard: "", join_group: default, carries: []}
-  - {id: e32, from: n21_compare_to_paper, to: G5_report_release, kind: data, guard: "", join_group: default, carries: []}
-  - {id: e33, from: G5_report_release, to: n22_publish_report, kind: data, guard: "verdict == PASS", join_group: default, carries: [gate_records, audit_records, degraded_flags]}
+  - {id: e31, from: n20_aggregate, to: n21_compare_to_paper, kind: data, guard: "", join_group: default, carries: [aggregated_tables], rationale: "[CORRECTED] carried nothing. n20 assembles the tables and n21 judges them, so the tables are the entire payload of this edge -- an empty carry meant the whole report chain moved no data on paper."}
+  - {id: e32, from: n21_compare_to_paper, to: G5_report_release, kind: data, guard: "", join_group: default, carries: [aggregated_tables, comparison_results, report_staging], rationale: "[CORRECTED] carried nothing, so G5's criterion -- every cell has exactly one verdict, every deviation appears in the report body -- was stated over values it had no way to see."}
+  - {id: e33, from: G5_report_release, to: n22_publish_report, kind: data, guard: "verdict == PASS", join_group: default, carries: [gate_records, audit_records, degraded_flags, report_staging, aggregated_tables, comparison_results], rationale: "n22 publishes the STAGED artifact by sha256, the way n12 promotes the index G4 verified. Without this carry it would have had to render a fresh report that no gate ever saw."}
 
   # error paths -- an invisible failure path is an undesigned failure path (E9)
   - {id: e34, from: G1_sources_valid, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records]}
@@ -1230,13 +1289,13 @@ dependencies:
 
 # ---------------------------------------------------------------- routing
 routing:
-  - {decision_point: G1_sources_valid, authority: A1, owner: edge, inputs: [manifest_count, glb_coverage, ckpt_behaviour], destinations: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: ['manifest_count', 'glb_coverage', 'ckpt_behaviour']}
-  - {decision_point: G2_pc_sanity, authority: A1, owner: edge, inputs: [cloud_shape, finiteness, centroid_offset, max_radius, per_axis_variance, self_retrieval_rank], destinations: [n09_build_splits, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: ['cloud_shape', 'finiteness', 'self_retrieval_rank']}
-  - {decision_point: G3_object_corpus, authority: A1, owner: edge, inputs: [leakage_count, admitted_size, quarantine_rate, eval_protocols, "stage1_encoding_protocol.status", "stage1_protocol.status"], destinations: [n10_train_stage1, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: ['leakage_count', 'admitted_size', 'quarantine_rate']}
-  - {decision_point: G4_gallery_freeze, authority: A1, owner: edge, inputs: [index_dim, index_count, nan_count, target_is_argmax, target_in_tie_set], destinations: [n12_promote_index, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: ['index_dim', 'index_count', 'nan_count', 'target_is_argmax', 'target_in_tie_set']}
+  - {decision_point: G1_sources_valid, authority: A1, owner: edge, inputs: [manifest_count, glb_coverage, ckpt_behaviour], destinations: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: [{name: manifest_count, from: asset_manifest}, {name: glb_coverage, from: asset_glb}, {name: ckpt_behaviour, from: pretrained_weights}]}
+  - {decision_point: G2_pc_sanity, authority: A1, owner: edge, inputs: [cloud_shape, finiteness, centroid_offset, max_radius, per_axis_variance, self_retrieval_rank], destinations: [n09_build_splits, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: [{name: cloud_shape, from: pointclouds}, {name: finiteness, from: pointclouds}, {name: self_retrieval_rank, from: pointclouds}]}
+  - {decision_point: G3_object_corpus, authority: A1, owner: edge, inputs: [leakage_count, admitted_size, quarantine_rate, eval_protocols, "stage1_encoding_protocol.status", "stage1_protocol.status"], destinations: [n10_train_stage1, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: [{name: leakage_count, from: splits}, {name: admitted_size, from: splits}, {name: quarantine_rate, from: quarantine}]}
+  - {decision_point: G4_gallery_freeze, authority: A1, owner: edge, inputs: [index_dim, index_count, nan_count, zero_vector_count, target_is_argmax, target_in_tie_set], destinations: [n12_promote_index, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: [{name: index_dim, from: gallery_index_staging}, {name: index_count, from: gallery_index_staging}, {name: nan_count, from: gallery_index_staging}, {name: zero_vector_count, from: gallery_index_staging}, {name: target_is_argmax, from: gallery_index_staging}, {name: target_in_tie_set, from: gallery_index_staging}]}
   - {decision_point: G6_stage2_ready, authority: A1, owner: edge, inputs: ["stage2_protocol.status", stage2_pairing, "essgnn_edge_protocol.status", "essgnn_arch_protocol.status", scene_splits], destinations: [n13_train_stage2, HALT_BLOCKED], default_destination: HALT_BLOCKED, derived_inputs: []}
-  - {decision_point: G7_composition_protocol, authority: A1, owner: edge, inputs: [composition_protocol.status, g0_source, query_list_source, placement_rule], destinations: [n15c_prepare_eval_scenes, HALT_BLOCKED], default_destination: HALT_BLOCKED, derived_inputs: []}
-  - {decision_point: G5_report_release, authority: A1, owner: edge, inputs: [verdict_completeness, gate_records, audit_records, degraded_flags], destinations: [n22_publish_report, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: ['verdict_completeness']}
+  - {decision_point: G7_composition_protocol, authority: A1, owner: edge, inputs: [composition_protocol.status, composition_protocol.source, g0_source, query_list_source, placement_rule, new_node_t_i, new_phys_edges, new_sem_edges], destinations: [n15c_prepare_eval_scenes, HALT_BLOCKED], default_destination: HALT_BLOCKED, derived_inputs: []}
+  - {decision_point: G5_report_release, authority: A1, owner: edge, inputs: [verdict_completeness, report_sha256_matches, comparison_results, report_staging, gate_records, audit_records, degraded_flags], destinations: [n22_publish_report, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: [{name: verdict_completeness, from: comparison_results}, {name: report_sha256_matches, from: report_staging}]}
   - {decision_point: sg1_admit_or_repair, authority: A1, owner: edge, inputs: [schema_valid, item_attempt], destinations: [sg1_admit, sg1_generate, sg1_quarantine], default_destination: sg1_quarantine}
   - {decision_point: sg2_cache_lookup, authority: A1, owner: edge, inputs: ["sem_edge_cache.contains(hash)"], destinations: [use_cache, call_llm], default_destination: call_llm}
   - {decision_point: sg3_train_scope, authority: A1, owner: edge, inputs: ["variant.train_scope"], destinations: [fuser_only, point_encoder_and_fuser, full], default_destination: point_encoder_and_fuser}

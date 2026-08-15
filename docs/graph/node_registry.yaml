@@ -48,7 +48,7 @@ nodes:
     purpose: "Fetch the two datasets the paper names, plus the frozen weights they run on."
     decomposition_rationale: [N1_distinct_failure_mode, N3_checkpoint_needed]
     reads: []
-    writes: [asset_manifest, asset_glb, procthor_dataset, run_progress, cost_ledger]
+    writes: [asset_manifest, asset_glb, procthor_dataset, pretrained_weights, run_progress, cost_ledger]
     precondition: "n01 postcondition holds"
     postcondition: >
       manifest present with len(manifest) assets; >=98% of GLBs on disk;
@@ -77,7 +77,7 @@ nodes:
     role: evaluate
     purpose: "Refuse to process an incomplete or unverified corpus."
     decomposition_rationale: [N5_gate_point]
-    reads: [asset_manifest, asset_glb, procthor_dataset]
+    reads: [asset_manifest, asset_glb, procthor_dataset, pretrained_weights]
     writes: [gate_records, run_progress]
     postcondition: "gate_record with is_terminal=true"
     deterministic: true
@@ -280,7 +280,7 @@ nodes:
     role: model
     purpose: "Cache the frozen CLIP halves of every asset's embedding."
     decomposition_rationale: [N3_checkpoint_needed, N7_parallelizable]
-    reads: [objaverse_annotations, renders, stage1_encoding_protocol]
+    reads: [objaverse_annotations, renders, stage1_encoding_protocol, pretrained_weights]
     writes: [text_image_embeddings, run_progress, cost_ledger]
     postcondition: "Every admitted asset has a text and an image embedding at the checkpoint's width"
     deterministic: false
@@ -520,7 +520,7 @@ nodes:
     role: mutate
     purpose: "Cross-modal alignment: train the point encoder and the fusion modules."
     decomposition_rationale: [N3_checkpoint_needed, N6_side_effects]
-    reads: [pointclouds, text_image_embeddings, renders, objaverse_annotations, stage1_hyperparameters,
+    reads: [pointclouds, text_image_embeddings, renders, objaverse_annotations, stage1_hyperparameters, pretrained_weights,
             splits, split_seed, stage1_protocol, stage1_encoding_protocol,
             variant_registry]
     writes: [stage1_ckpt, run_progress, cost_ledger, degraded_flags]
@@ -575,7 +575,7 @@ nodes:
     role: model
     purpose: "Produce the text/image embeddings every downstream consumer reads, using the FINAL Stage 1 encoders."
     decomposition_rationale: [N3_checkpoint_needed, N1_distinct_failure_mode]
-    reads: [stage1_ckpt, stage1_encoding_protocol, stage1_protocol, text_image_embeddings, renders, objaverse_annotations]
+    reads: [stage1_ckpt, stage1_encoding_protocol, stage1_protocol, text_image_embeddings, renders, objaverse_annotations, pretrained_weights]
     writes: [post_stage1_embeddings, run_progress, cost_ledger]
     postcondition: >
       post_stage1_embeddings holds a query map and a gallery map over the
@@ -613,7 +613,7 @@ nodes:
     role: mutate
     purpose: "Encode every admitted asset with the frozen gallery tower into a staging index."
     decomposition_rationale: [N6_side_effects, N5_gate_point]
-    reads: [stage1_ckpt, pointclouds, post_stage1_embeddings, asset_manifest, stage1_protocol, stage1_encoding_protocol]
+    reads: [stage1_ckpt, pointclouds, post_stage1_embeddings, asset_manifest, stage1_protocol, stage1_encoding_protocol, pretrained_weights]
     writes: [gallery_index_staging, run_progress, cost_ledger]
     postcondition: "Staging index has the checkpoint's embedding width and len(admitted) rows"
     deterministic: false
@@ -681,7 +681,7 @@ nodes:
     reads: [stage1_ckpt, scene_graphs, sem_edge_cache, procthor_object_text,
             stage2_protocol, stage2_pairing, essgnn_edge_protocol,
             essgnn_arch_protocol, pointclouds, post_stage1_embeddings, splits,
-            scene_splits, split_seed, variant_registry]
+            scene_splits, split_seed, variant_registry, pretrained_weights]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger, degraded_flags]
     precondition: "G3_object_corpus verdict == PASS; stage1_ckpt exists; G6_stage2_ready verdict == PASS (stage2_protocol.status == resolved AND essgnn_edge_protocol.status == resolved AND scene_splits valid)"
     postcondition: >
@@ -760,7 +760,7 @@ nodes:
     role: evaluate
     purpose: "Table 1: instance-level retrieval, 7 modality conditions x 2 gallery protocols."
     decomposition_rationale: [N4_independent_observability, N7_parallelizable]
-    reads: [gallery_index, variant_ckpts, eval_protocols, splits, pointclouds, post_stage1_embeddings, stage1_protocol, stage1_encoding_protocol]
+    reads: [gallery_index, variant_ckpts, eval_protocols, splits, pointclouds, post_stage1_embeddings, stage1_protocol, stage1_encoding_protocol, pretrained_weights]
     writes: [retrieval_metrics, run_progress, cost_ledger]
     postcondition: "Every (variant, condition, protocol) cell holds a metric with its n_gallery and n_query"
     deterministic: false
@@ -949,7 +949,7 @@ nodes:
     reads: [variant_registry, stage1_ckpt, splits, scene_splits, scene_graphs,
             sem_edge_cache, procthor_object_text, stage1_protocol, stage2_protocol,
             stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol,
-            pointclouds, post_stage1_embeddings, split_seed, stage1_hyperparameters]
+            pointclouds, post_stage1_embeddings, split_seed, stage1_hyperparameters, pretrained_weights]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger]
     precondition: "headline numbers exist; variant.requires_training is true"
     postcondition: "Every variant has a status in {SUCCESS, FAILED, EXHAUSTED} with a reason"
@@ -1019,7 +1019,7 @@ nodes:
     decomposition_rationale: [N4_independent_observability]
     reads: [retrieval_metrics, judge_scores, equivariance_report, variant_status,
             composed_scenes, composition_incomplete, degraded_flags]
-    writes: [run_progress]
+    writes: [aggregated_tables, run_progress]
     precondition: "join: core = {n15, n17, n14} all AND extended = {n19} all_settled"
     postcondition: "Every cell holds a value, an explicit NA, or an explicit INSUFFICIENT_EVIDENCE marker -- never blank"
     deterministic: true
@@ -1035,8 +1035,8 @@ nodes:
     role: evaluate
     purpose: "Give every table cell exactly one of three verdicts."
     decomposition_rationale: [N4_independent_observability, N5_gate_point]
-    reads: [retrieval_metrics, judge_scores, equivariance_report, degraded_flags, variant_status, eval_protocols]
-    writes: [run_progress]
+    reads: [aggregated_tables, retrieval_metrics, judge_scores, equivariance_report, degraded_flags, variant_status, eval_protocols]
+    writes: [comparison_results, report_staging, run_progress]
     postcondition: "SC-1..SC-8 each evaluated with a recorded observed value and delta"
     deterministic: true
     idempotent: true
@@ -1055,7 +1055,7 @@ nodes:
     role: evaluate
     purpose: "Last check before an irreversible publication."
     decomposition_rationale: [N5_gate_point]
-    reads: [gate_records, audit_records, degraded_flags, cost_ledger]
+    reads: [gate_records, audit_records, degraded_flags, cost_ledger, aggregated_tables, comparison_results, report_staging]
     writes: [gate_records, run_progress]
     postcondition: "gate_record with is_terminal=true"
     deterministic: true
@@ -1077,10 +1077,15 @@ nodes:
     role: mutate
     purpose: "The single outward-facing, irreversible action."
     decomposition_rationale: [N6_side_effects]
-    reads: [gate_records, audit_records, degraded_flags, asset_manifest, split_seed, quarantine, stage1_hyperparameters]
+    reads: [report_staging, aggregated_tables, comparison_results, pretrained_weights, gate_records, audit_records, degraded_flags, asset_manifest, split_seed, quarantine, stage1_hyperparameters]
     writes: [run_progress]
     precondition: "G5 verdict == PASS with is_terminal=true"
-    postcondition: "Report published; a git tag records the revision and artifact hashes"
+    postcondition: >
+      The published bytes are EXACTLY report_staging.uri, verified by sha256
+      against the value G5 approved; a git tag records the revision and artifact
+      hashes. n22 does not render a report -- it publishes the one that was
+      gated. Regenerating here would put an ungated document in front of
+      readers, which is the one thing an irreversible node must not do.
     deterministic: true
     idempotent: true
     idempotency_mechanism: idempotency_key
@@ -1092,7 +1097,15 @@ nodes:
         - {class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, record_fields: [missing_gate_record]}
       partial_failure_semantics: halt
       rollback: compensating_action
-      compensating_node: n22b_publish_erratum
+      compensating_action: >
+        [CORRECTED] This named `n22b_publish_erratum`, a node that does not
+        exist anywhere in the registry -- a compensating action that is only a
+        name compensates for nothing. Publication is irreversible by design, so
+        the compensation is deliberately EXTERNAL and manual: open an erratum
+        against the published artifact citing the failing gate record, and tag
+        the repository at the revision that produced it. Written here rather
+        than added as a node because inventing an automated retraction path
+        would suggest the publication can be taken back.
       rollback_note: "An erratum can be issued and the tag marked INVALIDATED, but content already read cannot be recalled. That is why G5 exists."
 
 # ==================================================================

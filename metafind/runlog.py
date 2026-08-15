@@ -44,9 +44,18 @@ def code_revision() -> str:
 
 
 def _append(path: Path, record: dict[str, Any]) -> None:
+    """Append one JSONL row and fsync it.
+
+    A plain buffered append is not a record: the bytes sit in the page cache,
+    and the crash these files exist to survive is exactly the event that
+    discards them. Appending a single line under O_APPEND is atomic for writes
+    below PIPE_BUF, so no temp-and-rename is needed -- but the fsync is.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as f:
         f.write(json.dumps(record) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
 
 
 @contextmanager
@@ -58,6 +67,15 @@ def run_progress(name: str, attempt: int = 1):
     never started -- and that is exactly the state a resume has to interpret.
     """
     started = time.time()
+    # A record on the way IN as well as out. The exit record is written in a
+    # `finally`, which does not run under kill -9 or a power loss -- so a run
+    # that died left no trace of itself at all, and a resume could not tell
+    # "never started" from "started and was killed after writing 8,000 files".
+    _append(paths.LOGS / "run_progress.jsonl", {
+        "stage": name, "status": "RUNNING", "started_at": started,
+        "ended_at": None, "attempt": attempt, "rc": None,
+        "stdout_broken": False, "code_revision": code_revision(),
+    })
     rc = 0
     try:
         yield

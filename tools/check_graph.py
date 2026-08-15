@@ -380,7 +380,20 @@ for dp in spec["routing"]:
     available = set(reads)
     for ch in reads:
         available |= channel_fields.get(ch, set())
-    declared_derived = set(dp.get("derived_inputs", []) or [])
+    derived_specs = dp.get("derived_inputs", []) or []
+    declared_derived = {d["name"] for d in derived_specs}
+    # A derived quantity must name the channel it is COMPUTED FROM, and the
+    # gate must read that channel. Without this the category was a way to
+    # declare anything: G5 routed on `verdict_completeness` while reading only
+    # gate_records, audit_records, degraded_flags and cost_ledger, none of
+    # which holds a per-cell verdict. "The gate works it out" was
+    # unfalsifiable.
+    for d in derived_specs:
+        check(
+            f"derived source {gid}/{d['name']}",
+            d.get("from") in reads,
+            f"is declared derived from `{d.get('from')}`, which {gid} does not read",
+        )
     for inp in dp.get("inputs", []):
         base = str(inp).split(".")[0]
         check(

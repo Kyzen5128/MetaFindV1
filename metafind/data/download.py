@@ -227,6 +227,7 @@ def fetch_procthor() -> dict:
 # ------------------------------------------------------------------ models
 
 
+# writes channel: pretrained_weights (ULIP-2 checkpoint)
 def fetch_ulip2() -> Path:
     """The frozen ULIP-2 checkpoint: PointBERT weights plus the 1280-d projection."""
     dest = paths.MODELS / "ulip2"
@@ -243,6 +244,7 @@ def fetch_ulip2() -> Path:
     return paths.ULIP2_CKPT
 
 
+# writes channel: pretrained_weights (Qwen2.5-VL)
 def fetch_qwen(model_id: str = "Qwen/Qwen2.5-VL-7B-Instruct") -> Path:
     """Qwen2.5-VL, standing in for GPT-4o as annotator and scene judge."""
     from huggingface_hub import snapshot_download
@@ -253,6 +255,7 @@ def fetch_qwen(model_id: str = "Qwen/Qwen2.5-VL-7B-Instruct") -> Path:
     return path
 
 
+# writes channel: pretrained_weights (ViT-bigG-14)
 def fetch_openclip() -> None:
     """ViT-bigG-14, the frozen text/image half of ULIP-2.
 

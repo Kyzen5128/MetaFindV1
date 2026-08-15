@@ -83,7 +83,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 
 ## 3. State schema
 
-完整 48 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
+完整 52 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
 
 | channel | merge | 為什麼 |
 |---|---|---|
@@ -1258,3 +1258,28 @@ registry 說 n03 寫 `run_progress`，channel 說 writers 包含 n03，兩邊完
 實際上是「這些資產的顏色我們沒讀出來」。
 **兩者在 sidecar 裡長得一模一樣** —— 只有跟上游成品比對才分得出來，
 而那份成品一直都在，我只是沒去下載。
+
+### 2026-08-15 第二十四輪（最後一次全量審查：報告鏈與 gate 輸入）
+
+審查者的結論是「該停止整份重審、改成實作驅動」，我同意。
+但這輪的 targeted audit 抓到**整個 graph 尾端根本沒接上**。
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 250 | **G5 → n22 的報告資料流完全是開的。** `n20`「組出 Table 1/2/3」、`n21`「給每格一個裁決」，**兩者都只寫 `run_progress`** —— 那是階段紀錄，不是表格也不是裁決。`e31`／`e32` 的 `carries` 是**空的**。於是 G5 的判準「每格恰好一個裁決、每項偏離都寫進報告正文」講的是它**讀不到的東西**；而**報告正文要到 n22 才產生**，也就是 gate 在驗一份還不存在的文件，然後 n22 可以自由發表另一份 | 新增 `aggregated_tables`／`comparison_results`／`report_staging` 三個 channel，`n20`／`n21` 寫、G5 讀、`n22` 讀。**照抄 gallery 已經在用的 late-commit 模式**：`n11` staging → `G4` 驗 → `n12` promote，對應 `n21` staging → `G5` 以 **sha256** 驗 → `n22` **發表同一個 sha256**。整個 graph 唯一不可逆的節點，現在發表的是 gate 批准過的位元組，不是它自己重新產生的 | 🔴 **尾端未閉合** |
+| 251 | **`verdict_completeness` 是個算不出來的衍生量。** G5 宣告它是 derived，但 G5 只讀 `gate_records`／`audit_records`／`degraded_flags`／`cost_ledger` —— 沒有一個含有逐格裁決。審查者精準指出：`self_retrieval_rank` 是**正當**的衍生量，`verdict_completeness` **不是**，而檢查器分不出來 | `derived_inputs` 改為 `{name, from}`，並新增檢查：**衍生量必須指名它從哪個 channel 導出，且 gate 必須讀得到那個 channel**。負向注入（改成 gate 沒讀的 channel）確認會紅。<br>**這條檢查本身有極限**：它驗得到「來源存不存在」，驗不到「真的算得出來」——這點寫在檢查註解裡，不假裝 | 🔴 |
+| 252 | **新檢查立刻抓到第二個**：G1 依據 `ckpt_behaviour` 判斷，卻沒讀任何 checkpoint channel —— 因為**整個 graph 沒有任何 channel 代表預訓練權重**。ULIP-2 checkpoint、ViT-bigG-14、Qwen2.5-VL 是每個階段都要載入的東西，`n06`／`n10`／`n11` 全都直接伸手到 `paths.py` 拿路徑 | 新增 `pretrained_weights` channel（含 `behavioural_check`）。**sha256 刻意不夠**：這裡要防的是「載得進去、輸出看起來合理的垃圾」，那種 checkpoint 雜湊完全正常 | 🔴 |
+| 253 | `n22` 的 `compensating_node: n22b_publish_erratum` —— **registry 裡沒有這個節點**，只是一個名字 | 改為明確的**外部人工補償程序**。發表本來就不可逆，**憑空造一個自動撤回節點會暗示它收得回來** | 🟠 |
+| 254 | `runlog.run_progress()` 只在 `finally` 寫紀錄，而 `finally` **在 kill -9 下不執行** —— 跑了 8,000 個檔案後被砍，`run_progress` 一筆都沒有。`_append` 也只是普通緩衝寫入，沒有 fsync | 進入時先寫 `RUNNING`，離開時寫終局；`_append` 加 `flush + fsync`。**這些檔案存在的目的就是撐過 crash，而 crash 正是會丟掉 page cache 的那個事件** | 🟠 |
+| 255 | `renders` 的型別只有 `{view_paths[11], view_sha256[11]}`，但 `n04` 的 postcondition 與 `L1-RENDER-EXTENTS` 都要求記錄正規化前的 mesh extents | 型別補 `raw_bbox_extents`／`projection`／`camera_layout`／`resolution`。**這是下一個要實作的節點的合約，先修** | 🟠 |
+| 256 | G4 判準要求「無零向量」但 routing inputs 沒有 `zero_vector_count`；G7 判準用到 8 項、routing 只列 4 項 | 兩者補齊 | 🟠 |
+
+**留到各自節點實作前再處理**（審查者同意不必為此再開全專案審查）：
+Table 3 variant 的 gallery index lifecycle（`n18`／`n19` 前）、
+`scene_semantic_edges` 的 pair→embedding 映射（`n08` 前）、
+C2 loop 的 progress counter 指向 SG1 私有 channel（`n08` 前）。
+
+**這輪之後改變工作方式**：不再整份重審。改為 **node-by-node**——
+只看該節點與它直接的上下游接縫，實作、smoke、故意注入失敗、確認 channel 真的產生、
+下游讀得到，然後鎖定。審查者的判斷我同意，而且第 21–24 輪就是證據：
+**`n03` 一實作就抓到純規格審查看不到的東西，而這輪三個 P0 裡有兩個是新檢查抓的，不是重讀抓的。**

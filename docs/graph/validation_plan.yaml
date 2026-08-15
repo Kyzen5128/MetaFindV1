@@ -1290,21 +1290,23 @@ level_3_gates:
     record_kind: gate
     position: "between n21_compare_to_paper and n22_publish_report"
     criterion: >
-      every table cell carries exactly one of REPRODUCED / NOT_REPRODUCED /
-      INSUFFICIENT_EVIDENCE, with none blank
-      AND all gate records present with is_terminal == true
-      AND audit records for RA-1, RA-2, RA-3 and RA-4 all present
-      AND every id in graph_spec.yaml `boundary.deviations` is stated in the
-          report body, enumerated from that list at run time rather than from
-          a hardcoded range
-      AND every id in `boundary.conditional_deviations` has its active_if
-          evaluated against the resolved protocols, and is reported as ACTIVE
-          or NOT APPLICABLE with the resolution that decided it (D-1 depends on
-          U-34 this way) (D-5 was added and the range D-1..D-4 missed it,
-          exactly as the U-01..U-10 range once missed U-11)
-      AND every degraded_flags entry appears in the report
-      AND every id in graph_spec.yaml `risks_unknowns` has a stated disposition,
-          enumerated from that list at run time rather than from a hardcoded range
+      report_staging exists and its sha256 matches the artifact on disk
+      AND every cell of aggregated_tables has a matching entry in
+          comparison_results carrying exactly one of REPRODUCED /
+          NOT_REPRODUCED / INSUFFICIENT_EVIDENCE
+      AND report_staging.deviations_stated covers every id in
+          boundary.deviations, plus D-1 when its active_if evaluates true
+      AND report_staging.unknowns_disposed covers every id in
+          risks_unknowns.unknowns
+      AND every Required Audit has a record, whatever its outcome
+      AND no table cell is blank
+      [CORRECTED] This criterion previously spoke about "every table cell" and
+      "the report body" while G5 read neither: n20 and n21 wrote only
+      only a stage record, and the body did not exist until n22, AFTER the gate. It
+      was a gate over a document that had not been written, in front of a node
+      free to publish something else. n21 now stages the report, G5 verifies
+      THIS artifact by sha256, and n22 publishes that exact sha256 -- the same
+      shape as n11 staging the index, G4 verifying it and n12 promoting it.
     evidence: [L2-DEGRADE-VISIBLE, L2-COST-BOUND, L1-GATE-NORECORD]
     unknown_registry_note: >
       [CORRECTED] The criterion used to read "every UNKNOWN U-01..U-10". A range
