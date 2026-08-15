@@ -90,7 +90,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | 3 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實測事實（F 系列）與架構決策（D 系列），**含論文的多處自相矛盾** |
 | 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：52 個 state channel、62 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
 | 5 | [`node_registry.yaml`](node_registry.yaml) | 35 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
-| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 58 個 L1、18 個 L2、7 個 gate、4 個 Required Audit |
+| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 59 個 L1、18 個 L2、7 個 gate、4 個 Required Audit |
 
 ## 一頁摘要
 
@@ -155,7 +155,7 @@ G1 來源有效 → G2 點雲健全 → G3 物件語料 → G4 gallery 凍結 �
 - **G6**：`stage2_protocol`（U-08a／U-08b）**或 `essgnn_edge_protocol`（U-29／U-30／U-19）**未 `resolved`、或 `scene_splits` 有洩漏之前，Stage 2 不准訓練。
 - **G7**：`composition_protocol.status` 未 `resolved`（U-18／U-21）之前，不准合成場景。**Table 1 不經過它。**
 
-76 個檢查（58 個 L1 ＋ 18 個 L2）對 7 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
+77 個檢查（59 個 L1 ＋ 18 個 L2）對 7 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
 
 `G2` 這一輪**縮小了判準**：它原本要求自取樣點雲必須與 ULIP 官方釋出的點雲一致，
 但論文從未說 MetaFind 沿用 ULIP 預取樣的點雲，而 Stage 1 本來就會 fine-tune point encoder。
@@ -227,7 +227,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | 節點 | 狀態 | 程式 |
 |---|---|---|
 | `n01_env_bootstrap` | **可執行** | `setup/01_storage.sh`、`02_conda_env.sh`、`03_verify_env.py`（7/7 通過） |
-| `n02_download` | **執行中** | `metafind/data/download.py`。GLB 下載進行中 |
+| `n02_download` | ✅ **完成** | `metafind/data/download.py`。46,052 個 GLB（351 GB）、0 失敗 |
 | `n03_sample_pointclouds` | **可執行** | `metafind/data/pointclouds.py`。60 個資產通過 G2 形狀／正規化判準，顏色對照官方 ULIP 雲平均差 0.0021；19 條測試 |
 | `n04_render_views` | **可執行** | `metafind/data/renders.py`。300 個資產、**隔離率 0.33%**（G3 門檻 2%）、837/min；11 張視圖全相異且無空白；11 條測試 |
 | 其餘 **二十四個**節點 | **只有規格** | 無 |

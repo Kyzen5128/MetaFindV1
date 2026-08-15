@@ -160,6 +160,28 @@ level_1:
     expected_on_injection: "the two renders differ"
     verified_blocks: false
 
+  - id: L1-RENDER-PARTIAL-BLANK
+    target: renders
+    target_kind: channel
+    asserts: >
+      Every record carries blank_views, and the corpus-wide distribution is
+      reported. An asset whose views are ALL blank is quarantined; an asset
+      with some blank views is admitted and counted.
+    negative_injection: "drop blank_views from the record"
+    expected_on_injection: "the field check fails"
+    verified_blocks: false
+    note: >
+      [MEASURED over 45,955 assets] 45,773 have no blank view, 135 have one,
+      and 47 have between two and nine. These are thin or sheet-like objects
+      seen edge-on, not a rendering fault -- the same geometry that makes 21
+      point clouds legitimately planar (L1-PC-NONDEGENERATE). They are admitted
+      because a partial view set still describes the object, but the count is
+      recorded: a regression that starts blanking views on ORDINARY assets
+      would move this distribution and nothing else, since every other render
+      check passes on a blank frame of the right shape.
+      Only all-blank is fatal, and it is: 104 of the 143 quarantine records are
+      "every view is blank -- the asset never entered frame".
+
   - id: L1-RENDER-EXTENTS
     target: renders
     target_kind: channel
@@ -1342,7 +1364,7 @@ level_3_gates:
 
 # ==================================================================
 gate_discipline:
-  total_l1: 58
+  total_l1: 59
   total_l2: 18
   total_gates: 7
   rejected_gate_candidates:
