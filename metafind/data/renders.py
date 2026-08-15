@@ -70,6 +70,7 @@ from metafind import paths, runlog
 # display; OSMesa is not installed here and pyglet needs a window.
 os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
 
+NODE = "n04_render_views"
 N_VIEWS = 11
 RESOLUTION = 224  # U-04
 PROJECTION = "orthographic"  # U-03a -- implementation choice, not an inference
@@ -392,7 +393,7 @@ def main() -> int:
     # and the errors surfaced as per-asset exceptions, so the run reported a
     # 41% quarantine rate as though a third of Objaverse were malformed.
     ctx = mp.get_context("spawn")
-    with runlog.run_progress("n04_render_views"), \
+    with runlog.run_progress(NODE), \
             cf.ProcessPoolExecutor(max_workers=args.workers, mp_context=ctx) as pool:
         futures = {pool.submit(process_one, u, g, out_dir): u for u, g in todo}
         for fut in cf.as_completed(futures):
@@ -400,14 +401,17 @@ def main() -> int:
             try:
                 fut.result()
             except Exception as exc:  # noqa: BLE001 -- one bad asset must not stop the run
-                quarantine.append({
+                # Written NOW, not flushed at the end: a long run gave no view
+                # of what it was discarding, and a crash lost every record.
+                runlog.quarantine(NODE, [{
                     "uid": uid,
                     "failure_class": ("RESOURCE" if isinstance(exc, (MemoryError, OSError))
                                       else "DETERMINISTIC_INPUT"),
                     "exception_type": type(exc).__name__,
                     "exception_msg": str(exc)[:400],
                     "traceback": traceback.format_exc()[-1500:],
-                })
+                }])
+                quarantine.append(uid)
                 continue
             done += 1
             if done % 200 == 0:
@@ -417,7 +421,6 @@ def main() -> int:
                       f"quarantine {len(quarantine)}", flush=True)
 
     n_indexed = rebuild_index(paths.LOGS / "renders_index.jsonl", out_dir)
-    runlog.quarantine("n04_render_views", quarantine)
     runlog.cost_ledger(
         cpu_seconds=round(time.time() - started, 1),
         assets_rendered=done,

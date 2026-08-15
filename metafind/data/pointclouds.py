@@ -61,6 +61,7 @@ import numpy as np
 
 from metafind import paths, runlog
 
+NODE = "n03_sample_pointclouds"
 N_POINTS = 10_000
 # 3: apply the scene-graph transform before sampling. Measured on 400 random
 # assets, 65.8% carry a non-identity transform, and on 40 re-sampled assets 16
@@ -425,7 +426,7 @@ def main() -> int:
     # DETERMINISTIC_INPUT -> quarantine, max_attempts 1: a non-manifold or empty
     # mesh fails identically forever, so retrying only spends time.
     quarantine, done, started = [], 0, time.time()
-    with runlog.run_progress("n03_sample_pointclouds"), \
+    with runlog.run_progress(NODE), \
             cf.ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {pool.submit(process_one, u, g, o): u for u, g, o in todo}
         for fut in cf.as_completed(futures):
@@ -441,12 +442,17 @@ def main() -> int:
                 # reported them as broken geometry.
                 cls = ("RESOURCE" if isinstance(exc, (MemoryError, OSError))
                        else "DETERMINISTIC_INPUT")
-                quarantine.append(
-                    {"uid": uid, "failure_class": cls,
-                     "exception_type": type(exc).__name__,
-                     "exception_msg": str(exc)[:400],
-                     "traceback": traceback.format_exc()[-1500:]}
-                )
+                # Written NOW, not collected and flushed at the end. A 70-minute
+                # run gave no view of what it was discarding until it finished,
+                # and a crash lost every record because they lived only in a
+                # list -- the same defect as buffering run_progress.
+                runlog.quarantine(NODE, [{
+                    "uid": uid, "failure_class": cls,
+                    "exception_type": type(exc).__name__,
+                    "exception_msg": str(exc)[:400],
+                    "traceback": traceback.format_exc()[-1500:],
+                }])
+                quarantine.append(cls)
                 continue
             done += 1
             if done % 500 == 0:
@@ -459,7 +465,6 @@ def main() -> int:
     # appended to. Appending made it grow duplicates on every resumed run and
     # made it disagree with the filesystem the moment one was interrupted.
     n_indexed = rebuild_index(index_path)
-    runlog.quarantine("n03_sample_pointclouds", quarantine)
     runlog.cost_ledger(
         cpu_seconds=round(time.time() - started, 1),
         assets_sampled=done,
@@ -469,7 +474,7 @@ def main() -> int:
         ),
     )
 
-    by_class = collections.Counter(q["failure_class"] for q in quarantine)
+    by_class = collections.Counter(quarantine)
     print(f"\n{done:,} sampled this run, {n_indexed:,} complete on disk, "
           f"{len(quarantine):,} quarantined {dict(by_class)} -> {paths.POINTCLOUDS}")
     # proceed_with_admitted: a partial corpus is a legitimate outcome here, and
