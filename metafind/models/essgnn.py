@@ -81,6 +81,8 @@ __all__ = ["ESSGNNConfig", "ESSGCL", "ESSGNN"]
 H0Mode = Literal["semantic", "concat_xt"]
 CoordFeat = Literal["updated", "current"]
 Agg = Literal["sum", "mean"]
+Distance = Literal["squared", "euclidean"]
+LayerSharing = Literal["independent", "shared"]
 Pool = Literal["mean", "sum", "max"]
 
 
@@ -146,6 +148,15 @@ class ESSGNNConfig:
     n_layers: int = 4
     h0_mode: H0Mode = "semantic"
     coord_feat: CoordFeat = "updated"
+    # U-17. Sec. 2.5 defines d_ij = ||x_i - x_j||_2; Appendix C Eq. 10-12 uses
+    # the square, as does the reference EGNN. Both are SE(3)-invariant, so
+    # neither breaks the proof, but the number reaching f_h and f_x differs.
+    distance: Distance = "squared"
+    # U-31. The paper writes theta_h / theta_x with no layer index, so whether
+    # the L layers share one parameter set is unstated. This also decides
+    # whether F11 holds: with independent layers the final coordinate head has
+    # no loss path, with sharing it still receives gradient from layers 1..L-1.
+    layer_sharing: LayerSharing = "independent"
     coords_agg: Agg = "sum"
     edge_proj_dim: int | None = None
     pooling: Pool = "mean"
@@ -205,9 +216,13 @@ class ESSGCL(nn.Module):
         # and RA-2, there is no "expected to fail" assertion to write. But the
         # number fed to f_h and f_x differs, so the trained model differs. We
         # follow Appendix C and EGNN. Recorded as a choice, not a deduction.
-        radial = (coord_diff**2).sum(dim=-1, keepdim=True)
+        sq = (coord_diff**2).sum(dim=-1, keepdim=True)
+        # U-17. Both forms are SE(3)-invariant; only the magnitude fed to the
+        # MLPs differs. The protocol chooses, so a declared value is one the
+        # model actually runs.
+        radial = sq if self.cfg.distance == "squared" else torch.sqrt(sq + 1e-12)
         if self.cfg.normalize_coord_diff:
-            coord_diff = coord_diff / (radial.sqrt() + 1e-8)
+            coord_diff = coord_diff / (sq.sqrt() + 1e-8)
 
         # ---- Eq. 2: feature update
         m_h = self.f_h(torch.cat([h[row], h[col], radial, edge_attr], dim=-1))
@@ -255,7 +270,14 @@ class ESSGNN(nn.Module):
             self.edge_proj = nn.Linear(cfg.edge_feat_dim, cfg.edge_proj_dim)
             edge_dim = cfg.edge_proj_dim
 
-        self.layers = nn.ModuleList(ESSGCL(cfg, edge_dim) for _ in range(cfg.n_layers))
+        if cfg.layer_sharing == "shared":
+            # One layer, applied L times. Not a saving -- a different model.
+            shared = ESSGCL(cfg, edge_dim)
+            self.layers = nn.ModuleList([shared] * cfg.n_layers)
+        else:
+            self.layers = nn.ModuleList(
+                ESSGCL(cfg, edge_dim) for _ in range(cfg.n_layers)
+            )
 
     def forward(
         self,

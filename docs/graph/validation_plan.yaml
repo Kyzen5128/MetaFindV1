@@ -502,6 +502,27 @@ level_1:
     expected_on_injection: "the scan finds a cached pc read on the main line"
     verified_blocks: false
 
+  - id: L1-ESSGNN-ARCH-PROTOCOL-APPLIED
+    target: essgnn_arch_protocol
+    target_kind: channel
+    asserts: >
+      The ESSGNNConfig the trainer builds equals the resolved protocol field by
+      field: use_io_projections, distance, coord_feat, layer_sharing, pooling,
+      hidden_dim, n_layers. Any mismatch refuses to start.
+    negative_injection: "resolve the protocol with layer_sharing=shared but build the config with independent"
+    expected_on_injection: "the comparison fails and Stage 2 does not start"
+    verified_blocks: false
+    note: >
+      A gate that checks a protocol is RESOLVED has not checked that the
+      protocol was FOLLOWED. Without this the channel records an intention
+      while the model runs something else -- the same protocol-versus-code
+      divergence this project has now corrected several times, just relocated
+      one level up.
+      Two of these fields only became checkable when they became executable:
+      `distance` and `layer_sharing` were declarable in the protocol before
+      ESSGNNConfig had them at all, so a run could declare `euclidean` and
+      `shared` and still execute squared distance over independent layers.
+
   - id: L1-ABLATION-INFERENCE-ONLY
     target: n18_train_ablations
     target_kind: node
@@ -1123,7 +1144,7 @@ level_3_gates:
 
 # ==================================================================
 gate_discipline:
-  total_l1: 52
+  total_l1: 53
   total_l2: 17
   total_gates: 7
   rejected_gate_candidates:
@@ -1238,7 +1259,7 @@ coverage_check:
   every_check_has_negative_injection: true
   no_existence_only_assertions: true
   open_items:
-    - item: "verified_blocks is false for all 69 checks"
+    - item: "verified_blocks is false for all 70 checks"
       status: "BY DESIGN at specification time"
       action: "During implementation, flip each to true only after its negative injection has been observed to fail."
     - item: "I-Design's completion rate has no baseline"

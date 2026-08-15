@@ -234,6 +234,7 @@ def test_full_scope_lets_gradient_reach_clip():
     and the memory recorded was that of a forward pass that cannot backpropagate.
     """
     import contextlib
+    import types
 
     from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
 
@@ -244,16 +245,39 @@ def test_full_scope_lets_gradient_reach_clip():
         "the main line must not build a graph through the frozen CLIP halves"
     )
 
-    bb.cfg = BackboneConfig(train_scope="full")
+    bb.cfg = BackboneConfig(train_scope="full", device="cpu")
     ctx = bb._clip_grad_context()
     assert isinstance(ctx, contextlib.nullcontext), (
         "train_scope=full must let gradient reach ViT-bigG, or RA-3 measures "
         "a forward pass that cannot backpropagate"
     )
 
-    # And prove it end to end on a stand-in encoder.
-    with ctx:
-        w = torch.nn.Linear(4, 4)
-        out = w(torch.randn(2, 4)).sum()
-    out.backward()
-    assert w.weight.grad is not None, "no gradient reached the stand-in CLIP encoder"
+    # Go through encode_text/encode_image themselves. Asserting only on
+    # _clip_grad_context would still pass if someone re-added @torch.no_grad()
+    # to the encoders -- which is exactly the regression this guards.
+    from metafind.models.ulip_backbone import EMBED_DIM
+
+    clip = torch.nn.Linear(4, EMBED_DIM)
+    bb.model = types.SimpleNamespace(
+        encode_text=lambda t: clip(t.float()),
+        encode_image=lambda i: clip(i.reshape(i.shape[0], -1)[:, :4].float()),
+    )
+    bb.tokenizer = lambda texts: torch.randn(len(texts), 4)
+
+    out = bb.encode_text(["a", "b"])
+    assert out.requires_grad, (
+        "encode_text produced a tensor with no grad_fn under train_scope=full -- "
+        "something re-applied @torch.no_grad(), so RA-3 would measure a forward "
+        "pass that cannot backpropagate"
+    )
+    out.sum().backward()
+    assert clip.weight.grad is not None, (
+        "encode_text built no graph under train_scope=full; RA-3 would measure "
+        "a forward pass that cannot backpropagate"
+    )
+
+    clip.zero_grad()
+    out = bb.encode_image(torch.randn(2, 3, 2, 2))
+    assert out.requires_grad, "encode_image produced no grad_fn under full"
+    out.sum().backward()
+    assert clip.weight.grad is not None, "encode_image built no graph under full"

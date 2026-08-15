@@ -579,7 +579,7 @@ graph TD
 | **U-14** | UNKNOWN | **11 張渲染圖怎麼變成一個 `e_image`**。§2.3 只說 render 11 views | 記錄選擇；影響 Table 1 七個條件中的四個 |
 | **U-15** | UNKNOWN | **結構化標註怎麼序列化成 text encoder 的輸入字串**。§2.3 只給欄位，沒給格式 | 釘住模板，加 golden-string 測試 |
 | **U-16** | UNKNOWN | **query / gallery 兩塔是否共享權重**。§2.4 說 "a dedicated query encoder"、§2.6 說兩者都訓練，但沒說共享關係 | 記錄選擇 |
-| **U-17** | UNKNOWN | **`d_ij` 還是 `d_ij²`**。§2.5 寫 `d_ij = ‖x_i − x_j‖₂`，Appendix C (10)–(12) 用 `‖·‖²`，原始 EGNN 也是平方 | 實作用平方（`essgnn.py` 的 `radial`）；兩者都 SE(3) 不變，不破壞證明，記錄為選擇 |
+| **U-17** | UNKNOWN・**可執行** | **`d_ij` 還是 `d_ij²`**。§2.5 寫 `d_ij = ‖x_i − x_j‖₂`，Appendix C (10)–(12) 用 `‖·‖²`，原始 EGNN 也是平方 | 實作用平方（`essgnn.py` 的 `radial`）；兩者都 SE(3) 不變，不破壞證明，記錄為選擇 |
 | **U-18** | **UNKNOWN・阻斷** | **Algorithm 1 第 7 行「放進場景、更新圖」到底產生什麼**。下一輪就要 `ESSGNN(G)`，需要新節點的 `t_i`、位置、朝向、尺度、物理邊、語意邊 —— 全部未定義 | `n15b` 決定，`G7` 強制 |
 | **U-19** | UNKNOWN | **邊的方向性**。§2.3 只說有 physical / semantic 兩種邊，沒說有向或無向，也沒說 relation(A,B) 是否等於 relation(B,A) | 記錄慣例；`L1-SCENE-SUPPORT` 的雙向是**我們的**慣例 |
 | **U-20** | UNKNOWN | **`t_i` 由哪個 encoder 產生**。§2.5 只寫 `t_i ∈ ℝ^d`。「frozen text encoder (e.g. CLIP or BERT)」講的是**語意邊**，不是 `t_i`，也沒說兩者同一個 | 記錄選擇與 `d` |
@@ -595,7 +595,7 @@ graph TD
 | **U-30** | UNKNOWN | **沒有語意嵌入的邊，`e_ij` 的張量契約是什麼**。`f_h : ℝ^(2d+1+e) → ℝ^d` 輸入寬度**固定**，所以缺 `e_ij` 的邊仍要填滿那 `e` 格。規格禁止補零（零向量與真實嵌入無法區分）並記 `semantic_edge_missing`，但**記旗標不等於說明 MLP 收到什麼** | 記錄機制；必須與合法嵌入可區分 |
 | **U-33** | UNKNOWN | **ESSGNN 有沒有保留 EGNN 的輸入／輸出投影**。§2.5 是 `t_i → h⁰ → L 層 → Pooling = e_layout`，**兩端都沒有投影**；官方 EGNN（`egnn_clean.py`）有 `embedding_in`／`embedding_out`，本實作沿用了。**多兩層可學參數不是同一個架構，而 upstream 慣例不是論文真值** | `use_io_projections` 旗標。`True` 沿用官方 EGNN（現行主線），`False` 字面復現 §2.5 但要求 `node_feat_dim == hidden_dim == out_dim` |
 | **U-32** | UNKNOWN | **scene dropout 的粒度**。§2.6 寫 "omitted in 30% of **batches**"，字面是**整批**一起丟；實作是**每個 sample 獨立**抽（`sample_scene_dropout` 回傳 `(B,)` 遮罩），`L1-SCENE-DROPOUT-30` 也驗 per-sample。對 in-batch 對比 loss 而言兩者的訓練分布不同 | 字面版是 batch-level；記錄採用哪個，另一個保留為變體 |
-| **U-31** | UNKNOWN | **ESSGNN 的 L 層是否共用參數**。§2.5 寫 `θ_h`、`θ_x` 都沒有層索引。這會改變參數量，也改變 F11：獨立層時最後一層座標頭沒有 loss path，**共用參數時同一個 `f_x` 仍會從前 L−1 層收到梯度** | 實作用每層獨立權重，記錄為選擇 |
+| **U-31** | UNKNOWN・**可執行** | **ESSGNN 的 L 層是否共用參數**。§2.5 寫 `θ_h`、`θ_x` 都沒有層索引。這會改變參數量，也改變 F11：獨立層時最後一層座標頭沒有 loss path，**共用參數時同一個 `f_x` 仍會從前 L−1 層收到梯度** | 實作用每層獨立權重，記錄為選擇 |
 | **R-01** | RISK・**部分實測** | **I-Design 裝得起來、初始設計會成功，但 5 次嘗試 0 個場景完成**。詳見下方 | Table 2/3 全靠它 |
 | **R-02** | RISK | 單卡 24GB 限制訓練範圍 | D-1 已聲明 |
 | **R-03** | RISK | Qwen 標註品質未知 | pilot 後人工抽查 |
@@ -925,3 +925,20 @@ preposition 對齊 enum（無法映射者落到 "on"）
 第二次執行又把**已被注入的內容**當成原始版本存回去，於是 `if False` 留在檔案裡，
 還原後測試才紅了一條。負向注入必須用 `try/finally` 還原 —— 一個驗證工具本身把程式改壞，
 比沒有驗證更糟。
+
+### 2026-08-15 第十二輪（外部審查後）
+
+上一輪兩個 P0 已確認修掉，審查者正式劃掉。這輪找到的是**同一個問題的鏡像**。
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 143 | **`essgnn_arch_protocol` 能宣告 `ESSGNNConfig` 做不到的值。** `distance` 與 `layer_sharing` 兩個欄位在程式裡**根本不存在**：`radial` 永遠是平方、`self.layers` 永遠建 L 個獨立 ESSGCL。所以 protocol 寫 `euclidean` + `shared`、`G6` 照樣 PASS，模型照樣跑 squared + independent | 兩者都真正實作進 `ESSGNNConfig`。實測：`shared` 只有 1 個唯一層、1,633 參數，`independent` 3 層、4,899 參數 | 🔴 **protocol 寫一套、程式跑另一套（鏡像版）** |
+| 144 | **沒有「protocol 是否被遵守」的檢查。** `G6` 驗的是 `status == resolved`，不是「trainer 真的照著建 config」 | 新增 `L1-ESSGNN-ARCH-PROTOCOL-APPLIED`，逐欄比對。**驗「已決議」不等於驗「已遵守」** | 🟠 |
+| 145 | **RA-3 的測試沒有真的呼叫 `encode_text`／`encode_image`** —— 它只驗 `_clip_grad_context()` 回傳什麼，所以有人重新加上 `@torch.no_grad()` 它仍會 PASS | 改成真的跑一次 forward + backward。**負向注入確認**：加回 `@no_grad` 後訊息命中「no grad_fn under train_scope=full」 | 🟠 |
+| 146 | D-6 寫 `cache_seed varied per retry, so a retry is an independent sample` —— **「重新發一次請求」不等於「統計獨立取樣」** | 改為「不會被餵同一份快取回應、會再次到達模型」，並註明真正的獨立取樣需要控制 sampler 的 RNG，而那在此未被證明 | 🟠 |
+| 147 | **`nondeterminism_sources` 漏了 I-Design 的規劃器。** 文件還寫「Qwen 出現三次」，但 D-5 之後是四次，而 Table 2 的評估場景本身就受規劃器隨機性影響 | 補 **NS-7**，凍結方式是把 prompt／尺寸／物件數／seed／planner model／I-Design revision／patch hash 在檢索評估前先持久化 | 🟠 |
+| 148 | `n09b` 的 purpose 還寫「決定 ProcTHOR target 對應哪個 gallery 正樣本」，但它現在同時決定邊語意與整個 ESSGNN 架構 | 改為「解決所有阻斷 Stage 2 的協定」 | 🟠 |
+| 149 | U-32 的 registry 文字仍描述舊 code | 同步為「論文字面 batch／現行主線 batch／變體 sample」 | 🟡 |
+
+**U-17 與 U-31 現在標為「可執行」** —— 先前它們只是登記在表上、程式沒有對應開關，
+等於一個選不了的選項。這一輪之後它們才真的是變體。

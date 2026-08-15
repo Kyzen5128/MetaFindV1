@@ -389,7 +389,7 @@ nodes:
 
   - id: n09b_resolve_stage2_protocol
     role: human
-    purpose: "Decide how a ProcTHOR target maps to a gallery positive, and where its modalities come from."
+    purpose: "Resolve every blocking Stage 2 protocol: the gallery positive and its modalities, the ESSGNN edge semantics, and the ESSGNN architecture."
     decomposition_rationale: [N5_gate_point, N1_distinct_failure_mode]
     reads: [scene_graphs, asset_manifest, procthor_object_text, objaverse_annotations]
     writes: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, run_progress]
