@@ -354,3 +354,116 @@ def test_projection_choice_has_no_default():
     """The whole point of U-33: upstream convention must not win by inheritance."""
     with pytest.raises(TypeError):
         ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8)  # type: ignore[call-arg]
+
+
+# ------------------------------------------------- U-17 distance / U-31 sharing
+
+_ARCH = dict(node_feat_dim=16, edge_feat_dim=8, hidden_dim=16, out_dim=16,
+             n_layers=3, use_io_projections=False)
+
+
+def test_squared_and_euclidean_produce_different_layouts():
+    """[U-17] Both are SE(3)-invariant, so only the magnitude into f_h/f_x differs."""
+    torch.manual_seed(0)
+    sq, nf, pos, ei, ea = make_scene(10, ESSGNNConfig(**_ARCH, distance="squared"))
+    torch.manual_seed(0)
+    eu = ESSGNN(ESSGNNConfig(**_ARCH, distance="euclidean")).to(DTYPE)
+    eu.load_state_dict(sq.state_dict())
+    a, b = sq(nf, pos, ei, ea), eu(nf, pos, ei, ea)
+    assert not torch.allclose(a, b), (
+        "identical weights and inputs gave identical outputs, so `distance` is "
+        "not reaching the message -- the option would be unselectable again"
+    )
+
+
+def test_shared_layers_are_one_module_independent_are_many():
+    shared = ESSGNN(ESSGNNConfig(**_ARCH, layer_sharing="shared"))
+    indep = ESSGNN(ESSGNNConfig(**_ARCH, layer_sharing="independent"))
+    assert len({id(x) for x in shared.layers}) == 1
+    assert len({id(x) for x in indep.layers}) == _ARCH["n_layers"]
+    assert sum(p.numel() for p in shared.parameters()) < sum(
+        p.numel() for p in indep.parameters()
+    ), "sharing must actually reduce the parameter count"
+
+
+def test_sharing_survives_a_state_dict_round_trip():
+    """A restore that silently untied the layers would change the model."""
+    cfg = ESSGNNConfig(**_ARCH, layer_sharing="shared")
+    a = ESSGNN(cfg)
+    b = ESSGNN(cfg)
+    b.load_state_dict(a.state_dict())
+    assert len({id(x) for x in b.layers}) == 1, "reload untied the shared layer"
+    b.layers[0].f_h[0].weight.data.fill_(0.5)
+    assert torch.equal(b.layers[2].f_h[0].weight, b.layers[0].f_h[0].weight), (
+        "layers are no longer the same object after reload"
+    )
+
+
+def test_shared_fx_gets_gradient_that_independent_final_fx_does_not():
+    """[U-31 vs F11] The whole reason layer sharing changes F11's conclusion.
+
+    With independent layers the last layer's coordinate head has no consumer:
+    nothing reads x^(L), so its f_x receives no gradient. With sharing, the same
+    f_x is also used at layers 0..L-2, whose coordinate updates DO feed the next
+    layer's distances -- so the parameter trains.
+    """
+    for sharing, expect_grad in (("independent", False), ("shared", True)):
+        torch.manual_seed(0)
+        m, nf, pos, ei, ea = make_scene(
+            10, ESSGNNConfig(**_ARCH, layer_sharing=sharing)
+        )
+        m(nf, pos, ei, ea).sum().backward()
+        last_fx = m.layers[-1].f_x[-1].weight
+        got = last_fx.grad is not None and bool((last_fx.grad != 0).any())
+        assert got is expect_grad, (
+            f"layer_sharing={sharing}: expected final f_x gradient={expect_grad}, "
+            f"got {got}. F11 only holds for independent layers."
+        )
+
+
+# ---------------------------------------------- protocol as the only entry point
+
+
+def test_from_protocol_is_the_supported_construction_path():
+    from metafind.models.essgnn import PAPER_LOCKED
+
+    proto = dict(status="resolved", use_io_projections=False, distance="euclidean",
+                 coord_feat="current", layer_sharing="shared", pooling="sum",
+                 hidden_dim=32, n_layers=2)
+    cfg = ESSGNNConfig.from_protocol(proto, node_feat_dim=32, edge_feat_dim=32, out_dim=32)
+    for k, v in proto.items():
+        if k != "status":
+            assert getattr(cfg, k) == v, f"{k} did not survive from_protocol"
+    for k, v in PAPER_LOCKED.items():
+        assert getattr(cfg, k) == v, f"{k} must stay at the paper-locked value"
+
+
+def test_from_protocol_refuses_an_unresolved_protocol():
+    with pytest.raises(ValueError, match="not resolved"):
+        ESSGNNConfig.from_protocol(
+            {"status": "unresolved"}, node_feat_dim=8, edge_feat_dim=8, out_dim=8
+        )
+
+
+def test_from_protocol_refuses_a_partial_protocol():
+    with pytest.raises(ValueError, match="missing"):
+        ESSGNNConfig.from_protocol(
+            {"status": "resolved", "distance": "squared"},
+            node_feat_dim=8, edge_feat_dim=8, out_dim=8,
+        )
+
+
+def test_paper_locked_values_are_the_defaults():
+    """[L1-ESSGNN-PAPER-LOCKED-CONFIG] These are our primary reading, not UNKNOWNs.
+
+    h0_mode, coords_agg, edge_proj_dim and normalize_coord_diff each pin one
+    interpretation of the paper. They are deliberately NOT in
+    essgnn_arch_protocol, which holds questions a person must answer; a run
+    that departs from these is a variant and has to say so.
+    """
+    from metafind.models.essgnn import PAPER_LOCKED
+
+    cfg = ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8,
+                       use_io_projections=True)
+    for k, v in PAPER_LOCKED.items():
+        assert getattr(cfg, k) == v, f"{k} default drifted from the paper-locked value"

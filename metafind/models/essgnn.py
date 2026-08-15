@@ -162,6 +162,60 @@ class ESSGNNConfig:
     pooling: Pool = "mean"
     normalize_coord_diff: bool = False
 
+    @classmethod
+    def from_protocol(
+        cls,
+        protocol: dict,
+        *,
+        node_feat_dim: int,
+        edge_feat_dim: int,
+        out_dim: int,
+    ) -> ESSGNNConfig:
+        """Build the config from a resolved essgnn_arch_protocol.
+
+        The single supported entry point for a trainer. Hand-writing an
+        ESSGNNConfig is what lets a run drift from the protocol G6 approved --
+        L1-ESSGNN-ARCH-PROTOCOL-APPLIED can detect that afterwards, but not
+        building the opportunity is better than catching it.
+
+        Widths stay arguments because they come from the loaded checkpoint and
+        from U-06 / U-20, not from this protocol.
+        """
+        if protocol.get("status") != "resolved":
+            raise ValueError(
+                "essgnn_arch_protocol is not resolved; G6 exists to stop Stage 2 "
+                "starting here (U-33, U-17, U-26, U-31, U-22)"
+            )
+        required = {"use_io_projections", "distance", "coord_feat",
+                    "layer_sharing", "pooling", "hidden_dim", "n_layers"}
+        if missing := required - protocol.keys():
+            raise ValueError(f"essgnn_arch_protocol is missing {sorted(missing)}")
+        return cls(
+            node_feat_dim=node_feat_dim,
+            edge_feat_dim=edge_feat_dim,
+            out_dim=out_dim,
+            use_io_projections=protocol["use_io_projections"],
+            distance=protocol["distance"],
+            coord_feat=protocol["coord_feat"],
+            layer_sharing=protocol["layer_sharing"],
+            pooling=protocol["pooling"],
+            hidden_dim=protocol["hidden_dim"],
+            n_layers=protocol["n_layers"],
+            **PAPER_LOCKED,
+        )
+
+
+
+# Values the main line pins to one reading of the paper. Unlike the fields in
+# essgnn_arch_protocol these are NOT open questions a person has to answer --
+# they are our primary interpretation, and a run that departs from them is a
+# variant that must say so. L1-ESSGNN-PAPER-LOCKED-CONFIG asserts them.
+PAPER_LOCKED = {
+    "h0_mode": "semantic",          # Appendix C's premise; Concat(x,t) is RA-1
+    "coords_agg": "sum",            # Eq. 3 sums; the reference EGNN defaults to mean
+    "edge_proj_dim": None,          # the paper has no such layer
+    "normalize_coord_diff": False,  # nor any normalisation of (x_i - x_j)
+}
 
 
 def _mlp(in_dim: int, hidden: int, out_dim: int) -> nn.Sequential:

@@ -942,3 +942,16 @@ preposition 對齊 enum（無法映射者落到 "on"）
 
 **U-17 與 U-31 現在標為「可執行」** —— 先前它們只是登記在表上、程式沒有對應開關，
 等於一個選不了的選項。這一輪之後它們才真的是變體。
+
+### 2026-08-15 第十三輪（外部審查後）
+
+審查者判定 **spec + core model 進入 lock candidate**，沒有新的 P0。這輪收的三個 P1
+都是「防回歸」與「execution contract」，不是架構問題。
+
+| # | 問題 | 現在 |
+|---|---|---|
+| 150 | 上一輪加的 `distance`／`layer_sharing` 分支**沒有直接測試** | 補四條。其中最有價值的是**共用層下最後一層 `f_x` 會不會收到梯度** —— 實測 `independent` 沒有、`shared` 有，因為同一組 `f_x` 在第 1..L−1 層的更新確實有下游消費者。**F11 只在獨立層下成立**，現在由測試釘住，不再只是論述 |
+| 151 | `L1-ESSGNN-ARCH-PROTOCOL-APPLIED` 只能事後比對 | 新增 `ESSGNNConfig.from_protocol()` 作為**唯一入口**：未 resolved 拒絕、欄位不齊拒絕、paper-locked 值強制套用。**不給 trainer 抄錯的機會，比事後抓到更好** |
+| 152 | `essgnn_arch_protocol` 沒涵蓋 `h0_mode`／`coords_agg`／`edge_proj_dim`／`normalize_coord_diff` —— 一個 config 可以滿足所有 protocol 欄位、卻仍是不同的模型（`normalize_coord_diff=True` 會把 `x_i−x_j` 換成單位向量） | 新增 `L1-ESSGNN-PAPER-LOCKED-CONFIG`。**刻意不併進 protocol** —— protocol 放的是「論文沒說、要人決定」的問題，這四個是「論文有說或可推得」的主線讀法，混在一起會毀掉登記表想維持的區分 |
+| 153 | U-17／U-31 的 registry 措辭停在「implementation uses ...」 | 改為「兩者皆可執行，現行主線是 X，由 resolved protocol 記錄實際跑的是哪個」 |
+| 154 | 綁定層在 `state_dict` 往返後可能被解開 | 加測試：reload 後 `id(layers[0]) == id(layers[2])`，且改一個會同時改到另一個 |

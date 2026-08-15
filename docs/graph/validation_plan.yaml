@@ -523,6 +523,32 @@ level_1:
       ESSGNNConfig had them at all, so a run could declare `euclidean` and
       `shared` and still execute squared distance over independent layers.
 
+  - id: L1-ESSGNN-PAPER-LOCKED-CONFIG
+    target: metafind/models/essgnn.py
+    target_kind: node
+    asserts: >
+      h0_mode == "semantic", coords_agg == "sum", edge_proj_dim is None and
+      normalize_coord_diff is False in every run of the main line, and
+      ESSGNNConfig.from_protocol forces them regardless of the protocol.
+    negative_injection: "set normalize_coord_diff=True in the trainer's config"
+    expected_on_injection: "the assertion fails; the coordinate update is a different model"
+    verified_blocks: false
+    note: >
+      A DIFFERENT KIND of decision from the fields in essgnn_arch_protocol, and
+      mixing the two would blur the distinction the registry exists to keep.
+      The protocol holds questions the paper leaves open, which a person must
+      answer (U-33, U-17, U-26, U-31). These four are our primary READING of
+      things the paper does state or imply:
+        h0_mode=semantic            Appendix C's premise; Concat(x,t) is RA-1
+        coords_agg=sum              Eq. 3 sums; reference EGNN defaults to mean
+        edge_proj_dim=None          the paper has no such layer
+        normalize_coord_diff=False  nor any normalisation of (x_i - x_j)
+      Without this, a config could satisfy every protocol field and still be a
+      different model: normalize_coord_diff=True replaces (x_i - x_j) with a
+      unit vector, and edge_proj_dim=64 inserts a layer the paper lacks.
+      L1-ESSGNN-ARCH-PROTOCOL-APPLIED does not compare them -- they are not
+      protocol fields.
+
   - id: L1-ABLATION-INFERENCE-ONLY
     target: n18_train_ablations
     target_kind: node
@@ -1144,7 +1170,7 @@ level_3_gates:
 
 # ==================================================================
 gate_discipline:
-  total_l1: 53
+  total_l1: 54
   total_l2: 17
   total_gates: 7
   rejected_gate_candidates:
@@ -1259,7 +1285,7 @@ coverage_check:
   every_check_has_negative_injection: true
   no_existence_only_assertions: true
   open_items:
-    - item: "verified_blocks is false for all 70 checks"
+    - item: "verified_blocks is false for all 71 checks"
       status: "BY DESIGN at specification time"
       action: "During implementation, flip each to true only after its negative injection has been observed to fail."
     - item: "I-Design's completion rate has no baseline"
