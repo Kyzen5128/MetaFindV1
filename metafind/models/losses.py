@@ -18,13 +18,13 @@ Stage 1 and Stage 2 use different objectives, and the difference is real:
 Under-specified in the paper
 ----------------------------
 
-U-09  ``tau``. Eq. 5 calls it "a temperature hyperparameter", which reads as
+U-22  ``tau``. Eq. 5 calls it "a temperature hyperparameter", which reads as
       fixed, but no value is given anywhere. ULIP-2 -- whose backbone this is
       built on -- uses a *learnable* logit scale initialised to ``log(1/0.07)``,
       the CLIP convention. Both are supported; the ULIP-2 convention is the
       default because the towers inherit its embedding space.
 
-U-10  ``sim(.,.)``, described only as "the similarity function". Cosine
+U-24  ``sim(.,.)``, described only as "the similarity function". Cosine
       similarity is assumed, matching ULIP, OpenShape and CLIP. Recorded as an
       assumption rather than treated as given.
 """
@@ -49,7 +49,7 @@ class ContrastiveConfig:
         bidirectional: False reproduces Eq. 5 (Stage 1, query->gallery only);
             True reproduces Eq. 7a/7b/8 (Stage 2, symmetric).
         learnable_temperature: use a learnable logit scale (ULIP-2/CLIP
-            convention) rather than a fixed tau. See U-09.
+            convention) rather than a fixed tau. See U-22.
         init_temperature: tau at initialisation. 0.07 is the CLIP value ULIP-2
             adopts.
         max_logit_scale: clamp on the learnable scale. Without it the scale can

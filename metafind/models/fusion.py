@@ -20,7 +20,7 @@ with 0", whose whole point is that it is worse.
 What the paper does not pin down
 --------------------------------
 
-U-07  Which of the five strategies is the default. Table 3 ablates ``Mean``
+U-13  Which of the five strategies is the default. Table 3 ablates ``Mean``
       (9.4) and ``MLPs`` (9.9) as *degradations* from the full model (11.4), so
       the default is one of masked-MLP / gated / transformer -- the paper never
       says which. ``FusionConfig.kind`` therefore has no paper-blessed value;
@@ -28,7 +28,7 @@ U-07  Which of the five strategies is the default. Table 3 ablates ``Mean``
       matches sec. 3.4's takeaway ("Masked modality fusion outperformed
       zero-padding"), and the choice is recorded rather than hidden.
 
-U-08  What happens when all three modalities are masked. "Independently" at 30%
+U-23  What happens when all three modalities are masked. "Independently" at 30%
       each means this occurs for 2.7% of queries, leaving a query built purely
       from mask tokens -- no information, yet still contrastively matched
       against its gallery item. The literal reading is implemented
@@ -56,7 +56,7 @@ class FusionConfig:
     """Configuration for the query-side fusion module.
 
     Attributes:
-        kind: fusion strategy. See U-07 -- the paper does not name its default.
+        kind: fusion strategy. See U-13 -- the paper does not name its default.
         dim: modality embedding width. ULIP-2 embeds at 1280.
         hidden: hidden width for the MLP/gated variants.
         n_heads: attention heads for the transformer variant.
@@ -96,7 +96,7 @@ def sample_modality_mask(
             ablates 0.10 and 0.50.
         allow_empty: if True (the literal reading), a query may lose all three
             modalities, which happens with probability ``p_mask ** 3`` -- 2.7% at
-            the paper's rate. See U-08.
+            the paper's rate. See U-23.
         device: device for the returned tensor.
         generator: optional RNG for reproducibility.
 

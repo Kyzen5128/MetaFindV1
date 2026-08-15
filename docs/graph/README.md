@@ -14,7 +14,7 @@
 | 標記 | 意思 |
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
-| **[未定]** | 論文沒說，我們選了一個並記錄（累積 15 條，其中 **U-08a／U-08b 為阻斷級**） |
+| **[未定]** | 論文沒說，我們選了一個並記錄（累積 25 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**） |
 | **[偏離]** | 與論文不同，必須在報告聲明（4 條，D-1…D-4） |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
@@ -35,15 +35,31 @@
 
 `00_FINDINGS` 排最後是因為它的 **D 系列是決策，會隨新事實改變**（D1/D2 已於
 2026-08-15 大幅修正）。它的 F 系列是實測、可信；D 系列與上位文件衝突時以上位者為準。
+它**不再使用 `U-nn` 編號** —— 它曾有自己一套與登記表同編號、不同意義的 UNKNOWN。
+
+### 一致性靠檢查，不靠讀
+
+```bash
+python3 tools/check_graph.py      # 1,005 項結構檢查
+```
+
+這六份文件互相引用的東西太多，人工同步一定會漏。檢查器涵蓋：
+邊的端點與 channel、主線無環、可達性、**channel 的 writers／readers 必須與節點的
+`reads`／`writes` 對稱**、**gate 判準提到的 channel 必須在它的 `reads` 裡**、
+execution order 必須符合 dependency DAG、join policy 的 group 必須有對應的邊、
+**`U-nn` 編號跨文件唯一**、以及各文件宣稱的數量與實際相符。
+
+每一項都是因為抓到過真實錯誤才存在的 —— 例如「gate 判準 vs `reads`」就是
+G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 
 | # | 檔案 | 內容 |
 |---|---|---|
 | 1 | [`02_BUILD_STEPS.md`](02_BUILD_STEPS.md) | **從這裡開始**。逐步驟建置流程，每步標明論文怎麼說、我們怎麼做 |
 | 2 | [`01_GRAPH_SPEC.md`](01_GRAPH_SPEC.md) | 完整規格：分類、目標、state、節點、邊、路由、迴圈、失敗、驗證、gate、風險、修正紀錄 |
 | 3 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實測事實（F 系列）與架構決策（D 系列），**含論文的多處自相矛盾** |
-| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：39 個 state channel、43 條邊、12 組 join policy、11 個決策點、3 個 cycle |
-| 5 | [`node_registry.yaml`](node_registry.yaml) | 29 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
-| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 44 個 L1、15 個 L2、6 個 gate、3 個 Required Audit |
+| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：42 個 state channel、51 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
+| 5 | [`node_registry.yaml`](node_registry.yaml) | 33 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
+| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 48 個 L1、16 個 L2、7 個 gate、3 個 Required Audit |
 
 ## 一頁摘要
 
@@ -81,18 +97,28 @@
 | **RA-2** | §2.5 的 `f_x → ℝ³` vs 證明需要 `φ_x` 為純量才能提出 `Q` | **失敗** |
 | **RA-3** | §3.4 的「fine-tune entire encoder」 vs 單卡 24GB | **不可行**，縮小 claim |
 
-### 六個 gate
+### 七個 gate
 
 ```
-G1 來源有效 → G2 點雲分布 → G3 語料有效 → G6 Stage 2 協定 → G4 gallery 凍結 → G5 報告發布
+G1 來源有效 → G2 點雲健全 → G3 物件語料 → G4 gallery 凍結 → G5 報告發布
+                                  ├→ G6 Stage 2 就緒（協定 + 場景語料）
+                                  └→ G7 場景合成協定
 ```
 
-`G6` 是這一輪新增的：**`stage2_protocol.status` 未 `resolved` 之前，Stage 2 不准訓練。**
-未決回傳 `BLOCKED_EVIDENCE`(rc=3) 而非 FAIL —— 沒有東西壞掉，只是決定還沒做。
+`G6` 與 `G7` 是**決定尚未做出**時的擋板，未決回傳 `BLOCKED_EVIDENCE`(rc=3) 而非 FAIL ——
+沒有東西壞掉，只是決定還沒做，上游照常跑。
 
-59 個測試對 6 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
+- **G6**：`stage2_protocol.status` 未 `resolved`（U-08a／U-08b）或 `scene_splits` 有洩漏之前，Stage 2 不准訓練。
+- **G7**：`composition_protocol.status` 未 `resolved`（U-18／U-21）之前，不准合成場景。**Table 1 不經過它。**
 
-### 兩個阻斷級的未解項 —— Stage 2 目前建不起來
+64 個測試對 7 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
+
+`G2` 這一輪**縮小了判準**：它原本要求自取樣點雲必須與 ULIP 官方釋出的點雲一致，
+但論文從未說 MetaFind 沿用 ULIP 預取樣的點雲，而 Stage 1 本來就會 fine-tune point encoder。
+那個判準在檢驗一個論文沒有主張的命題，降為 `L2-PC-ULIP-REF` 診斷。
+**它不是因為過不了才降級 —— 它從來沒跑過。**
+
+### 四個阻斷級的未解項
 
 **U-08a：Stage 2 的正樣本是哪一個 gallery 條目？**
 
@@ -110,11 +136,41 @@ Objaverse uid    : 867dfc95e96a4987...            46,052 個
 **U-08b：目標物件的 text / image / point cloud 從哪來？**
 ProcTHOR 只提供 metadata 與座標，沒有渲染圖也沒有點雲，所以 Eq.6 的三個模態沒有來源。
 
-**這兩個決定之前不要實作 Stage 2** —— 而且現在由 `G6_stage2_protocol` 這道 gate
-強制，不靠自律。其餘階段（環境、下載、點雲、渲染、場景圖、ESSGNN、Stage 1）
-不受影響，可以照常進行。
+**這兩個決定之前不要實作 Stage 2** —— 而且現在由 `G6_stage2_ready` 這道 gate
+強制，不靠自律。
+
+**U-18：Algorithm 1 第 7 行「放進場景、更新場景圖」到底產生什麼？**
+下一輪立刻要 `ESSGNN(G)`，需要新節點的 `t_i`、位置、朝向、尺度、物理邊、語意邊。
+論文一項都沒定義，而這個選擇會改變後面每一次檢索。
+
+**U-21：Algorithm 1 的 `G_0` 與 `{Q_1..Q_N}` 從哪來？**
+§3.3 說 200 個場景來自 **I-Design 的生成管線**，但 graph 原本沒有這條 channel，
+`n16` 讀的是 **ProcTHOR 房屋** —— 房屋是已完成的佈局，不是生成請求。
+**Table 2 的資料流從來沒有閉合。** 現在由 `G7_composition_protocol` 擋著。
+
+Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
+
+### Stage 1 也還沒鎖住的四件事
+
+這一輪逐項對論文後新發現，都會直接改變 Table 1：
+
+| id | 未定 | 論文怎麼說 |
+|---|---|---|
+| **U-13** | Full model 用哪一種 fusion | §2.4 列了五種、沒說是哪個。Table 3 只排除 Mean 與 MLPs |
+| **U-14** | 11 張渲染圖怎麼變成一個 `e_image` | 完全沒說。影響 Table 1 七個條件中的四個 |
+| **U-15** | 結構化標註怎麼序列化成 encoder 的輸入字串 | 只給欄位，沒給格式 |
+| **U-16** | query / gallery 兩塔是否共享權重 | 說「dedicated query encoder」、說兩者都訓練，但沒說共享關係 |
 
 ### 其他重大未解項
 
 **R-01：I-Design 尚未驗證能否執行。** Table 2 全部與 Table 3 的場景欄全部依賴它。
 查它很便宜，應該盡早做。
+
+**U-17：ESSGNN 用 `d` 還是 `d²`。** §2.5 寫 `‖x_i − x_j‖₂`，Appendix C 用 `‖·‖²`。
+兩者都是 SE(3) 不變、都不破壞證明，但**餵進 MLP 的數值不同，訓練結果就不同**。
+實作依 Appendix C 與原始 EGNN 用平方，記錄為選擇。
+
+**U-22：論文沒有公佈任何訓練超參數。** optimizer、learning rate、batch size、
+epochs、weight decay、scheduler、`τ`、`λ` 初值、ESSGNN 的 `L` 與 hidden 寬度、pooling ——
+一個都沒有。全部列在 `01_GRAPH_SPEC.md` §15，否則最後對不上時，
+分不清是模型沒復現還是 recipe 不同。

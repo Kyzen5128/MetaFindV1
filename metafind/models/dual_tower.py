@@ -53,7 +53,7 @@ class DualTowerConfig:
         use_layout: enable the ESSGNN branch and Eq. 6's residual term.
         essgnn: layout encoder configuration. ``out_dim`` must equal ``dim``.
         init_lambda: initial value of the learnable layout weight. The paper
-            gives no value (U-12); 1.0 keeps the residual at full strength at
+            gives no value (U-22); 1.0 keeps the residual at full strength at
             initialisation and lets training scale it down.
         scene_dropout: probability of dropping the layout term for a sample
             during training (sec. 2.6, "stochastic scene dropout (30%)").

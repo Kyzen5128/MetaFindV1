@@ -299,6 +299,13 @@ level_1:
     negative_injection: "ignore the children tree"
     expected_on_injection: "no support edges are produced"
     verified_blocks: false
+    note: >
+      [UNKNOWN U-19] Symmetry here is OUR convention. Paper 2.3 names
+      "physical-relation edges" and "semantic-relation edges" without saying
+      whether either is directed, and never says relation(A,B) equals
+      relation(B,A). The choice changes message passing: a directed support edge
+      and a symmetric one produce different h updates. This test pins our
+      convention so it cannot drift; it does not assert a paper requirement.
 
   - id: L1-SCENE-COORDS-RAW
     target: n07_scene_graphs
@@ -427,6 +434,73 @@ level_1:
     verified_blocks: false
     note: "[PAPER 2.6] 'Only the query-side fuser and the ESSGNN module are updated; the gallery encoder is frozen'."
 
+  - id: L1-STAGE2-QUERY-ENCODERS-FROZEN
+    target: n13_train_stage2
+    target_kind: node
+    asserts: >
+      After one Stage 2 optimizer step, the query-side text, image and POINT
+      encoders are all bit-identical to their Stage 1 values, and the only
+      parameters that moved are the fusion module, the ESSGNN and lambda.
+    negative_injection: "leave the query point encoder's requires_grad True, as Stage 1 sets it"
+    expected_on_injection: "query PointBERT parameters change and the assertion fails"
+    verified_blocks: false
+    note: >
+      [PAPER 2.6] "Only the query-side fuser and the ESSGNN module are updated;
+      the gallery encoder is frozen." Both halves matter. An earlier plan checked
+      only L1-GALLERY-FROZEN, but the query point encoder is the dangerous one:
+      Stage 1 trains it (train_scope: point_encoder_and_fuser), so it arrives at
+      Stage 2 with requires_grad already True and will keep training unless
+      explicitly frozen. Nothing would have caught that.
+
+  - id: L1-ABLATION-INFERENCE-ONLY
+    target: n18_train_ablations
+    target_kind: node
+    asserts: >
+      No checkpoint is produced for any variant whose requires_training is false;
+      the "w/o iterative retrieval" row resolves to the Full checkpoint named by
+      reuses_ckpt, with composition_mode: parallel.
+    negative_injection: "mark the iterative row requires_training: true"
+    expected_on_injection: "a second checkpoint appears for a row that is not a different model"
+    verified_blocks: false
+    note: >
+      Algorithm 1 is an inference-time procedure (paper 2.7). Training a model
+      for "w/o iterative retrieval" would compare two different checkpoints and
+      attribute the difference to the composition strategy.
+
+  - id: L1-TEXT-SERIALIZATION
+    target: n06_encode_text_image
+    target_kind: node
+    asserts: >
+      The annotation -> string serialization is a pinned template: a fixed
+      golden annotation produces a byte-identical string, and its embedding is
+      stable across runs.
+    negative_injection: "reorder two fields in the template"
+    expected_on_injection: "the golden string comparison fails"
+    verified_blocks: false
+    note: >
+      [UNKNOWN U-15] Paper 2.3 lists the fields ("object category, size
+      dimensions, materials, and placement constraints") but gives no
+      serialization format. Whether the encoder sees "wooden dining chair" or a
+      labelled multi-line record or raw JSON changes every text embedding. The
+      template is ours; this test stops it changing silently.
+
+  - id: L1-IMAGE-AGGREGATION
+    target: n06_encode_text_image
+    target_kind: node
+    asserts: >
+      The 11-view -> single-embedding rule is the one declared in the run config,
+      is applied identically at training and evaluation time, and is recorded
+      alongside the embedding.
+    negative_injection: "mean-pool at training time and take view 0 at evaluation time"
+    expected_on_injection: "the recorded rule and the applied rule disagree"
+    verified_blocks: false
+    note: >
+      [UNKNOWN U-14] Paper 2.3 says each asset is "rendered from 11 orthogonal
+      viewpoints" and never says how those become the single e_image that Eq. 6
+      consumes. Four of Table 1's seven conditions depend on the answer. The
+      failure this guards against is not choosing wrong -- it is choosing
+      differently in two places.
+
   # ---- gates
   - id: L1-GATE-NORECORD
     target: gate_records
@@ -447,18 +521,44 @@ level_1:
 # ================================================================== L2
 level_2:
 
-  - id: L2-PC-DISTRIBUTION
+  - id: L2-PC-SELF-CONSISTENT
     kind: scientific
-    seam: "self-sampled point clouds vs the ULIP-2 checkpoint"
+    seam: "n03 -> the frozen ULIP-2 point encoder"
     asserts: >
-      For 500 held-out assets, cos(ULIP's cloud, our cloud) through the same
-      encoder is far above the cross-asset baseline.
-    method: "encode both, compare paired cosine against the off-diagonal distribution"
+      A cloud sampled from mesh A, encoded by the frozen checkpoint, is closer to
+      an independently resampled cloud of the same mesh than to clouds of 1,000
+      other assets -- and by a wide margin.
+    method: "resample each of 500 meshes twice with different seeds; compare paired cosine against the off-diagonal distribution"
     tolerance: "paired mean must exceed the cross-asset mean by a wide, pre-registered margin"
     sample: fixture
-    negative_injection: "sample only 500 points instead of 10,000"
+    negative_injection: "sample 500 points instead of 10,000"
     expected_on_injection: "paired similarity collapses toward the baseline"
     verified_blocks: false
+    cited_by_gate: G2_pc_sanity
+    note: >
+      This is the part of the old L2-PC-DISTRIBUTION that does not depend on
+      ULIP's released clouds, and therefore the part that can gate. It catches a
+      sampler producing noise while requiring no external reference.
+
+  - id: L2-PC-ULIP-REF
+    kind: scientific
+    seam: "self-sampled point clouds vs ULIP's released clouds"
+    asserts: >
+      For a small reference sample, cos(ULIP's cloud, our cloud) through the same
+      encoder is far above the cross-asset baseline.
+    method: "download a reference subset of ULIP's released clouds; encode both; compare paired cosine against the off-diagonal distribution"
+    tolerance: "reported, not thresholded"
+    sample: fixture
+    negative_injection: "sample 500 points instead of 10,000"
+    expected_on_injection: "paired similarity collapses toward the baseline"
+    verified_blocks: false
+    blocks: false
+    note: >
+      [UNKNOWN U-02, DEMOTED FROM GATE] Diagnostic only. A low score here is
+      informative -- it says our preprocessing differs from ULIP's -- but it does
+      not invalidate the reproduction, because the paper never says MetaFind
+      reuses ULIP's pre-sampled clouds and Stage 1 fine-tunes the point encoder
+      anyway. Recorded in the report either way.
     cited_by_gate: G2_pc_distribution
     note: "[U-02] This is the evidence for not downloading ULIP's 185 GB of clouds."
 
@@ -512,7 +612,7 @@ level_2:
     negative_injection: "move one test house into the train set"
     expected_on_injection: "leakage_count == 1 and G3 fails"
     verified_blocks: false
-    cited_by_gate: G3_corpus_valid
+    cited_by_gate: G3_object_corpus
     note: "Asset-level disjointness is deliberately NOT asserted; see L1-SPLIT-NO-ASSET-DISJOINTNESS."
 
   - id: L2-COMPLETE
@@ -525,33 +625,53 @@ level_2:
     negative_injection: "drop one worker result silently"
     expected_on_injection: "the equality fails"
     verified_blocks: false
-    cited_by_gate: G3_corpus_valid
+    cited_by_gate: G3_object_corpus
 
   - id: L2-RESUME
     kind: resume_equivalence
     seam: "the whole interruptible pipeline"
     asserts: >
-      kill -9 mid-stage, restart, and the artifacts are byte-identical while the
-      external call count does not increase.
-    method: "run twice, once interrupted; diff artifact hashes and the cost ledger"
-    tolerance: exact
+      kill -9 mid-stage and restart. For PREPROCESSING artifacts -- point clouds,
+      renders, annotations, embeddings, semantic edges, splits, the gallery index
+      -- the result is byte-identical and the external call count does not
+      increase. For TRAINING, the restart resumes from the saved optimizer and
+      RNG state, the step counter continues rather than restarting, and no
+      sample is consumed twice within an epoch.
+    method: "run twice, once interrupted; diff artifact hashes and the cost ledger; for training, diff the resumed state dict against the pre-kill checkpoint"
+    tolerance: "exact for preprocessing artifacts; state-continuation for training"
     sample: pilot
     negative_injection: "decide completion on file existence rather than content hash"
     expected_on_injection: "a truncated file is treated as complete"
     verified_blocks: false
+    note: >
+      [CORRECTED] SC-8 previously demanded byte-identical artifacts everywhere,
+      which contradicts NS-4 and NS-5 in the spec: scatter_add_ atomics and
+      training stochasticity are declared non-removable and exact reproducibility
+      is explicitly not claimed. A checkpoint cannot be both. Byte-identity is
+      the right bar for deterministic preprocessing and the wrong bar for a
+      training run.
     cited_by_gate: ""
 
   - id: L2-GALLERY-SELF
     kind: scientific
     seam: "n11 -> G4 -> n12"
-    asserts: "1000 sampled gallery vectors used as their own queries give recall@1 == 1.0"
-    method: "exact inner product self-retrieval"
+    asserts: >
+      For 1000 sampled gallery vectors used as their own queries, the target's
+      similarity EQUALS the maximum similarity and the target is a member of the
+      argmax tie set.
+    method: "exact inner product self-retrieval, compared as sim[target] == sim.max()"
     tolerance: exact
     sample: full
     negative_injection: "shuffle the index id mapping"
-    expected_on_injection: "recall collapses and the index is not promoted"
+    expected_on_injection: "the target's score stops being the maximum and the index is not promoted"
     verified_blocks: false
     cited_by_gate: G4_gallery_freeze
+    note: >
+      [CORRECTED] The assertion was recall@1 == 1.0, which is not tie-safe: two
+      assets with identical embeddings make argmax return either id, so a
+      correctly built index can score below 1.0 and a broken one can reach it.
+      What the gate actually needs to know is that the target is ranked top,
+      ties included.
 
   - id: L2-DUAL-PROTOCOL
     kind: structural
@@ -673,27 +793,42 @@ level_3_gates:
     on_fail: "Resume the download. Never lower the coverage threshold to pass."
     downstream_blocked: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs]
 
-  - gate_id: G2_pc_distribution
+  - gate_id: G2_pc_sanity
     gate_class: G-INVALID
     justification: >
-      The ULIP-2 checkpoint was trained on point clouds sampled by ULIP's own
-      pipeline. If ours land off-distribution, every point-cloud embedding is
-      quietly wrong and every retrieval number built on it is invalid -- with no
-      error anywhere.
+      A point cloud that is malformed, degenerate or wrongly normalised makes
+      every point-cloud embedding silently wrong, and every retrieval number
+      built on it invalid, with no error anywhere. That is an invalidity
+      condition and belongs in a gate.
     record_kind: gate
     position: "between n03_sample_pointclouds and n09_build_splits"
     criterion: >
-      Over 500 held-out assets, the paired cosine between ULIP's released cloud
-      and ours, through the same encoder, exceeds the cross-asset baseline by the
-      pre-registered margin.
-    evidence: [L2-PC-DISTRIBUTION, L1-PC-NORM, L1-PC-SHAPE]
+      Every admitted cloud is (10000, 6), finite, pc_norm'd (centroid within
+      1e-5 of the origin, max radius within 1e-5 of 1) and non-degenerate
+      (per-axis variance above a floor); and a sampled cloud encoded by the
+      frozen checkpoint retrieves its own asset far above chance against a
+      1,000-asset probe set.
+    evidence: [L1-PC-SHAPE, L1-PC-NORM, L2-PC-SELF-CONSISTENT]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
-    record_path: "outputs/logs/gates/G2_pc_distribution.yaml"
+    record_path: "outputs/logs/gates/G2_pc_sanity.yaml"
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
-    on_fail: "Fix the sampler, or download ULIP's 185 GB of clouds. Never relax the margin to pass."
+    on_fail: "Fix the sampler. Never relax the thresholds to pass."
     downstream_blocked: [n09_build_splits, n10_train_stage1]
+    rescoped: >
+      [NARROWED, and the reason matters] This gate previously required our
+      sampled clouds to match ULIP's RELEASED clouds through the same encoder,
+      failing the run otherwise. That criterion tested a proposition the paper
+      never makes: nothing in MetaFind says it reuses ULIP's pre-sampled point
+      clouds, and Stage 1 fine-tunes the point encoder (paper 2.6), so the
+      encoder is free to adapt to our sampling. "Differs from ULIP's released
+      cloud" therefore does not imply "reproduction invalid".
+      The comparison is still worth having and is kept as L2-PC-ULIP-REF, a
+      diagnostic. It is NOT being demoted because it was failing -- it has never
+      been run, and the reference clouds are not on disk. It is being demoted
+      because it was testing the wrong claim. If the authors are found to state
+      that MetaFind reuses ULIP's preprocessing, it goes back to being a gate.
 
-  - gate_id: G3_corpus_valid
+  - gate_id: G3_object_corpus
     gate_class: G-INVALID
     justification: >
       Split leakage makes every retrieval number meaningless, and the error is
@@ -707,7 +842,7 @@ level_3_gates:
       AND both evaluation protocols are defined with explicit gallery sizes
     evidence: [L2-LEAK, L2-COMPLETE, L1-PROTOCOLS-DEFINED, L1-QUAR-REASON]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
-    record_path: "outputs/logs/gates/G3_corpus_valid.yaml"
+    record_path: "outputs/logs/gates/G3_object_corpus.yaml"
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
     on_fail: "Fix the pipeline and re-run. Do not widen the quarantine threshold."
     downstream_blocked: [n10_train_stage1, n13_train_stage2]
@@ -732,7 +867,7 @@ level_3_gates:
     on_fail: "Do NOT promote. Discard the staging index and rebuild; the promoted location stays untouched."
     downstream_blocked: [n12_promote_index, n15_eval_retrieval, n16_compose_scenes]
 
-  - gate_id: G6_stage2_protocol
+  - gate_id: G6_stage2_ready
     gate_class: G-INVALID
     justification: >
       "If we carry this error forward, does the conclusion still hold?" -- no.
@@ -750,15 +885,51 @@ level_3_gates:
       AND modality_source is named and recorded
       AND every ProcTHOR asset used as a Stage 2 target resolves to exactly one
           gallery entry in stage2_pairing
-    evidence: [L1-STAGE2-POSITIVE-DEFINED]
+      AND scene_splits is populated with disjoint train_houses and test_houses
+    evidence: [L1-STAGE2-POSITIVE-DEFINED, L1-STAGE2-QUERY-ENCODERS-FROZEN]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
-    record_path: "outputs/logs/gates/G6_stage2_protocol.yaml"
+    record_path: "outputs/logs/gates/G6_stage2_ready.yaml"
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
     on_fail: "Decide U-08a and U-08b, record the method, then re-run. Never fall back to a silent default positive."
     on_blocked_evidence: >
       Unresolved is rc=3, not rc=2: nothing is broken, a decision is outstanding.
       Everything upstream of Stage 2 continues.
+    verdict_semantics: >
+      Two failure modes deliberately share one gate because they guard one spend:
+      protocol unresolved -> BLOCKED_EVIDENCE (rc=3); scene_splits leaked or
+      absent -> FAIL (rc=2).
+    scene_corpus_note: >
+      [MOVED HERE from G3] Scene-corpus validity used to sit in G3, which meant
+      Stage 1 -- object-level pretraining on Objaverse-LVIS that needs no
+      ProcTHOR data at all -- waited on Qwen semantic-edge generation over
+      ProcTHOR. A fault in the ProcTHOR branch stopped training that did not
+      depend on it. The check belongs in front of the spend that needs it.
     downstream_blocked: [n13_train_stage2]
+
+  - gate_id: G7_composition_protocol
+    gate_class: G-INVALID
+    justification: >
+      Composing scenes against an undefined protocol produces numbers whose
+      meaning cannot be stated afterwards. Algorithm 1 needs an initial graph, a
+      query list, and a rule for what placing an asset does to the graph; the
+      paper supplies none of the three, and the choice changes every retrieval
+      after the first.
+    record_kind: gate
+    position: "between n15b_resolve_composition_protocol and n15c_prepare_eval_scenes"
+    criterion: >
+      composition_protocol.status == resolved AND g0_source, query_list_source,
+      placement_rule, new_node_t_i, new_phys_edges and new_sem_edges are all
+      populated with a stated method
+    evidence: [L1-GATE-NORECORD]
+    rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
+    record_path: "outputs/logs/gates/G7_composition_protocol.yaml"
+    record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
+    on_fail: "Answer U-18 and U-21. Do not substitute ProcTHOR houses for I-Design scenes -- a house is a finished layout, not a generation request."
+    downstream_blocked: [n15c_prepare_eval_scenes, n16_compose_scenes]
+    verdict_semantics: >
+      status != resolved -> BLOCKED_EVIDENCE (rc=3), not FAIL. Table 1 does not
+      pass through this gate and continues regardless; only Table 2 and Table 3's
+      two scene columns wait.
 
   - gate_id: G5_report_release
     gate_class: G-IRREVERSIBLE
@@ -774,8 +945,14 @@ level_3_gates:
       AND audit records for RA-1, RA-2 and RA-3 all present
       AND deviations D-1 through D-4 are stated in the report body
       AND every degraded_flags entry appears in the report
-      AND every UNKNOWN U-01..U-10 has a stated disposition
+      AND every id in graph_spec.yaml `risks_unknowns` has a stated disposition,
+          enumerated from that list at run time rather than from a hardcoded range
     evidence: [L2-DEGRADE-VISIBLE, L2-COST-BOUND, L1-GATE-NORECORD]
+    unknown_registry_note: >
+      [CORRECTED] The criterion used to read "every UNKNOWN U-01..U-10". A range
+      silently excludes anything added later, and U-11 through U-22 plus U-03a,
+      U-08a and U-08b already exist -- so a new UNKNOWN could have been left out
+      of the report while G5 still passed. The gate now iterates the registry.
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G5_report_release.yaml"
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
@@ -784,9 +961,9 @@ level_3_gates:
 
 # ==================================================================
 gate_discipline:
-  total_l1: 43
-  total_l2: 15
-  total_gates: 6
+  total_l1: 48
+  total_l2: 16
+  total_gates: 7
   rejected_gate_candidates:
     - {candidate: "all 7 modality conditions produced", why_not_a_gate: "fails all four criteria -- nothing is invalidated, contaminated, expensively redone or irreversible", demoted_to: L2}
     - {candidate: "annotation schema pass rate", why_not_a_gate: "a criterion inside G3, not a separate checkpoint", demoted_to: "criterion of G3"}
@@ -802,6 +979,7 @@ gate_discipline:
 required_audits:
   - audit_id: RA-1
     record_kind: required_audit
+    blocks: false
     why_not_a_gate: >
       EXPECTED TO FAIL. It reproduces a contradiction in the source: 2.5
       specifies h0 = Concat(x_i, t_i) while Appendix C's proof explicitly assumes
@@ -814,11 +992,12 @@ required_audits:
       "Section 2.5's h0 = Concat(x_i, t_i) is inconsistent with Appendix C's
       equivariance proof. Our results use h0 = t_i, the formulation the proof
       requires."
-    must_not_affect: [G3_corpus_valid, G4_gallery_freeze, G5_report_release, SC-4, SC-5, SC-6]
+    must_not_affect: [G3_object_corpus, G4_gallery_freeze, G5_report_release, SC-4, SC-5, SC-6]
     record_path: "outputs/logs/audits/RA1_h0_concat.yaml"
 
   - audit_id: RA-2
     record_kind: required_audit
+    blocks: false
     why_not_a_gate: >
       EXPECTED TO FAIL. Section 2.5 types f_x as R^(2d+1+e) -> R^3, but
       Appendix C factors the rotation out as
@@ -829,11 +1008,12 @@ required_audits:
     claim_on_failure: >
       "Section 2.5's f_x : ... -> R^3 is inconsistent with Appendix C's proof,
       which requires a scalar. Our implementation uses the scalar form."
-    must_not_affect: [G3_corpus_valid, G4_gallery_freeze, G5_report_release, SC-4, SC-5, SC-6]
+    must_not_affect: [G3_object_corpus, G4_gallery_freeze, G5_report_release, SC-4, SC-5, SC-6]
     record_path: "outputs/logs/audits/RA2_fx_range.yaml"
 
   - audit_id: RA-3
     record_kind: required_audit
+    blocks: false
     why_not_a_gate: >
       EXPECTED TO FAIL on this hardware. Section 3.4 concludes that fine-tuning
       the entire encoder beats training the fuser only, but ViT-bigG-14's 2.5B
@@ -846,7 +1026,7 @@ required_audits:
       hardware), 'entire encoder' in our reproduction means the 3D encoder plus
       fusion. The Table 3 row comparing full fine-tuning to fuser-only is
       reported within that reduced scope."
-    must_not_affect: [G3_corpus_valid, G4_gallery_freeze, G5_report_release, "other Table 3 rows"]
+    must_not_affect: [G3_object_corpus, G4_gallery_freeze, G5_report_release, "other Table 3 rows"]
     record_path: "outputs/logs/audits/RA3_train_scope.yaml"
 
 coverage_check:
@@ -859,7 +1039,7 @@ coverage_check:
   every_check_has_negative_injection: true
   no_existence_only_assertions: true
   open_items:
-    - item: "verified_blocks is false for all 58 checks"
+    - item: "verified_blocks is false for all 64 checks"
       status: "BY DESIGN at specification time"
       action: "During implementation, flip each to true only after its negative injection has been observed to fail."
     - item: "I-Design has not been verified to run"

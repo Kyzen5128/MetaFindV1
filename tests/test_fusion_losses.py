@@ -55,7 +55,7 @@ def test_mask_rate_negative_injection():
 
 
 def test_allow_empty_flag_controls_the_all_masked_case():
-    """U-08: the literal reading permits a query with no modality at all."""
+    """U-23: the literal reading permits a query with no modality at all."""
     g = torch.Generator().manual_seed(1)
     loose = sample_modality_mask(20_000, 0.5, allow_empty=True, generator=g)
     assert (~loose).all(dim=-1).any(), "allow_empty=True should produce empty queries"
@@ -148,7 +148,7 @@ def test_output_shape_and_finiteness(kind: str):
 @pytest.mark.parametrize("kind", KINDS)
 @pytest.mark.parametrize("include_absent", [True, False])
 def test_all_modalities_masked_stays_finite(kind: str, include_absent: bool):
-    """U-08: 2.7% of queries lose everything; a NaN here would poison the batch."""
+    """U-23: 2.7% of queries lose everything; a NaN here would poison the batch."""
     fuse = ModalityFusion(FusionConfig(kind=kind, **COMMON, include_absent_slots=include_absent))
     out = fuse(embeds(), torch.zeros(4, 3, dtype=torch.bool))
     assert torch.isfinite(out).all(), f"{kind} went non-finite with nothing present"
@@ -239,7 +239,7 @@ def test_accuracy_is_perfect_when_query_equals_gallery():
 
 
 def test_cosine_similarity_ignores_magnitude():
-    """U-10: sim is assumed cosine, so rescaling a tower must not change the loss."""
+    """U-24: sim is assumed cosine, so rescaling a tower must not change the loss."""
     torch.manual_seed(0)
     q, g = torch.randn(8, D), torch.randn(8, D)
     loss = MetaFindContrastiveLoss(ContrastiveConfig(bidirectional=True))

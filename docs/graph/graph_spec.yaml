@@ -147,7 +147,7 @@ state:
     - name: asset_manifest
       type: "map[uid -> source_path]"
       writers: [n02_download]
-      readers: [G1_sources_valid, n03_sample_pointclouds, n04_render_views, n09_build_splits, n11_gallery_index_staging]
+      readers: [G1_sources_valid, G3_object_corpus, G4_gallery_freeze, n03_sample_pointclouds, n04_render_views, n09_build_splits, n09b_resolve_stage2_protocol, n11_gallery_index_staging, n22_publish_report]
       merge: write_once
       lifetime: persistent
       note: >
@@ -158,7 +158,7 @@ state:
     - name: asset_glb
       type: "map[uid -> {path, sha256, bytes}]"
       writers: [n02_download]
-      readers: [n03_sample_pointclouds, n04_render_views, n16_compose_scenes]
+      readers: [G1_sources_valid, n03_sample_pointclouds, n04_render_views, n16_compose_scenes]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -169,7 +169,7 @@ state:
     - name: procthor_dataset
       type: "{path, sha256, train_count, val_count, test_count}"
       writers: [n02_download]
-      readers: [G1_sources_valid, n07_scene_graphs, n09_build_splits]
+      readers: [G1_sources_valid, n07_scene_graphs, n09c_build_scene_splits]
       merge: write_once
       lifetime: persistent
       note: >
@@ -182,7 +182,7 @@ state:
     - name: pointclouds
       type: "map[uid -> {path, sha256, n_points}]"
       writers: [n03_sample_pointclouds]
-      readers: [n10_train_stage1, n11_gallery_index_staging, n15_eval_retrieval]
+      readers: [G2_pc_sanity, n09_build_splits, n10_train_stage1, n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations]
       merge: upsert_by_key
       lifetime: persistent
       note: "Sampled from the mesh, then pc_norm'd exactly as ULIP does. Gated by G2 (U-02)."
@@ -197,7 +197,7 @@ state:
     - name: objaverse_annotations
       type: "map[objaverse_uid -> {category, description, dimensions, materials, placement_constraints, annotator_model}]"
       writers: [n05_annotate]
-      readers: [n06_encode_text_image]
+      readers: [n06_encode_text_image, n09b_resolve_stage2_protocol]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -209,7 +209,7 @@ state:
     - name: procthor_object_text
       type: "map[procthor_asset_id -> {text, source}]"
       writers: [n07_scene_graphs]
-      readers: [n08_semantic_edges, n09_build_splits, n09b_resolve_stage2_protocol, n13_train_stage2]
+      readers: [n08_semantic_edges, n09b_resolve_stage2_protocol, n09c_build_scene_splits, n13_train_stage2, n18_train_ablations]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -229,7 +229,7 @@ state:
     - name: text_image_embeddings
       type: "map[uid -> {text: 1280-d uri, image: 1280-d uri}]"
       writers: [n06_encode_text_image]
-      readers: [n10_train_stage1, n13_train_stage2, n11_gallery_index_staging]
+      readers: [n09_build_splits, n10_train_stage1, n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -241,14 +241,14 @@ state:
     - name: scene_graphs
       type: "map[house_id -> {nodes, positions, phys_edges, sem_edge_ids, uri}]"
       writers: [n07_scene_graphs]
-      readers: [n09_build_splits, n13_train_stage2, n16_compose_scenes]
+      readers: [n08_semantic_edges, n09b_resolve_stage2_protocol, n09c_build_scene_splits, n13_train_stage2, n14_equivariance_probe, n15b_resolve_composition_protocol, n18_train_ablations]
       merge: upsert_by_key
       lifetime: persistent
 
     - name: sem_edge_cache
       type: "map[hash -> {sentence, embedding_uri}]"
       writers: [n08_semantic_edges]
-      readers: [n08_semantic_edges, n13_train_stage2]
+      readers: [n08_semantic_edges, n09c_build_scene_splits, n13_train_stage2, n18_train_ablations]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -261,7 +261,7 @@ state:
     - name: stage2_protocol
       type: "{status: unresolved|resolved, pairing_method, modality_source, decided_by, decided_at}"
       writers: [n09b_resolve_stage2_protocol]
-      readers: [G6_stage2_protocol, n13_train_stage2]
+      readers: [G6_stage2_ready, n13_train_stage2, n15b_resolve_composition_protocol, n18_train_ablations]
       merge: replace
       lifetime: persistent
       note: >
@@ -274,7 +274,7 @@ state:
     - name: stage2_pairing
       type: "map[procthor_asset_id -> {gallery_uid, method, confidence}]"
       writers: [n09b_resolve_stage2_protocol]
-      readers: [n13_train_stage2]
+      readers: [G6_stage2_ready, n13_train_stage2, n18_train_ablations]
       merge: write_once
       lifetime: persistent
       note: >
@@ -295,29 +295,46 @@ state:
         stage2_protocol reaches status == resolved.
 
     - name: splits
-      type: "{object: {train, test}, scene: {train_houses, test_houses}}"
+      type: "{object: {train, test}}"
       writers: [n09_build_splits]
-      readers: [n10_train_stage1, n13_train_stage2, n15_eval_retrieval, n18_train_ablations]
+      readers: [G3_object_corpus, n10_train_stage1, n13_train_stage2, n15_eval_retrieval, n18_train_ablations]
       merge: write_once
       lifetime: persistent
       note: >
         [PAPER 3.1] "80% of the data for training and reserve 20% for testing".
-        House sets must be disjoint. An earlier draft additionally forbade an asset appearing
+        [CORRECTED] Object-level only. An earlier draft put the ProcTHOR house
+        split in the same channel, which forced n09 to read the ProcTHOR
+        branch, which put Qwen semantic-edge generation on the critical path to
+        Stage 1. Stage 1 is object-level pretraining on Objaverse-LVIS
+        (paper 2.6) and does not need ProcTHOR at all. See scene_splits.
+
+    - name: scene_splits
+      type: "{train_houses, test_houses}"
+      writers: [n09c_build_scene_splits]
+      readers: [G6_stage2_ready, n13_train_stage2, n18_train_ablations, n19_eval_ablations]
+      merge: write_once
+      lifetime: persistent
+      note: >
+        [PAPER 3.1] Same 80/20 statement, applied to ProcTHOR houses. House sets
+        must be disjoint. An earlier draft additionally forbade an asset appearing
         in both a train and a test house; the paper does not ask for that, and
         ProcTHOR's 12,000 houses draw on ~1,467 assets, so enforcing it would
         change the scene distribution. Removed.
+        [DECOUPLING] Split out of `splits` so that a failure anywhere in the
+        ProcTHOR branch -- scene-graph extraction, Qwen semantic edges --
+        cannot block Stage 1.
 
     - name: split_seed
       type: int
       writers: [n09_build_splits]
-      readers: [n10_train_stage1, n13_train_stage2, n22_publish_report]
+      readers: [n10_train_stage1, n13_train_stage2, n18_train_ablations, n22_publish_report]
       merge: write_once
       lifetime: persistent
 
     - name: eval_protocols
       type: "map[name -> {query_split, gallery_split, gallery_size}]"
       writers: [n09_build_splits]
-      readers: [n15_eval_retrieval, n19_eval_ablations, n21_compare_to_paper]
+      readers: [G3_object_corpus, n15_eval_retrieval, n19_eval_ablations, n21_compare_to_paper]
       merge: write_once
       lifetime: persistent
       note: >
@@ -330,6 +347,10 @@ state:
         protocols now run:
           A_test_gallery: query=test, gallery=test   (~9,210)
           B_full_gallery: query=test, gallery=full   (46,052)
+        [WIDENED] U-09 covers the QUERY set too. Paper 3.1 states only
+        "80% of the data for training and reserve 20% for testing"; it never
+        says Table 1's queries are the 20% test split. Both protocols above
+        assume query=test. That assumption is recorded here, not deduced.
 
     - name: stage1_ckpt
       type: "{uri, sha256, config_hash, data_hash, seed, code_revision, train_scope}"
@@ -348,38 +369,51 @@ state:
     - name: gallery_index
       type: "map[stage1_sha -> {uri, sha256, dim, count, promoted_at}]"
       writers: [n12_promote_index]
-      readers: [n15_eval_retrieval, n16_compose_scenes, n19_eval_ablations]
+      readers: [n15_eval_retrieval, n15b_resolve_composition_protocol, n16_compose_scenes, n19_eval_ablations]
       merge: upsert_by_key
       merge_note: "write_once semantics per key"
       lifetime: persistent
       note: "The immutable shared artifact every table reads. Hence G4 is G-CONTAM."
 
     - name: variant_registry
-      type: "list[{variant_id, train_scope, fusion, dropout, layout_encoder, composition_mode, table3_row}]"
+      type: "list[{variant_id, requires_training, reuses_ckpt, train_scope, fusion, dropout, layout_encoder, composition_mode, table3_row}]"
       writers: [n02_download]
-      readers: [n13_train_stage2, n18_train_ablations, n19_eval_ablations]
+      readers: [n10_train_stage1, n13_train_stage2, n18_train_ablations, n19_eval_ablations]
       merge: write_once
       lifetime: persistent
-      note: "Static registry. Declaring it in state is what makes the fan-out A1 rather than A3."
+      note: >
+        Static registry. Declaring it in state is what makes the fan-out A1 rather than A3.
+        [CORRECTED] `requires_training` was added because an earlier draft sent
+        all eight Table 3 rows through n18_train_ablations. Table 3's
+        "w/o iterative retrieval" is not a model -- Algorithm 1 runs at
+        inference only (paper 2.7), so that row is the Full checkpoint
+        evaluated with composition_mode: parallel. It is declared
+        requires_training: false, reuses_ckpt: full, and n18 must not train it.
+        Enforced by L1-ABLATION-INFERENCE-ONLY.
+        [UNKNOWN] "w/o Layout Context" is left as requires_training: true. It
+        could in principle be the Full checkpoint with lambda * e_layout forced
+        to zero, but Table 1 lists "MetaFind w/o ESSGNN" as a separate model and
+        its Table 3 R@1 (13.5) differs from Table 1's text-only figure (13.8),
+        so a retrained model is the safer reading. Recorded, not deduced.
 
     - name: variant_ckpts
       type: "map[variant_id -> {uri, sha256}]"
       writers: [n13_train_stage2, n18_train_ablations, sg3_train]
-      readers: [n15_eval_retrieval, n16_compose_scenes, n19_eval_ablations]
+      readers: [n14_equivariance_probe, n15_eval_retrieval, n16_compose_scenes, n19_eval_ablations]
       merge: upsert_by_key
       lifetime: persistent
 
     - name: variant_status
       type: "map[variant_id -> {status, reason}]"
       writers: [n13_train_stage2, n18_train_ablations, sg3_train]
-      readers: [n19_eval_ablations, n20_aggregate]
+      readers: [n19_eval_ablations, n20_aggregate, n21_compare_to_paper]
       merge: upsert_by_key
       lifetime: persistent
 
     - name: retrieval_metrics
       type: "map[(variant, condition, protocol) -> {R@1, R@5, n_gallery, n_query}]"
       writers: [n15_eval_retrieval, n19_eval_ablations]
-      readers: [n20_aggregate]
+      readers: [n20_aggregate, n21_compare_to_paper]
       merge: upsert_by_key
       lifetime: persistent
       note: "Keyed by PROTOCOL as well, so both gallery scopes are reported side by side."
@@ -392,6 +426,42 @@ state:
       lifetime: persistent
       note: "Three separate quantities, one per level (SC-4/5/6)."
 
+    - name: composition_protocol
+      type: "{status: unresolved|resolved, g0_source, query_list_source, placement_rule, new_node_t_i, new_phys_edges, new_sem_edges, decided_by, decided_at}"
+      writers: [n15b_resolve_composition_protocol]
+      readers: [G7_composition_protocol, n15c_prepare_eval_scenes, n16_compose_scenes, n19_eval_ablations]
+      merge: replace
+      lifetime: persistent
+      note: >
+        [UNKNOWN U-18 / U-21 -- BLOCKING for Table 2] Algorithm 1 requires an
+        initial scene graph G_0 and an asset query list {Q_1..Q_N}, and paper 3.3
+        says both come from "the scene generation pipeline of I-Design on a set
+        of 200 randomly sampled scenes". An earlier draft had n16 read
+        `scene_graphs`, which are ProcTHOR houses -- not I-Design output. The
+        Table 2 dataflow was never closed.
+        Line 7 of Algorithm 1 is "Place A*_i into the scene, update scene
+        graph: G <- G U {A*_i}" and nothing more. The very next iteration calls
+        ESSGNN(G), which needs, for the newly placed node: its t_i, its
+        position, its orientation, its scale, its physical edges and its
+        semantic edges. None of that is specified.
+        Held mutable until decided, exactly like stage2_protocol, so that
+        writing a placeholder cannot lock the channel before the answer exists.
+
+    - name: idesign_scenes
+      type: "map[scene_id -> {g0_uri, query_list, room_type, source_revision}]"
+      writers: [n15c_prepare_eval_scenes]
+      readers: [n16_compose_scenes, n19_eval_ablations]
+      merge: write_once
+      lifetime: persistent
+      note: >
+        [PAPER 3.3] The 200 evaluation scenes. Written only after
+        G7_composition_protocol passes, because what a "scene" contains is
+        exactly what the protocol decides.
+        [R-01] I-Design has not yet been verified to run here. If it cannot,
+        every Table 2 cell and Table 3's two scene columns become
+        INSUFFICIENT_EVIDENCE -- they are not substitutable with ProcTHOR
+        houses, which are layouts rather than generation requests.
+
     - name: composed_scenes
       type: "map[(variant, scene_id) -> {graph_uri, placed_count, incomplete}]"
       writers: [n16_compose_scenes, n19_eval_ablations, sg4_instance]
@@ -402,7 +472,7 @@ state:
     - name: composition_incomplete
       type: "set[(variant, scene_id)]"
       writers: [n16_compose_scenes, sg4_instance]
-      readers: [n20_aggregate]
+      readers: [n17_judge_scenes, n20_aggregate]
       merge: set_union
       lifetime: persistent
       note: "EXHAUSTED scenes are excluded from Table 2 means and reported separately."
@@ -410,29 +480,29 @@ state:
     - name: judge_scores
       type: "map[(method, scene_id, dimension) -> float]"
       writers: [n17_judge_scenes, n19_eval_ablations]
-      readers: [n20_aggregate]
+      readers: [n20_aggregate, n21_compare_to_paper]
       merge: upsert_by_key
       lifetime: persistent
 
     - name: quarantine
       type: "list[{uid, stage, failure_class, exception_type, exception_msg, code_revision, timestamp}]"
       writers: [n03_sample_pointclouds, n04_render_views, n05_annotate, n07_scene_graphs, n08_semantic_edges]
-      readers: [G3_corpus_valid, n22_publish_report]
+      readers: [G3_object_corpus, n22_publish_report]
       merge: append
       lifetime: persistent
       note: "Without the real exception per item, a shortfall is undiagnosable months later."
 
     - name: gate_records
       type: "list[gate_record]"
-      writers: [G1_sources_valid, G2_pc_distribution, G3_corpus_valid, G4_gallery_freeze, G6_stage2_protocol, G5_report_release]
-      readers: [G5_report_release, n22_publish_report]
+      writers: [G1_sources_valid, G2_pc_sanity, G3_object_corpus, G4_gallery_freeze, G5_report_release, G6_stage2_ready, G7_composition_protocol]
+      readers: [G5_report_release, n12_promote_index, n22_publish_report]
       merge: append
       lifetime: persistent
       note: "GD -- a gate may never backfill its own record. Missing record == not passed."
 
     - name: audit_records
       type: "list[required_audit_record]"
-      writers: [n14_equivariance_probe, RA-1, RA-2, RA-3]
+      writers: [RA-1, RA-2, RA-3, n14_equivariance_probe]
       readers: [G5_report_release, n22_publish_report]
       merge: append
       lifetime: persistent
@@ -456,7 +526,7 @@ state:
     - name: degraded_flags
       type: "set[str]"
       writers: [ALL_NODES]
-      readers: [n20_aggregate, n21_compare_to_paper, n22_publish_report]
+      readers: [G5_report_release, n20_aggregate, n21_compare_to_paper, n22_publish_report]
       merge: set_union
       lifetime: persistent
       note: "e.g. batch_size_reduced_oom, semantic_edge_missing, idesign_unavailable."
@@ -489,21 +559,23 @@ edges:
   - {id: e04, from: G1_sources_valid, to: n04_render_views, kind: data, guard: "verdict == PASS", join_group: default, carries: [asset_glb]}
   - {id: e05, from: G1_sources_valid, to: n07_scene_graphs, kind: data, guard: "verdict == PASS", join_group: default, carries: [procthor_dataset]}
 
-  - {id: e06, from: n03_sample_pointclouds, to: G2_pc_distribution, kind: data, guard: "", join_group: default, carries: [pointclouds]}
+  - {id: e06, from: n03_sample_pointclouds, to: G2_pc_sanity, kind: data, guard: "", join_group: default, carries: [pointclouds]}
   - {id: e07, from: n04_render_views, to: n05_annotate, kind: data, guard: "", join_group: default, carries: [renders]}
   - {id: e08, from: n07_scene_graphs, to: n08_semantic_edges, kind: data, guard: "", join_group: default, carries: [scene_graphs, procthor_object_text]}
   - {id: e09, from: n05_annotate, to: n06_encode_text_image, kind: data, guard: "", join_group: default, carries: [objaverse_annotations, renders]}
 
-  - {id: e10, from: G2_pc_distribution, to: n09_build_splits, kind: data, guard: "verdict == PASS", join_group: default, carries: [pointclouds]}
+  - {id: e10, from: G2_pc_sanity, to: n09_build_splits, kind: data, guard: "verdict == PASS", join_group: default, carries: [pointclouds]}
   - {id: e11, from: n06_encode_text_image, to: n09_build_splits, kind: data, guard: "", join_group: default, carries: [text_image_embeddings]}
-  - {id: e12, from: n08_semantic_edges, to: n09_build_splits, kind: data, guard: "", join_group: default, carries: [sem_edge_cache]}
-  - {id: e13, from: n09_build_splits, to: G3_corpus_valid, kind: data, guard: "", join_group: default, carries: [splits, eval_protocols]}
+  - {id: e12, from: n08_semantic_edges, to: n09c_build_scene_splits, kind: data, guard: "", join_group: default, carries: [sem_edge_cache]}
+  - {id: e12b, from: n07_scene_graphs, to: n09c_build_scene_splits, kind: data, guard: "", join_group: default, carries: [scene_graphs, procthor_object_text, procthor_dataset]}
+  - {id: e12c, from: n09c_build_scene_splits, to: G6_stage2_ready, kind: data, guard: "", join_group: corpus, carries: [scene_splits]}
+  - {id: e13, from: n09_build_splits, to: G3_object_corpus, kind: data, guard: "", join_group: default, carries: [splits, eval_protocols]}
 
-  - {id: e13b, from: G3_corpus_valid, to: n09b_resolve_stage2_protocol, kind: data, guard: "verdict == PASS", join_group: default, carries: [scene_graphs, asset_manifest]}
-  - {id: e13c, from: n09b_resolve_stage2_protocol, to: G6_stage2_protocol, kind: data, guard: "", join_group: default, carries: [stage2_protocol, stage2_pairing]}
-  - {id: e13d, from: G6_stage2_protocol, to: n13_train_stage2, kind: data, guard: "verdict == PASS", join_group: protocol, carries: [stage2_protocol, stage2_pairing]}
-  - {id: e13e, from: G6_stage2_protocol, to: HALT_BLOCKED, kind: escalation, guard: "verdict == BLOCKED_EVIDENCE", join_group: default, carries: [stage2_protocol], rationale: "U-08a/U-08b unresolved is a pause awaiting a decision, not a failure."}
-  - {id: e14, from: G3_corpus_valid, to: n10_train_stage1, kind: data, guard: "verdict == PASS", join_group: default, carries: [splits, pointclouds, text_image_embeddings]}
+  - {id: e13b, from: G3_object_corpus, to: n09b_resolve_stage2_protocol, kind: data, guard: "verdict == PASS", join_group: default, carries: [scene_graphs, asset_manifest]}
+  - {id: e13c, from: n09b_resolve_stage2_protocol, to: G6_stage2_ready, kind: data, guard: "", join_group: default, carries: [stage2_protocol, stage2_pairing]}
+  - {id: e13d, from: G6_stage2_ready, to: n13_train_stage2, kind: data, guard: "verdict == PASS", join_group: protocol, carries: [stage2_protocol, stage2_pairing, scene_splits]}
+  - {id: e13e, from: G6_stage2_ready, to: HALT_BLOCKED, kind: escalation, guard: "verdict == BLOCKED_EVIDENCE", join_group: default, carries: [stage2_protocol], rationale: "U-08a/U-08b unresolved is a pause awaiting a decision, not a failure."}
+  - {id: e14, from: G3_object_corpus, to: n10_train_stage1, kind: data, guard: "verdict == PASS", join_group: default, carries: [splits, pointclouds, text_image_embeddings]}
   - {id: e15, from: n10_train_stage1, to: n11_gallery_index_staging, kind: data, guard: "", join_group: default, carries: [stage1_ckpt]}
   - {id: e16, from: n11_gallery_index_staging, to: G4_gallery_freeze, kind: data, guard: "", join_group: default, carries: [gallery_index_staging]}
   - {id: e17, from: G4_gallery_freeze, to: n12_promote_index, kind: data, guard: "verdict == PASS", join_group: default, carries: [gallery_index_staging]}
@@ -520,11 +592,17 @@ edges:
   - {id: e20, from: n12_promote_index, to: n15_eval_retrieval, kind: data, guard: "", join_group: default, carries: [gallery_index, eval_protocols]}
   - {id: e21, from: n13_train_stage2, to: n15_eval_retrieval, kind: data, guard: "", join_group: default, carries: [variant_ckpts]}
   - {id: e22, from: n12_promote_index, to: n16_compose_scenes, kind: data, guard: "", join_group: default, carries: [gallery_index, asset_glb]}
+  - {id: e22b, from: n12_promote_index, to: n15b_resolve_composition_protocol, kind: data, guard: "", join_group: default, carries: [gallery_index]}
+  - {id: e22c, from: n15b_resolve_composition_protocol, to: G7_composition_protocol, kind: data, guard: "", join_group: default, carries: [composition_protocol]}
+  - {id: e22d, from: G7_composition_protocol, to: n15c_prepare_eval_scenes, kind: data, guard: "verdict == PASS", join_group: default, carries: [composition_protocol]}
+  - {id: e22e, from: n15c_prepare_eval_scenes, to: n16_compose_scenes, kind: data, guard: "", join_group: protocol, carries: [idesign_scenes, composition_protocol]}
+  - {id: e22f, from: G7_composition_protocol, to: HALT_BLOCKED, kind: escalation, guard: "verdict == BLOCKED_EVIDENCE", join_group: default, carries: [composition_protocol], rationale: "U-18/U-21 unresolved pauses Table 2 only; Table 1 is unaffected."}
   - {id: e23, from: n13_train_stage2, to: n16_compose_scenes, kind: data, guard: "", join_group: default, carries: [variant_ckpts]}
   - {id: e24, from: n16_compose_scenes, to: n17_judge_scenes, kind: data, guard: "", join_group: default, carries: [composed_scenes]}
 
   - {id: e25, from: n15_eval_retrieval, to: n18_train_ablations, kind: control, guard: "", join_group: default, carries: [], rationale: "Ablations start only once the headline numbers exist, so a broken headline is not multiplied by eight."}
   - {id: e26, from: n18_train_ablations, to: n19_eval_ablations, kind: data, guard: "", join_group: default, carries: [variant_ckpts, variant_status]}
+  - {id: e26b, from: n15c_prepare_eval_scenes, to: n19_eval_ablations, kind: data, guard: "", join_group: protocol, carries: [idesign_scenes, composition_protocol]}
 
   - {id: e27, from: n15_eval_retrieval, to: n20_aggregate, kind: data, guard: "", join_group: core, carries: [retrieval_metrics]}
   - {id: e28, from: n17_judge_scenes, to: n20_aggregate, kind: data, guard: "", join_group: core, carries: [judge_scores]}
@@ -537,8 +615,8 @@ edges:
 
   # error paths -- an invisible failure path is an undesigned failure path (E9)
   - {id: e34, from: G1_sources_valid, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records]}
-  - {id: e35, from: G2_pc_distribution, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records]}
-  - {id: e36, from: G3_corpus_valid, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records]}
+  - {id: e35, from: G2_pc_sanity, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records]}
+  - {id: e36, from: G3_object_corpus, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records]}
   - {id: e37, from: G4_gallery_freeze, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records], rationale: "Do NOT promote the staging index."}
   - {id: e38, from: G5_report_release, to: HALT_FAILED, kind: error, guard: "verdict == FAIL", join_group: default, carries: [gate_records]}
   - {id: e39, from: n16_compose_scenes, to: HALT_BLOCKED, kind: escalation, guard: "idesign_unavailable", join_group: default, carries: [degraded_flags], rationale: "R-01: Tables 2/3 become BLOCKED_EVIDENCE, not FAIL."}
@@ -548,8 +626,12 @@ join_policies:
   - node: n09_build_splits
     groups: [{name: default, policy: all, k: null}]
     trigger: any_group_satisfied
-    rationale: "Point clouds, embeddings and semantic edges must all be complete; a split computed from part of the data is wrong, not partial."
-  - node: G3_corpus_valid
+    rationale: "Point clouds and embeddings must both be complete; a split computed from part of the data is wrong, not partial."
+  - node: n09c_build_scene_splits
+    groups: [{name: default, policy: all, k: null}]
+    trigger: any_group_satisfied
+    rationale: "Scene graphs and semantic edges must both be complete for the same reason."
+  - node: G3_object_corpus
     groups: [{name: default, policy: all, k: null}]
     trigger: any_group_satisfied
     rationale: "A gate needs complete evidence."
@@ -574,11 +656,36 @@ join_policies:
       Stage 2 needs both the Stage 1 checkpoint and a RESOLVED Stage 2 protocol.
       Separating the groups makes the protocol a hard precondition rather than
       something the trainer discovers missing at runtime.
-
+  - node: G6_stage2_ready
+    groups:
+      - {name: default, policy: all, k: null}
+      - {name: corpus, policy: all, k: null}
+    trigger: all_groups_satisfied
+    rationale: >
+      Two independent preconditions for one spend: the protocol decision
+      (n09b) and the scene corpus (n09c). Keeping them in separate groups is
+      what lets the gate report BLOCKED_EVIDENCE for the first and FAIL for the
+      second instead of collapsing both into one verdict.
   - node: n16_compose_scenes
-    groups: [{name: default, policy: all, k: null}]
-    trigger: any_group_satisfied
-    rationale: "Needs the index to retrieve against and the checkpoints to encode with."
+    groups:
+      - {name: default, policy: all, k: null}
+      - {name: protocol, policy: all, k: null}
+    trigger: all_groups_satisfied
+    rationale: >
+      Same discipline as n13: the composition protocol and the 200 evaluation
+      scenes are a hard precondition, not something SG4 discovers missing on
+      iteration one.
+  - node: n19_eval_ablations
+    groups:
+      - {name: default, policy: all, k: null}
+      - {name: protocol, policy: all_settled, k: null}
+    trigger: all_groups_satisfied
+    rationale: >
+      Table 3's R@1 column needs only the checkpoints; its two scene columns
+      need the composition protocol. all_settled on the protocol group lets the
+      R@1 column be produced when I-Design is unavailable (R-01), with the scene
+      columns marked INSUFFICIENT_EVIDENCE.
+
   - node: n20_aggregate
     groups:
       - {name: core, policy: all, k: null}
@@ -616,25 +723,29 @@ dependencies:
     - {node: n03_sample_pointclouds, depends_on: [G1_sources_valid]}
     - {node: n04_render_views, depends_on: [G1_sources_valid]}
     - {node: n07_scene_graphs, depends_on: [G1_sources_valid]}
-    - {node: G2_pc_distribution, depends_on: [n03_sample_pointclouds]}
+    - {node: G2_pc_sanity, depends_on: [n03_sample_pointclouds]}
     - {node: n05_annotate, depends_on: [n04_render_views]}
     - {node: n08_semantic_edges, depends_on: [n07_scene_graphs]}
     - {node: n06_encode_text_image, depends_on: [n05_annotate]}
-    - {node: n09_build_splits, depends_on: [G2_pc_distribution, n06_encode_text_image, n08_semantic_edges]}
-    - {node: G3_corpus_valid, depends_on: [n09_build_splits]}
-    - {node: n10_train_stage1, depends_on: [G3_corpus_valid]}
+    - {node: n09_build_splits, depends_on: [G2_pc_sanity, n06_encode_text_image, n08_semantic_edges]}
+    - {node: G3_object_corpus, depends_on: [n09_build_splits]}
+    - {node: n10_train_stage1, depends_on: [G3_object_corpus]}
     - {node: n11_gallery_index_staging, depends_on: [n10_train_stage1]}
     - {node: G4_gallery_freeze, depends_on: [n11_gallery_index_staging]}
     - {node: n12_promote_index, depends_on: [G4_gallery_freeze]}
-    - {node: n09b_resolve_stage2_protocol, depends_on: [G3_corpus_valid]}
-    - {node: G6_stage2_protocol, depends_on: [n09b_resolve_stage2_protocol]}
-    - {node: n13_train_stage2, depends_on: [n10_train_stage1, G6_stage2_protocol]}
+    - {node: n09b_resolve_stage2_protocol, depends_on: [G3_object_corpus]}
+    - {node: n09c_build_scene_splits, depends_on: [n07_scene_graphs, n08_semantic_edges]}
+    - {node: G6_stage2_ready, depends_on: [n09b_resolve_stage2_protocol, n09c_build_scene_splits]}
+    - {node: n13_train_stage2, depends_on: [n10_train_stage1, G6_stage2_ready]}
     - {node: n14_equivariance_probe, depends_on: [n13_train_stage2]}
     - {node: n15_eval_retrieval, depends_on: [n12_promote_index, n13_train_stage2]}
-    - {node: n16_compose_scenes, depends_on: [n12_promote_index, n13_train_stage2]}
+    - {node: n15b_resolve_composition_protocol, depends_on: [n12_promote_index]}
+    - {node: G7_composition_protocol, depends_on: [n15b_resolve_composition_protocol]}
+    - {node: n15c_prepare_eval_scenes, depends_on: [G7_composition_protocol]}
+    - {node: n16_compose_scenes, depends_on: [n12_promote_index, n13_train_stage2, n15c_prepare_eval_scenes]}
     - {node: n17_judge_scenes, depends_on: [n16_compose_scenes]}
     - {node: n18_train_ablations, depends_on: [n15_eval_retrieval]}
-    - {node: n19_eval_ablations, depends_on: [n18_train_ablations]}
+    - {node: n19_eval_ablations, depends_on: [n18_train_ablations, n15c_prepare_eval_scenes]}
     - {node: n20_aggregate, depends_on: [n15_eval_retrieval, n17_judge_scenes, n14_equivariance_probe, n19_eval_ablations]}
     - {node: n21_compare_to_paper, depends_on: [n20_aggregate]}
     - {node: G5_report_release, depends_on: [n21_compare_to_paper]}
@@ -654,10 +765,10 @@ dependencies:
 # ---------------------------------------------------------------- routing
 routing:
   - {decision_point: G1_sources_valid, authority: A1, owner: edge, inputs: [manifest_count, glb_coverage, ckpt_behaviour], destinations: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs, HALT_FAILED], default_destination: HALT_FAILED}
-  - {decision_point: G2_pc_distribution, authority: A1, owner: edge, inputs: [pc_embedding_agreement, baseline_cross_similarity], destinations: [n09_build_splits, HALT_FAILED], default_destination: HALT_FAILED}
-  - {decision_point: G3_corpus_valid, authority: A1, owner: edge, inputs: [leakage_count, admitted_size, quarantine_rate, eval_protocols], destinations: [n10_train_stage1, HALT_FAILED], default_destination: HALT_FAILED}
+  - {decision_point: G2_pc_sanity, authority: A1, owner: edge, inputs: [pc_embedding_agreement, baseline_cross_similarity], destinations: [n09_build_splits, HALT_FAILED], default_destination: HALT_FAILED}
+  - {decision_point: G3_object_corpus, authority: A1, owner: edge, inputs: [leakage_count, admitted_size, quarantine_rate, eval_protocols], destinations: [n10_train_stage1, HALT_FAILED], default_destination: HALT_FAILED}
   - {decision_point: G4_gallery_freeze, authority: A1, owner: edge, inputs: [index_dim, index_count, nan_count, self_retrieval_recall], destinations: [n12_promote_index, HALT_FAILED], default_destination: HALT_FAILED}
-  - {decision_point: G6_stage2_protocol, authority: A1, owner: edge, inputs: [stage2_protocol.status, stage2_pairing], destinations: [n13_train_stage2, HALT_BLOCKED], default_destination: HALT_BLOCKED}
+  - {decision_point: G6_stage2_ready, authority: A1, owner: edge, inputs: [stage2_protocol.status, stage2_pairing], destinations: [n13_train_stage2, HALT_BLOCKED], default_destination: HALT_BLOCKED}
   - {decision_point: G5_report_release, authority: A1, owner: edge, inputs: [verdict_completeness, gate_records, audit_records, degraded_flags], destinations: [n22_publish_report, HALT_FAILED], default_destination: HALT_FAILED}
   - {decision_point: sg1_admit_or_repair, authority: A1, owner: edge, inputs: [schema_valid, item_attempt], destinations: [sg1_admit, sg1_generate, sg1_quarantine], default_destination: sg1_quarantine}
   - {decision_point: sg2_cache_lookup, authority: A1, owner: edge, inputs: ["sem_edge_cache.contains(hash)"], destinations: [use_cache, call_llm], default_destination: call_llm}
@@ -727,37 +838,61 @@ execution_order:
     - {layer: 2, parallel_nodes: [n02_download], gates: [], est: "1-2 days (46K GLBs dominate) -- CRITICAL PATH"}
     - {layer: 3, parallel_nodes: [], gates: [G1_sources_valid], est: "-"}
     - {layer: 4, parallel_nodes: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs], gates: [], est: "1-3 h"}
-    - {layer: 5, parallel_nodes: [], gates: [G2_pc_distribution], est: "-"}
+    - {layer: 5, parallel_nodes: [], gates: [G2_pc_sanity], est: "-"}
     - {layer: 6, parallel_nodes: [n05_annotate, n08_semantic_edges], gates: [], est: "1-2 days (Qwen over 46K assets) -- CRITICAL PATH"}
     - {layer: 7, parallel_nodes: [n06_encode_text_image], gates: [], est: "2-4 h"}
-    - {layer: 8, parallel_nodes: [n09_build_splits], gates: [], est: "<1 h"}
-    - {layer: 9, parallel_nodes: [], gates: [G3_corpus_valid], est: "-"}
+    - {layer: 8, parallel_nodes: [n09_build_splits, n09c_build_scene_splits], gates: [], est: "<1 h"}
+    - {layer: 9, parallel_nodes: [], gates: [G3_object_corpus], est: "-"}
     - {layer: 10, parallel_nodes: [n10_train_stage1], gates: [], est: "hours to 1 day (trains the point encoder, unlike the earlier draft)"}
-    - {layer: 10b, parallel_nodes: [n09b_resolve_stage2_protocol], gates: [G6_stage2_protocol], est: "human decision -- BLOCKS Stage 2 until U-08a and U-08b are answered"}
+    - {layer: 10b, parallel_nodes: [n09b_resolve_stage2_protocol], gates: [G6_stage2_ready], est: "human decision -- BLOCKS Stage 2 until U-08a and U-08b are answered"}
     - {layer: 11, parallel_nodes: [n11_gallery_index_staging, n13_train_stage2], gates: [], est: "3-8 h"}
     - {layer: 12, parallel_nodes: [], gates: [G4_gallery_freeze], est: "-"}
     - {layer: 13, parallel_nodes: [n12_promote_index, n14_equivariance_probe], gates: [], est: "<1 h"}
+    - {layer: 13b, parallel_nodes: [n15b_resolve_composition_protocol], gates: [G7_composition_protocol], est: "human decision -- BLOCKS Table 2 until U-18 and U-21 are answered"}
+    - {layer: 13c, parallel_nodes: [n15c_prepare_eval_scenes], gates: [], est: "1-3 h -- R-01, I-Design unverified"}
     - {layer: 14, parallel_nodes: [n15_eval_retrieval, n16_compose_scenes], gates: [], est: "6-17 h"}
     - {layer: 15, parallel_nodes: [n17_judge_scenes], gates: [], est: "2-4 h"}
     - {layer: 16, parallel_nodes: [n18_train_ablations], gates: [], est: "6-12 h"}
     - {layer: 17, parallel_nodes: [n19_eval_ablations], gates: [], est: "3-8 h"}
-    - {layer: 18, parallel_nodes: [n20_aggregate, n21_compare_to_paper], gates: [], est: "<1 h"}
-    - {layer: 19, parallel_nodes: [], gates: [G5_report_release], est: "-"}
-    - {layer: 20, parallel_nodes: [n22_publish_report], gates: [], est: "<1 h"}
+    - {layer: 18, parallel_nodes: [n20_aggregate], gates: [], est: "<1 h"}
+    - {layer: 19, parallel_nodes: [n21_compare_to_paper], gates: [], est: "<1 h"}
+    - {layer: 20, parallel_nodes: [], gates: [G5_report_release], est: "-"}
+    - {layer: 21, parallel_nodes: [n22_publish_report], gates: [], est: "<1 h"}
   notes: "Critical path is layer 2 (GLB download) and layer 6 (Qwen annotation over 46,052 assets)."
 
 # ---------------------------------------------------------------- risks
+# This list is the machine-readable UNKNOWN registry. G5_report_release checks
+# every id here for a disposition. It must never be expressed as a range: an
+# earlier draft wrote "U-01..U-10", so U-11 and everything after it could have
+# been omitted from the report and G5 would still have passed.
 risks_unknowns:
-  - {id: U-01, marked: UNKNOWN, item: "asset count: paper says ~48,000, manifest holds 46,052", affects: "every denominator", resolution: "use len(manifest); record its sha256", fallback: "n/a"}
-  - {id: U-02, marked: UNKNOWN, item: "whether self-sampled point clouds match ULIP-2's training distribution", affects: "every PC embedding", resolution: "G2 blocks on a 500-asset comparison against ULIP's released clouds", fallback: "download ULIP's 185 GB of point clouds"}
-  - {id: U-03, marked: UNKNOWN, item: "camera placement for the 11 views", affects: "the image modality", resolution: "Fibonacci lattice by default, recorded per asset", fallback: "axis-aligned variant available"}
-  - {id: U-04, marked: UNKNOWN, item: "render resolution", affects: "image tower input", resolution: "224px, matching ULIP-2's convention", fallback: "512px if annotation quality suffers"}
-  - {id: U-05, marked: UNKNOWN, item: "adjacency criterion for physical edges", affects: "ESSGNN input", resolution: "kNN k=8, recorded with the artifact", fallback: "radius mode available"}
-  - {id: U-06, marked: UNKNOWN, item: "which object pairs get a semantic edge", affects: "ESSGNN input", resolution: "record the choice; list in the report", fallback: "n/a"}
-  - {id: U-07, marked: UNKNOWN, item: "ProcTHOR ships 10k/1k/1k but the paper says 80/20", affects: "scene splits", resolution: "main line follows the paper; both recorded", fallback: "n/a"}
-  - {id: U-08, marked: UNKNOWN, item: "how Stage 2 training samples are constructed from ProcTHOR", affects: "all of Table 2 and 3", resolution: "the paper never defines it; our protocol is stated explicitly in 02_BUILD_STEPS", fallback: "n/a"}
-  - {id: U-09, marked: UNKNOWN, item: "gallery scope for Table 1", affects: "every R@k", resolution: "run both protocols and report both", fallback: "n/a"}
-  - {id: U-10, marked: UNKNOWN, item: "which IDesign aspect maps to Table 2's Scene Coherence", affects: "Table 2 column mapping", resolution: "record the assumed mapping", fallback: "n/a"}
+  - {id: U-01, marked: UNKNOWN, blocking: false, item: "asset count: paper says ~48,000, manifest holds 46,052", affects: "every denominator", resolution: "use len(manifest); record its sha256", fallback: "n/a"}
+  - {id: U-02, marked: UNKNOWN, blocking: false, item: "whether self-sampled point clouds match ULIP-2's training distribution", affects: "every PC embedding", resolution: "L2-PC-ULIP-REF diagnostic against a small sample of ULIP's released clouds; G2 now checks only that our clouds are structurally valid", fallback: "download a reference subset of ULIP's point clouds"}
+  - {id: U-03, marked: UNKNOWN, blocking: false, item: "camera placement for the 11 views", affects: "the image modality", resolution: "Fibonacci lattice by default, recorded per asset", fallback: "axis-aligned variant available"}
+  - {id: U-03a, marked: UNKNOWN, blocking: false, item: "orthographic or perspective projection -- paper 2.3 says '11 orthogonal viewpoints' and eleven mutually orthogonal directions do not exist in R^3, so 'orthogonal' is being read as a projection type", affects: "the image modality", resolution: "both projections implemented; the choice is recorded, not deduced", fallback: "n/a"}
+  - {id: U-04, marked: UNKNOWN, blocking: false, item: "render resolution", affects: "image tower input", resolution: "224px, matching ULIP-2's convention", fallback: "512px if annotation quality suffers"}
+  - {id: U-05, marked: UNKNOWN, blocking: false, item: "adjacency criterion for physical edges", affects: "ESSGNN input", resolution: "kNN k=8, recorded with the artifact", fallback: "radius mode available"}
+  - {id: U-06, marked: UNKNOWN, blocking: false, item: "which object pairs get a semantic edge, and the width of e_ij", affects: "ESSGNN input", resolution: "record the choice; list in the report", fallback: "n/a"}
+  - {id: U-07, marked: UNKNOWN, blocking: false, item: "ProcTHOR ships 10k/1k/1k but the paper says 80/20", affects: "scene splits", resolution: "main line follows the paper; both recorded", fallback: "n/a"}
+  - {id: U-08, marked: UNKNOWN, blocking: false, item: "how Stage 2 training samples are constructed from ProcTHOR", affects: "all of Table 2 and 3", resolution: "the paper never defines it; our protocol is stated explicitly in 02_BUILD_STEPS", fallback: "n/a"}
+  - {id: U-08a, marked: UNKNOWN, blocking: true, item: "which gallery entry is Stage 2's positive -- ProcTHOR assetIds and Objaverse uids have zero measured overlap (0 of 995)", affects: "Eq. 7a/7b have no positive; Stage 2 cannot be built", resolution: "n09b_resolve_stage2_protocol; enforced by G6_stage2_ready", fallback: "none -- this is a decision, not a computation"}
+  - {id: U-08b, marked: UNKNOWN, blocking: true, item: "where the Stage 2 target's text / image / point cloud come from; ProcTHOR ships metadata and coordinates only", affects: "Eq. 6 has no modality inputs", resolution: "n09b_resolve_stage2_protocol; enforced by G6_stage2_ready", fallback: "none"}
+  - {id: U-09, marked: UNKNOWN, blocking: false, item: "gallery scope AND query scope for Table 1 -- paper 3.1 gives only '80% training, 20% testing' and never says the queries are the test split", affects: "every R@k", resolution: "run both gallery protocols and report both; query=test is recorded as an assumption", fallback: "n/a"}
+  - {id: U-10, marked: UNKNOWN, blocking: false, item: "which IDesign aspect maps to Table 2's Scene Coherence", affects: "Table 2 column mapping", resolution: "record the assumed mapping", fallback: "n/a"}
+  - {id: U-11, marked: UNKNOWN, blocking: false, item: "how an absent modality is represented -- paper 2.6 rules out zero-padding ('Rather than zero-padding, we apply masked embeddings') but does not say whether that is a learned mask token or a mask applied inside the fusion layer", affects: "every partial-modality query", resolution: "record our choice; the only paper-backed assertion is that it differs from zero-padding", fallback: "n/a"}
+  - {id: U-12, marked: UNKNOWN, blocking: false, item: "how ProcTHOR metadata becomes the sentence behind t_i", affects: "ESSGNN node features", resolution: "record our template", fallback: "n/a"}
+  - {id: U-13, marked: UNKNOWN, blocking: false, item: "which fusion strategy the Full model uses. Paper 2.4 lists five ('mean pooling, MLP, masked MLP, gated fusion, or Transformer-based fusion') and never says which is MetaFind's. Table 3 rules out Mean (9.4) and MLPs (9.9) against Full (11.4), and the 'Padding missing modalities with 0' row (10.5) plus 3.4's 'Masked modality fusion outperformed zero-padding' show Full masks. That leaves masked MLP, gated and Transformer.", affects: "every Table 1 and Table 3 number", resolution: "primary = masked_mlp (implemented default in metafind/models/fusion.py); gated and transformer kept selectable and reported as alternatives", fallback: "n/a"}
+  - {id: U-14, marked: UNKNOWN, blocking: false, item: "how 11 rendered views become one image embedding. Paper 2.3 says each asset is 'rendered from 11 orthogonal viewpoints' and never states the aggregation.", affects: "Image Only, T+I, I+PC and T+I+PC -- four of Table 1's seven conditions", resolution: "record the choice among {random single view per step, fixed view, mean of 11 embeddings, max, learned multi-view fusion}", fallback: "n/a"}
+  - {id: U-15, marked: UNKNOWN, blocking: false, item: "how a structured annotation is serialised into the string the text encoder sees. Paper 2.3 gives the fields but no format.", affects: "every text embedding, hence Text Only, T+I, T+PC, T+I+PC", resolution: "record the exact template and pin it with a golden-string test", fallback: "n/a"}
+  - {id: U-16, marked: UNKNOWN, blocking: false, item: "whether the query and gallery towers share backbone weights. Paper 2.4 says 'a dedicated query encoder' and 2.6 says 'Both query and gallery encoders are trained', but never states sharing.", affects: "parameter count, Stage 1 dynamics, and the PC-Only figure the paper itself calls out as the dual-tower signature", resolution: "record the choice among {shared backbone + separate fusion, fully separate copies, fully shared}", fallback: "n/a"}
+  - {id: U-17, marked: UNKNOWN, blocking: false, item: "d_ij or d_ij^2 in ESSGNN. Paper 2.5 defines d_ij = ||x_i - x_j||_2; Appendix C Eq. 10-12 uses ||x_i - x_j||^2, as does the original EGNN.", affects: "the numeric input to f_h and f_x, hence every trained ESSGNN", resolution: "implementation uses squared distance (metafind/models/essgnn.py, `radial`), following Appendix C and EGNN; both are SE(3)-invariant so neither breaks the proof. Recorded as a choice; a cheap variant can measure it.", fallback: "n/a"}
+  - {id: U-18, marked: UNKNOWN, blocking: true, item: "what Algorithm 1 line 7 ('Place A*_i into the scene, update scene graph') actually produces. The next iteration calls ESSGNN(G), which needs the new node's t_i, position, orientation, scale, physical edges and semantic edges. None is specified.", affects: "every iteration after the first, hence all of Table 2", resolution: "n15b_resolve_composition_protocol; enforced by G7_composition_protocol", fallback: "none"}
+  - {id: U-19, marked: UNKNOWN, blocking: false, item: "edge directionality. Paper 2.3 names 'physical-relation edges' and 'semantic-relation edges' without saying whether they are directed, and does not say whether relation(A,B) equals relation(B,A).", affects: "message passing -- a directed support edge and a symmetric one give different h updates", resolution: "record the choice; L1-SCENE-SUPPORT currently asserts symmetric support edges, which is our convention rather than a paper requirement", fallback: "n/a"}
+  - {id: U-20, marked: UNKNOWN, blocking: false, item: "which encoder produces t_i. Paper 2.5 says only 'a text-derived feature t_i in R^d'. It names a frozen text encoder ('e.g. CLIP or BERT') for the semantic EDGE embeddings, not for t_i, and does not say the two are the same encoder.", affects: "ESSGNN node features and the width d", resolution: "record the choice and the resulting d", fallback: "n/a"}
+  - {id: U-21, marked: UNKNOWN, blocking: true, item: "where Algorithm 1's G_0 and {Q_1..Q_N} come from. Paper 3.3 says the 200 scenes come from I-Design's pipeline; the graph had no channel for them and n16 was reading ProcTHOR houses instead.", affects: "all of Table 2 and Table 3's two scene columns", resolution: "n15b_resolve_composition_protocol then n15c_prepare_eval_scenes; enforced by G7_composition_protocol", fallback: "none"}
+  - {id: U-22, marked: UNKNOWN, blocking: false, item: "training hyperparameters. The paper reports none: no optimizer, learning rate, batch size, epoch count, weight decay, scheduler, tau initialisation, lambda initialisation, ESSGNN depth L ('After L layers'), ESSGNN hidden width, or pooling type.", affects: "every trained number; without this list a mismatch cannot be attributed between architecture and recipe", resolution: "maintain the explicit table in 01_GRAPH_SPEC section 15; every value there is ours and is reported as such", fallback: "n/a"}
+  - {id: U-23, marked: UNKNOWN, blocking: false, item: "what a query with all three modalities masked means. Paper 2.6 masks each modality INDEPENDENTLY at 30%, so 2.7% of queries carry no information at all, yet Eq. 5 still matches them against a gallery item.", affects: "Stage 1 training signal", resolution: "the literal reading is implemented (allow_empty=True); a flag forces at least one modality, and the choice is recorded", fallback: "n/a"}
+  - {id: U-24, marked: UNKNOWN, blocking: false, item: "the similarity function. Eq. 5 and Eq. 7a/7b write sim(.,.) and never define it.", affects: "every loss and every retrieval ranking", resolution: "cosine, matching CLIP and ULIP convention; recorded as a choice", fallback: "n/a"}
   - {id: R-01, marked: RISK, item: "I-Design has not been verified to run", affects: "all of Tables 2 and 3", resolution: "trial-run it early -- cheap to check, expensive to discover late", fallback: "Tables 2/3 => BLOCKED_EVIDENCE"}
   - {id: R-02, marked: RISK, item: "24 GB limits the trainable scope", affects: "D-1 and RA-3", resolution: "not resolvable on this hardware", fallback: "declare the scope actually trained"}
   - {id: R-03, marked: RISK, item: "Qwen annotation quality is unmeasured", affects: "the text tower", resolution: "pilot then manual spot-check", fallback: "escalate model size"}

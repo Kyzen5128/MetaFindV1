@@ -8,8 +8,8 @@ Mapping to the paper, and where the paper contradicts itself
 ------------------------------------------------------------
 
 The method section (2.5) and the equivariance proof (Appendix C) do not agree in
-three places. Each is exposed as a config flag so both readings can be run and
-the difference measured, rather than silently picking one:
+four places. The first three are exposed as config flags so both readings can be
+run and the difference measured, rather than silently picking one:
 
 ============  ==========================  ==========================  =============
 discrepancy   sec. 2.5 says               Appendix C requires         default here
@@ -38,12 +38,21 @@ rotation. The reference EGNN agrees (``coord_mlp`` ends in ``Linear(hidden, 1)``
 Implementing the literal R^3 would break the paper's central claim, so the scalar
 form is used unconditionally and the discrepancy is reported instead.
 
-Two further under-specifications are surfaced as UNKNOWN rather than guessed:
+**The fourth is U-17: d_ij or d_ij^2.** Sec. 2.5 defines
+``d_ij^l = ||x_i^l - x_j^l||_2``; Appendix C Eq. 10-12 uses ``||x_i - x_j||^2``,
+as does the original EGNN. This one gets no audit and no flag, because both are
+SE(3)-invariant -- neither breaks the proof, so there is no "expected to fail"
+assertion to write. It still changes the number fed to f_h and f_x, and therefore
+the trained model. We follow Appendix C and EGNN, and record it as a choice.
+
+Further under-specifications are surfaced as UNKNOWN rather than guessed:
 
 * the frozen text encoder for e_ij is only given as "e.g., CLIP or BERT", so its
   width (1280 / 768 / 512) is a config input, not a constant;
 * ``Pooling`` in ``e_layout = Pooling({h_i^(L)})`` is unnamed, so ``pooling`` is
-  configurable and defaults to mean.
+  configurable and defaults to mean;
+* ``L`` is written only as "After $L$ layers" -- the paper gives no value, so
+  ``n_layers`` is a hyperparameter of ours (U-22), not a reproduction target.
 
 Per Eq. 3 the neighbour aggregation is a **sum**; the reference implementation
 defaults to ``mean``, so this is set explicitly (finding F9).
@@ -79,7 +88,8 @@ class ESSGNNConfig:
         out_dim: width of ``e_layout``. Must match the fusion output so Eq. 6's
             residual ``Fusion(...) + lambda * e_layout`` is well formed; ULIP-2
             embeds at 1280.
-        n_layers: number of EGCL layers ``L``.
+        n_layers: number of EGCL layers ``L``. The paper says only
+            "After $L$ layers" and never gives a value (U-22).
         h0_mode: ``"semantic"`` uses ``h^(0) = t_i`` (Appendix C premise);
             ``"concat_xt"`` uses the literal sec. 2.5 ``Concat(x_i, t_i)`` and is
             expected to fail equivariance. See RA-1.
@@ -154,6 +164,14 @@ class ESSGCL(nn.Module):
         coord_diff = x[row] - x[col]
         # ||x_i - x_j||^2 -- invariant under SE(3), which is what makes every
         # message invariant and hence the whole layer equivariant.
+        #
+        # U-17: the paper contradicts itself on whether this is
+        # the distance or its square. Sec. 2.5 defines d_ij = ||x_i - x_j||_2;
+        # Appendix C Eq. 10-12 uses ||x_i - x_j||^2, as does the original EGNN.
+        # Both are SE(3)-invariant, so neither breaks the proof -- unlike RA-1
+        # and RA-2, there is no "expected to fail" assertion to write. But the
+        # number fed to f_h and f_x differs, so the trained model differs. We
+        # follow Appendix C and EGNN. Recorded as a choice, not a deduction.
         radial = (coord_diff**2).sum(dim=-1, keepdim=True)
         if self.cfg.normalize_coord_diff:
             coord_diff = coord_diff / (radial.sqrt() + 1e-8)
@@ -207,7 +225,12 @@ class ESSGNN(nn.Module):
         Args:
             node_feat: ``(N, node_feat_dim)`` text-derived features ``t_i``.
             pos: ``(N, 3)`` object positions, in the scene's own (unnormalised)
-                frame -- normalising here would defeat the point of equivariance.
+                frame. Not because centring would break equivariance -- it would
+                not; ``x'_i = x_i - mean(x)`` leaves an EGNN equivariant. Because
+                sec. 2.5 states the setting as "large and often unnormalized
+                coordinate systems, with no guarantee that scenes are aligned or
+                centered", and pre-centring removes the very global translation
+                the paper claims to handle.
             edge_index: ``(2, E)``.
             edge_attr: ``(E, edge_feat_dim)``.
             batch: optional ``(N,)`` graph id per node for batched graphs. If

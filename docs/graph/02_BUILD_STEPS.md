@@ -6,6 +6,19 @@
 > **三種東西必須分開，不可混為一談：**
 > **[論文]** 原文明確規定 ｜ **[未定]** 論文沒說，我們選了一個並記錄 ｜ **[偏離]** 與論文不同，必須在報告中聲明
 
+**正式偏離只有四項**，編號與 `README.md`、`graph_spec.yaml` 一致，不得另編：
+
+| id | 偏離 |
+|---|---|
+| **D-1** | ViT-bigG-14 凍結（2.5B 參數在 24GB 上無法訓練） |
+| **D-2** | Qwen2.5-VL 取代 GPT-4o |
+| **D-3** | 不重跑 6 個 baseline |
+| **D-4** | 不做人工評分 |
+
+本文先前把「GLB 不刪」編成 D-1、把 ViT-bigG 凍結編成 D-3，與上述兩份文件錯位，已更正。
+**「保留 GLB」和「不提供 caption fallback」都不是偏離** —— 論文沒有相反規定，
+它們只是工程決定，不進偏離清單，否則報告的 deviation traceability 會亂掉。
+
 ---
 
 ## 資料與路徑
@@ -68,8 +81,10 @@ python -m metafind.data.download --only glbs        # 只抓 mesh（最慢，~21
 | ViT-bigG-14 | 9.5 GB | ULIP-2 的 text/image 編碼器 |
 | Qwen2.5-VL-7B | 16.6 GB | 取代 GPT-4o |
 
-**[偏離 D-1] GLB 不刪除。** 前一版設計「渲完就刪」是錯的：
+**GLB 不刪除。** 前一版設計「渲完就刪」是錯的：
 Algorithm 1 的 iterative composition 需要**真實幾何**才能放進場景，只有 embedding 不夠。
+（這**不是偏離** —— 論文沒說要刪，這只是一個工程決定。先前誤編為「偏離 D-1」，
+與 README／`graph_spec.yaml` 的 D-1 = ViT-bigG 凍結衝突，已更正。）
 
 **[偏離 D-2] Qwen2.5-VL 取代 GPT-4o**（§2.3 明寫 GPT-4o）。
 標註是文字塔的訓練資料，換標註器等於換文字分布 → 每筆標註記錄 `annotator_model`，
@@ -86,9 +101,15 @@ Algorithm 1 的 iterative composition 需要**真實幾何**才能放進場景�
 **[未定 U-02]** ULIP-2 checkpoint 是在**它自己取樣的點雲**上訓練的（10,000 點、xyz+rgb）。
 我們從 mesh 自行取樣，取樣方式若不一致，embedding 會偏離訓練分布。
 
-**做法**：保留 500 個 ULIP 官方點雲當**對照組**，比較「官方點雲」與「自行取樣」
-經過同一個 encoder 後的 embedding 餘弦相似度。相似度過低就必須調整取樣方式。
-**這個驗證要在全量處理之前做完。**
+**做法**：`G2_pc_sanity` 擋的是**結構有效性** —— 形狀 `(10000, 6)`、數值有限、
+`pc_norm` 後質心≈0 半徑≈1、非退化，且自取樣雲能在 1,000 資產的探針集裡檢索回自己。
+這些不成立時，每個 embedding 都是錯的，而且不會報錯，所以是 gate。
+
+與 **ULIP 官方點雲**的比較保留為 `L2-PC-ULIP-REF` 診斷，**不擋**。
+理由：論文從未說 MetaFind 沿用 ULIP 預取樣的點雲，而 §2.6 的 Stage 1 會 fine-tune
+point encoder，encoder 本來就能適應我們的取樣 —— 「和官方雲不一樣」推不出「復現無效」。
+**這項不是因為過不了才降級，它從來沒跑過**；是因為測錯命題才降級。
+若日後找到作者明確說沿用 ULIP 前處理，它就變回 gate。
 
 前處理必須完全複製 ULIP 的 `pc_norm`：質心置中、除以最大半徑。
 checkpoint 是在這樣的點雲上訓練的，餵原始座標不會報錯，只會讓每個 embedding 偏離分布。
@@ -109,6 +130,18 @@ ULIP 自己的慣例是 30 個方位角，也對不上。預設 Fibonacci lattic
 
 **[未定 U-04]** 解析度論文沒說。用 224px 對齊 ULIP-2 慣例與 image tower 輸入。
 
+**[未定 U-14] 11 張圖怎麼變成一個 `e_image`，論文完全沒說。**
+Eq.6 只吃一個 `e_image`，但 §2.3 只說 render 11 views，中間的規則是空的：
+
+```
+11 張渲染圖  →  ???  →  e_image (1280-d)
+```
+
+候選：隨機取 1 張／固定取 1 張／11 個 embedding 平均／取 max／學一個 multi-view fusion。
+**Table 1 七個條件裡有四個（Image Only、T+I、I+PC、T+I+PC）直接取決於這個選擇。**
+真正要防的失誤不是「選錯」，而是**訓練時與評估時選得不一樣** —— `L1-IMAGE-AGGREGATION`
+要求規則寫在 run config 裡、兩邊一致、並隨 embedding 一起記錄。
+
 渲染前 mesh 置中、縮放到單位球，否則 image tower 學到的是**建模單位**而非形狀。
 代價是絕對尺度歸零（見 Step 1.3）。
 
@@ -120,11 +153,28 @@ ULIP 自己的慣例是 30 個方位角，也對不上。預設 Fibonacci lattic
 > annotations provide rich textual descriptions detailing attributes such as
 > **object category, size dimensions, materials, and placement constraints**
 
-四個欄位全部必填，`placement_constraints` 用封閉詞彙表 —— 它是讓 layout-aware
-檢索成立的訊號，也是 ULIP-2 現成 caption 沒有、因此**不能拿來替代**的原因。
+> **注意「such as」。** 論文列的是**例子**，不是 schema。以下四項全部是
+> **我們的實作契約，不是論文要求**：
 
-**[偏離] 不提供 fallback 到 ULIP-2 captions。** 前一版把它設成便宜的預設分支是錯的：
+| 我們規定 | 論文有沒有說 |
+|---|---|
+| 剛好這四個欄位 | 沒有 —— 原文是 "attributes **such as**" |
+| 四個欄位全部必填 | 沒有 |
+| `placement_constraints` 用封閉詞彙表 | 沒有 |
+| `dimensions` 以公尺為單位 | 沒有 |
+
+保留這些規定是對的 —— 沒有 schema 就沒有可驗證的產物，而 `placement_constraints`
+是讓 layout-aware 檢索成立的訊號，也是 ULIP-2 現成 caption 沒有、因此**不能拿來替代**的原因。
+但它們必須以 **[未定／實作選擇]** 的身分出現在報告裡，不能寫成「論文要求」。
+
+**[未定 U-15] 標註怎麼變成 text encoder 的輸入字串，論文完全沒說。**
+是 `"wooden dining chair"`？是 `Category: chair. Material: wood. ...` 這種帶標籤的多行紀錄？
+還是直接餵 JSON？**這會直接改變每一個 text embedding**，因而改變 Table 1 的
+Text Only、T+I、T+PC、T+I+PC 四欄。模板必須釘死並加 golden-string 測試（`L1-TEXT-SERIALIZATION`）。
+
+**不提供 fallback 到 ULIP-2 captions。** 前一版把它設成便宜的預設分支是錯的：
 那會讓實驗變成別的實驗。若真的要用，整份結果標 `DEGRADED`，不得當成主線復現。
+（同樣**不是偏離** —— 論文沒說可以退回 caption，這是我們拒絕一條捷徑。）
 
 **[本實作的限制 F13]** 我們在渲染前做了 unit-sphere 正規化（否則 image tower 學到的是建模單位），
 代價是絕對尺度歸零 —— 1.8 m 桌子與 0.1 m 杯子正規化後同大小。
@@ -173,6 +223,19 @@ Objaverse uid    : 867dfc95e96a4987...                          (46,052 個)
 自己的 semantic metadata（§2.3 說它有提供），拆成獨立的 `procthor_object_text` channel。
 **[未定 U-12]** metadata 怎麼變成句子，論文沒說。
 
+**[未定 U-20] 句子再由哪個 encoder 變成 `t_i`，論文也沒說。**
+§2.5 只寫 `t_i ∈ ℝ^d`、稱它 "a text-derived feature"。文中確實提到一個
+「frozen text encoder (e.g. CLIP or BERT)」，但那句話講的是**語意邊** `e_ij`，
+不是 `t_i` —— 而且連那句都是 "e.g."。兩者是否同一個 encoder，論文從未說明。
+這決定了 `d` 的值，也決定 `f_h : ℝ^(2d+1+e) → ℝ^d` 的實際寬度。記錄選擇與 `d`。
+
+**[未定 U-19] 邊是有向還是無向，論文沒說。**
+§2.3 只講有 physical 與 semantic 兩種邊，沒說方向性，也沒說
+`relation(A, B)` 是否等於 `relation(B, A)`。這會改變 message passing ——
+有向的 support 邊與對稱的 support 邊，`h` 的更新結果不同。
+現行 `L1-SCENE-SUPPORT` 斷言「杯在桌下 → 雙向 support 邊」，
+**那是我們的慣例，不是論文要求**，測試留著是為了鎖住慣例不漂移。
+
 **改為**：
 ```
 key = sha256(desc_i, desc_j, prompt_version, llm_model, text_encoder_version)
@@ -198,7 +261,18 @@ scenes are aligned or centered"）。預先置中等於把它想解決的那個�
 **[論文 §3.1]**
 > We allocate **80% of the data for training and reserve 20% for testing**
 
-物件級 80/20、房屋級 80/20（依 `house_id` 切，不是依 room 或 object）。
+物件級 80/20（`n09_build_splits`）、房屋級 80/20（`n09c_build_scene_splits`，依 `house_id` 切，
+不是依 room 或 object）。
+
+**[前一版 dependency 錯誤] 這兩件事拆成兩個節點。**
+先前由同一個 `n09` 同時做，於是它必須讀 `scene_graphs`、`procthor_object_text`、
+`sem_edge_cache` —— 等於把 **Qwen 對 ProcTHOR 產語意邊**放進了 Stage 1 的關鍵路徑。
+但 §2.6 的 Stage 1 是 **Objaverse-LVIS 上的物件級預訓練**，完全不需要 ProcTHOR。
+ProcTHOR 分支的任何故障都會停掉一個不依賴它的訓練。兩條分支現在直到 `G6` 才匯流。
+
+**[未定 U-09] 論文沒說 Table 1 的 query 就是那 20%。**
+§3.1 只有「80% 訓練、20% 測試」這一句。gallery 範圍我們跑兩個協定都報，
+但 **query = test split 是我們的假設**，同樣要標成假設，不能寫成論文規定。
 
 **[前一版錯誤] 不再強制「同一 asset 不得同時出現在 train 與 test 房屋」。**
 論文沒有這個要求，而 ProcTHOR 本來就是 12,000 間房共用約 1,467 個資產庫 —— 強制 disjoint
@@ -234,7 +308,7 @@ scenes are aligned or centered"）。預先置中等於把它想解決的那個�
 | `point_encoder+fuser` | PointBERT (32.5M) + fusion + 投影 | ✅ | **主線** |
 | `full` | 再加 ViT-bigG-14 (2.5B) | ❌ 單卡不可行 | 記為硬體限制 |
 
-**[偏離 D-3]** ViT-bigG-14 的 text/image 端保持凍結 —— 2.5B 參數在 24GB 上無法訓練。
+**[偏離 D-1]** ViT-bigG-14 的 text/image 端保持凍結 —— 2.5B 參數在 24GB 上無法訓練。
 ULIP-2 原本的設計也是凍結 CLIP、訓練 point encoder，所以主線等級與 ULIP-2 一致。
 報告中須聲明「entire encoder」在我們的設定下指 3D encoder + fusion，不含 CLIP。
 
@@ -242,6 +316,46 @@ ULIP-2 原本的設計也是凍結 CLIP、訓練 point encoder，所以主線等
 不得用於主線。
 
 Loss 為 Eq.5，**單向 query→gallery**。ULIP 現成的 `ULIPWithImageLoss` 是單塔 tri-modal，不能用。
+
+**[未定 U-13] Full model 用哪一種 fusion，論文沒說。**
+
+§2.4 只列出五種：
+
+> combines these modality embeddings via one of several strategies, such as
+> **mean pooling, MLP, masked MLP, gated fusion, or Transformer-based fusion**
+
+「such as」+「one of several」= 它在描述一個**選項集合**，不是在指定 MetaFind 用哪個。
+能從 Table 3 推出來的只有排除：
+
+```
+Fusion = Mean   →  9.4        排除
+Fusion = MLPs   →  9.9        排除
+Padding with 0  → 10.5        排除 zero-padding（§3.4：Masked modality fusion
+Full            → 11.4                            outperformed zero-padding）
+```
+
+所以 Full **會遮罩缺席模態**，且不是 Mean、不是普通 MLP。剩下三個候選：
+**masked MLP / gated / Transformer**，論文無法再縮小。
+
+程式現行預設是 `masked_mlp`（`metafind/models/fusion.py`）—— 這個選擇合理
+（名稱與 §3.4 的 "Masked modality fusion" 直接對應），但**它不是論文真值**，
+必須以 U-13 的身分出現在報告裡。另外兩個保留為可選並列為對照。
+
+**[未定 U-16] query 塔與 gallery 塔是否共享權重，論文沒說。**
+
+§2.4 說 "training a **dedicated** query encoder"、稱兩者為
+"query encoder / gallery encoder"；§2.6 說 "**Both** query and gallery encoders are trained"。
+但從未說清楚：
+
+```
+A. backbone 共享、fusion 各自一份
+B. 兩塔完全各自一份
+C. 全部共享
+```
+
+這件事對雙塔的意義很關鍵 —— 論文自己在 Table 1 底下特別指出，baseline 的 PC-Only
+之所以虛高，是因為 query 與 gallery 用的是**同一個 embedding**，而 MetaFind 不是。
+共享政策直接決定這個差別有多大。記錄選擇。
 
 ### Step 2.2　Gallery 索引
 
@@ -263,6 +377,15 @@ Stage 1 完成後凍結 gallery 塔，對全部 admitted 資產編碼。
 > 雙向對比 Eq.7a/7b，平均為 Eq.8
 
 注意 Stage 1 是**單向**、Stage 2 是**雙向**，這個差異是論文明寫的。
+
+**「Only the query-side fuser and the ESSGNN module are updated」要驗兩邊。**
+這句話排除的不只是 gallery 塔，也包括 **query 側的 text / image / point encoder**。
+
+先前只有 `L1-GALLERY-FROZEN` 驗 gallery 側，但真正危險的是 **query 的 PointBERT**：
+Stage 1 的主線 `train_scope = point_encoder+fuser` **會訓練它**，所以它進入 Stage 2 時
+`requires_grad` 本來就是 `True`，不明確凍結就會繼續訓練 —— 而且不會有任何錯誤。
+新增 `L1-STAGE2-QUERY-ENCODERS-FROZEN`：跑完一步之後，query 的 text / image / point
+三個 encoder 都必須與 Stage 1 逐 bit 相同，只有 fusion、ESSGNN 與 `λ` 可以動。
 
 **[未定 U-08／U-08a／U-08b — 阻斷級，這是整個復現最大的架構缺口]**
 
@@ -311,7 +434,7 @@ Eq.6 需要 `e_text`、`e_image`、`e_pc`。ProcTHOR 只提供 metadata 與座�
 ```
 n09b_resolve_stage2_protocol   ← human 節點，做出這兩個決定
         ↓
-G6_stage2_protocol             ← G-INVALID gate
+G6_stage2_ready             ← G-INVALID gate
         ↓
 n13_train_stage2
 ```
@@ -378,12 +501,91 @@ protocol_B:  query = test split,  gallery = full         (46,052)
 - **RA-1**：§2.5 的 `h⁰ = Concat(x, t)` 與 Appendix C 的「h⁰ 對 SE(3) 不變」前提衝突。字面版**預期失敗**。
 - **RA-2**：§2.5 的 `f_x → ℝ³` 與 Appendix C 的證明衝突（提出 `Q` 需要 `φ_x` 是純量）。已實作為純量。
 
+**[未定 U-17] 還有第三處不一致：`d_ij` 到底是距離還是距離平方。**
+
+```
+§2.5        d_ij^l = ‖x_i^l − x_j^l‖₂          歐氏距離
+Appendix C  m_ij = φ_e(h_i, h_j, ‖x_i − x_j‖², e_ij)   (10)，(11)(12) 同
+原始 EGNN                     ‖·‖²             平方
+```
+
+這一項**與 RA-1／RA-2 性質不同，不設 audit**：兩者都對旋轉與平移不變，
+所以**都不會破壞等變性證明**，沒有「預期失敗」的斷言可寫。
+但**餵進 MLP 的數值不一樣，訓練出來的模型就不一樣**。
+
+實作依 Appendix C 與原始 EGNN 用**平方**（`metafind/models/essgnn.py` 的 `radial`）。
+這是選擇，不是推導，必須記錄；要量它的話，跑一個變體即可，很便宜。
+
 ### Step 3.3　Table 2 / 3：場景級
 
 Algorithm 1 逐物件檢索並放置，需要 **I-Design** 與**真實 mesh 幾何**（所以 GLB 不刪）。
 
 **[未驗證 R-01]** I-Design 尚未測試能否執行。Table 2 全部與 Table 3 的場景欄全部依賴它。
 **這是目前最大的未知，而且查它很便宜。**
+
+**[未定 U-21 — 阻斷級] Table 2 的資料流先前根本沒有閉合。**
+
+論文 §3.3：
+
+> We evaluate MetaFind on the **scene generation pipeline of I-Design** on a set of
+> **200 randomly sampled scenes**
+
+Algorithm 1 的 `Require:` 需要**初始場景圖 `G_0`** 與 **asset query list `{Q_1..Q_N}`**。
+先前 `n16_compose_scenes` 讀的是 `scene_graphs` —— 那是 **ProcTHOR 房屋**。
+**ProcTHOR 房屋是已經完成的佈局，不是生成請求**，兩者不是同一種東西。
+graph 裡從來沒有 I-Design 輸出的 channel，所以也沒有任何 gate 會發現這件事。
+
+現在補上 `idesign_scenes` channel（`{g0_uri, query_list, room_type, source_revision}`），
+由 `n15c_prepare_eval_scenes` 產生，而它排在 `G7_composition_protocol` 之後。
+
+**[未定 U-18 — 阻斷級] 「放進場景、更新場景圖」到底產生什麼，論文一個字都沒說。**
+
+Algorithm 1 第 7 行只有：
+
+```
+7:  Place A*_i into the scene, update scene graph: G <- G U {A*_i}
+```
+
+但下一輪的第 3 行立刻是 `e_layout <- ESSGNN(G)`。要讓它有定義，新放進去的那個節點必須有：
+
+| 需要 | 論文有沒有說 |
+|---|---|
+| `t_i`（節點文字特徵） | 沒有 |
+| 位置 `x_i` | 沒有 |
+| 朝向、尺度 | 沒有 |
+| 新的物理邊（support / adjacency 接到誰） | 沒有 |
+| 新的語意邊（要不要為新物件生關係句） | 沒有 |
+
+而**這個選擇會改變之後每一次檢索** —— 這正是論文說 iterative 比 parallel 好的機制所在。
+`sg4_place` 先前只寫「用真實幾何放置、更新 placed_assets」，不足以定義下一輪的輸入。
+
+**這兩項決定之前不要正式跑 Table 2**，由 `G7_composition_protocol` 擋著，
+未決回 `BLOCKED_EVIDENCE`(rc=3)。**Table 1 不經過這道 gate，照常進行。**
+
+**Table 3 的 `w/o iterative retrieval` 不需要重訓一個模型。**
+Algorithm 1 是 §2.7 的**推論期程序**，不是模型結構。那一列是
+**同一個 Full checkpoint** 換成 `composition_mode: parallel` 再評估：
+
+```
+訓練型 ablation（n18）        GAT / Mean / MLP / dropout 10 / dropout 50 /
+                              fuser only / zero padding / w/o Layout Context
+推論型 ablation（n19 直接評）  w/o iterative retrieval
+```
+
+先前 `n18_train_ablations` 宣稱要訓練「八個變體」，把這一列也算進去 ——
+那會變成拿兩個不同的 checkpoint 比較，然後把差異歸因於合成策略。
+`variant_registry` 現在有 `requires_training` 與 `reuses_ckpt` 兩個欄位，
+由 `L1-ABLATION-INFERENCE-ONLY` 釘住。
+
+（`w/o Layout Context` 保留為需要訓練：Table 1 把 `MetaFind w/o ESSGNN` 列為獨立模型，
+且它在 Table 3 的 R@1 是 13.5、Table 1 的 text-only 是 13.8，兩者不同 ——
+理論上它也可能只是把 `λ·e_layout` 設成 0，但重訓是比較保守的讀法。同樣記錄為選擇。）
+
+**`n18` 先前的 reads 根本湊不出一次訓練。** 它只宣告
+`{variant_registry, stage1_ckpt, splits, scene_graphs}` 四條，
+但 `n13` 做同一件事需要十一條 —— 要訓練 GAT 變體或 fusion 變體，
+至少還需要點雲、快取的 text/image embedding、語意邊、ProcTHOR 物件文字、
+以及已決議的 Stage 2 協定。那是一份**不可能被滿足的 dependency contract**，已補齊。
 
 **[偏離 D-2]** 場景評分用 Qwen2.5-VL 取代 GPT-4o。
 IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Table 2 是 4 個面向 1–5 分，
@@ -432,18 +634,33 @@ IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Ta
 
 | id | 內容 |
 |---|---|
-| U-01 | 資產數：論文「約 48,000」vs manifest 46,052 |
-| U-02 | 自行取樣的點雲與 ULIP-2 訓練分布是否一致（**需先驗證**） |
-| U-03 | 11 個視角的相機擺位 |
-| U-04 | 渲染解析度 |
-| U-05 | adjacency 的判準 |
-| U-06 | 語意邊要對哪些物件對 |
-| U-07 | ProcTHOR 官方 split vs 論文 80/20 |
-| U-08 | Stage 2 樣本怎麼組（目標選擇、partial scene、負樣本） |
-| **U-08a** | **正樣本是哪一個 gallery 條目** —— ProcTHOR 與 Objaverse 識別碼交集為 0（**阻斷**） |
-| **U-08b** | **目標物件的 text/image/pc 從哪來** —— ProcTHOR 沒有渲染圖也沒有點雲（**阻斷**） |
-| U-11 | 缺席模態怎麼表示（論文只排除 zero-padding） |
-| U-12 | ProcTHOR metadata 怎麼變成 `t_i` 的句子 |
-| U-03a | 11 視角用正交還是透視投影 |
-| U-09 | Table 1 的 gallery 範圍 |
-| U-10 | Table 2 的 Scene Coherence 對應 IDesign 哪個面向 |
+完整登記表在 `01_GRAPH_SPEC.md` §15，機器可讀版在 `graph_spec.yaml` 的 `risks_unknowns`；
+`G5_report_release` **逐項**檢查處置（不得用區間表示）。
+
+| id | 內容 | 影響哪張表 |
+|---|---|---|
+| U-01 | 資產數：論文「約 48,000」vs manifest 46,052 | 全部分母 |
+| U-02 | 自行取樣的點雲與 ULIP 官方點雲是否一致（**降為診斷**） | — |
+| U-03 | 11 個視角的相機擺位 | Table 1 影像欄 |
+| U-03a | 11 視角用正交還是透視投影 | Table 1 影像欄 |
+| U-04 | 渲染解析度 | Table 1 影像欄 |
+| U-05 | adjacency 的判準 | ESSGNN 輸入 |
+| U-06 | 語意邊要對哪些物件對；`e_ij` 寬度 | ESSGNN 輸入 |
+| U-07 | ProcTHOR 官方 split vs 論文 80/20 | Table 2/3 |
+| U-08 | Stage 2 樣本怎麼組（目標選擇、partial scene、負樣本） | Table 2/3 |
+| **U-08a** | **正樣本是哪一個 gallery 條目** —— ProcTHOR 與 Objaverse 識別碼交集為 0（**阻斷**） | Stage 2 全部 |
+| **U-08b** | **目標物件的 text/image/pc 從哪來** —— ProcTHOR 沒有渲染圖也沒有點雲（**阻斷**） | Stage 2 全部 |
+| U-09 | Table 1 的 gallery 範圍**與 query 範圍** | Table 1 全部 |
+| U-10 | Table 2 的 Scene Coherence 對應 IDesign 哪個面向 | Table 2 |
+| U-11 | 缺席模態怎麼表示（論文只排除 zero-padding） | Table 1 部分模態欄 |
+| U-12 | ProcTHOR metadata 怎麼變成 `t_i` 的句子 | ESSGNN 輸入 |
+| **U-13** | **Full model 用哪一種 fusion**（§2.4 列五種、沒說是哪個） | **Table 1 全部** |
+| **U-14** | **11 張渲染圖怎麼變成一個 `e_image`** | **Table 1 四欄** |
+| **U-15** | **標註怎麼序列化成 text encoder 的輸入字串** | **Table 1 四欄** |
+| **U-16** | **query / gallery 兩塔是否共享權重** | **Table 1 全部** |
+| U-17 | ESSGNN 用 `d` 還是 `d²`（§2.5 vs Appendix C） | 所有訓練結果 |
+| **U-18** | **Algorithm 1 放置後圖怎麼更新**（**阻斷**） | **Table 2 全部** |
+| U-19 | 邊是有向還是無向 | ESSGNN message passing |
+| U-20 | `t_i` 由哪個 encoder 產生 | ESSGNN 輸入與 `d` |
+| **U-21** | **Algorithm 1 的 `G_0` 與 query list 從哪來**（**阻斷**） | **Table 2 全部** |
+| U-22 | **訓練超參數論文一個都沒給** | 所有訓練結果 |

@@ -8,6 +8,13 @@
 > F 系列是實測，可信；**D 系列是決策，會隨新事實改變** —— 本文件的 D1/D2 已於 2026-08-15
 > 大幅修正（先前的版本把論文列為較差的 ablation 當成主線）。
 > 若本文件與 `02_BUILD_STEPS.md` 衝突，**以後者為準**。
+>
+> ⚠️ **本文件不使用 `U-nn` 編號。** 它曾經有自己的一套 `U-01`…`U-05`、`U-06`、`U-15`，
+> 與 `01_GRAPH_SPEC.md` §15 的登記表**編號相同但意義完全不同** —— 例如舊的 `U-04`
+> 是「Table 1 gallery 大小」，登記表的 `U-04` 是「渲染解析度」。
+> 靠「本文件權威最低」不足以避免這個問題：agent 用關鍵字搜尋時照樣會撈到。
+> 舊編號已全部移除，唯一的 UNKNOWN 登記表在 `01_GRAPH_SPEC.md` §15，
+> 機器可讀版在 `graph_spec.yaml` 的 `risks_unknowns`，由 `tools/check_graph.py` 對齊。
 
 ---
 
@@ -47,8 +54,11 @@ self.pc_projection = nn.Parameter(torch.empty(kwargs.pc_feat_dims, 1280))
 （舊的 `ULIP_WITH_IMAGE` 才是 512。MetaFind 說 build upon **ULIP-2** → 走 1280 這條。）
 
 **影響設計**：Eq.(6) `e_query = Fusion(e_text, e_img, e_pc) + λ·e_layout` 要求
-**ESSGNN pooling 後的輸出必須是 1280 維**，否則殘差加不起來。
-→ `ESSGNN.out_node_nf` 與 pooling 後的投影維度寫死 1280，並列為 L1 測試。
+**ESSGNN pooling 後的輸出必須與 embedding 同寬**，否則殘差加不起來。
+
+> **⚠️ 本節原本寫「寫死 1280，並列為 L1 測試」，那已被推翻。**
+> **論文全文沒有出現任何維度數字。** 1280 是我們讀 ULIP-2 checkpoint 得到的事實，
+> 不是論文真值。現行規格改為**從 checkpoint 推導寬度**，並禁止任何地方寫死。
 
 ---
 
@@ -170,9 +180,16 @@ data/objaverse-lvis  →  不存在，需下載
 代價是文字分佈與論文的「GPT-4o 結構化描述（category / size / materials /
 placement constraints）」不同。
 
-**影響設計**：`n03_preflight_budget` 先用 **500 asset pilot** 實測單價與 schema 通過率，
-再決定走 (a) 自行 GPT-4o 標註 或 (b) 沿用 ULIP-2 captions。
-這個決策點是 **A1**（依實測成本與預算比較，確定性判定），不是讓模型自己決定。
+> **⚠️ 本節的結論已被推翻，保留是為了記錄推翻的理由。**
+>
+> 原本寫「pilot 之後決定走 (a) 自行標註 或 (b) 沿用 ULIP-2 captions」。
+> **fallback 到 ULIP-2 captions 這個分支已取消。** 那些 caption 沒有
+> `placement_constraints`，而它正是 layout-aware 檢索成立的訊號 ——
+> 換掉等於做另一個實驗，而不是便宜地做同一個實驗。
+> 若真的要用，整份結果必須標 `DEGRADED`，不得當成主線復現。
+>
+> 另外，金錢成本本身也已不適用：**GPT-4o 已由 Qwen2.5-VL 取代（偏離 D-2）**，
+> 本節的美元估算只剩歷史意義。
 
 ---
 
@@ -231,7 +248,8 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 **若照論文做真的退化了，那是論文設計的性質，要報告出來，不是偷偷修掉。**
 
 **另一個未定**：論文只說文字編碼器是 "e.g., CLIP or BERT"，
-所以 `e` 的寬度（1280 / 768 / 512）是輸入而非常數 → 列為 **U-06**。
+所以 `e` 的寬度（1280 / 768 / 512）是輸入而非常數。
+（登記在 `01_GRAPH_SPEC.md` §15。）
 
 ---
 
@@ -288,7 +306,8 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 **最可能的解釋**：論文的
 *"constructed from a curated collection of more than 3,000 unique assets"*
 指的是 ProcTHOR **產生器可取用的資產庫**，而不是這 12,000 間房實際實例化的集合。
-無法在不取得完整 AI2-THOR 資產庫的情況下驗證 → 記為 **U-15**。
+無法在不取得完整 AI2-THOR 資產庫的情況下驗證，記為未定。
+（登記在 `01_GRAPH_SPEC.md` §15。）
 
 **影響設計**
 
@@ -302,7 +321,7 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 
 ---
 
-## F13. 渲染前的正規化會摧毀絕對尺度，所以「size dimensions」只能是類別先驗
+## F13. 渲染前的正規化會摧毀絕對尺度 —— **在本實作中** size 只能是類別先驗
 
 **證據**（`metafind/data/render.py::normalize_mesh`，論文要求的框架下）
 
@@ -317,9 +336,14 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 
 **長寬比保留，絕對尺度歸零。**
 
-論文 §2.3 要求標註包含 "size dimensions"，但標註模型只看得到渲染圖 ——
-它**不可能量到**真實尺寸，只能依「這是什麼東西」給出類別先驗。
-GPT-4o 當初產生的那些尺寸數字，性質上也是同一回事。
+論文 §2.3 的標註包含 "size dimensions"，而**在我們的管線裡**標註模型只看得到
+scale-normalised 的渲染圖 —— 它**不可能量到**真實尺寸，只能依「這是什麼東西」給出類別先驗。
+
+> **⚠️ 這是本實作的限制，不是論文的性質。**
+> 原本本節寫「GPT-4o 當初產生的那些尺寸數字，性質上也是同一回事」——
+> **這句話推不出來**：論文從未說它給 GPT-4o 看的是 scale-normalised 渲染圖，
+> 也沒說標註流程裡沒有一併提供尺寸 metadata。
+> 尺度歸零是**我們加上 unit-sphere 正規化**的後果，只能描述我們自己。
 
 **影響設計**
 
@@ -405,9 +429,15 @@ outputs/renders/                從 mesh 渲染 11 視角
 `datasets/` 與 `models/` 只下載不寫入；`outputs/` 全部可從它們重新生成。
 刪掉 outputs 只損失算力，刪掉 datasets 才要重新下載。
 
-**連帶的未定項 U-02**：ULIP-2 的 checkpoint 是在**它自己取樣**的點雲上訓練的。
+**連帶的未定項**：ULIP-2 的 checkpoint 是在**它自己取樣**的點雲上訓練的。
 我們從 mesh 自行取樣，取樣方式若不一致，embedding 會偏離分布而且不會報錯。
-保留 500 個 ULIP 官方點雲當對照組，由 **G2 gate** 擋住，驗證通過才往下走。
+
+> **⚠️ 這一段的結論已修改。** 原本寫「由 G2 gate 擋住」。
+> 現行 `G2_pc_sanity` 擋的是**結構有效性**（形狀、有限、`pc_norm`、非退化、自我可辨識）；
+> 與 ULIP 官方點雲的比較降為 `L2-PC-ULIP-REF` 診斷，不擋。
+> 理由：論文從未說 MetaFind 沿用 ULIP 預取樣的點雲，而 Stage 1 會 fine-tune
+> point encoder —— 「和官方雲不一樣」推不出「復現無效」。
+> 詳見 `01_GRAPH_SPEC.md` §11。
 
 ---
 
@@ -423,15 +453,17 @@ outputs/renders/                從 mesh 渲染 11 視角
 
 ---
 
-## 待解 UNKNOWN（未經確認，不得用猜測填空）
+## 待解 UNKNOWN — **SUPERSEDED**
 
-| id | 未知項 | 影響 | 如何解除 |
-|---|---|---|---|
-| U-01 | 場景級檢索的 gallery 到底是 48K Objaverse 還是 3K+ ProcTHOR 資產？論文未明說 | Table 2 的整個評估協定 | 先做小規模雙版本試跑比對；或聯繫作者 |
-| U-02 | Table 3 的場景級分數用幾個場景？論文只在 §3.3 說 Table 2 用 200 | Table 3 的可比性與成本 | 先以 50 場景試跑並宣告加寬容差 |
-| U-03 | `Padding missing modalities with 0` 是作用在 Stage-1 還是 Stage-2 fusion？ | 該 ablation 要重跑哪一段 | 兩版都跑（D2 之後成本可忍受） |
-| U-04 | Table 1 的 gallery 大小（48K 全量？還是測試集 20%？）→ 直接決定 R@1 的分母 | **所有 Table 1 數字的可比性** | 用 baseline PC-Only ≈ 98–99% 反推分母後驗證 |
-| U-05 | ProcTHOR 的 `t_i` 用它自己的 metadata 文字，還是要走 GPT-4o 標註？ | SG2 是否相依於 SG1 | 主線假設用 ProcTHOR 自帶 metadata（兩者可平行）；列為假設 A-02 |
-
-**U-04 特別重要**：它是唯一一個「猜錯會讓整張 Table 1 失去意義」的未知。
-因此 `G2_corpus_validity` 的判準之一就是「gallery 大小已鎖定並寫入 write_once channel」。
+> 本節原有一張自己的 `U-01`…`U-05` 表，**編號與 `01_GRAPH_SPEC.md` §15 的登記表衝突**
+> （相同 id、不同意義），且內容已過時，其中一條還是已知錯誤：
+> 它主張「用 baseline 的 PC-Only ≈ 98–99% **反推** gallery 分母」。
+> **那不可能成立** —— PC-Only 的 query embedding 與它自己的 gallery 條目相同，
+> 無論分母多大，自我檢索都趨近 100%，反推不出任何資訊。
+> 它引用的 `G2_corpus_validity` 這道 gate 也已不存在。
+>
+> 整節刪除而非保留註記，是因為「本文件權威最低」擋不住關鍵字搜尋。
+>
+> **唯一的 UNKNOWN 登記表：[`01_GRAPH_SPEC.md` §15](01_GRAPH_SPEC.md)**
+> （機器可讀版：`graph_spec.yaml` 的 `risks_unknowns`；
+> 由 `tools/check_graph.py` 檢查兩者對齊，並檢查沒有任何文件引用登記表以外的 `U-nn`）。

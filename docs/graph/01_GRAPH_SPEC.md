@@ -81,15 +81,18 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 
 ## 3. State schema
 
-完整 39 個 channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
+完整 42 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
 
 | channel | merge | 為什麼 |
 |---|---|---|
 | `asset_manifest` | `write_once` | 論文說「約 48,000」，實際 46,052。**一律 `len(manifest)`，不得寫死** |
-| `splits` / `split_seed` | `write_once` | 洩漏是 G-INVALID，定案後不得改 |
+| `splits` / `split_seed` | `write_once` | **物件級**。洩漏是 G-INVALID，定案後不得改 |
+| `scene_splits` | `write_once` | **新增**。ProcTHOR 房屋 split 從 `splits` 拆出來，讓 Stage 1 不再等 ProcTHOR 分支 |
+| `composition_protocol` | `replace` | **新增**。U-18／U-21，未決前保持可改 |
+| `idesign_scenes` | `write_once` | **新增**。Table 2 的 200 個評估場景（`G_0` + query list），先前根本沒有這條 channel |
 | `eval_protocols` | `write_once` | **取代先前的 `gallery_size_locked` 單一整數**，見 §7 |
 | `asset_glb` | `upsert_by_key` | **保留不刪** —— Algorithm 1 需要真實幾何 |
-| `pointclouds` | `upsert_by_key` | 從 mesh 取樣；U-02 需先驗證分布一致性 |
+| `pointclouds` | `upsert_by_key` | 從 mesh 取樣；`G2_pc_sanity` 檢查結構有效性，U-02 降為診斷 |
 | `renders` | `upsert_by_key` | 11 視角 × 46,052 |
 | `objaverse_annotations` | `upsert_by_key` | **以 Objaverse uid 為 key**。ProcTHOR 物件屬於另一個命名空間，不得讀這條 |
 | `procthor_object_text` | `upsert_by_key` | **新增**。ProcTHOR 場景圖的 `t_i` 與語意邊的輸入，來自 ProcTHOR 自己的 metadata |
@@ -127,16 +130,17 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 | id | role | 說明 |
 |---|---|---|
 | `n03_sample_pointclouds` | compute | 從 mesh 取樣 10,000 點 xyz+rgb，複製 ULIP 的 `pc_norm` |
-| **`G2_pc_distribution`** | evaluate | **G-INVALID**。U-02：自行取樣 vs ULIP 官方點雲的 embedding 一致性 |
+| **`G2_pc_sanity`** | evaluate | **G-INVALID**。形狀／有限／`pc_norm`／非退化／自我可辨識。**與 ULIP 官方點雲的比較降為 L2 診斷** |
 | `n04_render_views` | compute | 11 個視角、224px；**投影方式為設定值，預設正交（U-03a，不是論文明文）** |
 | `n05_annotate` | model | Qwen2.5-VL → category / dimensions / materials / placement_constraints |
 | `n06_encode_text_image` | model | CLIP 凍結 → 可快取；**PC 不在此列** |
 | `n07_scene_graphs` | compute | ProcTHOR → 節點（位置 + `t_i`）、物理邊（support 讀自 children 樹）。**`t_i` 來自 ProcTHOR metadata，不是 Objaverse 標註** |
 | `n08_semantic_edges` | model | Qwen 對 **ProcTHOR 物件描述**產生關係句 → frozen text encoder → `e_ij` |
-| `n09_build_splits` | compute | 物件 80/20、房屋 80/20 |
+| `n09_build_splits` | compute | **物件 80/20，只讀 Objaverse** |
+| `n09c_build_scene_splits` | compute | **新增**。房屋 80/20，只讀 ProcTHOR |
 | `n09b_resolve_stage2_protocol` | **human** | **決定 U-08a／U-08b** —— 正樣本對應與模態來源。論文沒說，只能由人決定 |
-| **`G6_stage2_protocol`** | evaluate | **G-INVALID**。未決 → `BLOCKED_EVIDENCE`(rc=3)，**不是 FAIL** |
-| **`G3_corpus_valid`** | evaluate | **G-INVALID**。零洩漏、集合完整性、協定已定義 |
+| **`G6_stage2_ready`** | evaluate | **G-INVALID**。協定未決 → `BLOCKED_EVIDENCE`(rc=3)；`scene_splits` 洩漏 → `FAIL`(rc=2) |
+| **`G3_object_corpus`** | evaluate | **G-INVALID**。**物件語料**零洩漏、集合完整性、協定已定義 |
 
 ### Phase 2 — 訓練
 
@@ -144,7 +148,7 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 |---|---|---|
 | `n10_train_stage1` | mutate | **訓練 point encoder + fusion**（Eq.5，單向），30% 模態遮罩 |
 | `n11_gallery_index_staging` | mutate | 凍結 gallery 塔，編碼全部 admitted 資產 → staging |
-| **`G4_gallery_freeze`** | evaluate | **G-CONTAM**。維度、數量、無 NaN、自我檢索 recall@1 = 1.0 |
+| **`G4_gallery_freeze`** | evaluate | **G-CONTAM**。維度、數量、無 NaN、**目標相似度 == 最大相似度且在 argmax tie set 內** |
 | `n12_promote_index` | mutate | late commit，`write_once` |
 | `n13_train_stage2` | mutate | 訓練 fuser + ESSGNN，gallery 凍結；Eq.6 殘差、30% scene dropout、Eq.7/8 雙向 |
 | `n14_equivariance_probe` | evaluate | SC-4/5/6 三層級 + RA-1/RA-2 |
@@ -154,10 +158,13 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 | id | role | 說明 |
 |---|---|---|
 | `n15_eval_retrieval` | evaluate | 7 模態組合 × **2 gallery 協定** × 2 變體 |
-| `n16_compose_scenes` | subgraph | Algorithm 1，需 I-Design + 真實 GLB 幾何 |
+| `n15b_resolve_composition_protocol` | **human** | **決定 U-18／U-21** —— `G_0` 來源與放置後的圖更新規則 |
+| **`G7_composition_protocol`** | evaluate | **G-INVALID**。未決 → `BLOCKED_EVIDENCE`(rc=3)。Table 1 不經過它 |
+| `n15c_prepare_eval_scenes` | compute | **新增**。I-Design → 200 個評估場景（R-01 未驗證） |
+| `n16_compose_scenes` | subgraph | Algorithm 1，讀 `idesign_scenes`（**不是** ProcTHOR 房屋）+ 真實 GLB 幾何 |
 | `n17_judge_scenes` | model | Qwen2.5-VL 四維度評分 |
-| `n18_train_ablations` | subgraph | Table 3 的 8 個變體（含 `fuser_only`） |
-| `n19_eval_ablations` | evaluate | Table 3 指標 |
+| `n18_train_ablations` | subgraph | Table 3 中**真的是不同模型**的變體。`w/o iterative retrieval` 不在此列 |
+| `n19_eval_ablations` | evaluate | Table 3 指標，**含 inference-only 那列**（Full checkpoint + `composition_mode: parallel`） |
 | `n20_aggregate` | compute | 組 Table 1/2/3 |
 | `n21_compare_to_paper` | evaluate | 逐格三選一判定 |
 | **`G5_report_release`** | evaluate | **G-IRREVERSIBLE** |
@@ -179,33 +186,42 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 ## 5. Dependency DAG
 
 ```
-n01_env_bootstrap
- └→ n02_download
-     └→ G1_sources_valid
-         ├→ n03_sample_pointclouds → G2_pc_distribution ─┐
-         ├→ n04_render_views ──→ n05_annotate ───────────┤   (Objaverse 標註)
-         └→ n07_scene_graphs ──→ n08_semantic_edges ─────┤   (ProcTHOR 描述，與上面互不相干)
-                                                          ↓
-                        n06_encode_text_image ←───────────┤
-                                    ↓                     │
-                              n09_build_splits ←──────────┘
-                                    ↓
-                            G3_corpus_valid
-                                    ↓
-                            n10_train_stage1
-                        ┌───────────┴───────────┐
-              n11_gallery_staging        n13_train_stage2
-                        ↓                       ↓
-                G4_gallery_freeze      n14_equivariance_probe
-                        ↓                       │
-                n12_promote_index               │
-                        ├───────────────────────┤
-                        ↓                       ↓
-              n15_eval_retrieval        n16_compose_scenes
-                        │                       ↓
-                        │               n17_judge_scenes
-                        │                       │
-                        └────→ n18_train_ablations → n19_eval_ablations
+n01_env_bootstrap → n02_download → G1_sources_valid
+                                        │
+        ┌───────────── Objaverse 分支 ──┴── ProcTHOR 分支 ─────────────┐
+        │                                                              │
+  n03_sample_pointclouds → G2_pc_sanity ─┐                  n07_scene_graphs
+  n04_render_views → n05_annotate ───────┤                        ↓
+                          ↓              │                  n08_semantic_edges
+              n06_encode_text_image ─────┤                        ↓
+                                         ↓                  n09c_build_scene_splits
+                              n09_build_splits                    │
+                                         ↓                        │
+                              G3_object_corpus                    │
+                          ┌──────────────┴───────┐                │
+                          ↓                      ↓                │
+                 n10_train_stage1    n09b_resolve_stage2_protocol │
+                          │                      ↓                │
+                          │              G6_stage2_ready ←─────────┘
+              ┌───────────┴───────────┐          │
+    n11_gallery_staging        n13_train_stage2 ←┘
+              ↓                       ↓
+      G4_gallery_freeze      n14_equivariance_probe
+              ↓                       │
+      n12_promote_index               │
+              ├───────────────────────┼──────────────┐
+              ↓                       │              ↓
+    n15_eval_retrieval                │   n15b_resolve_composition_protocol
+              │                       │              ↓
+              │                       │   G7_composition_protocol
+              │                       │              ↓
+              │                       │   n15c_prepare_eval_scenes
+              │                       ↓              │
+              │              n16_compose_scenes ←────┤
+              │                       ↓              │
+              │              n17_judge_scenes        │
+              │                                      │
+              └──→ n18_train_ablations → n19_eval_ablations
                                         ↓
                                   n20_aggregate
                                         ↓
@@ -218,9 +234,14 @@ n01_env_bootstrap
 
 **主線零回邊。** Cycle 全在 subgraph 內（C1 標註修復、C2 語意邊修復、C3 Algorithm 1）。
 
-> **先前草稿的 dependency bug**：baseline 節點被排成與資料準備平行。
+> **先前草稿的 dependency bug（一）**：baseline 節點被排成與資料準備平行。
 > 即使保留 baseline，它仍依賴 admitted 資產、前處理、split 與 gallery 協定，
 > 只能與 `n10` 平行、不能與 `n03` 平行。本版已移除該節點（D-3）。
+>
+> **先前草稿的 dependency bug（二）**：`n09_build_splits` 同時讀 Objaverse 與
+> ProcTHOR，於是 `n08`（Qwen 對 ProcTHOR 產語意邊）進了 Stage 1 的關鍵路徑。
+> §2.6 的 Stage 1 是 Objaverse-LVIS 上的物件級預訓練，**完全不需要 ProcTHOR**，
+> 卻會因為 ProcTHOR 分支的任何故障而停擺。兩條分支現在直到 `G6` 才匯流。
 
 ---
 
@@ -228,9 +249,16 @@ n01_env_bootstrap
 
 | 節點 | group | policy | 理由 |
 |---|---|---|---|
-| `n09_build_splits` | default | **`all`** | 物件與場景目錄都要齊，否則算出的 split 是錯的 |
+| `n09_build_splits` | default | **`all`** | 點雲與 embedding 都要齊，否則算出的 split 是錯的 |
+| `n09c_build_scene_splits` | default | **`all`** | 場景圖與語意邊都要齊，理由同上 |
 | `SG1/SG2 reduce` | default | **`all_settled`** | 必須知道**誰**失敗 —— gallery 分母改變會使 R@k 失去意義 |
-| `G3_corpus_valid` | default | **`all`** | gate 需要完整證據 |
+| `G3_object_corpus` | default | **`all`** | gate 需要完整證據 |
+| `G6_stage2_ready` | `default {n09b}` | **`all`** | 協定決定 |
+| | `corpus {n09c}` | **`all`** | 場景語料 |
+| | trigger | `all_groups_satisfied` | 分成兩組，才分得出 `BLOCKED_EVIDENCE` 與 `FAIL` |
+| `n16_compose_scenes` | `default` / `protocol` | 各 **`all`** | 協定與 200 個場景是硬前置，不是 SG4 跑到一半才發現缺 |
+| `n19_eval_ablations` | `default` | **`all`** | R@1 欄只需要 checkpoint |
+| | `protocol {n15c}` | **`all_settled`** | I-Design 不可用時（R-01），R@1 欄照出，場景欄記 `INSUFFICIENT_EVIDENCE` |
 | `n15_eval_retrieval` | default | **`all`** | 需要索引 + 兩個變體 |
 | `n20_aggregate` | `core {n15, n17}` | **`all`** | Table 1 與 Table 2 的模型評分欄必要 |
 | | `extended {n19}` | **`all_settled`** | Table 3 可部分缺，缺了只縮小 claim |
@@ -358,15 +386,24 @@ eval_protocols:
 
 ---
 
-## 11. Promotion gates（5 個）
+## 11. Promotion gates（7 個）
 
 | gate | class | 判準 | on_fail |
 |---|---|---|---|
-| **G1_sources_valid** | G-INVALID | manifest 完整；GLB 覆蓋率 ≥98%；ULIP-2 checkpoint 行為驗證通過（非僅 sha256） | 停，補下載 |
-| **G2_pc_distribution** | G-INVALID | U-02 通過：自取樣點雲的 embedding 與官方點雲一致性達標 | 停，調整取樣方式。**不得放寬門檻** |
-| **G3_corpus_valid** | G-INVALID | 零洩漏；集合完整性等式；兩個評估協定已定義；quarantine 率 ≤2% | 停，修資料管線 |
-| **G4_gallery_freeze** | G-CONTAM | 索引維度／數量正確、無 NaN、自我檢索 recall@1 = 1.0 | **不 promote**，staging 作廢重建 |
-| **G5_report_release** | G-IRREVERSIBLE | 每格有明確判定；gate record 齊全且 `is_terminal`；RA-1/2/3 紀錄齊全；D-1~D-4 已在報告聲明 | 停，補齊 |
+| **G1_sources_valid** | G-INVALID | manifest 完整；GLB 覆蓋率 ≥98%；ULIP-2 checkpoint 行為驗證通過（非僅 sha256）；**`procthor_dataset` 三個 split 齊全** | 停，補下載 |
+| **G2_pc_sanity** | G-INVALID | 每朵雲 `(10000, 6)`、有限、`pc_norm` 後質心≈0 半徑≈1、非退化；且自取樣雲能在 1,000 資產的探針集中檢索回自己 | 停，修取樣器。**不得放寬門檻** |
+| **G3_object_corpus** | G-INVALID | **物件語料**零洩漏；集合完整性等式；兩個評估協定已定義；quarantine 率 ≤2% | 停，修資料管線 |
+| **G6_stage2_ready** | G-INVALID | `stage2_protocol.status == resolved`（U-08a／U-08b）**且** `scene_splits` 房屋不重疊 | 未決 → `BLOCKED_EVIDENCE`；洩漏 → `FAIL` |
+| **G4_gallery_freeze** | G-CONTAM | 索引維度／數量正確、無 NaN、**目標相似度 == 最大相似度且在 argmax tie set 內** | **不 promote**，staging 作廢重建 |
+| **G7_composition_protocol** | G-INVALID | `composition_protocol.status == resolved`（U-18／U-21）：`G_0` 來源、query list 來源、放置規則、新節點的 `t_i`／物理邊／語意邊 | 未決 → `BLOCKED_EVIDENCE`。Table 1 不受影響 |
+| **G5_report_release** | G-IRREVERSIBLE | 每格有明確判定；gate record 齊全且 `is_terminal`；RA-1/2/3 紀錄齊全；D-1~D-4 已在報告聲明；**`risks_unknowns` 逐項有處置（逐項列舉，不得用區間）** | 停，補齊 |
+
+**G2 為什麼縮小判準。** 舊判準要求自取樣點雲必須與 **ULIP 官方釋出的點雲**一致，
+否則整條線停掉。那在檢驗一個論文從未主張的命題 —— MetaFind 沒說它沿用 ULIP 預取樣的點雲，
+而且 §2.6 的 Stage 1 會 fine-tune point encoder，encoder 本來就能適應我們的取樣。
+「和官方雲不一樣」推不出「復現無效」。這項比較仍有價值，降為 `L2-PC-ULIP-REF` 診斷。
+**它不是因為過不了才被降級 —— 它從來沒跑過**，參考點雲也不在磁碟上；它是因為測錯命題才被降級。
+若日後找到作者明確說 MetaFind 沿用 ULIP 的前處理，它就變回 gate。
 
 **Exit code**：`0` PASS｜`2` FAIL｜`3` BLOCKED_EVIDENCE｜`4` INVALIDATED｜`1` 保留給「檢查腳本自己壞了」
 
@@ -411,27 +448,37 @@ graph TD
   G1 --> n03[n03 sample_pointclouds]:::compute
   G1 --> n04[n04 render_11_views]:::compute
   G1 --> n07[n07 scene_graphs]:::compute
-  n03 --> G2{{G2 pc_distribution<br/>G-INVALID · U-02}}:::gate
+  n03 --> G2{{G2 pc_sanity<br/>G-INVALID}}:::gate
   n04 --> n05[[n05 annotate<br/>Qwen · SG1 · C1]]:::sub
   n07 --> n08[[n08 semantic_edges<br/>Qwen · SG2 · C2]]:::sub
-  G2 --> n09[n09 build_splits]:::compute
+  G2 --> n09[n09 build_splits<br/>Objaverse only]:::compute
   n05 --> n06[n06 encode_text_image<br/>CLIP frozen]:::model
   n06 --> n09
-  n08 --> n09
-  n09 --> G3{{G3 corpus_valid<br/>G-INVALID}}:::gate
+  n07 --> n09c[n09c build_scene_splits<br/>ProcTHOR only]:::compute
+  n08 --> n09c
+  n09 --> G3{{G3 object_corpus<br/>G-INVALID}}:::gate
   G3 --> n10[n10 train_stage1<br/>point_encoder + fusion]:::mutate
+  G3 --> n09b[/n09b resolve_stage2_protocol<br/>HUMAN · U-08a/U-08b/]:::term
+  n09b --> G6{{G6 stage2_ready<br/>G-INVALID}}:::gate
+  n09c --> G6
   n10 --> n11[n11 gallery_staging]:::mutate
   n11 --> G4{{G4 gallery_freeze<br/>G-CONTAM}}:::gate
   G4 --> n12[n12 promote_index]:::mutate
   n10 --> n13[n13 train_stage2<br/>fuser + ESSGNN]:::mutate
+  G6 --> n13
   n13 --> n14[n14 equivariance_probe]:::compute
   n12 --> n15[n15 eval_retrieval<br/>7 modes x 2 protocols]:::compute
   n13 --> n15
+  n12 --> n15b[/n15b resolve_composition_protocol<br/>HUMAN · U-18/U-21/]:::term
+  n15b --> G7{{G7 composition_protocol<br/>G-INVALID}}:::gate
+  G7 --> n15c[n15c prepare_eval_scenes<br/>I-Design x200 · R-01]:::compute
   n12 --> n16[[n16 compose_scenes<br/>SG4 · C3 · needs GLB]]:::sub
   n13 --> n16
+  n15c --> n16
   n16 --> n17[n17 judge_scenes<br/>Qwen]:::model
-  n15 --> n18[[n18 train_ablations<br/>SG3 x8]]:::sub
-  n18 --> n19[n19 eval_ablations]:::compute
+  n15 --> n18[[n18 train_ablations<br/>SG3 · 僅需訓練的變體]]:::sub
+  n18 --> n19[n19 eval_ablations<br/>含 inference-only 那列]:::compute
+  n15c --> n19
   n15 --> n20[n20 aggregate]:::compute
   n17 --> n20
   n19 -.->|extended: all_settled| n20
@@ -441,12 +488,21 @@ graph TD
   G5 --> n22[n22 publish]:::mutate
 
   HALT[FAILED]:::term
+  BLOCK[BLOCKED_EVIDENCE]:::term
   G1 -.->|FAIL| HALT
   G2 -.->|FAIL| HALT
   G3 -.->|FAIL| HALT
   G4 -.->|FAIL 不 promote| HALT
   G5 -.->|FAIL| HALT
+  G6 -.->|未決| BLOCK
+  G7 -.->|未決| BLOCK
 ```
+
+**兩條分支從 G1 之後就分開，直到 Stage 2 才匯流。** Objaverse 分支
+（`n03`/`n04`/`n05`/`n06` → `n09` → `G3` → `n10`）餵 Stage 1；ProcTHOR 分支
+（`n07` → `n08` → `n09c`）餵 Stage 2。先前 `n09` 同時讀兩邊，等於把
+**Qwen 對 ProcTHOR 產語意邊**放進了 Stage 1 的關鍵路徑 —— 而 §2.6 的 Stage 1
+是 Objaverse-LVIS 上的物件級預訓練，完全不需要 ProcTHOR。
 
 ---
 
@@ -461,20 +517,29 @@ graph TD
 | 5 | | **G2** | — |
 | 6 | `n05` ∥ `n08`（Qwen 推論） | | 1–2 天 |
 | 7 | `n06` | | 2–4 h |
-| 8 | `n09` | | <1 h |
+| 8 | `n09` ∥ **`n09c`** | | <1 h |
 | 9 | | **G3** | — |
 | 10 | `n10_train_stage1` | | **數小時–1 天**（比先前的草稿久，因為要訓 point encoder） |
+| 10b | `n09b`（人決定） | **G6** | 未決則 Stage 2 停在這裡 |
 | 11 | `n11` ∥ `n13` | | 3–8 h |
 | 12 | | **G4** | — |
 | 13 | `n12` ∥ `n14` | | <1 h |
+| 13b | `n15b`（人決定） | **G7** | 未決則 Table 2 停在這裡 |
+| 13c | `n15c`（I-Design ×200） | | 1–3 h，**R-01 未驗證** |
 | 14 | `n15` ∥ `n16` | | 6–17 h |
 | 15 | `n17` | | 2–4 h |
-| 16 | `n18` → `n19` | | 6–12 h |
-| 17 | `n20` → `n21` | | <1 h |
-| 18 | | **G5** | — |
-| 19 | `n22` | | <1 h |
+| 16 | `n18` | | 6–12 h |
+| 17 | `n19` | | 3–8 h |
+| 18 | `n20` | | <1 h |
+| 19 | `n21` | | <1 h |
+| 20 | | **G5** | — |
+| 21 | `n22` | | <1 h |
 
 **關鍵路徑**：Layer 2（GLB 下載）與 Layer 6（Qwen 標註 46,052 資產）。
+
+> **先前的草稿把 `n20` 與 `n21` 排在同一層平行執行**，但 dependency 明寫
+> `n21 depends_on n20` —— 不可能平行。`tools/check_graph.py` 現在會用
+> execution order 對照 dependency DAG，這類錯誤不再靠讀。
 
 ---
 
@@ -482,24 +547,58 @@ graph TD
 
 | id | 標記 | 內容 | 如何解除 |
 |---|---|---|---|
+> 這張表是 **UNKNOWN 登記表**，`G5_report_release` 逐項檢查是否都有處置。
+> **不得用區間表示**（先前寫成 `U-01..U-10`，於是 U-11 之後全部可以漏掉而 G5 照樣過）。
+> 機器可讀版本在 `graph_spec.yaml` 的 `risks_unknowns`，兩者由 `tools/check_graph.py` 對齊。
+
+| id | 標記 | 內容 | 如何解除 |
+|---|---|---|---|
 | **U-01** | UNKNOWN | 資產數：論文「約 48,000」vs manifest 46,052 | 用 `len(manifest)`，報告記錄 sha256 |
-| **U-02** | UNKNOWN | 自行取樣點雲與 ULIP-2 訓練分布是否一致 | **G2 擋住，必須先驗證** |
+| **U-02** | UNKNOWN | 自行取樣點雲與 ULIP 官方點雲是否一致 | **降為 L2-PC-ULIP-REF 診斷**（見 §11 G2） |
 | **U-03** | UNKNOWN | 11 視角的相機擺位 | 預設 Fibonacci，記錄選擇 |
+| **U-03a** | UNKNOWN | 11 視角用正交投影還是透視投影。論文只寫 "orthogonal viewpoints"，而 ℝ³ 裡不存在 11 個互相正交的方向 | 兩種都保留，記錄選擇 |
 | **U-04** | UNKNOWN | 渲染解析度 | 224px 對齊 ULIP-2 慣例 |
 | **U-05** | UNKNOWN | adjacency 判準 | 預設 kNN k=8，參數記入產物 |
-| **U-06** | UNKNOWN | 語意邊要對哪些物件對 | 選一個並記錄；列入報告未定項 |
+| **U-06** | UNKNOWN | 語意邊要對哪些物件對；`e_ij` 的寬度 | 選一個並記錄；列入報告未定項 |
 | **U-07** | UNKNOWN | ProcTHOR 官方 split vs 論文 80/20 | 主線用論文 80/20，兩者都記錄 |
 | **U-08** | UNKNOWN | **Stage 2 訓練樣本如何建構** | 論文完全未定義；明列我們採用的協定 |
-| **U-09** | UNKNOWN | Table 1 的 gallery 範圍 | **兩個協定都跑、都報** |
+| **U-08a** | **UNKNOWN・阻斷** | **Stage 2 的正樣本是哪一個 gallery 條目**。實測 ProcTHOR assetId 與 Objaverse uid **交集為 0**（995 vs 46,052） | `n09b` 決定，`G6` 強制 |
+| **U-08b** | **UNKNOWN・阻斷** | ProcTHOR 目標物件的 text / image / point cloud 從哪來 | 同上，Eq.6 的三個模態沒有來源 |
+| **U-09** | UNKNOWN | Table 1 的 gallery 範圍**以及 query 範圍**。§3.1 只寫 80/20，從未說 query 就是那 20% | gallery 兩個協定都跑；query=test **列為假設** |
 | **U-10** | UNKNOWN | Table 2 的 Scene Coherence 對應 IDesign 哪個面向 | 記錄對應假設 |
-| **U-08a** | **UNKNOWN・阻斷** | **Stage 2 的正樣本是哪一個 gallery 條目**。實測 ProcTHOR assetId 與 Objaverse uid **交集為 0**（995 vs 46,052），論文完全沒有提及這個對應 | 必須先決定並記入 `stage2_pairing`，否則 Eq.7a/7b 無正樣本 |
-| **U-08b** | **UNKNOWN・阻斷** | ProcTHOR 目標物件的 text / image / point cloud 從哪來。ProcTHOR 只提供 metadata 與座標，沒有渲染圖也沒有點雲 | 同上，Eq.6 的三個模態沒有來源 |
-| **U-11** | UNKNOWN | 缺席模態怎麼表示。論文只排除 zero-padding，沒說是 learned mask token 還是 fusion 層遮罩 | 記錄我們的選擇 |
+| **U-11** | UNKNOWN | 缺席模態怎麼表示。論文只排除 zero-padding | 記錄我們的選擇 |
 | **U-12** | UNKNOWN | ProcTHOR metadata 怎麼變成 `t_i` 的句子 | 記錄我們的做法 |
-| **U-03a** | UNKNOWN | 11 視角用正交投影還是透視投影。論文只寫 "orthogonal viewpoints"，沒指定投影方式 | 兩種都保留，記錄選擇 |
+| **U-13** | UNKNOWN | **Full model 用哪一種 fusion**。§2.4 列了五種、沒說是哪個。Table 3 排除 Mean(9.4) 與 MLPs(9.9)；`Padding with 0`(10.5) 與 §3.4「Masked modality fusion outperformed zero-padding」顯示 Full 會遮罩 → 剩 masked MLP / gated / Transformer | 主線 `masked_mlp`（程式現行預設），另兩種可選並列為對照 |
+| **U-14** | UNKNOWN | **11 張渲染圖怎麼變成一個 `e_image`**。§2.3 只說 render 11 views | 記錄選擇；影響 Table 1 七個條件中的四個 |
+| **U-15** | UNKNOWN | **結構化標註怎麼序列化成 text encoder 的輸入字串**。§2.3 只給欄位，沒給格式 | 釘住模板，加 golden-string 測試 |
+| **U-16** | UNKNOWN | **query / gallery 兩塔是否共享權重**。§2.4 說 "a dedicated query encoder"、§2.6 說兩者都訓練，但沒說共享關係 | 記錄選擇 |
+| **U-17** | UNKNOWN | **`d_ij` 還是 `d_ij²`**。§2.5 寫 `d_ij = ‖x_i − x_j‖₂`，Appendix C (10)–(12) 用 `‖·‖²`，原始 EGNN 也是平方 | 實作用平方（`essgnn.py` 的 `radial`）；兩者都 SE(3) 不變，不破壞證明，記錄為選擇 |
+| **U-18** | **UNKNOWN・阻斷** | **Algorithm 1 第 7 行「放進場景、更新圖」到底產生什麼**。下一輪就要 `ESSGNN(G)`，需要新節點的 `t_i`、位置、朝向、尺度、物理邊、語意邊 —— 全部未定義 | `n15b` 決定，`G7` 強制 |
+| **U-19** | UNKNOWN | **邊的方向性**。§2.3 只說有 physical / semantic 兩種邊，沒說有向或無向，也沒說 relation(A,B) 是否等於 relation(B,A) | 記錄慣例；`L1-SCENE-SUPPORT` 的雙向是**我們的**慣例 |
+| **U-20** | UNKNOWN | **`t_i` 由哪個 encoder 產生**。§2.5 只寫 `t_i ∈ ℝ^d`。「frozen text encoder (e.g. CLIP or BERT)」講的是**語意邊**，不是 `t_i`，也沒說兩者同一個 | 記錄選擇與 `d` |
+| **U-21** | **UNKNOWN・阻斷** | **Algorithm 1 的 `G_0` 與 `{Q_1..Q_N}` 從哪來**。§3.3 說 200 個場景來自 I-Design，但 graph 原本沒有這條 channel，`n16` 讀的是 ProcTHOR 房屋 | `n15b` → `G7` → `n15c` |
+| **U-22** | UNKNOWN | **訓練超參數論文一個都沒給** | 見下方「未公佈的訓練超參數」表 |
+| **U-23** | UNKNOWN | 三個模態同時被遮罩時代表什麼。§2.6 是**獨立** 30%，所以 2.7% 的 query 完全沒有資訊，Eq.5 仍要它去對上 gallery 條目 | 實作照字面（`allow_empty=True`），另有旗標可強制至少留一個模態 |
+| **U-24** | UNKNOWN | `sim(·,·)` 的定義。Eq.5 與 Eq.7a/7b 都只寫 `sim`，從未定義 | 用 cosine（CLIP／ULIP 慣例），記錄為選擇 |
 | **R-01** | RISK | **I-Design 尚未驗證能否執行** | Table 2/3 全靠它，**查它很便宜，應盡早做** |
 | **R-02** | RISK | 單卡 24GB 限制訓練範圍 | D-1 已聲明 |
 | **R-03** | RISK | Qwen 標註品質未知 | pilot 後人工抽查 |
+
+### 未公佈的訓練超參數（U-22）
+
+論文**一個數字都沒給**。以下每一項都是我們的選擇，報告中必須如此陳述 ——
+否則最後對不上時，無法分辨是模型沒復現，還是 recipe 不同。
+
+| 項目 | 論文 | 我們 |
+|---|---|---|
+| optimizer / learning rate / scheduler / weight decay | 未提 | 待定，記錄實際值 |
+| batch size | 未提 | 受 24GB 限制；**直接影響 Eq.5 的 in-batch negatives**，必須報告 |
+| epochs / gradient accumulation | 未提 | 待定 |
+| `τ`（Eq.5、Eq.7a/7b）初值與是否可學 | 只說 "a temperature hyperparameter" | 待定 |
+| `λ`（Eq.6）初值 | 只說 learnable scalar | 待定 |
+| ESSGNN 層數 `L` | 只寫 "After $L$ layers" | 超參數，不是論文真值 |
+| ESSGNN hidden 寬度、pooling 種類 | 未提 | 同上 |
+| embedding 寬度 | **全文無任何維度數字** | 由 checkpoint 推導 |
 
 ---
 
@@ -533,3 +632,43 @@ graph TD
 | 19 | 「正規化座標會破壞等變性」 | 數學上不對。改成：**為忠實保留論文的 unnormalized 設定**而不做置中 | 🟠 |
 | 20 | SC-1 用 ±3pp 當門檻 | Qwen 也換掉了 46,052 筆標註（文字塔的訓練資料），Table 1 同樣受影響 → 改為如實報告差距 | 🟠 |
 | 21 | `00_FINDINGS` 寫「以論文的 L=4」 | 論文只寫 "After $L$ layers"，沒給值 | 🟠 |
+
+### 2026-08-15 第三輪（外部審查後）
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 22 | **ProcTHOR 沒有進 graph state** —— G1 的判準文字說要檢查 ProcTHOR，但它的 `reads` 裡沒有任何 ProcTHOR channel。Objaverse 齊全、ProcTHOR 完全不存在時 G1 會 **PASS** | 新增 `procthor_dataset` channel，接上 `n02 → G1 → n07 → n09c` | 🔴 **假 gate** |
+| 23 | `stage2_pairing` 由 `n09` 以 `write_once` 寫入，但 U-08a 還沒答案 —— 寫空值會把 channel 永遠鎖死 | 拆成可改的 `stage2_protocol` 與定案後的 `stage2_pairing`；移到 `n09b` + `G6` | 🔴 **自我鎖死** |
+
+### 2026-08-15 第四輪（外部審查後，逐項重讀論文）
+
+前三輪處理的是「寫錯」與「內部不一致」；這一輪處理的是
+**「論文其實沒說、但我們已經默默選了」** —— 這類問題不會讓任何檢查變紅。
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 24 | **Full model 用哪一種 fusion 從未登記** —— §2.4 列五種、沒說是哪個，而程式已預設 `masked_mlp` | 新增 **U-13**，附 Table 3 能排除到什麼程度（剩 masked MLP / gated / Transformer） | 🔴 **改變 Table 1 全部** |
+| 25 | **11 張渲染圖怎麼變成一個 `e_image` 完全沒定義**，但 state schema 已直接假設 `image: 1280-d` | 新增 **U-14** 與 `L1-IMAGE-AGGREGATION`（訓練與評估必須用同一規則） | 🔴 **改變 Table 1 四欄** |
+| 26 | **結構化標註怎麼序列化成字串沒定義** | 新增 **U-15** 與 `L1-TEXT-SERIALIZATION`（golden-string） | 🔴 **改變 Table 1 四欄** |
+| 27 | 標註 schema 的「四欄必填 / 封閉詞彙表 / 公尺」被寫成論文要求，但原文是 "attributes **such as**" | 改標為**實作契約**，保留規定但不再宣稱是論文要求 | 🟠 |
+| 28 | **query / gallery 兩塔是否共享權重沒鎖** | 新增 **U-16** | 🔴 |
+| 29 | **`d_ij` vs `d_ij²`**：§2.5 寫 `‖·‖₂`，Appendix C (10)–(12) 用 `‖·‖²` | 新增 **U-17**。**不設 RA** —— 兩者都不變、都不破壞證明，但數值不同 | 🟠 |
+| 30 | **Table 2 的資料流從未閉合** —— §3.3 說 200 個場景來自 I-Design，`n16` 卻讀 ProcTHOR 房屋（房屋是完成的佈局，不是生成請求），graph 裡沒有 I-Design 的 channel | 新增 `composition_protocol` / `idesign_scenes` channel、`n15b`（human）、**`G7`**、`n15c` | 🔴 **Table 2 建不起來** |
+| 31 | **Algorithm 1 第 7 行「放進場景、更新圖」沒有定義**，但下一輪立刻要 `ESSGNN(G)`，需要新節點的 `t_i`／位置／朝向／尺度／物理邊／語意邊 | 新增 **U-18**（阻斷），由 `G7` 擋 | 🔴 |
+| 32 | U-09 只涵蓋 gallery 範圍，但 §3.1 也沒說 **query 就是那 20%** | U-09 擴大涵蓋 query set，`query=test` 明列為假設 | 🟠 |
+| 33 | `n18_train_ablations` 宣稱訓練「八個變體」，但 `w/o iterative retrieval` 是**推論期**策略（§2.7），不是另一個模型 | `variant_registry` 新增 `requires_training` / `reuses_ckpt`；由 `n19` 直接評估；`L1-ABLATION-INFERENCE-ONLY` 釘住 | 🔴 **會比較到兩個不同的 checkpoint** |
+| 34 | `n18` 只讀四條 channel，但 `n13` 做同一件事要十一條 —— 這份 dependency contract **不可能被滿足** | 補齊 reads | 🔴 |
+| 35 | §2.6 的「Only the query-side fuser and the ESSGNN module are updated」只驗了 gallery 側；**query 的 PointBERT 在 Stage 1 被訓練過，進 Stage 2 時 `requires_grad` 本來就是 True** | 新增 `L1-STAGE2-QUERY-ENCODERS-FROZEN` | 🔴 |
+| 36 | `00_FINDINGS` 有**自己的一套 `U-01`…`U-05`／`U-06`／`U-15`**，與 §15 登記表**同編號不同意義**；還保留已知錯誤的「用 PC-Only 反推分母」與已不存在的 `G2_corpus_validity` | 整節標為 `SUPERSEDED` 並刪除編號；`tools/check_graph.py` 現在檢查沒有任何文件引用登記表以外的 `U-nn` | 🔴 **搜尋關鍵字會撈到相反的答案** |
+| 37 | §11 仍寫「5 個 gate」，mermaid 與執行順序表都沒有 `n09b`／`G6` —— 同一份文件自相矛盾 | 全部同步；`check_graph.py` 檢查 gate 數與 gate 名稱的一致性 | 🟠 |
+| 38 | `02_BUILD_STEPS` 把「GLB 不刪」編成 D-1、把 ViT-bigG 凍結編成 D-3，與 README／`graph_spec.yaml` **錯位** | 統一為 D-1…D-4；「保留 GLB」與「不 fallback caption」**不是偏離**，移出清單 | 🟠 **deviation traceability** |
+| 39 | `execution_order` 把 `n20` 與 `n21` 排在同一層平行，但 dependency 明寫 `n21 depends_on n20` | 拆層；`check_graph.py` 用 dependency DAG 對照 execution order | 🟠 |
+| 40 | **Stage 1 被 ProcTHOR 不必要地阻塞** —— `n09` 同時讀兩邊，於是 Qwen 對 ProcTHOR 產語意邊進了 Stage 1 的關鍵路徑，而 §2.6 的 Stage 1 完全不需要 ProcTHOR | 拆成 `n09`（Objaverse）與 `n09c`（ProcTHOR）；`G3` 縮成 `G3_object_corpus`；場景語料併入 `G6_stage2_ready` | 🟠 **不必要的耦合** |
+| 41 | `G5` 的判準寫成 `U-01..U-10` —— **區間**表示法讓 U-11 之後可以漏掉而 G5 照樣過 | 改為逐項列舉 `risks_unknowns` | 🟠 |
+| 42 | `G2` 把「與 ULIP 官方點雲一致」當成 **G-INVALID**，但論文從未說 MetaFind 沿用 ULIP 的點雲，而 Stage 1 會 fine-tune point encoder | 縮為 `G2_pc_sanity`（結構有效性）；ULIP 比較降為 `L2-PC-ULIP-REF` 診斷。**它從來沒跑過，不是因為過不了才降級** | 🟠 |
+| 43 | `recall@1 == 1.0` 不是 tie-safe —— 兩個相同 embedding 會讓 argmax 回傳另一個 id | 改為「目標相似度 == 最大相似度，且目標在 argmax tie set 內」 | 🟠 |
+| 44 | SC-8 要求中斷重跑產物 **byte-identical**，但 NS-4／NS-5 已聲明 GPU atomics 與訓練隨機性不可移除、不宣稱精確重現 | byte-identical 只適用**前處理產物**；訓練改為 optimizer／RNG 狀態續跑 | 🟠 **自相矛盾** |
+| 45 | **邊的方向性從未登記**，但 `L1-SCENE-SUPPORT` 已斷言「雙向 support 邊」 | 新增 **U-19**；測試保留但改標為我們的慣例 | 🟠 |
+| 46 | **`t_i` 由哪個 encoder 產生沒鎖** —— 論文那句 "frozen text encoder (e.g. CLIP or BERT)" 講的是**語意邊**，不是 `t_i` | 新增 **U-20** | 🟠 |
+| 47 | **訓練超參數論文一個都沒給**，但只有零星記在各處 | 新增 **U-22** 與 §15 的超參數表 | 🟠 **對不上時分不出原因** |
+| 48 | 文件之間的數字（channel／node／edge／L1／L2／gate）靠人工同步 | 新增 [`tools/check_graph.py`](../../tools/check_graph.py)，1,005 項結構檢查，含 gate 判準與 `reads` 的一致性、UNKNOWN 編號跨文件唯一性、execution order 對照 dependency | — |

@@ -14,11 +14,11 @@ spec_version: "1.0"
 graph_id: "metafind-reproduction"
 
 mutate_ordering_proof:
-  - {node: n10_train_stage1, after_gates: [G1_sources_valid, G2_pc_distribution, G3_corpus_valid], why: "GPU spend gated by corpus validity; training on leaked splits is wasted"}
-  - {node: n11_gallery_index_staging, after_gates: [G3_corpus_valid], why: "writes only to a staging path; the shared artifact is written by n12"}
+  - {node: n10_train_stage1, after_gates: [G1_sources_valid, G2_pc_sanity, G3_object_corpus], why: "GPU spend gated by corpus validity; training on leaked splits is wasted"}
+  - {node: n11_gallery_index_staging, after_gates: [G3_object_corpus], why: "writes only to a staging path; the shared artifact is written by n12"}
   - {node: n12_promote_index, after_gates: [G4_gallery_freeze], why: "G-CONTAM. This is the late-commit point for the shared gallery index."}
-  - {node: n13_train_stage2, after_gates: [G3_corpus_valid, G6_stage2_protocol], why: "Stage 2 has no positive until the protocol is resolved"}
-  - {node: n22_publish_report, after_gates: [G1_sources_valid, G2_pc_distribution, G3_corpus_valid, G4_gallery_freeze, G6_stage2_protocol, G5_report_release], why: "G-IRREVERSIBLE. Publication cannot be undone."}
+  - {node: n13_train_stage2, after_gates: [G3_object_corpus, G6_stage2_ready], why: "Stage 2 has no positive until the protocol is resolved, and no corpus until scene_splits exists"}
+  - {node: n22_publish_report, after_gates: [G1_sources_valid, G2_pc_sanity, G3_object_corpus, G4_gallery_freeze, G6_stage2_ready, G5_report_release], why: "G-IRREVERSIBLE. Publication cannot be undone."}
 
 nodes:
 
@@ -120,13 +120,16 @@ nodes:
       partial_failure_semantics: proceed_with_admitted
       rollback: quarantine_forward
     notes: >
-      [UNKNOWN U-02] The ULIP-2 checkpoint was trained on point clouds sampled
-      by ULIP's own pipeline. Sampling differently shifts every embedding
-      off-distribution with no error raised. G2 blocks on measuring this.
+      [UNKNOWN U-02] The ULIP-2 checkpoint was trained on point clouds sampled by
+      ULIP's own pipeline, so sampling differently shifts every embedding with no
+      error raised. Measured by L2-PC-ULIP-REF and reported. It does not gate:
+      the paper never says MetaFind reuses ULIP's clouds, and Stage 1 trains the
+      point encoder anyway. G2_pc_sanity gates the part that genuinely
+      invalidates -- malformed or degenerate clouds.
 
-  - id: G2_pc_distribution
+  - id: G2_pc_sanity
     role: evaluate
-    purpose: "Prove self-sampled clouds encode like ULIP's released ones."
+    purpose: "Refuse to train on malformed, degenerate or wrongly normalised point clouds."
     decomposition_rationale: [N5_gate_point]
     reads: [pointclouds]
     writes: [gate_records, run_progress]
@@ -136,14 +139,24 @@ nodes:
     idempotency_mechanism: natural
     failure:
       classes: [CONTRACT_VIOLATION]
-      policies: [{class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, record_fields: [agreement, baseline]}]
+      policies: [{class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, record_fields: [shape, centroid, max_radius, min_axis_var, self_retrieval_rank]}]
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
-      Held-out reference: 500 of ULIP's released clouds. Compares the cosine
-      between "ULIP's cloud" and "our cloud" for the same asset against the
-      cross-asset baseline. On failure the sampler is fixed, or ULIP's 185 GB is
-      downloaded. The threshold is never relaxed to make it pass.
+      [NARROWED, and the reason matters] This gate used to require our clouds to
+      match ULIP's RELEASED clouds through the same encoder, failing the run
+      otherwise. That tested a proposition the paper never makes: nothing in
+      MetaFind says it reuses ULIP's pre-sampled clouds, and Stage 1 fine-tunes
+      the point encoder (paper 2.6), so the encoder can adapt to our sampling.
+      "Differs from ULIP's cloud" does not imply "reproduction invalid".
+      What remains is genuinely an invalidity condition: shape, finiteness,
+      pc_norm (centroid at origin, max radius 1), non-degeneracy, and that a
+      sampled cloud retrieves its own asset well above chance. The ULIP
+      comparison survives as L2-PC-ULIP-REF, a diagnostic.
+      It is NOT demoted because it was failing -- it has never been run and the
+      reference clouds are not on disk. It is demoted because it tested the wrong
+      claim. If the authors are found to say MetaFind reuses ULIP's
+      preprocessing, it becomes a gate again.
 
   - id: n04_render_views
     role: compute
@@ -295,14 +308,14 @@ nodes:
 
   - id: n09_build_splits
     role: compute
-    purpose: "Fix the 80/20 partitions and define both evaluation protocols."
+    purpose: "Fix the object-level 80/20 partition and define both evaluation protocols."
     decomposition_rationale: [N5_gate_point, N3_checkpoint_needed]
-    reads: [asset_manifest, procthor_dataset, pointclouds, text_image_embeddings, sem_edge_cache, scene_graphs, procthor_object_text]
+    reads: [asset_manifest, pointclouds, text_image_embeddings]
     writes: [splits, split_seed, eval_protocols, run_progress]
-    precondition: "all upstream preparation complete (join = all)"
+    precondition: "Objaverse preparation complete (join = all)"
     postcondition: >
-      Object and house splits are disjoint at their own level; both evaluation
-      protocols are defined with explicit gallery sizes.
+      Object train/test are disjoint; both evaluation protocols are defined with
+      explicit query and gallery scopes.
     deterministic: true
     idempotent: true
     idempotency_mechanism: natural
@@ -312,15 +325,20 @@ nodes:
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
-      [PAPER 3.1] 80/20. House sets must be disjoint. An earlier draft additionally forbade an
-      asset appearing in both a train and a test house; the paper does not ask
-      for it, and ProcTHOR's 12,000 houses draw on ~1,467 assets, so enforcing it
-      would change the scene distribution. Removed.
-      [UNKNOWN U-07] ProcTHOR also ships its own 10k/1k/1k split.
+      [PAPER 3.1] 80/20.
+      [DECOUPLED] Objaverse only. An earlier draft also read scene_graphs,
+      procthor_object_text and sem_edge_cache to build the house split here,
+      which put Qwen semantic-edge generation over ProcTHOR on the critical path
+      to Stage 1. Stage 1 is object-level pretraining on Objaverse-LVIS
+      (paper 2.6) and needs no ProcTHOR data at all, so a fault anywhere in the
+      ProcTHOR branch used to stop training that does not depend on it. House
+      splits moved to n09c_build_scene_splits.
+      [UNKNOWN U-09] query=test is our assumption; paper 3.1 states only the
+      80/20 allocation.
 
-  - id: G3_corpus_valid
+  - id: G3_object_corpus
     role: evaluate
-    purpose: "Refuse to train on a leaked or incomplete corpus."
+    purpose: "Refuse to run Stage 1 on a leaked or incomplete object corpus."
     decomposition_rationale: [N5_gate_point]
     reads: [splits, eval_protocols, asset_manifest, quarantine]
     writes: [gate_records, run_progress]
@@ -333,6 +351,35 @@ nodes:
       policies: [{class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, record_fields: [criterion, observed]}]
       partial_failure_semantics: halt
       rollback: N/A
+    notes: >
+      [RENAMED from G3_object_corpus] The old name promised more than the gate
+      checked. Scene-corpus validity is now checked by G6_stage2_ready, which
+      guards the spend that actually depends on it.
+
+  - id: n09c_build_scene_splits
+    role: compute
+    purpose: "Fix the ProcTHOR house 80/20 partition."
+    decomposition_rationale: [N5_gate_point, N1_distinct_failure_mode]
+    reads: [procthor_dataset, scene_graphs, procthor_object_text, sem_edge_cache]
+    writes: [scene_splits, run_progress]
+    precondition: "ProcTHOR preparation complete (join = all)"
+    postcondition: "train_houses and test_houses are disjoint"
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: natural
+    failure:
+      classes: [CONTRACT_VIOLATION]
+      policies: [{class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, record_fields: [leaked_ids, leak_type]}]
+      partial_failure_semantics: halt
+      rollback: N/A
+    notes: >
+      [PAPER 3.1] Same 80/20 statement, applied to houses. An earlier draft also
+      forbade an asset appearing in both a train and a test house; the paper does
+      not ask for it, and ProcTHOR's 12,000 houses draw on ~1,467 assets, so
+      enforcing it would change the scene distribution. Removed.
+      [UNKNOWN U-07] ProcTHOR also ships its own 10k/1k/1k split.
+      This node exists so that the ProcTHOR branch can fail without stopping
+      Stage 1.
 
   - id: n09b_resolve_stage2_protocol
     role: human
@@ -340,7 +387,7 @@ nodes:
     decomposition_rationale: [N5_gate_point, N1_distinct_failure_mode]
     reads: [scene_graphs, asset_manifest, procthor_object_text, objaverse_annotations]
     writes: [stage2_protocol, stage2_pairing, run_progress]
-    precondition: "G3 verdict == PASS"
+    precondition: "G3_object_corpus verdict == PASS"
     postcondition: >
       stage2_protocol.status == resolved, naming both the pairing method and the
       modality source; stage2_pairing populated accordingly.
@@ -367,11 +414,11 @@ nodes:
       Both are decisions, not derivations, so a person makes them and they are
       reported as choices.
 
-  - id: G6_stage2_protocol
+  - id: G6_stage2_ready
     role: evaluate
-    purpose: "Refuse to train Stage 2 until its positive and its modalities are defined."
+    purpose: "Refuse to train Stage 2 until its positive, its modalities and its scene corpus are all in place."
     decomposition_rationale: [N5_gate_point]
-    reads: [stage2_protocol, stage2_pairing]
+    reads: [stage2_protocol, stage2_pairing, scene_splits]
     writes: [gate_records, run_progress]
     postcondition: "gate_record with is_terminal=true"
     deterministic: true
@@ -383,9 +430,16 @@ nodes:
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
-      Unresolved is BLOCKED_EVIDENCE (rc=3), not FAIL: nothing is broken, a
-      decision is simply outstanding. Everything upstream of Stage 2 keeps
-      running.
+      Two distinct failure modes, deliberately in one gate because they guard
+      the same spend:
+        stage2_protocol.status != resolved  -> BLOCKED_EVIDENCE (rc=3). Nothing
+          is broken; a decision is simply outstanding, and everything upstream
+          keeps running.
+        scene_splits leaked or absent       -> FAIL (rc=2). Something is wrong
+          and must be fixed.
+      [WIDENED from G6_stage2_ready] Scene-corpus validity used to sit inside
+      G3, which forced Stage 1 to wait on the ProcTHOR branch. It belongs here,
+      in front of the spend that actually needs it.
 
 # ============================================================ PHASE 2
   - id: n10_train_stage1
@@ -495,9 +549,9 @@ nodes:
     decomposition_rationale: [N3_checkpoint_needed, N6_side_effects, N8_reusable]
     reads: [stage1_ckpt, scene_graphs, sem_edge_cache, procthor_object_text,
             stage2_protocol, stage2_pairing, pointclouds, text_image_embeddings,
-            splits, split_seed, variant_registry]
+            splits, scene_splits, split_seed, variant_registry]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger, degraded_flags]
-    precondition: "G3 verdict == PASS; stage1_ckpt exists; G6 verdict == PASS (stage2_protocol.status == resolved)"
+    precondition: "G3_object_corpus verdict == PASS; stage1_ckpt exists; G6_stage2_ready verdict == PASS (stage2_protocol.status == resolved AND scene_splits valid)"
     postcondition: >
       Both headline variants trained; lambda is a learnable scalar with gradient;
       the gallery tower received no gradient.
@@ -527,6 +581,12 @@ nodes:
       a ProcTHOR room: which object is the target, what the partial scene is, how
       many samples per room, how negatives are drawn. Our protocol is stated in
       02_BUILD_STEPS and must be reported as a choice, not a requirement.
+      [PAPER 2.6 -- freeze scope] "Only the query-side fuser and the ESSGNN
+      module are updated". That excludes the query-side TEXT, IMAGE and POINT
+      encoders as well as the whole gallery tower. An earlier draft validated
+      only the gallery side, so a gradient leaking into the query PointBERT --
+      which Stage 1 does train, so it is not frozen by default -- would have gone
+      unnoticed. Enforced by L1-STAGE2-QUERY-ENCODERS-FROZEN.
 
   - id: n14_equivariance_probe
     role: evaluate
@@ -585,11 +645,95 @@ nodes:
       denominator from the baselines' 98-99% PC-Only figure cannot work, since
       self-retrieval approaches 100% at either size.
 
+  - id: n15b_resolve_composition_protocol
+    role: human
+    purpose: "Decide where Algorithm 1's G_0 and query list come from, and what placing an asset does to the graph."
+    decomposition_rationale: [N5_gate_point, N1_distinct_failure_mode]
+    reads: [scene_graphs, gallery_index, stage2_protocol]
+    writes: [composition_protocol, run_progress]
+    precondition: "gallery_index promoted"
+    postcondition: >
+      composition_protocol.status == resolved, naming g0_source, query_list_source,
+      placement_rule, and how a newly placed node acquires t_i, physical edges and
+      semantic edges.
+    deterministic: false
+    idempotent: false
+    idempotency_mechanism: N/A
+    idempotency_note: "A human decision, recorded once."
+    failure:
+      classes: [HUMAN_RECOVERABLE]
+      policies:
+        - {class: HUMAN_RECOVERABLE, action: interrupt, max_attempts: 3, backoff: fixed, on_exhausted: HALT_BLOCKED, record_fields: [status, g0_source, placement_rule]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    notes: >
+      [U-21 -- BLOCKING] Paper 3.3 evaluates "on the scene generation pipeline of
+      I-Design on a set of 200 randomly sampled scenes". An earlier draft had n16
+      read `scene_graphs`, which holds ProcTHOR houses. A ProcTHOR house is a
+      finished layout; Algorithm 1 needs a generation request. The Table 2
+      dataflow was therefore never closed, and no gate noticed because no channel
+      for I-Design output existed.
+      [U-18 -- BLOCKING] Algorithm 1 line 7 says only "Place A*_i into the scene,
+      update scene graph". Line 3 of the next iteration calls ESSGNN(G). For that
+      to be defined, the placed node needs t_i, a position, an orientation, a
+      scale, physical edges and semantic edges. The paper specifies none of it,
+      and the choice changes every subsequent retrieval in the sequence.
+      Same discipline as n09b: the decision is a person's, held in a mutable
+      channel until made, then committed.
+
+  - id: G7_composition_protocol
+    role: evaluate
+    purpose: "Refuse to compose scenes until the composition protocol and its evaluation input are defined."
+    decomposition_rationale: [N5_gate_point]
+    reads: [composition_protocol]
+    writes: [gate_records, run_progress]
+    postcondition: "gate_record with is_terminal=true"
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: natural
+    failure:
+      classes: [CONTRACT_VIOLATION]
+      policies: [{class: CONTRACT_VIOLATION, action: fail_closed, max_attempts: 1, record_fields: [status, missing_fields]}]
+      partial_failure_semantics: halt
+      rollback: N/A
+    notes: >
+      Unresolved is BLOCKED_EVIDENCE (rc=3), not FAIL. Table 1 does not depend on
+      this gate and continues regardless; only Table 2 and Table 3's two scene
+      columns wait.
+
+  - id: n15c_prepare_eval_scenes
+    role: compute
+    purpose: "Produce the 200 evaluation scenes: initial graph plus asset query list."
+    decomposition_rationale: [N1_distinct_failure_mode, N3_checkpoint_needed]
+    reads: [composition_protocol]
+    writes: [idesign_scenes, run_progress, cost_ledger, degraded_flags]
+    precondition: "G7_composition_protocol verdict == PASS"
+    postcondition: "200 scenes, each with a G_0 and a non-empty query list, recorded with the generator revision"
+    deterministic: false
+    idempotent: true
+    idempotency_mechanism: read_before_write
+    failure:
+      classes: [DETERMINISTIC_INPUT, RESOURCE, TRANSIENT]
+      policies:
+        - {class: DETERMINISTIC_INPUT, action: fail_closed, max_attempts: 1, record_fields: [idesign_available, traceback], note: "R-01: if I-Design cannot run at all, Tables 2/3 become BLOCKED_EVIDENCE, not FAIL."}
+        - {class: RESOURCE, action: degrade, max_attempts: 2, backoff: fixed, on_exhausted: HALT_BLOCKED}
+        - {class: TRANSIENT, action: retry, max_attempts: 3, backoff: exponential_jitter, on_exhausted: quarantine}
+      partial_failure_semantics: halt
+      partial_failure_note: "Fewer than 200 scenes changes the comparison to the paper and must be declared, not silently averaged."
+      rollback: N/A
+    notes: >
+      [PAPER 3.3] "200 randomly sampled scenes".
+      [R-01 -- UNRESOLVED] I-Design has not been verified to run in this
+      environment. This is the cheapest thing on the critical path to check and
+      the most expensive to discover late: all four Table 2 columns and both of
+      Table 3's scene columns come through here. ProcTHOR houses are not a
+      substitute -- they are layouts, not generation requests.
+
   - id: n16_compose_scenes
     role: subgraph
     purpose: "Algorithm 1: retrieve and place one object at a time."
     decomposition_rationale: [N7_parallelizable, N8_reusable, N3_checkpoint_needed]
-    reads: [gallery_index, variant_ckpts, scene_graphs, asset_glb]
+    reads: [gallery_index, variant_ckpts, asset_glb, composition_protocol, idesign_scenes]
     writes: [composed_scenes, composition_incomplete, retrieval_trace, run_progress, degraded_flags]
     postcondition: "Each (variant, scene) yields either a complete scene or an entry in composition_incomplete -- never both, never neither"
     deterministic: false
@@ -610,6 +754,9 @@ nodes:
       O4: retrieval_trace records top-5 candidates, scores, the chosen id and
       lambda*||e_layout|| at every step -- without the last, an incoherent scene
       cannot be explained.
+      [CORRECTED] Reads idesign_scenes, not scene_graphs. ProcTHOR houses are
+      finished layouts and cannot serve as Algorithm 1's G_0; paper 3.3 sources
+      the 200 scenes from I-Design. See U-21.
 
   - id: n17_judge_scenes
     role: model
@@ -640,11 +787,13 @@ nodes:
 
   - id: n18_train_ablations
     role: subgraph
-    purpose: "The eight non-reusable Table 3 variants, including fuser_only."
+    purpose: "Train the Table 3 variants that are genuinely different models."
     decomposition_rationale: [N7_parallelizable, N8_reusable]
-    reads: [variant_registry, stage1_ckpt, splits, scene_graphs]
+    reads: [variant_registry, stage1_ckpt, splits, scene_splits, scene_graphs,
+            sem_edge_cache, procthor_object_text, stage2_protocol, stage2_pairing,
+            pointclouds, text_image_embeddings, split_seed]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger]
-    precondition: "headline numbers exist"
+    precondition: "headline numbers exist; variant.requires_training is true"
     postcondition: "Every variant has a status in {SUCCESS, FAILED, EXHAUSTED} with a reason"
     deterministic: false
     idempotent: true
@@ -659,12 +808,26 @@ nodes:
       partial_failure_note: "Unlike n13, a failed ablation marks its Table 3 row N/A and narrows SC-7 rather than halting."
       rollback: checkpoint_restore
     subgraph: {spec_ref: SG3, failure_surface: transparent, internal_gate_blocks_parent: false}
+    notes: >
+      [CORRECTED -- reads] An earlier draft read only
+      {variant_registry, stage1_ckpt, splits, scene_graphs}, which cannot train a
+      layout-aware variant at all: n13 needs eleven channels to do the same job.
+      A GAT variant, a fusion variant or a dropout variant needs the point
+      clouds, the cached text/image embeddings, the semantic edges, the ProcTHOR
+      object text and the resolved Stage 2 protocol. The declaration was a
+      dependency contract that could not be satisfied.
+      [CORRECTED -- scope] Table 3's "w/o iterative retrieval" is NOT trained
+      here. Algorithm 1 is an inference-time procedure (paper 2.7), so that row
+      is the Full checkpoint evaluated with composition_mode: parallel. It
+      carries requires_training: false and reuses_ckpt: full in variant_registry,
+      and n19 evaluates it directly.
 
   - id: n19_eval_ablations
     role: evaluate
-    purpose: "Table 3 metrics per variant."
+    purpose: "Table 3 metrics per variant, including the inference-only row."
     decomposition_rationale: [N4_independent_observability]
-    reads: [variant_ckpts, variant_status, gallery_index, eval_protocols, scene_graphs, variant_registry]
+    reads: [variant_ckpts, variant_status, gallery_index, eval_protocols,
+            scene_splits, variant_registry, composition_protocol, idesign_scenes]
     writes: [retrieval_metrics, composed_scenes, judge_scores, run_progress, cost_ledger]
     postcondition: "Every SUCCESS variant has metrics; every failed one is explicitly N/A with a reason"
     deterministic: false
@@ -677,6 +840,11 @@ nodes:
         - {class: TRANSIENT, action: retry, max_attempts: 3, backoff: exponential_jitter, on_exhausted: quarantine}
       partial_failure_semantics: proceed_with_admitted
       rollback: N/A
+    notes: >
+      Evaluates two kinds of row. Trained variants come from n18. The
+      inference-only row ("w/o iterative retrieval") reuses the Full checkpoint
+      named by variant.reuses_ckpt and simply runs SG4 with
+      composition_mode: parallel.
 
   - id: n20_aggregate
     role: compute
