@@ -6,7 +6,7 @@
 > **三種東西必須分開，不可混為一談：**
 > **[論文]** 原文明確規定 ｜ **[未定]** 論文沒說，我們選了一個並記錄 ｜ **[偏離]** 與論文不同，必須在報告中聲明
 
-**正式偏離五項**，編號與 `README.md`、`graph_spec.yaml` 一致，不得另編：
+**正式偏離六項**，編號與 `README.md`、`graph_spec.yaml` 一致，不得另編：
 
 | id | 偏離 |
 |---|---|
@@ -14,7 +14,19 @@
 | **D-2** | Qwen2.5-VL 取代 **GPT-4o**（資產標註與場景評分） |
 | **D-3** | 不重跑 6 個 baseline |
 | **D-4** | 不做人工評分 |
-| **D-5** | I-Design 的五個規劃 agent 改用 `Qwen2.5-7B-Instruct`，取代 **GPT-4** |
+| **D-5** | I-Design 中**所有**設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` |
+| **D-6** | 對 I-Design 的**行為性**修改（patch 02／03） |
+
+**D-6 改的是「產出什麼」，不是「誰產出」。** patch 02／03 會正規化佈局引用、
+丟棄懸空引用、合併重複 id、給修正迴圈上限、每次重試換 seed、耗盡時放棄場景 ——
+每一項都改變場景內容、哪些場景存活、以及完成率，因此 **Table 2 全部與 Table 3 場景欄都受影響**。
+
+> **邊界要講清楚：** 這些修改不存在於**目前公開的** `atcelen/IDesign`，
+> 但那**不等於**論文作者跑的是未修改版 —— 他們的整合程式與 I-Design 設定從未公開。
+> 誠實的說法是**我們偏離的是公開實作，不是「論文所做的事」**。
+
+（先前這裡只寫「五個規劃 agent」；公開 repo 至少六個 AssistantAgent 角色，
+所以改成描述 patch 實際做的事，不數 agent。）
 
 **D-5 與 D-2 是兩件事。** D-2 換的是 GPT-4o（標註／評分），D-5 換的是 GPT-4（I-Design 規劃器）。
 換規劃器會**改變場景本身**，Table 2 全部與 Table 3 場景欄一起位移；Table 1 完全不受影響。
@@ -710,7 +722,16 @@ IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Ta
 | **U-29** | **物理邊怎麼進 ESSGNN**（`f_h`／`f_x` 只吃一個 `e_ij`，而它是**語意**邊） | **ESSGNN 架構** |
 | **U-30** | **沒有語意嵌入時，固定寬度的 `e` 格填什麼**（禁止補零，但記旗標≠說明張量） | **ESSGNN 架構** |
 | U-31 | ESSGNN 的 L 層是否共用參數（`θ` 沒有層索引） | 參數量、F11 是否成立 |
+| **U-33** | **ESSGNN 有沒有保留 EGNN 的輸入／輸出投影**。§2.5 是 `t_i → h⁰ → L 層 → Pooling`，**兩端都沒有投影**；官方 `egnn_clean.py` 有 `embedding_in`／`embedding_out`，本實作沿用了 | **架構層級差異，不是超參數**。`use_io_projections` **無預設值**，必須由 `essgnn_arch_protocol` 指定，`G6` 檢查 |
 | **U-32** | **scene dropout 的粒度**。§2.6 寫 "omitted in 30% of **batches**"（整批），實作原本是每 sample 獨立抽。**注意同節的 modality masking 才是明寫 "independently"**，兩句不是一回事 | **Stage 2 訓練分布**。主線已改為 batch-level；`stage2_protocol.scene_dropout_granularity` 記錄，`G6` 檢查 |
 
-**U-29／U-30 由 `essgnn_edge_protocol` channel 承載，`G6` 在 Stage 2 訓練前強制。**
+**U-29／U-30 由 `essgnn_edge_protocol` 承載，U-33／U-17／U-26／U-31／U-22 由
+`essgnn_arch_protocol` 承載，兩者 `G6` 都在 Stage 2 訓練前強制。**
+
+`use_io_projections` 特別值得說：一個 `bool = True` 的預設**不是決定**，
+是官方 EGNN 的慣例靠繼承勝出。它現在**沒有預設值**，不指定就 `TypeError`。
+選 `False`（字面復現 §2.5）的代價要一起講：那會強制
+`node_feat_dim == hidden_dim == out_dim`，hidden 寬度變成 embedding 寬度（ULIP-2 是 1280），
+網路大很多，而且與 F8「1280 寬的 `e_ij` 把幾何訊號壓下約 45 倍」的實測互相作用。
+**這個取捨是人要做的判斷，所以它是 human 節點的輸出，不是 dataclass 的預設值。**
 登記成 UNKNOWN 是不夠的 —— `essgnn.py` 已經替它們做了決定（假定每條邊都有固定寬度的語意嵌入）。

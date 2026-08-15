@@ -170,7 +170,7 @@ boundary:
         public implementation, not that we deviate from what the paper did.
 
     - id: D-5
-      what: "I-Design's five planning agents run on local Qwen2.5-7B-Instruct instead of GPT-4"
+      what: "Every I-Design LLM path configured for gpt-4 or gpt-4-1106-preview is rerouted to local qwen2.5-7b-instruct"
       why: "no proprietary API; consistent with D-2's project decision"
       impact: >
         SEPARATE from D-2, which covers GPT-4o for annotation and judging.
@@ -335,6 +335,39 @@ state:
         has a defensible default, so the risk is silence, not incoherence.
         G3_object_corpus checks that the record is complete and that each field
         names a choice, which makes the choices appear in the report.
+
+    - name: essgnn_arch_protocol
+      type: "{status: unresolved|resolved, use_io_projections, distance, coord_feat, layer_sharing, pooling, hidden_dim, n_layers, decided_by, decided_at}"
+      writers: [n09b_resolve_stage2_protocol]
+      readers: [G6_stage2_ready, n13_train_stage2, n14_equivariance_probe, n18_train_ablations]
+      merge: replace
+      lifetime: persistent
+      note: >
+        [U-33 / U-17 / U-26 / U-31 / U-22] The ESSGNN architecture choices the
+        paper leaves open, in one place a gate can see.
+
+        U-33 is why this channel exists. A `use_io_projections: bool = True`
+        default in ESSGNNConfig is not a decision -- it is the EGNN reference
+        implementation's convention winning by inheritance, and it changes the
+        ARCHITECTURE, not a hyperparameter: `True` adds Linear(node_feat_dim,
+        hidden) before the layers and Linear(hidden, out_dim) after, neither of
+        which appears in 2.5, which goes t_i -> h^(0) -> L layers ->
+        Pooling({h^(L)}) = e_layout.
+
+        The argument for `False` as the faithful primary is straightforward:
+        the paper does not describe the projections. The consequence has to be
+        stated with it -- `False` forces node_feat_dim == hidden_dim ==
+        out_dim, so the hidden width becomes the embedding width (1280 for
+        ULIP-2) rather than something small, which is a much larger network and
+        interacts with finding F8, where a 1280-wide e_ij was measured to
+        suppress the geometric signal about 45x.
+        That trade is a person's call, which is why this is a `human` node's
+        output and not a default in a dataclass.
+
+        The remaining fields collect choices already registered elsewhere so
+        they cannot drift apart: distance (U-17, squared vs euclidean),
+        coord_feat (U-26, f_x sees h^(l+1) or h^(l)), layer_sharing (U-31),
+        pooling and the two hyperparameters (U-22).
 
     - name: essgnn_edge_protocol
       type: "{status: unresolved|resolved, topology, physical_relation_encoding, semantic_missing_representation, directionality, decided_by, decided_at}"
@@ -753,8 +786,8 @@ edges:
   - {id: e13, from: n09_build_splits, to: G3_object_corpus, kind: data, guard: "", join_group: default, carries: [splits, eval_protocols, stage1_protocol, asset_manifest]}
 
   - {id: e13b, from: G3_object_corpus, to: n09b_resolve_stage2_protocol, kind: data, guard: "verdict == PASS", join_group: default, carries: [scene_graphs, asset_manifest]}
-  - {id: e13c, from: n09b_resolve_stage2_protocol, to: G6_stage2_ready, kind: data, guard: "", join_group: default, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol]}
-  - {id: e13d, from: G6_stage2_ready, to: n13_train_stage2, kind: data, guard: "verdict == PASS", join_group: protocol, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, scene_splits]}
+  - {id: e13c, from: n09b_resolve_stage2_protocol, to: G6_stage2_ready, kind: data, guard: "", join_group: default, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol]}
+  - {id: e13d, from: G6_stage2_ready, to: n13_train_stage2, kind: data, guard: "verdict == PASS", join_group: protocol, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits]}
   - {id: e13e, from: G6_stage2_ready, to: HALT_BLOCKED, kind: escalation, guard: "verdict == BLOCKED_EVIDENCE", join_group: default, carries: [stage2_protocol], rationale: "U-08a/U-08b unresolved is a pause awaiting a decision, not a failure."}
   - {id: e14, from: G3_object_corpus, to: n10_train_stage1, kind: data, guard: "verdict == PASS", join_group: default, carries: [splits, pointclouds, text_image_embeddings]}
   - {id: e15, from: n10_train_stage1, to: n11_gallery_index_staging, kind: data, guard: "", join_group: default, carries: [stage1_ckpt]}
@@ -967,7 +1000,7 @@ routing:
   - {decision_point: G2_pc_sanity, authority: A1, owner: edge, inputs: [cloud_shape, finiteness, centroid_offset, max_radius, per_axis_variance, self_retrieval_rank], destinations: [n09_build_splits, HALT_FAILED], default_destination: HALT_FAILED}
   - {decision_point: G3_object_corpus, authority: A1, owner: edge, inputs: [leakage_count, admitted_size, quarantine_rate, eval_protocols, "stage1_protocol.status"], destinations: [n10_train_stage1, HALT_FAILED], default_destination: HALT_FAILED}
   - {decision_point: G4_gallery_freeze, authority: A1, owner: edge, inputs: [index_dim, index_count, nan_count, target_is_argmax, target_in_tie_set], destinations: [n12_promote_index, HALT_FAILED], default_destination: HALT_FAILED}
-  - {decision_point: G6_stage2_ready, authority: A1, owner: edge, inputs: ["stage2_protocol.status", stage2_pairing, "essgnn_edge_protocol.status", scene_splits], destinations: [n13_train_stage2, HALT_BLOCKED], default_destination: HALT_BLOCKED}
+  - {decision_point: G6_stage2_ready, authority: A1, owner: edge, inputs: ["stage2_protocol.status", stage2_pairing, "essgnn_edge_protocol.status", "essgnn_arch_protocol.status", scene_splits], destinations: [n13_train_stage2, HALT_BLOCKED], default_destination: HALT_BLOCKED}
   - {decision_point: G7_composition_protocol, authority: A1, owner: edge, inputs: [composition_protocol.status, g0_source, query_list_source, placement_rule], destinations: [n15c_prepare_eval_scenes, HALT_BLOCKED], default_destination: HALT_BLOCKED}
   - {decision_point: G5_report_release, authority: A1, owner: edge, inputs: [verdict_completeness, gate_records, audit_records, degraded_flags], destinations: [n22_publish_report, HALT_FAILED], default_destination: HALT_FAILED}
   - {decision_point: sg1_admit_or_repair, authority: A1, owner: edge, inputs: [schema_valid, item_attempt], destinations: [sg1_admit, sg1_generate, sg1_quarantine], default_destination: sg1_quarantine}

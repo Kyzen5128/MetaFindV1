@@ -222,3 +222,38 @@ def test_an_optimizer_step_moves_point_and_not_clip():
     assert all(
         torch.equal(a, b) for a, b in zip(before_clip, clip.parameters())
     ), "ViT-bigG moved, but D-1 declares it frozen"
+
+
+def test_full_scope_lets_gradient_reach_clip():
+    """[RA-3] `full` must actually build a graph through the CLIP halves.
+
+    The audit's purpose is to attempt entire-encoder fine-tuning and record
+    what happens on 24 GB. For a while it could not: encode_text and
+    encode_image were permanently decorated with @torch.no_grad(), so
+    train_scope="full" flipped requires_grad on and still produced no graph,
+    and the memory recorded was that of a forward pass that cannot backpropagate.
+    """
+    import contextlib
+
+    from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
+
+    bb = ULIPBackbone.__new__(ULIPBackbone)
+
+    bb.cfg = BackboneConfig(train_scope="point_encoder_and_fuser")
+    assert isinstance(bb._clip_grad_context(), torch.no_grad), (
+        "the main line must not build a graph through the frozen CLIP halves"
+    )
+
+    bb.cfg = BackboneConfig(train_scope="full")
+    ctx = bb._clip_grad_context()
+    assert isinstance(ctx, contextlib.nullcontext), (
+        "train_scope=full must let gradient reach ViT-bigG, or RA-3 measures "
+        "a forward pass that cannot backpropagate"
+    )
+
+    # And prove it end to end on a stand-in encoder.
+    with ctx:
+        w = torch.nn.Linear(4, 4)
+        out = w(torch.randn(2, 4)).sum()
+    out.backward()
+    assert w.weight.grad is not None, "no gradient reached the stand-in CLIP encoder"

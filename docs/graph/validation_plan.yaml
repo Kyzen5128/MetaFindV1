@@ -1026,6 +1026,11 @@ level_3_gates:
            implementation now follows; `sample` stays selectable as a variant. The two give different in-batch contrastive
            distributions, so Stage 2 must not start without the answer on
            record)
+      AND essgnn_arch_protocol.status == "resolved", naming use_io_projections
+          (U-33 -- an ARCHITECTURE difference inherited from the reference
+           EGNN, not a hyperparameter, and not something a dataclass default
+           may decide), distance (U-17), coord_feat (U-26), layer_sharing
+           (U-31), pooling, hidden_dim and n_layers (U-22)
       AND essgnn_edge_protocol.status == "resolved", naming topology,
           physical_relation_encoding, semantic_missing_representation and
           directionality (U-29, U-30, U-19) -- without these the ESSGNN edge

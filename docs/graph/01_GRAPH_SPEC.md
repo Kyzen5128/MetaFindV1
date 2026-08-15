@@ -76,13 +76,14 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 | **D-2** | Qwen2.5-VL 取代 GPT-4o | 專案決定 | **Table 1 與 Table 2 都受影響** —— Qwen 不只換掉裁判，也換掉 46,052 筆資產標註（文字塔的訓練資料）。所以 SC-1 只報告差距、不設門檻 |
 | **D-3** | 不重跑 baseline | 只復現 MetaFind | SC-2 只能與論文公佈值比較 |
 | **D-4** | 不做人工評分 | 無標註人力 | Table 2 人工欄 `INSUFFICIENT_EVIDENCE` |
-| **D-5** | I-Design 的五個規劃 agent 改用本地 `Qwen2.5-7B-Instruct`，取代 **GPT-4** | 無專有 API | **與 D-2 不同**：D-2 換的是標註與評分用的 GPT-4o。規劃器換掉會**改變場景本身**，Table 2 全部與 Table 3 場景欄一起位移；**Table 1 完全不受影響**（它不跑規劃器） |
+| **D-5** | I-Design 中**所有**設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` | 無專有 API | **與 D-2 不同**：D-2 換的是標註與評分用的 GPT-4o。規劃器換掉會**改變場景本身**，Table 2 全部與 Table 3 場景欄一起位移；**Table 1 完全不受影響**（它不跑規劃器） |
+| **D-6** | 對 I-Design 的**行為性**修改（patch 02／03）：佈局引用正規化、丟棄懸空引用、合併重複 id、修正迴圈上限、重試換 seed、耗盡放棄場景 | 不改就 5 次 0 完成 | 改的是管線**產出什麼**。**偏離的是公開實作** —— 作者的整合程式從未公開，不能斷言他們沒做類似修改 |
 
 ---
 
 ## 3. State schema
 
-完整 44 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
+完整 45 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
 
 | channel | merge | 為什麼 |
 |---|---|---|
@@ -99,6 +100,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 | `procthor_object_text` | `upsert_by_key` | **新增**。ProcTHOR 場景圖的 `t_i` 與語意邊的輸入，來自 ProcTHOR 自己的 metadata |
 | `procthor_dataset` | `write_once` | **新增**。先前 ProcTHOR 根本沒進 graph state，導致 G1 無從檢查它 |
 | `stage1_protocol` | `replace` | **新增**。Stage 1 的 U-13／14／15／16／22／23／24 原本只寫在散文裡，`n10` 仍可用程式預設開跑。**發現 UNKNOWN 不等於把它放進 graph。** 不另設 gate（每項都有合理預設，風險是沉默不是矛盾），由 `G3` 檢查記錄完整 |
+| `essgnn_arch_protocol` | `replace` | **新增**。U-33／U-17／U-26／U-31／U-22。**`use_io_projections: bool = True` 這種預設不是決定，是官方 EGNN 的慣例靠繼承勝出**，而且改的是**架構**不是超參數。由 `G6` 強制 |
 | `essgnn_edge_protocol` | `replace` | **新增**。U-29／U-30／U-19。登記成 UNKNOWN 還不夠 —— `essgnn.py` **已經替它們做了決定**（假定每條邊都有固定寬度的語意嵌入），而 G6 沒擋。由 `G6` 強制 |
 | `stage2_protocol` | `replace` | **新增**。決定本身，未決前保持可改 |
 | `stage2_pairing` | `write_once` | **U-08a**。只有在協定 `resolved` 之後才寫入，避免用空值把 channel 鎖死 |
@@ -902,3 +904,24 @@ preposition 對齊 enum（無法映射者落到 "on"）
 且「把 MetaFind 插進 I-Design 的 retrieval slot」是目前**最有 upstream 程式碼證據支持**的 Table 2 讀法
 （官方 I-Design README 確實把 scene planning → OpenShape retrieval → Blender placement 拆開），
 但仍須標明論文從未公開整合程式，因此那是 **evidence-backed interpretation，不是論文明文**。
+
+### 2026-08-15 第十一輪（外部審查後）
+
+審查者固定在 `25c042a`，確認上一輪三個 P0 都真的修進程式。剩下兩個 P0 都是同一個模式：
+**發現了、加了 flag，但沒進 graph；或改了註解，正文沒改。**
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 135 | **U-33 只是一個 `bool = True` 的預設。** 有 flag、有登記，但沒有 protocol state、`G6` 不檢查，Stage 2 可以直接繼承 `True` —— 而這是**架構層級**差異，不是超參數。**一個 dataclass 預設不是決定，是官方 EGNN 的慣例靠繼承勝出** | 新增 `essgnn_arch_protocol` channel（`use_io_projections`／`distance`／`coord_feat`／`layer_sharing`／`pooling`／`hidden_dim`／`n_layers`），`G6` 強制 resolved；**`use_io_projections` 移除預設值**，不指定即 `TypeError` | 🔴 |
+| 136 | **`02_BUILD_STEPS`（第二權威）又落後**：還寫「正式偏離五項」、沒有 D-6、**完全沒有 U-33** | 全面同步 | 🔴 **遵守 Authority 反而讀不到最新決策** |
+| 137 | D-5 的 `what` 欄位與 `01_GRAPH_SPEC` 正文仍寫「五個規劃 agent」，而 `impact` 裡自己已承認公開 repo 至少六個角色 —— **修正紀錄說改了，正文沒改** | 統一為「所有設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct`」，不數 agent | 🟠 |
+| 138 | U-32 的 registry 還描述舊 code（"implementation draws per sample"） | 改為「論文字面：batch／現行主線：batch／變體：sample」 | 🟠 |
+| 139 | **RA-3 的修正沒有 regression test** | 新增 `test_full_scope_lets_gradient_reach_clip`。**負向注入確認**：把 `no_grad` 改回永久，測試立刻紅 | 🟠 |
+| 140 | **U-33 沒有 test** | 新增四條：`False` 用 `Identity`、寬度不一致要 `ValueError`、`True` 有兩層 `Linear`、**沒有預設值**。負向注入（給它 `= True`）確認會紅 | 🟠 |
+| 141 | I-Design 的 seed 只設了 `agents` 模組的 config，但 `corrector_agents.py`／`refiner_agents.py` 各自有 module-local `gpt4_config`；而且 `cache_seed` 控制的是 autogen 的快取命名空間，**沒有證據顯示它會傳到 vLLM 的 generation RNG** | claim 收斂為「可重現的快取選擇／重試 provenance」，不宣稱整條 pipeline 由 seed 決定 | 🟠 |
+| 142 | `test_essgnn.py` 還寫 "With the paper's L=4" —— 早已修掉的錯誤說法又出現 | 改為 "the current reproduction setting n_layers=4" | 🟡 |
+
+**順帶記一個我自己的操作錯誤**：做負向注入時，第一次腳本在還原前就因 `IndexError` 中止，
+第二次執行又把**已被注入的內容**當成原始版本存回去，於是 `if False` 留在檔案裡，
+還原後測試才紅了一條。負向注入必須用 `try/finally` 還原 —— 一個驗證工具本身把程式改壞，
+比沒有驗證更糟。

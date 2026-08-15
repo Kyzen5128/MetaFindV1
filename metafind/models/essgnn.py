@@ -129,6 +129,17 @@ class ESSGNNConfig:
     node_feat_dim: int
     edge_feat_dim: int
     out_dim: int
+    # U-33, REQUIRED. 2.5 goes t_i -> h^(0) -> L layers -> Pooling with no
+    # projection on either side; the reference EGNN wraps its layers in
+    # embedding_in / embedding_out and this implementation inherited that.
+    # That is an ARCHITECTURE difference, so it gets no default: a `= True`
+    # here would let upstream's convention win the UNKNOWN by inheritance,
+    # which is the exact failure this project keeps rediscovering. The decision
+    # lives in essgnn_arch_protocol and is gated by G6.
+    #   True   reference-EGNN compatible; allows hidden_dim != out_dim
+    #   False  literal 2.5; forces node_feat_dim == hidden_dim == out_dim,
+    #          so the hidden width becomes the embedding width
+    use_io_projections: bool
     # Reproduction hyperparameters chosen by us (U-22). The paper gives no
     # value for either; these are recorded in stage1_protocol and reported.
     hidden_dim: int = 128
@@ -139,14 +150,7 @@ class ESSGNNConfig:
     edge_proj_dim: int | None = None
     pooling: Pool = "mean"
     normalize_coord_diff: bool = False
-    # U-33. MetaFind's 2.5 goes t_i -> h^0 -> L layers -> Pooling, with no
-    # projection either side. The reference EGNN wraps its layers in
-    # embedding_in / embedding_out, and this implementation followed that.
-    # Convenient, and necessary if node_feat_dim != hidden_dim, but it is
-    # UPSTREAM'S convention rather than something MetaFind states -- so it is a
-    # flag, not an assumption. `False` reproduces the paper literally, which
-    # then requires node_feat_dim == hidden_dim == out_dim.
-    use_io_projections: bool = True
+
 
 
 def _mlp(in_dim: int, hidden: int, out_dim: int) -> nn.Sequential:

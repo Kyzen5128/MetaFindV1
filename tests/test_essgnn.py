@@ -27,7 +27,7 @@ def fully_connected(n: int) -> torch.Tensor:
 
 
 def make_scene(n: int = 12, cfg: ESSGNNConfig | None = None, seed: int = 0, spread: float = 3.0):
-    cfg = cfg or ESSGNNConfig(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64, n_layers=3)
+    cfg = cfg or ESSGNNConfig(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64, n_layers=3, use_io_projections=True)
     # nn.Linear draws from the GLOBAL RNG, so without seeding it here the model
     # weights depend on whichever tests ran first -- results would then differ
     # between running a test alone and running the suite.
@@ -57,7 +57,7 @@ def random_rotation(seed: int = 0) -> torch.Tensor:
 
 def test_output_dim_matches_eq6_residual():
     """e_layout must be out_dim wide so Fusion(...) + lambda * e_layout is defined."""
-    cfg = ESSGNNConfig(node_feat_dim=1280, edge_feat_dim=1280, hidden_dim=64, out_dim=1280, n_layers=2)
+    cfg = ESSGNNConfig(node_feat_dim=1280, edge_feat_dim=1280, hidden_dim=64, out_dim=1280, n_layers=2, use_io_projections=True)
     model, nf, pos, ei, ea = make_scene(8, cfg)
     out = model(nf, pos, ei, ea)
     assert out.shape == (1280,), f"expected (1280,), got {tuple(out.shape)}"
@@ -69,7 +69,7 @@ def test_output_dim_matches_eq6_residual():
 
 def test_output_dim_negative_injection():
     """Negative injection: a mismatched width must break the Eq. 6 residual."""
-    cfg = ESSGNNConfig(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=512, n_layers=2)
+    cfg = ESSGNNConfig(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=512, n_layers=2, use_io_projections=True)
     model, nf, pos, ei, ea = make_scene(8, cfg)
     out = model(nf, pos, ei, ea)
     with pytest.raises(RuntimeError):
@@ -77,7 +77,7 @@ def test_output_dim_negative_injection():
 
 
 def test_batched_pooling_shape():
-    cfg = ESSGNNConfig(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64, n_layers=2)
+    cfg = ESSGNNConfig(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64, n_layers=2, use_io_projections=True)
     model, nf, pos, ei, ea = make_scene(10, cfg)
     batch = torch.tensor([0] * 5 + [1] * 5)
     assert model(nf, pos, ei, ea, batch=batch).shape == (2, 64)
@@ -92,6 +92,7 @@ def test_se3_equivariance(coord_feat: str):
     cfg = ESSGNNConfig(
         node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64,
         n_layers=3, h0_mode="semantic", coord_feat=coord_feat,
+        use_io_projections=True,
     )
     model, nf, pos, ei, ea = make_scene(12, cfg)
     q = random_rotation(1)
@@ -117,6 +118,7 @@ def test_equivariance_negative_injection():
     cfg = ESSGNNConfig(
         node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64,
         n_layers=3, h0_mode="concat_xt",
+        use_io_projections=True,
     )
     model, nf, pos, ei, ea = make_scene(12, cfg)
     q = random_rotation(1)
@@ -149,14 +151,14 @@ def test_coords_agg_defaults_to_sum_per_eq3():
     """Eq. 3 sums over neighbours; the reference EGNN defaults to mean (F9)."""
     # Widths are required arguments now: the paper states none, so no default
     # may look like a paper value (L1-EGNN-DIMS-NOT-HARDCODED).
-    assert ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8).coords_agg == "sum"
+    assert ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8, use_io_projections=True).coords_agg == "sum"
 
 
 def test_sum_and_mean_differ():
     """Negative injection: if sum and mean agreed, the previous test proves nothing."""
     common = dict(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64, n_layers=2)
-    m_sum, nf, pos, ei, ea = make_scene(12, ESSGNNConfig(**common, coords_agg="sum"))
-    m_mean = ESSGNN(ESSGNNConfig(**common, coords_agg="mean")).to(DTYPE)
+    m_sum, nf, pos, ei, ea = make_scene(12, ESSGNNConfig(**common, coords_agg="sum", use_io_projections=True))
+    m_mean = ESSGNN(ESSGNNConfig(**common, coords_agg="mean", use_io_projections=True)).to(DTYPE)
     m_mean.load_state_dict(m_sum.state_dict())
 
     # f_x is initialised near zero so the coordinate update starts tiny; scale it
@@ -174,7 +176,8 @@ def test_sum_and_mean_differ():
 def geometric_sensitivity(edge_dim: int, n: int = 12) -> float:
     """max |d e_layout / d pos| with semantic edges zeroed."""
     cfg = ESSGNNConfig(
-        node_feat_dim=32, edge_feat_dim=edge_dim, hidden_dim=32, out_dim=64, n_layers=3
+        node_feat_dim=32, edge_feat_dim=edge_dim, hidden_dim=32, out_dim=64, n_layers=3,
+        use_io_projections=True,
     )
     model, nf, pos, ei, ea = make_scene(n, cfg)
     pos = pos.clone().requires_grad_(True)
@@ -244,8 +247,8 @@ def test_semantic_edges_change_the_output():
 
 def test_edge_projection_is_absent_by_default():
     """The paper has no projection layer on e_ij, so the faithful default is None."""
-    assert ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8).edge_proj_dim is None
-    cfg = ESSGNNConfig(node_feat_dim=32, edge_feat_dim=1280, hidden_dim=64, out_dim=64, n_layers=1)
+    assert ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8, use_io_projections=True).edge_proj_dim is None
+    cfg = ESSGNNConfig(node_feat_dim=32, edge_feat_dim=1280, hidden_dim=64, out_dim=64, n_layers=1, use_io_projections=True)
     model = ESSGNN(cfg)
     in_features = model.layers[0].f_h[0].in_features
     assert in_features == 2 * 64 + 1 + 1280, f"unexpected message width {in_features}"
@@ -253,7 +256,8 @@ def test_edge_projection_is_absent_by_default():
 
 def test_edge_projection_when_enabled():
     cfg = ESSGNNConfig(
-        node_feat_dim=32, edge_feat_dim=1280, hidden_dim=64, out_dim=64, n_layers=1, edge_proj_dim=64
+        node_feat_dim=32, edge_feat_dim=1280, hidden_dim=64, out_dim=64, n_layers=1, edge_proj_dim=64,
+        use_io_projections=True,
     )
     model = ESSGNN(cfg)
     assert model.layers[0].f_h[0].in_features == 2 * 64 + 1 + 64
@@ -275,7 +279,7 @@ def test_gradients_reach_every_parameter_except_the_final_f_x():
     ``e_layout = Pooling({h_i^(L)})`` reads only h. Layer l's coordinate update
     matters solely because layer l+1 recomputes ``||x_i - x_j||^2`` from it, so
     the final layer's ``f_x`` has no downstream consumer and receives no
-    gradient. With the paper's L=4 that leaves a quarter of the coordinate
+    gradient. With the current reproduction setting n_layers=4 that leaves a quarter of the coordinate
     parameters untrained.
 
     This is a property of the architecture as described, not a defect to patch --
@@ -308,3 +312,45 @@ def test_intermediate_coordinate_updates_do_carry_gradient():
     for i in range(len(model.layers) - 1):
         g = model.layers[i].f_x[-1].weight.grad
         assert g is not None and g.abs().sum().item() > 0, f"layer {i} f_x got no gradient"
+
+
+# ------------------------------------------------------------ U-33 projections
+
+
+def test_literal_paper_form_uses_no_projections():
+    """[U-33] Sec. 2.5 is t_i -> h^(0) -> L layers -> Pooling, nothing either side."""
+    cfg = ESSGNNConfig(
+        node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=32,
+        n_layers=2, use_io_projections=False,
+    )
+    m = ESSGNN(cfg)
+    assert isinstance(m.embed_in, torch.nn.Identity)
+    assert isinstance(m.embed_out, torch.nn.Identity)
+
+
+def test_literal_paper_form_requires_matching_widths():
+    """Without projections the widths must already agree; say so loudly."""
+    with pytest.raises(ValueError, match="literally"):
+        ESSGNN(ESSGNNConfig(
+            node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64,
+            n_layers=2, use_io_projections=False,
+        ))
+
+
+def test_upstream_form_adds_two_linear_layers():
+    """[U-33] The reference-EGNN variant. Two extra learnable layers, recorded as such."""
+    cfg = ESSGNNConfig(
+        node_feat_dim=32, edge_feat_dim=16, hidden_dim=8, out_dim=64,
+        n_layers=2, use_io_projections=True,
+    )
+    m = ESSGNN(cfg)
+    assert isinstance(m.embed_in, torch.nn.Linear)
+    assert isinstance(m.embed_out, torch.nn.Linear)
+    assert (m.embed_in.in_features, m.embed_in.out_features) == (32, 8)
+    assert (m.embed_out.in_features, m.embed_out.out_features) == (8, 64)
+
+
+def test_projection_choice_has_no_default():
+    """The whole point of U-33: upstream convention must not win by inheritance."""
+    with pytest.raises(TypeError):
+        ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8)  # type: ignore[call-arg]

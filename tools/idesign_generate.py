@@ -119,11 +119,17 @@ def run_one(
         import agents  # noqa: PLC0415
 
         if seed is not None:
-            # Actually drive generation, rather than only recording the number.
-            # autogen keys its response cache on (prompt, config), and cache_seed
-            # is part of that config, so this is what makes two scenes with
-            # different seeds take different samples from the same prompt --
-            # and what makes one scene reproducible from its sidecar.
+            # What this does and does not control.
+            #
+            # cache_seed is autogen's CACHE NAMESPACE, so this gives a scene
+            # reproducible cache provenance and makes retries select
+            # consistently. Nothing in this repo shows it reaching vLLM's
+            # sampling RNG, so it must not be described as controlling
+            # generation end to end.
+            #
+            # Incomplete by construction: corrector_agents.py and
+            # refiner_agents.py each build their own module-local gpt4_config,
+            # which this does not reach. Recorded rather than papered over.
             random.seed(seed)
             for name in ("gpt4_config", "gpt4_prev_config", "gpt4_json_config",
                          "gpt4_json_engineer_config"):

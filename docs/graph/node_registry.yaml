@@ -392,7 +392,7 @@ nodes:
     purpose: "Decide how a ProcTHOR target maps to a gallery positive, and where its modalities come from."
     decomposition_rationale: [N5_gate_point, N1_distinct_failure_mode]
     reads: [scene_graphs, asset_manifest, procthor_object_text, objaverse_annotations]
-    writes: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, run_progress]
+    writes: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, run_progress]
     precondition: "G3_object_corpus verdict == PASS"
     postcondition: >
       stage2_protocol.status == resolved, naming both the pairing method and the
@@ -424,7 +424,7 @@ nodes:
     role: evaluate
     purpose: "Refuse to train Stage 2 until its positive, its modalities and its scene corpus are all in place."
     decomposition_rationale: [N5_gate_point]
-    reads: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, scene_splits]
+    reads: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits]
     writes: [gate_records, run_progress]
     postcondition: "gate_record with is_terminal=true"
     deterministic: true
@@ -565,8 +565,9 @@ nodes:
     purpose: "Layout-aware fine-tuning of the fuser and ESSGNN."
     decomposition_rationale: [N3_checkpoint_needed, N6_side_effects, N8_reusable]
     reads: [stage1_ckpt, scene_graphs, sem_edge_cache, procthor_object_text,
-            stage2_protocol, stage2_pairing, essgnn_edge_protocol, pointclouds,
-            text_image_embeddings, splits, scene_splits, split_seed, variant_registry]
+            stage2_protocol, stage2_pairing, essgnn_edge_protocol,
+            essgnn_arch_protocol, pointclouds, text_image_embeddings, splits,
+            scene_splits, split_seed, variant_registry]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger, degraded_flags]
     precondition: "G3_object_corpus verdict == PASS; stage1_ckpt exists; G6_stage2_ready verdict == PASS (stage2_protocol.status == resolved AND essgnn_edge_protocol.status == resolved AND scene_splits valid)"
     postcondition: >
@@ -609,7 +610,7 @@ nodes:
     role: evaluate
     purpose: "Verify SE(3) behaviour at all three levels, and record the paper's contradictions and overclaims."
     decomposition_rationale: [N4_independent_observability, N5_gate_point]
-    reads: [variant_ckpts, scene_graphs, essgnn_edge_protocol]
+    reads: [variant_ckpts, scene_graphs, essgnn_edge_protocol, essgnn_arch_protocol]
     writes: [equivariance_report, audit_records, run_progress]
     postcondition: >
       Three separate quantities recorded: per-layer coordinate equivariance,
@@ -825,8 +826,8 @@ nodes:
     decomposition_rationale: [N7_parallelizable, N8_reusable]
     reads: [variant_registry, stage1_ckpt, splits, scene_splits, scene_graphs,
             sem_edge_cache, procthor_object_text, stage1_protocol, stage2_protocol,
-            stage2_pairing, essgnn_edge_protocol, pointclouds, text_image_embeddings,
-            split_seed]
+            stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol,
+            pointclouds, text_image_embeddings, split_seed]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger]
     precondition: "headline numbers exist; variant.requires_training is true"
     postcondition: "Every variant has a status in {SUCCESS, FAILED, EXHAUSTED} with a reason"
