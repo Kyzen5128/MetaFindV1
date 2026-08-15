@@ -83,7 +83,7 @@ python -m metafind.data.download --only glbs        # 只抓 mesh（最慢，~21
 | Objaverse-LVIS manifest | 13 MB | 定義 46,052 個資產 |
 | ProcTHOR-10K → `procthor_dataset` | 395 MB | **必須進 graph state**，否則 G1 無從檢查它 |
 | Objaverse-LVIS GLB | ~216 GB | **保留不刪**，見下 |
-| ULIP-2 checkpoint | 384 MB | frozen backbone |
+| ULIP-2 checkpoint | 384 MB | PointBERT／`pc_projection` 的**初始權重**（Stage 1 會繼續訓練它們），以及凍結的 CLIP 側 |
 | ViT-bigG-14 | 9.5 GB | ULIP-2 的 text/image 編碼器 |
 | Qwen2.5-VL-7B | 16.6 GB | 取代 GPT-4o |
 
@@ -322,8 +322,20 @@ ProcTHOR 分支的任何故障都會停掉一個不依賴它的訓練。兩條�
 ULIP-2 原本的設計也是凍結 CLIP、訓練 point encoder，所以主線等級與 ULIP-2 一致。
 報告中須聲明「entire encoder」在我們的設定下指 3D encoder + fusion，不含 CLIP。
 
-**快取 embedding 只用於 `fuser_only` 這一列**（它本來就不更新 encoder，快取不改變結果），
-不得用於主線。
+**只有「點雲」的 embedding 快取限定 `fuser_only` 那一列。**
+text／image 走凍結的 ViT-bigG-14，主線本來就該快取——那是 D-1 之下的正確做法，不是妥協。
+
+```
+text / image   凍結 → 主線就該快取，省掉每個 epoch 重跑 2.5B 參數
+point cloud    主線可訓練 → 不可快取
+```
+
+理由是機制而非慣例：**embedding 快取按定義就是「某個不再更新的網路」的輸出**。
+在主線上快取點雲 embedding，等於把 point encoder 凍住，
+那就是 `fuser_only` ablation ——不管 `train_scope` 寫什麼。
+`L1-STAGE1-CACHE-DISCIPLINE` 就是釘這件事。
+
+（先前這段寫成「快取 embedding 只用於 `fuser_only`」，把三個模態混為一談。）
 
 Loss 為 Eq.5，**單向 query→gallery**。ULIP 現成的 `ULIPWithImageLoss` 是單塔 tri-modal，不能用。
 
@@ -694,6 +706,7 @@ IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Ta
 | **U-29** | **物理邊怎麼進 ESSGNN**（`f_h`／`f_x` 只吃一個 `e_ij`，而它是**語意**邊） | **ESSGNN 架構** |
 | **U-30** | **沒有語意嵌入時，固定寬度的 `e` 格填什麼**（禁止補零，但記旗標≠說明張量） | **ESSGNN 架構** |
 | U-31 | ESSGNN 的 L 層是否共用參數（`θ` 沒有層索引） | 參數量、F11 是否成立 |
+| **U-32** | **scene dropout 的粒度**。§2.6 寫 "omitted in 30% of **batches**"（整批），實作原本是每 sample 獨立抽。**注意同節的 modality masking 才是明寫 "independently"**，兩句不是一回事 | **Stage 2 訓練分布**。主線已改為 batch-level；`stage2_protocol.scene_dropout_granularity` 記錄，`G6` 檢查 |
 
 **U-29／U-30 由 `essgnn_edge_protocol` channel 承載，`G6` 在 Stage 2 訓練前強制。**
 登記成 UNKNOWN 是不夠的 —— `essgnn.py` 已經替它們做了決定（假定每條邊都有固定寬度的語意嵌入）。

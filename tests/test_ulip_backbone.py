@@ -1,4 +1,4 @@
-"""L1 tests for the frozen ULIP-2 backbone loader.
+"""L1 tests for the ULIP-2 backbone loader and its freeze scope.
 
 The checkpoint must be loaded with ``strict=False`` (974 open_clip keys come from
 elsewhere), which makes silent failure easy: a renamed prefix leaves the point
@@ -144,3 +144,81 @@ def test_pc_norm_negative_injection():
     rng = np.random.default_rng(0)
     xyz = rng.normal(size=(500, 3)) * 5 + 100
     assert not np.allclose(xyz.mean(axis=0), 0, atol=1e-6)
+
+
+# --------------------------------------------------------- freeze scope (U-22, D-1)
+
+
+def _scoped_backbone(scope):
+    """A backbone whose heavy load is stubbed, exercising only _apply_train_scope."""
+    import types
+
+    from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
+
+    bb = ULIPBackbone.__new__(ULIPBackbone)
+    bb.cfg = BackboneConfig(train_scope=scope)
+
+    point = torch.nn.Linear(4, 4)
+    clip = torch.nn.Linear(4, 4)
+    model = types.SimpleNamespace()
+    model.point_encoder = point
+    model.pc_projection = torch.nn.Parameter(torch.randn(4, 4))
+    model.visual = clip
+    model.parameters = lambda: [
+        *point.parameters(),
+        model.pc_projection,
+        *clip.parameters(),
+    ]
+    model.eval = lambda: None
+    model.train = lambda: None
+    bb.model = model
+    bb._apply_train_scope()
+    return bb, point, clip
+
+
+def test_main_line_trains_the_point_encoder_and_freezes_clip():
+    """[PAPER 2.6] "Both query and gallery encoders are trained".
+
+    This module froze every parameter for several rounds while the
+    specification said otherwise, which silently turned the main line into
+    Table 3's `Train fuser only` row (8.7 against 11.4). This is the check that
+    would have caught it.
+    """
+    bb, point, clip = _scoped_backbone("point_encoder_and_fuser")
+    assert all(p.requires_grad for p in point.parameters()), "PointBERT must train"
+    assert bb.model.pc_projection.requires_grad, "pc_projection must train"
+    assert not any(p.requires_grad for p in clip.parameters()), "ViT-bigG must stay frozen"
+    assert point.training, "the trainable half must not be left in eval mode"
+
+
+def test_fuser_only_freezes_the_point_encoder_too():
+    """The Table 3 ablation. It must be reachable, and only by asking for it."""
+    _, point, clip = _scoped_backbone("fuser_only")
+    assert not any(p.requires_grad for p in point.parameters())
+    assert not any(p.requires_grad for p in clip.parameters())
+
+
+def test_trainable_parameters_matches_the_scope():
+    bb, point, _ = _scoped_backbone("point_encoder_and_fuser")
+    trainable = bb.trainable_parameters()
+    assert len(trainable) == len(list(point.parameters())) + 1
+    assert all(p.requires_grad for p in trainable)
+
+
+def test_an_optimizer_step_moves_point_and_not_clip():
+    """The property that actually matters, measured the way training measures it."""
+    bb, point, clip = _scoped_backbone("point_encoder_and_fuser")
+    before_point = [p.detach().clone() for p in point.parameters()]
+    before_clip = [p.detach().clone() for p in clip.parameters()]
+
+    opt = torch.optim.SGD(bb.trainable_parameters(), lr=0.1)
+    loss = point(torch.randn(2, 4)).square().sum() + bb.model.pc_projection.square().sum()
+    loss.backward()
+    opt.step()
+
+    assert any(
+        not torch.equal(a, b) for a, b in zip(before_point, point.parameters())
+    ), "PointBERT did not move: the main line is silently the fuser_only ablation"
+    assert all(
+        torch.equal(a, b) for a, b in zip(before_clip, clip.parameters())
+    ), "ViT-bigG moved, but D-1 declares it frozen"

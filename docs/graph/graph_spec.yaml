@@ -150,12 +150,14 @@ boundary:
         SEPARATE from D-2, which covers GPT-4o for annotation and judging.
         I-Design's paper and repo use GPT-4 (not GPT-4o) for the interior
         designer / architect / engineer / corrector / refiner agents, which are
-        text-only. Changing the planner changes THE SCENES THEMSELVES, so every
+        text-only. Implemented by PATCHING I-Design's filter_dict
+        (setup/patches/idesign-01), not by aliasing Qwen as "gpt-4" in vLLM --
+        that was the first approach and was abandoned because every log line
+        then read gpt-4 while Qwen did the work. Changing the planner changes THE SCENES THEMSELVES, so every
         Table 2 row and Table 3 scene column shifts together; it does not touch
-        Table 1, which never runs the planner. Reached through an
-        OpenAI-compatible alias (vLLM --served-model-name gpt-4 ...), so
-        I-Design's source is unmodified; the real model id is recorded per
-        scene in its sidecar.
+        Table 1, which never runs the planner. The model name is
+        qwen2.5-7b-instruct everywhere -- vLLM, the config, the patched filter
+        and every scene sidecar. No alias exists.
 
   external_systems:
     - {name: "HuggingFace SFXX/ulip", kind: model_provider, failure_semantics: "unavailable => FAILED, no substitute", trust: trusted, validated_by: "sha256 plus a behavioural check"}
@@ -328,14 +330,17 @@ state:
           directionality                  U-19: directed or symmetric, per edge type
 
     - name: stage2_protocol
-      type: "{status: unresolved|resolved, pairing_method, modality_source, decided_by, decided_at}"
+      type: "{status: unresolved|resolved, pairing_method, modality_source, scene_dropout_granularity: batch|sample, decided_by, decided_at}"
       writers: [n09b_resolve_stage2_protocol]
       readers: [G6_stage2_ready, n13_train_stage2, n15b_resolve_composition_protocol, n18_train_ablations]
       merge: replace
       lifetime: persistent
       note: >
-        [U-08a / U-08b] Holds the decision itself, and stays mutable until it is
-        made. An earlier draft had n09_build_splits write stage2_pairing as
+        [U-08a / U-08b / U-32] Holds the decision itself, and stays mutable
+        until it is made. scene_dropout_granularity is here rather than in
+        stage1_protocol because scene dropout is a Stage 2 mechanism; the
+        faithful reading of "omitted in 30% of batches" is `batch`, and the
+        implementation currently does `sample`. An earlier draft had n09_build_splits write stage2_pairing as
         write_once while U-08a was still open -- writing an empty mapping would
         have locked the channel before the answer existed. The decision is now
         its own node, and only once status == resolved is the mapping committed.

@@ -33,6 +33,7 @@ frozen on a single card -- not the point encoder.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 import torch
 from torch import Tensor, nn
@@ -77,6 +78,9 @@ class DualTowerConfig:
     use_layout: bool = True
     init_lambda: float = 1.0
     scene_dropout: float = 0.30
+    # U-32. "batch" is the literal reading of 2.6 ("omitted in 30% of
+    # batches"); "sample" is kept selectable as the variant.
+    scene_dropout_granularity: Literal["batch", "sample"] = "batch"
 
     def __post_init__(self) -> None:
         if self.query_fusion is None:
@@ -209,7 +213,7 @@ class MetaFindDualTower(nn.Module):
 
     def __init__(self, cfg: DualTowerConfig) -> None:
         super().__init__()
-        self.cfg = cfg = cfg or DualTowerConfig()
+        self.cfg = cfg
         self.query = QueryTower(cfg)
         self.gallery = GalleryTower(cfg)
 
@@ -235,10 +239,27 @@ class MetaFindDualTower(nn.Module):
     def sample_scene_dropout(
         self, batch_size: int, generator: torch.Generator | None = None, device="cpu"
     ) -> Tensor:
-        """Draw sec. 2.6's 30% scene dropout mask. True means "drop the layout"."""
+        """Draw sec. 2.6's 30% scene dropout mask. True means "drop the layout".
+
+        Granularity follows ``cfg.scene_dropout_granularity`` (U-32):
+
+        * ``"batch"`` -- ONE draw for the whole batch, which is what 2.6 says:
+          "the layout vector e_layout is omitted in 30% of batches". Every row
+          then shares the layout condition, so the in-batch negatives of a
+          contrastive step are all in the same regime.
+        * ``"sample"`` -- an independent draw per row.
+
+        The two are not interchangeable for an in-batch contrastive loss.
+        Note 2.6's OTHER 30%, the Stage 1 modality masking, is explicitly
+        "independently" per modality; that one is genuinely per-sample. An
+        earlier version applied the per-sample reading to both.
+        """
         p = self.cfg.scene_dropout
         if not 0.0 <= p <= 1.0:
             raise ValueError(f"scene_dropout must be in [0, 1], got {p}")
+        if self.cfg.scene_dropout_granularity == "batch":
+            drop = torch.rand((), device=device, generator=generator) < p
+            return drop.expand(batch_size).clone()
         return torch.rand(batch_size, device=device, generator=generator) < p
 
     def forward(

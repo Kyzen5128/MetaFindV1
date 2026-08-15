@@ -115,7 +115,7 @@ def test_mask_token_is_what_carries_the_difference(kind: str):
 
 def test_absent_slots_participate_by_default():
     """U-11: sec. 2.6's contrast only has a referent if the slot is aggregated."""
-    assert FusionConfig().include_absent_slots is True
+    assert FusionConfig(dim=D).include_absent_slots is True
 
     torch.manual_seed(0)
     incl = ModalityFusion(FusionConfig(kind="mean", dim=D, include_absent_slots=True)).eval()

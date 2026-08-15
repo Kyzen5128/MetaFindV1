@@ -208,9 +208,9 @@ class ESSGCL(nn.Module):
 class ESSGNN(nn.Module):
     """Full layout encoder: L x ESSGCL, then pooling to ``e_layout``."""
 
-    def __init__(self, cfg: ESSGNNConfig | None = None) -> None:
+    def __init__(self, cfg: ESSGNNConfig) -> None:
         super().__init__()
-        self.cfg = cfg = cfg or ESSGNNConfig()
+        self.cfg = cfg
 
         in_dim = cfg.node_feat_dim + (3 if cfg.h0_mode == "concat_xt" else 0)
         self.embed_in = nn.Linear(in_dim, cfg.hidden_dim)

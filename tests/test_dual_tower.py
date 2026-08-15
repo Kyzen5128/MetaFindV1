@@ -111,11 +111,38 @@ def test_essgnn_width_mismatch_is_rejected_at_construction():
 # --------------------------------------------------------------- scene dropout
 
 
-def test_scene_dropout_rate_is_30_percent():
+def test_scene_dropout_rate_is_30_percent_per_batch():
+    """U-32: sec. 2.6 drops the layout "in 30% of batches", so the unit is a batch.
+
+    Measuring one large batch cannot see this rate at all -- under batch
+    granularity a single batch is entirely dropped or entirely kept, so the
+    within-batch mean is 0.0 or 1.0. The rate only exists across batches.
+    """
     model = MetaFindDualTower(cfg())
+    g = torch.Generator().manual_seed(0)
+    dropped = [
+        bool(model.sample_scene_dropout(8, generator=g)[0].item()) for _ in range(20_000)
+    ]
+    rate = sum(dropped) / len(dropped)
+    assert abs(rate - 0.30) < 0.01, f"per-batch scene dropout rate {rate:.4f}"
+
+
+def test_scene_dropout_batch_granularity_is_uniform_within_a_batch():
+    """The whole point of batch granularity: every row shares the condition."""
+    model = MetaFindDualTower(cfg())
+    g = torch.Generator().manual_seed(0)
+    for _ in range(50):
+        mask = model.sample_scene_dropout(16, generator=g)
+        assert mask.unique().numel() == 1, "a batch-level draw must not vary within the batch"
+
+
+def test_scene_dropout_sample_granularity_varies_within_a_batch():
+    """The variant stays available and must behave differently (U-32)."""
+    model = MetaFindDualTower(cfg(scene_dropout_granularity="sample"))
     mask = model.sample_scene_dropout(200_000, generator=torch.Generator().manual_seed(0))
     rate = mask.float().mean().item()
-    assert abs(rate - 0.30) < 0.01, f"scene dropout rate {rate:.4f}"
+    assert abs(rate - 0.30) < 0.01, f"per-sample scene dropout rate {rate:.4f}"
+    assert mask.unique().numel() == 2, "independent draws should produce both values"
 
 
 def test_scene_dropout_suppresses_only_the_marked_rows():

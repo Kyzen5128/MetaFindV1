@@ -71,8 +71,11 @@ class FusionConfig:
         dropout: dropout inside the MLP/transformer variants.
     """
 
+    # REQUIRED and first: the width comes from the loaded checkpoint, and 1280
+    # is a measured fact about ULIP-2 rather than a value the paper states --
+    # the paper contains no dimension anywhere.
+    dim: int
     kind: FusionKind = "masked_mlp"
-    dim: int = 1280
     hidden: int = 2048
     n_heads: int = 8
     n_layers: int = 2

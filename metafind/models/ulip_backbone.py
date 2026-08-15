@@ -274,4 +274,9 @@ class ULIPBackbone:
             raise ValueError(f"{what} embedding is {out.size(-1)}-d, expected {EMBED_DIM}")
         if not torch.isfinite(out).all():
             raise ValueError(f"{what} embedding contains non-finite values")
-        return out.float().cpu()
+        # Stay on the device. encode_pc is in Stage 1's autograd path, and a
+        # .cpu() here would both break the graph's placement and force a
+        # GPU->CPU->GPU round trip every step. Callers that want CPU tensors
+        # (the gallery index writer, cached text/image embeddings) call .cpu()
+        # themselves, where it is a deliberate transfer rather than a hidden one.
+        return out.float()

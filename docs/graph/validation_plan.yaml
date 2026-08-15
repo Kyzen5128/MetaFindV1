@@ -190,10 +190,20 @@ level_1:
   - id: L1-SCENE-DROPOUT-30
     target: n13_train_stage2
     target_kind: node
-    asserts: "the layout term is dropped for 30% +/- 1% of samples"
-    negative_injection: "set the rate to 0"
-    expected_on_injection: "the measured rate assertion fails"
+    asserts: >
+      The layout term is dropped at 30% +/- 1%, at the granularity named by
+      stage2_protocol.scene_dropout_granularity. Under `batch`, every sample in
+      a dropped batch has no layout and every sample in a kept batch has one --
+      the within-batch variance of the drop mask is zero. Under `sample`, draws
+      are independent within a batch.
+    negative_injection: "set the rate to 0; and separately, apply per-sample draws while the protocol says batch"
+    expected_on_injection: "the measured rate assertion fails; and the within-batch variance is non-zero where the protocol requires zero"
     verified_blocks: false
+    note: >
+      [U-32] Paper 2.6 says "omitted in 30% of batches" for scene dropout, and
+      separately says each modality is masked "independently" at 30% for Stage
+      1. Those are different statements; an earlier version of this check
+      asserted a per-sample rate for both.
 
   # ---- losses
   - id: L1-LOSS-STAGE1-UNIDIRECTIONAL
@@ -1010,6 +1020,12 @@ level_3_gates:
       AND scene_splits is populated with disjoint train_houses and test_houses
           (house-level leakage_count == 0; moved here from G3, which no longer
            touches the ProcTHOR branch)
+      AND stage2_protocol.scene_dropout_granularity is one of {batch, sample}
+          (U-32: paper 2.6 says the layout vector "is omitted in 30% of
+           BATCHES", which reads as one draw per batch; the implementation
+           draws per sample. The two give different in-batch contrastive
+           distributions, so Stage 2 must not start without the answer on
+           record)
       AND essgnn_edge_protocol.status == "resolved", naming topology,
           physical_relation_encoding, semantic_missing_representation and
           directionality (U-29, U-30, U-19) -- without these the ESSGNN edge
@@ -1045,8 +1061,17 @@ level_3_gates:
     record_kind: gate
     position: "between n15b_resolve_composition_protocol and n15c_prepare_eval_scenes"
     criterion: >
-      composition_protocol.status == resolved AND source is one of
-      {procthor_via_idesign, idesign_generated} AND g0_source,
+      composition_protocol.status == resolved
+      AND source == "idesign_generated"
+          [procthor_via_idesign is NOT accepted. U-27 measured that I-Design's
+           only entry point is IDesign(no_of_objects, user_input,
+           room_dimensions) -- there is no way to hand it a finished ProcTHOR
+           house, and procthor_to_idesign_adapter does not exist. A gate that
+           can mark a protocol "resolved" when nothing downstream can execute
+           it is not a gate. Reading A stays an open candidate for U-21;
+           RESOLVING to it is what is refused, and this line changes the moment
+           the adapter is specified and validated.]
+      AND g0_source,
       query_list_source, placement_rule, new_node_t_i, new_phys_edges and
       new_sem_edges are all populated with a stated method
     evidence: [L1-GATE-NORECORD]

@@ -618,7 +618,7 @@ graph TD
 
 **論文說了什麼：** §3.3 只有一句 —— "the scene generation pipeline of I-Design on a set of 200 randomly sampled scenes"。沒有規劃器模型、沒有 I-Design 設定、沒有 prompt、沒有房間尺寸、沒有物件數、沒說失敗場景怎麼處理、也沒說那 200 個是不是從更多次嘗試裡留下來的。
 
-**`setup/patches/` 裡的五個 patch 是為了「讓場景跑得完」而做的工程決定，沒有任何論文依據，報告中必須如此聲明。** 要把這件事從「開放問題」變成「量測」，需要先建立基準 —— 聯繫作者，或用 I-Design 原本的規劃器跑一次。
+**`setup/patches/` 裡的三個 patch 是為了「讓場景跑得完」而做的工程決定，沒有任何論文依據，報告中必須如此聲明**（其中 02、03 會改變場景內容與完成率，不是格式調整）。 要把這件事從「開放問題」變成「量測」，需要先建立基準 —— 聯繫作者，或用 I-Design 原本的規劃器跑一次。
 
 ---
 
@@ -821,3 +821,32 @@ graph TD
 
 新增兩條會真正抓到 #97 的測試：`L1-STAGE1-POINT-ENCODER-TRAINS`（一步之後 PointBERT 必須變、ViT-bigG 必須不變）與
 `L1-STAGE1-CACHE-DISCIPLINE`（主線不得讀 pc embedding 快取 —— 快取三個模態就等於做 `fuser_only`）。
+
+### 2026-08-15 第九輪（外部兩遍逐字審查後）
+
+審查者固定在 `03c10bb`，第一遍驗上一輪的修正是否真的落到檔案與程式，
+第二遍**完全重頭**重讀論文與全部文件、model code、tests、I-Design 整合。
+明確回報：**第二遍重建 paper facts 後沒有發現新的「核心架構理解做反」問題**，
+上一輪的 PointBERT frozen-backbone 錯誤也確認真的修進 code 了。
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 111 | **G7 仍允許 `procthor_via_idesign` 被判為 resolved。** `graph_spec` 的 channel note 已寫明它「NOT CURRENTLY A LEGAL RESOLVED VALUE」，但正式 `validation_plan` 的 G7 criterion 還寫 `source is one of {procthor_via_idesign, idesign_generated}` —— **gate 可以把一個下游根本無法執行的協定判成通過** | G7 只接受 `idesign_generated`，直到 `procthor_to_idesign_adapter` 被定義並驗證。Reading A 仍是 U-21 的候選 | 🔴 **可 resolve 到不可執行的協定** |
+| 112 | **U-32 被發現卻沒進 protocol。** `stage2_protocol` 沒有 `scene_dropout_granularity`、G6 不檢查、程式仍是 per-sample、validation 還在驗 per-sample —— 和先前抓到的「**發現 UNKNOWN ≠ 放進 graph**」是同一類錯 | 欄位進 `stage2_protocol`、`G6` 檢查；**程式主線改為 batch-level**（§2.6 字面），sample 保留為變體；測試改成跨批量測（batch 粒度下單批的比率只會是 0 或 1） | 🔴 |
+| 113 | `graph_spec` 的 D-5 還留著舊的 `--served-model-name gpt-4` 別名說法 | 刪除；改寫為「模型名處處都是 `qwen2.5-7b-instruct`，沒有別名」 | 🟠 |
+| 114 | 第二權威 `02_BUILD_STEPS` 仍把 ULIP-2 checkpoint 寫成 **frozen backbone** | 改為「PointBERT／`pc_projection` 的初始權重，Stage 1 繼續訓練；只有 CLIP 側凍結」 | 🟠 |
+| 115 | **`02_BUILD_STEPS` 的快取說法把三個模態混為一談** —— 寫成「快取 embedding 只用於 `fuser_only`」。正確是**只有點雲**如此；text／image 走凍結的 ViT-bigG，主線本來就該快取 | 分開寫，並給出機制理由：**embedding 快取按定義是「不再更新的網路」的輸出**，在主線快取點雲等於做 `fuser_only` | 🟠 |
+| 116 | `02_BUILD_STEPS` 的 UNKNOWN 表停在 U-31 | 補 U-32 | 🟠 |
+| 117 | **Stage 1 的新凍結契約沒有真正的 pytest 防回歸。** `test_ulip_backbone.py` 標題還叫 "frozen ULIP-2 backbone loader"，沒有測 `train_scope`，也沒有 optimizer step 驗證 | 新增四條測試，含 optimizer step 後 **PointBERT 必須變、ViT-bigG 必須不變**。**負向注入確認**：把 point encoder 凍回去，測試立刻紅 3 條並指出「主線悄悄變成 `fuser_only`」 | 🟠 **上一輪只加了 L1 規格，沒加實際測試** |
+| 118 | `FusionConfig.dim` 仍預設 1280 | 改為必填並前置。與 `DualTowerConfig.dim`、`ESSGNNConfig` 三個寬度一致 | 🟠 |
+| 119 | `encode_pc` 已可傳梯度，但 `_check()` 最後無條件 `.cpu()` —— 訓練路徑會 GPU→CPU→GPU 往返 | 保持原 device；要 CPU 的呼叫端自己轉，讓傳輸變成明示而非隱藏 | 🟠 |
+| 120 | **`ESSGNN()` 與 `MetaFindDualTower()` 的假 optional constructor 還在**（`cfg or ESSGNNConfig()`），而那兩個 config 都已不能空建 —— 上一輪我改了型別註記卻沒改函式體 | 兩處都移除 | 🟡 |
+| 121 | `node_registry`／`validation_plan` 的 G6 說明還寫「two failure modes」（實際三種）；G5 note 還停在 `RA-1/2/3` + `D-1..D-4` | 同步 | 🟡 |
+| 122 | `01_GRAPH_SPEC` 寫「`setup/patches/` 裡的**五個** patch」，實際三個 | 更正，並註明其中兩個會改變場景內容與完成率 | 🟡 |
+
+**審查者同時指出的「尚未實作」區塊，我同意且不視為缺陷**：
+`n10_train_stage1`／`n13_train_stage2` 的 trainer、以及 `n15c` 把 I-Design 的
+`scene_graph.json` 轉成 `evaluation_scene_inputs`（`G_0` + `{Q_1..Q_N}`）的 adapter，
+目前都只存在於規格。準確的現況描述是
+**「復現規格與核心模型元件接近可鎖；完整 training／evaluation workflow 尚未實作」**，
+而不是「可以直接開始完整復現訓練」。
