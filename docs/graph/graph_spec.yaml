@@ -303,6 +303,30 @@ state:
         G3_object_corpus checks that the record is complete and that each field
         names a choice, which makes the choices appear in the report.
 
+    - name: essgnn_edge_protocol
+      type: "{status: unresolved|resolved, topology, physical_relation_encoding, semantic_missing_representation, directionality, decided_by, decided_at}"
+      writers: [n09b_resolve_stage2_protocol]
+      readers: [G6_stage2_ready, n13_train_stage2, n14_equivariance_probe, n18_train_ablations]
+      merge: replace
+      lifetime: persistent
+      note: >
+        [U-29 / U-30 / U-19 -- BLOCKING for Stage 2] Registering these as
+        UNKNOWNs was not enough: metafind/models/essgnn.py already decides them.
+        Its forward takes edge_attr with one row per edge and concatenates it
+        straight into f_h and f_x, so the implementation assumes EVERY
+        message-passing edge carries a fixed-width semantic embedding. There is
+        no physical-edge type feature, no validity bit, no missing-edge
+        embedding, no geometry-only path. That is one answer to U-29 and U-30,
+        chosen by code rather than recorded as a decision, and G6 did not stop
+        Stage 2 from training on it.
+        Fields:
+          topology                        physical only | semantic only | union | parallel edges
+          physical_relation_encoding      how support vs adjacency is represented, if at all
+          semantic_missing_representation what the e-wide slot holds when there is no
+                                          sentence; must be distinguishable from a valid
+                                          embedding, so not zeros
+          directionality                  U-19: directed or symmetric, per edge type
+
     - name: stage2_protocol
       type: "{status: unresolved|resolved, pairing_method, modality_source, decided_by, decided_at}"
       writers: [n09b_resolve_stage2_protocol]
@@ -508,13 +532,19 @@ state:
           G_0            <- room_priors (6 layout elements, empty room)
           Q_i            <- the plan objects, in backtrack order
 
-        The sixth, t_i for a newly placed node, is NOT free. It must come from
-        the RETRIEVED asset's annotation, not from the plan text. If it came
-        from the plan, G at every step would be predictable from the plan alone,
-        ESSGNN(G) would not depend on what was retrieved, and iterative
-        composition would produce exactly the same sequence as parallel --
-        making Table 3's "w/o iterative retrieval" row measure nothing. That is
-        a derivation from the ablation having to be meaningful, not a guess.
+        The sixth, t_i for a newly placed node, is a CHOICE, and our candidate
+        is the retrieved asset's annotation rather than the plan text: it makes
+        e_layout reflect what retrieval actually returned, which is the
+        mechanism the paper credits iterative composition with.
+        [OVERREACH CORRECTED] An earlier version argued this was forced --
+        that plan-derived t_i would make iterative identical to parallel and
+        leave Table 3's "w/o iterative retrieval" row measuring nothing. That
+        does not follow. Iterative grows G by one placed node per step while
+        parallel evaluates every query against G_0, so e_layout(G_i) differs
+        from e_layout(G_0) whatever t_i is built from. Plan-derived t_i only
+        makes the sequence independent of WHICH asset was retrieved, not
+        identical to parallel. Recorded as a preference with a reason, not a
+        derivation.
 
     - name: evaluation_scene_inputs
       type: "map[scene_id -> {g0_uri, query_list, room_type, source, source_revision}]"

@@ -6,14 +6,20 @@
 > **三種東西必須分開，不可混為一談：**
 > **[論文]** 原文明確規定 ｜ **[未定]** 論文沒說，我們選了一個並記錄 ｜ **[偏離]** 與論文不同，必須在報告中聲明
 
-**正式偏離只有四項**，編號與 `README.md`、`graph_spec.yaml` 一致，不得另編：
+**正式偏離五項**，編號與 `README.md`、`graph_spec.yaml` 一致，不得另編：
 
 | id | 偏離 |
 |---|---|
 | **D-1** | ViT-bigG-14 凍結（2.5B 參數在 24GB 上無法訓練） |
-| **D-2** | Qwen2.5-VL 取代 GPT-4o |
+| **D-2** | Qwen2.5-VL 取代 **GPT-4o**（資產標註與場景評分） |
 | **D-3** | 不重跑 6 個 baseline |
 | **D-4** | 不做人工評分 |
+| **D-5** | I-Design 的五個規劃 agent 改用 `Qwen2.5-7B-Instruct`，取代 **GPT-4** |
+
+**D-5 與 D-2 是兩件事。** D-2 換的是 GPT-4o（標註／評分），D-5 換的是 GPT-4（I-Design 規劃器）。
+換規劃器會**改變場景本身**，Table 2 全部與 Table 3 場景欄一起位移；Table 1 完全不受影響。
+做法是**直接 patch I-Design 的 `filter_dict`**（`setup/patches/idesign-01`），
+模型名從頭到尾都是 `qwen2.5-7b-instruct`，**沒有用別名**。
 
 本文先前把「GLB 不刪」編成 D-1、把 ViT-bigG 凍結編成 D-3，與上述兩份文件錯位，已更正。
 **「保留 GLB」和「不提供 caption fallback」都不是偏離** —— 論文沒有相反規定，
@@ -528,8 +534,17 @@ Appendix C  m_ij = φ_e(h_i, h_j, ‖x_i − x_j‖², e_ij)   (10)，(11)(12) �
 
 Algorithm 1 逐物件檢索並放置，需要 **I-Design** 與**真實 mesh 幾何**（所以 GLB 不刪）。
 
-**[未驗證 R-01]** I-Design 尚未測試能否執行。Table 2 全部與 Table 3 的場景欄全部依賴它。
-**這是目前最大的未知，而且查它很便宜。**
+**[R-01 —— 已部分實測 2026-08-15]**
+
+| 項目 | 結果 |
+|---|---|
+| 能不能裝 | **能**。README／Dockerfile 要的 MinkowskiEngine、dgl、torch 1.12 **都不需要**（只有 `retrieve.py` 用，而那正是 MetaFind 取代的）。另：`requirements.txt` 的 `ag2==0.2.0` **PyPI 上不存在**，要用 `pyautogen==0.2.0` |
+| 能不能啟動 | **能**。`create_initial_design` 完成並通過 I-Design 自己的 schema 驗證 |
+| 能不能產出場景 | **不能**。Qwen2.5-7B 跑 5 次、**0 個完成**，每次失敗在不同的下游路徑 |
+
+**但沒有基準，所以不能斷定那 5 次是缺陷。** I-Design 沒用它原本的規劃器在本機跑過，
+論文也沒說那是什麼。`setup/patches/` 的三個 patch 是**為了讓場景跑得完而做的工程決定，
+沒有論文依據**，其中 02、03 會改變場景與完成率（不是格式調整）。
 
 **[未定 U-21 — 阻斷級] Table 2 的資料流先前根本沒有閉合。**
 
@@ -673,4 +688,12 @@ IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Ta
 | U-23 | 三個模態同時被遮罩時代表什麼（獨立 30% → 2.7% 的 query 全空） | Stage 1 訓練訊號 |
 | U-24 | `sim(·,·)` 從未定義 | 所有 loss 與排序 |
 | U-25 | §2.2 的「adaptive freezing strategies」全文沒有定義 | Stage 2 最佳化 |
-| U-26 | `f_h`／`f_x` 是否共用一條訊息（§2.5 vs Appendix C） | ESSGNN 參數化 |
+| U-26 | `f_h`／`f_x` 是否共用一條訊息，**以及 `f_x` 看到的是 `h^{l+1}` 還是 `h^l`** | ESSGNN 參數化 |
+| U-27 | I-Design 自己的輸入（prompt／房間尺寸／物件數）論文全沒給 | Table 2 |
+| U-28 | Table 1 在 layout-free 資料集評 `w/ ESSGNN` 時 `e_layout` 是什麼 | **Table 1 那一列 7 格** |
+| **U-29** | **物理邊怎麼進 ESSGNN**（`f_h`／`f_x` 只吃一個 `e_ij`，而它是**語意**邊） | **ESSGNN 架構** |
+| **U-30** | **沒有語意嵌入時，固定寬度的 `e` 格填什麼**（禁止補零，但記旗標≠說明張量） | **ESSGNN 架構** |
+| U-31 | ESSGNN 的 L 層是否共用參數（`θ` 沒有層索引） | 參數量、F11 是否成立 |
+
+**U-29／U-30 由 `essgnn_edge_protocol` channel 承載，`G6` 在 Stage 2 訓練前強制。**
+登記成 UNKNOWN 是不夠的 —— `essgnn.py` 已經替它們做了決定（假定每條邊都有固定寬度的語意嵌入）。

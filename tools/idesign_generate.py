@@ -123,6 +123,11 @@ def main() -> int:
         help="Must match both the patched filter_dict and vLLM --served-model-name.",
     )
     ap.add_argument("--n-scenes", type=int, default=len(SMOKE_PROMPTS))
+    ap.add_argument(
+        "--scene-spec-file",
+        type=Path,
+        help="JSONL of scene specs; required for anything larger than a smoke run.",
+    )
     args = ap.parse_args()
 
     if not (args.idesign_repo / "IDesign.py").exists():
@@ -134,14 +139,35 @@ def main() -> int:
         capture_output=True,
         text=True,
     ).stdout.strip()
+    patch_dir = Path(__file__).resolve().parents[1] / "setup" / "patches"
+    applied_patches = sorted(p.stem for p in patch_dir.glob("idesign-*.patch"))
     served = endpoint_model_id(args.base_url)
     print(f"I-Design {revision[:8]} | endpoint serves: {served}")
+    print(f"patches applied: {', '.join(applied_patches) or 'none'}")
 
     args.out.mkdir(parents=True, exist_ok=True)
     records, failures = [], 0
 
-    for i in range(args.n_scenes):
-        prompt, dims, n_obj = SMOKE_PROMPTS[i % len(SMOKE_PROMPTS)]
+    if args.scene_spec_file:
+        specs = [json.loads(line) for line in args.scene_spec_file.read_text().splitlines() if line.strip()]
+        scenes = [(d["prompt"], d["room_dimensions"], d["n_objects"]) for d in specs][: args.n_scenes]
+    else:
+        # Refuse to stretch two smoke prompts into an evaluation set. Cycling
+        # them would hand back 100 copies of each and call it "200 randomly
+        # sampled scenes" (paper 3.3), which it is not. The real list is part of
+        # the composition protocol decision (U-21/U-27) and is not invented here.
+        if args.n_scenes > len(SMOKE_PROMPTS):
+            print(
+                f"--n-scenes {args.n_scenes} exceeds the {len(SMOKE_PROMPTS)} smoke "
+                "prompts. Pass --scene-spec-file with one JSON object per line "
+                '({"prompt", "room_dimensions", "n_objects", "seed", "source"}) '
+                "derived from the resolved composition_protocol.",
+                file=sys.stderr,
+            )
+            return 2
+        scenes = SMOKE_PROMPTS[: args.n_scenes]
+
+    for i, (prompt, dims, n_obj) in enumerate(scenes):
         scene_id = f"scene_{i:04d}"
         workdir = args.out / scene_id
         write_config(workdir, args.base_url, args.api_key, args.model)
@@ -158,7 +184,14 @@ def main() -> int:
         rec |= {
             "scene_id": scene_id,
             "idesign_revision": revision,
-            "idesign_patches": ["idesign-01-qwen-model-name"],
+            # Every patch applied, not just the cosmetic one. 02 and 03 change
+            # BEHAVIOUR -- 02 moves layout references, canonicalises
+            # prepositions, drops dangling ids and deduplicates objects; 03
+            # bounds the correction loops, varies the cache seed per retry and
+            # abandons a scene on exhaustion. Both change which scenes exist and
+            # what they contain, so a sidecar naming only patch 01 would tell a
+            # later reader the scenes came from near-stock I-Design.
+            "idesign_patches": applied_patches,
             # D-5: I-Design's planner is GPT-4 upstream; here it is Qwen.
             "planner_model": args.model,
             "planner_endpoint_serves": served,

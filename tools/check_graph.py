@@ -207,6 +207,29 @@ for dep in spec["dependencies"]["dag"]:
     )
 
 
+# --- 8c. gate evidence must name checks that exist -----------------------
+# G3 cited L2-LEAK for a whole round after that check was split into
+# L2-LEAK-OBJECT and L2-LEAK-SCENE. A gate resting on a check that does not
+# exist is a gate resting on nothing.
+check_ids = {c["id"] for c in plan["level_1"]} | {c["id"] for c in plan["level_2"]}
+for g in plan["level_3_gates"]:
+    for ev in g.get("evidence", []):
+        check(
+            f"{g['gate_id']} evidence {ev}",
+            ev in check_ids,
+            "names a check that does not exist in level_1 or level_2",
+        )
+
+for c in plan["level_2"]:
+    gate = c.get("cited_by_gate")
+    if gate:
+        check(
+            f"{c['id']} cited_by_gate",
+            gate in {g["gate_id"] for g in plan["level_3_gates"]},
+            f"cites {gate}, which is not a gate",
+        )
+
+
 # --- 9. execution order respects declared dependencies -------------------
 # n20 and n21 were once scheduled in the same layer while n21 depended on n20.
 layer_of: dict[str, int] = {}

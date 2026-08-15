@@ -147,7 +147,9 @@ def test_translation_only_invariance():
 
 def test_coords_agg_defaults_to_sum_per_eq3():
     """Eq. 3 sums over neighbours; the reference EGNN defaults to mean (F9)."""
-    assert ESSGNNConfig().coords_agg == "sum"
+    # Widths are required arguments now: the paper states none, so no default
+    # may look like a paper value (L1-EGNN-DIMS-NOT-HARDCODED).
+    assert ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8).coords_agg == "sum"
 
 
 def test_sum_and_mean_differ():
@@ -242,7 +244,7 @@ def test_semantic_edges_change_the_output():
 
 def test_edge_projection_is_absent_by_default():
     """The paper has no projection layer on e_ij, so the faithful default is None."""
-    assert ESSGNNConfig().edge_proj_dim is None
+    assert ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8).edge_proj_dim is None
     cfg = ESSGNNConfig(node_feat_dim=32, edge_feat_dim=1280, hidden_dim=64, out_dim=64, n_layers=1)
     model = ESSGNN(cfg)
     in_features = model.layers[0].f_h[0].in_features

@@ -107,10 +107,23 @@ class ESSGNNConfig:
             paper and in the reference implementation.
     """
 
-    node_feat_dim: int = 1280
-    edge_feat_dim: int = 1280
+    # NO PAPER DEFAULTS. The paper contains no dimension anywhere: it writes
+    # t_i in R^d and f_h : R^(2d+1+e) -> R^d, and "After L layers" without an L.
+    # Widths that a checkpoint or a protocol determines are REQUIRED arguments,
+    # so a caller cannot inherit a number that looks like a paper value:
+    #   node_feat_dim  the t_i encoder's width (U-20, still open)
+    #   edge_feat_dim  the semantic edge encoder's width (U-06, still open)
+    #   out_dim        must equal the fusion output so Eq. 6's residual is well
+    #                  formed; read from the loaded ULIP-2 checkpoint
+    # An earlier version defaulted all three to 1280, which is the ULIP-2
+    # checkpoint's width -- a measured fact about a backbone, not a value the
+    # paper states. L1-EGNN-DIMS-NOT-HARDCODED forbids exactly that.
+    node_feat_dim: int
+    edge_feat_dim: int
+    out_dim: int
+    # Reproduction hyperparameters chosen by us (U-22). The paper gives no
+    # value for either; these are recorded in stage1_protocol and reported.
     hidden_dim: int = 128
-    out_dim: int = 1280
     n_layers: int = 4
     h0_mode: H0Mode = "semantic"
     coord_feat: CoordFeat = "updated"

@@ -901,11 +901,26 @@ level_3_gates:
     record_kind: gate
     position: "between n09_build_splits and n10_train_stage1"
     criterion: >
-      leakage_count == 0 at object and house level
+      object-level leakage_count == 0
       AND admitted + quarantined == len(manifest)
       AND quarantine_rate <= 0.02
-      AND both evaluation protocols are defined with explicit gallery sizes
-    evidence: [L2-LEAK, L2-COMPLETE, L1-PROTOCOLS-DEFINED, L1-QUAR-REASON]
+      AND both evaluation protocols are defined with explicit query and gallery scopes
+      AND stage1_protocol.status == "resolved", with fusion, image_aggregation,
+          text_serialization, tower_sharing, allow_all_masked, similarity and
+          hyperparameter_config_hash each naming a choice
+          (U-13, U-14, U-15, U-16, U-23, U-24, U-22)
+    evidence: [L2-LEAK-OBJECT, L2-COMPLETE, L1-PROTOCOLS-DEFINED, L1-QUAR-REASON]
+    scope_note: >
+      [CORRECTED] The criterion said "at object and house level" and cited
+      L2-LEAK, a check that no longer exists -- it was split into
+      L2-LEAK-OBJECT and L2-LEAK-SCENE when the Objaverse and ProcTHOR branches
+      were decoupled. Leaving house leakage here quietly reattached Stage 1 to
+      the ProcTHOR branch through the validation contract, undoing the
+      decoupling. House leakage belongs to G6_stage2_ready, in front of the
+      spend that needs it.
+      The stage1_protocol clause is what makes n10 unable to start on silent
+      defaults; an earlier attempt to add it did not match the file text and
+      was lost.
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G3_object_corpus.yaml"
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
@@ -924,7 +939,12 @@ level_3_gates:
       index width equals the checkpoint's embedding width
       AND index count equals len(admitted)
       AND no NaN and no zero vectors
-      AND self-retrieval recall@1 over 1000 samples == 1.0
+      AND for each of 1000 sampled gallery vectors used as its own query,
+          sim(target) == max(sim) and the target is a member of the argmax
+          tie set
+          [CORRECTED from "recall@1 == 1.0", which is not tie-safe: two
+           identical embeddings let argmax return either id, so a correct index
+           can score below 1.0 and a broken one can reach it]
     evidence: [L2-GALLERY-SELF]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G4_gallery_freeze.yaml"
@@ -951,7 +971,13 @@ level_3_gates:
       AND every ProcTHOR asset used as a Stage 2 target resolves to exactly one
           gallery entry in stage2_pairing
       AND scene_splits is populated with disjoint train_houses and test_houses
-    evidence: [L1-STAGE2-POSITIVE-DEFINED, L1-STAGE2-QUERY-ENCODERS-FROZEN]
+          (house-level leakage_count == 0; moved here from G3, which no longer
+           touches the ProcTHOR branch)
+      AND essgnn_edge_protocol.status == "resolved", naming topology,
+          physical_relation_encoding, semantic_missing_representation and
+          directionality (U-29, U-30, U-19) -- without these the ESSGNN edge
+          semantics are decided by whatever essgnn.py happens to do
+    evidence: [L1-STAGE2-POSITIVE-DEFINED, L1-STAGE2-QUERY-ENCODERS-FROZEN, L2-LEAK-SCENE]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G6_stage2_ready.yaml"
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
@@ -1009,7 +1035,10 @@ level_3_gates:
       INSUFFICIENT_EVIDENCE, with none blank
       AND all gate records present with is_terminal == true
       AND audit records for RA-1, RA-2, RA-3 and RA-4 all present
-      AND deviations D-1 through D-4 are stated in the report body
+      AND every id in graph_spec.yaml `boundary.deviations` is stated in the
+          report body, enumerated from that list at run time rather than from
+          a hardcoded range (D-5 was added and the range D-1..D-4 missed it,
+          exactly as the U-01..U-10 range once missed U-11)
       AND every degraded_flags entry appears in the report
       AND every id in graph_spec.yaml `risks_unknowns` has a stated disposition,
           enumerated from that list at run time rather than from a hardcoded range
@@ -1145,6 +1174,14 @@ coverage_check:
     - item: "verified_blocks is false for all 67 checks"
       status: "BY DESIGN at specification time"
       action: "During implementation, flip each to true only after its negative injection has been observed to fail."
-    - item: "I-Design has not been verified to run"
-      status: "R-01, unresolved"
-      action: "Trial-run early. All of Tables 2 and 3 depend on it, and checking is cheap."
+    - item: "I-Design's completion rate has no baseline"
+      status: "R-01, PARTIALLY MEASURED 2026-08-15"
+      action: >
+        Installs; create_initial_design completes and passes I-Design's own
+        schema validation; five attempts with a 7B planner produced zero
+        finished scenes, each failing in a different downstream path. What is
+        missing is a BASELINE: I-Design has not been run here with its original
+        planner and neither paper names one, so those failures cannot yet be
+        called defects rather than an ordinary rate. Establishing that -- by
+        contacting the authors or running the original planner -- is the open
+        action, not "trial-run it".

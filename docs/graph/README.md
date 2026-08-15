@@ -14,8 +14,8 @@
 | 標記 | 意思 |
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
-| **[未定]** | 論文沒說，我們選了一個並記錄（累積 30 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**） |
-| **[偏離]** | 與論文不同，必須在報告聲明（4 條，D-1…D-4） |
+| **[未定]** | 論文沒說，我們選了一個並記錄（累積 33 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**） |
+| **[偏離]** | 與論文不同，必須在報告聲明（5 條，D-1…D-5） |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
 
@@ -57,7 +57,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | 1 | [`02_BUILD_STEPS.md`](02_BUILD_STEPS.md) | **從這裡開始**。逐步驟建置流程，每步標明論文怎麼說、我們怎麼做 |
 | 2 | [`01_GRAPH_SPEC.md`](01_GRAPH_SPEC.md) | 完整規格：分類、目標、state、節點、邊、路由、迴圈、失敗、驗證、gate、風險、修正紀錄 |
 | 3 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實測事實（F 系列）與架構決策（D 系列），**含論文的多處自相矛盾** |
-| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：43 個 state channel、51 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
+| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：44 個 state channel、51 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
 | 5 | [`node_registry.yaml`](node_registry.yaml) | 33 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
 | 6 | [`validation_plan.yaml`](validation_plan.yaml) | 50 個 L1、17 個 L2、7 個 gate、4 個 Required Audit |
 
@@ -85,6 +85,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | **D-2** | Qwen2.5-VL 取代 GPT-4o | **Table 1 與 Table 2 都受影響** —— 它不只換裁判，也換掉 46,052 筆標註（文字塔的訓練資料）。SC-1 因此只報告差距、不設門檻 |
 | **D-3** | 不重跑 6 個 baseline | 只能與論文公佈值比較，並註明協定不同 |
 | **D-4** | 不做人工評分 | Table 2 人工欄判 `INSUFFICIENT_EVIDENCE` |
+| **D-5** | I-Design 的規劃 agent 用 `Qwen2.5-7B-Instruct` 取代 **GPT-4** | **與 D-2 不同**（那是 GPT-4o／標註與評分）。換規劃器改變**場景本身** → Table 2 全部與 Table 3 場景欄位移；**Table 1 不受影響**。做法是 patch `filter_dict`，**沒有別名** |
 
 ### 論文自身的四個矛盾
 
@@ -96,15 +97,16 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | **RA-1** | §2.5 的 `h⁰ = Concat(x,t)` vs Appendix C 的「`h⁰` 對 SE(3) 不變」前提 | **失敗** |
 | **RA-2** | §2.5 的 `f_x → ℝ³` vs 證明需要 `φ_x` 為純量才能提出 `Q` | **失敗** |
 | **RA-3** | §3.4 的「fine-tune entire encoder」 vs 單卡 24GB | **不可行**，縮小 claim |
-| **RA-4** | §2.5／§3.4 宣稱 ESSGNN 解決 GAT 對 translation **與 scaling** 的敏感，但 SE(3) **不含縮放** | **失敗** |
+| **RA-4** | §2.5／§3.4 宣稱 ESSGNN 解決 GAT 對 translation **與 scaling** 的敏感，但 SE(3) **不含縮放** | **量測，不預測** |
 
-**RA-4 是這次逐字重讀才發現的。** §2.5 的動機是
-"GATs are highly sensitive to global translation **and scaling**"，
-§3.4 的 takeaway 也重複一次。但論文能證的、也只證了 SE(3) 等變 ——
-**縮放不在 SE(3) 裡**，而且架構上不可能做到：`x → s·x` 時
-`‖x_i − x_j‖²` 變成 `s²‖x_i − x_j‖²`，每一條訊息都會變。
-**它的解法只覆蓋了它自己陳述的動機的一半。**
-RA-1／RA-2 是式子寫錯，RA-4 是 claim 開太大 —— 兩者都只能記錄、不能擋。
+**RA-4 是逐字重讀才發現的。** §2.5 的動機是
+"GATs are highly sensitive to global translation **and scaling**"，§3.4 也重複一次。
+但論文證的是 SE(3) 等變，**縮放不在 SE(3) 裡** —— 所以**沒有結構性保證**：
+`x → s·x` 時 `‖x_i − x_j‖²` 變成 `s²‖x_i − x_j‖²`，每條訊息都會變。
+
+**但「沒有保證」不等於「一定做不到」** —— MLP 仍可能學到在訓練範圍內對尺度不敏感的行為。
+RA-4 **量測 `e_layout` 實際移動多少，不預測結果**。
+RA-1／RA-2 是式子寫錯，RA-4 是 claim 開太大；三者都只記錄、不阻斷。
 
 ### 七個 gate
 
@@ -117,7 +119,7 @@ G1 來源有效 → G2 點雲健全 → G3 物件語料 → G4 gallery 凍結 �
 `G6` 與 `G7` 是**決定尚未做出**時的擋板，未決回傳 `BLOCKED_EVIDENCE`(rc=3) 而非 FAIL ——
 沒有東西壞掉，只是決定還沒做，上游照常跑。
 
-- **G6**：`stage2_protocol.status` 未 `resolved`（U-08a／U-08b）或 `scene_splits` 有洩漏之前，Stage 2 不准訓練。
+- **G6**：`stage2_protocol`（U-08a／U-08b）**或 `essgnn_edge_protocol`（U-29／U-30／U-19）**未 `resolved`、或 `scene_splits` 有洩漏之前，Stage 2 不准訓練。
 - **G7**：`composition_protocol.status` 未 `resolved`（U-18／U-21）之前，不准合成場景。**Table 1 不經過它。**
 
 67 個測試對 7 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
@@ -186,8 +188,12 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 
 ### 其他重大未解項
 
-**R-01：I-Design 尚未驗證能否執行。** Table 2 全部與 Table 3 的場景欄全部依賴它。
-查它很便宜，應該盡早做。
+**R-01：已部分實測。** I-Design **裝得起來**（README 要的 MinkowskiEngine／dgl／torch 1.12
+都不需要，`requirements.txt` 的 `ag2==0.2.0` 在 PyPI 上不存在），
+`create_initial_design` **會成功**，但 Qwen2.5-7B 跑 5 次**0 個場景完成**，每次失敗路徑不同。
+
+**沒有基準，所以不能斷定那是缺陷** —— I-Design 沒用原版規劃器在本機跑過，論文也沒說那是什麼。
+`setup/patches/` 的三個 patch 沒有論文依據，其中兩個會改變場景與完成率。
 
 **U-17：ESSGNN 用 `d` 還是 `d²`。** §2.5 寫 `‖x_i − x_j‖₂`，Appendix C 用 `‖·‖²`。
 兩者都是 SE(3) 不變、都不破壞證明，但**餵進 MLP 的數值不同，訓練結果就不同**。

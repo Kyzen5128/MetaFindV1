@@ -55,17 +55,35 @@ if [ ! -f "$IDESIGN_REPO/IDesign.py" ]; then
 fi
 echo "==> I-Design at $IDESIGN_REPO ($(git -C "$IDESIGN_REPO" rev-parse --short HEAD))"
 
-# 套用我們的 patch。目前只有一個：把寫死的 "gpt-4" 模型名改成真實的 Qwen 名稱。
-# 先前的做法是用 vLLM 的 --served-model-name 把 Qwen 掛成 "gpt-4" 以免改原始碼，
-# 但那讓所有 log 與設定檔都寫著 gpt-4 而其實跑的是 Qwen —— 實測幾分鐘內就誤導了讀者。
-# 寧可留下一個有紀錄的 patch，也不要留一個會被誤讀的別名。
+# 我們對 I-Design 的三個 patch：
+#   01  把寫死的 "gpt-4" 模型名改成真實的 Qwen 名稱（純命名）
+#   02  佈局元素歸位、preposition 對齊 enum、丟棄懸空引用、物件去重（**改變行為**）
+#   03  修正迴圈加上上限、每輪換 cache_seed、耗盡時放棄場景（**改變行為**）
+#
+# 02 與 03 會改變產出的場景與完成率，不是格式調整。每個場景的 sidecar
+# 都會記下實際套用了哪些，避免日後被當成接近原版的 I-Design。
+
+# 先確認 revision。patch 是針對這個 commit 做的；HEAD 不同就不該硬套。
+ACTUAL_HEAD=$(git -C "$IDESIGN_REPO" rev-parse --short=7 HEAD)
+if [ "$ACTUAL_HEAD" != "$IDESIGN_COMMIT" ]; then
+    echo "I-Design HEAD 是 $ACTUAL_HEAD，預期 $IDESIGN_COMMIT"
+    echo "  patch 是針對 $IDESIGN_COMMIT 做的。請 checkout 該 commit，或重新產生 patch。"
+    exit 1
+fi
+
+# 套用時要能分辨「已經套過」與「套不上去」——先前兩者都印「略過」，
+# 於是一個壞掉的 patch 看起來和成功一模一樣。
 for patch in "$PATCH_DIR"/idesign-*.patch; do
     [ -e "$patch" ] || continue
+    name=$(basename "$patch")
     if git -C "$IDESIGN_REPO" apply --check "$patch" 2>/dev/null; then
         git -C "$IDESIGN_REPO" apply "$patch"
-        echo "    套用 $(basename "$patch")"
+        echo "    套用 $name"
+    elif git -C "$IDESIGN_REPO" apply --reverse --check "$patch" 2>/dev/null; then
+        echo "    已套用 $name"
     else
-        echo "    略過 $(basename "$patch")（已套用或不適用）"
+        echo "    無法套用 $name —— 既非未套用亦非已套用，工作目錄狀態不明"
+        exit 1
     fi
 done
 

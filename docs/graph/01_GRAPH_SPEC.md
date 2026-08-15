@@ -82,7 +82,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 
 ## 3. State schema
 
-完整 43 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
+完整 44 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
 
 | channel | merge | 為什麼 |
 |---|---|---|
@@ -99,6 +99,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 | `procthor_object_text` | `upsert_by_key` | **新增**。ProcTHOR 場景圖的 `t_i` 與語意邊的輸入，來自 ProcTHOR 自己的 metadata |
 | `procthor_dataset` | `write_once` | **新增**。先前 ProcTHOR 根本沒進 graph state，導致 G1 無從檢查它 |
 | `stage1_protocol` | `replace` | **新增**。Stage 1 的 U-13／14／15／16／22／23／24 原本只寫在散文裡，`n10` 仍可用程式預設開跑。**發現 UNKNOWN 不等於把它放進 graph。** 不另設 gate（每項都有合理預設，風險是沉默不是矛盾），由 `G3` 檢查記錄完整 |
+| `essgnn_edge_protocol` | `replace` | **新增**。U-29／U-30／U-19。登記成 UNKNOWN 還不夠 —— `essgnn.py` **已經替它們做了決定**（假定每條邊都有固定寬度的語意嵌入），而 G6 沒擋。由 `G6` 強制 |
 | `stage2_protocol` | `replace` | **新增**。決定本身，未決前保持可改 |
 | `stage2_pairing` | `write_once` | **U-08a**。只有在協定 `resolved` 之後才寫入，避免用空值把 channel 鎖死 |
 | `sem_edge_cache` | `upsert_by_key` | **key = `sha256(desc_i, desc_j, prompt_ver, llm, encoder_ver)`**，非 category pair |
@@ -770,3 +771,26 @@ graph TD
 | 80 | U-26 只寫了一半 | 補上第二處差異：`f_x` 吃**已更新的** `h^{l+1}`（Eq.3）vs Appendix C 的 `m_ij` 用**舊的** `h^l` | 🟠 |
 | 81 | **Stage 1 的 UNKNOWN 沒進 graph state。** Stage 2 有 `stage2_protocol` + `G6` 擋著，Stage 1 的 U-13/14/15/16/22/23/24 只寫在散文裡，`n10` 仍可用程式預設開跑 | 新增 `stage1_protocol` channel，由 `G3_object_corpus` 檢查完整性。**不另設 gate** —— 每項都有合理預設，風險是沉默不是矛盾 | 🟠 **發現 ≠ 進入 graph** |
 | 82 | 文件說「G7 未決只擋 Table 2，其餘照常」，但 `n20` 的 `core` join 含 `n17`，**報告其實也發不出去** | 改寫為「Table 1 **算得出來但發不出去**」，並說明要單獨發布 Table 1 需要 `n17` 產出明確的 `INSUFFICIENT_EVIDENCE` 終端紀錄 —— 那是政策改動，此處不做 | 🟠 **誤導** |
+
+### 2026-08-15 第七輪（外部逐字審查後）
+
+審查者固定在 `a01b71b`，未跑任何腳本，並額外人工核對 I-Design setup、三個 patch、
+`idesign_generate.py`、`essgnn.py`、`fusion.py`。判定「主架構沒有新的根本推翻」，
+問題轉為 **「第六輪的修正紀錄寫對了，但沒有完整回灌到上位文件、gate 與實際程式」**。
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 83 | **`02_BUILD_STEPS.md` 嚴重落後，而它是權威順序裡僅次於論文的那一份。** 還寫「正式偏離只有四項」（D-5 已存在）、「R-01 尚未測試」（已部分實測）、UNKNOWN 總表停在 U-26。照文件自己的規則讀，會被導回舊版 | 全面同步 D-5、R-01 實測結果、U-27～U-31 | 🔴 **權威文件反向誤導** |
+| 84 | **G3 又把房屋洩漏接回來。** criterion 寫 `leakage_count == 0 at object and house level`，evidence 還引用**已不存在的** `L2-LEAK`（早已拆成 `-OBJECT`／`-SCENE`）。辛苦做的「Stage 1 不依賴 ProcTHOR」被 validation contract 偷偷接回去 | G3 只查物件層級；房屋洩漏歸 G6。**檢查器新增「evidence id 必須存在」** —— 這個懸空引用活了一整輪 | 🔴 **解耦被還原** |
+| 85 | **`stage1_protocol` 建了，但 G3 根本沒檢查它。** 我上一輪的編輯比對 `quarantine rate`、實際文字是 `quarantine_rate`，**replace 靜默失敗而我沒驗證** | 補進 G3 criterion。「發現 UNKNOWN → 放進 state」修好了，「不准 silent default 開跑」這半才真正完成 | 🔴 **修正沒生效** |
+| 86 | **U-29／U-30 登記了，但 `essgnn.py` 已經替它們做了決定。** 它對每條邊都要求固定寬度的 `edge_attr` 並直接 concat 進 `f_h`／`f_x` —— 沒有物理邊 type embedding、沒有 validity bit、沒有 missing-edge embedding、沒有 geometry-only 分支。而 G6 不擋 | 新增 `essgnn_edge_protocol` channel（topology／physical_relation_encoding／semantic_missing_representation／directionality），**`G6` 在 Stage 2 訓練前強制 resolved** | 🔴 **程式已隱式選定** |
+| 87 | **`ESSGNNConfig` 把論文沒給的數字設成預設**（`1280/1280/128/1280/4`），而 `L1-EGNN-DIMS-NOT-HARDCODED` 明說這樣要 fail | 由 checkpoint／protocol 決定的三個寬度改為**必填參數**；`hidden_dim=128`／`n_layers=4` 保留預設但明確標為我們的復現超參數（U-22） | 🔴 **程式與 validation 互相矛盾** |
+| 88 | **G4 的正式 criterion 又退回 `recall@1 == 1.0`**，而該版本自己早已判定不是 tie-safe | 改為「目標相似度 == 最大值且目標在 argmax tie set 內」 | 🔴 |
+| 89 | **sidecar 只記了 patch 01。** 但 02（移動佈局引用、對齊 preposition、丟棄懸空 id、物件去重）與 03（迴圈上限、每輪換 cache_seed、耗盡放棄場景）**會改變場景分布與完成率**，不是格式調整 | 改為列舉實際套用的全部 patch | 🔴 **provenance 錯誤** |
+| 90 | `graph_spec` 的 D-5 還寫「透過 `--served-model-name gpt-4` 別名，I-Design 未修改」，但實際做法相反 | 更正為 patch `filter_dict`、全程無別名 | 🟠 **做法寫反** |
+| 91 | `G5` 要求 `D-1..D-4`，漏掉 D-5 | 改為**逐項列舉 `boundary.deviations`**，不用區間 —— 與 UNKNOWN 同樣的教訓 | 🟠 |
+| 92 | **U-18 的 `t_i` 來源被「推導」得太強。** 原本寫「否則 iterative 與 parallel 會產生完全相同的序列」 | **那不成立** —— iterative 每輪讓 G 長大、parallel 全部看 `G_0`，無論 `t_i` 來自哪裡兩者都不同。plan-derived `t_i` 只是讓序列與「檢索到什麼」無關。降為**有理由的偏好**，不是推導 | 🟠 **過度推導** |
+| 93 | `README` 停在上一輪（30 條 UNKNOWN、D-1～D-4、RA-4「預期失敗」、R-01 未驗證） | 全面同步 | 🟠 |
+| 94 | `validation_plan` 尾端 `open_items` 仍寫 "I-Design has not been verified to run" | 改為 `PARTIALLY MEASURED`，並把待辦改成「建立基準」而非「試跑」 | 🟠 |
+| 95 | **`idesign_generate.py --n-scenes 200` 會靜默產出 100×A + 100×B**，然後被當成「200 randomly sampled scenes」 | 超過 smoke prompt 數量即 **fail closed**，要求 `--scene-spec-file` | 🟠 **會產生假的評估集** |
+| 96 | `04_idesign_env.sh` 寫「目前只有一個 patch」（實際三個）；`IDESIGN_COMMIT` 宣稱釘住卻從未檢查 HEAD；patch 套用把「已套用」與「套不上去」印成同一句 | 三者全修：HEAD 不符即 fail；`apply --check` / `apply --reverse --check` / 失敗，三種狀態分開 | 🟠 **provenance 假象** |
