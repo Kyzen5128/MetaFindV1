@@ -53,6 +53,26 @@ level_1:
       An earlier draft hardcoded 48000 in shard arithmetic and in the gallery denominator.
 
   # ---- point clouds
+  - id: L1-PC-NONDEGENERATE
+    target: pointclouds
+    target_kind: channel
+    asserts: >
+      For every axis where per_axis_variance is at or near zero, the mesh's own
+      raw_bbox_extents is correspondingly flat. A cloud that is planar while its
+      mesh is not indicates a sampler that collapsed the geometry.
+    negative_injection: "project every sampled point onto the xy plane"
+    expected_on_injection: "variance along z is zero while raw_bbox_extents[z] is not"
+    verified_blocks: false
+    note: >
+      [MEASURED] An absolute variance floor cannot tell a flat ASSET from a
+      flattening BUG. 21 of 46,052 assets have exactly zero variance on one
+      axis, and their mesh bounding boxes are 1.8e-12, 0.0, 3.6e-15 and 1.7e-08
+      thick on that axis -- planes, decals, 2D cutouts. All 10,000 of their
+      points are distinct, so the sampler worked; the object is flat.
+      Quarantining them would discard valid data, and raising the floor until
+      they pass would blind the check to the failure it exists for. Comparing
+      against the mesh separates the two.
+
   - id: L1-PC-RGB-SCALE
     target: pointclouds
     target_kind: channel
@@ -1062,7 +1082,8 @@ level_3_gates:
     criterion: >
       Every admitted cloud is (10000, 6), finite, pc_norm'd (centroid within
       1e-5 of the origin, max radius within 1e-5 of 1) and non-degenerate
-      (per-axis variance above a floor); its rgb columns lie in [0, 1] with
+      RELATIVE TO ITS OWN MESH -- a cloud may be flat along an axis only if the
+      mesh's raw_bbox_extents is flat along that axis too; its rgb columns lie in [0, 1] with
       rgb_scale == "unit" and a recorded colour_source; the corpus-wide
       fallback_grey rate and mean coloured_point_fraction are within tolerance
       of the smoke-corpus baseline for this sampler_version; and a sampled
@@ -1321,7 +1342,7 @@ level_3_gates:
 
 # ==================================================================
 gate_discipline:
-  total_l1: 57
+  total_l1: 58
   total_l2: 18
   total_gates: 7
   rejected_gate_candidates:

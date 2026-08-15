@@ -379,9 +379,16 @@ def process_one(uid: str, glb: Path, out: Path) -> dict:
         # used to score the annotator as if it were a strong one.
         "raw_bbox_extents": [float(v) for v in extents],
         "raw_bbox_volume": float(np.prod(extents)),
-        "centroid_offset": float(np.abs(normed.mean(axis=0)).max()),
-        "max_radius": float(np.sqrt((normed**2).sum(axis=1)).max()),
-        "per_axis_variance": [float(v) for v in normed.var(axis=0)],
+        # float64 for the STATISTICS, even though the cloud is stored float32.
+        # Averaging 10,000 float32 values accumulates about 1e-5 of error, which
+        # is larger than G2's 1e-5 centroid tolerance -- so 8 of 46,052 assets
+        # were recorded as failing a check their data passes. Verified on one:
+        # recomputed in float64 the centroid offset is 5.2e-09, not 1.15e-05.
+        # The gate's threshold is not the problem and must not be widened; the
+        # measurement was reporting the summation method rather than the cloud.
+        "centroid_offset": float(np.abs(normed.astype(np.float64).mean(axis=0)).max()),
+        "max_radius": float(np.sqrt((normed.astype(np.float64) ** 2).sum(axis=1)).max()),
+        "per_axis_variance": [float(v) for v in normed.astype(np.float64).var(axis=0)],
     }
 
     # The completion marker, written last and atomically. Order matters: npz

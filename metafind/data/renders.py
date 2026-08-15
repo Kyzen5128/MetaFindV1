@@ -130,6 +130,11 @@ def look_at(eye: np.ndarray, target=(0.0, 0.0, 0.0), up=(0.0, 0.0, 1.0)) -> np.n
     true_up = np.cross(right, fwd)
     pose = np.eye(4)
     pose[:3, 0], pose[:3, 1], pose[:3, 2], pose[:3, 3] = right, true_up, -fwd, eye
+    if not np.isfinite(pose).all():
+        # pyrender normalises again internally (node.py:234 "U / norms"), and a
+        # NaN pose reaching the GL layer can take the whole process down rather
+        # than raising. Fail here, where it is one asset.
+        raise ValueError(f"degenerate camera pose for eye={eye.tolist()}")
     return pose
 
 
@@ -439,39 +444,52 @@ def main() -> int:
     # and the errors surfaced as per-asset exceptions, so the run reported a
     # 41% quarantine rate as though a third of Objaverse were malformed.
     ctx = mp.get_context("spawn")
-    with runlog.run_progress(NODE), \
-            cf.ProcessPoolExecutor(max_workers=args.workers, mp_context=ctx,
-                                   max_tasks_per_child=500) as pool:
-      # Bounded batches. Queueing all 45,753 futures at once handed the
-      # executor's management thread that entire list to marshal up front, and
-      # the run stalled partway with nothing in the log. A batch also bounds
-      # what an interruption can lose.
-      for start in range(0, len(todo), 500):
-        futures = {pool.submit(process_one, u, g, out_dir): u
-                   for u, g in todo[start:start + 500]}
-        for fut in cf.as_completed(futures):
-            uid = futures[fut]
+    # ONE POOL PER BATCH, and a dead pool is survivable. A child process died
+    # abruptly at asset 400 and BrokenProcessPool took the whole 46,052-asset
+    # run down with it -- a GL driver can kill a process outright, and when it
+    # does, the correct response is to lose that batch, not the corpus.
+    # Rebuilding a pool costs about a second per 500 assets.
+    BATCH = 500
+    quarantine, done, started = [], 0, time.time()
+    with runlog.run_progress(NODE):
+        for start in range(0, len(todo), BATCH):
+            batch = todo[start:start + BATCH]
             try:
-                fut.result()
-            except Exception as exc:  # noqa: BLE001 -- one bad asset must not stop the run
-                # Written NOW, not flushed at the end: a long run gave no view
-                # of what it was discarding, and a crash lost every record.
+                with cf.ProcessPoolExecutor(max_workers=args.workers, mp_context=ctx,
+                                            max_tasks_per_child=200) as pool:
+                    futures = {pool.submit(process_one, u, g, out_dir): u for u, g in batch}
+                    for fut in cf.as_completed(futures):
+                        uid = futures[fut]
+                        try:
+                            fut.result()
+                        except Exception as exc:  # noqa: BLE001 -- one bad asset must not stop the run
+                            runlog.quarantine(NODE, [{
+                                "uid": uid,
+                                "failure_class": ("RESOURCE" if isinstance(exc, (MemoryError, OSError))
+                                                  else "DETERMINISTIC_INPUT"),
+                                "exception_type": type(exc).__name__,
+                                "exception_msg": str(exc)[:400],
+                                "traceback": traceback.format_exc()[-1500:],
+                            }])
+                            quarantine.append(uid)
+                            continue
+                        done += 1
+                        if done % 200 == 0:
+                            rate = done / max(time.time() - started, 1e-9) * 60
+                            print(f"  [{done:6d}/{len(todo)}] {rate:.0f}/min, "
+                                  f"剩餘約 {(len(todo)-done)/max(rate,1e-9):.0f} 分, "
+                                  f"quarantine {len(quarantine)}", flush=True)
+            except cf.process.BrokenProcessPool as exc:
+                # The batch is lost, not the run. Nothing is corrupted: an asset
+                # is complete only once its sidecar lands, so whatever this
+                # batch finished is kept and the rest is retried on resume.
+                print(f"  批次 {start//BATCH} 的 worker 崩潰，跳過該批繼續：{exc}",
+                      flush=True)
                 runlog.quarantine(NODE, [{
-                    "uid": uid,
-                    "failure_class": ("RESOURCE" if isinstance(exc, (MemoryError, OSError))
-                                      else "DETERMINISTIC_INPUT"),
-                    "exception_type": type(exc).__name__,
-                    "exception_msg": str(exc)[:400],
-                    "traceback": traceback.format_exc()[-1500:],
+                    "uid": f"__batch_{start}", "failure_class": "RESOURCE",
+                    "exception_type": "BrokenProcessPool",
+                    "exception_msg": str(exc)[:400], "traceback": "",
                 }])
-                quarantine.append(uid)
-                continue
-            done += 1
-            if done % 200 == 0:
-                rate = done / max(time.time() - started, 1e-9) * 60
-                print(f"  [{done:6d}/{len(todo)}] {rate:.0f}/min, "
-                      f"剩餘約 {(len(todo)-done)/max(rate,1e-9):.0f} 分, "
-                      f"quarantine {len(quarantine)}", flush=True)
 
     n_indexed = rebuild_index(paths.LOGS / "renders_index.jsonl", out_dir)
     runlog.cost_ledger(
