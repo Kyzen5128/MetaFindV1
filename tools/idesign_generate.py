@@ -9,11 +9,14 @@ on disk, so they never need to share an interpreter.
     conda activate IDesign
     PYTHONPATH=<idesign_repo> python tools/idesign_generate.py --n-scenes 2
 
-The LLM is reached over an OpenAI-compatible endpoint. Point that endpoint at
-Qwen (deviation D-2) rather than editing I-Design: vLLM is started with
-`--served-model-name gpt-4 ...`, so the model names I-Design filters on resolve
-to Qwen with no change to its source. The real model id is recorded in each
-scene's sidecar so the substitution is never invisible in the artifacts.
+The LLM is Qwen served over an OpenAI-compatible endpoint (deviation D-5).
+
+An earlier version served Qwen under the alias `gpt-4` so that I-Design's
+hardcoded `filter_dict={"model": ["gpt-4"]}` would resolve without touching its
+source. That was a bad trade: every log line and config file then said `gpt-4`
+while nothing of the sort was running, and it misled a reader within minutes.
+I-Design is patched instead -- setup/patches/idesign-01-qwen-model-name.patch,
+four filter sites across three files -- so the model name is honest end to end.
 """
 
 from __future__ import annotations
@@ -40,7 +43,7 @@ SMOKE_PROMPTS = [
 
 
 def endpoint_model_id(base_url: str) -> str:
-    """Ask the server what it is really serving, so the alias is recorded."""
+    """Ask the server what it is really serving, and record it."""
     import urllib.request
 
     try:
@@ -51,9 +54,9 @@ def endpoint_model_id(base_url: str) -> str:
         return f"unavailable: {exc}"
 
 
-def write_config(workdir: Path, base_url: str, api_key: str) -> None:
+def write_config(workdir: Path, base_url: str, api_key: str, model: str) -> None:
     """I-Design's agents.py reads OAI_CONFIG_LIST.json from the CWD at import."""
-    models = ["gpt-4", "gpt-4-1106-preview", "gpt-3.5-turbo-1106"]
+    models = [model]
     (workdir / "OAI_CONFIG_LIST.json").write_text(
         json.dumps(
             [{"model": m, "api_key": api_key, "base_url": base_url} for m in models],
@@ -112,6 +115,11 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--base-url", default="http://127.0.0.1:8000/v1")
     ap.add_argument("--api-key", default="local-vllm")
+    ap.add_argument(
+        "--model",
+        default="qwen2.5-7b-instruct",
+        help="Must match both the patched filter_dict and vLLM --served-model-name.",
+    )
     ap.add_argument("--n-scenes", type=int, default=len(SMOKE_PROMPTS))
     args = ap.parse_args()
 
@@ -134,7 +142,7 @@ def main() -> int:
         prompt, dims, n_obj = SMOKE_PROMPTS[i % len(SMOKE_PROMPTS)]
         scene_id = f"scene_{i:04d}"
         workdir = args.out / scene_id
-        write_config(workdir, args.base_url, args.api_key)
+        write_config(workdir, args.base_url, args.api_key, args.model)
         print(f"\n=== {scene_id}: {prompt!r} ===", flush=True)
         try:
             rec = run_one(args.idesign_repo, workdir, prompt, dims, n_obj)
@@ -146,10 +154,10 @@ def main() -> int:
         rec |= {
             "scene_id": scene_id,
             "idesign_revision": revision,
-            # D-2: the planner is Qwen, reached through an OpenAI-compatible
-            # alias. Recorded per scene so no artifact implies GPT-4 was used.
-            "planner_model_served_as": "gpt-4",
-            "planner_model_actual": served,
+            "idesign_patches": ["idesign-01-qwen-model-name"],
+            # D-5: I-Design's planner is GPT-4 upstream; here it is Qwen.
+            "planner_model": args.model,
+            "planner_endpoint_serves": served,
         }
         (workdir / "sidecar.json").write_text(json.dumps(rec, indent=2))
         records.append(rec)

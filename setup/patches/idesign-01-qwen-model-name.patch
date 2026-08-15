@@ -1,0 +1,48 @@
+diff --git a/agents.py b/agents.py
+index 31bd765..c35f4df 100644
+--- a/agents.py
++++ b/agents.py
+@@ -11,7 +11,7 @@ from schemas import initial_schema, interior_architect_schema, interior_designer
+ config_list_gpt4_prev = autogen.config_list_from_json(
+     "OAI_CONFIG_LIST.json",
+     filter_dict={
+-        "model": ["gpt-4-1106-preview"],
++        "model": ["qwen2.5-7b-instruct"],
+     },
+ )
+ 
+@@ -19,7 +19,7 @@ config_list_gpt4_prev = autogen.config_list_from_json(
+ config_list_gpt4 = autogen.config_list_from_json(
+     "OAI_CONFIG_LIST.json",
+     filter_dict={
+-        "model": ["gpt-4"],
++        "model": ["qwen2.5-7b-instruct"],
+     },
+ )
+ 
+diff --git a/corrector_agents.py b/corrector_agents.py
+index e5aeae5..c362d82 100644
+--- a/corrector_agents.py
++++ b/corrector_agents.py
+@@ -43,7 +43,7 @@ class JSONSchemaAgent(UserProxyAgent):
+ config_list_gpt4 = autogen.config_list_from_json(
+     "OAI_CONFIG_LIST.json",
+     filter_dict={
+-        "model": ["gpt-4-1106-preview"],
++        "model": ["qwen2.5-7b-instruct"],
+     },
+ )
+ 
+diff --git a/refiner_agents.py b/refiner_agents.py
+index e44b434..68b960c 100644
+--- a/refiner_agents.py
++++ b/refiner_agents.py
+@@ -40,7 +40,7 @@ class JSONSchemaAgent(UserProxyAgent):
+ config_list_gpt4 = autogen.config_list_from_json(
+     "OAI_CONFIG_LIST.json",
+     filter_dict={
+-        "model": ["gpt-4-1106-preview"],
++        "model": ["qwen2.5-7b-instruct"],
+     },
+ )
+ 

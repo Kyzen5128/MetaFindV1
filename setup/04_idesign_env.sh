@@ -41,6 +41,7 @@ set -euo pipefail
 
 IDESIGN_REPO=${IDESIGN_REPO:-/home/kyzen/IDesign}
 IDESIGN_COMMIT=7bc891c            # 釘住；I-Design repo 無 LICENSE，不 vendor 進本 repo
+PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/patches"
 SERVE_PREFIX=/mnt/data1/kyzen/MetaFind/envs/serve
 DATA_ROOT=/mnt/data1/kyzen/MetaFind
 
@@ -53,6 +54,20 @@ if [ ! -f "$IDESIGN_REPO/IDesign.py" ]; then
     exit 1
 fi
 echo "==> I-Design at $IDESIGN_REPO ($(git -C "$IDESIGN_REPO" rev-parse --short HEAD))"
+
+# 套用我們的 patch。目前只有一個：把寫死的 "gpt-4" 模型名改成真實的 Qwen 名稱。
+# 先前的做法是用 vLLM 的 --served-model-name 把 Qwen 掛成 "gpt-4" 以免改原始碼，
+# 但那讓所有 log 與設定檔都寫著 gpt-4 而其實跑的是 Qwen —— 實測幾分鐘內就誤導了讀者。
+# 寧可留下一個有紀錄的 patch，也不要留一個會被誤讀的別名。
+for patch in "$PATCH_DIR"/idesign-*.patch; do
+    [ -e "$patch" ] || continue
+    if git -C "$IDESIGN_REPO" apply --check "$patch" 2>/dev/null; then
+        git -C "$IDESIGN_REPO" apply "$patch"
+        echo "    套用 $(basename "$patch")"
+    else
+        echo "    略過 $(basename "$patch")（已套用或不適用）"
+    fi
+done
 
 if ! conda env list | grep -qE '^IDesign\s'; then
     conda create -n IDesign python=3.10 -y -q
@@ -90,11 +105,12 @@ cat <<EOF
   conda activate $SERVE_PREFIX
   export HF_HOME=$DATA_ROOT/models/hf-cache
   vllm serve Qwen/Qwen2.5-7B-Instruct \\
-      --served-model-name gpt-4 gpt-4-1106-preview gpt-3.5-turbo-1106 \\
+      --served-model-name qwen2.5-7b-instruct \\
       --max-model-len 16384 --gpu-memory-utilization 0.85 --port 8000
 
-  # --served-model-name 讓 I-Design 過濾的模型名直接解析到 Qwen，
-  # 因此完全不用改它的原始碼。真實模型 id 會記進每個場景的 sidecar。
+  # 模型名從頭到尾都是 qwen2.5-7b-instruct：vLLM 這樣掛、patch 過的
+  # filter_dict 這樣找、OAI_CONFIG_LIST.json 這樣寫、sidecar 這樣記。
+  # 沒有別名，log 不會出現任何 gpt-4 字樣。
 
 然後產生場景：
 
