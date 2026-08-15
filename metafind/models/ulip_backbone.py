@@ -25,7 +25,8 @@ could only run the other.
 
 What follows from the split:
 
-    text, image   frozen ViT-bigG-14 (D-1, forced by 24 GB) -> cacheable
+    text, image   frozen ViT-bigG-14 (U-34's primary reading, which ULIP-2's
+                  own 3.3 specifies) -> cacheable
     point cloud   trainable PointBERT + pc_projection       -> NOT cacheable,
                   because a cached embedding is by definition the output of a
                   network that is not being updated

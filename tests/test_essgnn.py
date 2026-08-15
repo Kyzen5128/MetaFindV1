@@ -425,7 +425,7 @@ def test_shared_fx_gets_gradient_that_independent_final_fx_does_not():
 
 
 def test_from_protocol_is_the_supported_construction_path():
-    from metafind.models.essgnn import PAPER_LOCKED
+    from metafind.models.essgnn import PRIMARY_INTERPRETATION
 
     proto = dict(status="resolved", use_io_projections=False, distance="euclidean",
                  coord_feat="current", layer_sharing="shared", pooling="sum",
@@ -434,7 +434,7 @@ def test_from_protocol_is_the_supported_construction_path():
     for k, v in proto.items():
         if k != "status":
             assert getattr(cfg, k) == v, f"{k} did not survive from_protocol"
-    for k, v in PAPER_LOCKED.items():
+    for k, v in PRIMARY_INTERPRETATION.items():
         assert getattr(cfg, k) == v, f"{k} must stay at the paper-locked value"
 
 
@@ -454,16 +454,16 @@ def test_from_protocol_refuses_a_partial_protocol():
 
 
 def test_paper_locked_values_are_the_defaults():
-    """[L1-ESSGNN-PAPER-LOCKED-CONFIG] These are our primary reading, not UNKNOWNs.
+    """[L1-ESSGNN-PAPER-LOCKED-CONFIG] Our primary reading, not open UNKNOWNs.
 
     h0_mode, coords_agg, edge_proj_dim and normalize_coord_diff each pin one
     interpretation of the paper. They are deliberately NOT in
     essgnn_arch_protocol, which holds questions a person must answer; a run
     that departs from these is a variant and has to say so.
     """
-    from metafind.models.essgnn import PAPER_LOCKED
+    from metafind.models.essgnn import PRIMARY_INTERPRETATION
 
     cfg = ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8,
                        use_io_projections=True)
-    for k, v in PAPER_LOCKED.items():
-        assert getattr(cfg, k) == v, f"{k} default drifted from the paper-locked value"
+    for k, v in PRIMARY_INTERPRETATION.items():
+        assert getattr(cfg, k) == v, f"{k} default drifted from the primary interpretation"

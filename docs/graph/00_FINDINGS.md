@@ -453,8 +453,10 @@ point cloud   →  point encoder 主線可訓練，不可預先快取
 
 先前「三個模態全部快取」正是讓設計退化成 `fuser_only` 的直接原因。
 
-**[偏離 D-1]** ViT-bigG-14 的 text/image 端保持凍結 —— 2.5B 參數在 24GB 上無法訓練。
-報告中須聲明：「entire encoder」在我們的設定下指 3D encoder + fusion，不含 CLIP。
+**[D-1 —— 條件式偏離，取決於 U-34]** ViT-bigG-14 的 text/image 端保持凍結。
+**這未必是偏離**：ULIP-2 §3.3 明文凍結 OpenCLIP，而 MetaFind 建立在 ULIP-2 之上，
+所以主線可能正是忠實做法。是否偏離取決於 MetaFind 的 "entire encoder" 是否涵蓋 CLIP（U-34）。
+兩種讀法都會在報告中陳述，並附上實際採用的 `clip_train_scope`。
 
 ### D3 — 原始 mesh 保留，不刪除
 

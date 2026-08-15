@@ -221,7 +221,7 @@ def test_an_optimizer_step_moves_point_and_not_clip():
     ), "PointBERT did not move: the main line is silently the fuser_only ablation"
     assert all(
         torch.equal(a, b) for a, b in zip(before_clip, clip.parameters())
-    ), "ViT-bigG moved, but D-1 declares it frozen"
+    ), "ViT-bigG moved; the main line reads U-34 as frozen, which ULIP-2 3.3 specifies"
 
 
 def test_full_scope_lets_gradient_reach_clip():

@@ -6,11 +6,13 @@
 > **三種東西必須分開，不可混為一談：**
 > **[論文]** 原文明確規定 ｜ **[未定]** 論文沒說，我們選了一個並記錄 ｜ **[偏離]** 與論文不同，必須在報告中聲明
 
-**正式偏離六項**，編號與 `README.md`、`graph_spec.yaml` 一致，不得另編：
+**正式偏離五項（D-2…D-6）＋條件式一項（D-1）**，編號與 `README.md`、
+`graph_spec.yaml` 一致，不得另編。D-1 放在 `boundary.conditional_deviations`，
+`active_if: stage1_encoding_protocol.clip_train_scope == 'trainable'`：
 
 | id | 偏離 |
 |---|---|
-| **D-1** | ViT-bigG-14 凍結（2.5B 參數在 24GB 上無法訓練） |
+| **D-1** *(條件式)* | ViT-bigG-14 的 CLIP 側保持凍結。**取決於 U-34**：若 MetaFind 的 "entire encoder" 不含 CLIP，這根本不是偏離（ULIP-2 §3.3 明文凍結）；只有 U-34 解為 `trainable` 時才成立 |
 | **D-2** | Qwen2.5-VL 取代 **GPT-4o**（資產標註與場景評分） |
 | **D-3** | 不重跑 6 個 baseline |
 | **D-4** | 不做人工評分 |
@@ -330,12 +332,16 @@ ProcTHOR 分支的任何故障都會停掉一個不依賴它的訓練。兩條�
 | `point_encoder+fuser` | PointBERT (32.5M) + fusion + 投影 | ✅ | **主線** |
 | `full` | 再加 ViT-bigG-14 (2.5B) | ❌ 單卡不可行 | 記為硬體限制 |
 
-**[偏離 D-1]** ViT-bigG-14 的 text/image 端保持凍結 —— 2.5B 參數在 24GB 上無法訓練。
+**[D-1 —— 條件式偏離，取決於 U-34]** ViT-bigG-14 的 text/image 端保持凍結。
 **ULIP-2 論文明文凍結 CLIP。** §3.3：
 
 > We adopt the largest version of encoders from OpenCLIP (ViT-G/14) and **freeze it
 > during the pre-training** ... based on the **pre-aligned and frozen image encoder
 > and text encoder** in OpenCLIP
+
+（論文寫 **ViT-G/14**，公開程式載入的是 **ViT-bigG-14**。兩者不是同一個 open_clip
+權重名稱，本文其餘各處講的都是**實際會載入的** ViT-bigG-14。這個差異出在 ULIP-2
+自己身上，不是我們的選擇，也不影響「凍結」這句話。）
 
 目標函數也只訓 3D encoder。所以**主線的凍結有 ULIP-2 論文的直接支持**。
 

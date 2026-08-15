@@ -121,30 +121,8 @@ boundary:
     - "reproducing I-Design itself"
 
   deviations:
-    - id: D-1
-      what: "ViT-bigG-14 stays frozen; only the 3D encoder and fusion train"
-      why: "2.5B parameters do not train on a 24 GB card"
-      status: "CONDITIONAL on U-34 -- not currently established as a deviation"
-      impact: >
-        [RECLASSIFIED] This was recorded as a proven deviation on the reasoning
-        that ULIP-2's public code does not freeze OpenCLIP -- its
-        ULIP2_PointBERT_Colored factory calls eval() without setting
-        requires_grad=False, while the ULIP-1 factories in the same file do
-        freeze explicitly, so its optimizer would include those parameters.
-        That observation is correct about the CODE and was the wrong basis for
-        a claim about the DESIGN. ULIP-2's paper 3.3 says plainly: "We adopt
-        the largest version of encoders from OpenCLIP (ViT-G/14) and freeze it
-        during the pre-training". The code omitting the freeze looks like an
-        oversight against its own paper, not an intent to train CLIP.
-
-        So freezing ViT-bigG-14 is what ULIP-2 specifies, and MetaFind builds
-        on ULIP-2. Whether it deviates from METAFIND is U-34 and is open:
-          U-34 = frozen     -> this is not a deviation at all, and D-1 becomes
-                               a hardware-driven agreement with ULIP-2
-          U-34 = trainable  -> this IS a deviation, forced by 24 GB, and RA-3
-                               is the evidence that the alternative could not run
-        Reported either way, with the resolution stated, rather than asserting
-        a deviation we have not established.
+    # NOTE: D-1 is NOT here. It lives under conditional_deviations below,
+    # because whether it is a deviation at all depends on U-34.
     - id: D-2
       what: "Qwen2.5-VL replaces GPT-4o for annotation and scene judging"
       why: "project decision"
@@ -212,6 +190,32 @@ boundary:
         qwen2.5-7b-instruct everywhere -- vLLM, the config, the patched filter
         and every scene sidecar. No alias exists.
 
+  conditional_deviations:
+    - id: D-1
+      what: "ViT-bigG-14 stays frozen; only the 3D encoder and fusion train"
+      active_if: "stage1_encoding_protocol.clip_train_scope == 'trainable'"
+      why: "2.5B parameters do not train on a 24 GB card"
+      impact: >
+        Listed separately from boundary.deviations because it is not currently
+        established as one, and enumerating it among the active deviations
+        would assert something we cannot support.
+          U-34 resolves to `frozen`     -> NOT a deviation. ULIP-2's paper 3.3
+            freezes OpenCLIP and MetaFind builds on ULIP-2, so the main line
+            agrees with its own backbone's specification.
+          U-34 resolves to `trainable`  -> IS a deviation, forced by 24 GB, and
+            RA-3 is the evidence that the alternative could not run here.
+        The earlier justification is withdrawn, and why matters: it rested on
+        ULIP-2's public ULIP2_PointBERT_Colored calling eval() without setting
+        requires_grad=False, so main.py's optimizer would have included those
+        parameters. That observation about the CODE is correct and verifiable.
+        Using it to conclude something about the DESIGN was not: ULIP-2's paper
+        3.3 states "We adopt the largest version of encoders from OpenCLIP
+        (ViT-G/14) and freeze it during the pre-training", and the five ULIP-1
+        factories in that same file DO freeze explicitly -- so the omission
+        reads as the code disagreeing with its own paper. Why it disagrees is
+        unknown and is not asserted here.
+        G5 evaluates active_if at report time rather than printing a fixed list.
+
   external_systems:
     - {name: "HuggingFace SFXX/ulip", kind: model_provider, failure_semantics: "unavailable => FAILED, no substitute", trust: trusted, validated_by: "sha256 plus a behavioural check"}
     - {name: "Objaverse", kind: database, failure_semantics: "partial => admitted set shrinks; >2% missing fails G3", trust: trusted}
@@ -271,14 +275,14 @@ state:
     - name: renders
       type: "map[uid -> {view_paths[11], view_sha256[11]}]"
       writers: [n04_render_views]
-      readers: [n05_annotate, n06_encode_text_image]
+      readers: [n05_annotate, n05b_resolve_stage1_encoding, n06_encode_text_image, n10_train_stage1]
       merge: upsert_by_key
       lifetime: persistent
 
     - name: objaverse_annotations
       type: "map[objaverse_uid -> {category, description, dimensions, materials, placement_constraints, annotator_model}]"
       writers: [n05_annotate]
-      readers: [n06_encode_text_image, n09b_resolve_stage2_protocol]
+      readers: [n05b_resolve_stage1_encoding, n06_encode_text_image, n09b_resolve_stage2_protocol, n10_train_stage1]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -308,16 +312,24 @@ state:
         specified.
 
     - name: text_image_embeddings
-      type: "map[uid -> {text: 1280-d uri, image: 1280-d uri}]"
+      type: "map[uid -> {text: uri, image: uri | list[uri] per view, aggregation, n_views}]"
       writers: [n06_encode_text_image]
       readers: [n09_build_splits, n10_train_stage1, n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations]
       merge: upsert_by_key
       lifetime: persistent
       note: >
-        Only text and image are cached. The point encoder is TRAINABLE in
-        Stage 1 (paper 2.6: "Both query and gallery encoders are trained"), so
-        point-cloud embeddings cannot be precomputed. An earlier draft cached all three, which
-        is what made it the "train fuser only" ablation by accident.
+        Cached ONLY when stage1_encoding_protocol.clip_train_scope == frozen.
+        The point encoder is TRAINABLE in Stage 1 (paper 2.6: "Both query and
+        gallery encoders are trained"), so point-cloud embeddings cannot be
+        precomputed -- an earlier draft cached all three, which made it the
+        "train fuser only" ablation by accident. The same rule binds CLIP: an
+        embedding cache is the output of a network that is not being updated,
+        so under `trainable` this channel stays empty and n10 consumes renders
+        and annotations directly.
+        [U-14] `image` holds ONE vector only when the aggregation is fixed in
+        advance (fixed view, mean, max). For a per-step choice such as "random
+        single view" it holds the per-view list -- the schema must keep what
+        the protocol needs, or the option is declarable and unexecutable.
 
     - name: scene_graphs
       type: "map[house_id -> {nodes, positions, phys_edges, sem_edge_ids, uri}]"
@@ -339,8 +351,35 @@ state:
         into one relation. Paper 2.5 and Appendix C both say the LLM is prompted
         with object DESCRIPTIONS.
 
+    - name: stage1_encoding_protocol
+      type: "{status: unresolved|resolved, text_serialization, image_aggregation, clip_train_scope: frozen|trainable, decided_by, decided_at}"
+      writers: [n05b_resolve_stage1_encoding]
+      readers: [G3_object_corpus, n06_encode_text_image, n10_train_stage1, n11_gallery_index_staging, n15_eval_retrieval]
+      merge: replace
+      lifetime: persistent
+      note: >
+        [ORDERING DEFECT, CORRECTED] These three fields lived in
+        stage1_protocol, which n09_build_splits writes -- one layer AFTER
+        n06_encode_text_image has already produced the cache. Each of them
+        decides what n06 should produce, so deciding them afterwards meant the
+        embeddings were built before it was settled how to build them:
+
+          text_serialization (U-15)  the exact string the text encoder sees.
+            Fixed after encoding, the cache answers a different question.
+          image_aggregation (U-14)   how 11 views become one e_image. A
+            protocol resolving to "random single view per training step" was
+            declarable and unexecutable, because the cache had already
+            collapsed 11 embeddings into one vector.
+          clip_train_scope (U-34)    frozen or trainable. Under `trainable`
+            there must be NO frozen cache at all -- gradient has to reach
+            OpenCLIP -- so this decides whether n06 runs in this form.
+
+        Resolved by a human before n06, for the same reason as the Stage 2
+        protocols: these are readings of an underspecified paper, not values a
+        default may supply.
+
     - name: stage1_protocol
-      type: "{status: unresolved|resolved, fusion, image_aggregation, text_serialization, tower_sharing, clip_train_scope: frozen|trainable, allow_all_masked, similarity, hyperparameter_config_hash, decided_by, decided_at}"
+      type: "{status: unresolved|resolved, fusion, tower_sharing, allow_all_masked, similarity, hyperparameter_config_hash, decided_by, decided_at}"
       writers: [n09_build_splits]
       readers: [G3_object_corpus, n10_train_stage1, n11_gallery_index_staging, n15_eval_retrieval, n18_train_ablations]
       merge: replace
@@ -353,6 +392,9 @@ state:
         (all-masked query) and U-24 (similarity) were all recorded in prose
         while n10 could still begin training on whatever the code defaulted to.
         Finding an UNKNOWN is not the same as putting it in the graph.
+        [SPLIT] The three fields that decide what n06 PRODUCES moved to
+        stage1_encoding_protocol, resolved before n06 runs. What remains here
+        is used at training time, so n09 is early enough.
         Unlike stage2_protocol this does NOT get its own gate -- every value
         has a defensible default, so the risk is silence, not incoherence.
         G3_object_corpus checks that the record is complete and that each field
@@ -798,20 +840,21 @@ edges:
   - {id: e06, from: n03_sample_pointclouds, to: G2_pc_sanity, kind: data, guard: "", join_group: default, carries: [pointclouds]}
   - {id: e07, from: n04_render_views, to: n05_annotate, kind: data, guard: "", join_group: default, carries: [renders]}
   - {id: e08, from: n07_scene_graphs, to: n08_semantic_edges, kind: data, guard: "", join_group: default, carries: [scene_graphs, procthor_object_text]}
-  - {id: e09, from: n05_annotate, to: n06_encode_text_image, kind: data, guard: "", join_group: default, carries: [objaverse_annotations, renders]}
+  - {id: e09a, from: n05_annotate, to: n05b_resolve_stage1_encoding, kind: data, guard: "", join_group: default, carries: [objaverse_annotations, renders]}
+  - {id: e09, from: n05b_resolve_stage1_encoding, to: n06_encode_text_image, kind: data, guard: "", join_group: default, carries: [objaverse_annotations, renders, stage1_encoding_protocol], rationale: "n06 cannot start before U-14/U-15/U-34 are answered: they decide what it should produce."}
 
   - {id: e10, from: G2_pc_sanity, to: n09_build_splits, kind: data, guard: "verdict == PASS", join_group: default, carries: [pointclouds]}
   - {id: e11, from: n06_encode_text_image, to: n09_build_splits, kind: data, guard: "", join_group: default, carries: [text_image_embeddings]}
   - {id: e12, from: n08_semantic_edges, to: n09c_build_scene_splits, kind: data, guard: "", join_group: default, carries: [sem_edge_cache]}
   - {id: e12b, from: n07_scene_graphs, to: n09c_build_scene_splits, kind: data, guard: "", join_group: default, carries: [scene_graphs, procthor_object_text, procthor_dataset]}
   - {id: e12c, from: n09c_build_scene_splits, to: G6_stage2_ready, kind: data, guard: "", join_group: corpus, carries: [scene_splits]}
-  - {id: e13, from: n09_build_splits, to: G3_object_corpus, kind: data, guard: "", join_group: default, carries: [splits, eval_protocols, stage1_protocol, asset_manifest]}
+  - {id: e13, from: n09_build_splits, to: G3_object_corpus, kind: data, guard: "", join_group: default, carries: [splits, eval_protocols, stage1_protocol, stage1_encoding_protocol, asset_manifest]}
 
   - {id: e13b, from: G3_object_corpus, to: n09b_resolve_stage2_protocol, kind: data, guard: "verdict == PASS", join_group: default, carries: [scene_graphs, asset_manifest]}
   - {id: e13c, from: n09b_resolve_stage2_protocol, to: G6_stage2_ready, kind: data, guard: "", join_group: default, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol]}
   - {id: e13d, from: G6_stage2_ready, to: n13_train_stage2, kind: data, guard: "verdict == PASS", join_group: protocol, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits]}
   - {id: e13e, from: G6_stage2_ready, to: HALT_BLOCKED, kind: escalation, guard: "verdict == BLOCKED_EVIDENCE", join_group: default, carries: [stage2_protocol], rationale: "U-08a/U-08b unresolved is a pause awaiting a decision, not a failure."}
-  - {id: e14, from: G3_object_corpus, to: n10_train_stage1, kind: data, guard: "verdict == PASS", join_group: default, carries: [splits, pointclouds, text_image_embeddings]}
+  - {id: e14, from: G3_object_corpus, to: n10_train_stage1, kind: data, guard: "verdict == PASS", join_group: default, carries: [splits, pointclouds, text_image_embeddings, renders, objaverse_annotations, stage1_protocol, stage1_encoding_protocol]}
   - {id: e15, from: n10_train_stage1, to: n11_gallery_index_staging, kind: data, guard: "", join_group: default, carries: [stage1_ckpt]}
   - {id: e16, from: n11_gallery_index_staging, to: G4_gallery_freeze, kind: data, guard: "", join_group: default, carries: [gallery_index_staging, asset_manifest]}
   - {id: e17, from: G4_gallery_freeze, to: n12_promote_index, kind: data, guard: "verdict == PASS", join_group: default, carries: [gallery_index_staging]}
@@ -976,7 +1019,8 @@ dependencies:
     - {node: G2_pc_sanity, depends_on: [n03_sample_pointclouds]}
     - {node: n05_annotate, depends_on: [n04_render_views]}
     - {node: n08_semantic_edges, depends_on: [n07_scene_graphs]}
-    - {node: n06_encode_text_image, depends_on: [n05_annotate]}
+    - {node: n05b_resolve_stage1_encoding, depends_on: [n05_annotate]}
+    - {node: n06_encode_text_image, depends_on: [n05b_resolve_stage1_encoding]}
     # [CORRECTED] n08_semantic_edges was still listed here after the branch split.
     # The edges and n09's reads had been decoupled, but this line had not, so the
     # machine-readable dependency still said Stage 1 waits for Qwen semantic-edge
@@ -1105,6 +1149,7 @@ execution_order:
     - {layer: 4, parallel_nodes: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs], gates: [], est: "1-3 h"}
     - {layer: 5, parallel_nodes: [], gates: [G2_pc_sanity], est: "-"}
     - {layer: 6, parallel_nodes: [n05_annotate, n08_semantic_edges], gates: [], est: "1-2 days (Qwen over 46K assets) -- CRITICAL PATH"}
+    - {layer: 6b, parallel_nodes: [n05b_resolve_stage1_encoding], gates: [], est: "human decision -- BLOCKS n06 until U-14, U-15 and U-34 are answered"}
     - {layer: 7, parallel_nodes: [n06_encode_text_image], gates: [], est: "2-4 h"}
     - {layer: 8, parallel_nodes: [n09_build_splits, n09c_build_scene_splits], gates: [], est: "<1 h"}
     - {layer: 9, parallel_nodes: [], gates: [G3_object_corpus], est: "-"}

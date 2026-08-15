@@ -14,8 +14,8 @@
 | 標記 | 意思 |
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
-| **[未定]** | 論文沒說，我們選了一個並記錄（累積 35 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**） |
-| **[偏離]** | 與論文不同，必須在報告聲明（6 條，D-1…D-6） |
+| **[未定]** | 論文沒說，我們選了一個並記錄（累積 36 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**） |
+| **[偏離]** | 與論文不同，必須在報告聲明（**5 條 D-2…D-6**，外加 **1 條條件式 D-1** —— 它是否成立取決於 U-34） |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
 
@@ -27,25 +27,37 @@
 Level 0 — MetaFind 本身
   docs/metafind_paper.md（含 Appendix）
 
-Level 1 — 相依元件的官方實作（證據，不是論文真值）
-  salesforce/ULIP        ULIP-2 backbone 實際怎麼寫
+Level 1 — 相依元件的「原論文」
+  ULIP-2 paper           §3.3 明文凍結 OpenCLIP、只訓 3D encoder
+  EGNN paper             squared distance、scalar φ_x、h⁰ 不變前提
+  I-Design paper
+
+Level 2 — 相依元件的官方「實作」（證據，且低於它自己的論文）
+  salesforce/ULIP        注意：ULIP-2 factory 未設 requires_grad=False，與其論文不一致
   vgsatorras/egnn        EGNN 參考實作
   atcelen/IDesign        I-Design 公開實作
 
-Level 2 — 我們的復現決策
+Level 3 — 我們的復現決策
   02_BUILD_STEPS.md      最新決策，人類可讀
   01_GRAPH_SPEC.md       graph 設計、U／D／RA 登記表
   graph_spec.yaml
   node_registry.yaml     機器可讀契約
   validation_plan.yaml
 
-Level 3 — 實作
+Level 4 — 我們的實作
   metafind/、tools/、setup/
 
 00_FINDINGS.md           實測事實（F 系列）與決策紀錄
 ```
 
-> **Level 1 只能回答「這個相依元件官方怎麼做」，不能自動補上 MetaFind 沒寫的部分。**
+> **兩條規則。**
+>
+> **一、Level 1／2 只能回答「這個相依元件怎麼定義／怎麼實作」，不能自動補上 MetaFind 沒寫的部分。**
+>
+> **二、相依元件的「論文」高於它自己的「實作」。** 這一層是後來才加的，
+> 而它的缺席正是 D-1 出錯的原因 —— 當時拿 ULIP-2 **程式**沒有 `requires_grad=False`
+> 去論證「凍結是我們的偏離」，但 ULIP-2 **論文** §3.3 明文凍結。
+> 兩者不一致時，論文說的是設計，程式只能說「公開版本長這樣」。
 >
 > 例：官方 EGNN 用 `‖·‖²` —— 這**支持** U-17 選平方，但**推不出**
 > 「MetaFind 主文其實也想寫平方」。同理，官方 EGNN 有 `embedding_in`／`embedding_out`
@@ -76,15 +88,15 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | 1 | [`02_BUILD_STEPS.md`](02_BUILD_STEPS.md) | **從這裡開始**。逐步驟建置流程，每步標明論文怎麼說、我們怎麼做 |
 | 2 | [`01_GRAPH_SPEC.md`](01_GRAPH_SPEC.md) | 完整規格：分類、目標、state、節點、邊、路由、迴圈、失敗、驗證、gate、風險、修正紀錄 |
 | 3 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實測事實（F 系列）與架構決策（D 系列），**含論文的多處自相矛盾** |
-| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：45 個 state channel、51 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
-| 5 | [`node_registry.yaml`](node_registry.yaml) | 33 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
+| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：46 個 state channel、52 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
+| 5 | [`node_registry.yaml`](node_registry.yaml) | 34 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
 | 6 | [`validation_plan.yaml`](validation_plan.yaml) | 54 個 L1、17 個 L2、7 個 gate、4 個 Required Audit |
 
 ## 一頁摘要
 
 `hierarchical DAG + stateful + parallel`，主線零回邊；3 個 cycle 全封在 subgraph 內。
 `control_authority: A1` ／ `execution_mode: probabilistic` ／ `topology_class: workflow`
-—— Qwen 出現三次但**從不決定路由**，只產生 payload。
+—— Qwen 出現四次（資產標註、語意邊、場景評分、I-Design 規劃）但**從不決定路由**，只產生 payload。
 
 ### 論文只要兩個資料集
 
@@ -96,11 +108,11 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 **不下載**：ULIP-2 預先取樣的點雲（185 GB）、ULIP-2 的渲染圖（474 GB，而且不是論文要的
 11 正交視角）、ShapeNet triplets（409 GB）。
 
-### 六項偏離
+### 五項偏離（D-2…D-6）＋一項條件式（D-1）
 
 | id | 偏離 | 影響 |
 |---|---|---|
-| **D-1** | ViT-bigG-14 凍結（2.5B 參數在 24GB 上無法訓練） | 「entire encoder」在我們的設定下指 3D encoder + fusion（RA-3 記錄） |
+| **D-1** *(條件式)* | ViT-bigG-14 的 CLIP 側保持凍結。`active_if: stage1_encoding_protocol.clip_train_scope == 'trainable'` | **U-34 未解前不算偏離** —— ULIP-2 §3.3 明文凍結 OpenCLIP，主線的凍結有其論文直接支持。RA-3 量測的是**另一個讀法**在本機是否可執行 |
 | **D-2** | Qwen2.5-VL 取代 GPT-4o | **Table 1 與 Table 2 都受影響** —— 它不只換裁判，也換掉 46,052 筆標註（文字塔的訓練資料）。SC-1 因此只報告差距、不設門檻 |
 | **D-3** | 不重跑 6 個 baseline | 只能與論文公佈值比較，並註明協定不同 |
 | **D-4** | 不做人工評分 | Table 2 人工欄判 `INSUFFICIENT_EVIDENCE` |

@@ -251,3 +251,74 @@ def test_layout_is_translation_invariant_end_to_end():
         b = model.query.encode_layout(nf, pos + 1000.0, ei, ea)
     err = (a - b).abs().max().item()
     assert err < 1e-3, f"layout moved by {err:.3e} under pure translation"
+
+
+# ------------------------------------------------ Stage 1 protocol -> runtime
+
+
+def _protocols(**over):
+    enc = dict(status="resolved", text_serialization="labelled_lines",
+               image_aggregation="mean", clip_train_scope="frozen")
+    tr = dict(status="resolved", fusion="gated", tower_sharing="separate",
+              allow_all_masked=True, similarity="cosine",
+              hyperparameter_config_hash="abc123")
+    enc.update(over.pop("enc", {})), tr.update(over.pop("tr", {}))
+    return enc, tr
+
+
+def _runtime(**over):
+    from metafind.models.stage1_config import Stage1RuntimeConfig
+
+    enc, tr = _protocols(**over)
+    return Stage1RuntimeConfig.from_protocols(
+        enc, tr, dim=D,
+        essgnn=ESSGNNConfig(node_feat_dim=16, edge_feat_dim=8, hidden_dim=16,
+                            out_dim=D, n_layers=2, use_io_projections=True),
+        checkpoint="/nonexistent/ckpt.pt", device="cpu",
+    )
+
+
+def test_protocol_choices_reach_the_runtime_objects():
+    """The protocol must beat every dataclass default, or it is only paperwork."""
+    rt = _runtime()
+    assert rt.tower.query_fusion.kind == "gated", "U-13 lost to FusionConfig's default"
+    assert rt.backbone.train_scope == "point_encoder_and_fuser"
+    assert rt.text_serialization == "labelled_lines"
+
+
+def test_trainable_clip_selects_the_full_scope_and_forbids_the_cache():
+    """[U-34] Reading a frozen cache under `trainable` would silently be the frozen run."""
+    rt = _runtime(enc={"clip_train_scope": "trainable"})
+    assert rt.backbone.train_scope == "full"
+    assert rt.may_use_cached_text_image is False
+
+
+def test_per_step_view_choice_forbids_the_cache():
+    """[U-14] One stored vector cannot answer a choice made each training step."""
+    assert _runtime(enc={"image_aggregation": "random_single_view"}).may_use_cached_text_image is False
+    assert _runtime(enc={"image_aggregation": "mean"}).may_use_cached_text_image is True
+
+
+def test_separate_towers_get_separate_fusion_modules():
+    rt = _runtime()
+    assert rt.tower.query_fusion is not rt.tower.gallery_fusion
+    shared = _runtime(tr={"tower_sharing": "shared"})
+    assert shared.tower.query_fusion is shared.tower.gallery_fusion
+
+
+def test_unresolved_or_partial_protocols_are_refused():
+    from metafind.models.stage1_config import Stage1RuntimeConfig
+
+    enc, tr = _protocols()
+    for bad_enc, bad_tr, msg in (
+        ({**enc, "status": "unresolved"}, tr, "not resolved"),
+        ({k: v for k, v in enc.items() if k != "image_aggregation"}, tr, "missing"),
+        (enc, {**tr, "status": "unresolved"}, "not resolved"),
+    ):
+        with pytest.raises(ValueError, match=msg):
+            Stage1RuntimeConfig.from_protocols(
+                bad_enc, bad_tr, dim=D,
+                essgnn=ESSGNNConfig(node_feat_dim=16, edge_feat_dim=8, hidden_dim=16,
+                                    out_dim=D, n_layers=2, use_io_projections=True),
+                checkpoint="/nonexistent/ckpt.pt", device="cpu",
+            )

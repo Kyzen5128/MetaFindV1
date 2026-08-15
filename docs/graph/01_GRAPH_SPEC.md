@@ -17,7 +17,7 @@ cycle 僅存在於 subgraph 內。
 
 | 欄位 | 值 | 判定理由 |
 |---|---|---|
-| `control_authority` | **A1** | 全圖沒有任何決策點由模型決定去向。Qwen 出現三次（資產標註、語意邊、場景評分），三次都只產生 payload 寫進 state；路由一律由 state 上的確定性 predicate 決定 |
+| `control_authority` | **A1** | 全圖沒有任何決策點由模型決定去向。Qwen 出現四次（資產標註、語意邊、場景評分、I-Design 規劃／D-5），四次都只產生 payload 寫進 state；路由一律由 state 上的確定性 predicate 決定 |
 | `execution_mode` | **probabilistic** | ≤A1 但節點輸出不可重現：Qwen 取樣、GPU atomics（`scatter_add_`）、訓練隨機性 |
 | `topology_class` | **workflow** | 所有 fan-out 的 destination 集合都是靜態列舉（11 視角、7 模態組合、2 gallery 協定、Table 3 的 10 列中 8 個需訓練的變體） |
 
@@ -83,7 +83,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 
 ## 3. State schema
 
-完整 45 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
+完整 46 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
 
 | channel | merge | 為什麼 |
 |---|---|---|
@@ -593,7 +593,7 @@ graph TD
 | **U-26** | UNKNOWN | **兩處差異，不是一處**。(a) 參數化：§2.5 是兩個獨立 MLP 吃同樣輸入；Appendix C (10)(13)(14) 先算一條 `m_ij = φ_e(...)` 再分給 `φ_h`／`φ_x`（原始 EGNN 走這種）。(b) **更新順序**：Eq.3 餵給 `f_x` 的是**已更新的** `h^{l+1}`，Appendix C 的 `m_ij` 是用**舊的** `h^l`。等變性兩種都成立，但數值不同 | 實作依 §2.5，記錄為選擇 |
 | **U-29** | UNKNOWN | **物理邊到底怎麼進 ESSGNN**。§2.3 定義 physical（support／adjacency）與 semantic 兩種邊，但 §2.5 的 `f_h`／`f_x` 只吃**一個**邊參數 `e_ij`，而 §2.5 與 Appendix C 都把 `e_ij` 定義成**語意**邊（LLM 關係句 → frozen text encoder）。物理邊是只決定 `N(i)`？自己帶 feature？與語意邊合併成一條？還是平行的另一條？support 與 adjacency 進網路後分不分得出來？全部沒說 | 記錄選擇 —— **這是架構決定，不是超參數** |
 | **U-30** | UNKNOWN | **沒有語意嵌入的邊，`e_ij` 的張量契約是什麼**。`f_h : ℝ^(2d+1+e) → ℝ^d` 輸入寬度**固定**，所以缺 `e_ij` 的邊仍要填滿那 `e` 格。規格禁止補零（零向量與真實嵌入無法區分）並記 `semantic_edge_missing`，但**記旗標不等於說明 MLP 收到什麼** | 記錄機制；必須與合法嵌入可區分 |
-| **U-34** | UNKNOWN | **Stage 1 有沒有訓練 OpenCLIP 的 text／image encoder**。<br>**支持凍結**：MetaFind 建立在 ULIP-2 之上，而 ULIP-2 §3.3 明文 "adopt the largest version of encoders from OpenCLIP (ViT-G/14) and **freeze it during the pre-training**"，特徵取自 "pre-aligned and **frozen** image encoder and text encoder"，目標函數只訓 3D encoder。<br>**支持可訓練**：MetaFind §2.6 "Both query and gallery encoders are trained"、§3.4 "fine-tuning the **entire** encoder"、且 §2.4 特地把自己與「凍結 text/image encoder 的既有做法」對比。<br>**MetaFind 從未逐個 module 列出誰訓練** | `stage1_protocol.clip_train_scope` 記錄採用的讀法；主線 `frozen`（有 ULIP-2 論文直接支持）。RA-3 量測 `trainable` 那個讀法在本機是否可執行 |
+| **U-34** | UNKNOWN | **Stage 1 有沒有訓練 OpenCLIP 的 text／image encoder**。<br>**支持凍結**：MetaFind 建立在 ULIP-2 之上，而 ULIP-2 §3.3 明文 "adopt the largest version of encoders from OpenCLIP (ViT-G/14) and **freeze it during the pre-training**"，特徵取自 "pre-aligned and **frozen** image encoder and text encoder"，目標函數只訓 3D encoder。<br>**支持可訓練**：MetaFind §2.6 "Both query and gallery encoders are trained"、§3.4 "fine-tuning the **entire** encoder"、且 §2.4 特地把自己與「凍結 text/image encoder 的既有做法」對比。<br>**MetaFind 從未逐個 module 列出誰訓練** | `stage1_encoding_protocol.clip_train_scope`（n05b 決定，早於 n06 編碼）記錄採用的讀法；主線 `frozen`（有 ULIP-2 論文直接支持）。RA-3 量測 `trainable` 那個讀法在本機是否可執行。<br>**`blocking: false`，但透過 G3 實質阻擋執行** —— 兩個讀法都能寫成報告，可是 n06 要編碼什麼取決於它，所以 G3 未放行前 Stage 1 跑不了 |
 | **U-33** | UNKNOWN | **ESSGNN 有沒有保留 EGNN 的輸入／輸出投影**。§2.5 是 `t_i → h⁰ → L 層 → Pooling = e_layout`，**兩端都沒有投影**；官方 EGNN（`egnn_clean.py`）有 `embedding_in`／`embedding_out`，本實作沿用了。**多兩層可學參數不是同一個架構，而 upstream 慣例不是論文真值** | `use_io_projections` 旗標。`True` 沿用官方 EGNN（現行主線），`False` 字面復現 §2.5 但要求 `node_feat_dim == hidden_dim == out_dim` |
 | **U-32** | UNKNOWN | **scene dropout 的粒度**。§2.6 寫 "omitted in 30% of **batches**"，字面是**整批**一起丟；實作是**每個 sample 獨立**抽（`sample_scene_dropout` 回傳 `(B,)` 遮罩），`L1-SCENE-DROPOUT-30` 也驗 per-sample。對 in-batch 對比 loss 而言兩者的訓練分布不同 | 字面版是 batch-level；記錄採用哪個，另一個保留為變體 |
 | **U-31** | UNKNOWN・**可執行** | **ESSGNN 的 L 層是否共用參數**。§2.5 寫 `θ_h`、`θ_x` 都沒有層索引。這會改變參數量，也改變 F11：獨立層時最後一層座標頭沒有 loss path，**共用參數時同一個 `f_x` 仍會從前 L−1 層收到梯度** | 實作用每層獨立權重，記錄為選擇 |
@@ -973,3 +973,27 @@ preposition 對齊 enum（無法映射者落到 "on"）
 **主線程式不需要改。** 目前 `train_scope = "point_encoder_and_fuser"`（CLIP 凍結）
 現在反而**有 ULIP-2 論文的直接支持**。錯的不是 code，是它的**證據分類**。
 `full` 模式保留，作為 U-34 另一個讀法與 RA-3 的量測對象。
+
+### 2026-08-15 第十五輪（外部審查後）
+
+上一輪把 U-34 登記進來，卻沒有問**它什麼時候被決定**。這輪的 P0 就是那個問題：
+`stage1_protocol` 在 `n09` 才寫出來，但它有三個欄位決定 `n06` 該編碼**什麼**，
+而 `n06` 跑在 `n09` 前面。登記一個 UNKNOWN 而不安排它的解決時機，等於沒登記。
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 160 | **Stage 1 的 protocol／dataflow 次序不成立。** U-15（文字序列化）、U-14（11 視圖聚合）、U-34（CLIP 是否訓練）都寫在 `stage1_protocol` 裡，由 **`n09`（層 8）**產出，可是 `n06_encode_text_image` 跑在**層 7**。三個決定都在編碼之後才存在。<br>後果具體且各不相同：`trainable` 讀法拿不到 raw text／image（`n10` 只收 embedding）；`random-view-per-step` 讀法只拿得到**單一** cached image vector，因為 `text_image_embeddings` 的型別是 `{text: uri, image: uri}`，11 視圖已經被摺掉了 | 拆出 **`stage1_encoding_protocol`**（`text_serialization` / `image_aggregation` / `clip_train_scope`），由新的 human 節點 **`n05b_resolve_stage1_encoding`**（層 6b，夾在 `n05_annotate` 與 `n06` 之間）產出。`text_image_embeddings` 改型為 `{text: uri, image: uri \| list[uri] per view, aggregation, n_views}`；`n10_train_stage1` 增讀 `renders` 與 `objaverse_annotations`，讓 `trainable` 那條**真的跑得起來**；`e09a`／`e09`／`e13`／`e14` 的 carry 與相依 DAG 一併補上 | 🔴 **次序缺陷** |
+| 161 | `e14` 沒有 carry `stage1_protocol`，`n10` 拿不到自己該遵守的協定 | 補上。`n10` 現在同時收兩份 protocol | 🔴 |
+| 162 | Stage 1 沒有 protocol → runtime 的建構器。`FusionConfig(dim=d)` 預設 `masked_mlp`，`BackboneConfig` 預設 `point_encoder_and_fuser` —— trainer 手寫任何一個都能繞過 G3 放行的值，且沒有東西會發現 | 新增 `metafind/models/stage1_config.py`，`Stage1RuntimeConfig.from_protocols()` 為**唯一入口**（同 ESSGNN 上一輪的做法）。附帶 `may_use_cached_text_image` —— `trainable` 或非預先可算的聚合下一律 False，因為**讀 cache 就是把 run 悄悄變成凍結版**，這是本專案已經犯過一次的錯 | 🔴 |
+| 163 | D-1 還放在 active `boundary.deviations`，`02_BUILD_STEPS` 也仍把它列進「正式偏離六項」 | `graph_spec.yaml` 新增 `boundary.conditional_deviations`，D-1 移入並帶 `active_if: stage1_encoding_protocol.clip_train_scope == 'trainable'`；`README`／`02_BUILD_STEPS`／`00_FINDINGS` 統一改為「五項偏離 ＋ 一項條件式」 | 🟠 |
+| 164 | `ulip_backbone.py`／`dual_tower.py`／`tests` 仍寫「(D-1, forced by 24 GB)」「D-1 declares it frozen」 | 改為「U-34 的主線讀法，且 ULIP-2 §3.3 明文如此」。**凍結不是被顯存逼的**，這個措辭會讓讀者以為主線是妥協 | 🟠 |
+| 165 | 權威階層缺了**依賴方的原論文**這一層 —— 而這正是第 155 項出錯的原因：我拿 ULIP-2 的**程式**去論證它的**設計** | `docs/graph/README.md` 補成五級：MetaFind 論文 → 依賴方**論文** → 依賴方**實作** → 復現決策 → 我們的程式。明文寫下**依賴方的論文大於它自己的實作**，以及依賴方的證據**永遠不能**填補 MetaFind 自己沒說的事 | 🟠 |
+| 166 | `PAPER_LOCKED` 這個名字宣稱得太滿 —— `h0_mode="semantic"` 其實**牴觸** 2.5 字面的 `Concat(x_i, t_i)`，它是從 Appendix C 的前提、Eq. 2 的元數與 Introduction 的「separating spatial and semantic channels」推出來的（RA-1） | 更名 `PRIMARY_INTERPRETATION`，docstring 明說它不是「論文無歧義寫死」 | 🟡 |
+| 167 | `essgnn.py` 說四個 UNKNOWN「each exposed as a config flag」，但 F10 沒有、也不該有 flag | 改為「在**忠實的替代讀法仍然數學上成立時**才給 flag」。F10 是 audit-only，因為 vector-valued `phi_x` 會破壞論文自己宣稱的等變性 | 🟡 |
+| 168 | U-34 標 `blocking: false`，但它其實擋住執行 | registry 補註：兩個讀法都寫得出報告，可是 `n06` 要編碼什麼取決於它，**G3 未放行前 Stage 1 跑不了** | 🟡 |
+| 169 | ULIP-2 論文寫 **ViT-G/14**、公開程式載入 **ViT-bigG-14**，本專案文件混用 | `02_BUILD_STEPS` 引文處註明差異出在 ULIP-2 自己，不是我們的選擇，也不影響「凍結」那句 | 🟡 |
+| 170 | `README`／`01_GRAPH_SPEC` 寫「Qwen 出現三次」 | 實際是四次（標註、場景評分、I-Design 規劃、圖像描述），已更正。第 147 項裡的「三次」是**歷史引述**，保留 | 🟡 |
+
+**這輪要記住的**：ESSGNN 上一輪學到「protocol 要有唯一建構入口」，Stage 1 這輪
+學到的是**更前面的一步** —— protocol 得在**它所支配的節點之前**被決定。
+兩個問題長得不一樣，但根因相同：登記了 UNKNOWN，卻沒安排它在圖上的位置。

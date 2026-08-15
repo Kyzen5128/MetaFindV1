@@ -12,9 +12,10 @@ Mapping to the paper, and where the paper contradicts itself
 ------------------------------------------------------------
 
 The method section (2.5) and the equivariance proof (Appendix C) do not agree in
-four places. Each is exposed as a config flag so both readings can be run and
-the difference measured, rather than silently picking one -- the first three in
-the table below, and U-17 further down:
+four places. Each is configurable WHERE A FAITHFUL ALTERNATIVE REMAINS
+MATHEMATICALLY VALID, so both readings can be run and the difference measured
+rather than one being picked silently. F10 is the exception and is audit-only,
+because a vector-valued phi_x breaks the equivariance the paper claims:
 
 ============  ==========================  ==========================  =============
 discrepancy   sec. 2.5 says               Appendix C requires         default here
@@ -203,16 +204,20 @@ class ESSGNNConfig:
             pooling=protocol["pooling"],
             hidden_dim=protocol["hidden_dim"],
             n_layers=protocol["n_layers"],
-            **PAPER_LOCKED,
+            **PRIMARY_INTERPRETATION,
         )
 
 
 
-# Values the main line pins to one reading of the paper. Unlike the fields in
+# Values the main line pins to one reading. NOT 'unambiguously stated by the
+# paper' -- h0_mode=semantic in particular CONTRADICTS 2.5's literal
+# Concat(x_i, t_i), and is chosen because Appendix C's premise, Eq. 2's arity
+# and the Introduction's "separating spatial and semantic channels" all point
+# the other way (RA-1). Unlike the fields in
 # essgnn_arch_protocol these are NOT open questions a person has to answer --
 # they are our primary interpretation, and a run that departs from them is a
 # variant that must say so. L1-ESSGNN-PAPER-LOCKED-CONFIG asserts them.
-PAPER_LOCKED = {
+PRIMARY_INTERPRETATION = {
     "h0_mode": "semantic",          # Appendix C's premise; Concat(x,t) is RA-1
     "coords_agg": "sum",            # Eq. 3 sums; the reference EGNN defaults to mean
     "edge_proj_dim": None,          # the paper has no such layer

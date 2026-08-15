@@ -20,14 +20,15 @@ What is cached and what is not
 `Train fuser only` row (8.7 against the full model's 11.4), not the main line.
 Paper 2.6 says "Both query and gallery encoders are trained".
 
-    text, image   frozen ViT-bigG-14 (D-1, forced by 24 GB) -> cached once
+    text, image   frozen ViT-bigG-14 (U-34's primary reading, matching
+                  ULIP-2's own 3.3) -> cached once
     point cloud   trainable PointBERT -> encoded every step, never cached
 
 Only the `fuser_only` ablation may consume a cached point-cloud embedding: an
 embedding cache is by construction the output of a network that is not being
 updated, so caching all three IS the ablation, whatever the configuration says.
-RA-3 records the remaining gap, which is ViT-bigG-14 (2.5B parameters) staying
-frozen on a single card -- not the point encoder.
+RA-3 measures U-34's other reading, in which ViT-bigG-14's 2.5B parameters also
+train -- not the point encoder, which trains on the main line either way.
 """
 
 from __future__ import annotations

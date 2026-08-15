@@ -229,11 +229,45 @@ nodes:
       them turns the experiment into a different one. If ever used, the whole
       result is marked DEGRADED.
 
+  - id: n05b_resolve_stage1_encoding
+    role: human
+    purpose: "Decide what n06 should produce, before it produces it."
+    decomposition_rationale: [N5_gate_point, N1_distinct_failure_mode]
+    reads: [objaverse_annotations, renders]
+    writes: [stage1_encoding_protocol, run_progress]
+    precondition: "annotations and renders exist for the admitted set"
+    postcondition: >
+      stage1_encoding_protocol.status == resolved, naming text_serialization,
+      image_aggregation and clip_train_scope.
+    deterministic: false
+    idempotent: false
+    idempotency_mechanism: N/A
+    idempotency_note: "A human decision, recorded once."
+    failure:
+      classes: [HUMAN_RECOVERABLE]
+      policies:
+        - {class: HUMAN_RECOVERABLE, action: interrupt, max_attempts: 3, backoff: fixed, on_exhausted: HALT_BLOCKED, record_fields: [status, text_serialization, image_aggregation, clip_train_scope]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    notes: >
+      [ORDERING] Added because these three decisions sat in stage1_protocol,
+      which n09 writes AFTER n06 has already encoded everything. Each of them
+      determines what the encoding should be, so resolving them afterwards
+      produced a cache built before its own specification existed:
+        U-15 text_serialization  the exact string the encoder sees
+        U-14 image_aggregation   how 11 views become one e_image; a per-step
+             choice cannot be honoured once the cache holds one vector
+        U-34 clip_train_scope    under `trainable` nothing may be cached at
+             all, because gradient has to reach OpenCLIP
+      No separate gate: n06 simply cannot start without the channel, which is
+      the enforcement. Unresolved therefore halts the Objaverse branch at n06
+      rather than being discovered at training time.
+
   - id: n06_encode_text_image
     role: model
     purpose: "Cache the frozen CLIP halves of every asset's embedding."
     decomposition_rationale: [N3_checkpoint_needed, N7_parallelizable]
-    reads: [objaverse_annotations, renders]
+    reads: [objaverse_annotations, renders, stage1_encoding_protocol]
     writes: [text_image_embeddings, run_progress, cost_ledger]
     postcondition: "Every admitted asset has a text and an image embedding at the checkpoint's width"
     deterministic: false
@@ -249,9 +283,14 @@ nodes:
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
-      ONLY text and image. The point encoder is trainable in Stage 1, so
-      point-cloud embeddings cannot be precomputed -- caching all three is what
-      made an earlier draft the "train fuser only" ablation by accident.
+      ONLY text and image, and only under clip_train_scope == frozen. The point
+      encoder is trainable in Stage 1, so point-cloud embeddings cannot be
+      precomputed -- caching all three is what made an earlier draft the "train
+      fuser only" ablation by accident, and the same reasoning binds CLIP under
+      the trainable reading of U-34.
+      Reads stage1_encoding_protocol because it decides what to produce:
+      the serialization template (U-15), whether to store one aggregated image
+      embedding or all eleven (U-14), and whether to run at all (U-34).
 
   - id: n07_scene_graphs
     role: compute
@@ -341,12 +380,14 @@ nodes:
       splits moved to n09c_build_scene_splits.
       [UNKNOWN U-09] query=test is our assumption; paper 3.1 states only the
       80/20 allocation.
+      Writes the TRAINING half of the Stage 1 protocol only. The encoding half
+      (U-14/U-15/U-34) is resolved earlier, at n05b, because n06 needs it.
 
   - id: G3_object_corpus
     role: evaluate
     purpose: "Refuse to run Stage 1 on a leaked or incomplete object corpus."
     decomposition_rationale: [N5_gate_point]
-    reads: [splits, eval_protocols, stage1_protocol, asset_manifest, quarantine]
+    reads: [splits, eval_protocols, stage1_protocol, stage1_encoding_protocol, asset_manifest, quarantine]
     writes: [gate_records, run_progress]
     postcondition: "gate_record with is_terminal=true"
     deterministic: true
@@ -455,7 +496,9 @@ nodes:
     role: mutate
     purpose: "Cross-modal alignment: train the point encoder and the fusion modules."
     decomposition_rationale: [N3_checkpoint_needed, N6_side_effects]
-    reads: [pointclouds, text_image_embeddings, splits, split_seed, stage1_protocol, variant_registry]
+    reads: [pointclouds, text_image_embeddings, renders, objaverse_annotations,
+            splits, split_seed, stage1_protocol, stage1_encoding_protocol,
+            variant_registry]
     writes: [stage1_ckpt, run_progress, cost_ledger, degraded_flags]
     precondition: "G3_object_corpus verdict == PASS"
     postcondition: >
@@ -494,12 +537,21 @@ nodes:
       on 24 GB -- see D-1 and RA-3).
       Loss is Eq. 5, one-directional. ULIP's ULIPWithImageLoss is a single-tower
       tri-modal objective and cannot be reused.
+      [U-34] Reads renders and objaverse_annotations as well as the cache,
+      because clip_train_scope decides which it consumes:
+        frozen     -> text_image_embeddings; renders/annotations unused
+        trainable  -> renders and annotations, encoded every step so gradient
+                      reaches OpenCLIP; the cache MUST NOT be read, since a
+                      cache is by construction the output of a frozen network
+      Declaring both is what makes the trainable reading executable at all. An
+      earlier version read only the cache, so a protocol resolving to
+      `trainable` passed G3 and then had no raw inputs to train on.
 
   - id: n11_gallery_index_staging
     role: mutate
     purpose: "Encode every admitted asset with the frozen gallery tower into a staging index."
     decomposition_rationale: [N6_side_effects, N5_gate_point]
-    reads: [stage1_ckpt, pointclouds, text_image_embeddings, asset_manifest, stage1_protocol]
+    reads: [stage1_ckpt, pointclouds, text_image_embeddings, asset_manifest, stage1_protocol, stage1_encoding_protocol]
     writes: [gallery_index_staging, run_progress, cost_ledger]
     postcondition: "Staging index has the checkpoint's embedding width and len(admitted) rows"
     deterministic: false
@@ -646,7 +698,7 @@ nodes:
     role: evaluate
     purpose: "Table 1: instance-level retrieval, 7 modality conditions x 2 gallery protocols."
     decomposition_rationale: [N4_independent_observability, N7_parallelizable]
-    reads: [gallery_index, variant_ckpts, eval_protocols, splits, pointclouds, text_image_embeddings, stage1_protocol]
+    reads: [gallery_index, variant_ckpts, eval_protocols, splits, pointclouds, text_image_embeddings, stage1_protocol, stage1_encoding_protocol]
     writes: [retrieval_metrics, run_progress, cost_ledger]
     postcondition: "Every (variant, condition, protocol) cell holds a metric with its n_gallery and n_query"
     deterministic: false
