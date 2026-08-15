@@ -1000,9 +1000,9 @@ level_3_gates:
       AND quarantine_rate <= 0.02
       AND both evaluation protocols are defined with explicit query and gallery scopes
       AND stage1_protocol.status == "resolved", with fusion, image_aggregation,
-          text_serialization, tower_sharing, allow_all_masked, similarity and
-          hyperparameter_config_hash each naming a choice
-          (U-13, U-14, U-15, U-16, U-23, U-24, U-22)
+          text_serialization, tower_sharing, clip_train_scope, allow_all_masked,
+          similarity and hyperparameter_config_hash each naming a choice
+          (U-13, U-14, U-15, U-16, U-34, U-23, U-24, U-22)
     evidence: [L2-LEAK-OBJECT, L2-COMPLETE, L1-PROTOCOLS-DEFINED, L1-QUAR-REASON]
     scope_note: >
       [CORRECTED] The criterion said "at object and house level" and cited
@@ -1224,17 +1224,28 @@ required_audits:
     record_kind: required_audit
     blocks: false
     why_not_a_gate: >
-      EXPECTED TO FAIL on this hardware. Section 3.4 concludes that fine-tuning
-      the entire encoder beats training the fuser only, but ViT-bigG-14's 2.5B
-      parameters do not train on a 24 GB card. This is a declared hardware limit
-      (D-1), not a defect to block on.
+      [REFRAMED] This audit measures whether U-34's TRAINABLE reading is
+      executable here -- not whether D-1 is justified.
+
+      MetaFind 3.4 concludes that fine-tuning the entire encoder beats training
+      the fuser only, without saying which modules "entire" covers. Read as
+      including OpenCLIP, ViT-bigG-14's 2.5B parameters must enter the
+      optimizer on a 24 GB card. RA-3 attempts exactly that and records what
+      happens.
+      What a failure proves and does not prove: it shows THAT INTERPRETATION is
+      infeasible on this hardware. It does not show the paper requires that
+      interpretation -- ULIP-2, which MetaFind builds on, freezes OpenCLIP in
+      its own 3.3, so the frozen reading has direct support and may simply be
+      correct. Blocking on this would be blocking on an open question.
     criterion: "train_scope=full completes without exhausting GPU memory"
-    claim_controlled: "We verified the paper's conclusion about training scope in full."
+    claim_controlled: "We tested U-34's trainable reading rather than assuming it infeasible."
     claim_on_failure: >
-      "Because ViT-bigG-14 stays frozen (deviation D-1, forced by single-GPU
-      hardware), 'entire encoder' in our reproduction means the 3D encoder plus
-      fusion. The Table 3 row comparing full fine-tuning to fuser-only is
-      reported within that reduced scope."
+      "'Entire encoder' in our reproduction means the 3D encoder plus fusion.
+      OpenCLIP stays frozen, which is what ULIP-2's own section 3.3 specifies
+      and is therefore a defensible reading of MetaFind rather than only a
+      hardware concession; whether MetaFind intended otherwise is U-34, open.
+      Where the trainable reading was attempted it did not fit on 24 GB, which
+      bounds what we can say about it -- not what the paper says."
     must_not_affect: [G3_object_corpus, G4_gallery_freeze, G5_report_release, "other Table 3 rows"]
     record_path: "outputs/logs/audits/RA3_train_scope.yaml"
 

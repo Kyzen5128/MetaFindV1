@@ -12,8 +12,9 @@ Mapping to the paper, and where the paper contradicts itself
 ------------------------------------------------------------
 
 The method section (2.5) and the equivariance proof (Appendix C) do not agree in
-four places. The first three are exposed as config flags so both readings can be
-run and the difference measured, rather than silently picking one:
+four places. Each is exposed as a config flag so both readings can be run and
+the difference measured, rather than silently picking one -- the first three in
+the table below, and U-17 further down:
 
 ============  ==========================  ==========================  =============
 discrepancy   sec. 2.5 says               Appendix C requires         default here
@@ -42,12 +43,13 @@ rotation. The reference EGNN agrees (``coord_mlp`` ends in ``Linear(hidden, 1)``
 Implementing the literal R^3 would break the paper's central claim, so the scalar
 form is used unconditionally and the discrepancy is reported instead.
 
-**The fourth is U-17: d_ij or d_ij^2.** Sec. 2.5 defines
+**The fourth is U-17: d_ij or d_ij^2, and it now has a flag.** Sec. 2.5 defines
 ``d_ij^l = ||x_i^l - x_j^l||_2``; Appendix C Eq. 10-12 uses ``||x_i - x_j||^2``,
-as does the original EGNN. This one gets no audit and no flag, because both are
-SE(3)-invariant -- neither breaks the proof, so there is no "expected to fail"
-assertion to write. It still changes the number fed to f_h and f_x, and therefore
-the trained model. We follow Appendix C and EGNN, and record it as a choice.
+as does the original EGNN. This one gets no AUDIT, because both are SE(3)-invariant -- neither breaks the
+proof, so there is no "expected to fail" assertion to write. It does get a
+config flag (`distance`), because it changes the number fed to f_h and f_x and
+therefore the trained model. `squared` is the primary, following Appendix C and
+the reference EGNN; the resolved essgnn_arch_protocol records what a run used.
 
 Further under-specifications are surfaced as UNKNOWN rather than guessed:
 

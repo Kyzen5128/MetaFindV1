@@ -72,7 +72,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 
 | id | 偏離 | 理由 | 影響 |
 |---|---|---|---|
-| **D-1** | ViT-bigG-14 保持凍結 | 2.5B 參數在 24GB 上無法訓練 | 「entire encoder」在我們的設定下指 3D encoder + fusion |
+| **D-1** | ViT-bigG-14 保持凍結 | 2.5B 參數在 24GB 上無法訓練 | **狀態：取決於 U-34，目前尚未確立為偏離**。先前的理由是「ULIP-2 公開程式沒有凍 CLIP」——那對**程式**的觀察正確，但拿來論證**設計**是錯的：ULIP-2 §3.3 明文凍結，而同檔的 ULIP-1 factory 都有明確凍結、只有 ULIP-2 的沒有，比較像疏漏。U-34 若解為 `frozen`，這根本不是偏離；若解為 `trainable`，才是偏離，且 RA-3 是「另一條路跑不動」的證據 |
 | **D-2** | Qwen2.5-VL 取代 GPT-4o | 專案決定 | **Table 1 與 Table 2 都受影響** —— Qwen 不只換掉裁判，也換掉 46,052 筆資產標註（文字塔的訓練資料）。所以 SC-1 只報告差距、不設門檻 |
 | **D-3** | 不重跑 baseline | 只復現 MetaFind | SC-2 只能與論文公佈值比較 |
 | **D-4** | 不做人工評分 | 無標註人力 | Table 2 人工欄 `INSUFFICIENT_EVIDENCE` |
@@ -593,6 +593,7 @@ graph TD
 | **U-26** | UNKNOWN | **兩處差異，不是一處**。(a) 參數化：§2.5 是兩個獨立 MLP 吃同樣輸入；Appendix C (10)(13)(14) 先算一條 `m_ij = φ_e(...)` 再分給 `φ_h`／`φ_x`（原始 EGNN 走這種）。(b) **更新順序**：Eq.3 餵給 `f_x` 的是**已更新的** `h^{l+1}`，Appendix C 的 `m_ij` 是用**舊的** `h^l`。等變性兩種都成立，但數值不同 | 實作依 §2.5，記錄為選擇 |
 | **U-29** | UNKNOWN | **物理邊到底怎麼進 ESSGNN**。§2.3 定義 physical（support／adjacency）與 semantic 兩種邊，但 §2.5 的 `f_h`／`f_x` 只吃**一個**邊參數 `e_ij`，而 §2.5 與 Appendix C 都把 `e_ij` 定義成**語意**邊（LLM 關係句 → frozen text encoder）。物理邊是只決定 `N(i)`？自己帶 feature？與語意邊合併成一條？還是平行的另一條？support 與 adjacency 進網路後分不分得出來？全部沒說 | 記錄選擇 —— **這是架構決定，不是超參數** |
 | **U-30** | UNKNOWN | **沒有語意嵌入的邊，`e_ij` 的張量契約是什麼**。`f_h : ℝ^(2d+1+e) → ℝ^d` 輸入寬度**固定**，所以缺 `e_ij` 的邊仍要填滿那 `e` 格。規格禁止補零（零向量與真實嵌入無法區分）並記 `semantic_edge_missing`，但**記旗標不等於說明 MLP 收到什麼** | 記錄機制；必須與合法嵌入可區分 |
+| **U-34** | UNKNOWN | **Stage 1 有沒有訓練 OpenCLIP 的 text／image encoder**。<br>**支持凍結**：MetaFind 建立在 ULIP-2 之上，而 ULIP-2 §3.3 明文 "adopt the largest version of encoders from OpenCLIP (ViT-G/14) and **freeze it during the pre-training**"，特徵取自 "pre-aligned and **frozen** image encoder and text encoder"，目標函數只訓 3D encoder。<br>**支持可訓練**：MetaFind §2.6 "Both query and gallery encoders are trained"、§3.4 "fine-tuning the **entire** encoder"、且 §2.4 特地把自己與「凍結 text/image encoder 的既有做法」對比。<br>**MetaFind 從未逐個 module 列出誰訓練** | `stage1_protocol.clip_train_scope` 記錄採用的讀法；主線 `frozen`（有 ULIP-2 論文直接支持）。RA-3 量測 `trainable` 那個讀法在本機是否可執行 |
 | **U-33** | UNKNOWN | **ESSGNN 有沒有保留 EGNN 的輸入／輸出投影**。§2.5 是 `t_i → h⁰ → L 層 → Pooling = e_layout`，**兩端都沒有投影**；官方 EGNN（`egnn_clean.py`）有 `embedding_in`／`embedding_out`，本實作沿用了。**多兩層可學參數不是同一個架構，而 upstream 慣例不是論文真值** | `use_io_projections` 旗標。`True` 沿用官方 EGNN（現行主線），`False` 字面復現 §2.5 但要求 `node_feat_dim == hidden_dim == out_dim` |
 | **U-32** | UNKNOWN | **scene dropout 的粒度**。§2.6 寫 "omitted in 30% of **batches**"，字面是**整批**一起丟；實作是**每個 sample 獨立**抽（`sample_scene_dropout` 回傳 `(B,)` 遮罩），`L1-SCENE-DROPOUT-30` 也驗 per-sample。對 in-batch 對比 loss 而言兩者的訓練分布不同 | 字面版是 batch-level；記錄採用哪個，另一個保留為變體 |
 | **U-31** | UNKNOWN・**可執行** | **ESSGNN 的 L 層是否共用參數**。§2.5 寫 `θ_h`、`θ_x` 都沒有層索引。這會改變參數量，也改變 F11：獨立層時最後一層座標頭沒有 loss path，**共用參數時同一個 `f_x` 仍會從前 L−1 層收到梯度** | 實作用每層獨立權重，記錄為選擇 |
@@ -955,3 +956,20 @@ preposition 對齊 enum（無法映射者落到 "on"）
 | 152 | `essgnn_arch_protocol` 沒涵蓋 `h0_mode`／`coords_agg`／`edge_proj_dim`／`normalize_coord_diff` —— 一個 config 可以滿足所有 protocol 欄位、卻仍是不同的模型（`normalize_coord_diff=True` 會把 `x_i−x_j` 換成單位向量） | 新增 `L1-ESSGNN-PAPER-LOCKED-CONFIG`。**刻意不併進 protocol** —— protocol 放的是「論文沒說、要人決定」的問題，這四個是「論文有說或可推得」的主線讀法，混在一起會毀掉登記表想維持的區分 |
 | 153 | U-17／U-31 的 registry 措辭停在「implementation uses ...」 | 改為「兩者皆可執行，現行主線是 X，由 resolved protocol 記錄實際跑的是哪個」 |
 | 154 | 綁定層在 `state_dict` 往返後可能被解開 | 加測試：reload 後 `id(layers[0]) == id(layers[2])`，且改一個會同時改到另一個 |
+
+### 2026-08-15 第十四輪（外部審查，首次納入 ULIP-2 原論文）
+
+上一輪的三個 ESSGNN P1 已收掉，審查者劃掉。這輪讀完 **ULIP-2 原論文**後，
+出現一個新的 P0 —— **而且錯的是我**。
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 155 | **D-1 的證據基礎不成立。** 我曾用「ULIP-2 公開程式沒有 `requires_grad = False`」論證「凍結 ViT-bigG 是我們的偏離」。**查證後：ULIP-2 §3.3 明文 "freeze it during the pre-training"**，特徵取自「pre-aligned and **frozen** image/text encoder」，目標函數只訓 3D encoder。<br>對程式的觀察沒錯（`ULIP2_PointBERT_Colored` 確實只 `eval()`，而 `main.py` 是 `if not p.requires_grad: continue`），但**拿實作論證設計是錯的** —— 同檔的 **ULIP-1 五個 factory 都有明確凍結**，只有 ULIP-2 的沒有，那比較像它對不上自己的論文。<br>**這正是本專案一路在防的錯誤，這次由我犯下** | 新增 **U-34**（Stage 1 是否訓練 OpenCLIP），兩邊證據並列；**D-1 改為「取決於 U-34，尚未確立為偏離」**；`stage1_protocol.clip_train_scope` 記錄採用的讀法，`G3` 檢查 | 🔴 **證據分類錯誤** |
+| 156 | RA-3 的定位建立在「D-1 已成立」之上 | 改為 **U-34 `trainable` 讀法的可行性稽核**。跑不動只證明「**那個讀法**在本機不可行」，**不證明論文要求那個讀法** —— 凍結那條有 ULIP-2 論文直接支持 | 🔴 |
+| 157 | `02_BUILD_STEPS`／`00_FINDINGS F5`／`ulip_backbone.py` 三處都寫著錯誤的 ULIP 敘述 | 全部更正，並保留「先前寫反了」的紀錄與理由 | 🟠 |
+| 158 | root README 的偏離表停在五項、沒有 D-6 | 重建為六項，並把 D-1 的條件狀態寫進去 | 🟠 |
+| 159 | `essgnn.py` 的 docstring 還說 U-17「no flag」，但 `distance` 已經是可選 | 更正：**沒有 audit**（兩者都不變、寫不出預期失敗的斷言），但**有 flag** | 🟡 |
+
+**主線程式不需要改。** 目前 `train_scope = "point_encoder_and_fuser"`（CLIP 凍結）
+現在反而**有 ULIP-2 論文的直接支持**。錯的不是 code，是它的**證據分類**。
+`full` 模式保留，作為 U-34 另一個讀法與 RA-3 的量測對象。

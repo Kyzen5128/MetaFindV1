@@ -145,9 +145,16 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python -m torch.distributed.launch --nproc_
 本機: 1× NVIDIA GeForce RTX 4090, 24564 MiB
 ```
 
-ULIP-2 用 open_clip **ViT-bigG-14**（~2.5B 參數）當 text/image backbone。
-官方 `ULIP2_PointBERT_Colored` 對它呼叫 `eval()`，但**沒有**設 `requires_grad = False`
-—— **`eval()` 不等於凍結**。本復現因 24GB 額外凍結它，那是 **D-1**，不是繼承。
+ULIP-2 用 open_clip **ViT-bigG-14**（~2.5B 參數）當 text/image backbone，
+其論文 §3.3 明文 **"freeze it during the pre-training"**。
+
+實作上有個對不上的地方：`ULIP2_PointBERT_Colored` 只呼叫 `eval()`，**沒有**設
+`requires_grad = False`，而 `main.py` 的 optimizer 用 `if not p.requires_grad: continue`
+挑參數 —— 所以照公開碼跑，那 2.5B 參數會進 optimizer。
+同檔的 **ULIP-1 五個 factory 都有明確凍結**，只有 ULIP-2 的沒有。
+
+> 這是 **ULIP-2 程式與它自己論文的落差**，不是「官方設計不凍結」。
+> 先前本文用這個落差論證「凍結是我們的偏離」，那個推論已撤回（見 U-34）。
 Eq.(5) 的分母 `Σ_{A' ∈ B}` 是 **in-batch negatives** —— 對比學習的檢索品質
 高度依賴 batch size，單卡 24GB 直接跑會把 batch 壓到遠低於論文設定。
 

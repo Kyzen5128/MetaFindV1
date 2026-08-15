@@ -45,19 +45,25 @@ scratch/             參考用的雜項腳本
 
 ## 已知偏離論文之處
 
-**正式偏離五項**，編號以 [`docs/graph/graph_spec.yaml`](docs/graph/graph_spec.yaml) 的 `boundary.deviations` 為準：
+**正式偏離六項**，編號以 [`docs/graph/graph_spec.yaml`](docs/graph/graph_spec.yaml) 的 `boundary.deviations` 為準：
 
 | id | 內容 |
 |---|---|
-| **D-1** | ViT-bigG-14 凍結（2.5B 參數在 24GB 上訓不動）。「fine-tune entire encoder」在我們的設定下指 3D encoder + fusion |
+| **D-1** | ViT-bigG-14 凍結（2.5B 參數在 24GB 上訓不動）。**狀態取決於 U-34** —— ULIP-2 §3.3 明文凍結 OpenCLIP，所以主線可能根本不是偏離 |
 | **D-2** | Qwen2.5-VL 取代 **GPT-4o**（資產標註與場景評分） |
 | **D-3** | 不重跑 6 個 baseline |
 | **D-4** | 不做人工評分 |
-| **D-5** | I-Design 的規劃 agent 用 Qwen2.5-7B-Instruct 取代 **GPT-4** |
+| **D-5** | I-Design 中所有設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` |
+| **D-6** | 對 I-Design 的**行為性**修改（patch 02／03）：偏離的是**公開實作**，不是「論文所做的事」 |
 
-> **早期版本的這張表寫著「D2＝frozen backbone 全部預先快取、訓練只在 1280-d 向量上」。**
-> 那正是論文 Table 3 的 `Train fuser only` 那一列（8.7 vs Full 11.4），
-> 與 §2.6 的 "Both query and gallery encoders are trained" 相反。已更正。
+> **兩次更正記在這裡。**
+> 早期這張表寫「D2＝frozen backbone 全部預先快取、訓練只在 1280-d 向量上」——
+> 那正是 Table 3 的 `Train fuser only`（8.7 vs Full 11.4），與 §2.6 相反。
+>
+> 後來 D-1 被寫成「已確立的偏離」，理由是 ULIP-2 公開程式沒有凍 CLIP。
+> **那個推論已撤回**：ULIP-2 §3.3 明文 "freeze it during the pre-training"，
+> 公開程式沒設 `requires_grad=False` 是它自己對不上論文，不是設計如此。
+> D-1 現在取決於 **U-34**（MetaFind 到底要不要訓練 CLIP，論文沒逐個 module 說）。
 
 論文自身的矛盾（F 系列、RA 系列）另見 [`docs/graph/00_FINDINGS.md`](docs/graph/00_FINDINGS.md)
 與 [`01_GRAPH_SPEC.md` §11](docs/graph/01_GRAPH_SPEC.md)。

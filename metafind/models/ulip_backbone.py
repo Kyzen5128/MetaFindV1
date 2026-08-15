@@ -9,7 +9,8 @@ rather than pretraining it, because the official script assumes 8 GPUs and this
 machine has one 24 GB card (F5).
 
 split_freeze_policy: the CLIP half is frozen; the POINT ENCODER IS TRAINABLE in
-Stage 1. Freezing ViT-bigG-14 is deviation D-1.
+Stage 1. Freezing ViT-bigG-14 is what ULIP-2 specifies (its 3.3); whether that
+also matches MetaFind's intent is U-34, and D-1 is conditional on it.
 
     paper 2.6  "Both query and gallery encoders are trained"
     paper 3.4  "Fine-tuning the entire encoder outperformed training the
@@ -32,9 +33,14 @@ What follows from the split:
 `train_scope` selects which of the three levels in 02_BUILD_STEPS is active.
 Only `fuser_only` may consume cached point-cloud embeddings.
 
-Note on upstream: `ULIP2_PointBERT_Colored` calls `open_clip_model.eval()` but
-does NOT set requires_grad=False on it, so freezing ViT-bigG-14 is OUR choice
-(D-1), not something inherited from ULIP-2's own design.
+Note on upstream, corrected: ULIP-2's paper 3.3 says it freezes OpenCLIP
+("freeze it during the pre-training") and trains only the 3D encoder, so the
+main line here agrees with ULIP-2 rather than deviating from it. Its public
+code is a separate matter -- ULIP2_PointBERT_Colored calls eval() without
+setting requires_grad=False, while the ULIP-1 factories beside it freeze
+explicitly, so the omission reads as an oversight against its own paper.
+Whether MetaFind wants CLIP trainable is U-34 and is open; D-1's status as a
+deviation depends on it.
 
 Why loading needs assertions
 ----------------------------

@@ -331,11 +331,27 @@ ProcTHOR 分支的任何故障都會停掉一個不依賴它的訓練。兩條�
 | `full` | 再加 ViT-bigG-14 (2.5B) | ❌ 單卡不可行 | 記為硬體限制 |
 
 **[偏離 D-1]** ViT-bigG-14 的 text/image 端保持凍結 —— 2.5B 參數在 24GB 上無法訓練。
-**注意不要據此宣稱「ULIP-2 官方本來也凍結 CLIP」** —— 讀過官方碼後這句不成立：
-`ULIP2_PointBERT_Colored` 只對 open_clip 呼叫 `eval()`，**沒有**設 `requires_grad = False`
-（那些 `requires_grad = False` 都在別的 SLIP loader 函式裡），而官方訓練是
-`for n, p in model.named_parameters(): if not p.requires_grad: continue` 再 `model.train()`。
-**`eval()` ≠ 凍結。** 凍結 ViT-bigG-14 是**我們**因 24GB 而做的決定（D-1），不是繼承自 ULIP-2。
+**ULIP-2 論文明文凍結 CLIP。** §3.3：
+
+> We adopt the largest version of encoders from OpenCLIP (ViT-G/14) and **freeze it
+> during the pre-training** ... based on the **pre-aligned and frozen image encoder
+> and text encoder** in OpenCLIP
+
+目標函數也只訓 3D encoder。所以**主線的凍結有 ULIP-2 論文的直接支持**。
+
+> **先前這裡寫反了，記下來。** 我曾用「公開程式沒有 `requires_grad = False`」
+> 論證「凍結是我們的偏離」。對**程式**的觀察沒錯 ——
+> `ULIP2_PointBERT_Colored` 確實只呼叫 `eval()`，而 `main.py` 的 optimizer 是
+> `if not p.requires_grad: continue`，所以那些參數會被收進去。
+> 但**拿實作去論證設計是錯的**：同一份檔案裡 ULIP-1 的五個 factory
+> （`ULIP_PN_SSG`、`ULIP_PointBERT` …）**都有**明確凍結，只有 ULIP-2 的沒有，
+> 那比較像是它自己對不上自己的論文。
+> **這正是這個專案一直在防的錯誤，只是這次是我犯的。**
+
+至於 MetaFind 是否要求解凍 CLIP —— **[未定 U-34]**。
+§2.6 寫 "Both query and gallery encoders are trained"、§3.4 寫 "fine-tuning the
+**entire** encoder"、§2.4 還特地與「凍結 text/image encoder 的既有做法」對比；
+但它**從未逐個 module 說誰訓練**。所以 D-1 是不是偏離，取決於 U-34。
 報告中須聲明「entire encoder」在我們的設定下指 3D encoder + fusion，不含 CLIP。
 
 **只有「點雲」的 embedding 快取限定 `fuser_only` 那一列。**
