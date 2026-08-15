@@ -241,7 +241,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 `metafind/models/`（`essgnn` / `dual_tower` / `fusion` / `losses` / `ulip_backbone` /
 `stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身 ——
 `n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer。
-112 個測試函式涵蓋這六個模組與取樣器（pytest 參數化後展開成 140 個 case），**沒有一條涵蓋任何節點的執行**。
+113 個測試函式涵蓋這六個模組與取樣器（pytest 參數化後展開成 140 個 case），**沒有一條涵蓋任何節點的執行**。
 
 ---
 

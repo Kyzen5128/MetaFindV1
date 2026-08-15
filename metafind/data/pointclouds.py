@@ -69,7 +69,14 @@ N_POINTS = 10_000
 # passing every G2 check.
 SAMPLER_VERSION = 3
 RGB_SCALE = "unit"  # [0, 1]; see the module docstring
-DEFAULT_GREY = 0.4  # ULIP's own stand-in for an uncoloured mesh
+DEFAULT_GREY = 0.4  # ULIP's stand-in for a dataset with no colour channel at all
+# glTF 2.0 specifies pbrMetallicRoughness.baseColorFactor default = [1,1,1,1].
+# A PBR material with neither a texture nor an explicit factor is therefore
+# WHITE, not unknown. trimesh reports 102/255 = 0.4 grey as ITS default in that
+# case, which is numerically identical to DEFAULT_GREY and so looked like a
+# legitimate fallback. Measured against ULIP's released cloud for
+# 1dc0fe17c77e...: theirs is 1.000, ours was 0.400.
+GLTF_DEFAULT_BASE_COLOR = 1.0
 
 
 def uid_seed(uid: str) -> int:
@@ -136,7 +143,7 @@ def load_parts(path: Path):
 
     if not parts:
         raise ValueError("no triangulated geometry in this GLB")
-    order = ("fallback_grey", "flat", "vertex", "face", "texture")
+    order = ("fallback_grey", "gltf_default", "flat", "vertex", "face", "texture")
     # The WORST source across parts, so an asset that is nine-tenths textured
     # and one-tenth grey is not labelled "texture". coloured_point_fraction
     # carries the degree, which the label alone cannot.
@@ -150,6 +157,8 @@ def _colourise(geom) -> str:
 
       texture        a baseColorTexture, sampled per vertex through the UVs
       flat           no texture, but the PBR material carries a baseColorFactor
+      gltf_default   a material with neither: glTF 2.0 defines baseColorFactor
+                     as [1,1,1,1], so the object is white
       vertex / face  colours stored on the geometry itself
       fallback_grey  nothing readable; ULIP's own 0.4 stand-in
 
@@ -190,9 +199,17 @@ def _colourise(geom) -> str:
                 return _uniform(vc, "flat")
         except (IndexError, ValueError, TypeError, AttributeError):
             pass
-        factor = getattr(getattr(vis, "material", None), "baseColorFactor", None)
+        mat = getattr(vis, "material", None)
+        factor = getattr(mat, "baseColorFactor", None)
         if factor is not None:
             return _uniform(np.asarray(factor).ravel(), "flat")
+        if mat is not None:
+            # Material present, no texture, no explicit factor -> glTF's default
+            # white. NOT trimesh's main_color, which is its own grey stand-in and
+            # happens to equal DEFAULT_GREY, so trusting it silently replaced a
+            # white object with a grey one.
+            return _uniform([int(GLTF_DEFAULT_BASE_COLOR * 255)] * 3 + [255],
+                            "gltf_default")
     else:
         vc = getattr(vis, "vertex_colors", None)
         if vc is not None and len(vc) == n:

@@ -419,6 +419,51 @@ scale-normalised 的渲染圖 —— 它**不可能量到**真實尺寸，只能
 
 ---
 
+## F21. U-02 第一次真的量了 —— 幾何吻合，而顏色缺口是**我們的 bug**
+
+拿官方 shard 裡 6 個我們也有 GLB 的資產，逐一比對。
+
+**幾何**（`pc_norm` 後的 Chamfer，各取 2,000 點）：
+
+| | 值 |
+|---|---|
+| 同一資產配對距離 中位數 | **0.00318** |
+| 不同資產基線 中位數 | **0.05880** |
+
+**低 18 倍。** 取樣程序與 ULIP 產生的雲描述的是同一個物體。
+
+**顏色**：一開始 6 個裡 2 個對不上，而**兩個都是我們標記為 `fallback_grey` 的**：
+
+```
+1dc0fe17c77e   我們 0.400   官方 1.000
+93b4b53d0985   我們 0.616   官方 0.704
+```
+
+追下去發現 `main_color = [102 102 102 255]`，而 **102/255 恰好等於 0.4** ——
+那是 **trimesh 自己的預設灰**，不是資產的顏色。
+**glTF 2.0 規定 `pbrMetallicRoughness.baseColorFactor` 缺省時是 `[1,1,1,1]`**，
+所以「有材質、沒貼圖、沒 factor」的物件是**白的**，不是未知。
+我把規格定義的白，塗成了 ULIP 用於「整個資料集沒有顏色通道」的灰。
+
+修正後六個全部吻合：
+
+```
+平均絕對差 0.0021    最大 0.007
+```
+
+而 smoke corpus 的 `fallback_grey` 從 9/60 **降到 0/60**，
+`coloured_point_fraction` 60/60 都是 1.000。
+
+**這一格的教訓**：`fallback_grey` 這個計數先前讀起來像「這些資產本來就沒顏色」，
+實際上是「這些資產的顏色我們沒讀出來」。
+**兩者在 sidecar 裡長得一模一樣，只有跟上游成品比對才分得出來。**
+
+（附帶：`fallback_grey` 現在**實際上到不了** —— trimesh 一定會補一個
+`SimpleMaterial`，所以 `gltf_default` 會先命中。它保留為最終保險，
+但不能再被描述成活躍的 fallback。）
+
+---
+
 ## F15. MetaFind 拿掉了 EGNN 的正規化常數 `C = 1/(M−1)`
 
 **這不是 UNKNOWN，是 MetaFind 與 EGNN 之間一個明確的差異。**
@@ -537,11 +582,24 @@ prompt 與尺寸，Table 5 列了 40 條 elaborate prompt。而 `idesign_generat
 
 ---
 
-## F20. ULIP-2 的點雲 RGB 在 **[0, 1]**，而這是靠 ULIP **程式**定下來的
+## F20. ULIP-2 的點雲 RGB 在 **[0, 1]** —— 已由官方檔案**實測**
 
 MetaFind 沒說，**ULIP-2 的論文也沒說**。checkpoint 名字只寫 `10k-xyzrgb`。
 
-**決定性證據在 ULIP 的程式裡**：資料集沒有顏色時它填
+**2026-08-15 實測，不再是推論。** 下載官方 `ULIP-2/objaverse_lvis/000-009.tar.gz`
+（shard 內 4,999 個資產），讀其中 120 個：
+
+```
+rgb dtype = float16    全域 min = 0.0000    全域 max = 1.0000
+超出 [0,1] 的資產：0 / 120
+```
+
+先前這裡寫的是「決定性證據在 ULIP 程式」，**那個推論過頭了**：
+`0.4` fallback 那兩行在 **ModelNet** 路徑，而 `Objaverse_Lvis_Colored` 是直接
+concat released `.npy` 的 rgb、**不除不夾**，繼承的是檔案本身的尺度。
+結論碰巧是對的，但當時的證據撐不起「decisive」這個詞。原始論證保留於下：
+
+資料集沒有顏色時它填
 
 ```python
 rgb_data = np.ones_like(point_set) * 0.4      # dataset_3d.py:292, 297

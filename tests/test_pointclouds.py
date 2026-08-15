@@ -107,19 +107,48 @@ def test_flat_pbr_material_is_a_colour_not_a_failure():
     assert np.allclose(m.visual.vertex_colors[:, :3], [204, 200, 176])
 
 
-def test_uncolourable_geometry_reports_itself():
-    """The fallback must be visible, not just applied.
+def test_material_without_texture_or_factor_is_gltf_white():
+    """glTF 2.0 defines baseColorFactor as [1,1,1,1] when absent.
 
-    A blanket `except Exception: return grey` is what made the first run produce
-    40 uniformly grey assets and look successful. The source is recorded so a
-    run that lost its colour channel is legible in the summary.
+    trimesh reports 102/255 = 0.4 as ITS default for that case, numerically
+    identical to DEFAULT_GREY, so treating the material as unreadable looked
+    like a legitimate fallback. Measured against ULIP's released cloud for
+    1dc0fe17c77e: theirs is 1.000, ours was 0.400. After this fix all six
+    comparable assets match to within 0.007, mean absolute difference 0.0021.
     """
     m = trimesh.creation.box()
     m.visual = trimesh.visual.TextureVisuals(
-        uv=None, material=trimesh.visual.material.PBRMaterial()
+        uv=np.zeros((len(m.vertices), 2)),
+        material=trimesh.visual.material.PBRMaterial(),
     )
-    assert _colourise(m) == "fallback_grey"
-    assert np.allclose(m.visual.vertex_colors[:, :3], int(DEFAULT_GREY * 255))
+    assert _colourise(m) == "gltf_default"
+    assert np.allclose(m.visual.vertex_colors[:, :3], 255)
+
+
+def test_colourise_always_yields_a_usable_array_and_a_named_source():
+    """The invariant, rather than a case that cannot occur.
+
+    `fallback_grey` is the terminal guard and is now UNREACHABLE through any
+    observed path: trimesh substitutes a SimpleMaterial where a glTF has none,
+    so the gltf_default branch fires first, and ColorVisuals regenerates
+    vertex_colors to match the mesh so the length checks cannot fail. It stayed
+    in because _colourise must return something, but it was not reached on any
+    of the 60 smoke assets and must not be described as a live fallback.
+
+    What matters downstream is what this test asserts: every geometry comes out
+    with one colour per vertex and a source that is named.
+    """
+    cases = [
+        _box(colour=(10, 20, 30, 255)),                      # vertex colours
+        _box(colour=(204, 200, 176, 255), texture=True),     # flat PBR factor
+        trimesh.creation.box(),                              # bare default
+    ]
+    for m in cases:
+        src = _colourise(m)
+        assert src in ("texture", "flat", "gltf_default", "vertex", "face", "fallback_grey")
+        vc = m.visual.vertex_colors
+        assert len(vc) == len(m.vertices), f"{src}: {len(vc)} colours for {len(m.vertices)} vertices"
+        assert vc[:, :3].max() <= 255 and vc[:, :3].min() >= 0
 
 
 # ------------------------------------------------------------ point budget

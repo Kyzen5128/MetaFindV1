@@ -749,6 +749,10 @@ level_2:
       non-degenerate -- everything G2 checked -- and would have trained.
       Baseline comes from the smoke corpus, not from a guess; a threshold
       invented before measuring would be a number nobody could defend.
+      MEASURED 2026-08-15, sampler_version 3, 60 assets: colour_source =
+      {texture 33, flat 18, gltf_default 9}, fallback_grey 0, mean
+      coloured_point_fraction 1.000. Against ULIP's released clouds for the 6
+      comparable assets, mean absolute difference in rgb mean is 0.0021 (F21).
 
   - id: L2-PC-SELF-CONSISTENT
     kind: scientific
