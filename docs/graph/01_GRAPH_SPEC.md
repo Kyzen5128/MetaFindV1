@@ -1279,6 +1279,24 @@ Table 3 variant 的 gallery index lifecycle（`n18`／`n19` 前）、
 `scene_semantic_edges` 的 pair→embedding 映射（`n08` 前）、
 C2 loop 的 progress counter 指向 SG1 私有 channel（`n08` 前）。
 
+### 2026-08-15 `n04_render_views` 實作（node-by-node 的第一個節點）
+
+只看 `n04` 自己與它的直接接縫，不再整份重讀。抓到的四件事全部是**跑起來才會顯形**的。
+
+| # | 問題 | 現在 |
+|---|---|---|
+| 257 | **41% 的資產被隔離，而那不是資料問題。** 4 個執行緒下有 67/82 個失敗是 `eglDestroyContext` —— EGL context 屬於建立它的執行緒。**錯誤以每個資產的例外浮現，所以 run 報出「41% 隔離率」，讀起來像三分之一的 Objaverse 是壞的** | 改用 `ProcessPoolExecutor`（spawn）。隔離率 41% → 2.0% |
+| 258 | pyrender 對**每一個貼圖槽**都做驗證，我只轉了 `baseColorTexture`，於是 emissive／normal map 還是會讓整個資產陣亡 | 五個槽全部處理，轉不動就丟掉那張圖而不是丟掉物件。2.0% → **0.33%** |
+| 259 | Objaverse GLB 裡混有 `Path3D` 曲線，`pyrender.Scene.from_trimesh_scene` 會整場拒絕 | 轉換前先剔除非網格幾何。**丟一條曲線是丟裝飾，丟整場是丟物件** |
+| 260 | **兩條負向注入沒紅，而那是我的測試沒測到。** scale 測試分不出「正確正規化」與「兩張都空白」；projection 測試**自己建了一個 OrthographicCamera**，所以把生產程式換成 perspective 它照樣綠 | scale 測試加驗非空白；projection 測試改走 `render_views(projection=...)` 生產路徑。兩條重新注入後都紅 |
+
+**實測**：300 個資產、**0.33% 隔離**、837/min、11 張視圖全相異、`blank_views` 全為 0。
+`n03` 的兩個教訓（scene transform、sidecar 當完成標記）直接沿用，沒有重犯。
+
+**第 260 項值得單獨記**：一條不會因為程式壞掉而變紅的測試，
+與一條真正的測試在報告裡長得一模一樣。
+**負向注入的價值不在於證明程式對，而在於證明測試在測東西。**
+
 **這輪之後改變工作方式**：不再整份重審。改為 **node-by-node**——
 只看該節點與它直接的上下游接縫，實作、smoke、故意注入失敗、確認 channel 真的產生、
 下游讀得到，然後鎖定。審查者的判斷我同意，而且第 21–24 輪就是證據：

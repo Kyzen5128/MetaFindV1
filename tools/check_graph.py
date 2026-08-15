@@ -291,7 +291,7 @@ test_count = sum(
     len(re.findall(r"^def test_", p.read_text(), re.M))
     for p in (DOCS.parents[1] / "tests").glob("test_*.py")
 )
-m2 = re.search(r"(\d+) 個測試函式涵蓋這六個模組", readme_txt)
+m2 = re.search(r"(\d+) 個測試函式涵蓋", readme_txt)
 check("README unit-test count", m2 is not None and int(m2.group(1)) == test_count,
       f"README says {m2.group(1) if m2 else '?'}, tests/ defines {test_count}")
 for nid in implemented:

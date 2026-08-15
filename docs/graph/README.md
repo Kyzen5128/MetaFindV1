@@ -219,7 +219,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | **U-15** | 結構化標註怎麼序列化成 encoder 的輸入字串 | 只給欄位，沒給格式 |
 | **U-16** | query / gallery 兩塔是否共享權重 | 說「dedicated query encoder」、說兩者都訓練，但沒說共享關係 |
 
-### 實作狀態 —— 28 個非 gate 節點裡，**有程式的是 3 個**
+### 實作狀態 —— 28 個非 gate 節點裡，**有程式的是 4 個**
 
 規格完整不等於管線存在。這張表是為了讓讀者不會把前者讀成後者
 （第十九輪剛因為同一個理由修過 `L1-STAGE1-PROTOCOL-APPLIED` 的措辭）。
@@ -228,8 +228,9 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 |---|---|---|
 | `n01_env_bootstrap` | **可執行** | `setup/01_storage.sh`、`02_conda_env.sh`、`03_verify_env.py`（7/7 通過） |
 | `n02_download` | **執行中** | `metafind/data/download.py`。GLB 下載進行中 |
-| `n03_sample_pointclouds` | **可執行** | `metafind/data/pointclouds.py`。60 個資產煙霧測試通過 G2 的形狀／正規化判準；15 條測試 |
-| 其餘 **二十五個**節點 | **只有規格** | 無 |
+| `n03_sample_pointclouds` | **可執行** | `metafind/data/pointclouds.py`。60 個資產通過 G2 形狀／正規化判準，顏色對照官方 ULIP 雲平均差 0.0021；16 條測試 |
+| `n04_render_views` | **可執行** | `metafind/data/renders.py`。300 個資產、**隔離率 0.33%**（G3 門檻 2%）、837/min；11 張視圖全相異且無空白；9 條測試 |
+| 其餘 **二十四個**節點 | **只有規格** | 無 |
 
 另有兩塊不對應任何節點、但已可執行：
 
@@ -241,7 +242,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 `metafind/models/`（`essgnn` / `dual_tower` / `fusion` / `losses` / `ulip_backbone` /
 `stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身 ——
 `n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer。
-113 個測試函式涵蓋這六個模組與取樣器（pytest 參數化後展開成 140 個 case），**沒有一條涵蓋任何節點的執行**。
+122 個測試函式涵蓋六個模型模組、取樣器與渲染器（pytest 參數化後展開成 151 個 case），**沒有一條涵蓋任何節點的執行**。
 
 ---
 

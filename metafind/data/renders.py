@@ -1,0 +1,386 @@
+"""Render 11 views per Objaverse asset.
+
+# IMPLEMENTS-NODE: n04_render_views
+
+Paper 2.3 gives one number and nothing else: assets are "rendered from 11
+orthogonal viewpoints". Everything below that is a recorded choice.
+
+  U-03a  projection.   Eleven mutually orthogonal directions do not exist in
+         R^3, so "orthogonal" cannot be literal. Orthographic is the reading we
+         run, and it is recorded per asset; perspective stays selectable
+         because the two produce different image-embedding distributions.
+  U-03   camera placement. A Fibonacci lattice, which spreads 11 directions
+         about as evenly as 11 directions can be spread. Axis-aligned is the
+         alternative and is also selectable.
+  U-04   resolution. 224px, matching what the image tower consumes.
+
+Scale is destroyed on purpose, and recorded on the way past
+--------------------------------------------------------
+
+Each asset is normalised to a unit sphere before rendering, which is what makes
+L1-RENDER-SCALE-INVARIANT hold: a millimetre-scaled and a metre-scaled copy of
+the same mesh must produce identical images, or the image tower would be
+learning the modelling units of whoever uploaded the asset. The cost is that
+absolute size is gone from the render, so the annotator's "size dimensions"
+(paper 2.3) can only ever be a category prior. ``raw_bbox_extents`` is written
+alongside so that estimate is auditable -- see F13, and note it is the
+axis-aligned bounding box in the file's own units, not a verified physical size.
+
+Two things inherited from n03 rather than rediscovered
+------------------------------------------------------
+
+*Scene-graph transforms are applied.* 65.8% of sampled Objaverse GLBs place
+geometry with a non-identity node transform. Ignoring them renders the object
+collapsed on itself, and the image still looks like a plausible render of
+something.
+
+*Completion means the sidecar, not the pixels.* Files are written first and the
+per-asset record last, so a crash costs one re-render rather than leaving an
+asset that is skipped forever with no metadata.
+"""
+
+from __future__ import annotations
+
+import argparse
+import concurrent.futures as cf
+import multiprocessing as mp
+import hashlib
+import json
+import os
+import time
+import traceback
+from pathlib import Path
+
+import numpy as np
+
+from metafind import paths, runlog
+
+# Must be set before pyrender imports OpenGL. EGL renders on the GPU with no
+# display; OSMesa is not installed here and pyglet needs a window.
+os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
+
+N_VIEWS = 11
+RESOLUTION = 224  # U-04
+PROJECTION = "orthographic"  # U-03a
+CAMERA_LAYOUT = "fibonacci"  # U-03
+RENDERER_VERSION = 1
+
+
+def fibonacci_directions(n: int = N_VIEWS) -> np.ndarray:
+    """``n`` unit vectors spread over the sphere, deterministically.
+
+    The paper's "11 orthogonal viewpoints" cannot be taken literally -- R^3 has
+    at most 3 mutually orthogonal directions -- so this reads it as "11 evenly
+    spread", which is what a Fibonacci lattice gives. Recorded as
+    camera_layout so a reader knows which reading produced the images.
+    """
+    i = np.arange(n, dtype=np.float64) + 0.5
+    phi = np.arccos(1.0 - 2.0 * i / n)
+    theta = np.pi * (1.0 + 5.0**0.5) * i
+    return np.stack(
+        [np.cos(theta) * np.sin(phi), np.sin(theta) * np.sin(phi), np.cos(phi)], axis=1
+    )
+
+
+def look_at(eye: np.ndarray, target=(0.0, 0.0, 0.0), up=(0.0, 0.0, 1.0)) -> np.ndarray:
+    """Camera-to-world pose looking from ``eye`` at ``target`` (OpenGL -Z forward)."""
+    eye = np.asarray(eye, dtype=np.float64)
+    fwd = np.asarray(target, dtype=np.float64) - eye
+    fwd /= np.linalg.norm(fwd)
+    up = np.asarray(up, dtype=np.float64)
+    if abs(float(fwd @ up)) > 0.999:  # looking along `up`: pick another reference
+        up = np.array([0.0, 1.0, 0.0])
+    right = np.cross(fwd, up)
+    right /= np.linalg.norm(right)
+    true_up = np.cross(right, fwd)
+    pose = np.eye(4)
+    pose[:3, 0], pose[:3, 1], pose[:3, 2], pose[:3, 3] = right, true_up, -fwd, eye
+    return pose
+
+
+def normalised_scene(path: Path):
+    """Load the GLB with its scene transforms applied and fit it to a unit sphere.
+
+    Returns ``(trimesh_scene, raw_bbox_extents)``. The extents are measured
+    BEFORE normalisation, because afterwards there is nothing left to measure:
+    every asset is the same size by construction, which is the point.
+    """
+    import trimesh
+
+    scene = trimesh.load(path, force="scene", process=False)
+
+    # Drop everything pyrender cannot turn into a mesh, BEFORE it tries.
+    # Objaverse GLBs carry Path3D curves and PointCloud geometry that
+    # from_trimesh_scene rejects outright, taking the whole asset with them --
+    # measured: 4 of 200 died on a Path3D alone. Dropping a curve loses a
+    # decoration; keeping it loses the object.
+    for name in [n for n, g in scene.geometry.items()
+                 if not isinstance(g, trimesh.Trimesh) or len(g.faces) == 0]:
+        scene.delete_geometry(name)
+    for geom in scene.geometry.values():
+        _flatten_texture(geom)
+
+    verts = []
+    for node in scene.graph.nodes_geometry:
+        transform, name = scene.graph[node]
+        geom = scene.geometry.get(name)
+        if not isinstance(geom, trimesh.Trimesh) or len(geom.vertices) == 0:
+            continue
+        verts.append(trimesh.transform_points(geom.vertices, transform))
+    if not verts:
+        raise ValueError("no triangulated geometry in this GLB")
+
+    allv = np.concatenate(verts, axis=0)
+    lo, hi = allv.min(axis=0), allv.max(axis=0)
+    extents = hi - lo
+    centroid = allv.mean(axis=0)
+    radius = float(np.linalg.norm(allv - centroid, axis=1).max())
+    if not np.isfinite(radius) or radius <= 0:
+        raise ValueError(f"degenerate mesh: radius {radius}")
+
+    fit = np.eye(4)
+    fit[:3, :3] /= radius
+    fit[:3, 3] = -centroid / radius
+    scene.apply_transform(fit)
+    return scene, extents
+
+
+def _flatten_texture(geom) -> None:
+    """Make a material pyrender can accept, or drop it to plain colour.
+
+    pyrender refuses a 2-channel (grey+alpha) texture and refuses a raw ndarray
+    where it expects a PIL image -- 10 of 200 assets died on those two alone.
+    Neither is a broken asset: converting the image is enough, and where that
+    fails the object still renders with its base colour, which is far better
+    than losing it.
+    """
+    import trimesh
+    from PIL import Image
+
+    vis = getattr(geom, "visual", None)
+    mat = getattr(vis, "material", None)
+    if mat is None:
+        return
+    # EVERY texture slot, not just baseColor. Fixing baseColorTexture alone
+    # left 3 of 200 assets dying on emissive and normal maps -- pyrender
+    # validates each slot it uses, so one unconverted map loses the asset just
+    # as completely as the main one.
+    for slot in ("baseColorTexture", "emissiveTexture", "normalTexture",
+                 "metallicRoughnessTexture", "occlusionTexture"):
+        tex = getattr(mat, slot, None)
+        if tex is None:
+            continue
+        try:
+            if isinstance(tex, np.ndarray):
+                tex = Image.fromarray(tex)
+            if tex.mode not in ("RGB", "RGBA"):
+                tex = tex.convert("RGBA")
+            setattr(mat, slot, tex)
+        except Exception:  # noqa: BLE001 -- a bad map must not cost the object
+            try:
+                setattr(mat, slot, None)
+            except Exception:  # noqa: BLE001
+                geom.visual = trimesh.visual.ColorVisuals(mesh=geom)
+                return
+
+
+def render_views(path: Path, n_views: int = N_VIEWS, resolution: int = RESOLUTION,
+                 projection: str = PROJECTION):
+    """``(images, raw_bbox_extents)`` -- ``n_views`` HxWx3 uint8 arrays."""
+    import pyrender
+
+    scene_tm, extents = normalised_scene(path)
+    scene = pyrender.Scene.from_trimesh_scene(scene_tm, bg_color=[255, 255, 255, 255],
+                                              ambient_light=[0.4, 0.4, 0.4])
+    if projection == "orthographic":
+        # xmag/ymag 1.1 leaves a small margin around the unit sphere, and makes
+        # apparent size independent of camera distance -- the property
+        # L1-RENDER-PROJECTION-CONSISTENT asserts.
+        camera = pyrender.OrthographicCamera(xmag=1.1, ymag=1.1, znear=0.01, zfar=100.0)
+    elif projection == "perspective":
+        camera = pyrender.PerspectiveCamera(yfov=np.pi / 4.0, znear=0.01, zfar=100.0)
+    else:
+        raise ValueError(f"unknown projection {projection!r}")
+
+    images = []
+    renderer = pyrender.OffscreenRenderer(resolution, resolution)
+    try:
+        for d in fibonacci_directions(n_views):
+            pose = look_at(d * 3.0)
+            cam_node = scene.add(camera, pose=pose)
+            # Light rides with the camera, so every view is lit the same way. A
+            # fixed world light makes some views black, which is a valid image
+            # and an invalid observation.
+            light_node = scene.add(
+                pyrender.DirectionalLight(color=[1.0, 1.0, 1.0], intensity=3.0), pose=pose
+            )
+            colour, _ = renderer.render(scene)
+            images.append(np.ascontiguousarray(colour[..., :3]))
+            scene.remove_node(cam_node)
+            scene.remove_node(light_node)
+    finally:
+        renderer.delete()
+    return images, extents
+
+
+def sidecar_path(out_dir: Path, uid: str) -> Path:
+    return out_dir / f"{uid}.json"
+
+
+def is_complete(out_dir: Path, uid: str) -> bool:
+    """Completion is the sidecar plus matching digests, never the image files.
+
+    Same contract as n03, and for the same reason: a crash after the last PNG
+    and before the record leaves an asset that a restart skips forever with no
+    metadata, and `renders` is what n05 and n06 consume.
+    """
+    sc = sidecar_path(out_dir, uid)
+    if not sc.exists():
+        return False
+    try:
+        rec = json.loads(sc.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    if len(rec.get("view_paths", [])) != N_VIEWS:
+        return False
+    for p, want in zip(rec["view_paths"], rec["view_sha256"]):
+        f = Path(p)
+        if not f.exists() or hashlib.sha256(f.read_bytes()).hexdigest() != want:
+            return False
+    return True
+
+
+def process_one(uid: str, glb: Path, out_dir: Path) -> dict:
+    from PIL import Image
+
+    images, extents = render_views(glb)
+    if len(images) != N_VIEWS:
+        raise ValueError(f"rendered {len(images)} views, expected {N_VIEWS}")
+
+    asset_dir = out_dir / uid
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    view_paths, view_sha, blank = [], [], 0
+    for i, img in enumerate(images):
+        # A camera pointed at nothing returns a uniform frame. It is a valid
+        # PNG of the right shape, so only the content says anything is wrong.
+        if float(img.std()) < 1.0:
+            blank += 1
+        p = asset_dir / f"view_{i:02d}.png"
+        tmp = p.with_suffix(".png.part")
+        Image.fromarray(img).save(tmp, format="PNG", optimize=False)
+        tmp.replace(p)
+        view_paths.append(str(p))
+        view_sha.append(hashlib.sha256(p.read_bytes()).hexdigest())
+
+    if blank == N_VIEWS:
+        raise ValueError("every view is blank -- the asset never entered frame")
+    if len(set(view_sha)) != N_VIEWS:
+        raise ValueError(
+            f"only {len(set(view_sha))} distinct views of {N_VIEWS}; the camera "
+            "is not moving between renders"
+        )
+
+    record = {
+        "uid": uid,
+        "view_paths": view_paths,
+        "view_sha256": view_sha,
+        "raw_bbox_extents": [float(v) for v in extents],
+        "projection": PROJECTION,
+        "camera_layout": CAMERA_LAYOUT,
+        "resolution": RESOLUTION,
+        "renderer_version": RENDERER_VERSION,
+        "blank_views": blank,
+    }
+    sc_tmp = sidecar_path(out_dir, uid).with_suffix(".json.part")
+    with sc_tmp.open("w") as fh:
+        json.dump(record, fh)
+        fh.flush()
+        os.fsync(fh.fileno())
+    sc_tmp.replace(sidecar_path(out_dir, uid))
+    return record
+
+
+def rebuild_index(index_path: Path, out_dir: Path) -> int:
+    """Derive renders_index.jsonl from the per-asset sidecars.
+
+    Derived, never appended: an appended index grows duplicates on resume and
+    disagrees with the filesystem the moment a run is interrupted.
+    """
+    tmp = index_path.with_suffix(".jsonl.part")
+    n = 0
+    with tmp.open("w") as f:
+        for sc in sorted(out_dir.glob("*.json")):
+            try:
+                f.write(json.dumps(json.loads(sc.read_text())) + "\n")
+                n += 1
+            except (OSError, json.JSONDecodeError):
+                continue
+    tmp.replace(index_path)
+    return n
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--workers", type=int, default=4,
+                    help="Separate PROCESSES: EGL contexts are not shareable across "
+                         "threads, and 4 threads produced a 34% eglDestroyContext "
+                         "failure rate that looked like bad assets.")
+    ap.add_argument("--limit", type=int)
+    ap.add_argument("--force", action="store_true")
+    args = ap.parse_args()
+
+    uids = sorted(json.loads(paths.LVIS_MANIFEST.read_text()))
+    glb_by_uid = {p.stem: p for p in paths.OBJAVERSE_GLB.rglob("*.glb")}
+    out_dir = paths.RENDERS
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    todo = [(u, glb_by_uid[u]) for u in uids
+            if u in glb_by_uid and (args.force or not is_complete(out_dir, u))]
+    if args.limit:
+        todo = todo[: args.limit]
+    print(f"{len(uids):,} in manifest, {len(todo):,} to render", flush=True)
+
+    quarantine, done, started = [], 0, time.time()
+    # ProcessPool, not ThreadPool. With 4 threads, 67 of 200 assets failed on
+    # eglDestroyContext -- an EGL context belongs to the thread that made it,
+    # and the errors surfaced as per-asset exceptions, so the run reported a
+    # 41% quarantine rate as though a third of Objaverse were malformed.
+    ctx = mp.get_context("spawn")
+    with runlog.run_progress("n04_render_views"), \
+            cf.ProcessPoolExecutor(max_workers=args.workers, mp_context=ctx) as pool:
+        futures = {pool.submit(process_one, u, g, out_dir): u for u, g in todo}
+        for fut in cf.as_completed(futures):
+            uid = futures[fut]
+            try:
+                fut.result()
+            except Exception as exc:  # noqa: BLE001 -- one bad asset must not stop the run
+                quarantine.append({
+                    "uid": uid,
+                    "failure_class": ("RESOURCE" if isinstance(exc, (MemoryError, OSError))
+                                      else "DETERMINISTIC_INPUT"),
+                    "exception_type": type(exc).__name__,
+                    "exception_msg": str(exc)[:400],
+                    "traceback": traceback.format_exc()[-1500:],
+                })
+                continue
+            done += 1
+            if done % 200 == 0:
+                rate = done / max(time.time() - started, 1e-9) * 60
+                print(f"  [{done:6d}/{len(todo)}] {rate:.0f}/min, "
+                      f"剩餘約 {(len(todo)-done)/max(rate,1e-9):.0f} 分, "
+                      f"quarantine {len(quarantine)}", flush=True)
+
+    n_indexed = rebuild_index(paths.LOGS / "renders_index.jsonl", out_dir)
+    runlog.quarantine("n04_render_views", quarantine)
+    runlog.cost_ledger(
+        cpu_seconds=round(time.time() - started, 1),
+        assets_rendered=done,
+        views_written=done * N_VIEWS,
+    )
+    print(f"\n{done:,} rendered this run, {n_indexed:,} complete on disk, "
+          f"{len(quarantine):,} quarantined -> {out_dir}")
+    return 0 if done or not todo else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
