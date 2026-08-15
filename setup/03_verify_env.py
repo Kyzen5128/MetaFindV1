@@ -16,6 +16,9 @@ Usage::
 """
 
 # IMPLEMENTS-NODE: n01_env_bootstrap
+# writes channel: run_progress -- this script is invoked by the operator rather
+# than by a scheduler, so its record is the pass/fail summary it prints and the
+# exit code, not a JSONL row. Named here so the registry and the source agree.
 
 from __future__ import annotations
 

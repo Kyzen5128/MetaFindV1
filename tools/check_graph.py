@@ -252,6 +252,31 @@ listed = set(re.findall(r"\|\s*\*\*(D-[0-9])\*\*", root))
 check("root README deviation ids", listed == dev_ids | cond_ids,
       f"lists {sorted(listed)}, graph_spec has {sorted(dev_ids | cond_ids)}")
 
+# An implemented node must reference every channel it declares writing. Both
+# implemented nodes failed this: n02 and n03 each listed run_progress and
+# cost_ledger in `writes` and emitted neither, which is the same
+# declared-but-not-executed defect the spec reviews kept finding one level up.
+# Only nodes carrying an IMPLEMENTS-NODE marker are checked -- a node with no
+# code cannot be accused of not writing anything.
+impl_src = {}
+for d in ("metafind", "tools", "setup"):
+    for f in (DOCS.parents[1] / d).rglob("*"):
+        if f.suffix not in (".py", ".sh"):
+            continue
+        body = f.read_text(errors="replace")
+        for nid in re.findall(r"^# IMPLEMENTS-NODE: (\S+)$", body, re.M):
+            impl_src[nid] = body
+for nid, body in impl_src.items():
+    if nid not in nodes:
+        continue
+    for ch in nodes[nid].get("writes", []) or []:
+        check(
+            f"{nid} emits {ch}",
+            ch in body,
+            f"the registry says this node writes `{ch}`, but its source never "
+            f"mentions it",
+        )
+
 test_count = sum(
     len(re.findall(r"^def test_", p.read_text(), re.M))
     for p in (DOCS.parents[1] / "tests").glob("test_*.py")

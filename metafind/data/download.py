@@ -36,7 +36,7 @@ import random
 import time
 from pathlib import Path
 
-from metafind import paths
+from metafind import paths, runlog
 
 
 def _hf_snapshot(repo_id: str, dest: Path, repo_type: str = "model", allow: list[str] | None = None) -> Path:
@@ -57,6 +57,7 @@ def _hf_snapshot(repo_id: str, dest: Path, repo_type: str = "model", allow: list
 # ------------------------------------------------------------------ datasets
 
 
+# writes channel: asset_manifest
 def fetch_lvis_manifest() -> dict[str, str]:
     """The 46,052-uid manifest that defines Objaverse-LVIS.
 
@@ -125,6 +126,7 @@ def _fetch_one_glb(uid: str, rel_path: str, dest_root: Path, attempts: int = 4) 
     return "unreachable"
 
 
+# writes channel: asset_glb
 def fetch_objaverse_glbs(uids: list[str], workers: int = 16) -> dict:
     """Fetch the GLB meshes, keeping them.
 
@@ -195,6 +197,7 @@ def fetch_objaverse_glbs(uids: list[str], workers: int = 16) -> dict:
     return {"requested": len(uids), "present": len(got), "missing": len(set(uids) - got)}
 
 
+# writes channel: procthor_dataset
 def fetch_procthor() -> dict:
     """ProcTHOR-10K house layouts, written as one JSONL per split."""
     import prior
@@ -289,6 +292,27 @@ def main() -> int:
     print("=" * 60)
     for name in steps:
         print(f"\n[{name}] {STEPS[name]}", flush=True)
+        # One run_progress record per step, not one for the whole invocation:
+        # `--only glbs` and a full run are different stages, and a resume has
+        # to know which of them completed.
+        with runlog.run_progress(f"n02_download:{name}"):
+            _run_step(name, args)
+
+    print("\n" + "=" * 60)
+    print(paths.describe())
+    runlog.cost_ledger(bytes_downloaded=_bytes_on_disk())
+    return 0
+
+
+def _bytes_on_disk() -> int:
+    total = 0
+    for root in (paths.OBJAVERSE, paths.PROCTHOR, paths.MODELS):
+        if root.exists():
+            total += sum(f.stat().st_size for f in root.rglob("*") if f.is_file())
+    return total
+
+
+def _run_step(name: str, args) -> None:
         if name == "manifest":
             fetch_lvis_manifest()
         elif name == "procthor":
@@ -305,10 +329,6 @@ def main() -> int:
                 uids = uids[: args.limit]
             stats = fetch_objaverse_glbs(uids, workers=args.workers)
             print(f"  {stats}")
-
-    print("\n" + "=" * 60)
-    print(paths.describe())
-    return 0
 
 
 if __name__ == "__main__":

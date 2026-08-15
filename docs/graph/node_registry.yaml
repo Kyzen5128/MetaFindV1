@@ -48,7 +48,7 @@ nodes:
     purpose: "Fetch the two datasets the paper names, plus the frozen weights they run on."
     decomposition_rationale: [N1_distinct_failure_mode, N3_checkpoint_needed]
     reads: []
-    writes: [asset_manifest, asset_glb, procthor_dataset, variant_registry, run_progress, cost_ledger]
+    writes: [asset_manifest, asset_glb, procthor_dataset, run_progress, cost_ledger]
     precondition: "n01 postcondition holds"
     postcondition: >
       manifest present with len(manifest) assets; >=98% of GLBs on disk;
@@ -234,7 +234,7 @@ nodes:
     purpose: "Decide what n06 should produce, before it produces it."
     decomposition_rationale: [N5_gate_point, N1_distinct_failure_mode]
     reads: [objaverse_annotations, renders]
-    writes: [stage1_encoding_protocol, stage1_hyperparameters, run_progress]
+    writes: [stage1_encoding_protocol, stage1_hyperparameters, variant_registry, run_progress]
     precondition: "annotations and renders exist for the admitted set"
     postcondition: >
       stage1_encoding_protocol.status == resolved, naming text_serialization,
@@ -267,6 +267,11 @@ nodes:
              represented. 2.6 only rules out zero-padding; it never says what
              replaces it, and `learned_token` was being chosen by a
              FusionConfig default while the registry called it UNKNOWN
+      [MOVED HERE] variant_registry -- which Table 3 rows we run, which reuse a
+      checkpoint, which are inference-only -- was declared as written by
+      n02_download, so downloading a dataset was formally what produced the
+      ablation plan. It is a reproduction decision and belongs with the other
+      ones, and n05b is early enough: n10 reads it.
       No separate gate: n06 simply cannot start without the channel, which is
       the enforcement. Unresolved therefore halts the Objaverse branch at n06
       rather than being discovered at training time.

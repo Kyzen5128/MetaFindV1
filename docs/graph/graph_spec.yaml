@@ -702,7 +702,7 @@ state:
 
     - name: variant_registry
       type: "list[{variant_id, requires_training, reuses_ckpt, train_scope, fusion, dropout, layout_encoder, composition_mode, table3_row}]"
-      writers: [n02_download]
+      writers: [n05b_resolve_stage1_encoding]
       readers: [n10_train_stage1, n13_train_stage2, n18_train_ablations, n19_eval_ablations]
       merge: write_once
       lifetime: persistent

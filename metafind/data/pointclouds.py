@@ -50,7 +50,7 @@ from pathlib import Path
 
 import numpy as np
 
-from metafind import paths
+from metafind import paths, runlog
 
 N_POINTS = 10_000
 SAMPLER_VERSION = 2  # bump whenever sampling changes; part of the cache key
@@ -305,7 +305,7 @@ def main() -> int:
     # DETERMINISTIC_INPUT -> quarantine, max_attempts 1: a non-manifold or empty
     # mesh fails identically forever, so retrying only spends time.
     quarantine, done, started = [], 0, time.time()
-    with cf.ThreadPoolExecutor(max_workers=args.workers) as pool, \
+    with runlog.run_progress("n03_sample_pointclouds"), cf.ThreadPoolExecutor(max_workers=args.workers) as pool, \
             sidecar_path.open("a") as sidecar:
         futures = {pool.submit(process_one, u, g, o): u for u, g, o in todo}
         for fut in cf.as_completed(futures):
@@ -314,7 +314,7 @@ def main() -> int:
                 rec = fut.result()
             except Exception as exc:  # noqa: BLE001 -- one bad mesh must not stop the run
                 quarantine.append(
-                    {"uid": uid, "node": "n03_sample_pointclouds",
+                    {"uid": uid, "failure_class": "DETERMINISTIC_INPUT",
                      "exception_type": type(exc).__name__,
                      "exception_msg": str(exc)[:400],
                      "traceback": traceback.format_exc()[-1500:]}
@@ -328,11 +328,15 @@ def main() -> int:
                 print(f"  [{done:6d}/{len(todo)}] {rate:.0f}/min, "
                       f"剩餘約 {left:.0f} 分, quarantine {len(quarantine)}", flush=True)
 
-    if quarantine:
-        qp = paths.LOGS / "quarantine_n03.jsonl"
-        with qp.open("a") as f:
-            for q in quarantine:
-                f.write(json.dumps(q) + "\n")
+    runlog.quarantine("n03_sample_pointclouds", quarantine)
+    runlog.cost_ledger(
+        cpu_seconds=round(time.time() - started, 1),
+        assets_sampled=done,
+        bytes_written=sum(
+            (paths.POINTCLOUDS / f"{u}.npz").stat().st_size
+            for u, _, o in todo if o.exists()
+        ),
+    )
 
     print(f"\n{done:,} sampled, {len(quarantine):,} quarantined -> {paths.POINTCLOUDS}")
     # proceed_with_admitted: a partial corpus is a legitimate outcome here, and
