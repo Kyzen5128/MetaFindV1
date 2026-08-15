@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import random
 import json
 import traceback
 import os
@@ -78,7 +79,7 @@ def verify_patches(patch_dir: Path, repo: Path) -> list[dict]:
             {
                 "name": patch.stem,
                 "applied": applied,
-                "sha256": hashlib.sha256(patch.read_bytes()).hexdigest()[:16],
+                "sha256": hashlib.sha256(patch.read_bytes()).hexdigest(),
             }
         )
     return out
@@ -102,6 +103,7 @@ def run_one(
     prompt: str,
     dims: list[float],
     n_objects: int,
+    seed: int | None = None,
 ) -> dict:
     """One scene, in its own CWD. Returns the sidecar record."""
     workdir.mkdir(parents=True, exist_ok=True)
@@ -114,6 +116,19 @@ def run_one(
     os.chdir(workdir)
     try:
         from IDesign import IDesign  # noqa: PLC0415
+        import agents  # noqa: PLC0415
+
+        if seed is not None:
+            # Actually drive generation, rather than only recording the number.
+            # autogen keys its response cache on (prompt, config), and cache_seed
+            # is part of that config, so this is what makes two scenes with
+            # different seeds take different samples from the same prompt --
+            # and what makes one scene reproducible from its sidecar.
+            random.seed(seed)
+            for name in ("gpt4_config", "gpt4_prev_config", "gpt4_json_config",
+                         "gpt4_json_engineer_config"):
+                if isinstance(getattr(agents, name, None), dict):
+                    getattr(agents, name)["cache_seed"] = seed
 
         design = IDesign(
             no_of_objects=n_objects, user_input=prompt, room_dimensions=dims
@@ -175,7 +190,7 @@ def main() -> int:
     print(f"I-Design {revision[:8]} | endpoint serves: {served}")
     for rec in applied_patches:
         mark = "applied" if rec["applied"] else "NOT APPLIED"
-        print(f"  patch {rec['name']}: {mark} ({rec['sha256']})")
+        print(f"  patch {rec['name']}: {mark} ({rec['sha256'][:12]}...)")
     if not all(r["applied"] for r in applied_patches):
         print(
             "Refusing to generate: the clone is missing patches this repo ships. "
@@ -236,7 +251,9 @@ def main() -> int:
         write_config(workdir, args.base_url, args.api_key, args.model)
         print(f"\n=== {scene_id}: {prompt!r} ===", flush=True)
         try:
-            rec = run_one(args.idesign_repo, workdir, prompt, dims, n_obj)
+            rec = run_one(
+                args.idesign_repo, workdir, prompt, dims, n_obj, seed=spec["seed"]
+            )
         except Exception as exc:  # noqa: BLE001 -- one bad scene must not stop the batch
             failures += 1
             print(f"  FAILED: {type(exc).__name__}: {exc}", file=sys.stderr)

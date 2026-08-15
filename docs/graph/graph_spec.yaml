@@ -143,14 +143,45 @@ boundary:
       what: "No human preference study"
       why: "no annotator capacity"
       impact: "Table 2 human column reported as INSUFFICIENT_EVIDENCE"
+    - id: D-6
+      what: "Behavioural modifications to I-Design beyond the model swap"
+      why: >
+        Without them no scene completed: five attempts ended in an unbounded
+        correction loop, a wall id in objects_in_room, a preposition outside
+        the schema's enum, a dangling object reference, and duplicate object ids.
+      impact: >
+        SEPARATE from D-5, which is only the planner model. Patches 02 and 03
+        change what the pipeline PRODUCES, not just who produces it:
+          layout-reference normalisation (walls moved to the list whose enum
+            accepts them, spellings canonicalised)
+          prepositions mapped onto the schema's enums, unmappable ones to "on"
+          dangling object references dropped
+          duplicate new_object_id entries collapsed, keeping the first
+          correction loops bounded (12 rounds, 3 attempts per conflict)
+          cache_seed varied per retry, so a retry is an independent sample
+          scenes abandoned on exhaustion instead of looping
+        Each changes scene content, which scenes survive, and the completion
+        rate -- so every Table 2 row and Table 3 scene column is affected.
+        [WHAT THIS DOES AND DOES NOT CLAIM] These modifications do not exist in
+        the currently public atcelen/IDesign. That is not evidence the MetaFind
+        authors ran it unmodified: their integration code and I-Design
+        configuration were never published, so whether they needed similar
+        changes is unknown. The honest statement is that we deviate from the
+        public implementation, not that we deviate from what the paper did.
+
     - id: D-5
       what: "I-Design's five planning agents run on local Qwen2.5-7B-Instruct instead of GPT-4"
       why: "no proprietary API; consistent with D-2's project decision"
       impact: >
         SEPARATE from D-2, which covers GPT-4o for annotation and judging.
-        I-Design's paper and repo use GPT-4 (not GPT-4o) for the interior
-        designer / architect / engineer / corrector / refiner agents, which are
-        text-only. Implemented by PATCHING I-Design's filter_dict
+        Every I-Design LLM path configured for "gpt-4" or "gpt-4-1106-preview"
+        is rerouted to qwen2.5-7b-instruct -- which is exactly what patch 01
+        does, and is a more accurate statement than counting agents. The public
+        repo defines at least six AssistantAgent roles (interior designer,
+        interior architect, engineer, spatial corrector, object deletion, layout
+        refiner) plus the GroupChat managers that share those configs; an
+        earlier version of this entry said "five planning agents".
+        All are text-only. Implemented by PATCHING I-Design's filter_dict
         (setup/patches/idesign-01), not by aliasing Qwen as "gpt-4" in vLLM --
         that was the first approach and was abandoned because every log line
         then read gpt-4 while Qwen did the work. Changing the planner changes THE SCENES THEMSELVES, so every
@@ -338,9 +369,10 @@ state:
       note: >
         [U-08a / U-08b / U-32] Holds the decision itself, and stays mutable
         until it is made. scene_dropout_granularity is here rather than in
-        stage1_protocol because scene dropout is a Stage 2 mechanism; the
-        faithful reading of "omitted in 30% of batches" is `batch`, and the
-        implementation currently does `sample`. An earlier draft had n09_build_splits write stage2_pairing as
+        stage1_protocol because scene dropout is a Stage 2 mechanism. The
+        faithful reading of "omitted in 30% of batches" is `batch`, and that is
+        now the implementation's primary; `sample` remains available as an
+        explicit variant rather than an equally faithful alternative. An earlier draft had n09_build_splits write stage2_pairing as
         write_once while U-08a was still open -- writing an empty mapping would
         have locked the channel before the answer existed. The decision is now
         its own node, and only once status == resolved is the mapping committed.
@@ -1074,6 +1106,7 @@ risks_unknowns:
   - {id: U-29, marked: UNKNOWN, blocking: false, item: "how PHYSICAL edges enter ESSGNN at all. Paper 2.3 defines two edge types, physical-relation (support, adjacency) and semantic-relation. But 2.5's f_h and f_x take exactly one edge argument, e_ij, and 2.5 plus Appendix C both define e_ij as the LLM relation sentence encoded by a frozen text encoder -- i.e. the SEMANTIC edge. Nothing says whether a physical edge (a) only determines the neighbourhood N(i), (b) carries a feature of its own, (c) is unioned with the semantic edge on the same edge, or (d) is a parallel edge. Nor whether support and adjacency are distinguishable once inside the network.", affects: "the ESSGNN architecture itself, hence every Table 2 and Table 3 scene number", resolution: "record the choice explicitly; it is an architecture decision, not a hyperparameter", fallback: "n/a"}
   - {id: U-30, marked: UNKNOWN, blocking: false, item: "the tensor contract for an edge with no semantic embedding. f_h : R^(2d+1+e) -> R^d has a FIXED input width, so an edge that reaches the network without an e_ij still needs e slots filled. The spec forbids zero-filling (a zero vector is indistinguishable from a real embedding) and records semantic_edge_missing, but recording a flag does not say what the MLP receives. Candidates: a learned missing-edge embedding, an appended validity bit, a separate geometry-only MLP, an edge-type embedding, or excluding the edge from message passing entirely.", affects: "every scene graph where a semantic edge failed or was never requested -- including all physical-only edges, if U-29 resolves that way", resolution: "record the mechanism; it must be distinguishable from a valid embedding", fallback: "n/a"}
   - {id: U-31, marked: UNKNOWN, blocking: false, item: "whether ESSGNN's L layers share one set of parameters. Paper 2.5 writes f_h(...; theta_h) and f_x(...; theta_x) with no layer index on theta, and never says whether each layer has its own weights or all L layers share one. The choice changes the parameter count and changes F11: with independent layers the final layer's coordinate head has no loss path, but with shared weights the same f_x still receives gradient from layers 1..L-1.", affects: "parameter count, and whether F11's observation generalises", resolution: "implementation uses independent per-layer weights (metafind/models/essgnn.py builds one ESSGCL per layer); recorded as a choice", fallback: "n/a"}
+  - {id: U-33, marked: UNKNOWN, blocking: false, item: "whether ESSGNN keeps EGNN's input/output projections. Paper 2.5 goes t_i -> h^(0) -> L layers -> Pooling({h^(L)}) = e_layout, with no projection on either side. The reference EGNN (vgsatorras/egnn, egnn_clean.py) wraps its layers in embedding_in and embedding_out, and this implementation inherited that. Two extra learnable layers is not the same architecture, and upstream convention is not MetaFind paper truth.", affects: "ESSGNN parameter count and what e_layout is a function of", resolution: "use_io_projections flag; True follows the reference EGNN and is the current primary, False reproduces 2.5 literally and requires node_feat_dim == hidden_dim == out_dim. Report which was run.", fallback: "n/a"}
   - {id: U-32, marked: UNKNOWN, blocking: false, item: "scene-dropout granularity. Paper 2.6 says the layout vector 'is omitted in 30% of BATCHES', which reads as one Bernoulli draw per batch applied to the whole batch. The implementation draws independently per sample (dual_tower.sample_scene_dropout returns a (B,) mask) and L1-SCENE-DROPOUT-30 asserts a per-SAMPLE rate. The two give different training distributions for an in-batch contrastive loss: batch-level means every negative in a batch shares the layout condition, sample-level means they do not.", affects: "Stage 2 training distribution", resolution: "the literal reading is batch-level; record which is used and keep the other selectable as a variant", fallback: "n/a"}
   - {id: U-25, marked: UNKNOWN, blocking: false, item: "'adaptive freezing strategies'. Paper 2.2 says Stage 2 fine-tunes the query encoder 'with adaptive freezing strategies', but 2.6 states a single fixed freeze ('Only the query-side fuser and the ESSGNN module are updated'). Nothing anywhere says what is adaptive about it, or what varies.", affects: "Stage 2 optimisation", resolution: "implement the fixed freeze that 2.6 specifies, and record that 2.2's 'adaptive' is unimplemented because it is undefined", fallback: "n/a"}
   - {id: U-26, marked: UNKNOWN, blocking: false, item: "whether f_h and f_x share a message, AND which h the coordinate head sees. Two differences, not one. (a) Parameterisation: 2.5 gives two independent MLPs over the same inputs (Eq. 2, Eq. 3); Appendix C Eq. 10/13/14 computes ONE message m_ij = phi_e(...) then applies phi_h(m_ij) and phi_x(m_ij) to it, as the original EGNN does. (b) Update ordering: Eq. 3 feeds f_x the ALREADY-UPDATED h_i^(l+1), h_j^(l+1), while Appendix C's m_ij is built from the OLD h^l. Equivariance survives either way, but the numbers differ.", affects: "ESSGNN parameter count and what the coordinate head can see", resolution: "implementation follows 2.5 (two independent MLPs, metafind/models/essgnn.py f_h and f_x); recorded as a choice", fallback: "n/a"}

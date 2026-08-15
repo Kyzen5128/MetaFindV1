@@ -1022,8 +1022,8 @@ level_3_gates:
            touches the ProcTHOR branch)
       AND stage2_protocol.scene_dropout_granularity is one of {batch, sample}
           (U-32: paper 2.6 says the layout vector "is omitted in 30% of
-           BATCHES", which reads as one draw per batch; the implementation
-           draws per sample. The two give different in-batch contrastive
+           BATCHES", which reads as one draw per batch, and which the
+           implementation now follows; `sample` stays selectable as a variant. The two give different in-batch contrastive
            distributions, so Stage 2 must not start without the answer on
            record)
       AND essgnn_edge_protocol.status == "resolved", naming topology,

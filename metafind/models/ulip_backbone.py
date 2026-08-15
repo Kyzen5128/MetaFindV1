@@ -1,9 +1,15 @@
-"""ULIP-2 backbone wrapper with a SPLIT freeze (decisions D1 and D2).
+"""ULIP-2 backbone wrapper with a SPLIT freeze.
 
-D1: the released ULIP-2 checkpoint is used rather than pretraining it, because
-the official script assumes 8 GPUs and this machine has one 24 GB card (F5).
+Two decisions, named rather than numbered: the formal deviation registry uses
+D-1..D-6, and this module previously wrote "D1"/"D2" for unrelated local
+decisions -- a one-hyphen difference that keyword search does not respect.
 
-D2: the CLIP half is frozen; the POINT ENCODER IS TRAINABLE in Stage 1.
+checkpoint_initialization: the released ULIP-2 checkpoint is the starting point
+rather than pretraining it, because the official script assumes 8 GPUs and this
+machine has one 24 GB card (F5).
+
+split_freeze_policy: the CLIP half is frozen; the POINT ENCODER IS TRAINABLE in
+Stage 1. Freezing ViT-bigG-14 is deviation D-1.
 
     paper 2.6  "Both query and gallery encoders are trained"
     paper 3.4  "Fine-tuning the entire encoder outperformed training the
@@ -26,6 +32,10 @@ What follows from the split:
 `train_scope` selects which of the three levels in 02_BUILD_STEPS is active.
 Only `fuser_only` may consume cached point-cloud embeddings.
 
+Note on upstream: `ULIP2_PointBERT_Colored` calls `open_clip_model.eval()` but
+does NOT set requires_grad=False on it, so freezing ViT-bigG-14 is OUR choice
+(D-1), not something inherited from ULIP-2's own design.
+
 Why loading needs assertions
 ----------------------------
 
@@ -45,6 +55,7 @@ actually changed the module's parameters.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sys
 from typing import Literal
 from dataclasses import dataclass
@@ -251,21 +262,38 @@ class ULIPBackbone:
         out = self.model.encode_pc(x)
         return self._check(out, "pc")
 
-    @torch.no_grad()
+    def _clip_grad_context(self):
+        """no_grad for the CLIP halves unless train_scope is `full`.
+
+        [CORRECTED] These two were permanently decorated with @torch.no_grad().
+        Under train_scope="full" that made RA-3 measure the wrong thing: the
+        parameters had requires_grad=True, but no autograd graph was ever built
+        through them, so ViT-bigG-14 could not receive gradient and the peak
+        memory recorded was NOT that of full-encoder fine-tuning. An audit whose
+        purpose is to attempt the infeasible thing and record what happens has
+        to actually attempt it.
+        """
+        return (
+            contextlib.nullcontext()
+            if self.cfg.train_scope == "full"
+            else torch.no_grad()
+        )
+
     def encode_text(self, texts: list[str]) -> Tensor:
-        """Encode captions. ``(B,)`` strings -> ``(B, 1280)``."""
+        """Encode captions. ``(B,)`` strings -> ``(B, D)``."""
         if not texts:
             raise ValueError("no texts given")
         tokens = self.tokenizer(texts).to(self.cfg.device)
-        out = self.model.encode_text(tokens)
+        with self._clip_grad_context():
+            out = self.model.encode_text(tokens)
         return self._check(out, "text")
 
-    @torch.no_grad()
     def encode_image(self, images: Tensor) -> Tensor:
-        """Encode preprocessed images. ``(B, 3, H, W)`` -> ``(B, 1280)``."""
+        """Encode preprocessed images. ``(B, 3, H, W)`` -> ``(B, D)``."""
         if images.dim() != 4 or images.size(1) != 3:
             raise ValueError(f"expected (B, 3, H, W), got {tuple(images.shape)}")
-        out = self.model.encode_image(images.to(self.cfg.device, dtype=self.cfg.dtype))
+        with self._clip_grad_context():
+            out = self.model.encode_image(images.to(self.cfg.device, dtype=self.cfg.dtype))
         return self._check(out, "image")
 
     @staticmethod

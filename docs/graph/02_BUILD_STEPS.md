@@ -319,7 +319,11 @@ ProcTHOR 分支的任何故障都會停掉一個不依賴它的訓練。兩條�
 | `full` | 再加 ViT-bigG-14 (2.5B) | ❌ 單卡不可行 | 記為硬體限制 |
 
 **[偏離 D-1]** ViT-bigG-14 的 text/image 端保持凍結 —— 2.5B 參數在 24GB 上無法訓練。
-ULIP-2 原本的設計也是凍結 CLIP、訓練 point encoder，所以主線等級與 ULIP-2 一致。
+**注意不要據此宣稱「ULIP-2 官方本來也凍結 CLIP」** —— 讀過官方碼後這句不成立：
+`ULIP2_PointBERT_Colored` 只對 open_clip 呼叫 `eval()`，**沒有**設 `requires_grad = False`
+（那些 `requires_grad = False` 都在別的 SLIP loader 函式裡），而官方訓練是
+`for n, p in model.named_parameters(): if not p.requires_grad: continue` 再 `model.train()`。
+**`eval()` ≠ 凍結。** 凍結 ViT-bigG-14 是**我們**因 24GB 而做的決定（D-1），不是繼承自 ULIP-2。
 報告中須聲明「entire encoder」在我們的設定下指 3D encoder + fusion，不含 CLIP。
 
 **只有「點雲」的 embedding 快取限定 `fuser_only` 那一列。**

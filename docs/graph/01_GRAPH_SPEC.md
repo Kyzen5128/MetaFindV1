@@ -591,11 +591,34 @@ graph TD
 | **U-26** | UNKNOWN | **兩處差異，不是一處**。(a) 參數化：§2.5 是兩個獨立 MLP 吃同樣輸入；Appendix C (10)(13)(14) 先算一條 `m_ij = φ_e(...)` 再分給 `φ_h`／`φ_x`（原始 EGNN 走這種）。(b) **更新順序**：Eq.3 餵給 `f_x` 的是**已更新的** `h^{l+1}`，Appendix C 的 `m_ij` 是用**舊的** `h^l`。等變性兩種都成立，但數值不同 | 實作依 §2.5，記錄為選擇 |
 | **U-29** | UNKNOWN | **物理邊到底怎麼進 ESSGNN**。§2.3 定義 physical（support／adjacency）與 semantic 兩種邊，但 §2.5 的 `f_h`／`f_x` 只吃**一個**邊參數 `e_ij`，而 §2.5 與 Appendix C 都把 `e_ij` 定義成**語意**邊（LLM 關係句 → frozen text encoder）。物理邊是只決定 `N(i)`？自己帶 feature？與語意邊合併成一條？還是平行的另一條？support 與 adjacency 進網路後分不分得出來？全部沒說 | 記錄選擇 —— **這是架構決定，不是超參數** |
 | **U-30** | UNKNOWN | **沒有語意嵌入的邊，`e_ij` 的張量契約是什麼**。`f_h : ℝ^(2d+1+e) → ℝ^d` 輸入寬度**固定**，所以缺 `e_ij` 的邊仍要填滿那 `e` 格。規格禁止補零（零向量與真實嵌入無法區分）並記 `semantic_edge_missing`，但**記旗標不等於說明 MLP 收到什麼** | 記錄機制；必須與合法嵌入可區分 |
+| **U-33** | UNKNOWN | **ESSGNN 有沒有保留 EGNN 的輸入／輸出投影**。§2.5 是 `t_i → h⁰ → L 層 → Pooling = e_layout`，**兩端都沒有投影**；官方 EGNN（`egnn_clean.py`）有 `embedding_in`／`embedding_out`，本實作沿用了。**多兩層可學參數不是同一個架構，而 upstream 慣例不是論文真值** | `use_io_projections` 旗標。`True` 沿用官方 EGNN（現行主線），`False` 字面復現 §2.5 但要求 `node_feat_dim == hidden_dim == out_dim` |
 | **U-32** | UNKNOWN | **scene dropout 的粒度**。§2.6 寫 "omitted in 30% of **batches**"，字面是**整批**一起丟；實作是**每個 sample 獨立**抽（`sample_scene_dropout` 回傳 `(B,)` 遮罩），`L1-SCENE-DROPOUT-30` 也驗 per-sample。對 in-batch 對比 loss 而言兩者的訓練分布不同 | 字面版是 batch-level；記錄採用哪個，另一個保留為變體 |
 | **U-31** | UNKNOWN | **ESSGNN 的 L 層是否共用參數**。§2.5 寫 `θ_h`、`θ_x` 都沒有層索引。這會改變參數量，也改變 F11：獨立層時最後一層座標頭沒有 loss path，**共用參數時同一個 `f_x` 仍會從前 L−1 層收到梯度** | 實作用每層獨立權重，記錄為選擇 |
 | **R-01** | RISK・**部分實測** | **I-Design 裝得起來、初始設計會成功，但 5 次嘗試 0 個場景完成**。詳見下方 | Table 2/3 全靠它 |
 | **R-02** | RISK | 單卡 24GB 限制訓練範圍 | D-1 已聲明 |
 | **R-03** | RISK | Qwen 標註品質未知 | pilot 後人工抽查 |
+
+### D-6：對 I-Design 的行為性修改
+
+D-5 只換模型；**patch 02／03 改的是管線「產出什麼」**：
+
+```
+佈局元素歸位、拼寫正規化
+preposition 對齊 enum（無法映射者落到 "on"）
+丟棄指向不存在物件的引用
+合併重複的 new_object_id（保留第一個）
+修正迴圈加上限（12 輪／同衝突 3 次）
+每次重試改 cache_seed，讓重試成為獨立取樣
+耗盡時放棄場景，而非繼續迴圈
+```
+
+每一項都會改變場景內容、哪些場景存活、以及完成率 → **Table 2 全部與 Table 3 場景欄都受影響**。
+
+> **這條聲明的邊界要講清楚。** 這些修改不存在於**目前公開的** `atcelen/IDesign`。
+> 但那**不等於**論文作者跑的是未修改版——他們的整合程式與 I-Design 設定從未公開。
+> 誠實的說法是：**我們偏離的是公開實作，不是「論文所做的事」**。
+
+---
 
 ### R-01 實測結果（2026-08-15）
 
@@ -850,3 +873,32 @@ graph TD
 目前都只存在於規格。準確的現況描述是
 **「復現規格與核心模型元件接近可鎖；完整 training／evaluation workflow 尚未實作」**，
 而不是「可以直接開始完整復現訓練」。
+
+### 2026-08-15 第十輪（外部審查，首次納入三個官方 upstream）
+
+審查者固定在 `9416e39`，並第一次把 `salesforce/ULIP`、`vgsatorras/egnn`、
+`atcelen/IDesign` 三個官方 repo 一起讀進來交叉核對，而不只是拿論文與我們的文件互比。
+確認上一輪兩個 blocker（G7 可 resolve 到不可執行協定、U-32 沒進 protocol）都真的修掉了，
+也確認 PointBERT 可訓練與 batch-level dropout 落到 code。
+
+**這一輪最大的價值不是抓 bug，是把「MetaFind 論文真值」與「upstream 實作證據」的界線切乾淨。**
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 123 | **RA-3 的 `full` 模式是假的。** `train_scope="full"` 會把 ViT-bigG 的 `requires_grad` 打開，但 `encode_text`／`encode_image` 上的 `@torch.no_grad()` 是**永久裝飾**，所以 CLIP 根本不會建圖、收不到梯度 —— **RA-3 量到的 VRAM 不是 full-encoder fine-tuning 的 VRAM**。這個 audit 的存在意義就是「真的去試，而不是假設不可行」 | 改為條件式：`full` 之外才 `no_grad` | 🔴 **audit 的證據不成立** |
+| 124 | **`essgnn.py` 有論文沒說的 `embed_in`／`embed_out`。** §2.5 是 `t_i → h⁰ → L 層 → Pooling`，兩端都沒有投影；官方 EGNN 有 `embedding_in`／`embedding_out`，我們沿用了。**多兩層可學參數不是同一個架構**，而且這是把 upstream 慣例悄悄升格成論文真值 | 新增 **U-33** 與 `use_io_projections` 旗標；`False` 字面復現 §2.5（並強制三個寬度相等） | 🔴 **upstream 慣例 ≠ 論文** |
+| 125 | **I-Design 的 patch 02／03 只被稱作「工程 patch」，沒進正式偏離登記。** 它們改的是管線**產出什麼**：正規化佈局引用、丟棄懸空引用、合併重複 id、迴圈上限、重試換 seed、耗盡放棄場景 —— 全都影響場景內容與完成率 | 新增 **D-6**。並寫明邊界：**我們偏離的是公開實作，不是「論文所做的事」** —— 作者的整合程式從未公開，不能斷言他們沒做類似修改 | 🔴 |
+| 126 | **「ULIP-2 官方本來也凍結 CLIP」是錯的。** 讀官方碼：`ULIP2_PointBERT_Colored` 只對 open_clip 呼叫 `eval()`，**沒有**設 `requires_grad = False`（那些都在別的 SLIP loader 裡），而官方訓練是「跳過 `requires_grad=False` 的參數」再 `model.train()`。**`eval()` ≠ 凍結** | `02_BUILD_STEPS` 與 `00_FINDINGS` F5 都改；凍結 ViT-bigG 是**我們**的 D-1，不是繼承 | 🟠 |
+| 127 | D-5 寫「five planning agents」，但公開 repo 至少六個 AssistantAgent 角色 | 改為描述 patch 實際做的事：「所有設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct`」 | 🟠 |
+| 128 | U-32 的 note 還寫「implementation currently does sample」，但主線已改 batch | 同步；並明確 `sample` 是**變體**而非同等忠實的選項 | 🟠 |
+| 129 | **`seed` 只是被記錄，沒有真的控制生成。** generator 要求 spec 有 `seed`、sidecar 也寫了，但 `run_one()` 沒收它，也沒設任何 RNG 或 autogen `cache_seed` | 真的傳進去並設定 `random.seed` 與所有 autogen config 的 `cache_seed` —— 這才是「不同 seed 取不同樣本、同一 seed 可從 sidecar 重現」 | 🟠 |
+| 130 | Authority 順序沒有把三個 upstream 納入 | 改為四層，並加一句關鍵限制：**Level 1 只能回答「相依元件官方怎麼做」，不能自動補上 MetaFind 沒寫的部分**（EGNN 用 `‖·‖²` 支持 U-17 的選擇，但推不出論文也想寫平方） | 🟠 |
+| 131 | `ModalityFusion()` 還是假 optional（`cfg or FusionConfig()`，而 `FusionConfig` 已不能空建） | 移除。`losses.py`／`ulip_backbone.py` 那兩個保留 —— 它們的 config **真的**能空建 | 🟡 |
+| 132 | `essgnn.py` 開頭寫 "producing an SE(3)-equivariant layout vector" | 改為「透過**等變**訊息傳遞產生**不變**的 layout embedding」—— 這正是 SC-4/5/6 要拆成三條的理由 | 🟡 |
+| 133 | patch hash 只存 16 hex，欄位卻叫 `sha256` | 存完整 64 hex，顯示時才截斷 | 🟡 |
+| 134 | `ulip_backbone.py` 的 docstring 用 `D1`／`D2` 指自己的局部決策，與正式 `D-1`／`D-2` 只差一個連字號 | 改用具名：`checkpoint_initialization`／`split_freeze_policy` | 🟡 |
+
+審查者同時確認：**從三個 upstream 重新交叉讀之後，沒有發現 MetaFind 整體 pipeline 的理解錯誤**，
+且「把 MetaFind 插進 I-Design 的 retrieval slot」是目前**最有 upstream 程式碼證據支持**的 Table 2 讀法
+（官方 I-Design README 確實把 scene planning → OpenShape retrieval → Blender placement 拆開），
+但仍須標明論文從未公開整合程式，因此那是 **evidence-backed interpretation，不是論文明文**。

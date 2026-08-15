@@ -124,9 +124,9 @@ def sample_modality_mask(
 class ModalityFusion(nn.Module):
     """Fuse an arbitrary subset of modality embeddings into one query vector."""
 
-    def __init__(self, cfg: FusionConfig | None = None) -> None:
+    def __init__(self, cfg: FusionConfig) -> None:
         super().__init__()
-        self.cfg = cfg = cfg or FusionConfig()
+        self.cfg = cfg
         d, m = cfg.dim, len(MODALITIES)
 
         # One learned stand-in per modality (sec. 2.6: "masked embeddings").

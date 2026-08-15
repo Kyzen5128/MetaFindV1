@@ -145,7 +145,9 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python -m torch.distributed.launch --nproc_
 本機: 1× NVIDIA GeForce RTX 4090, 24564 MiB
 ```
 
-ULIP-2 的 frozen backbone 是 open_clip **ViT-bigG-14**（~2.5B 參數）。
+ULIP-2 用 open_clip **ViT-bigG-14**（~2.5B 參數）當 text/image backbone。
+官方 `ULIP2_PointBERT_Colored` 對它呼叫 `eval()`，但**沒有**設 `requires_grad = False`
+—— **`eval()` 不等於凍結**。本復現因 24GB 額外凍結它，那是 **D-1**，不是繼承。
 Eq.(5) 的分母 `Σ_{A' ∈ B}` 是 **in-batch negatives** —— 對比學習的檢索品質
 高度依賴 batch size，單卡 24GB 直接跑會把 batch 壓到遠低於論文設定。
 

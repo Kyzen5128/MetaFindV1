@@ -14,8 +14,8 @@
 | 標記 | 意思 |
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
-| **[未定]** | 論文沒說，我們選了一個並記錄（累積 34 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**） |
-| **[偏離]** | 與論文不同，必須在報告聲明（5 條，D-1…D-5） |
+| **[未定]** | 論文沒說，我們選了一個並記錄（累積 35 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**） |
+| **[偏離]** | 與論文不同，必須在報告聲明（6 條，D-1…D-6） |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
 
@@ -24,14 +24,33 @@
 ### 權威順序（衝突時以上位者為準）
 
 ```
-1. docs/metafind_paper.md    論文本身
-2. 02_BUILD_STEPS.md         最新決策，人類可讀
-3. 01_GRAPH_SPEC.md          graph 設計
-4. graph_spec.yaml
-5. node_registry.yaml        機器可讀契約
-6. validation_plan.yaml
-7. 00_FINDINGS.md            實測事實（F 系列）與決策紀錄（D 系列）
+Level 0 — MetaFind 本身
+  docs/metafind_paper.md（含 Appendix）
+
+Level 1 — 相依元件的官方實作（證據，不是論文真值）
+  salesforce/ULIP        ULIP-2 backbone 實際怎麼寫
+  vgsatorras/egnn        EGNN 參考實作
+  atcelen/IDesign        I-Design 公開實作
+
+Level 2 — 我們的復現決策
+  02_BUILD_STEPS.md      最新決策，人類可讀
+  01_GRAPH_SPEC.md       graph 設計、U／D／RA 登記表
+  graph_spec.yaml
+  node_registry.yaml     機器可讀契約
+  validation_plan.yaml
+
+Level 3 — 實作
+  metafind/、tools/、setup/
+
+00_FINDINGS.md           實測事實（F 系列）與決策紀錄
 ```
+
+> **Level 1 只能回答「這個相依元件官方怎麼做」，不能自動補上 MetaFind 沒寫的部分。**
+>
+> 例：官方 EGNN 用 `‖·‖²` —— 這**支持** U-17 選平方，但**推不出**
+> 「MetaFind 主文其實也想寫平方」。同理，官方 EGNN 有 `embedding_in`／`embedding_out`
+> （U-33）、官方 ULIP-2 只對 CLIP 呼叫 `eval()` 而**沒有**設 `requires_grad=False`。
+> 這些是證據，不是真值 —— 兩者混淆正是這個專案反覆在防的錯誤。
 
 `00_FINDINGS` 排最後是因為它的 **D 系列是決策，會隨新事實改變**（D1/D2 已於
 2026-08-15 大幅修正）。它的 F 系列是實測、可信；D 系列與上位文件衝突時以上位者為準。
@@ -77,7 +96,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 **不下載**：ULIP-2 預先取樣的點雲（185 GB）、ULIP-2 的渲染圖（474 GB，而且不是論文要的
 11 正交視角）、ShapeNet triplets（409 GB）。
 
-### 五項偏離
+### 六項偏離
 
 | id | 偏離 | 影響 |
 |---|---|---|
@@ -85,7 +104,8 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | **D-2** | Qwen2.5-VL 取代 GPT-4o | **Table 1 與 Table 2 都受影響** —— 它不只換裁判，也換掉 46,052 筆標註（文字塔的訓練資料）。SC-1 因此只報告差距、不設門檻 |
 | **D-3** | 不重跑 6 個 baseline | 只能與論文公佈值比較，並註明協定不同 |
 | **D-4** | 不做人工評分 | Table 2 人工欄判 `INSUFFICIENT_EVIDENCE` |
-| **D-5** | I-Design 的規劃 agent 用 `Qwen2.5-7B-Instruct` 取代 **GPT-4** | **與 D-2 不同**（那是 GPT-4o／標註與評分）。換規劃器改變**場景本身** → Table 2 全部與 Table 3 場景欄位移；**Table 1 不受影響**。做法是 patch `filter_dict`，**沒有別名** |
+| **D-5** | I-Design 中所有設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` | **與 D-2 不同**（那是 GPT-4o／標註與評分）。換規劃器改變**場景本身** → Table 2 全部與 Table 3 場景欄位移；**Table 1 不受影響**。做法是 patch `filter_dict`，**沒有別名** |
+| **D-6** | 對 I-Design 的**行為性**修改（patch 02／03）：佈局引用正規化、丟棄懸空引用、合併重複 id、修正迴圈上限、重試換 seed、耗盡放棄場景 | 改的是管線**產出什麼**，不只是誰產出。**偏離的是公開實作** —— 論文作者的整合程式從未公開，不能斷言他們沒做類似修改 |
 
 ### 論文自身的四個矛盾
 

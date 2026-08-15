@@ -2,7 +2,11 @@
 
 Encodes a room layout as a graph whose nodes carry a 3D position and a
 text-derived feature, and whose edges carry an LLM-generated semantic relation
-embedding, producing an SE(3)-equivariant layout vector for Eq. 6.
+embedding, producing an SE(3)-INVARIANT layout embedding through equivariant message
+passing. The distinction matters and this docstring used to blur it: the
+coordinate channel is equivariant, h is invariant, and e_layout = Pooling({h})
+is therefore invariant too -- which is why SC-4/5/6 are three separate
+assertions rather than one.
 
 Mapping to the paper, and where the paper contradicts itself
 ------------------------------------------------------------
@@ -51,6 +55,10 @@ Further under-specifications are surfaced as UNKNOWN rather than guessed:
   width (1280 / 768 / 512) is a config input, not a constant;
 * ``Pooling`` in ``e_layout = Pooling({h_i^(L)})`` is unnamed, so ``pooling`` is
   configurable and defaults to mean;
+* whether ESSGNN keeps EGNN's ``embedding_in`` / ``embedding_out`` projections
+  is not stated (U-33): 2.5 writes t_i straight into h^0 and reads e_layout
+  straight out of Pooling({h^(L)}), while the reference EGNN projects on both
+  sides. ``use_io_projections`` selects between them;
 * ``L`` is written only as "After $L$ layers" -- the paper gives no value, so
   ``n_layers`` is a hyperparameter of ours (U-22), not a reproduction target.
 
@@ -131,6 +139,14 @@ class ESSGNNConfig:
     edge_proj_dim: int | None = None
     pooling: Pool = "mean"
     normalize_coord_diff: bool = False
+    # U-33. MetaFind's 2.5 goes t_i -> h^0 -> L layers -> Pooling, with no
+    # projection either side. The reference EGNN wraps its layers in
+    # embedding_in / embedding_out, and this implementation followed that.
+    # Convenient, and necessary if node_feat_dim != hidden_dim, but it is
+    # UPSTREAM'S convention rather than something MetaFind states -- so it is a
+    # flag, not an assumption. `False` reproduces the paper literally, which
+    # then requires node_feat_dim == hidden_dim == out_dim.
+    use_io_projections: bool = True
 
 
 def _mlp(in_dim: int, hidden: int, out_dim: int) -> nn.Sequential:
@@ -213,8 +229,20 @@ class ESSGNN(nn.Module):
         self.cfg = cfg
 
         in_dim = cfg.node_feat_dim + (3 if cfg.h0_mode == "concat_xt" else 0)
-        self.embed_in = nn.Linear(in_dim, cfg.hidden_dim)
-        self.embed_out = nn.Linear(cfg.hidden_dim, cfg.out_dim)
+        if cfg.use_io_projections:
+            self.embed_in: nn.Module = nn.Linear(in_dim, cfg.hidden_dim)
+            self.embed_out: nn.Module = nn.Linear(cfg.hidden_dim, cfg.out_dim)
+        else:
+            # Literal 2.5: h^0 IS t_i and e_layout IS Pooling({h^(L)}), so the
+            # widths have to line up on their own.
+            if not (in_dim == cfg.hidden_dim == cfg.out_dim):
+                raise ValueError(
+                    "use_io_projections=False reproduces sec. 2.5 literally, so "
+                    f"h0 width ({in_dim}), hidden_dim ({cfg.hidden_dim}) and "
+                    f"out_dim ({cfg.out_dim}) must all be equal"
+                )
+            self.embed_in = nn.Identity()
+            self.embed_out = nn.Identity()
 
         if cfg.edge_proj_dim is None:
             self.edge_proj: nn.Module = nn.Identity()
