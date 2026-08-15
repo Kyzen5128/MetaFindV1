@@ -88,9 +88,9 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | 1 | [`02_BUILD_STEPS.md`](02_BUILD_STEPS.md) | **從這裡開始**。逐步驟建置流程，每步標明論文怎麼說、我們怎麼做 |
 | 2 | [`01_GRAPH_SPEC.md`](01_GRAPH_SPEC.md) | 完整規格：分類、目標、state、節點、邊、路由、迴圈、失敗、驗證、gate、風險、修正紀錄 |
 | 3 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實測事實（F 系列）與架構決策（D 系列），**含論文的多處自相矛盾** |
-| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：46 個 state channel、52 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
+| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：46 個 state channel、53 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
 | 5 | [`node_registry.yaml`](node_registry.yaml) | 34 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
-| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 54 個 L1、17 個 L2、7 個 gate、4 個 Required Audit |
+| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 55 個 L1、17 個 L2、7 個 gate、4 個 Required Audit |
 
 ## 一頁摘要
 
@@ -128,7 +128,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 |---|---|---|
 | **RA-1** | §2.5 的 `h⁰ = Concat(x,t)` vs Appendix C 的「`h⁰` 對 SE(3) 不變」前提 | **失敗** |
 | **RA-2** | §2.5 的 `f_x → ℝ³` vs 證明需要 `φ_x` 為純量才能提出 `Q` | **失敗** |
-| **RA-3** | §3.4 的「fine-tune entire encoder」 vs 單卡 24GB | **不可行**，縮小 claim |
+| **RA-3** | **U-34 `trainable` 讀法的可行性稽核** —— `train_scope=full`（梯度真的到 ViT-bigG）在單卡 24GB 上跑不跑得動 | 跑不動只證明**那個讀法**在本機不可行，**不證明論文要求那個讀法**；凍結那條有 ULIP-2 §3.3 直接支持 |
 | **RA-4** | §2.5／§3.4 宣稱 ESSGNN 解決 GAT 對 translation **與 scaling** 的敏感，但 SE(3) **不含縮放** | **量測，不預測** |
 
 **RA-4 是逐字重讀才發現的。** §2.5 的動機是

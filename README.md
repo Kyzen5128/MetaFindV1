@@ -45,11 +45,14 @@ scratch/             參考用的雜項腳本
 
 ## 已知偏離論文之處
 
-**正式偏離六項**，編號以 [`docs/graph/graph_spec.yaml`](docs/graph/graph_spec.yaml) 的 `boundary.deviations` 為準：
+**正式偏離五項（D-2…D-6）＋條件式一項（D-1）**，編號以
+[`docs/graph/graph_spec.yaml`](docs/graph/graph_spec.yaml) 為準：D-2…D-6 在
+`boundary.deviations`，D-1 在 `boundary.conditional_deviations`，
+`active_if: stage1_encoding_protocol.clip_train_scope == 'trainable'`。
 
 | id | 內容 |
 |---|---|
-| **D-1** | ViT-bigG-14 凍結（2.5B 參數在 24GB 上訓不動）。**狀態取決於 U-34** —— ULIP-2 §3.3 明文凍結 OpenCLIP，所以主線可能根本不是偏離 |
+| **D-1** *(條件式)* | ViT-bigG-14 的 CLIP 側保持凍結。**U-34 未解前不算偏離** —— ULIP-2 §3.3 明文凍結 OpenCLIP，主線可能根本是忠實做法 |
 | **D-2** | Qwen2.5-VL 取代 **GPT-4o**（資產標註與場景評分） |
 | **D-3** | 不重跑 6 個 baseline |
 | **D-4** | 不做人工評分 |

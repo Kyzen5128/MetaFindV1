@@ -421,7 +421,7 @@ eval_protocols:
 |---|---|---|---|
 | **RA-1** | `h⁰ = Concat(x,t)` 版本的等變性 | 「我們復現了 §2.5 的字面寫法」 | **預期失敗**。四條獨立證據：Appendix C 的前提、**Eq.(2) 自己的型別**（`f_h → ℝ^d` 但 `Concat ∈ ℝ^{d+3}`，殘差加不起來）、Introduction 說「separating spatial and semantic channels」、官方 EGNN 把 `h` 與 `coord` 分開兩個參數 |
 | **RA-2** | `f_x → ℝ³` 版本的等變性 | 同上 | **預期失敗** —— 證明要求 `φ_x` 為純量才能提出 `Q` |
-| **RA-3** | `train_scope=full`（含 CLIP）的可行性 | 「我們驗證了論文關於訓練範圍的結論」 | 單卡不可行 → claim 縮小為「3D encoder + fusion 範圍內」 |
+| **RA-3** | `train_scope=full`（梯度真的到 CLIP）的可行性，即 **U-34 的 `trainable` 讀法** | 「跑不動 ⇒ 論文要求的做法我們做不到」 | 跑不動只結論「**該讀法**在單卡不可行」。主線 `frozen` 有 ULIP-2 §3.3 直接支持，不是退讓 |
 | **RA-4** | **全域縮放**下 `e_layout` 的變化量 | 「ESSGNN 解決 §2.5 所述的 scaling 敏感」 | **量測，不預測**。SE(3) 不含縮放 → **沒有結構性保證**；但 MLP 仍可能學到尺度不敏感，**缺乏保證 ≠ 證明做不到**。結果決定 claim 縮到多小 |
 
 ---
@@ -578,7 +578,7 @@ graph TD
 | **U-13** | UNKNOWN | **Full model 用哪一種 fusion**。論文給了**兩份不同的候選清單** —— §2.2 三種（mean pooling / MLP / Transformer）、§2.4 五種（多了 masked MLP 與 gated）—— 都沒說是哪個。Table 3 排除 Mean(9.4) 與 MLPs(9.9)；`Padding with 0`(10.5) 與 §3.4「Masked modality fusion outperformed zero-padding」顯示 Full 會遮罩 → 剩 masked MLP / gated / Transformer | 主線 `masked_mlp`（程式現行預設），另兩種可選並列為對照 |
 | **U-14** | UNKNOWN | **11 張渲染圖怎麼變成一個 `e_image`**。§2.3 只說 render 11 views | 記錄選擇；影響 Table 1 七個條件中的四個 |
 | **U-15** | UNKNOWN | **結構化標註怎麼序列化成 text encoder 的輸入字串**。§2.3 只給欄位，沒給格式 | 釘住模板，加 golden-string 測試 |
-| **U-16** | UNKNOWN | **query / gallery 兩塔是否共享權重**。§2.4 說 "a dedicated query encoder"、§2.6 說兩者都訓練，但沒說共享關係 | 記錄選擇 |
+| **U-16** | UNKNOWN | **query / gallery 兩塔是否共享權重**。§2.4 說 "a dedicated query encoder"、§2.6 說兩者都訓練，但沒說共享關係 | `stage1_protocol.tower_sharing` 記錄，**三個讀法都可執行**：`shared_backbone_separate_fusion`（共用 ULIP、各自 fusion）／`fully_shared`（連 fusion 都是同一個 module）／`fully_separate`（兩份 backbone、兩份 fusion）。<br>**`fully_shared` 被 §2.6 排除在 Stage 2 之外** —— 兩塔是同一個 module 時，「gallery 凍結」與「訓練 query fuser」不可能同時成立，`freeze_gallery()` 因此直接拒絕。這是從論文推得的，不是實作限制 |
 | **U-17** | UNKNOWN・**可執行** | **`d_ij` 還是 `d_ij²`**。§2.5 寫 `d_ij = ‖x_i − x_j‖₂`，Appendix C (10)–(12) 用 `‖·‖²`，原始 EGNN 也是平方 | 實作用平方（`essgnn.py` 的 `radial`）；兩者都 SE(3) 不變，不破壞證明，記錄為選擇 |
 | **U-18** | **UNKNOWN・阻斷** | **Algorithm 1 第 7 行「放進場景、更新圖」到底產生什麼**。下一輪就要 `ESSGNN(G)`，需要新節點的 `t_i`、位置、朝向、尺度、物理邊、語意邊 —— 全部未定義 | `n15b` 決定，`G7` 強制 |
 | **U-19** | UNKNOWN | **邊的方向性**。§2.3 只說有 physical / semantic 兩種邊，沒說有向或無向，也沒說 relation(A,B) 是否等於 relation(B,A) | 記錄慣例；`L1-SCENE-SUPPORT` 的雙向是**我們的**慣例 |
@@ -595,7 +595,7 @@ graph TD
 | **U-30** | UNKNOWN | **沒有語意嵌入的邊，`e_ij` 的張量契約是什麼**。`f_h : ℝ^(2d+1+e) → ℝ^d` 輸入寬度**固定**，所以缺 `e_ij` 的邊仍要填滿那 `e` 格。規格禁止補零（零向量與真實嵌入無法區分）並記 `semantic_edge_missing`，但**記旗標不等於說明 MLP 收到什麼** | 記錄機制；必須與合法嵌入可區分 |
 | **U-34** | UNKNOWN | **Stage 1 有沒有訓練 OpenCLIP 的 text／image encoder**。<br>**支持凍結**：MetaFind 建立在 ULIP-2 之上，而 ULIP-2 §3.3 明文 "adopt the largest version of encoders from OpenCLIP (ViT-G/14) and **freeze it during the pre-training**"，特徵取自 "pre-aligned and **frozen** image encoder and text encoder"，目標函數只訓 3D encoder。<br>**支持可訓練**：MetaFind §2.6 "Both query and gallery encoders are trained"、§3.4 "fine-tuning the **entire** encoder"、且 §2.4 特地把自己與「凍結 text/image encoder 的既有做法」對比。<br>**MetaFind 從未逐個 module 列出誰訓練** | `stage1_encoding_protocol.clip_train_scope`（n05b 決定，早於 n06 編碼）記錄採用的讀法；主線 `frozen`（有 ULIP-2 論文直接支持）。RA-3 量測 `trainable` 那個讀法在本機是否可執行。<br>**`blocking: false`，但透過 G3 實質阻擋執行** —— 兩個讀法都能寫成報告，可是 n06 要編碼什麼取決於它，所以 G3 未放行前 Stage 1 跑不了 |
 | **U-33** | UNKNOWN | **ESSGNN 有沒有保留 EGNN 的輸入／輸出投影**。§2.5 是 `t_i → h⁰ → L 層 → Pooling = e_layout`，**兩端都沒有投影**；官方 EGNN（`egnn_clean.py`）有 `embedding_in`／`embedding_out`，本實作沿用了。**多兩層可學參數不是同一個架構，而 upstream 慣例不是論文真值** | `use_io_projections` 旗標。`True` 沿用官方 EGNN（現行主線），`False` 字面復現 §2.5 但要求 `node_feat_dim == hidden_dim == out_dim` |
-| **U-32** | UNKNOWN | **scene dropout 的粒度**。§2.6 寫 "omitted in 30% of **batches**"，字面是**整批**一起丟；實作是**每個 sample 獨立**抽（`sample_scene_dropout` 回傳 `(B,)` 遮罩），`L1-SCENE-DROPOUT-30` 也驗 per-sample。對 in-batch 對比 loss 而言兩者的訓練分布不同 | 字面版是 batch-level；記錄採用哪個，另一個保留為變體 |
+| **U-32** | UNKNOWN | **scene dropout 的粒度**。§2.6 寫 "omitted in 30% of **batches**"，字面是**整批**一起丟；**現行主線就是 batch-level**（`scene_dropout_granularity="batch"`），`sample` 保留為變體。對 in-batch 對比 loss 而言兩者的訓練分布不同 | `stage2_protocol.scene_dropout_granularity` 記錄，G6 檢查。注意 §2.6 另一個 30%（Stage 1 的 modality masking）明文 "independently"，那個才真的是 per-sample |
 | **U-31** | UNKNOWN・**可執行** | **ESSGNN 的 L 層是否共用參數**。§2.5 寫 `θ_h`、`θ_x` 都沒有層索引。這會改變參數量，也改變 F11：獨立層時最後一層座標頭沒有 loss path，**共用參數時同一個 `f_x` 仍會從前 L−1 層收到梯度** | 實作用每層獨立權重，記錄為選擇 |
 | **R-01** | RISK・**部分實測** | **I-Design 裝得起來、初始設計會成功，但 5 次嘗試 0 個場景完成**。詳見下方 | Table 2/3 全靠它 |
 | **R-02** | RISK | 單卡 24GB 限制訓練範圍 | D-1 已聲明 |
@@ -997,3 +997,35 @@ preposition 對齊 enum（無法映射者落到 "on"）
 **這輪要記住的**：ESSGNN 上一輪學到「protocol 要有唯一建構入口」，Stage 1 這輪
 學到的是**更前面的一步** —— protocol 得在**它所支配的節點之前**被決定。
 兩個問題長得不一樣，但根因相同：登記了 UNKNOWN，卻沒安排它在圖上的位置。
+
+### 2026-08-15 第十六輪（外部審查後）
+
+上一輪把決策時序修對了，這輪審查者去走**實際 dataflow**，抓到的全是
+「宣告得出來、但執行的不是它」—— 比文件措辭嚴重得多。
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 171 | **`U-34 = trainable` 這條路仍然走不通。** 上一輪把決策提前到 `n05b` 是對的，可是 `n06 → n09` 依然是**無條件**的，而 `n09` 的 join policy 要求 `text_image_embeddings` 完整。於是：trainable 讀法下 `n06` 依契約不該產生 frozen cache ⇒ `n09` 永遠等不到 ⇒ **到不了 `n10`**。`n10` 拿得到 raw renders 沒有用，因為根本走不到那裡 | `e09`／`e11` 加上 `clip_train_scope == 'frozen'` 的 guard；新增 **`e11b`（`n05b → n09`，carries `objaverse_annotations, renders`，guard `== 'trainable'`）**。`n09` 的 join 改成兩組：`pointclouds`（`all`）＋ `stage1_text_image`（`any`，兩條互斥 guarded 邊），trigger `all_groups_satisfied`。**trainable 下 `n06` 整個跳過** —— 不是內部分支 | 🔴 **登記的讀法不可執行** |
+| 172 | **G3 還在驗拆分前的 schema。** criterion 仍要求 `stage1_protocol` 提供 `image_aggregation`／`text_serialization`／`clip_train_scope`，但那三個欄位已經搬到 `stage1_encoding_protocol`。**這道閘會擋掉一份正確解出的 protocol**，同時對真正支配 `n06` 的那個 channel 一無所查 | criterion 拆成兩段分別驗；routing inputs 補 `stage1_encoding_protocol.status`；並要求 `hyperparameter_config_hash` **能被 dereference** | 🔴 **閘活在舊 schema** |
+| 173 | **U-16 的「共享」是假的。** registry 列了三種讀法，程式只有 `"shared"／"separate"`，而 `"shared"` 的實作是把**同一個 `FusionConfig` 物件**交給兩塔 —— 兩次 `ModalityFusion(cfg)` 各自建了一組參數，所以不論 protocol 寫什麼，跑的都是 `fully_separate`。**config identity 不是 weight sharing**，而當時的測試只驗 `query_fusion is gallery_fusion`（兩個 config 欄位），驗不到這件事 | 改成明確三值 enum：`shared_backbone_separate_fusion` / `fully_shared` / `fully_separate`。`fully_shared` 在 `MetaFindDualTower` 裡**改綁 module**（`self.gallery.fusion = self.query.fusion`），測試改驗**參數同一性**與「query 的梯度出現在 gallery 的參數上」。backbone 數量也跟著 enum 走 | 🔴 **宣稱的選項不可執行** |
+| 174 | **Stage 1 的唯一建構入口卻要求 `ESSGNNConfig`。** §2.6 的 Stage 1 是 object-level 對齊、**沒有空間脈絡**，而 `essgnn_arch_protocol` 要到 `n09b`（層 10b）才解出——比 `n10` 還晚。舊簽章唯一能滿足的方式就是**自己編一個架構**，測試正是這樣做的，剛好是這專案一路在關的洞 | `DualTowerConfig.essgnn` 改為 optional，`use_layout=True` 而沒給架構直接拒絕；`Stage1RuntimeConfig` 移除 `essgnn` 參數，一律建 `use_layout=False`。Stage 2 過 G6 後才 `ESSGNNConfig.from_protocol` | 🔴 **兩階段邊界被破壞** |
+| 175 | **`Stage1RuntimeConfig` 宣稱吃 protocol，實際只用三個欄位。**<br>`allow_all_masked` 從沒到 `sample_modality_mask`（跑的永遠是 `allow_empty=True`）；`similarity` 收任何字串，而 loss 無條件正規化兩邊、算的一定是 cosine——**`dot_product` 會被貼上標籤但算出 cosine 的數字**；`hyperparameter_config_hash` 只驗「欄位存在」、不 dereference，於是 U-22 的每一個值都停在 library default，報告卻顯示有個 hash 像是選過 | 三者都真的消費：新增 `sample_present_mask()` 作為唯一取遮罩入口；`similarity` 不支援就丟 `UnsupportedProtocol`；hash 必須**對得上實際 artifact 的 canonical sha256**，且 artifact 必須逐項列出 U-22 的 11 個超參數，`ContrastiveConfig` 由它建 | 🔴 **protocol 存在 ≠ runtime 遵守** |
+| 176 | 缺 Stage 1 版的 `*-PROTOCOL-APPLIED` | 新增 **`L1-STAGE1-PROTOCOL-APPLIED`**，由 G3 引用。關鍵在於它比對的是**實例化後的 module 與參數**，不是 config —— 比對 config 完全抓不到第 173 項 | 🟠 |
+| 177 | **per-view cache schema 更新了，runtime 的 cache policy 沒跟上。** `may_use_cached_text_image` 仍以「一個向量答不出 per-step 選擇」為由對 `random_single_view` 回 False，但 channel 現在存的是 11 個 per-view embedding | 拆成兩件事：`may_use_cached_text_image`（只看 `frozen`）與 `cache_layout`（`aggregated` / `per_view` / `none`）。frozen 下 11 個凍結 embedding 算一次，per-step 隨機選視圖**完全答得出來** | 🟠 |
+| 178 | root `README` 仍寫「正式偏離六項」並把 D-1 放進 active 表 | 與其餘文件統一為「五項 ＋ 一項條件式」 | 🟠 |
+| 179 | `01_GRAPH_SPEC` 的 U-16 只寫「記錄選擇」、U-32 還描述舊 code（per-sample） | U-16 補上三個讀法與 **`fully_shared` 被 §2.6 排除在 Stage 2 之外**（兩塔同一個 module 時，「gallery 凍結」與「訓練 query fuser」不可能同時成立，`freeze_gallery()` 直接拒絕——這是從論文推得的，不是實作限制）；U-32 同步為主線 batch | 🟠 |
+| 180 | `docs/README` 的 RA-3 摘要縮回舊說法（「entire encoder vs 24GB → 不可行」） | 改回第 156 項確立的定位：**U-34 `trainable` 讀法的可行性稽核** | 🟠 |
+
+**新增兩條結構檢查**，各自對應這輪的一類錯，都做過負向注入：
+
+- `gate <G> field <channel>.<field>` —— gate criterion 與 routing inputs 裡的
+  `channel.field` 必須是該 channel `type:` 真的宣告的欄位。**注入舊的
+  `stage1_protocol.image_aggregation` 立刻紅。** 原本的第 8 項只驗「有沒有讀這個
+  channel」，schema 漂移它看不見。
+- `any-group <node>/<group> guarded` —— `policy: any` 的 join group 必須有多於
+  一條邊，且**每條都要有 guard**。**把 `e11` 的 guard 拿掉立刻紅。**
+  一條沒有 guard 的邊永遠會滿足該組，其餘分支就只是裝飾——這正是第 171 項的成因。
+
+**這輪要記住的**：前幾輪修的是「決策有沒有登記」「決策在圖上的位置對不對」，
+這輪是**第三種**——決策**有沒有真的被執行的東西讀走**。
+三者都會產生同一個外觀：報告寫著一個選擇，跑的是另一個。

@@ -283,6 +283,10 @@ nodes:
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
+      SKIPPED ENTIRELY under clip_train_scope == trainable -- e09's guard, not
+      an internal branch. Gradient must reach OpenCLIP under that reading, so
+      there is nothing a cache could contribute, and n09 gets its text/image
+      completeness from e11b instead.
       ONLY text and image, and only under clip_train_scope == frozen. The point
       encoder is trainable in Stage 1, so point-cloud embeddings cannot be
       precomputed -- caching all three is what made an earlier draft the "train
@@ -355,7 +359,7 @@ nodes:
     role: compute
     purpose: "Fix the object-level 80/20 partition and define both evaluation protocols."
     decomposition_rationale: [N5_gate_point, N3_checkpoint_needed]
-    reads: [asset_manifest, pointclouds, text_image_embeddings]
+    reads: [asset_manifest, pointclouds, text_image_embeddings, objaverse_annotations, renders]
     writes: [splits, split_seed, eval_protocols, stage1_protocol, run_progress]
     precondition: "Objaverse preparation complete (join = all)"
     postcondition: >
@@ -382,6 +386,13 @@ nodes:
       80/20 allocation.
       Writes the TRAINING half of the Stage 1 protocol only. The encoding half
       (U-14/U-15/U-34) is resolved earlier, at n05b, because n06 needs it.
+      [BRANCH] The text/image completeness this node requires arrives on ONE of
+      two guarded edges: e11 (text_image_embeddings) under clip_train_scope ==
+      frozen, e11b (objaverse_annotations + renders) under trainable. An
+      unconditional e11 made the trainable reading of U-34 unreachable -- the
+      join demanded a cache that reading forbids producing. `n06` is therefore
+      listed as a dependency for ORDERING only; under trainable it is skipped
+      and the join is satisfied by e11b.
 
   - id: G3_object_corpus
     role: evaluate

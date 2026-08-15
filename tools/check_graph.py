@@ -188,6 +188,82 @@ for g in plan["level_3_gates"]:
         CHECKS += 1
 
 
+# --- 8a. `channel.field` in a gate criterion must be a field of that channel
+# G3 kept demanding stage1_protocol.image_aggregation / .text_serialization /
+# .clip_train_scope for a whole round after those three fields moved to
+# stage1_encoding_protocol. The gate read the right channels and named the
+# right channels, so check 8 passed -- but it was validating a schema that no
+# longer existed, and it would have rejected a correctly resolved pair. A gate
+# is the barrier in front of the spend; it has to know the current shape of
+# what it guards.
+FIELD_RE = re.compile(r"\b([a-z][a-z0-9_]*)\.([a-z][a-z0-9_]*)\b")
+# `type:` strings look like "{status: a|b, fusion, tower_sharing: x|y, ...}".
+# Take the identifier before an optional `:` in each comma-separated part.
+channel_fields: dict[str, set[str]] = {}
+for name, ch in channels.items():
+    t = str(ch.get("type", ""))
+    if not t.startswith("{"):
+        continue
+    channel_fields[name] = {
+        part.split(":")[0].strip()
+        for part in t.strip("{}").split(",")
+        if part.split(":")[0].strip().isidentifier()
+    }
+
+for g in plan["level_3_gates"]:
+    gid = g["gate_id"]
+    for blob in (str(g.get("criterion", "")), str(g.get("scope_note", ""))):
+        for chan, fld in FIELD_RE.findall(blob):
+            if chan not in channel_fields:
+                continue
+            check(
+                f"gate {gid} field {chan}.{fld}",
+                fld in channel_fields[chan],
+                f"channel `{chan}` has no field `{fld}`; it declares "
+                f"{sorted(channel_fields[chan])}",
+            )
+
+for dp in spec["routing"]:
+    for inp in dp.get("inputs", []):
+        chan, _, fld = str(inp).partition(".")
+        if fld and chan in channel_fields:
+            check(
+                f"routing {dp['decision_point']} input {inp}",
+                fld in channel_fields[chan],
+                f"channel `{chan}` has no field `{fld}`",
+            )
+
+
+# --- 8a2. an `any` join group must have >1 edge and all of them guarded ---
+# n09_build_splits joined `all` over the frozen-cache edge and would have
+# joined the same way over a trainable-route edge, which is how the trainable
+# reading of U-34 became structurally unreachable: the join demanded a cache
+# that reading forbids producing. The repair is a branch, and a branch is only
+# real if every arm carries a guard -- one unguarded arm always fires and the
+# other arms are decoration.
+for j in spec["join_policies"]:
+    node = j["node"]
+    for grp in j.get("groups", []):
+        if grp.get("policy") != "any":
+            continue
+        arms = [e for e in edges if e["to"] == node and e.get("join_group") == grp["name"]]
+        if not arms:
+            # Subgraph-internal nodes (sg1_generate, sg4_encode_layout, ...)
+            # are fed by loop edges that the top-level `edges:` list does not
+            # contain. Nothing to compare against here.
+            continue
+        check(
+            f"any-group {node}/{grp['name']} size",
+            len(arms) > 1,
+            f"policy `any` over {len(arms)} edge(s) is just `all` with a weaker name",
+        )
+        check(
+            f"any-group {node}/{grp['name']} guarded",
+            all(e.get("guard") for e in arms),
+            "unguarded arm: " + ", ".join(e["id"] for e in arms if not e.get("guard")),
+        )
+
+
 # --- 8b. the dependency DAG must agree with the edge list ----------------
 # n09_build_splits kept `depends_on: n08_semantic_edges` for a whole round after
 # the Objaverse/ProcTHOR branches were split. The edges and the node's `reads`

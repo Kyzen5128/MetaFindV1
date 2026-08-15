@@ -275,14 +275,14 @@ state:
     - name: renders
       type: "map[uid -> {view_paths[11], view_sha256[11]}]"
       writers: [n04_render_views]
-      readers: [n05_annotate, n05b_resolve_stage1_encoding, n06_encode_text_image, n10_train_stage1]
+      readers: [n05_annotate, n05b_resolve_stage1_encoding, n06_encode_text_image, n09_build_splits, n10_train_stage1]
       merge: upsert_by_key
       lifetime: persistent
 
     - name: objaverse_annotations
       type: "map[objaverse_uid -> {category, description, dimensions, materials, placement_constraints, annotator_model}]"
       writers: [n05_annotate]
-      readers: [n05b_resolve_stage1_encoding, n06_encode_text_image, n09b_resolve_stage2_protocol, n10_train_stage1]
+      readers: [n05b_resolve_stage1_encoding, n06_encode_text_image, n09_build_splits, n09b_resolve_stage2_protocol, n10_train_stage1]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -379,7 +379,7 @@ state:
         default may supply.
 
     - name: stage1_protocol
-      type: "{status: unresolved|resolved, fusion, tower_sharing, allow_all_masked, similarity, hyperparameter_config_hash, decided_by, decided_at}"
+      type: "{status: unresolved|resolved, fusion, tower_sharing: shared_backbone_separate_fusion|fully_shared|fully_separate, allow_all_masked, similarity, hyperparameter_config_hash, decided_by, decided_at}"
       writers: [n09_build_splits]
       readers: [G3_object_corpus, n10_train_stage1, n11_gallery_index_staging, n15_eval_retrieval, n18_train_ablations]
       merge: replace
@@ -399,6 +399,17 @@ state:
         has a defensible default, so the risk is silence, not incoherence.
         G3_object_corpus checks that the record is complete and that each field
         names a choice, which makes the choices appear in the report.
+        [CONSUMED] Every field now reaches an object, checked by
+        L1-STAGE1-PROTOCOL-APPLIED. Four of them previously did not:
+        allow_all_masked never reached sample_modality_mask, similarity was
+        accepted as any string while the loss computed cosine regardless,
+        hyperparameter_config_hash dereferenced nothing so all of U-22 ran on
+        library defaults, and tower_sharing shared a FusionConfig object while
+        each tower still built its own ModalityFusion. A protocol field nobody
+        consumes is a claim in the report with nothing behind it.
+        tower_sharing is an explicit three-way enum because U-16's registry
+        lists three readings, and a reading the code cannot take is not an
+        option.
 
     - name: essgnn_arch_protocol
       type: "{status: unresolved|resolved, use_io_projections, distance, coord_feat, layer_sharing, pooling, hidden_dim, n_layers, decided_by, decided_at}"
@@ -841,10 +852,11 @@ edges:
   - {id: e07, from: n04_render_views, to: n05_annotate, kind: data, guard: "", join_group: default, carries: [renders]}
   - {id: e08, from: n07_scene_graphs, to: n08_semantic_edges, kind: data, guard: "", join_group: default, carries: [scene_graphs, procthor_object_text]}
   - {id: e09a, from: n05_annotate, to: n05b_resolve_stage1_encoding, kind: data, guard: "", join_group: default, carries: [objaverse_annotations, renders]}
-  - {id: e09, from: n05b_resolve_stage1_encoding, to: n06_encode_text_image, kind: data, guard: "", join_group: default, carries: [objaverse_annotations, renders, stage1_encoding_protocol], rationale: "n06 cannot start before U-14/U-15/U-34 are answered: they decide what it should produce."}
+  - {id: e09, from: n05b_resolve_stage1_encoding, to: n06_encode_text_image, kind: data, guard: "stage1_encoding_protocol.clip_train_scope == 'frozen'", join_group: default, carries: [objaverse_annotations, renders, stage1_encoding_protocol], rationale: "n06 cannot start before U-14/U-15/U-34 are answered: they decide what it should produce. Under `trainable` n06 does not run at all -- a cache is by construction the output of a network nobody is updating, so producing one would be 2-4 h spent on an artifact that reading would silently turn the run back into the frozen variant."}
 
-  - {id: e10, from: G2_pc_sanity, to: n09_build_splits, kind: data, guard: "verdict == PASS", join_group: default, carries: [pointclouds]}
-  - {id: e11, from: n06_encode_text_image, to: n09_build_splits, kind: data, guard: "", join_group: default, carries: [text_image_embeddings]}
+  - {id: e10, from: G2_pc_sanity, to: n09_build_splits, kind: data, guard: "verdict == PASS", join_group: pointclouds, carries: [pointclouds]}
+  - {id: e11, from: n06_encode_text_image, to: n09_build_splits, kind: data, guard: "stage1_encoding_protocol.clip_train_scope == 'frozen'", join_group: stage1_text_image, carries: [text_image_embeddings]}
+  - {id: e11b, from: n05b_resolve_stage1_encoding, to: n09_build_splits, kind: data, guard: "stage1_encoding_protocol.clip_train_scope == 'trainable'", join_group: stage1_text_image, carries: [objaverse_annotations, renders], rationale: "[BRANCH] Under `trainable` there is no embedding cache, and an unconditional n06 -> n09 made that reading unreachable: n09's join required text_image_embeddings, so the route U-34 explicitly allows could never reach n10. What n09 actually needs is that every admitted asset HAS its text/image inputs, which under this reading is the raw annotations and renders."}
   - {id: e12, from: n08_semantic_edges, to: n09c_build_scene_splits, kind: data, guard: "", join_group: default, carries: [sem_edge_cache]}
   - {id: e12b, from: n07_scene_graphs, to: n09c_build_scene_splits, kind: data, guard: "", join_group: default, carries: [scene_graphs, procthor_object_text, procthor_dataset]}
   - {id: e12c, from: n09c_build_scene_splits, to: G6_stage2_ready, kind: data, guard: "", join_group: corpus, carries: [scene_splits]}
@@ -908,9 +920,16 @@ edges:
 # J1 -- every fan-in declared explicitly; no runtime default is inherited
 join_policies:
   - node: n09_build_splits
-    groups: [{name: default, policy: all, k: null}]
-    trigger: any_group_satisfied
-    rationale: "Point clouds and embeddings must both be complete; a split computed from part of the data is wrong, not partial."
+    groups: [{name: pointclouds, policy: all, k: null}, {name: stage1_text_image, policy: any, k: null}]
+    trigger: all_groups_satisfied
+    rationale: >
+      Point clouds are required unconditionally. The text/image side arrives by
+      exactly one of two mutually exclusive guarded routes (e11 under `frozen`,
+      e11b under `trainable`), so that group is `any` -- but the trigger is
+      `all_groups_satisfied`, because dropping either group would let a split be
+      computed from part of the data, which is wrong rather than partial.
+      [CORRECTED] This was one `all` group over both edges, which made the
+      `trainable` reading of U-34 structurally unreachable.
   - node: n09c_build_scene_splits
     groups: [{name: default, policy: all, k: null}]
     trigger: any_group_satisfied
@@ -1025,7 +1044,7 @@ dependencies:
     # The edges and n09's reads had been decoupled, but this line had not, so the
     # machine-readable dependency still said Stage 1 waits for Qwen semantic-edge
     # generation over ProcTHOR. Two of the three places were fixed; this was the third.
-    - {node: n09_build_splits, depends_on: [G2_pc_sanity, n06_encode_text_image]}
+    - {node: n09_build_splits, depends_on: [G2_pc_sanity, n06_encode_text_image, n05b_resolve_stage1_encoding]}
     - {node: G3_object_corpus, depends_on: [n09_build_splits]}
     - {node: n10_train_stage1, depends_on: [G3_object_corpus]}
     - {node: n11_gallery_index_staging, depends_on: [n10_train_stage1]}
@@ -1064,7 +1083,7 @@ dependencies:
 routing:
   - {decision_point: G1_sources_valid, authority: A1, owner: edge, inputs: [manifest_count, glb_coverage, ckpt_behaviour], destinations: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs, HALT_FAILED], default_destination: HALT_FAILED}
   - {decision_point: G2_pc_sanity, authority: A1, owner: edge, inputs: [cloud_shape, finiteness, centroid_offset, max_radius, per_axis_variance, self_retrieval_rank], destinations: [n09_build_splits, HALT_FAILED], default_destination: HALT_FAILED}
-  - {decision_point: G3_object_corpus, authority: A1, owner: edge, inputs: [leakage_count, admitted_size, quarantine_rate, eval_protocols, "stage1_protocol.status"], destinations: [n10_train_stage1, HALT_FAILED], default_destination: HALT_FAILED}
+  - {decision_point: G3_object_corpus, authority: A1, owner: edge, inputs: [leakage_count, admitted_size, quarantine_rate, eval_protocols, "stage1_encoding_protocol.status", "stage1_protocol.status"], destinations: [n10_train_stage1, HALT_FAILED], default_destination: HALT_FAILED}
   - {decision_point: G4_gallery_freeze, authority: A1, owner: edge, inputs: [index_dim, index_count, nan_count, target_is_argmax, target_in_tie_set], destinations: [n12_promote_index, HALT_FAILED], default_destination: HALT_FAILED}
   - {decision_point: G6_stage2_ready, authority: A1, owner: edge, inputs: ["stage2_protocol.status", stage2_pairing, "essgnn_edge_protocol.status", "essgnn_arch_protocol.status", scene_splits], destinations: [n13_train_stage2, HALT_BLOCKED], default_destination: HALT_BLOCKED}
   - {decision_point: G7_composition_protocol, authority: A1, owner: edge, inputs: [composition_protocol.status, g0_source, query_list_source, placement_rule], destinations: [n15c_prepare_eval_scenes, HALT_BLOCKED], default_destination: HALT_BLOCKED}

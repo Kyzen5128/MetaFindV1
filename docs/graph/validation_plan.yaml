@@ -367,6 +367,41 @@ level_1:
     expected_on_injection: "the evaluation refuses to start"
     verified_blocks: false
 
+  - id: L1-STAGE1-PROTOCOL-APPLIED
+    target: stage1_protocol
+    target_kind: channel
+    asserts: >
+      Every field of BOTH Stage 1 protocols reaches the object that acts on it,
+      checked against the instantiated modules rather than against the config:
+        fusion                      -> query.fusion.cfg.kind and gallery.fusion.cfg.kind
+        tower_sharing               -> PARAMETER identity between the towers, and
+                                       the number of distinct ULIP backbones
+        allow_all_masked            -> the allow_empty actually passed to
+                                       sample_modality_mask
+        similarity                  -> refuses to start on anything the loss does
+                                       not implement, rather than accepting the
+                                       string and computing cosine anyway
+        hyperparameter_config_hash  -> canonical sha256 of the hyperparameter
+                                       artifact the run loaded
+        clip_train_scope            -> backbone train_scope, and whether a cache
+                                       may be read at all
+        image_aggregation           -> cache layout (one vector vs eleven)
+        text_serialization          -> the template the encoder was given
+    negative_injection: "resolve tower_sharing=fully_shared, then build the towers with independent fusion modules"
+    expected_on_injection: "parameter identity fails and Stage 1 does not start"
+    verified_blocks: false
+    note: >
+      The Stage 1 counterpart of L1-ESSGNN-ARCH-PROTOCOL-APPLIED, added after a
+      review found four fields that G3 required but nothing consumed:
+      allow_all_masked never reached sample_modality_mask, similarity was
+      accepted as any string while the loss computed cosine unconditionally,
+      hyperparameter_config_hash was a presence check that dereferenced nothing
+      so the run used library defaults for every value of U-22, and
+      tower_sharing shared a CONFIG OBJECT while each tower still constructed
+      its own ModalityFusion -- config identity, not weight sharing.
+      Comparing against the config would have missed the last one entirely,
+      which is why this compares against parameters.
+
   - id: L1-STAGE2-POSITIVE-DEFINED
     target: stage2_pairing
     target_kind: channel
@@ -999,11 +1034,16 @@ level_3_gates:
       AND admitted + quarantined == len(manifest)
       AND quarantine_rate <= 0.02
       AND both evaluation protocols are defined with explicit query and gallery scopes
-      AND stage1_protocol.status == "resolved", with fusion, image_aggregation,
-          text_serialization, tower_sharing, clip_train_scope, allow_all_masked,
-          similarity and hyperparameter_config_hash each naming a choice
-          (U-13, U-14, U-15, U-16, U-34, U-23, U-24, U-22)
-    evidence: [L2-LEAK-OBJECT, L2-COMPLETE, L1-PROTOCOLS-DEFINED, L1-QUAR-REASON]
+      AND stage1_encoding_protocol.status == "resolved", with text_serialization,
+          image_aggregation and clip_train_scope each naming a choice
+          (U-15, U-14, U-34)
+      AND stage1_protocol.status == "resolved", with fusion, tower_sharing,
+          allow_all_masked, similarity and hyperparameter_config_hash each
+          naming a choice (U-13, U-16, U-23, U-24, U-22)
+      AND hyperparameter_config_hash resolves to a hyperparameter artifact whose
+          canonical sha256 equals it -- presence of the field is not enough,
+          because a hash nothing dereferences leaves the run on library defaults
+    evidence: [L2-LEAK-OBJECT, L2-COMPLETE, L1-PROTOCOLS-DEFINED, L1-QUAR-REASON, L1-STAGE1-PROTOCOL-APPLIED]
     scope_note: >
       [CORRECTED] The criterion said "at object and house level" and cited
       L2-LEAK, a check that no longer exists -- it was split into
@@ -1012,9 +1052,16 @@ level_3_gates:
       the ProcTHOR branch through the validation contract, undoing the
       decoupling. House leakage belongs to G6_stage2_ready, in front of the
       spend that needs it.
-      The stage1_protocol clause is what makes n10 unable to start on silent
-      defaults; an earlier attempt to add it did not match the file text and
-      was lost.
+      The two protocol clauses are what make n10 unable to start on silent
+      defaults; an earlier attempt to add the first did not match the file text
+      and was lost.
+      [CORRECTED] This criterion still demanded image_aggregation,
+      text_serialization and clip_train_scope FROM stage1_protocol after those
+      three fields had been moved to stage1_encoding_protocol. The gate was
+      validating a schema that no longer existed -- it would have failed a
+      correctly resolved pair, and it checked nothing about the channel that
+      actually governs n06. Splitting the clause is not cosmetic: G3 is the
+      formal barrier in front of Stage 1.
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G3_object_corpus.yaml"
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
@@ -1174,7 +1221,7 @@ level_3_gates:
 
 # ==================================================================
 gate_discipline:
-  total_l1: 54
+  total_l1: 55
   total_l2: 17
   total_gates: 7
   rejected_gate_candidates:

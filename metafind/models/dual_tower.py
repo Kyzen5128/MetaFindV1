@@ -42,7 +42,36 @@ from torch import Tensor, nn
 from metafind.models.essgnn import ESSGNN, ESSGNNConfig
 from metafind.models.fusion import MODALITIES, FusionConfig, ModalityFusion
 
-__all__ = ["DualTowerConfig", "GalleryTower", "QueryTower", "MetaFindDualTower"]
+__all__ = [
+    "TOWER_SHARING",
+    "TowerSharing",
+    "DualTowerConfig",
+    "GalleryTower",
+    "QueryTower",
+    "MetaFindDualTower",
+]
+
+# U-16. The paper never says whether the two towers share weights, so the
+# registry lists three readings -- and each one has to be RUNNABLE, or the
+# registry is describing options the code cannot take.
+#
+#   shared_backbone_separate_fusion  one ULIP backbone, two fusion modules
+#   fully_shared                     one backbone, ONE fusion module, tied
+#   fully_separate                   two backbones, two fusion modules
+#
+# An earlier version collapsed these to "shared"/"separate" and implemented
+# "shared" by handing both towers the same FusionConfig OBJECT. Two
+# `ModalityFusion(cfg)` calls then built two independent parameter sets from
+# one config, so the run was `fully_separate` whatever the protocol said.
+# Config identity is not weight sharing.
+TowerSharing = Literal[
+    "shared_backbone_separate_fusion", "fully_shared", "fully_separate"
+]
+TOWER_SHARING: tuple[str, ...] = (
+    "shared_backbone_separate_fusion",
+    "fully_shared",
+    "fully_separate",
+)
 
 
 @dataclass
@@ -51,13 +80,21 @@ class DualTowerConfig:
 
     Attributes:
         dim: shared embedding width. ULIP-2 embeds at 1280 (finding F2).
+        tower_sharing: which of U-16's three readings to run. No default: the
+            paper does not state one, and a default here would silently decide
+            it for every caller.
         query_fusion: fusion used by the query tower.
         gallery_fusion: fusion used by the gallery tower. Kept separate because
             sec. 2.4 describes the gallery as modality-complete while the query
             side is the flexible one; tying them would prevent freezing one
-            without the other.
-        use_layout: enable the ESSGNN branch and Eq. 6's residual term.
-        essgnn: layout encoder configuration. ``out_dim`` must equal ``dim``.
+            without the other. Ignored under ``fully_shared``, where the gallery
+            reuses the query's module.
+        use_layout: enable the ESSGNN branch and Eq. 6's residual term. FALSE
+            IN STAGE 1 -- 2.6 makes Stage 1 object-level cross-modal alignment
+            with no spatial context, and the ESSGNN architecture is not even
+            decided until n09b/G6.
+        essgnn: layout encoder configuration, required only when ``use_layout``.
+            ``out_dim`` must equal ``dim``.
         init_lambda: initial value of the learnable layout weight. The paper
             gives no value (U-22); 1.0 keeps the residual at full strength at
             initialisation and lets training scale it down.
@@ -67,12 +104,17 @@ class DualTowerConfig:
 
     # REQUIRED, no defaults. `dim` is the loaded checkpoint's embedding width
     # (1280 for ULIP-2 -- a measured fact about a backbone, not a value the
-    # paper states), and ESSGNN's widths additionally depend on the still-open
-    # U-06 / U-20 encoder choices. Defaulting either would reintroduce a
-    # paper-looking constant one level above the module that just stopped
-    # doing it. Build both after the checkpoint and stage1_protocol resolve.
+    # paper states); `tower_sharing` is U-16 and the paper is silent.
+    # Defaulting either would reintroduce a paper-looking constant one level
+    # above the module that just stopped doing it.
     dim: int
-    essgnn: ESSGNNConfig
+    tower_sharing: TowerSharing
+    # `essgnn` is OPTIONAL because Stage 1 does not have one. It used to be
+    # required, which forced Stage 1's constructor to accept an ESSGNNConfig
+    # and its tests to hand-write one -- exactly the "code invents an
+    # architecture the protocol has not decided" failure this project keeps
+    # closing, and it also put a Stage 2 object inside the Stage 1 boundary.
+    essgnn: ESSGNNConfig | None = None
     # Derived from `dim` when not given, so callers need not restate the width.
     query_fusion: FusionConfig | None = None
     gallery_fusion: FusionConfig | None = None
@@ -84,10 +126,22 @@ class DualTowerConfig:
     scene_dropout_granularity: Literal["batch", "sample"] = "batch"
 
     def __post_init__(self) -> None:
+        if self.tower_sharing not in TOWER_SHARING:
+            raise ValueError(
+                f"tower_sharing must be one of {TOWER_SHARING}, got {self.tower_sharing!r}"
+            )
         if self.query_fusion is None:
             self.query_fusion = FusionConfig(dim=self.dim)
         if self.gallery_fusion is None:
             self.gallery_fusion = FusionConfig(dim=self.dim)
+        if not self.use_layout:
+            return
+        if self.essgnn is None:
+            raise ValueError(
+                "use_layout=True needs an ESSGNNConfig. Stage 1 has no layout "
+                "branch (2.6) and must pass use_layout=False; Stage 2 builds "
+                "one with ESSGNNConfig.from_protocol after G6."
+            )
         if self.essgnn.out_dim != self.dim:
             raise ValueError(
                 f"essgnn.out_dim ({self.essgnn.out_dim}) must equal dim ({self.dim}); "
@@ -217,6 +271,19 @@ class MetaFindDualTower(nn.Module):
         self.cfg = cfg
         self.query = QueryTower(cfg)
         self.gallery = GalleryTower(cfg)
+        if cfg.tower_sharing == "fully_shared":
+            # Rebind the MODULE, not the config. Both towers already built a
+            # ModalityFusion; assigning here makes them one object, so the
+            # parameters are literally the same tensors and an optimizer sees
+            # each once. Passing one FusionConfig to both -- which is what an
+            # earlier version did -- produced two independent parameter sets.
+            self.gallery.fusion = self.query.fusion
+
+    def fusion_is_tied(self) -> bool:
+        """Whether the two towers' fusion parameters are the same tensors."""
+        qs = list(self.query.fusion.parameters())
+        gs = list(self.gallery.fusion.parameters())
+        return len(qs) == len(gs) and all(q is g for q, g in zip(qs, gs))
 
     def freeze_gallery(self, frozen: bool = True) -> None:
         """Freeze or unfreeze the gallery tower.
@@ -225,7 +292,21 @@ class MetaFindDualTower(nn.Module):
         gallery encoder is frozen" (sec. 2.6). Freezing also puts the tower in
         eval mode so any dropout inside it stops perturbing the embeddings that
         the frozen gallery index was built from.
+
+        Refuses under ``fully_shared``, and that refusal is a paper result, not
+        a limitation: if the towers are one module, "the gallery encoder is
+        frozen" and "the query-side fuser is trained" cannot both hold. So 2.6
+        rules out that reading of U-16 for Stage 2 -- which is worth raising
+        loudly at the point of contradiction rather than silently freezing the
+        query tower too and reporting a Stage 2 that never trained.
         """
+        if frozen and self.cfg.tower_sharing == "fully_shared":
+            raise ValueError(
+                "tower_sharing='fully_shared' cannot satisfy 2.6: freezing the "
+                "gallery would freeze the query fuser it is tied to. Use "
+                "'shared_backbone_separate_fusion' or 'fully_separate' for any "
+                "run that reaches Stage 2."
+            )
         for p in self.gallery.parameters():
             p.requires_grad_(not frozen)
         self.gallery.train(not frozen)

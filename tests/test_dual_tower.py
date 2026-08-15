@@ -19,6 +19,7 @@ D = 32
 def cfg(**kw) -> DualTowerConfig:
     base = dict(
         dim=D,
+        tower_sharing="fully_separate",
         query_fusion=FusionConfig(dim=D, hidden=64, n_heads=4, n_layers=1),
         gallery_fusion=FusionConfig(dim=D, hidden=64, n_heads=4, n_layers=1),
         essgnn=ESSGNNConfig(node_feat_dim=16, edge_feat_dim=8, hidden_dim=16, out_dim=D, n_layers=2, use_io_projections=True),
@@ -255,26 +256,32 @@ def test_layout_is_translation_invariant_end_to_end():
 
 # ------------------------------------------------ Stage 1 protocol -> runtime
 
+HP = dict(optimizer="adamw", learning_rate=1e-4, weight_decay=0.1,
+          scheduler="cosine", batch_size=64, epochs=10, p_mask=0.30,
+          init_temperature=0.07, learnable_temperature=True,
+          max_logit_scale=100.0, seed=0)
+
 
 def _protocols(**over):
+    from metafind.models.stage1_config import canonical_hyperparameter_hash
+
+    hp = {**HP, **over.pop("hp", {})}
     enc = dict(status="resolved", text_serialization="labelled_lines",
                image_aggregation="mean", clip_train_scope="frozen")
-    tr = dict(status="resolved", fusion="gated", tower_sharing="separate",
+    tr = dict(status="resolved", fusion="gated", tower_sharing="fully_separate",
               allow_all_masked=True, similarity="cosine",
-              hyperparameter_config_hash="abc123")
+              hyperparameter_config_hash=canonical_hyperparameter_hash(hp))
     enc.update(over.pop("enc", {})), tr.update(over.pop("tr", {}))
-    return enc, tr
+    return enc, tr, hp
 
 
 def _runtime(**over):
     from metafind.models.stage1_config import Stage1RuntimeConfig
 
-    enc, tr = _protocols(**over)
+    enc, tr, hp = _protocols(**over)
     return Stage1RuntimeConfig.from_protocols(
-        enc, tr, dim=D,
-        essgnn=ESSGNNConfig(node_feat_dim=16, edge_feat_dim=8, hidden_dim=16,
-                            out_dim=D, n_layers=2, use_io_projections=True),
-        checkpoint="/nonexistent/ckpt.pt", device="cpu",
+        enc, tr, dim=D, checkpoint="/nonexistent/ckpt.pt",
+        hyperparameters=hp, device="cpu",
     )
 
 
@@ -286,30 +293,109 @@ def test_protocol_choices_reach_the_runtime_objects():
     assert rt.text_serialization == "labelled_lines"
 
 
+def test_stage1_builds_no_layout_branch():
+    """[2.6] Stage 1 is object-level alignment; ESSGNN is not decided until n09b."""
+    rt = _runtime()
+    assert rt.tower.use_layout is False and rt.tower.essgnn is None
+    model = MetaFindDualTower(rt.tower)
+    assert model.query.layout_encoder is None
+    # negative injection: asking for the branch without an architecture must fail,
+    # not fabricate one.
+    with pytest.raises(ValueError, match="use_layout=True needs an ESSGNNConfig"):
+        DualTowerConfig(dim=D, tower_sharing="fully_separate", use_layout=True)
+
+
 def test_trainable_clip_selects_the_full_scope_and_forbids_the_cache():
     """[U-34] Reading a frozen cache under `trainable` would silently be the frozen run."""
     rt = _runtime(enc={"clip_train_scope": "trainable"})
     assert rt.backbone.train_scope == "full"
     assert rt.may_use_cached_text_image is False
+    assert rt.cache_layout == "none"
 
 
-def test_per_step_view_choice_forbids_the_cache():
-    """[U-14] One stored vector cannot answer a choice made each training step."""
-    assert _runtime(enc={"image_aggregation": "random_single_view"}).may_use_cached_text_image is False
-    assert _runtime(enc={"image_aggregation": "mean"}).may_use_cached_text_image is True
+def test_per_step_view_choice_needs_the_per_view_cache_not_no_cache():
+    """[U-14] Eleven cached per-view embeddings answer a per-step choice exactly."""
+    rnd = _runtime(enc={"image_aggregation": "random_single_view"})
+    assert rnd.may_use_cached_text_image is True
+    assert rnd.cache_layout == "per_view"
+    assert _runtime(enc={"image_aggregation": "mean"}).cache_layout == "aggregated"
 
 
-def test_separate_towers_get_separate_fusion_modules():
-    rt = _runtime()
-    assert rt.tower.query_fusion is not rt.tower.gallery_fusion
-    shared = _runtime(tr={"tower_sharing": "shared"})
-    assert shared.tower.query_fusion is shared.tower.gallery_fusion
+def test_tower_sharing_ties_actual_parameters_not_just_configs():
+    """[U-16] The failure this catches: one config, two ModalityFusion calls."""
+    sep = MetaFindDualTower(_runtime().tower)
+    assert not sep.fusion_is_tied()
+
+    shared = MetaFindDualTower(_runtime(tr={"tower_sharing": "fully_shared"}).tower)
+    assert shared.query.fusion is shared.gallery.fusion
+    assert shared.fusion_is_tied(), "config identity was mistaken for weight sharing"
+    # A gradient through the QUERY must appear on the GALLERY's parameter --
+    # that is what sharing means, and it is exactly what config identity does
+    # not give you.
+    shared.query(embeds(2), present=torch.ones(2, len(MODALITIES), dtype=torch.bool)).sum().backward()
+    assert next(shared.gallery.fusion.parameters()).grad is not None
+
+
+def test_backbone_count_follows_tower_sharing():
+    """[U-16] `fully_separate` is the only reading with two ULIP backbones."""
+    assert _runtime(tr={"tower_sharing": "fully_separate"}).gallery_backbone is not None
+    for s in ("fully_shared", "shared_backbone_separate_fusion"):
+        assert _runtime(tr={"tower_sharing": s}).gallery_backbone is None
+
+
+def test_fully_shared_cannot_satisfy_stage2_freezing():
+    """[2.6] "gallery frozen" and "query fuser trained" contradict under one module."""
+    model = MetaFindDualTower(_runtime(tr={"tower_sharing": "fully_shared"}).tower)
+    with pytest.raises(ValueError, match="cannot satisfy 2.6"):
+        model.freeze_gallery()
+
+
+def test_allow_all_masked_reaches_the_sampler():
+    """[U-23] The field was required by G3 and consumed by nothing."""
+    g = torch.Generator().manual_seed(0)
+    forbidden = _runtime(tr={"allow_all_masked": False}).sample_present_mask(512, generator=g)
+    assert forbidden.any(dim=-1).all(), "allow_all_masked=False did not reach sample_modality_mask"
+    allowed = _runtime(tr={"allow_all_masked": True},
+                       hp={"p_mask": 0.9}).sample_present_mask(512, generator=g)
+    assert (~allowed.any(dim=-1)).any(), "allow_all_masked=True never produced an empty query"
+
+
+def test_unimplemented_similarity_is_refused_not_silently_cosine():
+    """[U-24] The loss normalises both sides; accepting `dot_product` mislabels it."""
+    from metafind.models.stage1_config import UnsupportedProtocol
+
+    with pytest.raises(UnsupportedProtocol, match="similarity="):
+        _runtime(tr={"similarity": "dot_product"})
+
+
+def test_hyperparameter_hash_must_dereference():
+    """[U-22] A presence check leaves every value on a library default."""
+    from metafind.models.stage1_config import Stage1RuntimeConfig
+
+    enc, tr, hp = _protocols()
+    with pytest.raises(ValueError, match="does not match the artifact"):
+        Stage1RuntimeConfig.from_protocols(
+            enc, {**tr, "hyperparameter_config_hash": "0" * 64}, dim=D,
+            checkpoint="/nonexistent/ckpt.pt", hyperparameters=hp, device="cpu")
+    with pytest.raises(ValueError, match="missing"):
+        Stage1RuntimeConfig.from_protocols(
+            enc, tr, dim=D, checkpoint="/nonexistent/ckpt.pt",
+            hyperparameters={k: v for k, v in hp.items() if k != "learning_rate"},
+            device="cpu")
+
+
+def test_hyperparameters_reach_the_loss():
+    """[U-22] `ContrastiveConfig()` used to mean "whatever the library defaults are"."""
+    rt = _runtime(hp={"init_temperature": 0.05, "learnable_temperature": False})
+    assert rt.loss.init_temperature == 0.05
+    assert rt.loss.learnable_temperature is False
+    assert rt.loss.bidirectional is False, "Eq. 5 is one-directional"
 
 
 def test_unresolved_or_partial_protocols_are_refused():
     from metafind.models.stage1_config import Stage1RuntimeConfig
 
-    enc, tr = _protocols()
+    enc, tr, hp = _protocols()
     for bad_enc, bad_tr, msg in (
         ({**enc, "status": "unresolved"}, tr, "not resolved"),
         ({k: v for k, v in enc.items() if k != "image_aggregation"}, tr, "missing"),
@@ -317,8 +403,5 @@ def test_unresolved_or_partial_protocols_are_refused():
     ):
         with pytest.raises(ValueError, match=msg):
             Stage1RuntimeConfig.from_protocols(
-                bad_enc, bad_tr, dim=D,
-                essgnn=ESSGNNConfig(node_feat_dim=16, edge_feat_dim=8, hidden_dim=16,
-                                    out_dim=D, n_layers=2, use_io_projections=True),
-                checkpoint="/nonexistent/ckpt.pt", device="cpu",
-            )
+                bad_enc, bad_tr, dim=D, checkpoint="/nonexistent/ckpt.pt",
+                hyperparameters=hp, device="cpu")
