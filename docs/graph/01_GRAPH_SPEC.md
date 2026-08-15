@@ -76,6 +76,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 | **D-2** | Qwen2.5-VL 取代 GPT-4o | 專案決定 | **Table 1 與 Table 2 都受影響** —— Qwen 不只換掉裁判，也換掉 46,052 筆資產標註（文字塔的訓練資料）。所以 SC-1 只報告差距、不設門檻 |
 | **D-3** | 不重跑 baseline | 只復現 MetaFind | SC-2 只能與論文公佈值比較 |
 | **D-4** | 不做人工評分 | 無標註人力 | Table 2 人工欄 `INSUFFICIENT_EVIDENCE` |
+| **D-5** | I-Design 的五個規劃 agent 改用本地 `Qwen2.5-7B-Instruct`，取代 **GPT-4** | 無專有 API | **與 D-2 不同**：D-2 換的是標註與評分用的 GPT-4o。規劃器換掉會**改變場景本身**，Table 2 全部與 Table 3 場景欄一起位移；**Table 1 完全不受影響**（它不跑規劃器） |
 
 ---
 
@@ -583,6 +584,8 @@ graph TD
 | **U-23** | UNKNOWN | 三個模態同時被遮罩時代表什麼。§2.6 是**獨立** 30%，所以 2.7% 的 query 完全沒有資訊，Eq.5 仍要它去對上 gallery 條目 | 實作照字面（`allow_empty=True`），另有旗標可強制至少留一個模態 |
 | **U-24** | UNKNOWN | `sim(·,·)` 的定義。Eq.5 與 Eq.7a/7b 都只寫 `sim`，從未定義 | 用 cosine（CLIP／ULIP 慣例），記錄為選擇 |
 | **U-25** | UNKNOWN | **「adaptive freezing strategies」**。§2.2 說 Stage 2「with adaptive freezing strategies」，但 §2.6 給的是**固定**凍結。什麼東西是 adaptive、隨什麼變，全文沒有 | 實作 §2.6 的固定凍結，並記錄 §2.2 的 adaptive 因未定義而未實作 |
+| **U-27** | UNKNOWN | **I-Design 自己的輸入**。它的 API 是 `IDesign(no_of_objects, user_input, room_dimensions)`；§3.3 只說「200 個隨機取樣的場景」，沒給 prompt 清單、房間尺寸、物件數。**實測：I-Design 根本沒有吃 ProcTHOR 房屋的入口**，所以 U-21 的讀法 A 字面上不可執行 | 記錄我們用的 prompt／尺寸／物件數，並聲明那是我們的 |
+| **U-28** | UNKNOWN | **Table 1 在 layout-free 的 Objaverse-LVIS 上評 `w/ ESSGNN` 時，`e_layout` 是什麼**。§3.2 承認有這件事（"feature-attribution mismatch when evaluating on layout-free datasets"）卻沒說 `λ·e_layout` 是省略、歸零還是別的；它提的 "two fusion heads" 也沒說有沒有實作 | 記錄選擇。30% scene-dropout 已定義了「省略」的行為，是最可能的讀法。**two fusion heads 不實作** |
 | **U-26** | UNKNOWN | **`f_h` 與 `f_x` 是否共用一條訊息**。§2.5 是兩個獨立 MLP 吃同樣的輸入；Appendix C (10)(13)(14) 是先算一條 `m_ij = φ_e(...)`，再由 `φ_h`／`φ_x` 各自吃它。**這是不同的參數化，不只是輸入不同**，原始 EGNN 走 Appendix C 那種 | 實作依 §2.5（兩個獨立 MLP），記錄為選擇 |
 | **R-01** | RISK | **I-Design 尚未驗證能否執行** | Table 2/3 全靠它，**查它很便宜，應盡早做** |
 | **R-02** | RISK | 單卡 24GB 限制訓練範圍 | D-1 已聲明 |
