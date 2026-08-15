@@ -19,14 +19,26 @@ Under-specified in the paper
 ----------------------------
 
 U-22  ``tau``. Eq. 5 calls it "a temperature hyperparameter", which reads as
-      fixed, but no value is given anywhere. ULIP-2 -- whose backbone this is
-      built on -- uses a *learnable* logit scale initialised to ``log(1/0.07)``,
-      the CLIP convention. Both are supported; the ULIP-2 convention is the
-      default because the towers inherit its embedding space.
+      fixed, but no value is given anywhere.
+
+      Two claims used to be bundled here, and they have different standing:
+
+      * *Learnable* -- ULIP-2's PAPER says so directly. Its Eq. 1 and Eq. 2 both
+        define "tau is a learnable temperature parameter". Since MetaFind's
+        towers inherit ULIP-2's embedding space, that is dependency-paper
+        evidence, not a convention we assumed.
+      * *Initialised to log(1/0.07)* -- NOT in the ULIP-2 paper. It comes from
+        CLIP's convention and ULIP's code. Keeping it labelled as though the
+        paper supplied it would repeat the D-1 mistake of arguing about a
+        dependency's design from its implementation.
+
+      Neither is a default any more: both arrive through the hyperparameter
+      artifact that ``Stage1RuntimeConfig`` requires and hashes.
 
 U-24  ``sim(.,.)``, described only as "the similarity function". Cosine
       similarity is assumed, matching ULIP, OpenShape and CLIP. Recorded as an
-      assumption rather than treated as given.
+      assumption rather than treated as given, and a protocol naming anything
+      else is refused rather than silently computed as cosine.
 """
 
 from __future__ import annotations
@@ -48,10 +60,11 @@ class ContrastiveConfig:
     Attributes:
         bidirectional: False reproduces Eq. 5 (Stage 1, query->gallery only);
             True reproduces Eq. 7a/7b/8 (Stage 2, symmetric).
-        learnable_temperature: use a learnable logit scale (ULIP-2/CLIP
-            convention) rather than a fixed tau. See U-22.
-        init_temperature: tau at initialisation. 0.07 is the CLIP value ULIP-2
-            adopts.
+        learnable_temperature: use a learnable logit scale rather than a fixed
+            tau. ULIP-2's paper states this for its own objective (Eq. 1/2).
+            See U-22.
+        init_temperature: tau at initialisation. 0.07 is CLIP's value; the
+            ULIP-2 paper does not give one.
         max_logit_scale: clamp on the learnable scale. Without it the scale can
             run away early in training and saturate the softmax.
     """

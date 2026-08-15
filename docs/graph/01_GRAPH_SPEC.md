@@ -593,7 +593,8 @@ graph TD
 | **U-26** | UNKNOWN | **兩處差異，不是一處**。(a) 參數化：§2.5 是兩個獨立 MLP 吃同樣輸入；Appendix C (10)(13)(14) 先算一條 `m_ij = φ_e(...)` 再分給 `φ_h`／`φ_x`（原始 EGNN 走這種）。(b) **更新順序**：Eq.3 餵給 `f_x` 的是**已更新的** `h^{l+1}`，Appendix C 的 `m_ij` 是用**舊的** `h^l`。等變性兩種都成立，但數值不同 | 實作依 §2.5，記錄為選擇 |
 | **U-29** | UNKNOWN | **物理邊到底怎麼進 ESSGNN**。§2.3 定義 physical（support／adjacency）與 semantic 兩種邊，但 §2.5 的 `f_h`／`f_x` 只吃**一個**邊參數 `e_ij`，而 §2.5 與 Appendix C 都把 `e_ij` 定義成**語意**邊（LLM 關係句 → frozen text encoder）。物理邊是只決定 `N(i)`？自己帶 feature？與語意邊合併成一條？還是平行的另一條？support 與 adjacency 進網路後分不分得出來？全部沒說 | 記錄選擇 —— **這是架構決定，不是超參數** |
 | **U-30** | UNKNOWN | **沒有語意嵌入的邊，`e_ij` 的張量契約是什麼**。`f_h : ℝ^(2d+1+e) → ℝ^d` 輸入寬度**固定**，所以缺 `e_ij` 的邊仍要填滿那 `e` 格。規格禁止補零（零向量與真實嵌入無法區分）並記 `semantic_edge_missing`，但**記旗標不等於說明 MLP 收到什麼** | 記錄機制；必須與合法嵌入可區分 |
-| **U-34** | UNKNOWN | **Stage 1 有沒有訓練 OpenCLIP 的 text／image encoder**。<br>**支持凍結**：MetaFind 建立在 ULIP-2 之上，而 ULIP-2 §3.3 明文 "adopt the largest version of encoders from OpenCLIP (ViT-G/14) and **freeze it during the pre-training**"，特徵取自 "pre-aligned and **frozen** image encoder and text encoder"，目標函數只訓 3D encoder。<br>**支持可訓練**：MetaFind §2.6 "Both query and gallery encoders are trained"、§3.4 "fine-tuning the **entire** encoder"、且 §2.4 特地把自己與「凍結 text/image encoder 的既有做法」對比。<br>**MetaFind 從未逐個 module 列出誰訓練** | `stage1_encoding_protocol.clip_train_scope`（n05b 決定，早於 n06 編碼）記錄採用的讀法；主線 `frozen`（有 ULIP-2 論文直接支持）。RA-3 量測 `trainable` 那個讀法在本機是否可執行。<br>**`blocking: false`，但透過 G3 實質阻擋執行** —— 兩個讀法都能寫成報告，可是 n06 要編碼什麼取決於它，所以 G3 未放行前 Stage 1 跑不了 |
+| **U-35** | UNKNOWN | **`f_h`／`f_x` 的 MLP 內部結構**。§2.5 只寫 "approximated using MLPs"，深度、激活、輸出端有沒有激活全部沒說。我們的 `_mlp` 對兩者用**同一個**形狀（Linear → SiLU → Linear），那從來不是一個決定，只是它剛好長這樣。<br>**EGNN 原論文 Appendix C 給的是三種不同形狀**：`φ_e` = Linear → Swish → Linear → **Swish**（輸出端有激活）、`φ_x` = Linear → Swish → Linear（沒有）、`φ_h` = Linear → Swish → Linear **＋ `h_i` 殘差**。所以我們的 `f_x` 恰好等同 EGNN 的 `φ_x`，`f_h` **三個都不是**。SiLU 與 Swish 是同一個函數，真正的差別只在尾端激活與殘差 | `essgnn_arch_protocol.mlp_structure` 記錄，由 `G6` 強制。**EGNN 的 Appendix C 只提供選項清單，不提供答案** —— 依賴方的論文不能替 MetaFind 補它沒說的事，而這裡 MetaFind 是真的沉默，不是有歧義 |
+| **U-34** | UNKNOWN | **Stage 1 有沒有訓練 OpenCLIP 的 text／image encoder**。<br>**支持凍結**：MetaFind 建立在 ULIP-2 之上，而 ULIP-2 §3.3 明文 "We adopt the largest version of encoders from OpenCLIP (**ViT-G/14**) ... and **freeze it during pre-training**"，並說特徵是 "based on the **frozen** encoders"、目標函數 `min_{E_P}` 只訓 3D encoder（Eq. 3）。<br>**[更正]** 先前這裡把兩句併成一句寫成 "pre-aligned and frozen image encoder and text encoder" 並當成引文，**原文沒有那一句**。<br>**支持可訓練**：MetaFind §2.6 "Both query and gallery encoders are trained"、§3.4 "fine-tuning the **entire** encoder"、且 §2.4 特地把自己與「凍結 text/image encoder 的既有做法」對比。<br>**MetaFind 從未逐個 module 列出誰訓練** | `stage1_encoding_protocol.clip_train_scope`（n05b 決定，早於 n06 編碼）記錄採用的讀法；主線 `frozen`（有 ULIP-2 論文直接支持）。RA-3 量測 `trainable` 那個讀法在本機是否可執行。<br>**`blocking: false`，但透過 G3 實質阻擋執行** —— 兩個讀法都能寫成報告，可是 n06 要編碼什麼取決於它，所以 G3 未放行前 Stage 1 跑不了 |
 | **U-33** | UNKNOWN | **ESSGNN 有沒有保留 EGNN 的輸入／輸出投影**。§2.5 是 `t_i → h⁰ → L 層 → Pooling = e_layout`，**兩端都沒有投影**；官方 EGNN（`egnn_clean.py`）有 `embedding_in`／`embedding_out`，本實作沿用了。**多兩層可學參數不是同一個架構，而 upstream 慣例不是論文真值** | `use_io_projections` 旗標。`True` 沿用官方 EGNN（現行主線），`False` 字面復現 §2.5 但要求 `node_feat_dim == hidden_dim == out_dim` |
 | **U-32** | UNKNOWN | **scene dropout 的粒度**。§2.6 寫 "omitted in 30% of **batches**"，字面是**整批**一起丟；**現行主線就是 batch-level**（`scene_dropout_granularity="batch"`），`sample` 保留為變體。對 in-batch 對比 loss 而言兩者的訓練分布不同 | `stage2_protocol.scene_dropout_granularity` 記錄，G6 檢查。注意 §2.6 另一個 30%（Stage 1 的 modality masking）明文 "independently"，那個才真的是 per-sample |
 | **U-31** | UNKNOWN・**可執行** | **ESSGNN 的 L 層是否共用參數**。§2.5 寫 `θ_h`、`θ_x` 都沒有層索引。這會改變參數量，也改變 F11：獨立層時最後一層座標頭沒有 loss path，**共用參數時同一個 `f_x` 仍會從前 L−1 層收到梯度** | 實作用每層獨立權重，記錄為選擇 |
@@ -1029,3 +1030,24 @@ preposition 對齊 enum（無法映射者落到 "on"）
 **這輪要記住的**：前幾輪修的是「決策有沒有登記」「決策在圖上的位置對不對」，
 這輪是**第三種**——決策**有沒有真的被執行的東西讀走**。
 三者都會產生同一個外觀：報告寫著一個選擇，跑的是另一個。
+
+### 2026-08-15 第十七輪（逐字讀 ULIP-2 與 EGNN 兩份原論文）
+
+第十五輪把「依賴方的**論文**」加進權威階層，這輪才第一次真的拿兩份原文逐條比對。
+結果：一個引文造假、一個沉默預設、三個該記下的差異。
+
+| # | 問題 | 現在 | 嚴重度 |
+|---|---|---|---|
+| 181 | **我把改寫當成 ULIP-2 的引文。** 第 155 項撤回 D-1 時，我寫「特徵取自 "pre-aligned and **frozen** image encoder and text encoder"」並加了引號。**原文沒有那一句** —— 它把 §3.3 的兩句併成一句：*"The feature space, already **pre-aligned** by OpenCLIP, serves as the target space"* 與 *"We extract the image feature ... **based on the frozen encoders**"*。另外原文是 "freeze it during pre-training"，沒有 "the"。<br>**凍結這個結論不受影響**（"freeze it during pre-training" 與 Eq. 3 的 `min_{E_P}` 都在），但 **D-1 的撤回正是建立在這句話上**，而這份文件整套紀律就是不准把改寫當引文 | 三處live 引文全部換成原文，並標明先前那句是改寫 | 🔴 **引文不實** |
+| 182 | **`f_h`／`f_x` 的 MLP 內部結構是個沉默預設。** §2.5 只說 "approximated using MLPs"。我們的 `_mlp` 對兩者用同一個 Linear → SiLU → Linear，**那從來不是一個決定**。EGNN Appendix C 給的是**三種不同形狀**：`φ_e` 尾端有 Swish、`φ_x` 沒有、`φ_h` 有殘差。對照下來我們的 `f_x` 恰好等同 `φ_x`，`f_h` 三個都不是 | 新增 **U-35**，進 `essgnn_arch_protocol.mlp_structure`，由 `G6` 強制。**EGNN 的附錄只提供選項清單，不提供答案** —— MetaFind 在這裡是真的沉默，不是有歧義。<br>（`f_h` 內部沒有殘差是**對的**：MetaFind Eq. 2 與 Appendix C Eq. 14 都把殘差寫在 `f_h` **外面**） | 🟠 **沉默預設** |
+| 183 | **F15**：EGNN Eq. 4 有 `C = 1/(M−1)`，論文明講 *"which normalizes the sum"*；**MetaFind 兩處都沒有**（§2.5 Eq. 3、Appendix C Eq. 13） | 主線照 MetaFind（Level 0 > Level 1）。`coords_agg="sum"` 因此**不是我們的一種讀法，是照抄**。但記下後果：座標更新量級隨鄰居數成長，而 ProcTHOR 房間的物件數差異很大。`C` 是純量，等變性不受影響，受影響的是訓練穩定性 | 🟡 **新發現** |
+| 184 | **F16**：EGNN 唯一一個做圖級嵌入的實驗（QM9, §5.3）**明確不更新座標** —— *"we do not update coordinates x_i during message passing, making our model functionally E(n) invariant"*。MetaFind 保留了座標更新，而 `e_layout` 只讀 `h` | **不據此改主線**。但這讓 **F11**（最後一層 `f_x` 收不到梯度）從「我們發現的怪事」變成「上游遇過並處理過的情形」 | 🟡 **新發現** |
+| 185 | **F17**：ULIP-2 §6.2 自己就寫 *"pre-training primarily utilizes **object-level** 3D shape datasets, which differ in distribution and complexity from **scene-level** 3D data"*，並把場景級列為 future work。MetaFind 做的正是這件事 | 記進 findings，報告要講。另外兩點對上了：**10k xyzrgb** 由 Appendix A.1 證實是 ULIP-2 的最佳設定（50.6/79.1 正是摘要的 SOTA），先前只是從 checkpoint 檔名推的；**視圖數不衝突**，ULIP-2 對 Objaverse 是 12 張、MetaFind 是 11 張，U-14 不能拿 ULIP-2 當證據 | 🟡 **新發現** |
+| 186 | `losses.py` 把「τ 可學習」與「τ 初值 0.07」綁成同一個 ULIP-2 慣例 | 拆開，因為兩者權威等級不同：**「learnable」ULIP-2 論文 Eq. 1/2 直接寫了**（"tau is a learnable temperature parameter"），是 Level 1 論文證據；**「0.07」論文沒給**，那是 CLIP 慣例與 ULIP 程式。綁在一起就是第 155 項那個錯誤的縮小版 | 🟠 |
+| 187 | `graph_spec.yaml` 的 U-34 `resolution` 還寫 `stage1_protocol.clip_train_scope` | 改為 `stage1_encoding_protocol`（n05b 決定，早於 n06） | 🟡 |
+
+**沒有發現的東西也值得記**：`h⁰` 必須對 SE(3) 不變這個前提，EGNN Appendix A 與
+MetaFind Appendix C **兩邊都寫了**，所以 RA-1 與 `h0_mode="semantic"` 的立論比原本更穩；
+`φ_x` 輸出純量在 EGNN 正文與附錄都寫死，F10 的 audit-only 定位不變；
+`‖x_i − x_j‖²` 在 EGNN Eq. 3 是平方，與 MetaFind Appendix C 一致、與 §2.5 的 `‖·‖₂` 不一致
+—— **U-17 仍然是 MetaFind 自己內部的矛盾**，EGNN 幫不上忙，也不該被拿來當裁決。

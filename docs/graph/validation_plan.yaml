@@ -1124,7 +1124,11 @@ level_3_gates:
           (U-33 -- an ARCHITECTURE difference inherited from the reference
            EGNN, not a hyperparameter, and not something a dataclass default
            may decide), distance (U-17), coord_feat (U-26), layer_sharing
-           (U-31), pooling, hidden_dim and n_layers (U-22)
+           (U-31), pooling, hidden_dim, n_layers (U-22) and mlp_structure
+           (U-35 -- MetaFind says only "approximated using MLPs", and EGNN's
+            Appendix C specifies a DIFFERENT shape for each of its three
+            functions, so one shared Linear-SiLU-Linear was a silent choice
+            rather than the reference architecture)
       AND essgnn_edge_protocol.status == "resolved", naming topology,
           physical_relation_encoding, semantic_missing_representation and
           directionality (U-29, U-30, U-19) -- without these the ESSGNN edge

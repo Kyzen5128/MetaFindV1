@@ -414,6 +414,69 @@ scale-normalised 的渲染圖 —— 它**不可能量到**真實尺寸，只能
 
 ---
 
+## F15. MetaFind 拿掉了 EGNN 的正規化常數 `C = 1/(M−1)`
+
+**這不是 UNKNOWN，是 MetaFind 與 EGNN 之間一個明確的差異。**
+
+EGNN Eq. (4)：
+
+```
+x_i^{l+1} = x_i^l + C Σ_{j≠i} (x_i^l − x_j^l) φ_x(m_ij)
+```
+
+論文明講 *"C is chosen to be 1/(M − 1), which normalizes the sum"*。
+
+MetaFind **兩處**都沒有 `C` —— §2.5 Eq. (3) 與 Appendix C Eq. (13) 都是純粹的 `Σ`。
+
+**主線照 MetaFind 走**（Level 0 勝過 Level 1，而且這裡 MetaFind 不含糊，是 EGNN 不同）。
+但要記下後果：**座標更新的量級會隨鄰居數成長**。EGNN 的 QM9 分子節點數相近，
+ProcTHOR 房間的物件數不是 —— 一個 4 件家具的房間與一個 30 件的房間，
+在同一組權重下位移尺度差一個量級。`C` 是純量，等變性兩邊都成立，
+所以 Appendix C 的證明不受影響；受影響的是**訓練穩定性**，不是正確性。
+
+`coords_agg = "sum"` 因此不是「我們的一種讀法」，而是**照著 MetaFind 抄**。
+
+---
+
+## F16. EGNN 在自己的圖級任務裡**不更新座標**
+
+§5.3（QM9）：*"Since positions are static, we do not update coordinates x_i during
+message passing, making our model functionally E(n) invariant."*
+
+那正是 EGNN 唯一一個「把節點聚合成一個圖級向量」的實驗，與 `e_layout = Pooling({h_i^L})`
+的用途相同 —— 而它**關掉了** Eq. (4)。
+
+MetaFind 沒有關：Eq. (3) 與 Appendix C Eq. (13) 都保留座標更新，
+而 `e_layout` 只讀 `h`。這正是 **F11**（最後一層 `f_x` 收不到梯度）的來源，
+現在多了一個佐證：**EGNN 自己遇到同樣的情形時，選擇不更新座標**。
+
+**不據此改主線** —— 依賴方的做法不能覆蓋 MetaFind 的明文。記錄下來，
+因為它讓 F11 從「我們發現的怪事」變成「上游遇過並處理過的已知情形」。
+
+---
+
+## F17. ULIP-2 自己就把「物件級 → 場景級」列為未解問題
+
+§6.2 Limitations：*"ULIP-2's pre-training primarily utilizes object-level 3D shape
+datasets, which differ in distribution and complexity from scene-level 3D data.
+Applying ULIP-2 to scene-level data represents a compelling avenue for future
+research."*
+
+MetaFind 做的就是這件事。這不改變任何實作決定，但它是**報告裡該講的一句話**：
+MetaFind 的 backbone 論文明文說自己沒驗過場景級資料。
+
+順帶兩點對得上的：
+
+- **點雲 10k xyzrgb 是對的。** ULIP-2 Appendix A.1 的 `10k xyzrgb` = 50.6／79.1，
+  正是摘要的 SOTA 數字（`8k xyz` 是 48.9）。我們的 `G2_pc_sanity` 驗 `(10000, 6)`、
+  下載的 checkpoint 是 `ULIP-2-PointBERT-10k-xyzrgb-pc-vit_g`，**一致**。
+  先前這只是從 checkpoint 檔名推的，現在有論文。
+- **視圖數不衝突。** ULIP-2 對 Objaverse 渲染 **12** 張（§4.1），MetaFind 是 **11** 張
+  （摘要與 §2.3）。U-14 問的是「11 張怎麼變成一個 `e_image`」，
+  跟 ULIP-2 的 12 無關 —— 不要把它拿來當證據。
+
+---
+
 ## 由 F1–F13 推導出的三個架構決策
 
 ### D1 — 不重訓 ULIP-2 本身，用官方 released checkpoint 當起點

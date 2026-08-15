@@ -226,6 +226,29 @@ PRIMARY_INTERPRETATION = {
 
 
 def _mlp(in_dim: int, hidden: int, out_dim: int) -> nn.Sequential:
+    """One 2-layer MLP shape, used for BOTH f_h and f_x. [U-35]
+
+    Paper 2.5 says only "approximated using MLPs" -- no depth, no activation,
+    nothing about whether the output carries one. This shape was never a
+    decision; it is what this helper happened to be.
+
+    EGNN's Appendix C specifies THREE different shapes:
+
+        phi_e   Linear -> Swish -> Linear -> Swish   (activation on the output)
+        phi_x   Linear -> Swish -> Linear            (none)
+        phi_h   Linear -> Swish -> Linear, + h_i     (residual)
+
+    SiLU and Swish are the same function, so `f_x` below matches EGNN's phi_x
+    exactly and `f_h` matches none of them -- it is missing both the trailing
+    activation and the residual. That difference is now U-35 and is recorded in
+    essgnn_arch_protocol.mlp_structure, which G6 requires. EGNN's appendix
+    supplies the VARIANT LIST, not the answer: a dependency paper cannot fill
+    in what MetaFind leaves unsaid.
+
+    Note MetaFind writes the residual OUTSIDE f_h (Eq. 2 and Appendix C Eq. 14
+    are both `h_i + sum(...)`), so f_h having no internal residual is correct
+    for this paper even though EGNN's phi_h has one.
+    """
     return nn.Sequential(
         nn.Linear(in_dim, hidden), nn.SiLU(), nn.Linear(hidden, out_dim)
     )

@@ -335,9 +335,18 @@ ProcTHOR 分支的任何故障都會停掉一個不依賴它的訓練。兩條�
 **[D-1 —— 條件式偏離，取決於 U-34]** ViT-bigG-14 的 text/image 端保持凍結。
 **ULIP-2 論文明文凍結 CLIP。** §3.3：
 
-> We adopt the largest version of encoders from OpenCLIP (ViT-G/14) and **freeze it
-> during the pre-training** ... based on the **pre-aligned and frozen image encoder
-> and text encoder** in OpenCLIP
+> We adopt the largest version of encoders from OpenCLIP (**ViT-G/14**) [13] for most
+> of our experiments and **freeze it during pre-training**. The feature space, already
+> **pre-aligned** by OpenCLIP, serves as the target space where we aim to integrate the
+> 3D modality. ... We extract the image feature and text feature **based on the frozen
+> encoders**. We train the 3D encoder $E_P$ to align the 3D feature with the image and
+> text features.
+
+**[更正]** 先前這裡引的是「based on the **pre-aligned and frozen image encoder and
+text encoder** in OpenCLIP」，那**不是原文**——它把上面兩句併成一句。原文是分開的
+「already pre-aligned by OpenCLIP」與「based on the frozen encoders」。
+凍結這件事沒有變，**但這份文件的整套紀律就是不准把改寫當引文**，
+而 D-1 的撤回正是建立在這句話上。
 
 （論文寫 **ViT-G/14**，公開程式載入的是 **ViT-bigG-14**。兩者不是同一個 open_clip
 權重名稱，本文其餘各處講的都是**實際會載入的** ViT-bigG-14。這個差異出在 ULIP-2
