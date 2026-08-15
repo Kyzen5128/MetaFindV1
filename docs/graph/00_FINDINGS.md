@@ -146,7 +146,8 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python -m torch.distributed.launch --nproc_
 ```
 
 ULIP-2 用 open_clip **ViT-bigG-14**（~2.5B 參數）當 text/image backbone，
-其論文 §3.3 明文 **"freeze it during the pre-training"**。
+其論文 §3.3 明文 **"freeze it during pre-training"**。
+（先前這裡多寫了一個 "the"，已更正 —— 這份文件的紀律不容許改寫當引文。）
 
 實作上有個對不上的地方：`ULIP2_PointBERT_Colored` 只呼叫 `eval()`，**沒有**設
 `requires_grad = False`，而 `main.py` 的 optimizer 用 `if not p.requires_grad: continue`
@@ -392,8 +393,12 @@ scale-normalised 的渲染圖 —— 它**不可能量到**真實尺寸，只能
 
 **影響設計**
 
-- 標註 prompt 明說渲染圖是 scale-normalised，要模型依物件類別估計，
-  而不是假裝在量測（`test_prompt_explains_that_renders_are_scale_normalised`）。
+- 標註 prompt 要明說渲染圖是 scale-normalised，要模型依物件類別估計，
+  而不是假裝在量測。
+  **這條尚未實作** —— `n05_annotate` 還沒有程式，所以 `metafind/data/` 裡沒有
+  prompt，也沒有 `test_prompt_explains_that_renders_are_scale_normalised`。
+  先前這裡直接用反引號寫了那個測試名，讀起來像它已經存在。
+  已登記的檢查是 `L1-RENDER-SCALE-INVARIANT`。
 - **原始 bounding box 記進 render sidecar**（`extents_m`、`volume_m3`）。
   我們手上本來就有，記下來幾乎零成本，而且讓模型的估計**可稽核**
   —— 之後可以直接比對「模型猜的尺寸」與「mesh 真實尺寸」的相關性。
@@ -406,11 +411,11 @@ scale-normalised 的渲染圖 —— 它**不可能量到**真實尺寸，只能
 | 項目 | 事實 | 影響 |
 |---|---|---|
 | `unsorted_segment_sum` 用 `scatter_add_`（`egnn_clean.py:149-154`） | GPU atomics → **非確定性** | 列入 `nondeterminism_sources`；等變性測試容差不能設成 exact |
-| `coords_agg` 預設 `'mean'`（`egnn_clean.py:17`） | 論文 Eq.(3) 是 **sum** | 設定必須明寫 `coords_agg='sum'`，列 L1 |
+| `coords_agg` 預設 `'mean'`（`egnn_clean.py:11` 的簽章預設；`:17` 是賦值，`:75-80` 是分支） | MetaFind Eq.(3) 與 Appendix C Eq.(13) 都是**裸 sum**（見 **F15**：EGNN 論文 Eq.(4) 另有 `C = 1/(M−1)`，MetaFind 兩處都拿掉了） | 設定必須明寫 `coords_agg='sum'`，列 L1 |
 | `E_GCL.forward` 回傳的第三個值是**原封不動的** `edge_attr`（`egnn_clean.py:103`） | 語意邊不會被逐層更新 | 與論文一致（`e_ij` 為常量），寫進 postcondition |
 | `get_edges()` 建**全連接**圖（`egnn_clean.py:167-176`） | 我們要的是稀疏的 physical+semantic 邊 | 必須自寫 `edge_index` 建構；不可複用 |
 | `Objaverse_Lvis_Colored.__getitem__` 只回傳 `(pc, label, name)` | **沒有圖片、沒有 caption** | tri-modal 資料要自己組，不能複用這個 Dataset |
-| `Objaverse_Lvis_Colored` 需要 `data/objaverse-lvis/lvis.json` 等 | 檔案不存在 | 列入 `n02_download` 的明確產出 |
+| `Objaverse_Lvis_Colored` 需要 `data/objaverse-lvis/lvis.json` 等 | 當時不存在；**2026-08-15 已由 `n02_download` 取得**（`lvis.json` 與 `objaverse_lvis_metadata.json` 皆在 `datasets/objaverse-lvis/`） | 已是 `n02_download` 的明確產出 |
 
 ---
 

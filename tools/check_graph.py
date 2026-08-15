@@ -188,6 +188,44 @@ for g in plan["level_3_gates"]:
         CHECKS += 1
 
 
+# --- 7c. the implementation-status table must match the filesystem ---------
+# docs/graph/README.md claims "28 non-gate nodes, 2 implemented". A status
+# table is exactly the kind of claim that rots silently: it is written once,
+# read as current forever, and nothing recomputes it. This is also the claim a
+# reader is most likely to mistake specification completeness for.
+readme_txt = (DOCS / "README.md").read_text()
+non_gate = [n for n in registry["nodes"] if not n["id"].startswith("G")]
+m = re.search(r"28 個非 gate 節點裡，\*\*有程式的是 (\d+) 個\*\*", readme_txt)
+check("README implementation-status heading present", m is not None,
+      "the status table's heading changed shape; update this check with it")
+if m:
+    src = "\n".join(
+        p.read_text()
+        for d in ("metafind", "tools", "setup")
+        for p in (DOCS.parents[1] / d).rglob("*")
+        if p.suffix in (".py", ".sh")
+    )
+    # An explicit marker, not a substring hit: a comment that merely NAMES a
+    # node id is not an implementation of it, and the first version of this
+    # check counted three such comments as working code.
+    implemented = re.findall(r"^# IMPLEMENTS-NODE: (\S+)$", src, re.M)
+    check("README non-gate node count", len(non_gate) == 28,
+          f"table says 28, registry has {len(non_gate)}")
+    check("README implemented-node count", len(implemented) == int(m.group(1)),
+          f"table says {m.group(1)}, filesystem shows {len(implemented)}: {sorted(implemented)}")
+
+test_count = sum(
+    len(re.findall(r"^def test_", p.read_text(), re.M))
+    for p in (DOCS.parents[1] / "tests").glob("test_*.py")
+)
+m2 = re.search(r"(\d+) 個測試函式涵蓋這六個模組", readme_txt)
+check("README unit-test count", m2 is not None and int(m2.group(1)) == test_count,
+      f"README says {m2.group(1) if m2 else '?'}, tests/ defines {test_count}")
+for nid in implemented:
+    check(f"IMPLEMENTS-NODE {nid}", nid in {n["id"] for n in registry["nodes"]},
+          "marker names a node that is not in the registry")
+
+
 # --- 8a. `channel.field` in a gate criterion must be a field of that channel
 # G3 kept demanding stage1_protocol.image_aggregation / .text_serialization /
 # .clip_train_scope for a whole round after those three fields moved to

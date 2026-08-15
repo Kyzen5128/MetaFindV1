@@ -25,6 +25,8 @@ truncated download that leaves a file behind must not be mistaken for a
 finished one.
 """
 
+# IMPLEMENTS-NODE: n02_download
+
 from __future__ import annotations
 
 import argparse

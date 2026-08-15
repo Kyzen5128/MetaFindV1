@@ -255,7 +255,7 @@ key = sha256(desc_i, desc_j, prompt_version, llm_model, text_encoder_version)
 
 **[未定 U-20] 句子再由哪個 encoder 變成 `t_i`，論文也沒說。**
 §2.5 只寫 `t_i ∈ ℝ^d`、稱它 "a text-derived feature"。文中確實提到一個
-「frozen text encoder (e.g. CLIP or BERT)」，但那句話講的是**語意邊** `e_ij`，
+「frozen text encoder (e.g., CLIP or BERT)」，但那句話講的是**語意邊** `e_ij`，
 不是 `t_i` —— 而且連那句都是 "e.g."。兩者是否同一個 encoder，論文從未說明。
 這決定了 `d` 的值，也決定 `f_h : ℝ^(2d+1+e) → ℝ^d` 的實際寬度。記錄選擇與 `d`。
 

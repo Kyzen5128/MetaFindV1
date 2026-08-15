@@ -585,7 +585,7 @@ graph TD
 | **U-17** | UNKNOWN・**可執行** | **`d_ij` 還是 `d_ij²`**。§2.5 寫 `d_ij = ‖x_i − x_j‖₂`，Appendix C (10)–(12) 用 `‖·‖²`，原始 EGNN 也是平方 | 實作用平方（`essgnn.py` 的 `radial`）；兩者都 SE(3) 不變，不破壞證明，記錄為選擇 |
 | **U-18** | **UNKNOWN・阻斷** | **Algorithm 1 第 7 行「放進場景、更新圖」到底產生什麼**。下一輪就要 `ESSGNN(G)`，需要新節點的 `t_i`、位置、朝向、尺度、物理邊、語意邊 —— 全部未定義 | `n15b` 決定，`G7` 強制 |
 | **U-19** | UNKNOWN | **邊的方向性**。§2.3 只說有 physical / semantic 兩種邊，沒說有向或無向，也沒說 relation(A,B) 是否等於 relation(B,A) | 記錄慣例；`L1-SCENE-SUPPORT` 的雙向是**我們的**慣例 |
-| **U-20** | UNKNOWN | **`t_i` 由哪個 encoder 產生**。§2.5 只寫 `t_i ∈ ℝ^d`。「frozen text encoder (e.g. CLIP or BERT)」講的是**語意邊**，不是 `t_i`，也沒說兩者同一個 | 記錄選擇與 `d` |
+| **U-20** | UNKNOWN | **`t_i` 由哪個 encoder 產生**。§2.5 只寫 `t_i ∈ ℝ^d`。「frozen text encoder (e.g., CLIP or BERT)」講的是**語意邊**，不是 `t_i`，也沒說兩者同一個 | 記錄選擇與 `d` |
 | **U-21** | **UNKNOWN・阻斷** | **Algorithm 1 的 `G_0` 與 `{Q_1..Q_N}` 從哪來**。§3.3 說 200 個場景來自 I-Design，但 graph 原本沒有這條 channel，`n16` 讀的是 ProcTHOR 房屋 | `n15b` → `G7` → `n15c` |
 | **U-22** | UNKNOWN | **訓練超參數論文一個都沒給** | 見下方「未公佈的訓練超參數」表 |
 | **U-23** | UNKNOWN | 三個模態同時被遮罩時代表什麼。§2.6 是**獨立** 30%，所以 2.7% 的 query 完全沒有資訊，Eq.5 仍要它去對上 gallery 條目 | 實作照字面（`allow_empty=True`），另有旗標可強制至少留一個模態 |
@@ -737,7 +737,7 @@ preposition 對齊 enum（無法映射者落到 "on"）
 | 43 | `recall@1 == 1.0` 不是 tie-safe —— 兩個相同 embedding 會讓 argmax 回傳另一個 id | 改為「目標相似度 == 最大相似度，且目標在 argmax tie set 內」 | 🟠 |
 | 44 | SC-8 要求中斷重跑產物 **byte-identical**，但 NS-4／NS-5 已聲明 GPU atomics 與訓練隨機性不可移除、不宣稱精確重現 | byte-identical 只適用**前處理產物**；訓練改為 optimizer／RNG 狀態續跑 | 🟠 **自相矛盾** |
 | 45 | **邊的方向性從未登記**，但 `L1-SCENE-SUPPORT` 已斷言「雙向 support 邊」 | 新增 **U-19**；測試保留但改標為我們的慣例 | 🟠 |
-| 46 | **`t_i` 由哪個 encoder 產生沒鎖** —— 論文那句 "frozen text encoder (e.g. CLIP or BERT)" 講的是**語意邊**，不是 `t_i` | 新增 **U-20** | 🟠 |
+| 46 | **`t_i` 由哪個 encoder 產生沒鎖** —— 論文那句 "frozen text encoder (e.g., CLIP or BERT)" 講的是**語意邊**，不是 `t_i` | 新增 **U-20** | 🟠 |
 | 47 | **訓練超參數論文一個都沒給**，但只有零星記在各處 | 新增 **U-22** 與 §15 的超參數表 | 🟠 **對不上時分不出原因** |
 | 48 | 文件之間的數字（channel／node／edge／L1／L2／gate）靠人工同步 | 新增 [`tools/check_graph.py`](../../tools/check_graph.py)，含 gate 判準與 `reads` 的一致性、UNKNOWN 編號跨文件唯一性、execution order 對照 dependency | — |
 
@@ -968,7 +968,7 @@ preposition 對齊 enum（無法映射者落到 "on"）
 
 | # | 問題 | 現在 | 嚴重度 |
 |---|---|---|---|
-| 155 | **D-1 的證據基礎不成立。** 我曾用「ULIP-2 公開程式沒有 `requires_grad = False`」論證「凍結 ViT-bigG 是我們的偏離」。**查證後：ULIP-2 §3.3 明文 "freeze it during the pre-training"**，特徵取自「pre-aligned and **frozen** image/text encoder」，目標函數只訓 3D encoder。<br>對程式的觀察沒錯（`ULIP2_PointBERT_Colored` 確實只 `eval()`，而 `main.py` 是 `if not p.requires_grad: continue`），但**拿實作論證設計是錯的** —— 同檔的 **ULIP-1 五個 factory 都有明確凍結**，只有 ULIP-2 的沒有，那比較像它對不上自己的論文。<br>**這正是本專案一路在防的錯誤，這次由我犯下** | 新增 **U-34**（Stage 1 是否訓練 OpenCLIP），兩邊證據並列；**D-1 改為「取決於 U-34，尚未確立為偏離」**；`stage1_protocol.clip_train_scope` 記錄採用的讀法，`G3` 檢查 | 🔴 **證據分類錯誤** |
+| 155 | **D-1 的證據基礎不成立。** 我曾用「ULIP-2 公開程式沒有 `requires_grad = False`」論證「凍結 ViT-bigG 是我們的偏離」。**查證後：ULIP-2 §3.3 明文 "freeze it during pre-training"**（當時我寫成 "during **the** pre-training"，第十九輪一併更正），特徵取自「pre-aligned and **frozen** image/text encoder」，目標函數只訓 3D encoder。<br>對程式的觀察沒錯（`ULIP2_PointBERT_Colored` 確實只 `eval()`，而 `main.py` 是 `if not p.requires_grad: continue`），但**拿實作論證設計是錯的** —— 同檔的 **ULIP-1 五個 factory 都有明確凍結**，只有 ULIP-2 的沒有，那比較像它對不上自己的論文。<br>**這正是本專案一路在防的錯誤，這次由我犯下** | 新增 **U-34**（Stage 1 是否訓練 OpenCLIP），兩邊證據並列；**D-1 改為「取決於 U-34，尚未確立為偏離」**；`stage1_protocol.clip_train_scope` 記錄採用的讀法，`G3` 檢查 | 🔴 **證據分類錯誤** |
 | 156 | RA-3 的定位建立在「D-1 已成立」之上 | 改為 **U-34 `trainable` 讀法的可行性稽核**。跑不動只證明「**那個讀法**在本機不可行」，**不證明論文要求那個讀法** —— 凍結那條有 ULIP-2 論文直接支持 | 🔴 |
 | 157 | `02_BUILD_STEPS`／`00_FINDINGS F5`／`ulip_backbone.py` 三處都寫著錯誤的 ULIP 敘述 | 全部更正，並保留「先前寫反了」的紀錄與理由 | 🟠 |
 | 158 | root README 的偏離表停在五項、沒有 D-6 | 重建為六項，並把 D-1 的條件狀態寫進去 | 🟠 |
@@ -1106,3 +1106,30 @@ ULIP-2 是把改寫當引文，EGNN 是沉默預設，I-Design 是編造輸入�
 這輪學到的是**它得在整條路徑上都被讀走**。
 `actual=trainable` 在 `n10` 的入口是通的、出口是斷的 ——
 一個只在半條路徑上成立的合約，看起來與成立的合約一模一樣。
+
+### 2026-08-15 `docs/` 全檔逐項查證（引文／程式碼引用／數字／實作狀態）
+
+不是審查回應，是把六份文件的**可查證宣稱**全部重跑一遍。
+
+| # | 問題 | 現在 |
+|---|---|---|
+| 202 | **第十七輪那個引文錯誤沒修乾淨。** `"freeze it during **the** pre-training"` 還留在三處：`00_FINDINGS:149`、`01_GRAPH_SPEC` 第 155 項、`graph_spec.yaml` 的 D-1 理由。當時只改了 U-34 登記表與 `02_BUILD_STEPS` | 三處全部改為 `"freeze it during pre-training"`，並註明先前多了一個 "the" |
+| 203 | `"frozen text encoder (e.g. CLIP or BERT)"` 三處都漏了逗號，原文是 `(e.g., CLIP or BERT)` | 三處補上 |
+| 204 | `coords_agg` 預設值引 `egnn_clean.py:17` —— 那是**賦值**，簽章預設在 `:11`、分支在 `:75-80` | 三個位置分別註明 |
+| 205 | F14 還寫 `lvis.json`「檔案不存在」 | 已由 `n02_download` 取得（46,052 筆），改為已完成 |
+| 206 | F13 用反引號寫了 `test_prompt_explains_that_renders_are_scale_normalised`，**那個測試不存在** —— `n05_annotate` 根本還沒有程式，所以也沒有 prompt | 改為「尚未實作」，並指向真正登記的 `L1-RENDER-SCALE-INVARIANT`。**與第 198 項同一類錯：寫出不存在的物件會被讀成覆蓋率** |
+| 207 | **沒有任何一份文件寫「哪些節點真的有程式」。** 六份規格加起來 8,000 行，讀者很容易把規格完整讀成管線存在 | `docs/graph/README.md` 新增實作狀態表：**28 個非 gate 節點裡有程式的是 2 個**（`n01`、`n02`），其餘只有規格；`metafind/models/` 是 `n10`／`n13` 的**元件**不是節點本身；99 個測試函式全部涵蓋模組、**沒有一條涵蓋節點執行** |
+| 208 | 那張表本身也會腐爛 | 新增檢查：非 gate 節點數、已實作節點數、測試函式數**全部重算**。判準是原始碼裡的 `# IMPLEMENTS-NODE: <id>` 標記 —— 第一版用字串比對，把三個**只是提到節點 id 的註解**算成了實作。負向注入（在 `stage1_config.py` 貼上 `n10` 標記）確認會紅 |
+
+**重跑後確認無誤、不需改動的**：`F1`–`F4` 的六個程式碼引用行號（`ULIP_models.py:189/191`、
+`losses.py:14`、`main.py:350`、`dataset_3d.py:544`、`egnn_clean.py:84/95/103/149-154/167-176`）；
+Appendix C 的 `h⁰` 不變前提與 Table 1 註腳的引文都是原文；
+**46,052**（`lvis.json` 實際鍵數）、**1,467** 個 unique assetId、**12,000** 間房全部重新量過；
+U-01 有記論文「約 48,000」與 manifest 46,052 的差；
+兩份 UNKNOWN 登記表**各 38 筆、集合完全相同**；
+channel／edge／node／gate／偏離／Required Audit／cycle 的所有數字宣稱都對得上；
+`L2-LEAK`／`L2-PC-DISTRIBUTION` 的引用全部出現在「這條已不存在」的說明裡；
+Table 1 與 Table 3 對不上的那四個數字（11.4/11.3、13.5/13.8）在第 60 項有登記。
+
+**查了 591 段英文引文、2 筆帶行號的程式碼引用、12 個被引用但不存在的路徑**
+（其中 11 個是尚未執行的 gate `record_path`，正確）。

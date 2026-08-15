@@ -15,6 +15,8 @@ Usage::
     python setup/03_verify_env.py --full     # includes it
 """
 
+# IMPLEMENTS-NODE: n01_env_bootstrap
+
 from __future__ import annotations
 
 import argparse
