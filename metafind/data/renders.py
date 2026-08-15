@@ -224,6 +224,29 @@ LAYOUTS = {
     "fibonacci": fibonacci_directions,
 }
 
+_RENDERER: dict[int, object] = {}
+
+
+def _renderer(resolution: int):
+    """One OffscreenRenderer per process, created once and reused.
+
+    Building and tearing down an EGL context per asset is what broke the
+    threaded version -- 67 of 200 assets failed on eglDestroyContext -- and
+    doing it 46,000 times running stalled the process version too: after ~8,600
+    assets the pool had no workers left, the parent spun at 37% CPU with 20
+    threads, and progress simply stopped. No error in the log, no OOM in
+    dmesg, the process still alive. A hung process that keeps running is the
+    failure mode a "did it exit?" check cannot see.
+
+    Deliberately per-process module state: a renderer holds a GL context and
+    cannot be pickled across a process boundary.
+    """
+    import pyrender
+
+    if resolution not in _RENDERER:
+        _RENDERER[resolution] = pyrender.OffscreenRenderer(resolution, resolution)
+    return _RENDERER[resolution]
+
 
 def render_views(path: Path, n_views: int = N_VIEWS, resolution: int = RESOLUTION,
                  projection: str = PROJECTION, layout: str = CAMERA_LAYOUT):
@@ -244,23 +267,20 @@ def render_views(path: Path, n_views: int = N_VIEWS, resolution: int = RESOLUTIO
         raise ValueError(f"unknown projection {projection!r}")
 
     images = []
-    renderer = pyrender.OffscreenRenderer(resolution, resolution)
-    try:
-        for d in LAYOUTS[layout](n_views):
-            pose = look_at(d * 3.0)
-            cam_node = scene.add(camera, pose=pose)
-            # Light rides with the camera, so every view is lit the same way. A
-            # fixed world light makes some views black, which is a valid image
-            # and an invalid observation.
-            light_node = scene.add(
-                pyrender.DirectionalLight(color=[1.0, 1.0, 1.0], intensity=3.0), pose=pose
-            )
-            colour, _ = renderer.render(scene)
-            images.append(np.ascontiguousarray(colour[..., :3]))
-            scene.remove_node(cam_node)
-            scene.remove_node(light_node)
-    finally:
-        renderer.delete()
+    renderer = _renderer(resolution)
+    for d in LAYOUTS[layout](n_views):
+        pose = look_at(d * 3.0)
+        cam_node = scene.add(camera, pose=pose)
+        # Light rides with the camera, so every view is lit the same way. A
+        # fixed world light makes some views black, which is a valid image
+        # and an invalid observation.
+        light_node = scene.add(
+            pyrender.DirectionalLight(color=[1.0, 1.0, 1.0], intensity=3.0), pose=pose
+        )
+        colour, _ = renderer.render(scene)
+        images.append(np.ascontiguousarray(colour[..., :3]))
+        scene.remove_node(cam_node)
+        scene.remove_node(light_node)
     return images, extents
 
 
@@ -284,9 +304,32 @@ def is_complete(out_dir: Path, uid: str) -> bool:
         return False
     if len(rec.get("view_paths", [])) != N_VIEWS:
         return False
-    for p, want in zip(rec["view_paths"], rec["view_sha256"]):
-        f = Path(p)
-        if not f.exists() or hashlib.sha256(f.read_bytes()).hexdigest() != want:
+    sizes = rec.get("view_bytes")
+    if sizes is None or len(sizes) != N_VIEWS:
+        # Sidecars written before view_bytes existed. Upgrade in place with a
+        # stat per file rather than requiring a separate migration step: the
+        # check that needs the field is the one that can cheapest supply it,
+        # and a migration script is one more thing to remember to run.
+        try:
+            sizes = [Path(v).stat().st_size for v in rec["view_paths"]]
+        except (OSError, KeyError):
+            return False
+        rec["view_bytes"] = sizes
+        tmp = sc.with_suffix(".json.part")
+        tmp.write_text(json.dumps(rec))
+        tmp.replace(sc)
+    # SIZE, not sha256. Re-hashing every completed asset on startup means
+    # reading 11 PNGs each: at 8,927 assets that is ~2.5 GB of cold reads
+    # before the first new render, and with the point-cloud node saturating
+    # the same disk it never finished -- the run looked hung, and was.
+    # A truncated or half-written PNG has the wrong size, which is what this
+    # check is for; the sha256 stays in the record for provenance and
+    # L2-RESUME, where reading the bytes is the point.
+    for path_str, want in zip(rec["view_paths"], sizes):
+        try:
+            if Path(path_str).stat().st_size != want:
+                return False
+        except OSError:
             return False
     return True
 
@@ -300,7 +343,7 @@ def process_one(uid: str, glb: Path, out_dir: Path) -> dict:
 
     asset_dir = out_dir / uid
     asset_dir.mkdir(parents=True, exist_ok=True)
-    view_paths, view_sha, blank = [], [], 0
+    view_paths, view_sha, view_bytes, blank = [], [], [], 0
     for i, img in enumerate(images):
         # A camera pointed at nothing returns a uniform frame. It is a valid
         # PNG of the right shape, so only the content says anything is wrong.
@@ -311,7 +354,9 @@ def process_one(uid: str, glb: Path, out_dir: Path) -> dict:
         Image.fromarray(img).save(tmp, format="PNG", optimize=False)
         tmp.replace(p)
         view_paths.append(str(p))
-        view_sha.append(hashlib.sha256(p.read_bytes()).hexdigest())
+        blob = p.read_bytes()
+        view_sha.append(hashlib.sha256(blob).hexdigest())
+        view_bytes.append(len(blob))
 
     if blank == N_VIEWS:
         raise ValueError("every view is blank -- the asset never entered frame")
@@ -325,6 +370,7 @@ def process_one(uid: str, glb: Path, out_dir: Path) -> dict:
         "uid": uid,
         "view_paths": view_paths,
         "view_sha256": view_sha,
+        "view_bytes": view_bytes,
         "raw_bbox_extents": [float(v) for v in extents],
         "projection": PROJECTION,
         "camera_layout": CAMERA_LAYOUT,
@@ -394,8 +440,15 @@ def main() -> int:
     # 41% quarantine rate as though a third of Objaverse were malformed.
     ctx = mp.get_context("spawn")
     with runlog.run_progress(NODE), \
-            cf.ProcessPoolExecutor(max_workers=args.workers, mp_context=ctx) as pool:
-        futures = {pool.submit(process_one, u, g, out_dir): u for u, g in todo}
+            cf.ProcessPoolExecutor(max_workers=args.workers, mp_context=ctx,
+                                   max_tasks_per_child=500) as pool:
+      # Bounded batches. Queueing all 45,753 futures at once handed the
+      # executor's management thread that entire list to marshal up front, and
+      # the run stalled partway with nothing in the log. A batch also bounds
+      # what an interruption can lose.
+      for start in range(0, len(todo), 500):
+        futures = {pool.submit(process_one, u, g, out_dir): u
+                   for u, g in todo[start:start + 500]}
         for fut in cf.as_completed(futures):
             uid = futures[fut]
             try:

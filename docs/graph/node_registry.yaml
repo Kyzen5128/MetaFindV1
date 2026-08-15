@@ -112,6 +112,12 @@ nodes:
     idempotency_mechanism: read_before_write
     cacheable: true
     cache_key: [glb_sha256, sampler_version, n_points, seed]
+    cost:
+      wallclock_s: 4600
+      note: >
+        Also disk-bound: 351 GB of GLB reads against a 74 MB/s volume. Measured
+        553 assets/min with 8 workers, which is exactly the read ceiling, so
+        more workers do not help.
     failure:
       classes: [DETERMINISTIC_INPUT, RESOURCE]
       policies:
@@ -171,7 +177,20 @@ nodes:
     idempotency_mechanism: read_before_write
     cacheable: true
     cache_key: [glb_sha256, n_views, layout, resolution]
-    cost: {wallclock_s: 1500, note: "31 ms/asset measured"}
+    cost:
+      wallclock_s: 4700
+      note: >
+        DISK-BOUND, not compute-bound. Measured 2026-08-15: the volume sustains
+        74 MB/s of reads, and the 46,052 GLBs total 351 GB, so a single pass
+        cannot finish faster than ~79 minutes no matter how many workers run.
+        The earlier figure, 1500 s at "31 ms/asset", came from a smoke run over
+        assets already warm in page cache and describes nothing real.
+        n03 alone needs 70 MB/s to read the same meshes, so the two nodes
+        CANNOT usefully run at the same time -- attempting it left n04 blocked
+        in uninterruptible I/O wait before it printed its first line. Run them
+        sequentially. Reading each GLB once and producing both artifacts would
+        halve the I/O, and is deliberately NOT done: it would merge two nodes
+        the graph separates for different failure classes and cacheability.
     failure:
       classes: [DETERMINISTIC_INPUT, RESOURCE]
       policies:
