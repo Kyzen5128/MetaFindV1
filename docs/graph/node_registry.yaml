@@ -202,6 +202,12 @@ nodes:
     postcondition: >
       Every admitted asset has category, description, dimensions, materials and
       placement_constraints, with placement values drawn from a closed vocabulary.
+      [IMPLEMENTATION CONTRACT, NOT A PAPER REQUIREMENT] Paper 2.3 says
+      "attributes SUCH AS object category, size dimensions, materials, and
+      placement constraints". "Such as" gives examples, not a schema. Exactly
+      these four fields, all of them required, a closed placement vocabulary and
+      metres are all ours. Keeping them is right -- without a schema there is no
+      verifiable artifact -- but they are reported as choices.
     deterministic: false
     idempotent: true
     idempotency_mechanism: read_before_write
@@ -448,10 +454,14 @@ nodes:
     decomposition_rationale: [N3_checkpoint_needed, N6_side_effects]
     reads: [pointclouds, text_image_embeddings, splits, split_seed, variant_registry]
     writes: [stage1_ckpt, run_progress, cost_ledger, degraded_flags]
-    precondition: "G3 verdict == PASS"
+    precondition: "G3_object_corpus verdict == PASS"
     postcondition: >
       Checkpoint written at a content-addressed path recording train_scope;
-      masked modalities use learned mask tokens, not zeros.
+      an absent modality produces a fused output that DIFFERS from what
+      zero-padding gives (paper 2.6: "Rather than zero-padding, we apply masked
+      embeddings"). A learned mask token is our implementation of that, not a
+      paper requirement -- see U-11. An earlier draft asserted the token itself
+      here, which is the round-2 blocker; this is its second surviving copy.
     deterministic: false
     deterministic_note: "GPU atomics, dataloader shuffling, dropout. Seeds fixed; bit-exactness not claimed."
     idempotent: true
@@ -520,8 +530,12 @@ nodes:
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
-      Key criterion: sample 1000 gallery vectors, query with each, require
-      recall@1 == 1.0. An index that cannot retrieve itself is broken.
+      Key criterion: sample 1000 gallery vectors, query with each, and require
+      that the target's similarity EQUALS the maximum and the target is in the
+      argmax tie set. An index that cannot retrieve itself is broken.
+      [CORRECTED] This said recall@1 == 1.0, which is not tie-safe: two identical
+      embeddings let argmax return either id, so a correct index can score below
+      1.0 and a broken one can reach it.
 
   - id: n12_promote_index
     role: mutate

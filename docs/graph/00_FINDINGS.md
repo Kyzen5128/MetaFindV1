@@ -9,11 +9,12 @@
 > 大幅修正（先前的版本把論文列為較差的 ablation 當成主線）。
 > 若本文件與 `02_BUILD_STEPS.md` 衝突，**以後者為準**。
 >
-> ⚠️ **本文件不使用 `U-nn` 編號。** 它曾經有自己的一套 `U-01`…`U-05`、`U-06`、`U-15`，
+> ⚠️ **本文件不使用 `U-nn` 也不使用 `R-nn` 編號。** 它曾經有自己的一套 `U-01`…`U-05`、`U-06`、`U-15`，
 > 與 `01_GRAPH_SPEC.md` §15 的登記表**編號相同但意義完全不同** —— 例如舊的 `U-04`
 > 是「Table 1 gallery 大小」，登記表的 `U-04` 是「渲染解析度」。
 > 靠「本文件權威最低」不足以避免這個問題：agent 用關鍵字搜尋時照樣會撈到。
-> 舊編號已全部移除，唯一的 UNKNOWN 登記表在 `01_GRAPH_SPEC.md` §15，
+> 它也曾用 `R-01` 指「磁碟空間風險」，而登記表的 `R-01` 是「I-Design 尚未驗證能否執行」。
+> 舊編號已全部移除，唯一的登記表在 `01_GRAPH_SPEC.md` §15，
 > 機器可讀版在 `graph_spec.yaml` 的 `risks_unknowns`，由 `tools/check_graph.py` 對齊。
 
 ---
@@ -28,9 +29,29 @@
   **刻意把 `h` 與 `coord` 分開兩個參數**，`h` 全程不含座標；座標只透過
   `coord2radial()`（`egnn_clean.py:84-93`）以 `||x_i - x_j||²` 這個**不變量**進入訊息。
 
-**結論**：若照 §2.5 字面實作 `Concat(x, t)`，`h^0` 隨 `x` 一起被旋轉平移，
-Appendix C 的證明**不成立**，Eq.(4)/(9) 的等變性會實測失敗。
-這是論文自身的矛盾，不是我們的實作錯誤。
+**2026-08-15 逐字重讀後補上兩條獨立證據（不需要等變性論證）**
+
+**其一：Eq.(2) 自己的型別就不成立。** §2.5 定義
+`f_h : ℝ^(2d+1+e) → ℝ^d`，而 Eq.(2) 是殘差式 `h^{l+1} = h^l + Σ f_h(...)`，
+所以 `h^l` 必須是 `ℝ^d`。但 `t_i ∈ ℝ^d`、`x_i ∈ ℝ³`，
+`Concat(x_i, t_i) ∈ ℝ^{d+3} ≠ ℝ^d`。
+
+```
+h^0 = Concat(x, t)  ∈ ℝ^{d+3}
+h^1 = h^0 + f_h(…)  ∈ ℝ^{d+3} + ℝ^d     ← 加不起來
+```
+
+**第 0 層的殘差根本無法相加。** 這不必談旋轉、不必看 Appendix C，
+純粹是維度就不對。
+
+**其二：Introduction 自己說是分開的。** 論文第 40 行寫
+ESSGNN *"maintains equivariance to rotation and translation by **separating
+spatial and semantic channels**"* —— **分離**，正好與 `Concat` 相反。
+
+**結論**：若照 §2.5 字面實作 `Concat(x, t)`，除了 `h^0` 隨 `x` 旋轉平移、
+Appendix C 的證明不成立之外，**它連 Eq.(2) 自己的型別都對不上**，
+而 Introduction 描述的機制也是相反的。
+四條證據都指向同一個方向：這是論文的筆誤，不是我們的實作錯誤。
 
 **影響設計**
 
@@ -87,7 +108,12 @@ zero-shot 分類不會這樣。
 **影響設計**
 
 - 必須自寫 `MetaFindDualTowerLoss` 與 `InstanceRetrievalEvaluator` 兩個節點，不能複用。
-- baseline 的 PC-Only 灌水現象要**刻意重現**（否則我們的 Table 1 對不上）→ **Required Audit（RA-2）**。
+
+> **⚠️ 本節原本還寫「baseline 的 PC-Only 灌水現象要刻意重現 → Required Audit（RA-2）」，兩處都錯。**
+> **RA-2 是 `f_x → ℝ³`**，與 baseline 無關（編號張冠李戴）。
+> 而且我們**不重跑任何 baseline**（偏離 D-3），根本無從重現它們的數字。
+> 正確的說法是 **SC-2**：我們自己的 PC-Only 應當**低於**論文公佈的 baseline 值 ——
+> 那是要重現的**方向**，不是要重現對方的灌水。
 
 ---
 
@@ -103,7 +129,7 @@ data/dataset_3d.py:544:from torch._six import string_classes
 `requirements.txt` 還鎖 `timm==0.4.12`、`open3d==0.16.0`、`open-clip-torch==2.24.0`，
 在現代 Python/torch 上不會乾淨安裝。
 
-**影響設計**：獨立的 `n01_env_bootstrap` 節點（§7 N1：失敗模式與其他節點完全不同），
+**影響設計**：獨立的 `n01_env_bootstrap` 節點（分解理由 N1：失敗模式與其他節點完全不同），
 並有 L1 smoke test（ULIP-2 ckpt 真的載入、EGNN forward 真的跑出正確 shape）。
 不做這步，後面每個節點都會以「看起來像資料問題」的形式失敗。
 
@@ -146,18 +172,21 @@ data/objaverse-lvis  →  不存在，需下載
 | 項目 | 估算 |
 |---|---|
 | ViT-bigG-14 + ULIP-2 checkpoint | ~15 GB |
-| 48K 點雲 @10000 pts × (xyz+rgb) × float32 | 240KB × 48K ≈ **11.5 GB** |
-| 48K × 11 views 渲染圖 @~100KB | 528K 張 ≈ **53 GB** |
+| 46,052 點雲 @10000 pts × (xyz+rgb) × float32 | 240KB × 46,052 ≈ **11 GB** |
+| 46,052 × 11 views 渲染圖 @~100KB | 507K 張 ≈ **51 GB** |
 | ProcTHOR-10K | ~10 GB |
-| 快取 embedding（D2 的產物） | 48K × 3 × 1280 × 4B ≈ **0.7 GB** |
-| **合計** | **~90 GB** |
+| 快取 embedding（**只有 text/image 兩種**，見 D2） | 46,052 × 2 × 1280 × 4B ≈ **0.5 GB** |
+| **合計** | **~88 GB**（**不含 GLB 原檔 ~216 GB**，見 D3） |
 
 > **2026-08-14 更新**：所有大型資料改放 `/mnt/data1/kyzen/MetaFind`（779GB 可用），
 > repo 內以 `./data` symlink 指向。90GB 對 779GB 綽綽有餘。
 >
-> **後果：原本的 R-01 風險解除，D3 從「必要」降級為「可選」。**
+> **後果：磁碟風險解除。**
 > 這是設計文件裡少數「因為新事實而放寬」的地方 —— 值得標明，因為
 > **放寬約束和放寬檢查是兩回事**：前者是事實變了，後者是為了讓紅燈變綠燈。
+>
+> （本段原本寫「原本的 R-01 風險解除」。**那個 `R-01` 是本文件自己的編號**，
+> 與登記表的 `R-01`（I-Design 未驗證）**同號不同義**，已移除。）
 
 **影響設計 → 架構決策 D3（見下，已改寫）。**
 
@@ -291,7 +320,7 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 
 ## F12. ProcTHOR-10K 實際只有 1,467 個 unique asset，論文說「3,000+」
 
-**實測**（`metafind/data/fetch_procthor.py`，2026-08-15）
+**實測**（2026-08-15；當時的抓取腳本已隨資料重置刪除，數字記錄於此）
 
 | | latest revision | 舊版 `ab3cacd`（pre-AI2THOR-5.0） |
 |---|---|---|
@@ -312,7 +341,7 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 **影響設計**
 
 - 若場景級檢索的 gallery 是 ProcTHOR 資產，實際只有 1,467 個而非 3,000+。
-  但 IDesign 的 `retrieve.py` 是對 **Objaverse** 檢索（見 §三），
+  但 IDesign 的 `retrieve.py` 是對 **Objaverse** 檢索，
   所以主線不受影響；此數字只在報告中如實記錄。
 - **69 objects/house（最多 245）遠高於我原本的假設。** SG4 的
   `N ≤ 25` 上限是針對 Algorithm 1 要放置的查詢數，不是房間總物件數，
@@ -323,7 +352,7 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 
 ## F13. 渲染前的正規化會摧毀絕對尺度 —— **在本實作中** size 只能是類別先驗
 
-**證據**（`metafind/data/render.py::normalize_mesh`，論文要求的框架下）
+**證據**（2026-08-15 實測；當時的渲染模組已隨資料重置刪除，結論保留）
 
 渲染前必須把 mesh 置中並縮放到單位球，否則以公釐建模和以公尺建模的同一個物件
 會產生完全不同的圖，image tower 學到的是**建模單位**而不是形狀。
@@ -356,7 +385,7 @@ scale-normalised 的渲染圖 —— 它**不可能量到**真實尺寸，只能
 
 ---
 
-## F9. 其他實作細節
+## F14. 其他實作細節（原編號 F9，與 F8→F13 的順序衝突，改編號）
 
 | 項目 | 事實 | 影響 |
 |---|---|---|
@@ -365,11 +394,11 @@ scale-normalised 的渲染圖 —— 它**不可能量到**真實尺寸，只能
 | `E_GCL.forward` 回傳的第三個值是**原封不動的** `edge_attr`（`egnn_clean.py:103`） | 語意邊不會被逐層更新 | 與論文一致（`e_ij` 為常量），寫進 postcondition |
 | `get_edges()` 建**全連接**圖（`egnn_clean.py:167-176`） | 我們要的是稀疏的 physical+semantic 邊 | 必須自寫 `edge_index` 建構；不可複用 |
 | `Objaverse_Lvis_Colored.__getitem__` 只回傳 `(pc, label, name)` | **沒有圖片、沒有 caption** | tri-modal 資料要自己組，不能複用這個 Dataset |
-| `Objaverse_Lvis_Colored` 需要 `data/objaverse-lvis/lvis.json` 等 | 檔案不存在 | 列入 `n02_acquire_sources` 的明確產出 |
+| `Objaverse_Lvis_Colored` 需要 `data/objaverse-lvis/lvis.json` 等 | 檔案不存在 | 列入 `n02_download` 的明確產出 |
 
 ---
 
-## 由 F1–F9 推導出的三個架構決策
+## 由 F1–F13 推導出的三個架構決策
 
 ### D1 — 不重訓 ULIP-2 本身，用官方 released checkpoint 當起點
 
@@ -443,13 +472,15 @@ outputs/renders/                從 mesh 渲染 11 視角
 
 ## 這些發現如何改變 graph 的形狀
 
-| 若沒做這次調查，會畫出的圖 | 實際該畫的圖 |
-|---|---|
-| `prep → pretrain → finetune → eval` 四段循序 | 前面多一整段 **Stage 0 可行性**（環境修補 + 預算 pilot + 硬體 preflight），且它有自己的 gate |
-| 昂貴的是「訓練」，gate 擋在訓練前 | 昂貴的是**標註與編碼**（一次性），訓練反而便宜 → **G-COST gate 前移到資料階段** |
-| Ablation 是最貴的尾巴，需要 G-COST gate | Ablation 因 D2 變便宜；**最貴且不可逆的尾巴是 5 位專家 × 200 場景的人工評分** |
-| 等變性是「訓練完看一下」的指標 | 等變性是 **G-INVALID 判準**，且 `Concat(x,t)` 版本是預期失敗的 **Required Audit** |
-| 資料準備是一次 fan-out | 是**帶 disk backpressure 的 shard 串流**，且含不可逆的刪檔動作 |
+> ⚠️ **這張表寫於第一輪，之後四輪的決策把其中三格推翻了。** 保留是為了記錄推翻本身。
+
+| 若沒做這次調查，會畫出的圖 | 實際該畫的圖 | 現況 |
+|---|---|---|
+| `prep → pretrain → finetune → eval` 四段循序 | 前面多一整段 Stage 0 可行性（環境修補 + 硬體 preflight） | ✅ 成立（**預算 pilot 節點已不存在** —— GPT-4o 換成本地 Qwen，D-2） |
+| 昂貴的是「訓練」，gate 擋在訓練前 | 昂貴的是標註與編碼（一次性） | ✅ 成立 |
+| Ablation 是最貴的尾巴 | 最貴且不可逆的尾巴是 5 位專家 × 200 場景的人工評分 | ❌ **推翻** —— 人工評分不做（偏離 D-4） |
+| 等變性是「訓練完看一下」的指標 | 等變性是 **G-INVALID 判準** | ❌ **推翻** —— 等變性**明確被拒絕當 gate**（`validation_plan.yaml` 的 `rejected_gate_candidates`：設成 gate 會誘使放寬容差去遷就論文自己的矛盾），改為 SC-4/5/6 + RA-1/RA-2 |
+| 資料準備是一次 fan-out | 是帶 disk backpressure 的 shard 串流，且含**不可逆的刪檔動作** | ❌ **推翻** —— GLB **保留不刪**（D3），沒有不可逆刪檔 |
 
 ---
 

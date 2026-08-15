@@ -332,7 +332,7 @@ level_1:
     verified_blocks: false
 
   - id: L1-SPLIT-NO-ASSET-DISJOINTNESS
-    target: n09_build_splits
+    target: n09c_build_scene_splits
     target_kind: node
     asserts: "an asset appearing in both a train and a test house is NOT treated as leakage"
     negative_injection: "re-add the asset-disjointness rule"
@@ -342,6 +342,9 @@ level_1:
       An earlier draft invented this rule. The paper only asks for 80/20, and ProcTHOR's
       12,000 houses draw on ~1,467 assets, so enforcing it changes the scene
       distribution.
+      [RETARGETED] This asserts about HOUSES, so it belongs to n09c after the
+      Objaverse/ProcTHOR branch split; it was still pointing at n09_build_splits,
+      which no longer touches ProcTHOR at all.
 
   - id: L1-PROTOCOLS-DEFINED
     target: eval_protocols
@@ -553,14 +556,20 @@ level_2:
     expected_on_injection: "paired similarity collapses toward the baseline"
     verified_blocks: false
     blocks: false
+    cited_by_gate: ""
     note: >
       [UNKNOWN U-02, DEMOTED FROM GATE] Diagnostic only. A low score here is
       informative -- it says our preprocessing differs from ULIP's -- but it does
       not invalidate the reproduction, because the paper never says MetaFind
       reuses ULIP's pre-sampled clouds and Stage 1 fine-tunes the point encoder
       anyway. Recorded in the report either way.
-    cited_by_gate: G2_pc_distribution
-    note: "[U-02] This is the evidence for not downloading ULIP's 185 GB of clouds."
+      It is also the evidence for not downloading ULIP's 185 GB of clouds.
+      [DUPLICATE KEY REMOVED] This entry carried two `note:` keys. YAML keeps the
+      last silently, so the whole justification above was discarded at parse time
+      and only the one-line version survived -- invisible to any tool that reads
+      the parsed document rather than the file. `cited_by_gate` also still named
+      G2_pc_distribution, a gate that no longer exists, while the entry itself
+      says it was demoted out of gating.
 
   - id: L2-EQUIVAR-COORD
     kind: scientific
@@ -602,18 +611,36 @@ level_2:
       and called it the coordinate channel. e_layout is pooled from h, which is
       invariant; applying R and T to it has no geometric meaning.
 
-  - id: L2-LEAK
+  - id: L2-LEAK-OBJECT
     kind: scientific
-    seam: "n09_build_splits -> training"
-    asserts: "train_ids and test_ids are disjoint; train_houses and test_houses are disjoint"
+    seam: "n09_build_splits -> Stage 1"
+    asserts: "train_ids and test_ids are disjoint"
+    method: "set intersection"
+    tolerance: exact
+    sample: full
+    negative_injection: "move one test asset into the train set"
+    expected_on_injection: "leakage_count == 1 and G3_object_corpus fails"
+    verified_blocks: false
+    cited_by_gate: G3_object_corpus
+
+  - id: L2-LEAK-SCENE
+    kind: scientific
+    seam: "n09c_build_scene_splits -> Stage 2"
+    asserts: "train_houses and test_houses are disjoint"
     method: "set intersection"
     tolerance: exact
     sample: full
     negative_injection: "move one test house into the train set"
-    expected_on_injection: "leakage_count == 1 and G3 fails"
+    expected_on_injection: "leakage_count == 1 and G6_stage2_ready fails"
     verified_blocks: false
-    cited_by_gate: G3_object_corpus
-    note: "Asset-level disjointness is deliberately NOT asserted; see L1-SPLIT-NO-ASSET-DISJOINTNESS."
+    cited_by_gate: G6_stage2_ready
+    note: >
+      [SPLIT OUT of the old single L2-LEAK] Object and house leakage are now
+      guarded by different gates, because the branches were decoupled: object
+      leakage invalidates Stage 1 (G3), house leakage invalidates Stage 2 (G6).
+      One check citing only G3 would have left house leakage ungated.
+      Asset-level disjointness is deliberately NOT asserted; see
+      L1-SPLIT-NO-ASSET-DISJOINTNESS.
 
   - id: L2-COMPLETE
     kind: structural
@@ -962,7 +989,7 @@ level_3_gates:
 # ==================================================================
 gate_discipline:
   total_l1: 48
-  total_l2: 16
+  total_l2: 17
   total_gates: 7
   rejected_gate_candidates:
     - {candidate: "all 7 modality conditions produced", why_not_a_gate: "fails all four criteria -- nothing is invalidated, contaminated, expensively redone or irreversible", demoted_to: L2}
@@ -1029,6 +1056,38 @@ required_audits:
     must_not_affect: [G3_object_corpus, G4_gallery_freeze, G5_report_release, "other Table 3 rows"]
     record_path: "outputs/logs/audits/RA3_train_scope.yaml"
 
+  - audit_id: RA-4
+    record_kind: required_audit
+    blocks: false
+    why_not_a_gate: >
+      EXPECTED TO FAIL, and the failure is a property of the paper's own claim.
+      Section 2.5 motivates ESSGNN by saying "Standard Graph Attention Networks
+      (GATs) are highly sensitive to global translation AND SCALING", and 3.4's
+      takeaway repeats it: "GAT is sensitive to translation/scaling, whereas
+      ESSGNN's equivariant property provides substantial improvements".
+      But the property the paper proves, and the only one it can prove, is
+      SE(3) equivariance -- rotation and translation. SE(3) does not contain
+      scaling, and the architecture cannot be scale-invariant: under x -> s*x
+      the message input ||x_i - x_j||^2 becomes s^2 ||x_i - x_j||^2, so every
+      message changes. The remedy does not cover half of the stated motivation.
+      Gating on this would mean blocking on the paper's own overclaim.
+    criterion: >
+      Scale a scene by s in {0.5, 2, 10} with no other change and measure
+      ||e_layout(s*x) - e_layout(x)||. Report it beside the translation and
+      rotation numbers (SC-4/5/6), which DO hold.
+    claim_controlled: "ESSGNN is robust to the global scaling that section 2.5 names."
+    claim_on_failure: >
+      "ESSGNN is equivariant to rotation and translation, as Appendix C proves
+      and as we verify (SC-4/5/6). It is NOT invariant to global scaling, which
+      section 2.5 also lists among the failure modes it addresses. Our Table 3
+      ESSGNN-vs-GAT comparison therefore supports the translation/rotation half
+      of the paper's claim only."
+    must_not_affect: [G3_object_corpus, G4_gallery_freeze, G6_stage2_ready, G5_report_release, "SC-4", "SC-5", "SC-6"]
+    record_path: "outputs/logs/audits/RA4_scale_sensitivity.yaml"
+    note: >
+      Found on a word-by-word re-reading of the paper, not by any structural
+      check -- nothing in the graph was inconsistent, the paper was.
+
 coverage_check:
   every_node_has_l1: true
   every_concurrent_channel_has_merge_test: true
@@ -1039,7 +1098,7 @@ coverage_check:
   every_check_has_negative_injection: true
   no_existence_only_assertions: true
   open_items:
-    - item: "verified_blocks is false for all 64 checks"
+    - item: "verified_blocks is false for all 65 checks"
       status: "BY DESIGN at specification time"
       action: "During implementation, flip each to true only after its negative injection has been observed to fail."
     - item: "I-Design has not been verified to run"

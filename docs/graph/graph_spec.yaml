@@ -185,7 +185,10 @@ state:
       readers: [G2_pc_sanity, n09_build_splits, n10_train_stage1, n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations]
       merge: upsert_by_key
       lifetime: persistent
-      note: "Sampled from the mesh, then pc_norm'd exactly as ULIP does. Gated by G2 (U-02)."
+      note: >
+        Sampled from the mesh, then pc_norm'd exactly as ULIP does.
+        G2_pc_sanity gates STRUCTURAL validity. The comparison against ULIP's
+        released clouds (U-02) is L2-PC-ULIP-REF, a diagnostic that does not gate.
 
     - name: renders
       type: "map[uid -> {view_paths[11], view_sha256[11]}]"
@@ -585,8 +588,13 @@ edges:
     kind: data
     guard: ""
     join_group: default
-    carries: [stage1_ckpt, scene_graphs, sem_edge_cache]
-    rationale: "Stage 2 needs the frozen gallery ENCODER, not the gallery INDEX, so it runs parallel to n11/G4/n12."
+    carries: [stage1_ckpt]
+    rationale: >
+      Stage 2 needs the frozen gallery ENCODER, not the gallery INDEX, so it runs
+      parallel to n11/G4/n12.
+      [CORRECTED] This edge also declared it carried scene_graphs and
+      sem_edge_cache, which n10 does not write. Those reach n13 from the
+      ProcTHOR branch via G6, not from Stage 1 training.
   - {id: e19, from: n13_train_stage2, to: n14_equivariance_probe, kind: data, guard: "", join_group: default, carries: [variant_ckpts]}
 
   - {id: e20, from: n12_promote_index, to: n15_eval_retrieval, kind: data, guard: "", join_group: default, carries: [gallery_index, eval_protocols]}
@@ -727,7 +735,11 @@ dependencies:
     - {node: n05_annotate, depends_on: [n04_render_views]}
     - {node: n08_semantic_edges, depends_on: [n07_scene_graphs]}
     - {node: n06_encode_text_image, depends_on: [n05_annotate]}
-    - {node: n09_build_splits, depends_on: [G2_pc_sanity, n06_encode_text_image, n08_semantic_edges]}
+    # [CORRECTED] n08_semantic_edges was still listed here after the branch split.
+    # The edges and n09's reads had been decoupled, but this line had not, so the
+    # machine-readable dependency still said Stage 1 waits for Qwen semantic-edge
+    # generation over ProcTHOR. Two of the three places were fixed; this was the third.
+    - {node: n09_build_splits, depends_on: [G2_pc_sanity, n06_encode_text_image]}
     - {node: G3_object_corpus, depends_on: [n09_build_splits]}
     - {node: n10_train_stage1, depends_on: [G3_object_corpus]}
     - {node: n11_gallery_index_staging, depends_on: [n10_train_stage1]}
@@ -765,10 +777,11 @@ dependencies:
 # ---------------------------------------------------------------- routing
 routing:
   - {decision_point: G1_sources_valid, authority: A1, owner: edge, inputs: [manifest_count, glb_coverage, ckpt_behaviour], destinations: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs, HALT_FAILED], default_destination: HALT_FAILED}
-  - {decision_point: G2_pc_sanity, authority: A1, owner: edge, inputs: [pc_embedding_agreement, baseline_cross_similarity], destinations: [n09_build_splits, HALT_FAILED], default_destination: HALT_FAILED}
+  - {decision_point: G2_pc_sanity, authority: A1, owner: edge, inputs: [cloud_shape, finiteness, centroid_offset, max_radius, per_axis_variance, self_retrieval_rank], destinations: [n09_build_splits, HALT_FAILED], default_destination: HALT_FAILED}
   - {decision_point: G3_object_corpus, authority: A1, owner: edge, inputs: [leakage_count, admitted_size, quarantine_rate, eval_protocols], destinations: [n10_train_stage1, HALT_FAILED], default_destination: HALT_FAILED}
-  - {decision_point: G4_gallery_freeze, authority: A1, owner: edge, inputs: [index_dim, index_count, nan_count, self_retrieval_recall], destinations: [n12_promote_index, HALT_FAILED], default_destination: HALT_FAILED}
-  - {decision_point: G6_stage2_ready, authority: A1, owner: edge, inputs: [stage2_protocol.status, stage2_pairing], destinations: [n13_train_stage2, HALT_BLOCKED], default_destination: HALT_BLOCKED}
+  - {decision_point: G4_gallery_freeze, authority: A1, owner: edge, inputs: [index_dim, index_count, nan_count, target_is_argmax, target_in_tie_set], destinations: [n12_promote_index, HALT_FAILED], default_destination: HALT_FAILED}
+  - {decision_point: G6_stage2_ready, authority: A1, owner: edge, inputs: [stage2_protocol.status, stage2_pairing, scene_splits], destinations: [n13_train_stage2, HALT_BLOCKED], default_destination: HALT_BLOCKED}
+  - {decision_point: G7_composition_protocol, authority: A1, owner: edge, inputs: [composition_protocol.status, g0_source, query_list_source, placement_rule], destinations: [n15c_prepare_eval_scenes, HALT_BLOCKED], default_destination: HALT_BLOCKED}
   - {decision_point: G5_report_release, authority: A1, owner: edge, inputs: [verdict_completeness, gate_records, audit_records, degraded_flags], destinations: [n22_publish_report, HALT_FAILED], default_destination: HALT_FAILED}
   - {decision_point: sg1_admit_or_repair, authority: A1, owner: edge, inputs: [schema_valid, item_attempt], destinations: [sg1_admit, sg1_generate, sg1_quarantine], default_destination: sg1_quarantine}
   - {decision_point: sg2_cache_lookup, authority: A1, owner: edge, inputs: ["sem_edge_cache.contains(hash)"], destinations: [use_cache, call_llm], default_destination: call_llm}
@@ -781,7 +794,7 @@ static_fanouts:
   - {name: modality_conditions, cardinality: 7, source: "paper Table 1 columns", bound: 7}
   - {name: eval_protocols, cardinality: 2, source: "U-09 -- both readings run", bound: 2}
   - {name: headline_variants, cardinality: 2, source: "paper Table 1 last two rows", bound: 2}
-  - {name: ablation_variants, cardinality: 8, source: "paper Table 3 minus 2 reusable rows", bound: 10}
+  - {name: ablation_variants, cardinality: 8, source: "paper Table 3 has 10 rows: 1 is Full itself, 1 (w/o iterative retrieval) is inference-only, leaving 8 that require training", bound: 9}
   - {name: assets, cardinality: "len(asset_manifest)", source: "manifest, currently 46052", bound: 60000, over_bound_action: truncate_and_record}
   - {name: eval_scenes, cardinality: 200, source: "paper 3.3", bound: 200}
 static_fanouts_note: >
@@ -881,16 +894,18 @@ risks_unknowns:
   - {id: U-10, marked: UNKNOWN, blocking: false, item: "which IDesign aspect maps to Table 2's Scene Coherence", affects: "Table 2 column mapping", resolution: "record the assumed mapping", fallback: "n/a"}
   - {id: U-11, marked: UNKNOWN, blocking: false, item: "how an absent modality is represented -- paper 2.6 rules out zero-padding ('Rather than zero-padding, we apply masked embeddings') but does not say whether that is a learned mask token or a mask applied inside the fusion layer", affects: "every partial-modality query", resolution: "record our choice; the only paper-backed assertion is that it differs from zero-padding", fallback: "n/a"}
   - {id: U-12, marked: UNKNOWN, blocking: false, item: "how ProcTHOR metadata becomes the sentence behind t_i", affects: "ESSGNN node features", resolution: "record our template", fallback: "n/a"}
-  - {id: U-13, marked: UNKNOWN, blocking: false, item: "which fusion strategy the Full model uses. Paper 2.4 lists five ('mean pooling, MLP, masked MLP, gated fusion, or Transformer-based fusion') and never says which is MetaFind's. Table 3 rules out Mean (9.4) and MLPs (9.9) against Full (11.4), and the 'Padding missing modalities with 0' row (10.5) plus 3.4's 'Masked modality fusion outperformed zero-padding' show Full masks. That leaves masked MLP, gated and Transformer.", affects: "every Table 1 and Table 3 number", resolution: "primary = masked_mlp (implemented default in metafind/models/fusion.py); gated and transformer kept selectable and reported as alternatives", fallback: "n/a"}
-  - {id: U-14, marked: UNKNOWN, blocking: false, item: "how 11 rendered views become one image embedding. Paper 2.3 says each asset is 'rendered from 11 orthogonal viewpoints' and never states the aggregation.", affects: "Image Only, T+I, I+PC and T+I+PC -- four of Table 1's seven conditions", resolution: "record the choice among {random single view per step, fixed view, mean of 11 embeddings, max, learned multi-view fusion}", fallback: "n/a"}
+  - {id: U-13, marked: UNKNOWN, blocking: false, item: "which fusion strategy the Full model uses. The paper gives TWO DIFFERENT candidate lists: 2.2 says 'a fusion layer (e.g., mean pooling, an MLP, or a Transformer-based module)' -- three -- while 2.4 says 'mean pooling, MLP, masked MLP, gated fusion, or Transformer-based fusion' -- five. Neither says which is MetaFind's. Table 3 rules out Mean (9.4) and MLPs (9.9) against Full (11.4), and the 'Padding missing modalities with 0' row (10.5) plus 3.4's 'Masked modality fusion outperformed zero-padding' show Full masks. That leaves masked MLP, gated and Transformer.", affects: "every Table 1 and Table 3 number", resolution: "primary = masked_mlp (implemented default in metafind/models/fusion.py); gated and transformer kept selectable and reported as alternatives", fallback: "n/a"}
+  - {id: U-14, marked: UNKNOWN, blocking: false, item: "how 11 rendered views become one image embedding. Paper 2.3 says each asset is 'rendered from 11 orthogonal viewpoints' and never states the aggregation. It applies to the QUERY side too: 2.1 defines the query as containing 'images q_img', plural.", affects: "Image Only, T+I, I+PC and T+I+PC -- four of Table 1's seven conditions", resolution: "record the choice among {random single view per step, fixed view, mean of 11 embeddings, max, learned multi-view fusion}", fallback: "n/a"}
   - {id: U-15, marked: UNKNOWN, blocking: false, item: "how a structured annotation is serialised into the string the text encoder sees. Paper 2.3 gives the fields but no format.", affects: "every text embedding, hence Text Only, T+I, T+PC, T+I+PC", resolution: "record the exact template and pin it with a golden-string test", fallback: "n/a"}
   - {id: U-16, marked: UNKNOWN, blocking: false, item: "whether the query and gallery towers share backbone weights. Paper 2.4 says 'a dedicated query encoder' and 2.6 says 'Both query and gallery encoders are trained', but never states sharing.", affects: "parameter count, Stage 1 dynamics, and the PC-Only figure the paper itself calls out as the dual-tower signature", resolution: "record the choice among {shared backbone + separate fusion, fully separate copies, fully shared}", fallback: "n/a"}
   - {id: U-17, marked: UNKNOWN, blocking: false, item: "d_ij or d_ij^2 in ESSGNN. Paper 2.5 defines d_ij = ||x_i - x_j||_2; Appendix C Eq. 10-12 uses ||x_i - x_j||^2, as does the original EGNN.", affects: "the numeric input to f_h and f_x, hence every trained ESSGNN", resolution: "implementation uses squared distance (metafind/models/essgnn.py, `radial`), following Appendix C and EGNN; both are SE(3)-invariant so neither breaks the proof. Recorded as a choice; a cheap variant can measure it.", fallback: "n/a"}
   - {id: U-18, marked: UNKNOWN, blocking: true, item: "what Algorithm 1 line 7 ('Place A*_i into the scene, update scene graph') actually produces. The next iteration calls ESSGNN(G), which needs the new node's t_i, position, orientation, scale, physical edges and semantic edges. None is specified.", affects: "every iteration after the first, hence all of Table 2", resolution: "n15b_resolve_composition_protocol; enforced by G7_composition_protocol", fallback: "none"}
   - {id: U-19, marked: UNKNOWN, blocking: false, item: "edge directionality. Paper 2.3 names 'physical-relation edges' and 'semantic-relation edges' without saying whether they are directed, and does not say whether relation(A,B) equals relation(B,A).", affects: "message passing -- a directed support edge and a symmetric one give different h updates", resolution: "record the choice; L1-SCENE-SUPPORT currently asserts symmetric support edges, which is our convention rather than a paper requirement", fallback: "n/a"}
   - {id: U-20, marked: UNKNOWN, blocking: false, item: "which encoder produces t_i. Paper 2.5 says only 'a text-derived feature t_i in R^d'. It names a frozen text encoder ('e.g. CLIP or BERT') for the semantic EDGE embeddings, not for t_i, and does not say the two are the same encoder.", affects: "ESSGNN node features and the width d", resolution: "record the choice and the resulting d", fallback: "n/a"}
-  - {id: U-21, marked: UNKNOWN, blocking: true, item: "where Algorithm 1's G_0 and {Q_1..Q_N} come from. Paper 3.3 says the 200 scenes come from I-Design's pipeline; the graph had no channel for them and n16 was reading ProcTHOR houses instead.", affects: "all of Table 2 and Table 3's two scene columns", resolution: "n15b_resolve_composition_protocol then n15c_prepare_eval_scenes; enforced by G7_composition_protocol", fallback: "none"}
+  - {id: U-21, marked: UNKNOWN, blocking: true, item: "where Algorithm 1's G_0 and {Q_1..Q_N} come from. The paper says two things that do not obviously agree: 3.1 states 'Scene-level layout-aware retrieval is conducted on ProcTHOR-10K', while 3.3 states the evaluation is 'on the scene generation pipeline of I-Design on a set of 200 randomly sampled scenes'. Reading A: 200 scenes sampled from ProcTHOR-10K and run through I-Design's pipeline. Reading B: 200 scenes generated by I-Design from text prompts, with ProcTHOR used only for Stage 2 training. Whichever holds, the graph had no channel for the evaluation input at all, and n16 was reading ProcTHOR houses -- which under Reading B is simply the wrong dataset, and under Reading A is still the wrong OBJECT, since Algorithm 1 needs a generation request rather than a finished layout.", affects: "all of Table 2 and Table 3's two scene columns", resolution: "n15b_resolve_composition_protocol picks a reading and records it; then n15c_prepare_eval_scenes; enforced by G7_composition_protocol", fallback: "none"}
   - {id: U-22, marked: UNKNOWN, blocking: false, item: "training hyperparameters. The paper reports none: no optimizer, learning rate, batch size, epoch count, weight decay, scheduler, tau initialisation, lambda initialisation, ESSGNN depth L ('After L layers'), ESSGNN hidden width, or pooling type.", affects: "every trained number; without this list a mismatch cannot be attributed between architecture and recipe", resolution: "maintain the explicit table in 01_GRAPH_SPEC section 15; every value there is ours and is reported as such", fallback: "n/a"}
+  - {id: U-25, marked: UNKNOWN, blocking: false, item: "'adaptive freezing strategies'. Paper 2.2 says Stage 2 fine-tunes the query encoder 'with adaptive freezing strategies', but 2.6 states a single fixed freeze ('Only the query-side fuser and the ESSGNN module are updated'). Nothing anywhere says what is adaptive about it, or what varies.", affects: "Stage 2 optimisation", resolution: "implement the fixed freeze that 2.6 specifies, and record that 2.2's 'adaptive' is unimplemented because it is undefined", fallback: "n/a"}
+  - {id: U-26, marked: UNKNOWN, blocking: false, item: "whether f_h and f_x share a message. Paper 2.5 gives two independent MLPs over the same inputs (Eq. 2 and Eq. 3); Appendix C Eq. 10/13/14 computes ONE message m_ij = phi_e(...) and then applies phi_h(m_ij) and phi_x(m_ij) to it. That is a different parameterisation, not just different inputs, and the original EGNN follows the Appendix C form.", affects: "ESSGNN parameter count and what the coordinate head can see", resolution: "implementation follows 2.5 (two independent MLPs, metafind/models/essgnn.py f_h and f_x); recorded as a choice", fallback: "n/a"}
   - {id: U-23, marked: UNKNOWN, blocking: false, item: "what a query with all three modalities masked means. Paper 2.6 masks each modality INDEPENDENTLY at 30%, so 2.7% of queries carry no information at all, yet Eq. 5 still matches them against a gallery item.", affects: "Stage 1 training signal", resolution: "the literal reading is implemented (allow_empty=True); a flag forces at least one modality, and the choice is recorded", fallback: "n/a"}
   - {id: U-24, marked: UNKNOWN, blocking: false, item: "the similarity function. Eq. 5 and Eq. 7a/7b write sim(.,.) and never define it.", affects: "every loss and every retrieval ranking", resolution: "cosine, matching CLIP and ULIP convention; recorded as a choice", fallback: "n/a"}
   - {id: R-01, marked: RISK, item: "I-Design has not been verified to run", affects: "all of Tables 2 and 3", resolution: "trial-run it early -- cheap to check, expensive to discover late", fallback: "Tables 2/3 => BLOCKED_EVIDENCE"}

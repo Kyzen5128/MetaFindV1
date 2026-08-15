@@ -188,6 +188,25 @@ for g in plan["level_3_gates"]:
         CHECKS += 1
 
 
+# --- 8b. the dependency DAG must agree with the edge list ----------------
+# n09_build_splits kept `depends_on: n08_semantic_edges` for a whole round after
+# the Objaverse/ProcTHOR branches were split. The edges and the node's `reads`
+# were both corrected; this third declaration was not, so the machine-readable
+# dependency still said Stage 1 waits on Qwen semantic edges.
+edge_preds = defaultdict(set)
+for e in edges:
+    if e["from"] in nodes and e["to"] in nodes and e.get("kind") not in ("feedback", "error", "escalation"):
+        edge_preds[e["to"]].add(e["from"])
+
+for dep in spec["dependencies"]["dag"]:
+    n, declared = dep["node"], set(dep["depends_on"])
+    check(
+        f"dag matches edges for {n}",
+        declared == edge_preds[n],
+        f"depends_on {sorted(declared)} but incoming edges come from {sorted(edge_preds[n])}",
+    )
+
+
 # --- 9. execution order respects declared dependencies -------------------
 # n20 and n21 were once scheduled in the same layer while n21 depended on n20.
 layer_of: dict[str, int] = {}
@@ -236,6 +255,41 @@ for j in spec["join_policies"]:
             edge_groups[node] <= {grp["name"] for grp in j.get("groups", [])},
             f"incoming groups {sorted(edge_groups[node])} exceed the declared policy",
         )
+
+
+# --- 10b. no duplicate mapping keys anywhere in the YAML files -----------
+# L2-PC-ULIP-REF carried two `note:` keys. PyYAML keeps the last silently, so a
+# whole paragraph of justification was discarded at parse time -- invisible to
+# every check that reads the parsed document instead of the file.
+class _DupDetect(yaml.SafeLoader):
+    pass
+
+
+def _no_dupes(loader, node, deep=False):
+    seen: set = set()
+    for key_node, _ in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in seen:
+            FAILURES.append(
+                f"duplicate key `{key}` at line {key_node.start_mark.line + 1} "
+                f"of {getattr(loader, '_fname', '?')} -- YAML silently keeps the last"
+            )
+        seen.add(key)
+    return yaml.SafeLoader.construct_mapping(loader, node, deep)
+
+
+_DupDetect.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _no_dupes
+)
+
+for fname in ("graph_spec.yaml", "node_registry.yaml", "validation_plan.yaml"):
+    loader = _DupDetect((DOCS / fname).read_text())
+    loader._fname = fname
+    try:
+        loader.get_single_data()
+    finally:
+        loader.dispose()
+    CHECKS += 1
 
 
 # --- 11. UNKNOWN identifiers resolve to the registry ---------------------

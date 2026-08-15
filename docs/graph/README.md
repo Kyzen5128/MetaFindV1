@@ -14,7 +14,7 @@
 | 標記 | 意思 |
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
-| **[未定]** | 論文沒說，我們選了一個並記錄（累積 25 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**） |
+| **[未定]** | 論文沒說，我們選了一個並記錄（累積 27 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**） |
 | **[偏離]** | 與論文不同，必須在報告聲明（4 條，D-1…D-4） |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
@@ -40,7 +40,7 @@
 ### 一致性靠檢查，不靠讀
 
 ```bash
-python3 tools/check_graph.py      # 1,005 項結構檢查
+python3 tools/check_graph.py      # 1,000+ 項結構檢查
 ```
 
 這六份文件互相引用的東西太多，人工同步一定會漏。檢查器涵蓋：
@@ -59,7 +59,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | 3 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實測事實（F 系列）與架構決策（D 系列），**含論文的多處自相矛盾** |
 | 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：42 個 state channel、51 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
 | 5 | [`node_registry.yaml`](node_registry.yaml) | 33 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
-| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 48 個 L1、16 個 L2、7 個 gate、3 個 Required Audit |
+| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 48 個 L1、17 個 L2、7 個 gate、4 個 Required Audit |
 
 ## 一頁摘要
 
@@ -86,7 +86,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | **D-3** | 不重跑 6 個 baseline | 只能與論文公佈值比較，並註明協定不同 |
 | **D-4** | 不做人工評分 | Table 2 人工欄判 `INSUFFICIENT_EVIDENCE` |
 
-### 論文自身的三個矛盾
+### 論文自身的四個矛盾
 
 都不設 gate，改用 **Required Audit**（必跑、必留紀錄、**永不阻斷**）——
 因為設成 gate 之後，唯一「讓它變綠」的方法就是放寬判準，那等於沒有檢查。
@@ -96,6 +96,15 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | **RA-1** | §2.5 的 `h⁰ = Concat(x,t)` vs Appendix C 的「`h⁰` 對 SE(3) 不變」前提 | **失敗** |
 | **RA-2** | §2.5 的 `f_x → ℝ³` vs 證明需要 `φ_x` 為純量才能提出 `Q` | **失敗** |
 | **RA-3** | §3.4 的「fine-tune entire encoder」 vs 單卡 24GB | **不可行**，縮小 claim |
+| **RA-4** | §2.5／§3.4 宣稱 ESSGNN 解決 GAT 對 translation **與 scaling** 的敏感，但 SE(3) **不含縮放** | **失敗** |
+
+**RA-4 是這次逐字重讀才發現的。** §2.5 的動機是
+"GATs are highly sensitive to global translation **and scaling**"，
+§3.4 的 takeaway 也重複一次。但論文能證的、也只證了 SE(3) 等變 ——
+**縮放不在 SE(3) 裡**，而且架構上不可能做到：`x → s·x` 時
+`‖x_i − x_j‖²` 變成 `s²‖x_i − x_j‖²`，每一條訊息都會變。
+**它的解法只覆蓋了它自己陳述的動機的一半。**
+RA-1／RA-2 是式子寫錯，RA-4 是 claim 開太大 —— 兩者都只能記錄、不能擋。
 
 ### 七個 gate
 
@@ -111,7 +120,7 @@ G1 來源有效 → G2 點雲健全 → G3 物件語料 → G4 gallery 凍結 �
 - **G6**：`stage2_protocol.status` 未 `resolved`（U-08a／U-08b）或 `scene_splits` 有洩漏之前，Stage 2 不准訓練。
 - **G7**：`composition_protocol.status` 未 `resolved`（U-18／U-21）之前，不准合成場景。**Table 1 不經過它。**
 
-64 個測試對 7 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
+65 個測試對 7 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
 
 `G2` 這一輪**縮小了判準**：它原本要求自取樣點雲必須與 ULIP 官方釋出的點雲一致，
 但論文從未說 MetaFind 沿用 ULIP 預取樣的點雲，而 Stage 1 本來就會 fine-tune point encoder。
@@ -144,8 +153,22 @@ ProcTHOR 只提供 metadata 與座標，沒有渲染圖也沒有點雲，所以 
 論文一項都沒定義，而這個選擇會改變後面每一次檢索。
 
 **U-21：Algorithm 1 的 `G_0` 與 `{Q_1..Q_N}` 從哪來？**
-§3.3 說 200 個場景來自 **I-Design 的生成管線**，但 graph 原本沒有這條 channel，
-`n16` 讀的是 **ProcTHOR 房屋** —— 房屋是已完成的佈局，不是生成請求。
+
+論文這裡自己說了兩件不見得相容的事：
+
+```
+§3.1  Scene-level layout-aware retrieval is conducted on ProcTHOR-10K
+§3.3  evaluate ... on the scene generation pipeline of I-Design
+      on a set of 200 randomly sampled scenes
+```
+
+讀法 A：200 個場景抽自 ProcTHOR-10K，再送進 I-Design 的管線。
+讀法 B：200 個場景由 I-Design 從文字生成，ProcTHOR 只用於 Stage 2 訓練。
+
+**上一輪我把讀法 B 當成事實寫死了，那是過度修正。** 兩種讀法都還開著。
+但無論哪一種，graph 原本**根本沒有評估輸入這條 channel**，
+而 `n16` 讀的是 ProcTHOR 房屋 —— 讀法 B 下那是錯的資料集，
+讀法 A 下那仍是錯的東西（Algorithm 1 要的是生成請求，不是完成的佈局）。
 **Table 2 的資料流從來沒有閉合。** 現在由 `G7_composition_protocol` 擋著。
 
 Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。

@@ -223,20 +223,7 @@ Objaverse uid    : 867dfc95e96a4987...                          (46,052 個)
 自己的 semantic metadata（§2.3 說它有提供），拆成獨立的 `procthor_object_text` channel。
 **[未定 U-12]** metadata 怎麼變成句子，論文沒說。
 
-**[未定 U-20] 句子再由哪個 encoder 變成 `t_i`，論文也沒說。**
-§2.5 只寫 `t_i ∈ ℝ^d`、稱它 "a text-derived feature"。文中確實提到一個
-「frozen text encoder (e.g. CLIP or BERT)」，但那句話講的是**語意邊** `e_ij`，
-不是 `t_i` —— 而且連那句都是 "e.g."。兩者是否同一個 encoder，論文從未說明。
-這決定了 `d` 的值，也決定 `f_h : ℝ^(2d+1+e) → ℝ^d` 的實際寬度。記錄選擇與 `d`。
-
-**[未定 U-19] 邊是有向還是無向，論文沒說。**
-§2.3 只講有 physical 與 semantic 兩種邊，沒說方向性，也沒說
-`relation(A, B)` 是否等於 `relation(B, A)`。這會改變 message passing ——
-有向的 support 邊與對稱的 support 邊，`h` 的更新結果不同。
-現行 `L1-SCENE-SUPPORT` 斷言「杯在桌下 → 雙向 support 邊」，
-**那是我們的慣例，不是論文要求**，測試留著是為了鎖住慣例不漂移。
-
-**改為**：
+cache key **改為**：
 ```
 key = sha256(desc_i, desc_j, prompt_version, llm_model, text_encoder_version)
 ```
@@ -245,6 +232,23 @@ key = sha256(desc_i, desc_j, prompt_version, llm_model, text_encoder_version)
 **[未定 U-06] 語意邊要對哪些物件對，論文沒說。**
 §2.3 只寫「prompting an LLM on object pairs」—— 全部對？只有物理鄰居？某個 kNN？
 這直接影響 ESSGNN 的輸入。選一個並記錄，且列為報告中的未定項。
+
+**[未定 U-20] 句子再由哪個 encoder 變成 `t_i`，論文也沒說。**
+§2.5 只寫 `t_i ∈ ℝ^d`、稱它 "a text-derived feature"。文中確實提到一個
+「frozen text encoder (e.g. CLIP or BERT)」，但那句話講的是**語意邊** `e_ij`，
+不是 `t_i` —— 而且連那句都是 "e.g."。兩者是否同一個 encoder，論文從未說明。
+這決定了 `d` 的值，也決定 `f_h : ℝ^(2d+1+e) → ℝ^d` 的實際寬度。記錄選擇與 `d`。
+
+（順帶：Abstract 說 ESSGNN 捕捉 "spatial relationships and **object appearance
+features**"，但 §2.5 說 `t_i` 是 **text-derived**。兩句不一致，也支持
+「`t_i` 到底怎麼來」確實沒鎖。）
+
+**[未定 U-19] 邊是有向還是無向，論文沒說。**
+§2.3 只講有 physical 與 semantic 兩種邊，沒說方向性，也沒說
+`relation(A, B)` 是否等於 `relation(B, A)`。這會改變 message passing ——
+有向的 support 邊與對稱的 support 邊，`h` 的更新結果不同。
+現行 `L1-SCENE-SUPPORT` 斷言「杯在桌下 → 雙向 support 邊」，
+**那是我們的慣例，不是論文要求**，測試留著是為了鎖住慣例不漂移。
 
 **座標不正規化。** 場景座標保持原始世界座標。
 
@@ -317,13 +321,16 @@ ULIP-2 原本的設計也是凍結 CLIP、訓練 point encoder，所以主線等
 
 Loss 為 Eq.5，**單向 query→gallery**。ULIP 現成的 `ULIPWithImageLoss` 是單塔 tri-modal，不能用。
 
-**[未定 U-13] Full model 用哪一種 fusion，論文沒說。**
+**[未定 U-13] Full model 用哪一種 fusion，論文沒說 —— 而且它給了兩份不同的清單。**
 
-§2.4 只列出五種：
+> **§2.2**：integrated via a fusion layer (e.g., **mean pooling, an MLP, or a
+> Transformer-based module**)　←　三種
+>
+> **§2.4**：combines these modality embeddings via one of several strategies,
+> such as **mean pooling, MLP, masked MLP, gated fusion, or Transformer-based
+> fusion**　←　五種
 
-> combines these modality embeddings via one of several strategies, such as
-> **mean pooling, MLP, masked MLP, gated fusion, or Transformer-based fusion**
-
+**兩份清單自己就不一致**（§2.4 多了 masked MLP 與 gated）。
 「such as」+「one of several」= 它在描述一個**選項集合**，不是在指定 MetaFind 用哪個。
 能從 Table 3 推出來的只有排除：
 
@@ -366,7 +373,8 @@ Stage 1 完成後凍結 gallery 塔，對全部 admitted 資產編碼。
 壞掉的索引一旦 promote，事後分不出哪些數字被污染。
 
 驗證判準：維度正確、數量等於 manifest、無 NaN／零向量、
-**抽 1000 筆自我檢索 recall@1 = 1.0**（撈不回自己就是索引壞了）。
+**抽 1000 筆自我檢索，目標相似度 == 最大相似度且目標在 argmax tie set 內**
+（撈不回自己就是索引壞了；`recall@1 = 1.0` 不是 tie-safe —— 兩筆相同的 embedding 會讓 argmax 回傳另一個 id）。
 
 ### Step 2.3　Stage 2：佈局感知微調
 
@@ -632,8 +640,6 @@ IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Ta
 
 ## 未定項總表
 
-| id | 內容 |
-|---|---|
 完整登記表在 `01_GRAPH_SPEC.md` §15，機器可讀版在 `graph_spec.yaml` 的 `risks_unknowns`；
 `G5_report_release` **逐項**檢查處置（不得用區間表示）。
 
@@ -664,3 +670,7 @@ IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Ta
 | U-20 | `t_i` 由哪個 encoder 產生 | ESSGNN 輸入與 `d` |
 | **U-21** | **Algorithm 1 的 `G_0` 與 query list 從哪來**（**阻斷**） | **Table 2 全部** |
 | U-22 | **訓練超參數論文一個都沒給** | 所有訓練結果 |
+| U-23 | 三個模態同時被遮罩時代表什麼（獨立 30% → 2.7% 的 query 全空） | Stage 1 訓練訊號 |
+| U-24 | `sim(·,·)` 從未定義 | 所有 loss 與排序 |
+| U-25 | §2.2 的「adaptive freezing strategies」全文沒有定義 | Stage 2 最佳化 |
+| U-26 | `f_h`／`f_x` 是否共用一條訊息（§2.5 vs Appendix C） | ESSGNN 參數化 |
