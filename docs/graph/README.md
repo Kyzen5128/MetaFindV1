@@ -219,7 +219,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | **U-15** | 結構化標註怎麼序列化成 encoder 的輸入字串 | 只給欄位，沒給格式 |
 | **U-16** | query / gallery 兩塔是否共享權重 | 說「dedicated query encoder」、說兩者都訓練，但沒說共享關係 |
 
-### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 11 個**
+### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 12 個**
 
 規格完整不等於管線存在。這張表是為了讓讀者不會把前者讀成後者
 （第十九輪剛因為同一個理由修過 `L1-STAGE1-PROTOCOL-APPLIED` 的措辭）。
@@ -239,7 +239,8 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | `n11b_stage2_gallery_index` | **只有規格** | U-08a 判定後新增：用凍結的 Stage 1 塔編碼 ProcTHOR 資產，Stage 2 專屬索引 |
 | `n15a_resolve_eval_scene_protocol` | **只有規格** | U-27：Table 2 的 200 個 I-Design 請求，**仍需人決定** |
 | `n09_build_splits` | **可執行** | `metafind/data/splits.py`。物件 80/20 ＋ **U-09 的兩種評估協定並行**（gallery=test 與 gallery=full），gallery_size 由切分推導、不寫死；18 條測試 |
-| 其餘 **十八個**節點 | **只有規格** | 無 |
+| `n06_encode_text_image` | **可執行** | `metafind/data/encode_text_image.py`。凍結 bigG 編碼文字與 11 視角；**11 個 per-view 向量全部保留**（只存聚合後的會把 U-14 烤死在 46,052 個檔案裡）；token 數實測不假設 |
+| 其餘 **十七個**節點 | **只有規格** | 無 |
 
 另有兩塊不對應任何節點、但已可執行：
 

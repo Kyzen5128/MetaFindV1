@@ -96,14 +96,14 @@ SE(3) 等變性 smoke、determinism、儲存區與快取落點、ULIP-2 建模�
 
 ```bash
 python -m metafind.data.download                    # 全部
-python -m metafind.data.download --only glbs        # 只抓 mesh（最慢，~216 GB）
+python -m metafind.data.download --only glbs        # 只抓 mesh（最慢，實測 328 GB）
 ```
 
 | 項目 | 大小 | 用途 |
 |---|---|---|
 | Objaverse-LVIS manifest | 13 MB | 定義 46,052 個資產 |
 | ProcTHOR-10K → `procthor_dataset` | 395 MB | **必須進 graph state**，否則 G1 無從檢查它 |
-| Objaverse-LVIS GLB | ~216 GB | **保留不刪**，見下 |
+| Objaverse-LVIS GLB | **實測 328 GB** | **保留不刪**，見下。先前寫 ~216 GB，那是下載前的估計，少報 52% |
 | ULIP-2 checkpoint | 384 MB | PointBERT／`pc_projection` 的**初始權重**（Stage 1 會繼續訓練它們），以及凍結的 CLIP 側 |
 | ViT-bigG-14 | 9.5 GB | ULIP-2 的 text/image 編碼器 |
 | Qwen2.5-VL-7B | 16.6 GB | 取代 GPT-4o |
