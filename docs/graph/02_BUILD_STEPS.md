@@ -250,6 +250,36 @@ Objaverse uid    : 867dfc95e96a4987...                          (46,052 個)
 自己的 semantic metadata（§2.3 說它有提供），拆成獨立的 `procthor_object_text` channel。
 **[未定 U-12]** metadata 怎麼變成句子，論文沒說。
 
+**[實測 2026-08-17] 目前的模板是類別層級，不是實例層級。**
+`object_text()` 回傳 `f"a {humanise(category)}"`，而 category 來自 ProcTHOR
+物件 id 的第一段。實測結果：
+
+```
+1,467 個 assetId  ->  93 種不重複描述
+最多重複：74 個不同資產都叫 "a side table"（Chair_1..Chair_56 -> "a chair"）
+不重複的描述配對：4,242（理論上限 93x92/2 = 4,278，也就是 99.2% 的類別配對
+                      在 12,000 個房子裡至少共現過一次）
+```
+
+**三個後果，都要記錄而不是只記在腦裡：**
+
+1. **`t_i` 只能分辨 93 種節點。** ESSGNN 看不出兩張不同的椅子有什麼差別。
+   這是 U-12 這個選擇的直接結果，不是 bug —— ProcTHOR 的資產本來就是類別的變體，
+   而且它沒有提供 per-instance 描述。但**報告裡不能寫成 ESSGNN 分辨了 1,467 個資產**。
+2. **n08 因此很便宜。** 4,242 條而不是十萬條，用 n05 實測的 29.1/min 約 **2.4 小時**。
+   先前 C1 討論時估的「鄰域讀法約 13 萬條」是按 **assetId 配對**算的；
+   `collect_pairs` 是按**描述文字**去重，所以真實成本低一個數量級。
+   那個估算沒錯，但單位不同，不可混用。
+3. **Stage 2 的 text 模態也是類別層級。** image 和 point cloud 才帶實例身分
+   （n07b 給每個資產自己的 11 視角與點雲）。所以 query 仍能分辨 1,467 個資產，
+   但**只靠 text 不行**。Table 3 的 "Text Only" 是 Objaverse 物件級任務
+   （n05 的 Qwen 標註是 per-asset 的），不受此限制 —— 兩者不要混談。
+
+**還有一條路沒走：**用 n07b 已經渲染好的 11 視角，跑 VLM 產生 per-asset 描述
+（做法跟 n05 對 Objaverse 一樣），可得到 1,467 種不重複文字。
+這會讓 `t_i` 變成實例層級，但**成本從 4,242 條變成 1,467 個資產標註 + 最多
+1,075,311 條配對**。尚未決定，登記為 U-12 的第二個讀法。
+
 cache key **改為**：
 ```
 key = sha256(desc_i, desc_j, prompt_version, llm_model, text_encoder_version)
