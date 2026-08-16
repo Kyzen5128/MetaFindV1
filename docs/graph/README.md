@@ -219,7 +219,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | **U-15** | 結構化標註怎麼序列化成 encoder 的輸入字串 | 只給欄位，沒給格式 |
 | **U-16** | query / gallery 兩塔是否共享權重 | 說「dedicated query encoder」、說兩者都訓練，但沒說共享關係 |
 
-### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 16 個**
+### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 17 個**
 
 規格完整不等於管線存在。這張表是為了讓讀者不會把前者讀成後者
 （第十九輪剛因為同一個理由修過 `L1-STAGE1-PROTOCOL-APPLIED` 的措辭）。
@@ -242,7 +242,8 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | `n06_encode_text_image` | **可執行** | `metafind/data/encode_text_image.py`。凍結 bigG 編碼文字與 11 視角；**11 個 per-view 向量全部保留**（只存聚合後的會把 U-14 烤死在 46,052 個檔案裡）；token 數實測不假設 |
 | `n10_train_stage1` | **可執行** | `metafind/train/stage1.py`。凍結 CLIP 的向量走 n06 快取、**點雲即時編碼**（PointBERT 在 optimizer 裡，快取等於變成 fuser-only ablation）；checkpoint 只存 requires_grad 參數（F27）；17 條測試 |
 | `n11` ＋ `n12` ＋ `n11b` | **可執行** | `metafind/train/gallery_index.py`。三個節點同一支程式，因為它們是同一個操作套在不同語料上，而**不能漂移的正是編碼器** —— 拆開會有三份「載入、凍結、雜湊」，而那個雜湊就是重點。Stage 1 的 Objaverse 索引與 Stage 2 的 ProcTHOR 索引**永不合併** |
-| 其餘 **十五個**節點 | **只有規格** | 無 |
+| `n09b_resolve_stage2_protocol` | **可執行** | `metafind/models/resolve_stage2.py`。把 U-08a/b/d/e 與四個 ESSGNN 選擇寫成 n13 讀得到的形式，並在寫入前**用 `ESSGNNConfig.from_protocol` 驗一遍** —— 一個 Literal 打錯要在一秒內失敗，不是等 Stage 1 訓練完 |
+| 其餘 **十四個**節點 | **只有規格** | 無 |
 
 另有兩塊不對應任何節點、但已可執行：
 
