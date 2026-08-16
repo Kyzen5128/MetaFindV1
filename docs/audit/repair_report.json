@@ -1,0 +1,15 @@
+{
+ "metafind_paper.md": {},
+ "ulip2_paper.md": {
+  "t": 13,
+  "f": 6,
+  "r(right)": 2
+ },
+ "egnn_paper.md": {
+  "t": 112,
+  "f": 1,
+  "a": 2,
+  "r(right)": 6,
+  "bare:ext{": 1
+ }
+}

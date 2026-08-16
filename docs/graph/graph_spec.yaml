@@ -417,6 +417,26 @@ state:
       merge: upsert_by_key
       lifetime: persistent
 
+    - name: procthor_node_embeddings
+      type: "{uri, sha256, asset_ids, embedding_dim, text_encoder_version, n_assets}"
+      writers: [n08_semantic_edges]
+      readers: [G6_stage2_ready, n13_train_stage2, n18_train_ablations]
+      merge: write_once
+      lifetime: persistent
+      note: >
+        [U-20] ESSGNN's node feature t_i, as a vector. The decision that t_i uses
+        the SAME frozen text encoder as e_ij was recorded and had no artifact --
+        `procthor_object_text` holds the strings and nothing held the
+        embeddings, so n13 had a node feature it could not obtain. Third time
+        this shape has appeared: a resolution that reads as complete and leaves
+        the trainer with nothing to read.
+        Written by n08 rather than a node of its own because n08 already loads
+        that encoder for the edge sentences, and U-20 pins t_i to it precisely
+        so the two live in one space. Encoding them anywhere else would make
+        "the same encoder" a claim rather than a fact.
+        NOT text_image_embeddings: that is Objaverse, ViT-bigG-14, 1280-d --
+        wrong corpus and wrong encoder on both counts.
+
     - name: sem_edge_cache
       type: "map[hash -> {sentence, embedding_uri}]"
       writers: [n08_semantic_edges]
@@ -1131,7 +1151,7 @@ edges:
   - {id: e08b, from: n07_scene_graphs, to: n07b_procthor_asset_modalities, kind: data, guard: "", join_group: default, carries: [scene_graphs, procthor_object_text], rationale: "n07b needs the asset set the houses actually use, which is n07's output, not the raw JSONL."}
   - {id: e08c, from: n07b_procthor_asset_modalities, to: n11b_stage2_gallery_index, kind: data, guard: "", join_group: default, carries: [procthor_asset_modalities]}
   - {id: e08d, from: n10_train_stage1, to: n11b_stage2_gallery_index, kind: data, guard: "", join_group: default, carries: [stage1_ckpt], rationale: "2.6 freezes the gallery encoder DURING Stage 2, so the index must be built by Stage 1's FINAL weights. Encoding earlier would pin embeddings the deployed model never produces."}
-  - {id: e08e, from: n11b_stage2_gallery_index, to: G6_stage2_ready, kind: data, guard: "", join_group: default, carries: [stage2_gallery_index, procthor_asset_modalities, stage1_ckpt], rationale: "G6 verifies the decision was IMPLEMENTED, not merely recorded: no index, no Stage 2."}
+  - {id: e08e, from: n11b_stage2_gallery_index, to: G6_stage2_ready, kind: data, guard: "", join_group: default, carries: [stage2_gallery_index, procthor_asset_modalities, procthor_node_embeddings, stage1_ckpt], rationale: "G6 verifies the decision was IMPLEMENTED, not merely recorded: no index, no Stage 2."}
   - {id: e08, from: n07_scene_graphs, to: n08_semantic_edges, kind: data, guard: "", join_group: default, carries: [scene_graphs, procthor_object_text]}
   - {id: e09a, from: n05_annotate, to: n05b_resolve_stage1_encoding, kind: data, guard: "", join_group: default, carries: [objaverse_annotations, renders]}
   - {id: e09, from: n05b_resolve_stage1_encoding, to: n06_encode_text_image, kind: data, guard: "stage1_encoding_protocol.actual_clip_train_scope == 'frozen'", join_group: default, carries: [objaverse_annotations, renders, stage1_encoding_protocol], rationale: "n06 cannot start before U-14/U-15/U-34 are answered: they decide what it should produce. Under `trainable` n06 does not run at all -- a cache is by construction the output of a network nobody is updating, so producing one would be 2-4 h spent on an artifact that reading would silently turn the run back into the frozen variant."}

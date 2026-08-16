@@ -109,6 +109,8 @@ ENCODE_BATCH = 256
 SENTENCES_PATH = paths.OUTPUTS / "sem_edge_sentences.jsonl"
 EMBEDDINGS_PATH = paths.OUTPUTS / "sem_edge_embeddings.npz"
 CACHE_PATH = paths.OUTPUTS / "sem_edge_cache.json"
+NODE_EMB_PATH = paths.OUTPUTS / "procthor_node_embeddings.npz"
+NODE_EMB_RECORD = paths.OUTPUTS / "procthor_node_embeddings.json"
 
 
 # --- phase 1: which distinct pairs exist ----------------------------------
@@ -258,6 +260,15 @@ def encode_sentences(sentences: list[str], model_id: str = TEXT_ENCODER) -> np.n
     return embeddings
 
 
+def _write_json(path, obj) -> None:
+    tmp = path.with_suffix(path.suffix + ".part")
+    with tmp.open("w") as fh:
+        json.dump(obj, fh)
+        fh.flush()
+        os.fsync(fh.fileno())
+    tmp.replace(path)
+
+
 # --- phase 4: assemble the cache ------------------------------------------
 
 def build_cache(settled: dict[str, dict], embeddings_uri: str) -> dict[str, dict]:
@@ -351,6 +362,29 @@ def main() -> int:
     )
 
     cache = build_cache(settled, str(EMBEDDINGS_PATH))
+
+    # [U-20] `procthor_node_embeddings`: ESSGNN's t_i, encoded HERE because this
+    # is the node that already holds the encoder e_ij uses. Encoding them
+    # elsewhere would make "the same encoder" a claim rather than a fact -- and
+    # the two vectors are concatenated inside f_h, so a mismatch would put node
+    # and edge features in unrelated spaces with nothing to signal it.
+    node_texts = {a: rec["text"] for a, rec in text_map.items()}
+    node_ids = sorted(node_texts)
+    node_vecs = encode_sentences([node_texts[a] for a in node_ids])
+    tmp_np = NODE_EMB_PATH.with_suffix(".part.npz")
+    np.savez_compressed(tmp_np, ids=np.array(node_ids),
+                        embeddings=node_vecs.astype(np.float32))
+    tmp_np.replace(NODE_EMB_PATH)
+    _write_json(NODE_EMB_RECORD, {
+        "uri": str(NODE_EMB_PATH),
+        "sha256": __import__("hashlib").sha256(NODE_EMB_PATH.read_bytes()).hexdigest(),
+        "asset_ids": node_ids,
+        "embedding_dim": int(node_vecs.shape[1]),
+        "text_encoder_version": TEXT_ENCODER_VERSION,
+        "n_assets": len(node_ids),
+    })
+    print(f"{len(node_ids):,} node embeddings (t_i) at {node_vecs.shape[1]}-d "
+          f"-> {NODE_EMB_PATH}", flush=True)
 
     tmp = CACHE_PATH.with_suffix(".json.part")
     with tmp.open("w") as fh:

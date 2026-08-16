@@ -1,0 +1,161 @@
+"""Tests for n13_train_stage2's pure half.
+
+n13 cannot be smoke-tested end to end yet: it needs stage1_ckpt (n10 has not
+run) and sem_edge_cache (n08 has not run). What IS testable is the part that
+encodes the decisions -- the batcher that enforces U-08e and the context graph
+that enforces U-08d -- and those are the two that would fail silently.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from metafind.train.stage2 import (
+    build_context_graph,
+    unique_positive_batches,
+)
+
+
+def samples(pattern: list[str]) -> list[tuple[str, int, str]]:
+    """`pattern` gives each sample's assetId; house and index are incidental."""
+    return [(f"h{i//5:03d}", i, a) for i, a in enumerate(pattern)]
+
+
+# --- U-08e: no duplicate positive in a batch -------------------------------
+
+def test_no_batch_contains_the_same_asset_twice():
+    """[U-08e] A frozen encoder gives one assetId ONE embedding, so a duplicate
+    is a negative bit-identical to the positive: the gradient would ask the
+    model to separate two identical vectors."""
+    s = samples(["A", "B", "C", "A", "B", "C", "A", "D"])
+    for batch in unique_positive_batches(s, 3, np.random.default_rng(0)):
+        assets = [s[i][2] for i in batch]
+        assert len(assets) == len(set(assets)), assets
+
+
+def test_it_holds_on_the_real_frequency_shape():
+    """The measured corpus is 665,320 instances over 1,467 assets, so a few
+    assets recur thousands of times. A batcher that works on a uniform pattern
+    and not on a skewed one would pass a weaker test than reality."""
+    skewed = ["A"] * 60 + ["B"] * 30 + [f"X{i}" for i in range(40)]
+    s = samples(skewed)
+    for batch in unique_positive_batches(s, 16, np.random.default_rng(1)):
+        assets = [s[i][2] for i in batch]
+        assert len(assets) == len(set(assets))
+
+
+def test_every_sample_is_used_not_dropped():
+    """Deferring a colliding sample rather than discarding it. Dropping would
+    silently reweight the corpus toward rare assets -- a different experiment,
+    reported under the same name."""
+    s = samples(["A", "B", "A", "B", "A", "C"])
+    used = [i for batch in unique_positive_batches(s, 2, np.random.default_rng(2))
+            for i in batch]
+    assert sorted(used) == list(range(len(s)))
+
+
+def test_a_single_asset_yields_single_sample_batches():
+    """The degenerate case: if every sample shares one asset, uniqueness forces
+    batch size 1 rather than an infinite loop."""
+    s = samples(["A"] * 5)
+    batches = unique_positive_batches(s, 4, np.random.default_rng(3))
+    assert all(len(b) == 1 for b in batches)
+    assert sum(len(b) for b in batches) == 5
+
+
+def test_batching_is_seeded():
+    s = samples(["A", "B", "C", "D", "E", "F", "A", "B"])
+    a = unique_positive_batches(s, 3, np.random.default_rng(7))
+    b = unique_positive_batches(s, 3, np.random.default_rng(7))
+    assert a == b
+
+
+def test_a_different_seed_gives_a_different_order():
+    s = samples([f"X{i}" for i in range(40)])
+    a = unique_positive_batches(s, 8, np.random.default_rng(1))
+    b = unique_positive_batches(s, 8, np.random.default_rng(2))
+    assert a != b
+
+
+# --- U-08d: the target leaves the graph ------------------------------------
+
+def graph() -> dict:
+    return {
+        "nodes": [{"index": i, "asset_id": f"A{i}", "position": [float(i), 0.0, 0.0]}
+                  for i in range(4)],
+        "sem_edge_ids": [[0, 1], [1, 2], [2, 3], [0, 3]],
+    }
+
+
+def data_bits(dim: int = 4):
+    text_map = {f"A{i}": f"a thing {i}" for i in range(4)}
+    text_map["_meta"] = {"prompt_version": 1, "llm_model": "m",
+                         "text_encoder_version": "v"}
+    return {}, text_map, np.full(dim, 0.5, dtype=np.float32)
+
+
+def test_the_target_node_is_absent_from_the_context():
+    """[U-08d] The load-bearing one. Leaving the target in lets ESSGNN read the
+    answer off its own input: the loss falls and nothing distinguishes that from
+    learning."""
+    sem, text, tok = data_bits()
+    keep, pos, edge_index, edge_attr = build_context_graph(graph(), 2, 4, sem, text, tok)
+    assert [n["index"] for n in keep] == [0, 1, 3]
+    assert pos.shape == (3, 3)
+
+
+def test_every_edge_touching_the_target_is_removed():
+    sem, text, tok = data_bits()
+    _, _, edge_index, _ = build_context_graph(graph(), 2, 4, sem, text, tok)
+    # [1,2] and [2,3] go; [0,1] and [0,3] remain, each stored both ways
+    assert edge_index.shape[1] == 4
+
+
+def test_node_indices_are_remapped_not_left_with_holes():
+    """ESSGNN indexes edges positionally. A hole would make every edge past the
+    target point at the wrong node, and every shape would still be valid."""
+    sem, text, tok = data_bits()
+    keep, _, edge_index, _ = build_context_graph(graph(), 1, 4, sem, text, tok)
+    assert edge_index.max() < len(keep)
+    assert set(edge_index.flatten().tolist()) <= set(range(len(keep)))
+
+
+def test_edges_are_stored_symmetrically():
+    """[U-19] Matching what n07 wrote. A directed reading would ask ESSGNN for
+    edges the scene graphs do not contain."""
+    sem, text, tok = data_bits()
+    _, _, edge_index, _ = build_context_graph(graph(), 2, 4, sem, text, tok)
+    pairs = set(zip(edge_index[0].tolist(), edge_index[1].tolist()))
+    assert all((b, a) in pairs for a, b in pairs)
+
+
+def test_a_missing_semantic_edge_uses_the_token_not_zeros():
+    """[U-30] f_h's width is fixed so the slots need filling, and zero is a
+    valid point in the space -- indistinguishable from a real relation."""
+    sem, text, tok = data_bits()
+    _, _, _, edge_attr = build_context_graph(graph(), 2, 4, sem, text, tok)
+    assert edge_attr.shape[1] == 4
+    assert np.abs(edge_attr).sum() > 0, "the missing-edge fill was all zeros"
+    assert np.allclose(edge_attr[0], tok)
+
+
+def test_edge_attr_rows_match_edge_count():
+    """A mismatch here is a silent misalignment: ESSGNN would pair edge k with
+    attribute k and both arrays would look fine."""
+    sem, text, tok = data_bits()
+    for target in range(4):
+        _, _, edge_index, edge_attr = build_context_graph(
+            graph(), target, 4, sem, text, tok)
+        assert edge_attr.shape[0] == edge_index.shape[1]
+
+
+def test_removing_every_neighbour_leaves_an_empty_edge_set_not_a_crash():
+    g = {"nodes": [{"index": 0, "asset_id": "A0", "position": [0.0, 0.0, 0.0]},
+                   {"index": 1, "asset_id": "A1", "position": [1.0, 0.0, 0.0]}],
+         "sem_edge_ids": [[0, 1]]}
+    sem, text, tok = data_bits()
+    keep, _, edge_index, edge_attr = build_context_graph(g, 1, 4, sem, text, tok)
+    assert len(keep) == 1
+    assert edge_index.shape == (2, 0)
+    assert edge_attr.shape == (0, 4)

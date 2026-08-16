@@ -115,7 +115,7 @@ def unique_positive_batches(samples: list[tuple[str, int, str]], batch_size: int
     rare assets, which is a different experiment.
     """
     order = rng.permutation(len(samples))
-    pending, batches, current, seen = list(order), [], [], set()
+    pending, batches, current, seen = [int(i) for i in order], [], [], set()
     while pending:
         deferred = []
         for idx in pending:
@@ -123,17 +123,21 @@ def unique_positive_batches(samples: list[tuple[str, int, str]], batch_size: int
             if asset in seen:
                 deferred.append(idx)
                 continue
-            current.append(int(idx))
+            current.append(idx)
             seen.add(asset)
             if len(current) == batch_size:
                 batches.append(current)
                 current, seen = [], set()
-        if not deferred:
-            break
-        if len(deferred) == len(pending) and not current:
-            # Everything left collides with everything left, which can only
-            # happen if fewer distinct assets remain than the batch needs.
-            break
+        # A pass that placed NOTHING means every remaining sample collides with
+        # the batch being filled. Flushing it short and clearing `seen` is what
+        # makes progress; without this the loop spins forever on a corpus where
+        # one asset dominates -- MEASURED: five samples of one asset hung the
+        # test suite until it was killed at 120 s.
+        if len(deferred) == len(pending):
+            if not current:
+                break
+            batches.append(current)
+            current, seen = [], set()
         pending = deferred
     if current:
         batches.append(current)
@@ -182,8 +186,7 @@ def _edge_key(a: str, b: str, text_map: dict) -> str:
 
 
 def encode_query(model, backbone, graph: dict, target_index: int, asset_id: str,
-                 drop_layout: bool, device: str, edge_dim: int,
-                 sem_cache: dict, text_map: dict, missing_token):
+                 drop_layout: bool, device: str, data: "Stage2Data"):
     """One leave-one-out query: the target's modalities plus its scene context.
 
     The target is removed from the graph here and nowhere else, so the removal
@@ -194,7 +197,7 @@ def encode_query(model, backbone, graph: dict, target_index: int, asset_id: str,
     import torch
     from PIL import Image
 
-    rec = modalities[asset_id]
+    rec = data.modalities[asset_id]
     with torch.no_grad():
         # The query encoders are frozen in Stage 2 (2.6); only the fuser and
         # the ESSGNN move, so these three cost no graph.
@@ -210,10 +213,11 @@ def encode_query(model, backbone, graph: dict, target_index: int, asset_id: str,
     layout = None
     if not drop_layout:
         keep, pos, edge_index, edge_attr = build_context_graph(
-            graph, target_index, edge_dim, sem_cache, text_map, missing_token)
-        if keep:
+            graph, target_index, data.edge_dim, data.sem_cache,
+            data.text_map, data.missing_token)
+        if keep and edge_index.shape[1] > 0:
             node_feat = torch.stack([
-                torch.from_numpy(text_vectors[str(n["asset_id"])]) for n in keep
+                torch.from_numpy(data.node_vectors[str(n["asset_id"])]) for n in keep
             ]).to(device)
             layout = model.query.encode_layout(
                 node_feat,
@@ -226,6 +230,59 @@ def encode_query(model, backbone, graph: dict, target_index: int, asset_id: str,
     # target_eligibility required one. `present=None` means all three.
     return model.query(embeds, present=None, layout=layout,
                        drop_layout=None)[0]
+
+
+class Stage2Data:
+    """Everything the trainer reads, loaded once and passed explicitly.
+
+    Explicit rather than module-level because the first draft of encode_query
+    reached for `modalities` and `text_vectors` as free names, and Python was
+    happy to compile it -- an AST scan of the function's free variables is what
+    found them, not the interpreter.
+    """
+
+    def __init__(self, device: str) -> None:
+        import numpy as np
+
+        self.modalities = {}
+        for path in sorted(paths.PROCTHOR_MODALITIES.glob("*.json")):
+            rec = json.loads(path.read_text())
+            self.modalities[rec["asset_id"]] = rec
+
+        node = json.loads((paths.OUTPUTS / "procthor_node_embeddings.json").read_text())
+        arr = np.load(node["uri"])
+        self.node_vectors = {a: v for a, v in
+                             zip(arr["ids"].tolist(), arr["embeddings"])}
+        self.edge_dim = int(node["embedding_dim"])
+
+        cache = json.loads((paths.OUTPUTS / "sem_edge_cache.json").read_text())
+        emb = np.load(paths.OUTPUTS / "sem_edge_embeddings.npz")
+        vecs = emb["embeddings"]
+        self.sem_cache = {}
+        for key, entry in cache["entries"].items():
+            if entry.get("degraded") or entry.get("embedding_uri") is None:
+                continue
+            self.sem_cache[key] = vecs[int(entry["embedding_uri"].rsplit("#", 1)[1])]
+
+        text = json.loads((paths.OUTPUTS / "procthor_object_text.json").read_text())
+        self.text_map = {a: rec["text"] for a, rec in text.items()}
+        self.text_map["_meta"] = {
+            "prompt_version": cache["prompt_version"],
+            "llm_model": cache["llm_model"],
+            "text_encoder_version": cache["text_encoder_version"],
+        }
+
+        # [U-30] The learned missing-edge token. NOT zeros -- a zero vector is a
+        # valid point in the space and indistinguishable from a real relation.
+        # Seeded so a rerun sees the same token; it is a parameter of the run,
+        # not of the model, until n13 learns one.
+        self.missing_token = np.random.default_rng(0).normal(
+            scale=0.02, size=self.edge_dim).astype(np.float32)
+
+    def graphs_for(self, house_ids) -> dict:
+        return {h: json.loads((paths.SCENE_GRAPHS / f"{h}.json").read_text())
+                for h in house_ids
+                if (paths.SCENE_GRAPHS / f"{h}.json").exists()}
 
 
 def trainable_state_dict(model) -> dict:
@@ -286,7 +343,8 @@ def main() -> int:
     if args.limit_houses:
         train_houses = train_houses[: args.limit_houses]
 
-    eligible = set(positive_map) & set(id_to_row)
+    data = Stage2Data(args.device)
+    eligible = set(positive_map) & set(id_to_row) & set(data.modalities)
     samples = enumerate_samples(train_houses, eligible)
     if not samples:
         print("no eligible sample; check stage2_positive_map and the gallery index",
@@ -316,6 +374,8 @@ def main() -> int:
     opt = torch.optim.AdamW(params, lr=values["learning_rate"],
                             weight_decay=values["weight_decay"])
 
+    graphs = data.graphs_for({h for h, _, _ in samples})
+    stage2_dropout = values["p_mask"]
     epochs = args.epochs or values["epochs"]
     batches = unique_positive_batches(samples, values["batch_size"], rng)
     print(f"{len(samples):,} samples over {len(train_houses):,} houses, "
@@ -338,9 +398,7 @@ def main() -> int:
                     house_id, target_index, asset_id = samples[idx]
                     graph = graphs[house_id]
                     q = encode_query(model, backbone, graph, target_index,
-                                     asset_id, drop, args.device,
-                                     edge_dim, sem_cache, text_map,
-                                     missing_token)
+                                     asset_id, drop, args.device, data)
                     queries.append(q)
                     positives.append(gallery_vecs[id_to_row[asset_id]])
 

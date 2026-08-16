@@ -411,7 +411,7 @@ nodes:
     purpose: "LLM relation sentences between objects, encoded into edge features."
     decomposition_rationale: [N1_distinct_failure_mode, N8_reusable]
     reads: [scene_graphs, procthor_object_text, sem_edge_cache]
-    writes: [sem_edge_cache, quarantine, run_progress, cost_ledger]
+    writes: [sem_edge_cache, procthor_node_embeddings, quarantine, run_progress, cost_ledger]
     postcondition: "Every selected object pair has an edge embedding or an explicit semantic_edge_missing flag"
     deterministic: false
     idempotent: true
@@ -565,7 +565,7 @@ nodes:
     role: evaluate
     purpose: "Refuse to train Stage 2 until its positive, its modalities and its scene corpus are all in place."
     decomposition_rationale: [N5_gate_point]
-    reads: [stage2_protocol, stage2_positive_map, procthor_asset_modalities, stage2_gallery_index, stage1_ckpt, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits, stage1_protocol]
+    reads: [stage2_protocol, stage2_positive_map, procthor_asset_modalities, procthor_node_embeddings, stage2_gallery_index, stage1_ckpt, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits, stage1_protocol]
     writes: [gate_records, run_progress]
     postcondition: "gate_record with is_terminal=true"
     deterministic: true
@@ -785,7 +785,8 @@ nodes:
     purpose: "Layout-aware fine-tuning of the fuser and ESSGNN."
     decomposition_rationale: [N3_checkpoint_needed, N6_side_effects, N8_reusable]
     reads: [stage1_ckpt, scene_graphs, sem_edge_cache, procthor_object_text,
-            procthor_asset_modalities, stage2_gallery_index,
+            procthor_asset_modalities, procthor_node_embeddings,
+            stage2_gallery_index,
             stage2_protocol, stage2_positive_map, essgnn_edge_protocol,
             essgnn_arch_protocol, scene_splits, split_seed,
             variant_registry, pretrained_weights]
@@ -1105,7 +1106,8 @@ nodes:
     decomposition_rationale: [N7_parallelizable, N8_reusable]
     reads: [variant_registry, stage1_ckpt, splits, scene_splits, scene_graphs,
             sem_edge_cache, procthor_object_text, procthor_asset_modalities,
-            stage2_gallery_index, stage1_protocol, stage2_protocol,
+            procthor_node_embeddings, stage2_gallery_index, stage1_protocol,
+            stage2_protocol,
             stage2_positive_map, essgnn_edge_protocol, essgnn_arch_protocol,
             pointclouds, post_stage1_embeddings, split_seed, stage1_hyperparameters, pretrained_weights]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger]
