@@ -478,7 +478,12 @@ Stage 1 的主線 `train_scope = point_encoder+fuser` **會訓練它**，所以�
 新增 `L1-STAGE2-QUERY-ENCODERS-FROZEN`：跑完一步之後，query 的 text / image / point
 三個 encoder 都必須與 Stage 1 逐 bit 相同，只有 fusion、ESSGNN 與 `λ` 可以動。
 
-**[未定 U-08／U-08a／U-08b — 阻斷級，這是整個復現最大的架構缺口]**
+**[U-08a／U-08b —— 2026-08-16 判定。U-08（樣本怎麼組）仍為未定]**
+
+> **判定摘要**：Stage 2 使用**自己的 ProcTHOR gallery**，正樣本就是**同一個 assetId**，
+> 完全不需要 ProcTHOR→Objaverse 對應表。ProcTHOR 側的模態由 AI2-THOR **隔離渲染**產生
+> （與 n04 同協定），點雲為多視角深度外殼，query 側允許缺點雲。
+> 依據見 `graph_spec.yaml` 的 `U-08a`／`U-08b` `decision_basis`。
 
 論文從未定義 Stage 2 的訓練樣本怎麼從 ProcTHOR 建構。拆成三個缺口，
 **第二個讓這個階段根本建不起來**：
@@ -489,12 +494,18 @@ Stage 1 的主線 `train_scope = point_encoder+fuser` **會訓練它**，所以�
 - 「current scene」是目標以外的全部，還是某個前綴？
 - 一間房產生幾筆樣本、負樣本怎麼取
 
-### U-08a　**正樣本是哪一個 gallery 條目**（阻斷）
+### U-08a　正樣本是哪一個 gallery 條目 —— **已判定：同一個 ProcTHOR assetId**
 
 Eq.7a/7b 需要一個 positive。目標是 **ProcTHOR 物件**，gallery 是 **Objaverse-LVIS**，
 而兩者的識別碼**交集為 0**（實測 995 vs 46,052，完全不相交）。
 
-**沒有這個對應關係，loss 的正樣本就不存在。** 論文完全沒有提到這件事。
+**但那個「必須對應」的前提是我們自己加的。** 論文 §2.6 寫的是
+「Only the query-side fuser and the ESSGNN module are updated; the gallery encoder
+is frozen」—— 凍的是**權重**；Eq. 7a/7b 的分母是 batch `B`，**沒有任何一句把 Stage 2
+的 gallery catalog 綁在 Objaverse**。retrieval 系統裡 encoder 與 index 本來就是兩件事，
+凍結 encoder 不代表 index 不能換。
+
+**所以正樣本的身分就是 `Fridge_19 → Fridge_19`。**
 可能的讀法（都未經證實）：
 
 | | 做法 |
@@ -503,14 +514,28 @@ Eq.7a/7b 需要一個 positive。目標是 **ProcTHOR 物件**，gallery 是 **O
 | (b) | 場景階段另外用 ProcTHOR 自己的 ~1,467 個資產建一個 gallery |
 | (c) | 用目標物件自己的模態當正樣本，讓 Stage 2 變成自我檢索目標 |
 
-選定之後必須寫進 `stage2_pairing` channel 並記錄方法，且**在報告中列為選擇而非論文規定**。
+**選定 (b)。** (a) 與依 embedding 對應都是假標籤；(c) 最危險 —— 場景與正樣本之間沒有
+ground truth 關係，模型可以完全忽略 ESSGNN 仍然把 loss 降下去，算得出數字卻沒有在學
+scene-aware compatibility。已寫進 `stage2_pairing` channel，**報告中列為選擇而非論文規定**。
 
-### U-08b　**目標物件的三個模態從哪來**（阻斷）
+**[實測 F25]** 那個 gallery 是 **1,467** 個資產，不是論文轉述的「3,000+」。
+它就是 Eq. 7a/7b 的負樣本池大小，比 Stage 1 的 46,052 小得多，訓練訊號因此較弱 ——
+報告必須寫我們實際的數字。
 
-Eq.6 需要 `e_text`、`e_image`、`e_pc`。ProcTHOR 只提供 metadata 與座標 ——
-**沒有渲染圖，也沒有點雲**。所以這三個模態沒有現成來源。
-若走 U-08a 的 (a)，可以用對應到的 Objaverse 資產的模態；走 (b) 則要為 ProcTHOR
-的 1,467 個資產另外產生點雲與渲染圖。
+### U-08b　目標物件的三個模態從哪來 —— **已判定：AI2-THOR 隔離渲染**
+
+**[更正 F24]** 先前這裡寫「ProcTHOR 沒有渲染圖也沒有點雲」。那對 JSONL 成立，
+對 ProcTHOR 不成立 —— 房子本來就是給 AI2-THOR 載入的，而 AI2-THOR 會渲染。
+實測可取得與 n04 同協定的 11 視角正交隔離渲染。
+
+唯一真缺口是點雲：n03 從完整 mesh 取樣（含被遮蔽面），這裡只能從 11 張深度圖
+反投影成**可見外殼**，而 gallery encoder 凍結、PointBERT 沒有機會適應這個位移。
+論文自己的設計吸收了這一點：§2.4 明說 query encoder 接受任意模態子集，
+所以 **query 走 text+image、點雲選配**，gallery 維持 §2.6 要求的 modality-complete。
+
+**分類為 [未指定・高影響復現選擇]，不是 [偏離]。** 偏離是「論文說 X、我們做 Y」；
+這裡是論文要求 Stage 2 的模態卻從未指定 ProcTHOR 的模態怎麼產生 ——
+我們是在實作一個缺失的協定，不是違反一個已陳述的協定。
 
 ### 因此
 
@@ -629,7 +654,16 @@ Algorithm 1 逐物件檢索並放置，需要 **I-Design** 與**真實 mesh 幾�
 prompt 已改用論文 Table 4 的原文（先前那兩條是我編的）。詳見 **F18**。`setup/patches/` 的三個 patch 是**為了讓場景跑得完而做的工程決定，
 沒有論文依據**，其中 02、03 會改變場景與完成率（不是格式調整）。
 
-**[未定 U-21 — 阻斷級] Table 2 的資料流先前根本沒有閉合。**
+**[U-21 —— 2026-08-16 判定為讀法 B]** Table 2 的資料流先前根本沒有閉合。
+
+> **判定**：ProcTHOR 只用於 Stage 2 訓練；Table 2 的 200 個場景、query list 與 layout
+> **全部由 I-Design 產生**。§3.1 與 §3.3 因此不衝突 —— 它們在講不同階段。
+> **驗證**：我們自己的 `tools/idesign_generate.py:166` 呼叫的是
+> `IDesign(no_of_objects, user_input, room_dimensions)` —— 吃文字 prompt 與房間尺寸，
+> **沒有任何介面吃 ProcTHOR house**。
+> 「randomly sampled scenes」略偏讀法 A，但它從未說 sampled **from ProcTHOR**，
+> 200 個 prompt 或 configuration 在語法上同樣成立，所以不足以定案。
+> 讀法 A 保留為診斷（ProcTHOR leave-one-out 場景補全），**不作為 Table 2 結果**。
 
 論文 §3.3：
 
@@ -644,7 +678,17 @@ graph 裡從來沒有 I-Design 輸出的 channel，所以也沒有任何 gate �
 現在補上 `evaluation_scene_inputs` channel（`{g0_uri, query_list, room_type, source_revision}`），
 由 `n15c_prepare_eval_scenes` 產生，而它排在 `G7_composition_protocol` 之後。
 
-**[未定 U-18 — 阻斷級] 「放進場景、更新場景圖」到底產生什麼，論文一個字都沒說。**
+**[U-18 —— 2026-08-16 判定]** 「放進場景、更新場景圖」到底產生什麼，論文一個字都沒說。
+
+> **判定：擁有 slot 的是佈局來源，檢索器永遠不發明位置。**
+> Stage 2 訓練沿用被移除物件在 ProcTHOR 的原始 pose；Table 2 沿用 I-Design 規劃的 slot。
+> 自己寫放置規則被否決 —— 那會讓 Table 2 變成「MetaFind 檢索 ＋ 我們自製的放置演算法」，
+> 美感與合理性分數就無法歸因給檢索。
+> **新節點的 `t_i` 用檢索到的資產的標註文字，不是 query 文字。** §2.1 定義節點是
+> **既有**物件；第 7 行之後，既有的是被檢索到的那一個。沿用 query 文字等於讓場景圖
+> 描述「想要的世界」而不是「現在的世界」，與論文自陳的
+> 「continuously adapting retrieval results to current scene updates」相違。
+> 兩個字串都保留，只有 `t_i` 用後者。
 
 Algorithm 1 第 7 行只有：
 

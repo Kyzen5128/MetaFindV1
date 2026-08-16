@@ -728,6 +728,31 @@ rgb_data = np.ones_like(point_set) * 0.4      # dataset_3d.py:292, 297
 而這次是在一個我原本打算只花二十分鐘查證的探針上發生的。
 凡是產生影像的節點，驗收一定要包含「真的把圖打開看」。
 
+## F25. Stage 2 的 gallery 只有 **1,467** 個資產，不是論文說的「3,000+」
+
+MetaFind 2.3 轉述 ProcTHOR「over 10,000 generated houses constructed from a
+curated collection of more than **3,000 unique assets**」。
+
+**兩種獨立量法都對不上那個數字：**
+
+| 量的是什麼 | 方法 | 結果 |
+|---|---|---|
+| 12,000 間房子實際用到的 | 掃過 train 10k + val 1k + test 1k 的所有 `assetId` | **1,467** |
+| AI2-THOR 資產庫本身有的 | `controller.step(action="GetAssetDatabase")` | **1,934** |
+
+我原本以為差異可以用「資產庫有 3,000+、房子只用了一部分」解釋。
+**查了資產庫本身之後，這個解釋也不成立** —— 庫裡只有 1,934 個。
+
+ProcTHOR 原論文的 PDF 過大無法直接抓取，摘要也沒有給資產數，
+所以我無法斷定「3,000+」出自何處或指的是什麼（可能含材質變體、可能是不同版本）。
+**能確定的是：我們手上這個 build 沒有 3,000 個資產，而我們只能用手上有的。**
+
+**為什麼這個數字現在變重要**：U-08a 判定為「Stage 2 用獨立的 ProcTHOR gallery」，
+所以這 1,467 就是 Stage 2 對比損失的**負樣本池大小**。它決定 Eq. 7a/7b 分母的
+規模，而那直接影響 loss 的難度 —— 1,467 個候選比 46,052 個容易得多，
+Stage 2 的訓練訊號因此比 Stage 1 弱。報告必須寫出這個數字，不能沿用論文的
+「3,000+」，那不是我們跑的東西。
+
 ## 由 F1–F13 推導出的三個架構決策
 
 ### D1 — 不重訓 ULIP-2 本身，用官方 released checkpoint 當起點

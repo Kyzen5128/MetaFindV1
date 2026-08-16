@@ -1382,3 +1382,54 @@ unknown_ids = {u["id"] for u in _ru_items if u["id"].startswith("U-")}
 
 **這輪的通用教訓**：把一個 UNKNOWN 標成 RESOLVED 不是一次 commit，是一次遷移。
 機器可讀的狀態改了而人類可讀的正文沒改，比兩邊都沒改更危險 —— 因為它看起來已經完成了。
+
+### 2026-08-16 四個阻斷級 UNKNOWN 一次判定（外部討論轉達 ＋ 本地實測）
+
+**U-08a／U-08b／U-18／U-21 全部判定，`blocking: true` 的項目歸零。**
+
+#### 收斂點是一個我們自己加的前提被拆掉
+
+四題卡了很久，因為我一直在問「ProcTHOR 的 `Fridge_19` 要對應到哪一個 Objaverse uid」。
+**論文從來沒有要求這個對應存在。** 是我們自己假設了「Stage 2 必須沿用 Stage 1 的 gallery」。
+
+逐字回查：
+
+> §2.6　Only the query-side fuser and the ESSGNN module are updated;
+> **the gallery encoder is frozen.**
+
+凍的是**權重**。Eq. 7a/7b 的分母是 batch `B`，**全文沒有任何一句把 Stage 2 的
+gallery catalog 綁在 Objaverse 上**。檢索系統裡 encoder 與 index 本來就是兩件事。
+
+於是正樣本的身分變成 `Fridge_19 → Fridge_19`，那張不存在的對應表根本不需要。
+
+#### 三項可驗的都驗了
+
+| 主張 | 驗法 | 結果 |
+|---|---|---|
+| gallery frozen 指權重不指 catalog | 逐字讀 §2.6 與 Eq. 7a/7b | ✅ 成立 |
+| I-Design 介面不吃 ProcTHOR house | 讀**我們自己的** `tools/idesign_generate.py:166` | ✅ `IDesign(no_of_objects, user_input, room_dimensions)` |
+| ProcTHOR 有「3,000+ unique assets」 | 掃 12,000 間房子 ＋ `GetAssetDatabase` | ❌ **1,467 用到／庫裡 1,934**（F25） |
+
+第三項是**論文轉述的數字對不上實物**，兩種獨立量法都對不上。
+
+#### 判定摘要
+
+```
+U-08a  Stage 2 用獨立的 ProcTHOR gallery，正樣本 = 同一個 assetId
+U-08b  AI2-THOR 隔離渲染（F24）；點雲為多視角深度外殼；query 可缺點雲
+U-18   擁有 slot 的是佈局來源；t_i 用「檢索到的資產」的標註，不是 query 文字
+U-21   讀法 B —— ProcTHOR 訓練、I-Design 產生 Table 2 的場景與 query list
+```
+
+四個都 `confidence: moderate`，都帶 `reopen_if`。**沒有一個寫成「作者一定是這樣做」。**
+
+#### checker 又補了一個洞
+
+上一輪加的「正文不得把 RESOLVED 項目說成還開著」只認得
+`未解／尚未確立／取決於／仍待`。這四項在文件裡的寫法是 **「阻斷級」** ——
+語意完全相同，字串完全不同，所以檢查看不到。
+
+把「阻斷級」加進詞表之後**立刻又抓到 4 處**。
+
+**這是同一個教訓的第二次**：檢查一個狀態遷移有沒有做完，關鍵不在規則本身，
+而在**遷移的說法有幾種寫法**。第一版只想到一種。

@@ -257,7 +257,12 @@ for u in _u_entries:
 # Prose must not still call a resolved item open. This is the check that would
 # have caught the c43c72e half-migration on its own: the registry said RESOLVED
 # while three documents still said "取決於 U-34", and nothing compared them.
-_OPEN_PHRASES = ("未解", "尚未確立", "取決於", "仍待", "unresolved", "still open")
+# "阻斷級" is on this list because it describes an unknown that is CURRENTLY
+# stopping the pipeline. Once the registry resolves it, a document still calling
+# it blocking is telling a reader to wait for a decision that has been made --
+# the same half-migration as U-34, in a different vocabulary.
+_OPEN_PHRASES = ("未解", "尚未確立", "取決於", "仍待", "阻斷級",
+                 "unresolved", "still open")
 # A correction log RECORDS that something was once open. Rewriting it to match
 # today's state would destroy the only account of how the decision was reached,
 # so everything from the log heading onward is exempt -- history is supposed to
