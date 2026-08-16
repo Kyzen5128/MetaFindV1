@@ -68,7 +68,7 @@ We consider a graph $G = (V, E)$ with nodes $v_i \in V$ and edges $e_{ij} \in E$
 
 Our **Equivariant Graph Convolutional Layer (EGCL)** takes as input the set of node embeddings $h^l = \{h_0^l, \dots, h_{M-1}^l\}$, coordinate embeddings $x^l = \{x_0^l, \dots, x_{M-1}^l\}$, and edge information $E = (e_{ij})$, and outputs a transformation on $h^{l+1}$ and $x^{l+1}$ [11]. Concisely, $h^{l+1}, x^{l+1} = \text{EGCL}[h^l, x^l, E]$ [11]. The equations defining this layer are [11]:
 
-$$m_{ij} = \phi_e \left( h_i^l, h_j^l, \|x_i^l - x_j^l\|^2, a_{ij}  \right) \quad (3)$$
+$$m_{ij} = \phi_e \left( h_i^l, h_j^l, \|x_i^l - x_j^l\|^2, a_{ij} \right) \quad (3)$$
 $$x_i^{l+1} = x_i^l + C \sum_{j 
 eq i} (x_i^l - x_j^l) \phi_x(m_{ij}) \quad (4)$$
 $$m_i = \sum_{j 
@@ -193,7 +193,7 @@ We predict 12 chemical properties of small molecules in the QM9 dataset, contain
 | $\epsilon_{\text{LUMO}}$ | $\text{meV}$ | 38 | 34 | 38 | 35 | 25 | **20** | 38 | 33 | 25 |
 | $\mu$ | $\text{D}$ | 0.030 | 0.033 | 0.038 | 0.043 | 0.032 | 0.030 | 0.064 | 0.051 | **0.029** |
 | $C_
-u$ | $	\text{cal/mol K}$| 0.040 | 0.033 | 0.026 | 0.031 | 0.038 | **0.023** | 0.101 | 0.054 | 0.031 |
+u$ | $\text{cal/mol K}$| 0.040 | 0.033 | 0.026 | 0.031 | 0.038 | **0.023** | 0.101 | 0.054 | 0.031 |
 | $G$ | $\text{meV}$ | 19 | 14 | 20 | 14 | 22 | **8** | - | - | 12 |
 | $H$ | $\text{meV}$ | 17 | 14 | 21 | 14 | 24 | **7** | - | - | 12 |
 | $R^2$ | $\text{bohr}^3$ | 0.180 | 0.073 | 0.961 | 0.354 | 0.800 | 0.331 | - | - | **0.106** |
@@ -266,7 +266,7 @@ $$\|(Qx_i^l + g) - (Qx_j^l + g)\|^2 = \|Q(x_i^l - x_j^l)\|^2 = (x_i^l - x_j^l)^T
 
 Thus, the edge message $m_{ij}$ in Equation (3) is invariant [68]:
 
-$$m'_{ij} = \phi_e \left( h_i^l, h_j^l, \|Qx_i^l + g - (Qx_j^l + g)\|^2, a_{ij}  \right) = \phi_e \left( h_i^l, h_j^l, \|x_i^l - x_j^l\|^2, a_{ij}  \right) = m_{ij} \quad (12)$$
+$$m'_{ij} = \phi_e \left( h_i^l, h_j^l, \|Qx_i^l + g - (Qx_j^l + g)\|^2, a_{ij} \right) = \phi_e \left( h_i^l, h_j^l, \|x_i^l - x_j^l\|^2, a_{ij} \right) = m_{ij} \quad (12)$$
 
 Now, applying the transformation to Equation (4) [68, 69]:
 
@@ -274,7 +274,7 @@ $$Qx_i^l + g + C \sum_{j
 eq i} (Qx_i^l + g - [Qx_j^l + g]) \phi_x(m_{ij}) = Qx_i^l + g + Q C \sum_{j 
 eq i} (x_i^l - x_j^l) \phi_x(m_{ij})$$
 $$= Q \left[ x_i^l + C \sum_{j 
-eq i} (x_i^l - x_j^l) \phi_x(m_{ij})  \right] + g = Qx_i^{l+1} + g$$
+eq i} (x_i^l - x_j^l) \phi_x(m_{ij}) \right] + g = Qx_i^{l+1} + g$$
 
 Since $m_{ij}$ is invariant, $m_i$ in Equation (5) is invariant [69]. Consequently, node feature updates $h_i^{l+1}$ in Equation (6) are invariant [69]:
 
@@ -287,7 +287,7 @@ This completes the proof [69].
 ### Appendix B: Re-Formulation for Velocity Type Inputs
 When velocity inputs are given, the EGCL layer computes $h^{l+1}, x^{l+1}, v^{l+1} = \text{EGCL}[h^l, x^l, v^{init}, E]$ as follows [70]:
 
-$$m_{ij} = \phi_e \left( h_i^l, h_j^l, \|x_i^l - x_j^l\|^2, a_{ij}  \right)$$
+$$m_{ij} = \phi_e \left( h_i^l, h_j^l, \|x_i^l - x_j^l\|^2, a_{ij} \right)$$
 $$v_i^{l+1} = \phi_v(h_i^l) v_i^{init} + C \sum_{j 
 eq i} (x_i^l - x_j^l) \phi_x(m_{ij})$$
 $$x_i^{l+1} = x_i^l + v_i^{l+1}$$
@@ -307,7 +307,7 @@ eq i} (Qx_i^l + g - [Qx_j^l + g]) \phi_x(m_{ij})$$
 $$= Q \phi_v(h_i^l) v_i^{init} + Q C \sum_{j 
 eq i} (x_i^l - x_j^l) \phi_x(m_{ij})$$
 $$= Q \left[ \phi_v(h_i^l) v_i^{init} + C \sum_{j 
-eq i} (x_i^l - x_j^l) \phi_x(m_{ij})  \right] = Qv_i^{l+1} \quad (12)$$
+eq i} (x_i^l - x_j^l) \phi_x(m_{ij}) \right] = Qv_i^{l+1} \quad (12)$$
 
 And the coordinate update [72]:
 
@@ -383,9 +383,7 @@ $$\tilde{x}_i^T \tilde{x}_i - 2 \tilde{x}_i^T \tilde{x}_j + \tilde{x}_j^T \tilde
 
 Since $\|\tilde{x}_i\|^2 = \|\tilde{y}_i\|^2$ and $\|\tilde{x}_j\|^2 = \|\tilde{y}_j\|^2$, we obtain:
 
-$$\langle \tilde{x}_i, \tilde{x}_j 
-angle = \langle \tilde{y}_i, \tilde{y}_j 
-angle \quad (14)$$
+$$\langle \tilde{x}_i, \tilde{x}_j \rangle = \langle \tilde{y}_i, \tilde{y}_j \rangle \quad (14)$$
 
 which proves that angles between all pairs are identical [85]. 
 
@@ -396,20 +394,11 @@ $$\| \sum_i c_i \tilde{x}_i \|^2 = \| \sum_i c_i \tilde{y}_i \|^2 \quad (*)$$
 Let $V_x = \text{span}(\{\tilde{x}_i\})$ with a basis $\{x_{i_j}\}_{j=1}^d$ ($d \le n$) [86]. We define a linear map $A : V_x \to V_y$ by mapping the basis vectors $x_{i_j} \mapsto y_{i_j}$ [86]. For any point $\tilde{x}_i = \sum_j c_j x_{i_j}$, we show $A\tilde{x}_i = \tilde{y}_i$ [86]:
 
 $$\| \tilde{y}_i - A\tilde{x}_i \|_2^2 = \| \tilde{y}_i - \sum_j c_j y_{i_j} \|_2^2$$
-$$= \langle \tilde{y}_i, \tilde{y}_i 
-angle - 2 \langle \tilde{y}_i, \sum_j c_j y_{i_j} 
-angle + \langle \sum_j c_j y_{i_j}, \sum_j c_j y_{i_j} 
-angle$$
-$$\stackrel{(*)}{=} \langle \tilde{x}_i, \tilde{x}_i 
-angle - 2 \langle \tilde{x}_i, \sum_j c_j x_{i_j} 
-angle + \langle \sum_j c_j x_{i_j}, \sum_j c_j x_{i_j} 
-angle = 0 \quad (15)$$
+$$= \langle \tilde{y}_i, \tilde{y}_i \rangle - 2 \langle \tilde{y}_i, \sum_j c_j y_{i_j} \rangle + \langle \sum_j c_j y_{i_j}, \sum_j c_j y_{i_j} \rangle$$
+$$\stackrel{(*)}{=} \langle \tilde{x}_i, \tilde{x}_i \rangle - 2 \langle \tilde{x}_i, \sum_j c_j x_{i_j} \rangle + \langle \sum_j c_j x_{i_j}, \sum_j c_j x_{i_j} \rangle = 0 \quad (15)$$
 
 Thus $A\tilde{x}_i = \tilde{y}_i$ for all $i$ [87]. Orthogonality of $A$ on $V_x$ is guaranteed because:
 
-$$\langle A x_{i_j}, A x_{i_k} 
-angle = \langle y_{i_j}, y_{i_k} 
-angle = \langle x_{i_j}, x_{i_k} 
-angle \quad (16)$$
+$$\langle A x_{i_j}, A x_{i_k} \rangle = \langle y_{i_j}, y_{i_k} \rangle = \langle x_{i_j}, x_{i_k} \rangle \quad (16)$$
 
 We can extend $A$ to an orthogonal matrix $Q$ over the whole space $\mathbb{R}^n$ using the orthogonal complement [87]. Finally, incorporating the translations, we obtain $x_i = Qy_i + t$, which completes the uniqueness proof [87].

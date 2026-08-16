@@ -1,0 +1,35 @@
+{
+ "metafind_paper.md": {
+  "bare_in_math": {},
+  "balance": {
+   "$$ pairs": true,
+   "{ }": true,
+   "left/right": true,
+   "langle/rangle": true
+  },
+  "math_spans": 82,
+  "display_blocks": 20
+ },
+ "ulip2_paper.md": {
+  "bare_in_math": {},
+  "balance": {
+   "$$ pairs": true,
+   "{ }": true,
+   "left/right": true,
+   "langle/rangle": true
+  },
+  "math_spans": 26,
+  "display_blocks": 3
+ },
+ "egnn_paper.md": {
+  "bare_in_math": {},
+  "balance": {
+   "$$ pairs": true,
+   "{ }": true,
+   "left/right": true,
+   "langle/rangle": true
+  },
+  "math_spans": 264,
+  "display_blocks": 44
+ }
+}

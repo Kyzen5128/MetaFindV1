@@ -75,12 +75,12 @@ ULIP-2 aligns the triplet of 3D point clouds, 2D rendered images, and comprehens
 Given a 3D shape $O$, we extract its 3D point cloud $P$, randomly sample its 2D rendered image $I \sim \text{render}(O)$, and its BLIP-2 generated language description $T \sim \text{blip2}(I)$, where $\text{render}$ is the 3D-to-2D rendering operation and $\text{blip2}$ is the image description query [180]. We extract the image feature $f_I = E_I(I)$ and text feature $f_T = E_T(T)$ based on the frozen encoders [180]. We train the 3D encoder $E_P$ to align the 3D feature $f_P = E_P(P)$ with the image and text features [180].
 
 The **3D-to-image contrastive loss** is formulated as:
-$$\mathcal{L}_{P2I} = -\frac{1}{2} \sum_{i} \left[ \log \frac{\exp(f_{P,i} \cdot f_{I,i} / \tau)}{\sum_{j} \exp(f_{P,i} \cdot f_{I,j} / \tau)} + \log \frac{\exp(f_{P,i} \cdot f_{I,i} / \tau)}{\sum_{j} \exp(f_{P,j} \cdot f_{I,i} / \tau)}  \right] \quad (1)$$
+$$\mathcal{L}_{P2I} = -\frac{1}{2} \sum_{i} \left[ \log \frac{\exp(f_{P,i} \cdot f_{I,i} / \tau)}{\sum_{j} \exp(f_{P,i} \cdot f_{I,j} / \tau)} + \log \frac{\exp(f_{P,i} \cdot f_{I,i} / \tau)}{\sum_{j} \exp(f_{P,j} \cdot f_{I,i} / \tau)} \right] \quad (1)$$
 
 where $i, j$ are the sampling indices, and $\tau$ is a learnable temperature parameter [181].
 
 Similarly, the **3D-to-text contrastive loss** is formulated as:
-$$\mathcal{L}_{P2T} = -\frac{1}{2} \sum_{i} \left[ \log \frac{\exp(f_{P,i} \cdot f_{T,i} / \tau)}{\sum_{j} \exp(f_{P,i} \cdot f_{T,j} / \tau)} + \log \frac{\exp(f_{P,i} \cdot f_{T,i} / \tau)}{\sum_{j} \exp(f_{P,j} \cdot f_{T,i} / \tau)}  \right] \quad (2)$$
+$$\mathcal{L}_{P2T} = -\frac{1}{2} \sum_{i} \left[ \log \frac{\exp(f_{P,i} \cdot f_{T,i} / \tau)}{\sum_{j} \exp(f_{P,i} \cdot f_{T,j} / \tau)} + \log \frac{\exp(f_{P,i} \cdot f_{T,i} / \tau)}{\sum_{j} \exp(f_{P,j} \cdot f_{T,i} / \tau)} \right] \quad (2)$$
 
 Our final training objective is to minimize the sum of the two contrastive alignment losses:
 $$\min_{E_P} \mathcal{L}_{P2I} + \mathcal{L}_{P2T} \quad (3)$$

@@ -1,15 +1,45 @@
 {
- "metafind_paper.md": {},
+ "metafind_paper.md": {
+  "repaired": {},
+  "total": 0,
+  "control_bytes_left": 0,
+  "bare_fragments": {
+   "text": 31,
+   "tau": 1,
+   "approx": 2,
+   "to ": 73
+  },
+  "display_blocks": 20
+ },
  "ulip2_paper.md": {
-  "t": 13,
-  "f": 6,
-  "r(right)": 2
+  "repaired": {
+   "t": 13,
+   "f": 6,
+   "r": 2
+  },
+  "total": 21,
+  "control_bytes_left": 0,
+  "bare_fragments": {
+   "text": 10,
+   "approx": 2,
+   "to ": 43
+  },
+  "display_blocks": 3
  },
  "egnn_paper.md": {
-  "t": 112,
-  "f": 1,
-  "a": 2,
-  "r(right)": 6,
-  "bare:ext{": 1
+  "repaired": {
+   "t": 113,
+   "r": 17,
+   "a": 2,
+   "f": 1
+  },
+  "total": 133,
+  "control_bytes_left": 0,
+  "bare_fragments": {
+   "times": 3,
+   "approx": 3,
+   "to ": 52
+  },
+  "display_blocks": 44
  }
 }
