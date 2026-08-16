@@ -697,6 +697,29 @@ level_1:
       labelled multi-line record or raw JSON changes every text embedding. The
       template is ours; this test stops it changing silently.
 
+  - id: L1-TEXT-TOKEN-BUDGET
+    target: n06_encode_text_image
+    target_kind: node
+    asserts: >
+      Every serialized annotation is COUNTED against the text encoder's context
+      length before it is encoded, and one that exceeds it is recorded rather
+      than truncated. No asset reaches the encoder whose placement constraint
+      was silently dropped.
+    negative_injection: "encode without counting, letting the tokenizer truncate"
+    expected_on_injection: "an over-length annotation encodes with no record of the loss"
+    verified_blocks: false
+    note: >
+      MEASURED: CLIP ViT-B/32 truncates at 77 tokens SILENTLY, and the pinned
+      template puts the description first, so an overlong one does not lose
+      itself -- it loses the TAIL, where placement_constraints lives. n05b caps
+      description, category, materials and placement by CHARACTER count, which
+      after the caps holds 1,406 real annotations to 70 tokens worst case with
+      none over 77. But characters are not tokens: an artificial 40-character
+      run of one letter still reaches 81. The character caps are a bound on the
+      realistic case; this check is the bound on the rest, and it belongs to
+      n06 because n06 owns the tokenizer. Same principle as
+      L1-SEMEDGE-NO-ZEROFILL -- a degraded input must be visible, not quiet.
+
   - id: L1-IMAGE-AGGREGATION
     target: n06_encode_text_image
     target_kind: node
@@ -1364,7 +1387,7 @@ level_3_gates:
 
 # ==================================================================
 gate_discipline:
-  total_l1: 59
+  total_l1: 60
   total_l2: 18
   total_gates: 7
   rejected_gate_candidates:
