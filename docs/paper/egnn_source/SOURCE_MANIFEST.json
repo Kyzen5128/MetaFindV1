@@ -6,8 +6,6 @@
  "main_tex": "example_paper.tex",
  "included_tex_files": [
   "example_paper.tex",
-  "sections/index.tex",
-  "sections/template.tex",
   "sections/introduction.tex",
   "sections/background.tex",
   "sections/model.tex",
@@ -19,12 +17,6 @@
  "include_tree": {
   "file": "example_paper.tex",
   "includes": [
-   {
-    "file": "sections/index.tex"
-   },
-   {
-    "file": "sections/template.tex"
-   },
    {
     "file": "sections/introduction.tex"
    },
@@ -53,11 +45,12 @@
  ],
  "supplement_files": [],
  "macro_files": [],
- "orphan_tex_files": [],
+ "orphan_tex_files": [
+  "sections/index.tex",
+  "sections/template.tex"
+ ],
  "tex_sha256": {
   "example_paper.tex": "5fbe491d6c83d689ec4b37b705ad7a4c0061099fbcd6a4282a378049a6d2eb93",
-  "sections/index.tex": "bd45a70ae2836b47ba09c73ee558a3252b9f3b1c8080f079264dcffd85dc2c3f",
-  "sections/template.tex": "a49930d937bbc85bfbad8c4e581080a330bc89b7c60cdd7352ff15a3041675aa",
   "sections/introduction.tex": "afa73fc887428a51efa22a96d9733f3186aade10244cd38ef9e984b3fc4216f7",
   "sections/background.tex": "8a5d871b1ef38fedaf5471fa3e6d5d0deb4326d7e0d1277df33f948d4c801466",
   "sections/model.tex": "8bd683d3c21ea65ec8a49d31df0a86fde61c163c219e00ef1641096fb19cfb5a",

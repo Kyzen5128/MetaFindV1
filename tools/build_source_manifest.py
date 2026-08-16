@@ -27,7 +27,7 @@ PAPER = Path(__file__).resolve().parents[1] / "docs" / "paper"
 # published identifier. Recorded so a later reader can re-download and compare.
 PAPERS = {
     "metafind": {"dir": "metafind_source", "archive": "MetaFind.gz",
-                 "main": "neurips_2025.tex", "arxiv_id": "2510.05057"},
+                 "main": "neurips_2025.tex", "arxiv_id": "2510.04057"},
     "ulip2":    {"dir": "ulip2_source", "archive": "Ulip2.gz",
                  "main": "main.tex", "arxiv_id": "2305.08275"},
     "egnn":     {"dir": "egnn_source", "archive": "EGNN.gz",
@@ -37,6 +37,36 @@ PAPERS = {
 }
 
 INCLUDE = re.compile(r"\\(?:input|include|subfile)\s*\{([^}]+)\}")
+
+
+def strip_comments(tex: str) -> str:
+    """Drop TeX comments BEFORE walking the include tree.
+
+    Without this, a commented-out `%\\input{sections/template}` counts as part of
+    the document. EGNN comments out two includes and ULIP-2 one, so the manifest
+    claimed 10 and 4 reached files against a true 8 and 3 -- and `X_suppl.tex`
+    was additionally classified as a supplement the paper does not contain.
+
+    The formula extractor already did this, which is why three commented-out
+    EGNN equations were correctly excluded from the census. Only the manifest
+    was missing it, so the two tools disagreed about what the document IS.
+
+    A percent sign preceded by a backslash is a literal, not a comment.
+    """
+    out = []
+    for line in tex.split("\n"):
+        i, esc = 0, False
+        while i < len(line):
+            if line[i] == "\\":
+                esc = not esc
+            elif line[i] == "%" and not esc:
+                line = line[:i]
+                break
+            else:
+                esc = False
+            i += 1
+        out.append(line)
+    return "\n".join(out)
 
 
 def resolve(root: Path, ref: str) -> Path | None:
@@ -58,7 +88,7 @@ def walk(root: Path, main: Path) -> tuple[list[str], dict]:
         seen.add(rel)
         order.append(rel)
         kids = []
-        for m in INCLUDE.finditer(p.read_text(errors="replace")):
+        for m in INCLUDE.finditer(strip_comments(p.read_text(errors="replace"))):
             child = resolve(root, m.group(1))
             if child is not None:
                 kids.append(visit(child))

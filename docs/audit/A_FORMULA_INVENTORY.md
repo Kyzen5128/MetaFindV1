@@ -12,9 +12,9 @@ authoritative for any formula, dimension, symbol or equation number.
 
 | paper | arXiv | main tex | files read | orphans ignored | display | inline |
 |---|---|---|---|---|---|---|
-| MetaFind | `2510.05057` | `neurips_2025.tex` | 5 | 0 | 20 | 75 |
-| ULIP-2 | `2305.08275` | `main.tex` | 4 | 4 | 3 | 46 |
-| EGNN | `2102.09844` | `example_paper.tex` | 10 | 0 | 33 | 523 |
+| MetaFind | `2510.04057` | `neurips_2025.tex` | 5 | 0 | 20 | 75 |
+| ULIP-2 | `2305.08275` | `main.tex` | 3 | 5 | 3 | 46 |
+| EGNN | `2102.09844` | `example_paper.tex` | 8 | 2 | 38 | 484 |
 | I-Design | `2404.02838` | `main.tex` | 15 | 0 | 0 | 70 |
 
 Orphans are `.tex` files present in an archive that the main document
@@ -221,7 +221,7 @@ Q\rm x^{l+1} + g,\; \rm h^{l+1} = \mathrm{ESSGNN}(Q\rm x^l + g,\; \rm h^l,\; E)
 \min_{E_\text{P}}\mathcal{L}_\text{P2I}+\mathcal{L}_\text{P2T}.
 ```
 
-## EGNN (33)
+## EGNN (38)
 
 ### Equivariance
 
@@ -338,7 +338,28 @@ w\left\|\rmz_{i}- \rmz_{j}\right\|^{2} + b
 
 ### Equivariance Proof
 
-**`EG-U10`** — unnumbered — `sections/appendix.tex` line 17 — `align*`
+**`EG-U10`** — unnumbered — `sections/appendix.tex` line 7 — `$$`
+- sha256: `f5daa37b9f11201a`
+
+```latex
+Q\rmx^{l+1} + g, \rmh^{l+1}  = \mathrm{EGCL}(Q\rmx^l + g, \rmh^l)
+```
+
+**`EG-U11`** — unnumbered — `sections/appendix.tex` line 11 — `$$`
+- sha256: `21ac5c6066d09c99`
+
+```latex
+\rmm_{i, j} =\phi_{e}\left(\rmh_{i}^{l}, \rmh_{j}^{l},\left\|Q\rmx_{i}^{l} + g- [Q\rmx_{j}^{l} + g]\right\|^{2}, a_{i j}\right) = \phi_{e}\left(\rmh_{i}^{l}, \rmh_{j}^{l},\left\|\rmx_{i}^{l} - \rmx_{j}^{l} \right\|^{2}, a_{i j}\right)
+```
+
+**`EG-U12`** — unnumbered — `sections/appendix.tex` line 14 — `$$`
+- sha256: `70dc888729d287b6`
+
+```latex
+Q\rmx_{i}^{l+1} + g  = Q\rmx_{i}^{l} + g +C\sum_{j \neq i}\left(Q\rmx_{i}^{l} + g - [Q\rmx_{j}^{l} + g]\right) \phi_{x}\left(\rmm_{i, j}\right)
+```
+
+**`EG-U13`** — unnumbered — `sections/appendix.tex` line 17 — `align*`
 - sha256: `67cd99f5c44987c3`
 
 ```latex
@@ -346,14 +367,14 @@ Q\rmx_{i}^{l} + g +C\sum_{j \neq i}\left(Q\rmx_{i}^{l} + g - Q\rmx_{j}^{l} - g\r
     &= Q\rmx_{i}^{l} + g +QC\sum_{j \neq i}\left(\rmx_{i}^{l} - \rmx_{j}^{l}\right) \phi_{x}\left(\rmm_{i, j}\right)
 ```
 
-**`EG-U11`** — unnumbered — `sections/appendix.tex` line 17 — `align*`
+**`EG-U14`** — unnumbered — `sections/appendix.tex` line 17 — `align*`
 - sha256: `53bcd790f26c91c8`
 
 ```latex
 &= Q\left(\rmx_{i}^{l} +C\sum_{j \neq i}\left(\rmx_{i}^{l} - \rmx_{j}^{l}\right) \phi_{x}\left(\rmm_{i, j}\right) \right) + g
 ```
 
-**`EG-U12`** — unnumbered — `sections/appendix.tex` line 17 — `align*`
+**`EG-U15`** — unnumbered — `sections/appendix.tex` line 17 — `align*`
 - sha256: `e3a094bf49a1344e`
 
 ```latex
@@ -362,35 +383,35 @@ Q\rmx_{i}^{l} + g +C\sum_{j \neq i}\left(Q\rmx_{i}^{l} + g - Q\rmx_{j}^{l} - g\r
 
 ### Re-formulation for velocity type inputs
 
-**`EG-U13`** — unnumbered — `sections/appendix.tex` line 31 — `align*`
+**`EG-U16`** — unnumbered — `sections/appendix.tex` line 31 — `align*`
 - sha256: `ebbc49d73b80dcab`
 
 ```latex
 \rmm_{i j} &=\phi_{e}\left(\rmh_{i}^{l}, \rmh_{j}^{l},\left\|\rmx_{i}^{l}-\rmx_{j}^{l}\right\|^{2}, a_{i j}\right)
 ```
 
-**`EG-U14`** — unnumbered — `sections/appendix.tex` line 31 — `align*`
+**`EG-U17`** — unnumbered — `sections/appendix.tex` line 31 — `align*`
 - sha256: `9e50c4a2218627f0`
 
 ```latex
 \rmv_{i}^{l+1}&= \phi_{v}\left(\rmh_{i}^l\right)\rmv_{i}^{\text{init}} +C\sum_{j \neq i}\left(\rmx_{i}^{l}-\rmx_{j}^{l}\right) \phi_{x}\left(\rmm_{i j}\right)
 ```
 
-**`EG-U15`** — unnumbered — `sections/appendix.tex` line 31 — `align*`
+**`EG-U18`** — unnumbered — `sections/appendix.tex` line 31 — `align*`
 - sha256: `2237559dcdded3a3`
 
 ```latex
 \rmx_{i}^{l+1} &=\mathbf{x}_{i}^{l}+ \mathbf{v}_i^{l+1}
 ```
 
-**`EG-U16`** — unnumbered — `sections/appendix.tex` line 31 — `align*`
+**`EG-U19`** — unnumbered — `sections/appendix.tex` line 31 — `align*`
 - sha256: `8e89c73228a9d314`
 
 ```latex
 \rmm_{i} &=\sum_{j \neq i} \rmm_{i j}
 ```
 
-**`EG-U17`** — unnumbered — `sections/appendix.tex` line 31 — `align*`
+**`EG-U20`** — unnumbered — `sections/appendix.tex` line 31 — `align*`
 - sha256: `b65b462c3b63c4a8`
 
 ```latex
@@ -399,18 +420,32 @@ Q\rmx_{i}^{l} + g +C\sum_{j \neq i}\left(Q\rmx_{i}^{l} + g - Q\rmx_{j}^{l} - g\r
 
 ### Equivariance proof for velocity type inputs
 
-**`EG-U18`** — unnumbered — `sections/appendix.tex` line 44 — `align*`
+**`EG-U21`** — unnumbered — `sections/appendix.tex` line 41 — `$$`
+- sha256: `4ca20f0f14a65852`
+
+```latex
+\rmh^{l+1}, Q\rmx^{l+1} + g, Q\rmv^{l+1} = \text{EGCL}[\rmh^{l}, Q\rmx^{l} + g, Q\rmv^{\text{init}}, \mathcal{E}]
+```
+
+**`EG-U22`** — unnumbered — `sections/appendix.tex` line 44 — `align*`
 - sha256: `93563c04426b9514`
 
 ```latex
 \rmv_{i}^{l+1}&= \phi_{v}\left(\rmh_{i}^l\right)\rmv_{i}^{\text{init}} +C\sum_{j \neq i}\left(\rmx_{i}^{l}-\rmx_{j}^{l}\right) \phi_{x}\left(\rmm_{i j}\right)
 ```
 
-**`EG-U19`** — unnumbered — `sections/appendix.tex` line 44 — `align*`
+**`EG-U23`** — unnumbered — `sections/appendix.tex` line 44 — `align*`
 - sha256: `2237559dcdded3a3`
 
 ```latex
 \rmx_{i}^{l+1} &=\mathbf{x}_{i}^{l}+ \mathbf{v}_i^{l+1}
+```
+
+**`EG-U24`** — unnumbered — `sections/appendix.tex` line 49 — `$$`
+- sha256: `1d43d24235df90ce`
+
+```latex
+Q\rmv_{i}^{l+1} = \phi_{v}\left(\rmh_{i}^l\right)Q\rmv_{i}^{\text{init}} +C\sum_{j \neq i}\left(Q\rmx_{i}^{l} + g - [Q\rmx_{j}^{l} + g]\right) \phi_{x}\left(\rmm_{i j}\right)
 ```
 
 **`EG-10`** — (10) — `sections/appendix.tex` line 51 — `align`
@@ -435,14 +470,14 @@ Q\rmx_{i}^{l} + g +C\sum_{j \neq i}\left(Q\rmx_{i}^{l} + g - Q\rmx_{j}^{l} - g\r
 &= Q\rmv_{i}^{l+1}
 ```
 
-**`EG-U23`** — unnumbered — `sections/appendix.tex` line 60 — `align*`
+**`EG-U28`** — unnumbered — `sections/appendix.tex` line 60 — `align*`
 - sha256: `225772bcb32229ff`
 
 ```latex
 Q\mathbf{x}_{i}^{l}+ g + Q\mathbf{v}_i^{l+1} &= Q\left (\mathbf{x}_{i}^{l} +\mathbf{v}_i^{l+1} \right ) +g
 ```
 
-**`EG-U24`** — unnumbered — `sections/appendix.tex` line 60 — `align*`
+**`EG-U29`** — unnumbered — `sections/appendix.tex` line 60 — `align*`
 - sha256: `e3a094bf49a1344e`
 
 ```latex
@@ -451,56 +486,56 @@ Q\mathbf{x}_{i}^{l}+ g + Q\mathbf{v}_i^{l+1} &= Q\left (\mathbf{x}_{i}^{l} +\mat
 
 ### Sometimes invariant features are all you need.
 
-**`EG-U25`** — unnumbered — `sections/appendix.tex` line 177 — `align*`
+**`EG-U30`** — unnumbered — `sections/appendix.tex` line 177 — `align*`
 - sha256: `9af0ecf258338b3f`
 
 ```latex
 \ell_2(Q\rmx_i + t, Q\rmx_j + t) &= \sqrt{} (Q\rmx_i + t - [Q\rmx_j + t])^T(Q\rmx_i + t - [Q\rmx_j + t]) = \sqrt{} (Q\rmx_i - Q\rmx_j)^T(Q\rmx_i - Q\rmx_j)
 ```
 
-**`EG-U26`** — unnumbered — `sections/appendix.tex` line 177 — `align*`
+**`EG-U31`** — unnumbered — `sections/appendix.tex` line 177 — `align*`
 - sha256: `62d329fa474e44f0`
 
 ```latex
 &= \sqrt{} (\rmx_i - \rmx_j)^T Q^T Q (\rmx_i - \rmx_j) = \sqrt{} (\rmx_i - \rmx_j)^T (\rmx_i - \rmx_j) = \ell_2(\rmx_i, \rmx_j)
 ```
 
-**`EG-U27`** — unnumbered — `sections/appendix.tex` line 188 — `equation*`
+**`EG-U32`** — unnumbered — `sections/appendix.tex` line 188 — `equation*`
 - sha256: `5ffe1f6d3ed46dfc`
 
 ```latex
 \ell_2(\tilde{\rmx}_i, \tilde{\rmx}_j) = \ell_2(\rmx_i, \rmx_j) = \ell_2(\rmy_i, \rmy_j) = \ell_2(\tilde{\rmy}_i, \tilde{\rmy}_j).
 ```
 
-**`EG-U28`** — unnumbered — `sections/appendix.tex` line 193 — `equation*`
+**`EG-U33`** — unnumbered — `sections/appendix.tex` line 193 — `equation*`
 - sha256: `ef5aed6f2aa25b3b`
 
 ```latex
 \rmx_i^T\rmx_i - 2 \rmx_i^T\rmx_j + \rmx_j^T\rmx_j = ||\rmx_i - \rmx_j||_2^2 = ||\rmy_i - \rmy_j||_2^2 = \rmy_i^T\rmy_i - 2 \rmy_i^T\rmy_j + \rmy_j^T\rmy_j
 ```
 
-**`EG-U29`** — unnumbered — `sections/appendix.tex` line 200 — `equation*`
+**`EG-U34`** — unnumbered — `sections/appendix.tex` line 200 — `equation*`
 - sha256: `10b005ebd1f8399e`
 
 ```latex
 || \sum_i c_i \rmx_i ||_2 = || \sum_i c_i \rmy_i ||_2 \quad (*).\vspace{-.3cm}
 ```
 
-**`EG-U30`** — unnumbered — `sections/appendix.tex` line 206 — `align*`
+**`EG-U35`** — unnumbered — `sections/appendix.tex` line 206 — `align*`
 - sha256: `f7500e7f273537f7`
 
 ```latex
 ||\rmy_i - \sum_j c_j \rmy_{i_j}||_2^2 &= \langle \rmy_i, \rmy_i \rangle - 2 \langle \rmy_i, \sum_j c_i \rmy_{i_j} \rangle + \langle \sum_j c_i \rmy_{i_j}, \sum_j c_i \rmy_{i_j} \rangle
 ```
 
-**`EG-U31`** — unnumbered — `sections/appendix.tex` line 206 — `align*`
+**`EG-U36`** — unnumbered — `sections/appendix.tex` line 206 — `align*`
 - sha256: `2ab3a0e63838d1a2`
 
 ```latex
 &\stackrel{(*)}{=} \langle \rmx_i, \rmx_i \rangle - 2 \langle \rmx_i, \sum_j c_i \rmx_{i_j} \rangle + \langle \sum_j c_i \rmx_{i_j}, \sum_j c_i \rmx_{i_j} \rangle = \langle \rmx_i, \rmx_i \rangle - 2 \langle \rmx_i, \rmx_i \rangle + \langle \rmx_i, \rmx_i \rangle = 0.
 ```
 
-**`EG-U32`** — unnumbered — `sections/appendix.tex` line 211 — `equation*`
+**`EG-U37`** — unnumbered — `sections/appendix.tex` line 211 — `equation*`
 - sha256: `e3746f88d8fdeb28`
 
 ```latex

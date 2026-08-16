@@ -276,11 +276,27 @@ class Stage2Data:
         arr = np.load(node["uri"])
         self.node_vectors = {a: v for a, v in
                              zip(arr["ids"].tolist(), arr["embeddings"])}
-        self.edge_dim = int(node["embedding_dim"])
+        # t_i's width and e_ij's width are read from the two artifacts SEPARATELY
+        # and checked against the arrays. `self.edge_dim` used to be assigned
+        # from the NODE record's `embedding_dim` -- the two happen to come from
+        # the same text encoder today, so it worked, and it would have gone on
+        # working right up until someone changed one of them. The paper fixes
+        # neither: t_i's encoder is unstated (U-20 / C's S6) and e_ij's is only
+        # "e.g., CLIP or BERT" (U-06).
+        self.node_dim = int(node["embedding_dim"])
+        if arr["embeddings"].shape[1] != self.node_dim:
+            raise ValueError(
+                f"procthor_node_embeddings declares {self.node_dim}-d but the "
+                f"array is {arr['embeddings'].shape[1]}-d")
 
         cache = json.loads((paths.OUTPUTS / "sem_edge_cache.json").read_text())
         emb = np.load(paths.OUTPUTS / "sem_edge_embeddings.npz")
         vecs = emb["embeddings"]
+        self.edge_dim = int(cache["edge_dim"])
+        if vecs.shape[1] != self.edge_dim:
+            raise ValueError(
+                f"sem_edge_cache declares edge_dim {self.edge_dim} but "
+                f"sem_edge_embeddings is {vecs.shape[1]}-d")
         self.sem_cache = {}
         for key, entry in cache["entries"].items():
             if entry.get("degraded") or entry.get("embedding_uri") is None:
@@ -345,7 +361,7 @@ def freeze_for_stage2(model, backbone) -> dict:
 
 
 def build_stage2_model(encoding: dict, training: dict, hyperparameters: dict,
-                       arch_proto: dict, edge_proto: dict):
+                       arch_proto: dict, *, node_feat_dim: int, edge_feat_dim: int):
     """[P0-3] The Stage 2 dual tower -- WITH the ESSGNN branch.
 
     Stage 1's ``build_model`` sets ``use_layout=False``, which is right there:
@@ -369,10 +385,18 @@ def build_stage2_model(encoding: dict, training: dict, hyperparameters: dict,
     fusion = FusionConfig(kind=training["fusion"], dim=EMBED_DIM, zero_pad=zero_pad)
     essgnn = ESSGNNConfig.from_protocol(
         arch_proto,
-        # U-20: the t_i encoder is unstated by the paper (C's S6), so its width
-        # is read from what n08 actually wrote rather than assumed.
-        node_feat_dim=int(edge_proto["node_embedding_dim"]),
-        edge_feat_dim=int(edge_proto["edge_embedding_dim"]),
+        # MEASURED from n08's artifacts, NOT read from a protocol. An earlier
+        # version took these from `essgnn_edge_protocol["node_embedding_dim"]`
+        # and `["edge_embedding_dim"]`, which nothing writes -- n09b's
+        # EDGE_DECISIONS holds topology / physical_relation_encoding /
+        # semantic_missing_representation / directionality and no widths. The
+        # first real n13 run would have raised KeyError before building
+        # anything, and no test reached this path because n13 has never run.
+        #
+        # A protocol is the right home for a DECISION. A width is a measurement
+        # of what an encoder emitted, so it belongs to the artifact.
+        node_feat_dim=node_feat_dim,
+        edge_feat_dim=edge_feat_dim,
         # Eq. 6 ADDS e_layout to the fused query, so this is not a free choice.
         out_dim=EMBED_DIM,
     )
@@ -437,8 +461,9 @@ def main() -> int:
     # use_layout=False -- correct there, since 2.6 puts ESSGNN in Stage 2 -- so
     # reusing it here left query.layout_encoder as None while encode_query below
     # calls encode_layout, which raises. Eq. 6's lambda was absent too.
-    model = build_stage2_model(encoding, training, hyperparameters,
-                               arch_proto, edge_proto)
+    model = build_stage2_model(encoding, training, hyperparameters, arch_proto,
+                               node_feat_dim=data.node_dim,
+                               edge_feat_dim=data.edge_dim)
     loss_fn = MetaFindContrastiveLoss(ContrastiveConfig(
         # [Eq. 7/8] symmetric, unlike Stage 1's Eq. 5
         bidirectional=True,
@@ -523,10 +548,19 @@ def main() -> int:
                 "variant_id": args.variant,
                 "uri": str(CKPT_DIR / f"stage2_{args.variant}.pt"),
                 "trainable_only": True,
-                "n_params_saved": sum(v.numel() for v in trainable_state_dict(model).values()),
+                "n_params_saved": sum(
+                    v.numel() for m in (model, loss_fn)
+                    for v in trainable_state_dict(m).values()),
             }
         CKPT_DIR.mkdir(parents=True, exist_ok=True)
+        # `loss_trainable_state` is here for the same reason Stage 1 has it, and
+        # the omission was the same bug one stage later: `learnable_temperature`
+        # defaults True, so tau IS in this optimizer -- `params` above takes
+        # loss_fn.parameters() -- and saving only `model` trained it all run and
+        # then dropped it. Nothing errors; the file is simply missing a tensor
+        # that moved.
         torch.save({"trainable_state": trainable_state_dict(model),
+                    "loss_trainable_state": trainable_state_dict(loss_fn),
                     "trainer_version": TRAINER_VERSION,
                     "variant": args.variant}, record["uri"])
         record["sha256"] = hashlib.sha256(Path(record["uri"]).read_bytes()).hexdigest()

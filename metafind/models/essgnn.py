@@ -189,10 +189,23 @@ class ESSGNNConfig:
                 "essgnn_arch_protocol is not resolved; G6 exists to stop Stage 2 "
                 "starting here (U-33, U-17, U-26, U-31, U-22)"
             )
-        required = {"use_io_projections", "distance", "coord_feat",
-                    "layer_sharing", "pooling", "hidden_dim", "n_layers"}
+        required = {"architecture_family", "use_io_projections", "distance",
+                    "coord_feat", "layer_sharing", "pooling", "hidden_dim",
+                    "n_layers"}
         if missing := required - protocol.keys():
             raise ValueError(f"essgnn_arch_protocol is missing {sorted(missing)}")
+        # [C1 / U-26] This class only builds 2.5's two-MLP layer. That is a
+        # legitimate implementation as long as it is DECLARED -- what is not
+        # legitimate is building it while the audit records U-26 as unresolved,
+        # which is what happened while the protocol had no key for it.
+        family = protocol["architecture_family"]
+        if family != "sec25_two_mlp":
+            raise ValueError(
+                f"architecture_family is {family!r}. Only 'sec25_two_mlp' is "
+                "implemented; 'appendix_shared_msg' (phi_e -> m_ij -> phi_x, "
+                "phi_h) is a DIFFERENT model and has no code. A null here means "
+                "C1/U-26 has not been decided -- see "
+                "docs/audit/C_PAPER_CONTRADICTIONS.md#c1.")
         return cls(
             node_feat_dim=node_feat_dim,
             edge_feat_dim=edge_feat_dim,

@@ -2,7 +2,7 @@
  "summary": {
   "metafind": {
    "title": "MetaFind",
-   "arxiv_id": "2510.05057",
+   "arxiv_id": "2510.04057",
    "archive_sha256": "61351d3456dd95dbc6bd641ce25802a4ce3dd492baa7881f856627a49438b4e5",
    "main_tex": "neurips_2025.tex",
    "tex_files_read": 5,
@@ -17,8 +17,8 @@
    "arxiv_id": "2305.08275",
    "archive_sha256": "7d274247d248471817e6f19f7ca78fbdbb05ff5ac30fc816eac1207d8e551b33",
    "main_tex": "main.tex",
-   "tex_files_read": 4,
-   "orphan_tex_ignored": 4,
+   "tex_files_read": 3,
+   "orphan_tex_ignored": 5,
    "display_formulas": 3,
    "numbered": 3,
    "unnumbered": 0,
@@ -29,12 +29,12 @@
    "arxiv_id": "2102.09844",
    "archive_sha256": "3bfe32974cceccb69b6ebcf9b685c1461c7882630ff11262bfb59644eeefb7ff",
    "main_tex": "example_paper.tex",
-   "tex_files_read": 10,
-   "orphan_tex_ignored": 0,
-   "display_formulas": 33,
+   "tex_files_read": 8,
+   "orphan_tex_ignored": 2,
+   "display_formulas": 38,
    "numbered": 12,
-   "unnumbered": 21,
-   "inline_formulas": 523
+   "unnumbered": 26,
+   "inline_formulas": 484
   },
   "idesign": {
    "title": "I-Design",
@@ -49,7 +49,7 @@
    "inline_formulas": 70
   }
  },
- "formulas_total": 56,
+ "formulas_total": 61,
  "checks": [
   "exact_latex is a substring of its source TeX",
   "sha256 matches exact_latex",

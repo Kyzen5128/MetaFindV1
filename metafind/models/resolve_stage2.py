@@ -84,6 +84,27 @@ EDGE_DECISIONS = {
 }
 
 ARCH_DECISIONS = {
+    # [C1 / U-26] WHICH ESSGNN. The paper describes two, and until this key
+    # existed the code silently implemented one of them: ESSGCL builds f_h and
+    # f_x unconditionally, so `essgnn_arch_protocol.status = "resolved"` and
+    # "U-26 is blocking and unresolved" were both true at once and G6 could not
+    # gate the thing it exists to gate.
+    #
+    #   sec25_two_mlp        2.5's f_h and f_x, each reading (d, h_i, h_j, e_ij)
+    #   appendix_shared_msg  the appendix's phi_e -> m_ij -> {phi_x, phi_h}
+    #
+    # NOT a free knob and NOT a value to guess: it selects between two things
+    # the authors themselves wrote, and the two are different models. Written
+    # here as UNRESOLVED so G6 blocks Stage 2 until a person decides.
+    #
+    # Note what is NOT part of this fork. `j in N(i)` versus `j != i` looks like
+    # it belongs here -- 2.5 uses one and the appendix the other -- but EGNN's
+    # own model.tex settles it: "in this work we choose to aggregate messages
+    # from all other nodes j != i, but we could limit the message exchange to a
+    # given neighborhood j in N(i) if desired in both equations". It is an
+    # option upstream states outright, available to EITHER family, so pairing
+    # the appendix's messages with N(i) is not cross-mixing.
+    "architecture_family": None,
     "use_io_projections": True,
     "distance": "squared",
     # ESSGNNConfig's vocabulary is "updated"|"current", not "h_next".
@@ -158,16 +179,30 @@ def assert_matches_code(arch: dict) -> None:
                 "the failure would surface inside Stage 2."
             )
 
-    cfg = ESSGNNConfig.from_protocol(
-        {**arch, "status": "resolved"},
-        node_feat_dim=512, edge_feat_dim=512, out_dim=1280)
-    for field in ("distance", "coord_feat", "layer_sharing", "pooling",
-                  "hidden_dim", "n_layers", "use_io_projections"):
-        if getattr(cfg, field) != arch[field]:
-            raise ValueError(
-                f"essgnn_arch_protocol.{field} = {arch[field]!r} did not survive "
-                f"ESSGNNConfig, which holds {getattr(cfg, field)!r}"
-            )
+    # from_protocol names its own required set; check it HERE rather than by
+    # letting the call below raise, because that call is skipped while C1 is
+    # undecided and a missing field would then go unreported until Stage 2.
+    required = {"architecture_family", "use_io_projections", "distance",
+                "coord_feat", "layer_sharing", "pooling", "hidden_dim",
+                "n_layers"}
+    if missing := required - arch.keys():
+        raise ValueError(f"essgnn_arch_protocol is missing {sorted(missing)}")
+
+    # C1 undecided: the round trip through ESSGNNConfig cannot run, because
+    # from_protocol correctly refuses an undecided family. Skipping only that
+    # step -- rather than substituting a placeholder family -- keeps this
+    # function from being the place that quietly picks one.
+    if arch["architecture_family"] is not None:
+        cfg = ESSGNNConfig.from_protocol(
+            {**arch, "status": "resolved"},
+            node_feat_dim=512, edge_feat_dim=512, out_dim=1280)
+        for field in ("distance", "coord_feat", "layer_sharing", "pooling",
+                      "hidden_dim", "n_layers", "use_io_projections"):
+            if getattr(cfg, field) != arch[field]:
+                raise ValueError(
+                    f"essgnn_arch_protocol.{field} = {arch[field]!r} did not "
+                    f"survive ESSGNNConfig, which holds {getattr(cfg, field)!r}"
+                )
     # [U-35] mlp_structure has no config field, so the string describes the
     # code. Assert the description is still true, and refuse any other value --
     # recording one essgnn.py does not implement is worse than recording none.
@@ -221,7 +256,15 @@ def main() -> int:
         _write(POSITIVE_MAP, mapping)
         _write(EDGE_PROTOCOL, {"status": "resolved", **EDGE_DECISIONS, **stamp})
         assert_matches_code(ARCH_DECISIONS)
-        _write(ARCH_PROTOCOL, {"status": "resolved", **ARCH_DECISIONS, **stamp})
+        # [C1 / U-26] The arch protocol is "resolved" ONLY when the ESSGNN
+        # family has been chosen. While it is None the file is written -- every
+        # other decision in it is real and worth recording -- but marked
+        # unresolved, so G6 blocks Stage 2 and ESSGNNConfig.from_protocol
+        # refuses. Previously this said "resolved" unconditionally, which is how
+        # "U-26 is blocking" and "the arch protocol is resolved" coexisted.
+        arch_status = ("resolved" if ARCH_DECISIONS["architecture_family"]
+                       else "unresolved_c1_architecture_family")
+        _write(ARCH_PROTOCOL, {"status": arch_status, **ARCH_DECISIONS, **stamp})
 
     print(f"Stage 2 protocols materialised by {decided_by}")
     print(f"  positives      {len(mapping):,} assets, identity mapping")

@@ -82,7 +82,7 @@ def test_the_guard_rejects_a_backbone_that_is_not_saved():
         def trainable_parameters(self):
             return list(nn.Linear(7, 7).parameters())
 
-    with pytest.raises(RuntimeError, match="in the optimizer but in none"):
+    with pytest.raises(RuntimeError, match="belong to no module"):
         assert_checkpoint_covers_optimizer(Detached(), m, l, sections(b, m, l))
 
 

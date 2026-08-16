@@ -226,8 +226,15 @@ def main() -> int:
                     vectors.append(model.gallery(embeds)[0].cpu().numpy())
                 if (i + 1) % 2000 == 0:
                     print(f"  [{i + 1:6d}/{len(ids)}]", flush=True)
-            record = build_index(np.stack(vectors), ids,
-                                 paths.OUTPUTS / "gallery_index.npz")
+            # Named by the checkpoint that produced it, NOT a fixed live path.
+            # `gallery_index.npz` was overwritten by every rebuild while the
+            # promoted registry kept a record per stage1_sha -- so an older
+            # record's `sha256` stopped matching the bytes at its own `uri`, and
+            # the write-once guarantee that promotion exists to provide was not
+            # actually held by anything on disk.
+            record = build_index(
+                np.stack(vectors), ids,
+                paths.OUTPUTS / f"gallery_index_{ckpt_record['sha256'][:16]}.npz")
             record["gallery_encoder_sha256"] = encoder_sha
             _write(STAGING_PATH, {ckpt_record["sha256"]: record})
             print(f"\nstaged {record['count']:,} x {record['dim']} "
@@ -276,8 +283,9 @@ def main() -> int:
                 if len(ids) % 200 == 0:
                     print(f"  [{len(ids):5d}/{len(mods)}]", flush=True)
 
-            record = build_index(np.stack(vectors), ids,
-                                 paths.OUTPUTS / "stage2_gallery.npz")
+            record = build_index(
+                np.stack(vectors), ids,
+                paths.OUTPUTS / f"stage2_gallery_{ckpt_record['sha256'][:16]}.npz")
             record.update({
                 "asset_ids": ids,
                 "embedding_dim": record["dim"],

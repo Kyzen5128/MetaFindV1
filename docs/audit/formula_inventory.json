@@ -2,7 +2,7 @@
  "summary": {
   "metafind": {
    "title": "MetaFind",
-   "arxiv_id": "2510.05057",
+   "arxiv_id": "2510.04057",
    "archive_sha256": "61351d3456dd95dbc6bd641ce25802a4ce3dd492baa7881f856627a49438b4e5",
    "main_tex": "neurips_2025.tex",
    "tex_files_read": 5,
@@ -17,8 +17,8 @@
    "arxiv_id": "2305.08275",
    "archive_sha256": "7d274247d248471817e6f19f7ca78fbdbb05ff5ac30fc816eac1207d8e551b33",
    "main_tex": "main.tex",
-   "tex_files_read": 4,
-   "orphan_tex_ignored": 4,
+   "tex_files_read": 3,
+   "orphan_tex_ignored": 5,
    "display_formulas": 3,
    "numbered": 3,
    "unnumbered": 0,
@@ -29,12 +29,12 @@
    "arxiv_id": "2102.09844",
    "archive_sha256": "3bfe32974cceccb69b6ebcf9b685c1461c7882630ff11262bfb59644eeefb7ff",
    "main_tex": "example_paper.tex",
-   "tex_files_read": 10,
-   "orphan_tex_ignored": 0,
-   "display_formulas": 33,
+   "tex_files_read": 8,
+   "orphan_tex_ignored": 2,
+   "display_formulas": 38,
    "numbered": 12,
-   "unnumbered": 21,
-   "inline_formulas": 523
+   "unnumbered": 26,
+   "inline_formulas": 484
   },
   "idesign": {
    "title": "I-Design",
@@ -535,6 +535,48 @@
   {
    "paper": "EG",
    "source_tex": "sections/appendix.tex",
+   "source_line": 7,
+   "section": "Equivariance Proof",
+   "environment": "$$",
+   "equation_label": null,
+   "equation_number": null,
+   "numbered": false,
+   "exact_latex": "Q\\rmx^{l+1} + g, \\rmh^{l+1}  = \\mathrm{EGCL}(Q\\rmx^l + g, \\rmh^l)",
+   "sha256": "f5daa37b9f11201a9e7790078546b1b53ee8306706dd71f234ceb639fedf29bc",
+   "parent_environment_sha256": null,
+   "id": "EG-U10"
+  },
+  {
+   "paper": "EG",
+   "source_tex": "sections/appendix.tex",
+   "source_line": 11,
+   "section": "Equivariance Proof",
+   "environment": "$$",
+   "equation_label": null,
+   "equation_number": null,
+   "numbered": false,
+   "exact_latex": "\\rmm_{i, j} =\\phi_{e}\\left(\\rmh_{i}^{l}, \\rmh_{j}^{l},\\left\\|Q\\rmx_{i}^{l} + g- [Q\\rmx_{j}^{l} + g]\\right\\|^{2}, a_{i j}\\right) = \\phi_{e}\\left(\\rmh_{i}^{l}, \\rmh_{j}^{l},\\left\\|\\rmx_{i}^{l} - \\rmx_{j}^{l} \\right\\|^{2}, a_{i j}\\right)",
+   "sha256": "21ac5c6066d09c99c536351a29095e93c2cc5c610305d9e60828d5a8d5e0b151",
+   "parent_environment_sha256": null,
+   "id": "EG-U11"
+  },
+  {
+   "paper": "EG",
+   "source_tex": "sections/appendix.tex",
+   "source_line": 14,
+   "section": "Equivariance Proof",
+   "environment": "$$",
+   "equation_label": null,
+   "equation_number": null,
+   "numbered": false,
+   "exact_latex": "Q\\rmx_{i}^{l+1} + g  = Q\\rmx_{i}^{l} + g +C\\sum_{j \\neq i}\\left(Q\\rmx_{i}^{l} + g - [Q\\rmx_{j}^{l} + g]\\right) \\phi_{x}\\left(\\rmm_{i, j}\\right)",
+   "sha256": "70dc888729d287b6acf186d22785130ebf14d8f51a4b02223fc2ab21ecddaf49",
+   "parent_environment_sha256": null,
+   "id": "EG-U12"
+  },
+  {
+   "paper": "EG",
+   "source_tex": "sections/appendix.tex",
    "source_line": 17,
    "section": "Equivariance Proof",
    "environment": "align*",
@@ -544,7 +586,7 @@
    "exact_latex": "\n    Q\\rmx_{i}^{l} + g +C\\sum_{j \\neq i}\\left(Q\\rmx_{i}^{l} + g - Q\\rmx_{j}^{l} - g\\right) \\phi_{x}\\left(\\rmm_{i, j}\\right)\n    &= Q\\rmx_{i}^{l} + g +QC\\sum_{j \\neq i}\\left(\\rmx_{i}^{l} - \\rmx_{j}^{l}\\right) \\phi_{x}\\left(\\rmm_{i, j}\\right)",
    "sha256": "67cd99f5c44987c33c3bcf7745428e17c49ceefd5e1940a163b02776698c2824",
    "parent_environment_sha256": "f52fc5727ac17d180b2df9a4831a7fd8a7496a039d1764ea9b865b282150bd97",
-   "id": "EG-U10"
+   "id": "EG-U13"
   },
   {
    "paper": "EG",
@@ -558,7 +600,7 @@
    "exact_latex": "\n    &= Q\\left(\\rmx_{i}^{l} +C\\sum_{j \\neq i}\\left(\\rmx_{i}^{l} - \\rmx_{j}^{l}\\right) \\phi_{x}\\left(\\rmm_{i, j}\\right) \\right) + g",
    "sha256": "53bcd790f26c91c8f3a2c4daa82be7cfdbd5d47218ea18051fa11a92a3481bc5",
    "parent_environment_sha256": "f52fc5727ac17d180b2df9a4831a7fd8a7496a039d1764ea9b865b282150bd97",
-   "id": "EG-U11"
+   "id": "EG-U14"
   },
   {
    "paper": "EG",
@@ -572,7 +614,7 @@
    "exact_latex": "\n    &= Q\\rmx_{i}^{l+1} + g\n",
    "sha256": "e3a094bf49a1344edf2d8935abf481b443e0a78f6ede37761adb61eea3cc6eb2",
    "parent_environment_sha256": "f52fc5727ac17d180b2df9a4831a7fd8a7496a039d1764ea9b865b282150bd97",
-   "id": "EG-U12"
+   "id": "EG-U15"
   },
   {
    "paper": "EG",
@@ -586,7 +628,7 @@
    "exact_latex": "\n\\rmm_{i j} &=\\phi_{e}\\left(\\rmh_{i}^{l}, \\rmh_{j}^{l},\\left\\|\\rmx_{i}^{l}-\\rmx_{j}^{l}\\right\\|^{2}, a_{i j}\\right) ",
    "sha256": "ebbc49d73b80dcab418b42196ee16acf5938becbe518654ac4e6922422b8fb6b",
    "parent_environment_sha256": "5dec6c24007243e4f46942e6d43c47e348fa19e4b8e05994506b6dcf19dcafe9",
-   "id": "EG-U13"
+   "id": "EG-U16"
   },
   {
    "paper": "EG",
@@ -600,7 +642,7 @@
    "exact_latex": " \n \\rmv_{i}^{l+1}&= \\phi_{v}\\left(\\rmh_{i}^l\\right)\\rmv_{i}^{\\text{init}} +C\\sum_{j \\neq i}\\left(\\rmx_{i}^{l}-\\rmx_{j}^{l}\\right) \\phi_{x}\\left(\\rmm_{i j}\\right) ",
    "sha256": "9e50c4a2218627f0c036aded5688c56a259af5e3cc831d056653d0c4d5df218c",
    "parent_environment_sha256": "5dec6c24007243e4f46942e6d43c47e348fa19e4b8e05994506b6dcf19dcafe9",
-   "id": "EG-U14"
+   "id": "EG-U17"
   },
   {
    "paper": "EG",
@@ -614,7 +656,7 @@
    "exact_latex": "\n\\rmx_{i}^{l+1} &=\\mathbf{x}_{i}^{l}+ \\mathbf{v}_i^{l+1} ",
    "sha256": "2237559dcdded3a338496c19a7a89884593a336093b293576f13ca0c8eb698f7",
    "parent_environment_sha256": "5dec6c24007243e4f46942e6d43c47e348fa19e4b8e05994506b6dcf19dcafe9",
-   "id": "EG-U15"
+   "id": "EG-U18"
   },
   {
    "paper": "EG",
@@ -628,7 +670,7 @@
    "exact_latex": "\n\\rmm_{i} &=\\sum_{j \\neq i} \\rmm_{i j} ",
    "sha256": "8e89c73228a9d31405cbbd487e8d62f250bed3b92031d0c9f45b98ab84ec479b",
    "parent_environment_sha256": "5dec6c24007243e4f46942e6d43c47e348fa19e4b8e05994506b6dcf19dcafe9",
-   "id": "EG-U16"
+   "id": "EG-U19"
   },
   {
    "paper": "EG",
@@ -642,7 +684,21 @@
    "exact_latex": "\n\\rmh_{i}^{l+1} &=\\phi_{h}\\left(\\rmh_{i}^l, \\rmm_{i}\\right)\n",
    "sha256": "b65b462c3b63c4a8ecf1dbda993854c4401dd77e43976d341d53b379a38e887d",
    "parent_environment_sha256": "5dec6c24007243e4f46942e6d43c47e348fa19e4b8e05994506b6dcf19dcafe9",
-   "id": "EG-U17"
+   "id": "EG-U20"
+  },
+  {
+   "paper": "EG",
+   "source_tex": "sections/appendix.tex",
+   "source_line": 41,
+   "section": "Equivariance proof for velocity type inputs",
+   "environment": "$$",
+   "equation_label": null,
+   "equation_number": null,
+   "numbered": false,
+   "exact_latex": "\\rmh^{l+1}, Q\\rmx^{l+1} + g, Q\\rmv^{l+1} = \\text{EGCL}[\\rmh^{l}, Q\\rmx^{l} + g, Q\\rmv^{\\text{init}}, \\mathcal{E}]",
+   "sha256": "4ca20f0f14a658520260b577ca61a3e2f2b987328b3d49ece503b96788a1bb73",
+   "parent_environment_sha256": null,
+   "id": "EG-U21"
   },
   {
    "paper": "EG",
@@ -656,7 +712,7 @@
    "exact_latex": "\n     \\rmv_{i}^{l+1}&= \\phi_{v}\\left(\\rmh_{i}^l\\right)\\rmv_{i}^{\\text{init}} +C\\sum_{j \\neq i}\\left(\\rmx_{i}^{l}-\\rmx_{j}^{l}\\right) \\phi_{x}\\left(\\rmm_{i j}\\right) ",
    "sha256": "93563c04426b951499d0453c5eb01d3f53c1eb80f0edff4d5c3269e2fbd4c166",
    "parent_environment_sha256": "ffaf8e443d20ba8f05eda397199bb0e30827d823fbb90cb9e696e0236ef853bd",
-   "id": "EG-U18"
+   "id": "EG-U22"
   },
   {
    "paper": "EG",
@@ -670,7 +726,21 @@
    "exact_latex": "\n\\rmx_{i}^{l+1} &=\\mathbf{x}_{i}^{l}+ \\mathbf{v}_i^{l+1} ",
    "sha256": "2237559dcdded3a338496c19a7a89884593a336093b293576f13ca0c8eb698f7",
    "parent_environment_sha256": "ffaf8e443d20ba8f05eda397199bb0e30827d823fbb90cb9e696e0236ef853bd",
-   "id": "EG-U19"
+   "id": "EG-U23"
+  },
+  {
+   "paper": "EG",
+   "source_tex": "sections/appendix.tex",
+   "source_line": 49,
+   "section": "Equivariance proof for velocity type inputs",
+   "environment": "$$",
+   "equation_label": null,
+   "equation_number": null,
+   "numbered": false,
+   "exact_latex": "Q\\rmv_{i}^{l+1} = \\phi_{v}\\left(\\rmh_{i}^l\\right)Q\\rmv_{i}^{\\text{init}} +C\\sum_{j \\neq i}\\left(Q\\rmx_{i}^{l} + g - [Q\\rmx_{j}^{l} + g]\\right) \\phi_{x}\\left(\\rmm_{i j}\\right)",
+   "sha256": "1d43d24235df90ce2e02583cbe649cee0ed2068181cba5c16586af4fefb45e10",
+   "parent_environment_sha256": null,
+   "id": "EG-U24"
   },
   {
    "paper": "EG",
@@ -726,7 +796,7 @@
    "exact_latex": "\n    Q\\mathbf{x}_{i}^{l}+ g + Q\\mathbf{v}_i^{l+1} &= Q\\left (\\mathbf{x}_{i}^{l} +\\mathbf{v}_i^{l+1} \\right ) +g ",
    "sha256": "225772bcb32229ff47c8b8921008df641944c26e5184fe5ecea29f28c65f25e6",
    "parent_environment_sha256": "18cf3e8203fed0012918fe8abd8a63c7f53ba0f5c614735eb6cc7f9635f47649",
-   "id": "EG-U23"
+   "id": "EG-U28"
   },
   {
    "paper": "EG",
@@ -740,7 +810,7 @@
    "exact_latex": "\n    &= Q\\rmx_{i}^{l+1} + g\n",
    "sha256": "e3a094bf49a1344edf2d8935abf481b443e0a78f6ede37761adb61eea3cc6eb2",
    "parent_environment_sha256": "18cf3e8203fed0012918fe8abd8a63c7f53ba0f5c614735eb6cc7f9635f47649",
-   "id": "EG-U24"
+   "id": "EG-U29"
   },
   {
    "paper": "EG",
@@ -754,7 +824,7 @@
    "exact_latex": "\n    \\ell_2(Q\\rmx_i + t, Q\\rmx_j + t) &= \\sqrt{} (Q\\rmx_i + t - [Q\\rmx_j + t])^T(Q\\rmx_i + t - [Q\\rmx_j + t]) = \\sqrt{} (Q\\rmx_i - Q\\rmx_j)^T(Q\\rmx_i - Q\\rmx_j) ",
    "sha256": "9af0ecf258338b3f59f789e029961f61f6665c0bb104e4256772c476e9cfda91",
    "parent_environment_sha256": "c2b8dfd3f689c9b93a3d1a23465d3156b007aae536eb9f061929587648ab5758",
-   "id": "EG-U25"
+   "id": "EG-U30"
   },
   {
    "paper": "EG",
@@ -768,7 +838,7 @@
    "exact_latex": "\n    &= \\sqrt{} (\\rmx_i - \\rmx_j)^T Q^T Q (\\rmx_i - \\rmx_j) = \\sqrt{} (\\rmx_i - \\rmx_j)^T (\\rmx_i - \\rmx_j) = \\ell_2(\\rmx_i, \\rmx_j)\n",
    "sha256": "62d329fa474e44f0c18416a65ce9f69fd29959b5b0547366fd950df51e14d5d3",
    "parent_environment_sha256": "c2b8dfd3f689c9b93a3d1a23465d3156b007aae536eb9f061929587648ab5758",
-   "id": "EG-U26"
+   "id": "EG-U31"
   },
   {
    "paper": "EG",
@@ -782,7 +852,7 @@
    "exact_latex": "\n    \\ell_2(\\tilde{\\rmx}_i, \\tilde{\\rmx}_j) = \\ell_2(\\rmx_i, \\rmx_j) = \\ell_2(\\rmy_i, \\rmy_j) = \\ell_2(\\tilde{\\rmy}_i, \\tilde{\\rmy}_j).\n",
    "sha256": "5ffe1f6d3ed46dfc9e9689c0513916895ef812b4a18c206a44eedcbb5defdf00",
    "parent_environment_sha256": null,
-   "id": "EG-U27"
+   "id": "EG-U32"
   },
   {
    "paper": "EG",
@@ -796,7 +866,7 @@
    "exact_latex": "\n    \\rmx_i^T\\rmx_i - 2 \\rmx_i^T\\rmx_j + \\rmx_j^T\\rmx_j = ||\\rmx_i - \\rmx_j||_2^2 = ||\\rmy_i - \\rmy_j||_2^2 = \\rmy_i^T\\rmy_i - 2 \\rmy_i^T\\rmy_j + \\rmy_j^T\\rmy_j\n",
    "sha256": "ef5aed6f2aa25b3bca37f56e800a974143e4a6b89814c690d1ac9e6ef728f36f",
    "parent_environment_sha256": null,
-   "id": "EG-U28"
+   "id": "EG-U33"
   },
   {
    "paper": "EG",
@@ -810,7 +880,7 @@
    "exact_latex": "\n    || \\sum_i c_i \\rmx_i ||_2 = || \\sum_i c_i \\rmy_i ||_2 \\quad (*).\\vspace{-.3cm}\n",
    "sha256": "10b005ebd1f8399efae5812fff67ac3d8d19a7c4639867dd123697a7f7ea996c",
    "parent_environment_sha256": null,
-   "id": "EG-U29"
+   "id": "EG-U34"
   },
   {
    "paper": "EG",
@@ -824,7 +894,7 @@
    "exact_latex": "\n    ||\\rmy_i - \\sum_j c_j \\rmy_{i_j}||_2^2 &= \\langle \\rmy_i, \\rmy_i \\rangle - 2 \\langle \\rmy_i, \\sum_j c_i \\rmy_{i_j} \\rangle + \\langle \\sum_j c_i \\rmy_{i_j}, \\sum_j c_i \\rmy_{i_j} \\rangle ",
    "sha256": "f7500e7f273537f7c1137f0762fffc3e201295829fa84b3c409343f5ac47e612",
    "parent_environment_sha256": "df91c98f9e31e4b76113c742a913314f95f20c9017827993b0ef5b7e5bb221c2",
-   "id": "EG-U30"
+   "id": "EG-U35"
   },
   {
    "paper": "EG",
@@ -838,7 +908,7 @@
    "exact_latex": "\n    &\\stackrel{(*)}{=} \\langle \\rmx_i, \\rmx_i \\rangle - 2 \\langle \\rmx_i, \\sum_j c_i \\rmx_{i_j} \\rangle + \\langle \\sum_j c_i \\rmx_{i_j}, \\sum_j c_i \\rmx_{i_j} \\rangle = \\langle \\rmx_i, \\rmx_i \\rangle - 2 \\langle \\rmx_i, \\rmx_i \\rangle + \\langle \\rmx_i, \\rmx_i \\rangle = 0.\n",
    "sha256": "2ab3a0e63838d1a29b8ac51a938fcaf8c78add6fe2b7f4a292c48136f9bb678f",
    "parent_environment_sha256": "df91c98f9e31e4b76113c742a913314f95f20c9017827993b0ef5b7e5bb221c2",
-   "id": "EG-U31"
+   "id": "EG-U36"
   },
   {
    "paper": "EG",
@@ -852,7 +922,7 @@
    "exact_latex": "\n    \\langle A \\rmx_{i_j}, A \\rmx_{i_j} \\rangle = \\langle \\rmy_{i_j}, \\rmy_{i_j} \\rangle = \\langle \\rmx_{i_j}, \\rmx_{i_j} \\rangle \n",
    "sha256": "e3746f88d8fdeb2801c66d883de0650f695a1a2a2071ac050b73449945b77581",
    "parent_environment_sha256": null,
-   "id": "EG-U32"
+   "id": "EG-U37"
   }
  ]
 }

@@ -471,12 +471,13 @@ def test_shared_fx_gets_gradient_that_independent_final_fx_does_not():
 def test_from_protocol_is_the_supported_construction_path():
     from metafind.models.essgnn import PRIMARY_INTERPRETATION
 
-    proto = dict(status="resolved", use_io_projections=False, distance="euclidean",
+    proto = dict(status="resolved", architecture_family="sec25_two_mlp",
+                 use_io_projections=False, distance="euclidean",
                  coord_feat="current", layer_sharing="shared", pooling="sum",
                  hidden_dim=32, n_layers=2)
     cfg = ESSGNNConfig.from_protocol(proto, node_feat_dim=32, edge_feat_dim=32, out_dim=32)
     for k, v in proto.items():
-        if k != "status":
+        if k not in ("status", "architecture_family"):
             assert getattr(cfg, k) == v, f"{k} did not survive from_protocol"
     for k, v in PRIMARY_INTERPRETATION.items():
         assert getattr(cfg, k) == v, f"{k} must stay at the paper-locked value"
@@ -492,7 +493,7 @@ def test_from_protocol_refuses_an_unresolved_protocol():
 def test_from_protocol_refuses_a_partial_protocol():
     with pytest.raises(ValueError, match="missing"):
         ESSGNNConfig.from_protocol(
-            {"status": "resolved", "distance": "squared"},
+            {"status": "resolved", "architecture_family": "sec25_two_mlp", "distance": "squared"},
             node_feat_dim=8, edge_feat_dim=8, out_dim=8,
         )
 

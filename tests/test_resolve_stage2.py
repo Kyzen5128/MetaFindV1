@@ -165,3 +165,46 @@ def test_the_exclusion_is_reported_not_silent(monkeypatch, tmp_path):
     mapping, skipped = build_positive_map()
     assert mapping == {}
     assert len(skipped) == 3
+
+
+# --- C1 / U-26: the protocol must carry the architecture choice --------------
+
+def test_the_architecture_family_is_undecided_not_defaulted():
+    """[C1 / U-26] The audit calls U-26 blocking; the protocol must agree.
+
+    Before this key existed, ESSGCL built f_h and f_x unconditionally, so
+    "U-26 is unresolved and blocking" and "essgnn_arch_protocol.status =
+    resolved" were both true at once. G6 could not gate the one thing it was
+    written to gate.
+    """
+    assert "architecture_family" in ARCH_DECISIONS
+    assert ARCH_DECISIONS["architecture_family"] is None, (
+        "a value here means C1 was decided -- update "
+        "docs/audit/C_PAPER_CONTRADICTIONS.md and say who decided and why")
+
+
+def test_an_undecided_family_refuses_to_build_a_config():
+    from metafind.models.essgnn import ESSGNNConfig
+
+    proto = {**ARCH_DECISIONS, "status": "resolved"}
+    with pytest.raises(ValueError, match="architecture_family"):
+        ESSGNNConfig.from_protocol(proto, node_feat_dim=8, edge_feat_dim=8, out_dim=8)
+
+
+def test_the_unimplemented_family_is_refused_rather_than_approximated():
+    """`appendix_shared_msg` has no code. Accepting it would run the two-MLP
+    layer under the appendix's name -- a wrong label on a real experiment."""
+    from metafind.models.essgnn import ESSGNNConfig
+
+    proto = {**ARCH_DECISIONS, "status": "resolved",
+             "architecture_family": "appendix_shared_msg"}
+    with pytest.raises(ValueError, match="no code"):
+        ESSGNNConfig.from_protocol(proto, node_feat_dim=8, edge_feat_dim=8, out_dim=8)
+
+
+def test_assert_matches_code_still_checks_everything_else_while_c1_is_open():
+    """The early return must skip ONLY the config round trip."""
+    with pytest.raises(ValueError, match="mlp_structure|not one of"):
+        assert_matches_code({**ARCH_DECISIONS, "mlp_structure": "linear_relu_linear"})
+    with pytest.raises(ValueError, match="not one of"):
+        assert_matches_code({**ARCH_DECISIONS, "distance": "l2"})

@@ -46,6 +46,13 @@ ENVS = NUMBERED + STARRED + ("displaymath",)
 ENV_RE = re.compile(
     r"\\begin\{(" + "|".join(ENVS) + r")\}(.*?)\\end\{\1\}", re.S)
 BRACKET_RE = re.compile(r"(?<!\\)\\\[(.*?)(?<!\\)\\\]", re.S)
+# Plain TeX display math. Only EGNN's appendix uses it -- six blocks, including
+# the EGCL equivariance target and the velocity-variant statements -- and an
+# earlier version of this file did not scan for it at all. The census then
+# reported `failures: []`, which proved only that the formulas it HAD found were
+# uncorrupted; it said nothing about the ones it never looked for. Completeness
+# and integrity are different claims and the validation now makes both.
+DOLLAR_RE = re.compile(r"(?<![\\$])\$\$(.+?)\$\$", re.S)
 LABEL_RE = re.compile(r"\\label\{([^}]+)\}")
 SECTION_RE = re.compile(r"\\(sub)*section\*?\{([^}]*)\}")
 
@@ -88,6 +95,8 @@ def rows_matching(clean: str, raw: str, rel: str, short: str,
         found.append((m.start(), m.group(1), m.group(2)))
     for m in BRACKET_RE.finditer(clean):
         found.append((m.start(), r"\[\]", m.group(1)))
+    for m in DOLLAR_RE.finditer(clean):
+        found.append((m.start(), "$$", m.group(1)))
     found.sort()
 
     rows = []

@@ -223,16 +223,40 @@ def assert_checkpoint_covers_optimizer(backbone, model, loss_fn, sections: dict)
     in_opt = {id(p) for p in
               list(backbone.trainable_parameters()) + list(model.parameters())
               + list(loss_fn.parameters()) if p.requires_grad}
-    saved = set()
-    for module in (backbone.model, model, loss_fn):
-        saved |= {id(p) for p in module.parameters() if p.requires_grad}
-    if missing := in_opt - saved:
-        raise RuntimeError(
-            f"{len(missing)} parameter(s) are in the optimizer but in none of the "
-            f"checkpoint sections {CKPT_SECTIONS}; Stage 1 would train them and "
-            "throw the result away")
     if not in_opt:
         raise RuntimeError("the optimizer has no trainable parameters at all")
+
+    # Compared against WHAT IS IN `sections`, not against what the modules
+    # happen to expose. An earlier version rebuilt `saved` by walking the same
+    # three modules again, which proves only that the optimizer's tensors live
+    # in modules we intend to serialise -- a tautology, since `sections` was
+    # built from those very modules. It would have passed even if
+    # trainable_state_dict had silently dropped a key.
+    #
+    # Names, not identities, on this side: a state dict holds detached CPU
+    # copies, so `id()` cannot match across the copy. The names come from the
+    # same `named_parameters()` call that produced the dict, so a rename cannot
+    # desynchronise them either.
+    saved_names = {f"{sec}:{n}" for sec, state in sections.items() for n in state}
+    expected = set()
+    for sec, module in (("backbone_trainable_state", backbone.model),
+                        ("tower_trainable_state", model),
+                        ("loss_trainable_state", loss_fn)):
+        expected |= {f"{sec}:{n}" for n, p in module.named_parameters()
+                     if p.requires_grad and id(p) in in_opt}
+    if missing := expected - saved_names:
+        raise RuntimeError(
+            f"{len(missing)} parameter(s) are in the optimizer but absent from "
+            f"the checkpoint sections, e.g. {sorted(missing)[:3]}; Stage 1 would "
+            "train them and throw the result away")
+
+    covered = {id(p) for _, module in (("b", backbone.model), ("t", model),
+                                       ("l", loss_fn))
+               for p in module.parameters() if p.requires_grad}
+    if orphaned := in_opt - covered:
+        raise RuntimeError(
+            f"{len(orphaned)} parameter(s) are in the optimizer but belong to no "
+            f"module the checkpoint serialises {CKPT_SECTIONS}")
 
 
 def load_stage1_checkpoint(backbone, model, loss_fn, path=None,
