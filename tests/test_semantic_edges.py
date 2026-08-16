@@ -168,12 +168,29 @@ def test_a_prompt_that_gained_a_coordinate_trips_its_own_assertion(monkeypatch):
     ("A pillow rests on a bed.", "A pillow rests on a bed."),
     ('  "A pillow rests on a bed."  ', "A pillow rests on a bed."),
     ("Sure, here it is: A pillow rests on a bed.", "A pillow rests on a bed."),
+    ("Here is the sentence: A rug lies under a table.",
+     "A rug lies under a table."),
     ("```\nA pillow rests on a bed.\n```", "A pillow rests on a bed."),
     ("A pillow rests on a bed.\nThey are both bedroom items.",
      "A pillow rests on a bed."),
 ])
 def test_parse_sentence_strips_the_wrapping(raw, expected):
     assert parse_sentence(raw) == expected
+
+
+@pytest.mark.parametrize("raw", [
+    "A lamp: it stands on a nightstand.",
+    "A desk lamp: used for reading at a desk.",
+])
+def test_a_legitimate_colon_keeps_its_subject(raw):
+    """Preamble stripping must not eat the object the relation is about.
+
+    The first version matched any short prefix ending in a colon, so
+    "A lamp: it stands on a nightstand." became "it stands on a nightstand."
+    and the lamp vanished from the embedding. Carrying a constant preamble is
+    the lesser harm -- it shifts every edge alike; losing content does not.
+    """
+    assert parse_sentence(raw) == raw
 
 
 @pytest.mark.parametrize("bad", ["", "   ", "\n", "123 456", "!!! ???"])

@@ -87,6 +87,24 @@ _COORDINATE_HINT = re.compile(
 )
 
 
+# A chat model's "Sure, here it is:" wrapper, and nothing else. The first
+# version of this matched ANY short prefix ending in a colon, which silently ate
+# the subject of a legitimate sentence -- "A lamp: it stands on a nightstand."
+# became "it stands on a nightstand.", and the object the relation is about was
+# gone from the embedding. Losing content is worse than carrying a constant
+# preamble, which at least shifts every edge alike.
+#
+# The list is deliberately short and literal. n08 has not run yet, so anything
+# broader would be guessing at a failure mode we have not observed; if the real
+# run shows other wrappers, they get added with the evidence attached.
+_PREAMBLE = re.compile(
+    r"^\s*(?:sure|certainly|of course|okay|ok|here(?:'s| is| it is)?|"
+    r"the (?:answer|response|sentence|relationship)|"
+    r"answer|response|sentence|relationship)\b[^.\n]{0,40}:\s*",
+    re.I,
+)
+
+
 class SemanticEdgeError(Exception):
     """A rejected relation sentence, carrying the message the repair prompt needs."""
 
@@ -176,9 +194,7 @@ def parse_sentence(raw: str) -> str:
     fenced = re.search(r"```(?:\w+)?\s*(.*?)```", text, re.S)
     if fenced:
         text = fenced.group(1).strip()
-    # A leading "Sure, here is ...:" preamble, only when a colon precedes the
-    # actual sentence on the same line.
-    text = re.sub(r"^[^.\n]{0,60}:\s*", "", text, count=1)
+    text = _PREAMBLE.sub("", text, count=1)
     text = text.strip().strip('"').strip()
     first = text.split("\n", 1)[0].strip()
     return first

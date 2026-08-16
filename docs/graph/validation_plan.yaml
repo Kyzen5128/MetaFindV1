@@ -948,6 +948,19 @@ level_2:
     expected_on_injection: "the equality fails"
     verified_blocks: false
     cited_by_gate: G3_object_corpus
+    note: >
+      [MEASURED 2026-08-16] `quarantined` here means UNIQUE uids MINUS the
+      admitted set, and both subtractions are load-bearing. The quarantine
+      channel is append-only and written as failures happen, so n04's file holds
+      143 records for 99 distinct uids -- a uid reappears each time a batch
+      retried it. Two of those 99 succeeded on a later pass and are in the
+      renders index as well. Taking the file at face value gives
+      45,955 + 99 = 46,054 against a 46,052 manifest, and the equality this
+      check asserts FAILS by exactly the two recovered assets. The danger is not
+      the arithmetic, it is the repair: the obvious way to make a failing
+      equality pass is to loosen it. Counting lines instead of uids inflates the
+      rate the other way, 0.31% against a true 0.21%, which would be reported
+      against G3's 2% ceiling as if it were the measured value.
 
   - id: L2-RESUME
     kind: resume_equivalence

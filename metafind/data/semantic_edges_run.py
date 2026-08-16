@@ -77,11 +77,31 @@ NODE = "n08_semantic_edges"
 LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"  # D-2's stand-in, text-only here
 
 # [U-06, the "width of e_ij" half] The paper says "a frozen text encoder (e.g.,
-# CLIP or BERT)" and stops. CLIP ViT-B/32 gives 512 dimensions; the bigG variant
-# also cached here gives 1280, which would make e_ij wider than the node feature
-# it is concatenated with in f_h : R^(2d+1+e) -> R^d. Recorded as our choice.
+# CLIP or BERT)" and stops, so the width is ours to choose -- and F8 MEASURED
+# that the choice is consequential rather than cosmetic:
+#
+#     e_ij width      geometric sensitivity
+#            16                       50.9
+#          1280                       1.14
+#
+# f_h takes (2*hidden + 1 + e), where hidden is 128 and the geometry enters as
+# the SINGLE scalar ||x_i - x_j||^2. A 1280-wide edge feature is ten times the
+# node width and drowns that scalar about 45-fold. Note this is about `hidden`,
+# not about t_i's raw width: ESSGNN projects node features to hidden_dim first,
+# so the thing e_ij is concatenated with is 128-d whatever encoder produced t_i.
+#
+# CLIP ViT-B/32 at 512 is the smaller of the two CLIPs already cached here. The
+# tower uses ViT-bigG-14 (1280) and deliberately is NOT reused: the tower's job
+# is to be the retrieval space, ESSGNN's job is to keep geometry legible, and
+# F8 says those pull in opposite directions.
+#
+# [U-20] This also pins t_i's encoder, and pinning it here is the point. t_i and
+# e_ij both feed f_h; letting n08 pick one encoder and a later node pick another
+# would put ESSGNN's node and edge features in two unrelated semantic spaces for
+# no stated reason. Whatever encodes t_i must be THIS model.
 TEXT_ENCODER = "laion/CLIP-ViT-B-32-laion2B-s34B-b79K"
 TEXT_ENCODER_VERSION = "clip-vit-b32-laion2b-s34b-b79k"
+EDGE_DIM = 512
 
 MAX_NEW_TOKENS = 64
 ENCODE_BATCH = 256
@@ -224,7 +244,18 @@ def encode_sentences(sentences: list[str], model_id: str = TEXT_ENCODER) -> np.n
                          return_tensors="pt").to("cuda")
             emb = enc(**inputs).text_embeds
             out.append(torch.nn.functional.normalize(emb, dim=-1).float().cpu().numpy())
-    return np.concatenate(out, axis=0)
+    embeddings = np.concatenate(out, axis=0)
+    # F8 makes e a load-bearing number, so a model swap that silently changed it
+    # would change how much geometry survives message passing without anything
+    # saying so.
+    if embeddings.shape[1] != EDGE_DIM:
+        raise ValueError(
+            f"{model_id} produced {embeddings.shape[1]}-d embeddings, not "
+            f"{EDGE_DIM}. e_ij's width is a recorded decision (U-06, F8), not "
+            "whatever the encoder happens to emit -- update EDGE_DIM "
+            "deliberately or use the declared model."
+        )
+    return embeddings
 
 
 # --- phase 4: assemble the cache ------------------------------------------

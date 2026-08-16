@@ -86,6 +86,18 @@ def test_multiple_placement_values_read_as_prose():
     assert "typically placed tabletop or wall mounted." in serialize_annotation(ann)
 
 
+@pytest.mark.parametrize("field", ["materials", "placement_constraints"])
+def test_an_empty_list_field_is_refused_not_rendered_as_punctuation(field):
+    """"made of ," and "typically placed ." encode fine and rank badly.
+
+    n05 already refuses both, but a guard living in another module vanishes the
+    first time this function is called from somewhere else.
+    """
+    ann = dict(GOLDEN_ANNOTATION, **{field: []})
+    with pytest.raises(ValueError):
+        serialize_annotation(ann)
+
+
 def test_underscores_never_reach_the_encoder():
     ann = dict(GOLDEN_ANNOTATION, placement_constraints=["ceiling_mounted"])
     assert "_" not in serialize_annotation(ann)

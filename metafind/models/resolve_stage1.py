@@ -255,6 +255,17 @@ def serialize_annotation(annotation: dict, template: str = TEXT_TEMPLATE) -> str
     " or " so the sentence reads as prose rather than as a serialised list --
     the encoder is frozen and was trained on captions.
     """
+    # n05's validate_annotation already refuses both of these, so this cannot
+    # fire on a sidecar the pipeline wrote. It is here because the alternative
+    # failure is SILENT: an empty list renders as "made of ," or "typically
+    # placed .", which encodes fine, ranks badly, and looks like nothing is
+    # wrong. A guard that depends on a check in another module is a guard that
+    # disappears the first time someone calls this function from somewhere else.
+    for field in ("materials", "placement_constraints"):
+        if not annotation[field]:
+            raise ValueError(f"`{field}` is empty; the serialized string would "
+                             "be malformed rather than merely short")
+
     dims = annotation["dimensions"]
     materials = ", ".join(annotation["materials"][:MAX_MATERIALS])
     placement = annotation["placement_constraints"][:MAX_PLACEMENT]
