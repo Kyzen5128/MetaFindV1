@@ -18,6 +18,15 @@ import torch
 
 from metafind.models.essgnn import ESSGNN, ESSGNNConfig
 
+# [C1 / U-26] The primary reading. `sec25_two_mlp` is the competing hypothesis
+# and is exercised by the family tests at the bottom of this file, so most tests
+# here describe the appendix layer.
+FAMILY = "appendix_shared_msg"
+# 2.5's layer, kept alive as the competing hypothesis. Tests that reach for
+# `f_h` / `f_x` by name are ABOUT that layer -- the appendix has phi_e / phi_x /
+# phi_h instead -- so they say so rather than inheriting the primary.
+TWO_MLP = "sec25_two_mlp"
+
 DTYPE = torch.float64  # float32 noise would swamp the equivariance tolerance
 
 
@@ -26,8 +35,11 @@ def fully_connected(n: int) -> torch.Tensor:
     return torch.tensor(idx, dtype=torch.long).T
 
 
-def make_scene(n: int = 12, cfg: ESSGNNConfig | None = None, seed: int = 0, spread: float = 3.0):
-    cfg = cfg or ESSGNNConfig(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64, n_layers=3, use_io_projections=True)
+def make_scene(n: int = 12, cfg: ESSGNNConfig | None = None, seed: int = 0,
+               spread: float = 3.0, family: str = FAMILY):
+    cfg = cfg or ESSGNNConfig(architecture_family=family, node_feat_dim=32,
+                              edge_feat_dim=16, hidden_dim=32, out_dim=64,
+                              n_layers=3, use_io_projections=True)
     # nn.Linear draws from the GLOBAL RNG, so without seeding it here the model
     # weights depend on whichever tests ran first -- results would then differ
     # between running a test alone and running the suite.
@@ -57,7 +69,7 @@ def random_rotation(seed: int = 0) -> torch.Tensor:
 
 def test_output_dim_matches_eq6_residual():
     """e_layout must be out_dim wide so Fusion(...) + lambda * e_layout is defined."""
-    cfg = ESSGNNConfig(node_feat_dim=1280, edge_feat_dim=1280, hidden_dim=64, out_dim=1280, n_layers=2, use_io_projections=True)
+    cfg = ESSGNNConfig(architecture_family=FAMILY, node_feat_dim=1280, edge_feat_dim=1280, hidden_dim=64, out_dim=1280, n_layers=2, use_io_projections=True)
     model, nf, pos, ei, ea = make_scene(8, cfg)
     out = model(nf, pos, ei, ea)
     assert out.shape == (1280,), f"expected (1280,), got {tuple(out.shape)}"
@@ -69,7 +81,7 @@ def test_output_dim_matches_eq6_residual():
 
 def test_output_dim_negative_injection():
     """Negative injection: a mismatched width must break the Eq. 6 residual."""
-    cfg = ESSGNNConfig(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=512, n_layers=2, use_io_projections=True)
+    cfg = ESSGNNConfig(architecture_family=FAMILY, node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=512, n_layers=2, use_io_projections=True)
     model, nf, pos, ei, ea = make_scene(8, cfg)
     out = model(nf, pos, ei, ea)
     with pytest.raises(RuntimeError):
@@ -77,7 +89,7 @@ def test_output_dim_negative_injection():
 
 
 def test_batched_pooling_shape():
-    cfg = ESSGNNConfig(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64, n_layers=2, use_io_projections=True)
+    cfg = ESSGNNConfig(architecture_family=FAMILY, node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64, n_layers=2, use_io_projections=True)
     model, nf, pos, ei, ea = make_scene(10, cfg)
     batch = torch.tensor([0] * 5 + [1] * 5)
     assert model(nf, pos, ei, ea, batch=batch).shape == (2, 64)
@@ -86,12 +98,18 @@ def test_batched_pooling_shape():
 # --------------------------------------------------------------- L2-EQUIVAR
 
 
-@pytest.mark.parametrize("coord_feat", ["updated", "current"])
-def test_se3_equivariance(coord_feat: str):
-    """SC-5: coords are equivariant and h is invariant, under BOTH readings of Eq. 3/13."""
-    cfg = ESSGNNConfig(
+@pytest.mark.parametrize("family", ["appendix_shared_msg", "sec25_two_mlp"])
+def test_se3_equivariance(family: str):
+    """SC-5: h is invariant under BOTH readings of C1.
+
+    Parametrised over the family rather than over coord_feat, because
+    coord_feat is not a free axis: the appendix has no such choice (phi_x reads
+    m_ij) and 2.5 fixes it to h^(l+1). Running both families here is what keeps
+    2.5 a live competing hypothesis rather than dead code.
+    """
+    cfg = ESSGNNConfig(architecture_family=family,
         node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64,
-        n_layers=3, h0_mode="semantic", coord_feat=coord_feat,
+        n_layers=3, h0_mode="semantic",
         use_io_projections=True,
     )
     model, nf, pos, ei, ea = make_scene(12, cfg)
@@ -115,7 +133,7 @@ def test_equivariance_negative_injection():
     implementation -- it demonstrates that sec. 2.5 contradicts the premise
     Appendix C states, and it proves test_se3_equivariance is not vacuous.
     """
-    cfg = ESSGNNConfig(
+    cfg = ESSGNNConfig(architecture_family=FAMILY, 
         node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64,
         n_layers=3, h0_mode="concat_xt",
         use_io_projections=True,
@@ -151,14 +169,14 @@ def test_coords_agg_defaults_to_sum_per_eq3():
     """Eq. 3 sums over neighbours; the reference EGNN defaults to mean (F9)."""
     # Widths are required arguments now: the paper states none, so no default
     # may look like a paper value (L1-EGNN-DIMS-NOT-HARDCODED).
-    assert ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8, use_io_projections=True).coords_agg == "sum"
+    assert ESSGNNConfig(architecture_family=FAMILY, node_feat_dim=8, edge_feat_dim=8, out_dim=8, use_io_projections=True).coords_agg == "sum"
 
 
 def test_sum_and_mean_differ():
     """Negative injection: if sum and mean agreed, the previous test proves nothing."""
     common = dict(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64, n_layers=2)
-    m_sum, nf, pos, ei, ea = make_scene(12, ESSGNNConfig(**common, coords_agg="sum", use_io_projections=True))
-    m_mean = ESSGNN(ESSGNNConfig(**common, coords_agg="mean", use_io_projections=True)).to(DTYPE)
+    m_sum, nf, pos, ei, ea = make_scene(12, ESSGNNConfig(architecture_family=TWO_MLP, **common, coords_agg="sum", use_io_projections=True))
+    m_mean = ESSGNN(ESSGNNConfig(architecture_family=TWO_MLP, **common, coords_agg="mean", use_io_projections=True)).to(DTYPE)
     m_mean.load_state_dict(m_sum.state_dict())
 
     # f_x is initialised near zero so the coordinate update starts tiny; scale it
@@ -173,9 +191,19 @@ def test_sum_and_mean_differ():
 # --------------------------------------------------------------- L1-SEMEDGE-ZERO
 
 
-def geometric_sensitivity(edge_dim: int, n: int = 12) -> float:
+def message_mlp(layer):
+    """The first MLP a semantic edge reaches, whichever family built the layer.
+
+    Two-MLP calls it `f_h`; the appendix calls it `phi_e`. The property under
+    test -- that `e_ij` arrives at full width with no projection -- belongs to
+    both, so the test should not be pinned to one family's attribute names.
+    """
+    return getattr(layer, "f_h", None) or layer.phi_e
+
+
+def geometric_sensitivity(edge_dim: int, n: int = 12, family: str = TWO_MLP) -> float:
     """max |d e_layout / d pos| with semantic edges zeroed."""
-    cfg = ESSGNNConfig(
+    cfg = ESSGNNConfig(architecture_family=family, 
         node_feat_dim=32, edge_feat_dim=edge_dim, hidden_dim=32, out_dim=64, n_layers=3,
         use_io_projections=True,
     )
@@ -203,23 +231,38 @@ def test_geometry_is_wired_into_the_output():
 
 
 def test_wider_semantic_edges_suppress_geometric_sensitivity():
-    """F8 part 2: quantifies the swamping effect the paper's design invites.
+    """[F8] MEASURED, and it belongs to the TWO-MLP layer specifically.
 
-    Each message sees exactly one geometric scalar (||x_i - x_j||^2) alongside
-    e_ij, so widening e_ij dilutes geometry. Measured with seeded weights:
-    edge_dim 16 -> |grad| ~= 51, edge_dim 1280 -> |grad| ~= 1.1, a ~45x drop.
+    With `f_h` reading the raw tuple, one geometric scalar competes against a
+    1280-wide `e_ij` in a single concatenation and loses. Over six seeds the
+    wide/narrow sensitivity ratio has median 0.055 (range 0.007-0.243).
 
-    This is a property of sec. 2.5 as written, not a defect to patch. The test
-    pins the DIRECTION so the effect cannot silently disappear or invert; the
-    magnitude on a trained model is what n11 has to report.
+    The appendix layer does NOT show this reliably -- median 0.126, range
+    0.031-2.278, so on some seeds geometry is stronger at the wide setting.
+    `phi_e` compresses everything to `hidden` first and the coordinate head sees
+    only that bottleneck, which changes the competition. Recorded rather than
+    generalised: F8 is a property of one of the two readings of C1, not of
+    ESSGNN.
     """
-    narrow = geometric_sensitivity(16)
-    wide = geometric_sensitivity(1280)
+    narrow = geometric_sensitivity(16, family=TWO_MLP)
+    wide = geometric_sensitivity(1280, family=TWO_MLP)
     assert narrow > 0 and wide > 0, "geometry must survive at both widths"
     assert wide < narrow / 5, (
         f"expected wide semantic edges to suppress geometry; "
-        f"narrow={narrow:.3e} wide={wide:.3e}"
-    )
+        f"narrow={narrow:.3e} wide={wide:.3e}")
+
+
+def test_f8_does_not_generalise_to_the_appendix_layer():
+    """The companion assertion. Without it, F8 would read as a fact about
+    ESSGNN and get carried into the report for whichever family we run."""
+    ratios = []
+    for seed in range(6):
+        n = geometric_sensitivity(16, family="appendix_shared_msg")
+        w = geometric_sensitivity(1280, family="appendix_shared_msg")
+        ratios.append(w / n)
+    assert max(ratios) > 0.243, (
+        "the appendix layer now suppresses geometry as consistently as the "
+        "two-MLP one; F8's scope claim needs re-measuring")
 
 
 def test_geometry_changes_the_output_at_all():
@@ -247,20 +290,20 @@ def test_semantic_edges_change_the_output():
 
 def test_edge_projection_is_absent_by_default():
     """The paper has no projection layer on e_ij, so the faithful default is None."""
-    assert ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8, use_io_projections=True).edge_proj_dim is None
-    cfg = ESSGNNConfig(node_feat_dim=32, edge_feat_dim=1280, hidden_dim=64, out_dim=64, n_layers=1, use_io_projections=True)
+    assert ESSGNNConfig(architecture_family=FAMILY, node_feat_dim=8, edge_feat_dim=8, out_dim=8, use_io_projections=True).edge_proj_dim is None
+    cfg = ESSGNNConfig(architecture_family=FAMILY, node_feat_dim=32, edge_feat_dim=1280, hidden_dim=64, out_dim=64, n_layers=1, use_io_projections=True)
     model = ESSGNN(cfg)
-    in_features = model.layers[0].f_h[0].in_features
+    in_features = message_mlp(model.layers[0])[0].in_features
     assert in_features == 2 * 64 + 1 + 1280, f"unexpected message width {in_features}"
 
 
 def test_edge_projection_when_enabled():
-    cfg = ESSGNNConfig(
+    cfg = ESSGNNConfig(architecture_family=FAMILY, 
         node_feat_dim=32, edge_feat_dim=1280, hidden_dim=64, out_dim=64, n_layers=1, edge_proj_dim=64,
         use_io_projections=True,
     )
     model = ESSGNN(cfg)
-    assert model.layers[0].f_h[0].in_features == 2 * 64 + 1 + 64
+    assert message_mlp(model.layers[0])[0].in_features == 2 * 64 + 1 + 64
 
 
 def test_shape_contract_violations_raise():
@@ -286,7 +329,7 @@ def test_gradients_reach_every_parameter_except_the_final_f_x():
     "fixing" it would deviate from the paper. The test asserts the exact pattern
     so that a future change to the readout is caught rather than absorbed.
     """
-    model, nf, pos, ei, ea = make_scene(10)
+    model, nf, pos, ei, ea = make_scene(10, family=TWO_MLP)
     model(nf, pos, ei, ea).sum().backward()
 
     dead = {
@@ -351,7 +394,7 @@ def test_edge_missing_shape_is_checked():
 
 def test_intermediate_coordinate_updates_do_carry_gradient():
     """Companion: every non-final f_x must be live, or the coordinate channel is inert."""
-    model, nf, pos, ei, ea = make_scene(10)
+    model, nf, pos, ei, ea = make_scene(10, family=TWO_MLP)
     model(nf, pos, ei, ea).sum().backward()
     for i in range(len(model.layers) - 1):
         g = model.layers[i].f_x[-1].weight.grad
@@ -363,7 +406,7 @@ def test_intermediate_coordinate_updates_do_carry_gradient():
 
 def test_literal_paper_form_uses_no_projections():
     """[U-33] Sec. 2.5 is t_i -> h^(0) -> L layers -> Pooling, nothing either side."""
-    cfg = ESSGNNConfig(
+    cfg = ESSGNNConfig(architecture_family=FAMILY, 
         node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=32,
         n_layers=2, use_io_projections=False,
     )
@@ -375,7 +418,7 @@ def test_literal_paper_form_uses_no_projections():
 def test_literal_paper_form_requires_matching_widths():
     """Without projections the widths must already agree; say so loudly."""
     with pytest.raises(ValueError, match="literally"):
-        ESSGNN(ESSGNNConfig(
+        ESSGNN(ESSGNNConfig(architecture_family=FAMILY, 
             node_feat_dim=32, edge_feat_dim=16, hidden_dim=32, out_dim=64,
             n_layers=2, use_io_projections=False,
         ))
@@ -383,7 +426,7 @@ def test_literal_paper_form_requires_matching_widths():
 
 def test_upstream_form_adds_two_linear_layers():
     """[U-33] The reference-EGNN variant. Two extra learnable layers, recorded as such."""
-    cfg = ESSGNNConfig(
+    cfg = ESSGNNConfig(architecture_family=FAMILY, 
         node_feat_dim=32, edge_feat_dim=16, hidden_dim=8, out_dim=64,
         n_layers=2, use_io_projections=True,
     )
@@ -397,7 +440,7 @@ def test_upstream_form_adds_two_linear_layers():
 def test_projection_choice_has_no_default():
     """The whole point of U-33: upstream convention must not win by inheritance."""
     with pytest.raises(TypeError):
-        ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8)  # type: ignore[call-arg]
+        ESSGNNConfig(architecture_family=FAMILY, node_feat_dim=8, edge_feat_dim=8, out_dim=8)  # type: ignore[call-arg]
 
 
 # ------------------------------------------------- U-17 distance / U-31 sharing
@@ -409,9 +452,9 @@ _ARCH = dict(node_feat_dim=16, edge_feat_dim=8, hidden_dim=16, out_dim=16,
 def test_squared_and_euclidean_produce_different_layouts():
     """[U-17] Both are SE(3)-invariant, so only the magnitude into f_h/f_x differs."""
     torch.manual_seed(0)
-    sq, nf, pos, ei, ea = make_scene(10, ESSGNNConfig(**_ARCH, distance="squared"))
+    sq, nf, pos, ei, ea = make_scene(10, ESSGNNConfig(architecture_family=TWO_MLP, **_ARCH, distance="squared"))
     torch.manual_seed(0)
-    eu = ESSGNN(ESSGNNConfig(**_ARCH, distance="euclidean")).to(DTYPE)
+    eu = ESSGNN(ESSGNNConfig(architecture_family=TWO_MLP, **_ARCH, distance="euclidean")).to(DTYPE)
     eu.load_state_dict(sq.state_dict())
     a, b = sq(nf, pos, ei, ea), eu(nf, pos, ei, ea)
     assert not torch.allclose(a, b), (
@@ -421,8 +464,8 @@ def test_squared_and_euclidean_produce_different_layouts():
 
 
 def test_shared_layers_are_one_module_independent_are_many():
-    shared = ESSGNN(ESSGNNConfig(**_ARCH, layer_sharing="shared"))
-    indep = ESSGNN(ESSGNNConfig(**_ARCH, layer_sharing="independent"))
+    shared = ESSGNN(ESSGNNConfig(architecture_family=TWO_MLP, **_ARCH, layer_sharing="shared"))
+    indep = ESSGNN(ESSGNNConfig(architecture_family=TWO_MLP, **_ARCH, layer_sharing="independent"))
     assert len({id(x) for x in shared.layers}) == 1
     assert len({id(x) for x in indep.layers}) == _ARCH["n_layers"]
     assert sum(p.numel() for p in shared.parameters()) < sum(
@@ -432,7 +475,7 @@ def test_shared_layers_are_one_module_independent_are_many():
 
 def test_sharing_survives_a_state_dict_round_trip():
     """A restore that silently untied the layers would change the model."""
-    cfg = ESSGNNConfig(**_ARCH, layer_sharing="shared")
+    cfg = ESSGNNConfig(architecture_family=TWO_MLP, **_ARCH, layer_sharing="shared")
     a = ESSGNN(cfg)
     b = ESSGNN(cfg)
     b.load_state_dict(a.state_dict())
@@ -454,7 +497,7 @@ def test_shared_fx_gets_gradient_that_independent_final_fx_does_not():
     for sharing, expect_grad in (("independent", False), ("shared", True)):
         torch.manual_seed(0)
         m, nf, pos, ei, ea = make_scene(
-            10, ESSGNNConfig(**_ARCH, layer_sharing=sharing)
+            10, ESSGNNConfig(architecture_family=TWO_MLP, **_ARCH, layer_sharing=sharing)
         )
         m(nf, pos, ei, ea).sum().backward()
         last_fx = m.layers[-1].f_x[-1].weight
@@ -508,7 +551,7 @@ def test_paper_locked_values_are_the_defaults():
     """
     from metafind.models.essgnn import PRIMARY_INTERPRETATION
 
-    cfg = ESSGNNConfig(node_feat_dim=8, edge_feat_dim=8, out_dim=8,
+    cfg = ESSGNNConfig(architecture_family=FAMILY, node_feat_dim=8, edge_feat_dim=8, out_dim=8,
                        use_io_projections=True)
     for k, v in PRIMARY_INTERPRETATION.items():
         assert getattr(cfg, k) == v, f"{k} default drifted from the primary interpretation"

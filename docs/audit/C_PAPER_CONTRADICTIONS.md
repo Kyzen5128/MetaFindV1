@@ -52,7 +52,28 @@ form is being replaced, and it proves equivariance for the appendix form only.
 C2–C6 are separate consequences of this split, listed individually because each
 can be got wrong on its own after picking a side.
 
-**Registered as U-26. The only genuinely blocking contradiction.**
+**Registered as U-26. DECIDED 2026-08-17: `appendix_shared_msg` is primary.**
+
+The appendix wins on coherence, not on authority. 2.5 is the normative Method
+section and that counts, but the same paragraph carries three transcription
+errors -- C2, C3 and C4 below, all in one page. The appendix is internally
+consistent, is what the equivariance proof is actually written about, and
+matches the "semantic extension of EGNN" the paper claims for itself.
+
+**This is an `[INFERENCE]` about the most likely implemented architecture, not
+a paper fact.** The paper specifies both and never says which it ran. 2.5 stays
+implemented as `sec25_two_mlp` and is a competing hypothesis to be measured, not
+a fallback: `test_se3_equivariance` runs both, and `essgnn_arch_protocol`
+records which one a run used.
+
+One axis that looks like part of this fork is not. `j in N(i)` versus `j != i`
+is an option EGNN states outright -- "in this work we choose to aggregate
+messages from all other nodes j != i, but we could limit the message exchange to
+a given neighborhood j in N(i) if desired in both equations" -- so pairing the
+appendix's messages with N(i) is taking an upstream option, not mixing branches.
+It also keeps `e_ij` defined, since a semantic embedding exists only for
+connected pairs: the complete-graph reading needs ~1.07M LLM relations against
+~1.3e5 (MEASURED over 12,000 ProcTHOR houses).
 
 <a id="c2"></a>
 ### C2 — `h^{(0)}` contains `x`, and the proof assumes it does not — **SEVERE**

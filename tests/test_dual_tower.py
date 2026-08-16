@@ -10,6 +10,8 @@ import pytest
 import torch
 
 from metafind.models.dual_tower import DualTowerConfig, MetaFindDualTower, QueryTower
+FAMILY = "appendix_shared_msg"  # C1 primary; sec25_two_mlp is the competing hypothesis
+
 from metafind.models.essgnn import ESSGNNConfig
 from metafind.models.fusion import MODALITIES, FusionConfig
 
@@ -22,7 +24,7 @@ def cfg(**kw) -> DualTowerConfig:
         tower_sharing="fully_separate",
         query_fusion=FusionConfig(dim=D, hidden=64, n_heads=4, n_layers=1),
         gallery_fusion=FusionConfig(dim=D, hidden=64, n_heads=4, n_layers=1),
-        essgnn=ESSGNNConfig(node_feat_dim=16, edge_feat_dim=8, hidden_dim=16, out_dim=D, n_layers=2, use_io_projections=True),
+        essgnn=ESSGNNConfig(architecture_family=FAMILY, node_feat_dim=16, edge_feat_dim=8, hidden_dim=16, out_dim=D, n_layers=2, use_io_projections=True),
     )
     return DualTowerConfig(**{**base, **kw})
 
@@ -33,7 +35,7 @@ def embeds(b: int = 4, d: int = D, seed: int = 0):
 
 
 def scene(n: int = 6, cfgg: ESSGNNConfig | None = None, seed: int = 0):
-    cfgg = cfgg or ESSGNNConfig(node_feat_dim=16, edge_feat_dim=8, hidden_dim=16, out_dim=D, n_layers=2, use_io_projections=True)
+    cfgg = cfgg or ESSGNNConfig(architecture_family=FAMILY, node_feat_dim=16, edge_feat_dim=8, hidden_dim=16, out_dim=D, n_layers=2, use_io_projections=True)
     g = torch.Generator().manual_seed(seed)
     ei = torch.tensor([(i, j) for i in range(n) for j in range(n) if i != j]).T
     return (
@@ -106,7 +108,7 @@ def test_layout_without_branch_raises():
 def test_essgnn_width_mismatch_is_rejected_at_construction():
     """Eq. 6 adds the two vectors, so a width mismatch must fail loudly and early."""
     with pytest.raises(ValueError, match="Eq. 6"):
-        QueryTower(cfg(essgnn=ESSGNNConfig(node_feat_dim=16, edge_feat_dim=8, out_dim=D + 1, use_io_projections=True)))
+        QueryTower(cfg(essgnn=ESSGNNConfig(architecture_family=FAMILY, node_feat_dim=16, edge_feat_dim=8, out_dim=D + 1, use_io_projections=True)))
 
 
 # --------------------------------------------------------------- scene dropout

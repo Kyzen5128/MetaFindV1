@@ -94,8 +94,20 @@ ARCH_DECISIONS = {
     #   appendix_shared_msg  the appendix's phi_e -> m_ij -> {phi_x, phi_h}
     #
     # NOT a free knob and NOT a value to guess: it selects between two things
-    # the authors themselves wrote, and the two are different models. Written
-    # here as UNRESOLVED so G6 blocks Stage 2 until a person decides.
+    # the authors themselves wrote, and the two are different models.
+    #
+    # DECIDED 2026-08-17: appendix_shared_msg. 2.5 is the normative Method
+    # section and that counts for something, but the same paragraph carries
+    # three transcription errors -- h^(0) = Concat(x, t) against the appendix's
+    # own invariance premise, a width that does not close, and f_x typed to R^3
+    # where the proof needs a scalar. The appendix is internally coherent, is
+    # what the equivariance proof is written about, and matches the "semantic
+    # extension of EGNN" the paper claims for itself.
+    #
+    # This is an INFERENCE about the most likely implemented architecture, NOT
+    # a paper fact. The paper specifies both and never says which it ran. 2.5
+    # stays implemented as `sec25_two_mlp` and must be measured against this
+    # one; it is a competing hypothesis, not a fallback.
     #
     # Note what is NOT part of this fork. `j in N(i)` versus `j != i` looks like
     # it belongs here -- 2.5 uses one and the appendix the other -- but EGNN's
@@ -104,13 +116,16 @@ ARCH_DECISIONS = {
     # given neighborhood j in N(i) if desired in both equations". It is an
     # option upstream states outright, available to EITHER family, so pairing
     # the appendix's messages with N(i) is not cross-mixing.
-    "architecture_family": None,
+    "architecture_family": "appendix_shared_msg",
     "use_io_projections": True,
     "distance": "squared",
     # ESSGNNConfig's vocabulary is "updated"|"current", not "h_next".
-    # [U-26] 2.5 writes f_x taking h^{l+1}, so the coordinate head sees the
-    # UPDATED features -- which is what "updated" names.
-    "coord_feat": "updated",
+    # [C1] Was "updated", which is 2.5's reading -- Eq. 3 passes h^{l+1} to f_x.
+    # Under appendix_shared_msg there is no such choice: phi_x reads m_ij, and
+    # phi_e built it from h^l. ESSGNN refuses "updated" beside this family
+    # rather than ignoring it, so the protocol cannot describe a model nobody
+    # ran. Switching families means switching this back.
+    "coord_feat": "current",
     "layer_sharing": "independent",
     "pooling": "mean",
     "hidden_dim": 128,
@@ -169,9 +184,25 @@ def assert_matches_code(arch: dict) -> None:
     #
     # The vocabularies have to be read off the annotations and compared.
     hints = typing.get_type_hints(ESSGNNConfig)
+
+    def literal_values(hint):
+        """Unwrap `Literal[...] | None` as well as a bare `Literal[...]`.
+
+        `coord_feat` became optional so its default could be resolved per
+        architecture family, which turned its hint into `Optional[Literal[...]]`
+        -- and `get_origin(...) is Literal` is False for that, so this check
+        silently stopped validating the field it was written for. A vocabulary
+        check that quietly covers less than it did is worse than one that errors.
+        """
+        if typing.get_origin(hint) is typing.Literal:
+            return typing.get_args(hint)
+        for arg in typing.get_args(hint):          # Union / Optional members
+            if typing.get_origin(arg) is typing.Literal:
+                return typing.get_args(arg)
+        return None
+
     for field, value in arch.items():
-        hint = hints.get(field)
-        allowed = typing.get_args(hint) if typing.get_origin(hint) is typing.Literal else None
+        allowed = literal_values(hints.get(field))
         if allowed and value not in allowed:
             raise ValueError(
                 f"essgnn_arch_protocol.{field} = {value!r} is not one of "

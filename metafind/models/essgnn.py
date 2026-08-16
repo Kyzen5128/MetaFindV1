@@ -79,7 +79,7 @@ from torch import Tensor, nn
 
 from metafind.vendor.egnn_clean import unsorted_segment_mean, unsorted_segment_sum
 
-__all__ = ["ESSGNNConfig", "ESSGCL", "ESSGNN"]
+__all__ = ["ESSGNNConfig", "ESSGCL", "ESSGCLShared", "ESSGNN"]
 
 H0Mode = Literal["semantic", "concat_xt"]
 CoordFeat = Literal["updated", "current"]
@@ -87,6 +87,9 @@ Agg = Literal["sum", "mean"]
 Distance = Literal["squared", "euclidean"]
 LayerSharing = Literal["independent", "shared"]
 Pool = Literal["mean", "sum", "max"]
+# [C1 / U-26] The two ESSGNNs MetaFind describes. Not a style choice -- different
+# parameter counts, different gradient paths, different functions.
+ArchFamily = Literal["appendix_shared_msg", "sec25_two_mlp"]
 
 
 @dataclass
@@ -145,12 +148,32 @@ class ESSGNNConfig:
     #   False  literal 2.5; forces node_feat_dim == hidden_dim == out_dim,
     #          so the hidden width becomes the embedding width
     use_io_projections: bool
+    # [C1 / U-26] REQUIRED, no default. The paper specifies ESSGNN twice and the
+    # two specifications differ; a default here would be this file picking one.
+    #
+    #   appendix_shared_msg  phi_e -> m_ij -> {phi_x, phi_h}   <- primary
+    #   sec25_two_mlp        f_h and f_x, each on the raw tuple
+    #
+    # PRIMARY is the appendix, decided 2026-08-17. 2.5 is the normative Method
+    # section, but that same paragraph carries three transcription errors --
+    # h^(0) = Concat(x, t) against the appendix's own invariance premise, a
+    # width that does not close (h^(0) is d+3 while f_h reads 2d and writes d),
+    # and f_x typed to R^3 where the proof needs a scalar. The appendix is
+    # internally coherent, is what the equivariance proof is actually written
+    # about, and matches the "semantic extension of EGNN" the paper claims.
+    # 2.5 stays runnable as the competing hypothesis, never as a fallback.
+    architecture_family: ArchFamily
     # Reproduction hyperparameters chosen by us (U-22). The paper gives no
     # value for either; these are recorded in stage1_protocol and reported.
     hidden_dim: int = 128
     n_layers: int = 4
     h0_mode: H0Mode = "semantic"
-    coord_feat: CoordFeat = "updated"
+    # None means "whatever this family implies", resolved in __post_init__.
+    # A hard default cannot be right for both: 2.5's Eq. 3 passes h^(l+1) to
+    # f_x, while the appendix has no such choice at all -- phi_x reads m_ij,
+    # which phi_e built from h^l. Defaulting to either one made every config
+    # for the other family either wrong or noisy.
+    coord_feat: CoordFeat | None = None
     # U-17. Sec. 2.5 defines d_ij = ||x_i - x_j||_2; Appendix C Eq. 10-12 uses
     # the square, as does the reference EGNN. Both are SE(3)-invariant, so
     # neither breaks the proof, but the number reaching f_h and f_x differs.
@@ -164,6 +187,12 @@ class ESSGNNConfig:
     edge_proj_dim: int | None = None
     pooling: Pool = "mean"
     normalize_coord_diff: bool = False
+
+    def __post_init__(self) -> None:
+        if self.coord_feat is None:
+            self.coord_feat = ("current"
+                               if self.architecture_family == "appendix_shared_msg"
+                               else "updated")
 
     @classmethod
     def from_protocol(
@@ -194,22 +223,21 @@ class ESSGNNConfig:
                     "n_layers"}
         if missing := required - protocol.keys():
             raise ValueError(f"essgnn_arch_protocol is missing {sorted(missing)}")
-        # [C1 / U-26] This class only builds 2.5's two-MLP layer. That is a
-        # legitimate implementation as long as it is DECLARED -- what is not
-        # legitimate is building it while the audit records U-26 as unresolved,
-        # which is what happened while the protocol had no key for it.
+        # [C1 / U-26] Both families are implemented now. A null still means the
+        # decision has not been recorded, and building on a null would be this
+        # method picking one.
         family = protocol["architecture_family"]
-        if family != "sec25_two_mlp":
+        if family not in ("appendix_shared_msg", "sec25_two_mlp"):
             raise ValueError(
-                f"architecture_family is {family!r}. Only 'sec25_two_mlp' is "
-                "implemented; 'appendix_shared_msg' (phi_e -> m_ij -> phi_x, "
-                "phi_h) is a DIFFERENT model and has no code. A null here means "
-                "C1/U-26 has not been decided -- see "
+                f"architecture_family is {family!r}. It must be one of "
+                "'appendix_shared_msg' (primary) or 'sec25_two_mlp'. A null "
+                "means C1/U-26 has not been decided -- see "
                 "docs/audit/C_PAPER_CONTRADICTIONS.md#c1.")
         return cls(
             node_feat_dim=node_feat_dim,
             edge_feat_dim=edge_feat_dim,
             out_dim=out_dim,
+            architecture_family=protocol["architecture_family"],
             use_io_projections=protocol["use_io_projections"],
             distance=protocol["distance"],
             coord_feat=protocol["coord_feat"],
@@ -337,8 +365,88 @@ class ESSGCL(nn.Module):
         return h_next, x + agg
 
 
+class ESSGCLShared(nn.Module):
+    """One layer of the APPENDIX's ESSGNN -- the primary reading of C1/U-26.
+
+    Implements `appendix.tex`::
+
+        m_ij      = phi_e(h_i^l, h_j^l, ||x_i^l - x_j^l||^2, e_ij)   (10)
+        x_i^{l+1} = x_i^l + sum_j (x_i^l - x_j^l) . phi_x(m_ij)      (13)
+        h_i^{l+1} = h_i^l + sum_j phi_h(m_ij)                        (14)
+
+    The difference from `ESSGCL` is not notational. There, `f_h` and `f_x` each
+    read the raw `(d, h_i, h_j, e_ij)` tuple and share no computation; here one
+    `phi_e` produces a message and the other two see ONLY that message. Different
+    parameter counts, different gradient paths, different functions -- which is
+    why both exist and why nothing may silently substitute one for the other.
+
+    Two things carried over from the two-MLP layer because they are forced
+    rather than chosen:
+
+    * `phi_x` is scalar-valued. 2.5 types `f_x` to R^3, but the appendix's own
+      proof factors Q out of `sum (Qx_i - Qx_j) phi_x`, which holds only for a
+      scalar. EGNN's model.tex says it outright: "phi_x: R^nf -> R^1 ... outputs
+      a scalar value".
+    * the residual sits OUTSIDE phi_h, per Eq. 14's `h_i^l + sum(...)`.
+
+    The neighbourhood is `edge_index`, i.e. `N(i)`, even though Eq. 13/14 write
+    `j != i`. That is not cross-mixing: EGNN's model.tex states the option
+    directly -- "in this work we choose to aggregate messages from all other
+    nodes j != i, but we could limit the message exchange to a given
+    neighborhood j in N(i) if desired in both equations". Taking it also keeps
+    `e_ij` defined, since a semantic embedding exists only for pairs the scene
+    graph actually connects; the complete-graph reading would need ~1.07M LLM
+    relations against ~1.3e5 (MEASURED over 12,000 ProcTHOR houses).
+    """
+
+    def __init__(self, cfg: ESSGNNConfig, edge_dim: int) -> None:
+        super().__init__()
+        self.cfg = cfg
+        h = cfg.hidden_dim
+        # phi_e : R^(2d + 1 + e) -> R^d   (Eq. 10)
+        self.phi_e = _mlp(2 * h + 1 + edge_dim, h, h)
+        # phi_x : R^d -> R                (Eq. 13, scalar per the proof)
+        self.phi_x = _mlp(h, h, 1)
+        # phi_h : R^d -> R^d              (Eq. 14)
+        self.phi_h = _mlp(h, h, h)
+        # Same reason as the two-MLP layer: a large random coordinate update at
+        # step 0 makes the equivariance error numerically meaningless before any
+        # training has happened.
+        nn.init.xavier_uniform_(self.phi_x[-1].weight, gain=0.001)
+        nn.init.zeros_(self.phi_x[-1].bias)
+
+    def forward(
+        self, h: Tensor, x: Tensor, edge_index: Tensor, edge_attr: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        row, col = edge_index[0], edge_index[1]
+        coord_diff = x[row] - x[col]
+        sq = (coord_diff**2).sum(dim=-1, keepdim=True)
+        # U-17 again. The appendix uses the square; `euclidean` remains
+        # selectable so the two readings stay measurable rather than assumed.
+        radial = sq if self.cfg.distance == "squared" else torch.sqrt(sq + 1e-12)
+        if self.cfg.normalize_coord_diff:
+            coord_diff = coord_diff / (sq.sqrt() + 1e-8)
+
+        # ---- Eq. 10: ONE message, consumed by both updates
+        m_ij = self.phi_e(torch.cat([h[row], h[col], radial, edge_attr], dim=-1))
+
+        # ---- Eq. 13: coordinate update
+        trans = coord_diff * self.phi_x(m_ij)
+        agg = (
+            unsorted_segment_sum(trans, row, num_segments=x.size(0))
+            if self.cfg.coords_agg == "sum"
+            else unsorted_segment_mean(trans, row, num_segments=x.size(0))
+        )
+        x_next = x + agg
+
+        # ---- Eq. 14: feature update, residual outside phi_h
+        h_next = h + unsorted_segment_sum(
+            self.phi_h(m_ij), row, num_segments=h.size(0))
+        return h_next, x_next
+
+
 class ESSGNN(nn.Module):
-    """Full layout encoder: L x ESSGCL, then pooling to ``e_layout``."""
+    """Full layout encoder: L layers, then pooling to ``e_layout``."""
 
     def __init__(self, cfg: ESSGNNConfig) -> None:
         super().__init__()
@@ -378,13 +486,31 @@ class ESSGNN(nn.Module):
         self.missing_edge_token = nn.Parameter(torch.zeros(cfg.edge_feat_dim))
         nn.init.normal_(self.missing_edge_token, std=0.02)
 
+        # [C1 / U-26] The family selects the layer. Both are real readings of the
+        # same paper, so neither is a fallback for the other.
+        if cfg.architecture_family == "appendix_shared_msg":
+            layer_cls = ESSGCLShared
+            # `coord_feat` describes WHICH h the coordinate head reads, and the
+            # appendix has no such choice: phi_x sees m_ij, which phi_e built
+            # from h^l. "updated" names a thing that does not exist here, so it
+            # is refused rather than ignored -- a protocol recording "updated"
+            # beside this family would describe a model nobody ran.
+            if cfg.coord_feat != "current":
+                raise ValueError(
+                    f"coord_feat={cfg.coord_feat!r} is meaningless under "
+                    "appendix_shared_msg: phi_x reads m_ij, which is built from "
+                    "h^l. Use 'current', or switch to sec25_two_mlp where "
+                    "Eq. 3 does pass h^(l+1).")
+        else:
+            layer_cls = ESSGCL
+
         if cfg.layer_sharing == "shared":
             # One layer, applied L times. Not a saving -- a different model.
-            shared = ESSGCL(cfg, edge_dim)
+            shared = layer_cls(cfg, edge_dim)
             self.layers = nn.ModuleList([shared] * cfg.n_layers)
         else:
             self.layers = nn.ModuleList(
-                ESSGCL(cfg, edge_dim) for _ in range(cfg.n_layers)
+                layer_cls(cfg, edge_dim) for _ in range(cfg.n_layers)
             )
 
     def forward(

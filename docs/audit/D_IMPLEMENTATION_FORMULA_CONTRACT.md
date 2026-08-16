@@ -28,7 +28,10 @@ follow it, including where following it is worse (Stage 1's asymmetry, C7).
 |---|---|---|---|
 | `MF-1` | retrieval argmax | [gallery_index.py](../../metafind/train/gallery_index.py) | `[PAPER]` |
 | `MF-U1` | `h^(0) = Concat(x_i, t_i)` | [essgnn.py](../../metafind/models/essgnn.py) | `[PAPER CONTRADICTION]` — C2 |
-| `MF-2` | feature update | [essgnn.py](../../metafind/models/essgnn.py) | `[PAPER]` |
+| `MF-14` | feature update (**primary**) | `ESSGCLShared` in [essgnn.py](../../metafind/models/essgnn.py) | `[PAPER]` |
+| `MF-10` | shared message `m_ij` (**primary**) | `ESSGCLShared` | `[PAPER]` |
+| `MF-13` | coordinate update (**primary**) | `ESSGCLShared` | `[PAPER CONTRADICTION]` — C3 |
+| `MF-2` | feature update (2.5, competing) | `ESSGCL` | `[PAPER]` |
 | `MF-3` | coordinate update | [essgnn.py](../../metafind/models/essgnn.py) | `[PAPER CONTRADICTION]` — C3 |
 | `MF-U4` | `e_layout = Pooling(...)` | [essgnn.py](../../metafind/models/essgnn.py) | `[IMPLEMENTATION CHOICE]` — S2 |
 | `MF-4` | SE(3) equivariance | [test_essgnn.py](../../tests/test_essgnn.py), [test_cuda_smoke.py](../../tests/test_cuda_smoke.py) | tested, CPU and CUDA |
@@ -300,8 +303,10 @@ should be labelled as one.
 
 No claim that MetaFind's mathematics is fully reproduced is admissible while:
 
-- **C1 is open** (U-26). §2.5 and the appendix are two different ESSGNNs; until
-  one is chosen there is no single specification to have reproduced.
+- **C1 is decided but is an `[INFERENCE]`** (U-26, 2026-08-17). The primary is
+  the appendix's shared-message form; 2.5 remains implemented and must be
+  measured against it. The paper never says which it ran, so no result may be
+  reported as "the paper's architecture" -- only as one of two readings.
 - **Neither stage has run.** Every contract here is checked by tests, not by a
   completed training run.
 - **S4 stands.** No layer count, widths, batch size, learning rate, optimiser,

@@ -71,7 +71,8 @@ def test_essgnn_equivariance_holds_on_cuda():
     differs on GPU, so the CPU tolerance is not evidence for this one."""
     from metafind.models.essgnn import ESSGNN, ESSGNNConfig
 
-    cfg = ESSGNNConfig(node_feat_dim=32, edge_feat_dim=16, hidden_dim=32,
+    cfg = ESSGNNConfig(architecture_family="appendix_shared_msg",
+                       node_feat_dim=32, edge_feat_dim=16, hidden_dim=32,
                        out_dim=64, n_layers=3, use_io_projections=True)
     model = ESSGNN(cfg).cuda().double()
     g = torch.Generator(device="cpu").manual_seed(0)
