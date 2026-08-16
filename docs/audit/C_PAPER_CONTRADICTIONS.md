@@ -333,7 +333,7 @@ non-equivariant coordinate update contaminates `h` from layer 2 onward. **At
 
 | id | severity | blocks | resolution |
 |---|---|---|---|
-| C1 | structural | **yes** — U-26 | open |
+| C1 | structural | no longer | **decided 2026-08-17**: `appendix_shared_msg` primary, `sec25_two_mlp` competing. `[INFERENCE]`, not a paper fact. |
 | C2 | severe | no | toward the theorem: `h^(0) = t_i` |
 | C3 | severe | no | `f_x → \mathbb{R}^1`; guarded by an `L ≥ 2` equivariance test |
 | C4 | severe | no | subsumed by C2's resolution |
@@ -347,5 +347,8 @@ C2, C3 and C4 point the same way from three independent directions — the
 appendix's stated premise, the equivariance algebra, and dimensional analysis.
 That convergence is why the resolution is defensible.
 
-**C1 remains open.** Until it is decided, ESSGNN has no single specification and
-no claim of a fully reproduced MetaFind is admissible.
+**C1 is decided, and the decision is an `[INFERENCE]`.** The appendix's
+shared-message form is primary; 2.5's two-MLP form is implemented and measured
+against it. The paper specifies both and never says which it ran, so no result
+may be reported as "the paper's architecture" -- only as one of two readings,
+named.

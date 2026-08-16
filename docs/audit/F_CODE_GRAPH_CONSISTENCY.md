@@ -34,6 +34,9 @@ than doc to doc.
 | missing-edge token | unspecified (U-30) | `learned_missing_token` | **`nn.Parameter`** | `missing_edge_token_gets_gradient` | `FIXED` |
 | equivariance at `L ≥ 2` | Eq. 4 | — | — | `n_layers=3` in both tests | `CONSISTENT` |
 | `x^(L)` equivariance | Eq. 4 | — | not exposed by `forward` | **not asserted** | `OPEN` — D.4 |
+| **C1 family** | specifies two | `architecture_family` | both implemented | `test_se3_equivariance` runs both | `FIXED` |
+| `coord_feat` per family | — | resolved, not defaulted | `__post_init__` | refusal test | `FIXED` |
+| F8's scope | — | — | measured on both | pinned + companion | `FIXED` |
 
 **`OPEN` row.** `test_se3_equivariance` asserts h-invariance only. Coverage is
 better than it sounds — `x` re-enters through `d_{ij}` at the next layer, so a
@@ -57,6 +60,8 @@ rather than done on the eve of the first training run.
 | Eq. 5 unidirectional | §2.6 | ✓ | `bidirectional=False` | direction test | `CONSISTENT` |
 | **CUDA RNG** | — | — | draws on the generator's device | **CUDA smoke, ran on the 4090** | `FIXED` |
 | `Stage1RuntimeConfig` is the construction path | — | declared authority | **n10 does not use it** | — | `OPEN` |
+| **backbone actually frozen** | §2.6 | — | `set_train_scope` + `is_frozen` | 9 tests, incl. non-determinism injection | `FIXED` |
+| checkpoint guard reads `sections` | — | — | compares against the saved keys | guard tests | `FIXED` |
 
 **The `OPEN` row.** `stage1_config.py` declares itself the single path that
 validates and hashes a run's configuration; `stage1.py` reads the protocol dicts
@@ -74,6 +79,7 @@ and is left for a deliberate commit rather than folded into this audit.
 | gallery frozen | §2.4, §2.6 | ✓ | `freeze_gallery(True)` | freeze tests | `CONSISTENT` |
 | **encoder identity hash** | — | "gallery encoder matches Stage 1" | **backbone + fusion** | — | `FIXED`, `SPEC ONLY` |
 | index pinned to checkpoint | — | ✓ | digest compared at promote | promote tests | `CONSISTENT` |
+| **index filename is immutable** | — | write_once | named per checkpoint sha | — | `FIXED`, `SPEC ONLY` |
 | staging → gate → promote | — | ✓ | `promote(gate_passed)` | refuses without the gate | `CONSISTENT` |
 | Objaverse ≠ ProcTHOR index | U-08a | ✓ | separate paths | — | `SPEC ONLY` |
 | **ProcTHOR `pc_norm`** | — | — | `prepare_depth_shell` | — | `FIXED`, `SPEC ONLY` |
@@ -100,6 +106,9 @@ smoke run, and until then this table says so rather than implying coverage.
 | same-assetId positive (U-08a) | silent | ✓ | `positive_map` lookup | — | `SPEC ONLY` |
 | **batches reshuffled per epoch** | silent | — | inside the epoch loop | — | `FIXED`, `SPEC ONLY` |
 | **layout with nodes but no edges** | silent | — | `if keep:` | — | `FIXED`, `SPEC ONLY` |
+| **ESSGNN widths** | — | measured, not decided | from n08's artifacts | — | `FIXED`, `SPEC ONLY` |
+| **Stage 2 saves `loss_fn`** | — | — | `loss_trainable_state` | — | `FIXED`, `SPEC ONLY` |
+| **`--variant` reaches the model** | Table 3 | `variant_registry` | `load_variant` | 6 tests | `FIXED` |
 | n13 has ever run | — | — | **never** | — | `OPEN` |
 
 ---
@@ -128,8 +137,9 @@ construction" is what was said about the four things this pass found.
 
 | item | code | test | status |
 |---|---|---|---|
-| TeX include-tree resolution | `build_source_manifest.py` | self-validating (orphans listed) | `CONSISTENT` |
-| formula extraction | `build_formula_inventory.py` | substring + SHA256 + round-trip + uniqueness | `CONSISTENT` |
+| TeX include-tree resolution | `build_source_manifest.py` | comments stripped before walking | `FIXED` — counted `%\input` as included |
+| formula extraction | `build_formula_inventory.py` | substring + SHA256 + round-trip + uniqueness | `FIXED` — `$$` was never scanned |
+| arXiv ids | `build_source_manifest.py` | — | `FIXED` — MetaFind's pointed at another paper |
 | commented-out equations excluded | `strip_comments` | 3 excluded in EGNN, counted | `CONSISTENT` |
 | equation numbers are ours | documented in A | — | `SPEC ONLY` |
 
@@ -140,13 +150,19 @@ construction" is what was said about the four things this pass found.
 | status | count |
 |---|---|
 | `CONSISTENT` | 30 |
-| `FIXED` | 9 |
-| `SPEC ONLY` | 12 |
+| `FIXED` | 22 |
+| `SPEC ONLY` | 16 |
 | `OPEN` | 3 |
 
 The three `OPEN` rows — `x^(L)` untested, `Stage1RuntimeConfig` uncalled, n13
 never run — are recorded rather than fixed, and each says why.
 
-The twelve `SPEC ONLY` rows are the honest weak spot. Most need a loaded
-backbone or a completed training run to test, which is the same reason they were
-never tested before. The first smoke run converts most of them.
+The sixteen `SPEC ONLY` rows are the honest weak spot, and it grew: several of
+this round's fixes are correct in the code with no test, because they need a
+loaded 9.5 GB backbone or a completed run. That is the same reason the bugs
+survived in the first place. The queued Stage 1 smoke converts most of them, and
+until it passes this table says `SPEC ONLY` rather than implying coverage.
+
+**`FIXED` more than doubled between rounds.** Nine of those came from an
+external review of the first nine; two came from the first round's own fix. A
+fix is not a place to stop checking.

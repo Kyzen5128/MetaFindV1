@@ -202,13 +202,63 @@ bounding-box provenance survives.
 
 ---
 
-## E.9 Summary
+## E.10 Second review round (2026-08-17)
+
+The handover brief went to an external reviewer, which found eight further
+problems. Every one was verified against the code and the TeX before being
+accepted; all eight held. Two of its numeric predictions -- 61 total formulas
+and 484 EGNN inline -- came out exactly right.
+
+| # | finding | verdict |
+|---|---|---|
+| 1 | the extractor never scanned `$$...$$`; EGNN's appendix uses it | `NEEDS_CHANGE` — 56 → **61** |
+| 2 | `build_source_manifest` walked includes without stripping comments | `NEEDS_CHANGE` — EGNN 10 → 8 files, ULIP-2 4 → 3 |
+| 3 | MetaFind's arXiv id was `2510.05057`, a different paper | `NEEDS_CHANGE` — now `2510.04057` |
+| 4 | `build_stage2_model` read protocol keys nothing writes | `NEEDS_CHANGE` — n13 would KeyError; widths now from n08's artifacts |
+| 5 | Stage 2's checkpoint dropped `loss_fn`, so learned `τ` was lost | `NEEDS_CHANGE` — P0-1's shape, one stage later |
+| 6 | `--variant` reached only the filename | `NEEDS_CHANGE` — ten identical models under ten names |
+| 7 | `gallery_index.npz` fixed path broke write-once | `NEEDS_CHANGE` — now named per checkpoint |
+| 8 | `assert_checkpoint_covers_optimizer` ignored `sections` | `NEEDS_CHANGE` — was a tautology |
+
+**Two more were self-inflicted, by the P0-1 fix itself.** Restoring Stage 1's
+point encoder needs a trainable backbone, and nothing switched it back:
+PointBERT stayed in `train()` with `drop_path_rate 0.1`, so the gallery index
+would have been non-deterministic; and Stage 2's freeze guard iterated
+`backbone.parameters()`, which `ULIPBackbone` does not have, so it ran zero
+times. `set_train_scope()` and `is_frozen()` fix both, and `is_frozen()` requires
+**no gradients AND no module in training mode**, because those are two different
+things and only one of them was being checked.
+
+The completeness lesson is worth stating on its own. `failures: []` proved that
+the formulas the extractor FOUND were uncorrupted. It said nothing about the
+ones it never looked for. **Integrity and completeness are different claims and
+a validation report must not let one stand in for the other.**
+
+---
+
+## E.11 C1 decided (2026-08-17)
+
+`appendix_shared_msg` is primary; `sec25_two_mlp` is implemented and competing.
+`[INFERENCE]`, not a paper fact — see C's C1 entry. Two consequences recorded
+here because they change the graph, not just the audit:
+
+- **n08's topology is settled**, so it can run. Phase 1 measured 4,242 distinct
+  description pairs over 12,000 houses (~2.4 h at n05's rate).
+- **F8 does not generalise.** "A 1280-wide `e_ij` swamps the geometric scalar"
+  was measured on the two-MLP layer (median ratio 0.055 over six seeds). The
+  appendix layer gives median 0.126, range 0.031–2.278. It is a property of one
+  reading, not of ESSGNN.
+
+---
+
+## E.12 Summary
 
 | verdict | count |
 |---|---|
 | `VERIFIED` | 26 |
-| `NEEDS_CHANGE` | 9 (5 code, 4 labelling) |
-| `UNRESOLVED` | 4 (C1/U-26, U-27, Table 1 attribution, S5 label) |
+| `NEEDS_CHANGE` | 19 (15 code, 4 labelling) |
+| `UNRESOLVED` | 2 (U-27, Table 1 attribution) |
 | `OBSOLETE` | 3 (repaired Markdown, repair report, latex sanity) |
 
-The pipeline design survived. The code did not.
+The pipeline design survived. The code did not, twice: the first round found
+five P0s, and fixing one of them created two more.

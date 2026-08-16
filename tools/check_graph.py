@@ -12,6 +12,7 @@ Exit 0 = all checks pass, 1 = at least one failure.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from collections import defaultdict
@@ -413,6 +414,33 @@ test_count = sum(
 m2 = re.search(r"(\d+) 個測試函式涵蓋", readme_txt)
 check("README unit-test count", m2 is not None and int(m2.group(1)) == test_count,
       f"README says {m2.group(1) if m2 else '?'}, tests/ defines {test_count}")
+# --- docs/audit must not drift from the inventory it is built on ------------
+# Added after the C1 decision left five separate documents still calling U-26
+# unresolved. Reading them by eye found three; a script found the other two.
+_audit = DOCS.parent / "audit"
+if (_audit / "formula_inventory_validation.json").exists():
+    _val = json.loads((_audit / "formula_inventory_validation.json").read_text())
+    _n = _val["formulas_total"]
+    _per_paper = {s["display_formulas"] for s in _val["summary"].values()}
+    for _md in sorted(_audit.glob("*.md")):
+        _txt = _md.read_text()
+        for _m in re.finditer(r"\*\*(\d+) (?:display )?formulas?\*\*|(\d+) 條公式", _txt):
+            _got = int(_m.group(1) or _m.group(2))
+            check(f"{_md.name} formula count",
+                  _got == _n or _got in _per_paper,
+                  f"claims {_got} formulas; the inventory holds {_n} "
+                  f"(per-paper {sorted(_per_paper)})")
+    # A resolved UNKNOWN may not still be described as open in the audit either.
+    for _md in sorted(_audit.glob("*.md")):
+        _txt = _md.read_text()
+        for _rid in sorted(resolved_ids):
+            for _line in _txt.split("\n"):
+                if _rid in _line and re.search(r"\bopen\b|unresolved", _line, re.I) \
+                        and "decided" not in _line.lower():
+                    check(f"{_md.name} calls {_rid} open",
+                          False,
+                          f"{_rid} is RESOLVED in the registry: {_line.strip()[:90]}")
+
 for nid in implemented:
     check(f"IMPLEMENTS-NODE {nid}", nid in {n["id"] for n in registry["nodes"]},
           "marker names a node that is not in the registry")

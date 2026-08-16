@@ -61,7 +61,33 @@ control**: `test_equivariance_negative_injection` asserts it *breaks* invariance
 (`err > 1e-3`). Without that assertion the positive test would pass on a model
 that ignored coordinates entirely.
 
-### `MF-2` — feature update — `[PAPER]`
+### C1: which layer runs — `[INFERENCE]`, decided 2026-08-17
+
+**Primary: `appendix_shared_msg` (`ESSGCLShared`).** One `phi_e` builds `m_ij`;
+`phi_x` and `phi_h` see only that message.
+
+```python
+m_ij   = self.phi_e(torch.cat([h[row], h[col], radial, edge_attr], dim=-1))   # Eq. 10
+x_next = x + agg(coord_diff * self.phi_x(m_ij))                              # Eq. 13
+h_next = h + unsorted_segment_sum(self.phi_h(m_ij), row, ...)                # Eq. 14
+```
+
+**Competing: `sec25_two_mlp` (`ESSGCL`)**, below. Implemented, tested for
+equivariance in the same parametrised test, and to be measured — a hypothesis,
+not a fallback.
+
+Why the appendix: 2.5 is the normative Method section, but that one paragraph
+carries C2, C3 and C4 — three transcription errors. The appendix is internally
+coherent and is what the equivariance proof is written about. **The paper
+specifies both and never says which it ran**, so this is `[INFERENCE]`.
+
+The neighbourhood is `N(i)` under **both**, and that is not cross-mixing: EGNN's
+`model.tex` states the option — "we could limit the message exchange to a given
+neighborhood j in N(i) if desired in both equations". It also keeps `e_ij`
+defined; the complete-graph reading needs ~1.07M LLM relations against 4,242
+(MEASURED, n08 phase 1 over 12,000 houses).
+
+### `MF-2` — feature update, 2.5's form — `[PAPER]`, competing hypothesis
 
 ```latex
 h_i^{l+1} &= h_i^l + \sum_{j \in \mathcal{N}(i)} f_h(d_{ij}^l, h_i^l, h_j^l, e_{ij}; \theta_h), \\
@@ -129,6 +155,8 @@ checkpoint. `test_missing_edge_token_gets_gradient` is the assertion.
 
 | setting | value | basis |
 |---|---|---|
+| `architecture_family` | `appendix_shared_msg` | **C1, `[INFERENCE]`** — `sec25_two_mlp` also implemented |
+| `coord_feat` | resolved per family | no hard default: appendix has no such choice, 2.5 fixes it to `h^(l+1)`. "updated" beside the appendix family is REFUSED |
 | `distance` | `squared` | C6 — appendix and EGNN; `euclidean` follows §2.5. `[PAPER CONTRADICTION]` |
 | `n_layers` | 4 | S4 — no `L` in the paper. `[IMPLEMENTATION CHOICE]` |
 | `hidden_dim` | 128 | S4 |
