@@ -219,7 +219,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | **U-15** | 結構化標註怎麼序列化成 encoder 的輸入字串 | 只給欄位，沒給格式 |
 | **U-16** | query / gallery 兩塔是否共享權重 | 說「dedicated query encoder」、說兩者都訓練，但沒說共享關係 |
 
-### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 12 個**
+### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 13 個**
 
 規格完整不等於管線存在。這張表是為了讓讀者不會把前者讀成後者
 （第十九輪剛因為同一個理由修過 `L1-STAGE1-PROTOCOL-APPLIED` 的措辭）。
@@ -240,7 +240,8 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | `n15a_resolve_eval_scene_protocol` | **只有規格** | U-27：Table 2 的 200 個 I-Design 請求，**仍需人決定** |
 | `n09_build_splits` | **可執行** | `metafind/data/splits.py`。物件 80/20 ＋ **U-09 的兩種評估協定並行**（gallery=test 與 gallery=full），gallery_size 由切分推導、不寫死；18 條測試 |
 | `n06_encode_text_image` | **可執行** | `metafind/data/encode_text_image.py`。凍結 bigG 編碼文字與 11 視角；**11 個 per-view 向量全部保留**（只存聚合後的會把 U-14 烤死在 46,052 個檔案裡）；token 數實測不假設 |
-| 其餘 **十七個**節點 | **只有規格** | 無 |
+| `n10_train_stage1` | **可執行** | `metafind/train/stage1.py`。凍結 CLIP 的向量走 n06 快取、**點雲即時編碼**（PointBERT 在 optimizer 裡，快取等於變成 fuser-only ablation）；checkpoint 只存 requires_grad 參數（F27）；17 條測試 |
+| 其餘 **十六個**節點 | **只有規格** | 無 |
 
 另有兩塊不對應任何節點、但已可執行：
 
@@ -252,7 +253,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 `metafind/models/`（`essgnn` / `dual_tower` / `fusion` / `losses` / `ulip_backbone` /
 `stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身 ——
 `n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer。
-261 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態（pytest 參數化後展開成 324 個 case），**沒有一條涵蓋任何節點的執行**。
+276 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態（pytest 參數化後展開成 341 個 case），**沒有一條涵蓋任何節點的執行**。
 
 ---
 
