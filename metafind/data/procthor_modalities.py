@@ -95,6 +95,19 @@ ORBIT_RADIUS = 6.0  # orthographic, so this only has to clear the geometry
 DEPTH_FOV_DEG = 45.0
 DEPTH_DISTANCE_FACTOR = 2.5
 
+# The cloud's extent against the box AI2-THOR reports, as a RATIO rather than an
+# absolute error -- because the reference itself is not exact. MEASURED over 192
+# assets: 0.94 to 1.53, median 1.005. The high end is entirely beds, whose
+# duvets and pillows hang off the frame; the renders show the cloth clearly and
+# the reported box does not contain it, so AI2-THOR's box tracks the collider,
+# not the drape. Those clouds are RIGHT and the reference is short.
+#
+# An absolute threshold would have quarantined 31 of the first 163 assets for
+# being correct. The bound below still catches what this check exists for: the
+# orthographic-depth bug produced a ratio of 69.
+BBOX_RATIO_MIN = 0.5
+BBOX_RATIO_MAX = 3.0
+
 
 def strip_house(house: dict, asset_id: str) -> dict:
     """A house holding exactly one asset, lifted clear of everything else.
@@ -218,7 +231,12 @@ def is_complete(asset_id: str) -> bool:
         return False
     if len(rec.get("view_paths", [])) != N_VIEWS:
         return False
-    return Path(rec.get("pointcloud_uri", "")).exists()
+    uri = rec.get("pointcloud_uri")
+    if uri is None:
+        # A recorded absence, not an unfinished asset. Requiring the file here
+        # would re-render every transparent asset on every resume, forever.
+        return bool(rec.get("pointcloud_missing_reason"))
+    return Path(uri).exists()
 
 
 def asset_ids_in_use() -> list[str]:
@@ -316,11 +334,29 @@ def _write_asset(asset_id: str, cap: dict, text: str,
         view_paths.append(str(vp))
         view_bytes.append(vp.stat().st_size)
 
-    cloud = fuse_depth_shell(cap["depths"], cap["depth_poses"], cap["far_cut"])
+    # MEASURED: some ProcTHOR assets never appear in AI2-THOR's depth buffer at
+    # all -- Bottle_1, CD_1 and eleven Bowls returned a uniform far-plane depth
+    # at every distance tried, while RGB rendered them normally. They are the
+    # glass and glossy ones, and Unity's depth prepass carries opaque geometry
+    # only. It is a property of the ASSET, not of the camera: the same probe at
+    # 0.5, 1, 3 and 6 m gave depth for an alarm clock and nothing for a bowl.
+    #
+    # So this is a missing MODALITY, not a failed asset. The record is written
+    # with text and eleven views and an explicit null, because 2.4 lets the query
+    # side take any subset and stage2_protocol already has query_pointcloud
+    # optional. Quarantining would have thrown away two good modalities; a
+    # zero-filled cloud would have been indistinguishable from a real one.
     pc_path = out / "pointcloud.npz"
-    tmp = out / "pointcloud.part.npz"
-    np.savez_compressed(tmp, xyz=cloud)
-    tmp.replace(pc_path)
+    cloud, missing = None, None
+    try:
+        cloud = fuse_depth_shell(cap["depths"], cap["depth_poses"], cap["far_cut"])
+        tmp = out / "pointcloud.part.npz"
+        np.savez_compressed(tmp, xyz=cloud)
+        tmp.replace(pc_path)
+    except ValueError as exc:
+        missing = f"{exc}. AI2-THOR returned no depth for this asset at any "\
+                  "distance; its material is not in the depth prepass."
+        pc_path.unlink(missing_ok=True)
 
     # The cloud must occupy the box AI2-THOR itself reports. This is the only
     # thing standing between a correct unprojection and a plausible-looking wrong
@@ -329,10 +365,22 @@ def _write_asset(asset_id: str, cap: dict, text: str,
     # the real distance. Every count and shape check passed; this comparison read
     # 11.063 m against an object 0.16 m wide.
     bb = cap["bb"]
-    lo, hi = cloud.min(axis=0), cloud.max(axis=0)
     reported = np.array([bb["size"]["x"], bb["size"]["y"], bb["size"]["z"]])
-    measured = hi - lo
-    bbox_err = float(np.abs(measured - reported).max())
+    if cloud is None:
+        measured = np.array([float("nan")] * 3)
+        bbox_err, ratio = float("nan"), float("nan")
+    else:
+        lo, hi = cloud.min(axis=0), cloud.max(axis=0)
+        measured = hi - lo
+        bbox_err = float(np.abs(measured - reported).max())
+        ratio = float((measured / np.maximum(reported, 1e-6)).max())
+    if cloud is not None and not BBOX_RATIO_MIN <= ratio <= BBOX_RATIO_MAX:
+        raise ValueError(
+            f"cloud extent is {ratio:.2f}x the reported bounding box "
+            f"(allowed {BBOX_RATIO_MIN}-{BBOX_RATIO_MAX}); reported "
+            f"{reported.round(3).tolist()}, measured {measured.round(3).tolist()}. "
+            "The unprojection is producing geometry unrelated to the asset."
+        )
 
     return {
         "asset_id": asset_id,
@@ -340,12 +388,14 @@ def _write_asset(asset_id: str, cap: dict, text: str,
         "text": text,
         "view_paths": view_paths,
         "view_bytes": view_bytes,
-        "pointcloud_uri": str(pc_path),
-        "n_points": int(len(cloud)),
-        "pointcloud_kind": "multiview_depth_shell",
+        "pointcloud_uri": None if cloud is None else str(pc_path),
+        "pointcloud_missing_reason": missing,
+        "n_points": 0 if cloud is None else int(len(cloud)),
+        "pointcloud_kind": None if cloud is None else "multiview_depth_shell",
         "bbox_reported": reported.tolist(),
         "bbox_measured": measured.tolist(),
         "bbox_max_abs_error_m": bbox_err,
+        "bbox_size_ratio": ratio,
         "image_protocol": {"n_views": N_VIEWS, "resolution": RESOLUTION,
                            "projection": PROJECTION,
                            "elevation_deg": ORBIT_ELEVATION_DEG,
@@ -385,7 +435,7 @@ def main() -> int:
         return 0
 
     renderer = ThorRenderer()
-    done, quarantined, started = 0, 0, time.time()
+    done, quarantined, no_cloud, started = 0, 0, 0, time.time()
     worst_bbox = 0.0
     with runlog.run_progress(NODE):
         for asset_id in todo:
@@ -411,19 +461,24 @@ def main() -> int:
                 fh.flush()
                 os.fsync(fh.fileno())
             tmp.replace(sc)
-            worst_bbox = max(worst_bbox, rec["bbox_max_abs_error_m"])
+            if rec["pointcloud_uri"] is None:
+                no_cloud += 1
+            else:
+                worst_bbox = max(worst_bbox, rec["bbox_size_ratio"])
             done += 1
             if done % 50 == 0:
                 rate = done / max(time.time() - started, 1e-9) * 60
                 print(f"  [{done:5d}/{len(todo)}] {rate:.1f}/min, "
-                      f"quarantine {quarantined}, worst bbox err {worst_bbox:.3f} m",
+                      f"quarantine {quarantined}, no-cloud {no_cloud}, "
+                      f"worst bbox ratio {worst_bbox:.2f}x",
                       flush=True)
 
     renderer.stop()
     runlog.cost_ledger(wallclock_s=round(time.time() - started, 1),
                        assets_rendered=done, views_written=done * N_VIEWS)
     print(f"\n{done:,} rendered, {quarantined:,} quarantined, "
-          f"worst bbox error {worst_bbox:.3f} m -> {paths.PROCTHOR_MODALITIES}")
+          f"{no_cloud:,} without a point cloud (text+image only), "
+          f"worst bbox ratio {worst_bbox:.2f}x -> {paths.PROCTHOR_MODALITIES}")
     return 0
 
 

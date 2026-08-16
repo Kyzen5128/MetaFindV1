@@ -219,7 +219,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | **U-15** | 結構化標註怎麼序列化成 encoder 的輸入字串 | 只給欄位，沒給格式 |
 | **U-16** | query / gallery 兩塔是否共享權重 | 說「dedicated query encoder」、說兩者都訓練，但沒說共享關係 |
 
-### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 10 個**
+### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 11 個**
 
 規格完整不等於管線存在。這張表是為了讓讀者不會把前者讀成後者
 （第十九輪剛因為同一個理由修過 `L1-STAGE1-PROTOCOL-APPLIED` 的措辭）。
@@ -238,7 +238,8 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | `n07b_procthor_asset_modalities` | **可執行** | `metafind/data/procthor_modalities.py`。AI2-THOR 隔離渲染，相機協定**由 `renders.py` import 而非抄寫**；點雲以 AI2-THOR 自報的 bounding box 驗證反投影 |
 | `n11b_stage2_gallery_index` | **只有規格** | U-08a 判定後新增：用凍結的 Stage 1 塔編碼 ProcTHOR 資產，Stage 2 專屬索引 |
 | `n15a_resolve_eval_scene_protocol` | **只有規格** | U-27：Table 2 的 200 個 I-Design 請求，**仍需人決定** |
-| 其餘 **十九個**節點 | **只有規格** | 無 |
+| `n09_build_splits` | **可執行** | `metafind/data/splits.py`。物件 80/20 ＋ **U-09 的兩種評估協定並行**（gallery=test 與 gallery=full），gallery_size 由切分推導、不寫死；18 條測試 |
+| 其餘 **十八個**節點 | **只有規格** | 無 |
 
 另有兩塊不對應任何節點、但已可執行：
 
@@ -250,7 +251,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 `metafind/models/`（`essgnn` / `dual_tower` / `fusion` / `losses` / `ulip_backbone` /
 `stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身 ——
 `n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer。
-231 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態（pytest 參數化後展開成 290 個 case），**沒有一條涵蓋任何節點的執行**。
+247 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態（pytest 參數化後展開成 308 個 case），**沒有一條涵蓋任何節點的執行**。
 
 ---
 
