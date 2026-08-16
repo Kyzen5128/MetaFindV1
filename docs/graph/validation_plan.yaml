@@ -622,6 +622,30 @@ level_1:
     verified_blocks: false
     note: "[PAPER 2.6] 'Only the query-side fuser and the ESSGNN module are updated; the gallery encoder is frozen'."
 
+  - id: L1-CKPT-TRAINABLE-ONLY
+    target: stage1_ckpt
+    target_kind: channel
+    asserts: >
+      Every checkpoint holds ONLY parameters with requires_grad True at save
+      time. n_params_saved matches the optimizer's parameter count, and no
+      ViT-bigG-14 tensor appears in the state dict.
+    negative_injection: "save model.state_dict() whole"
+    expected_on_injection: >
+      n_params_saved jumps by ~2.5 billion, the file grows past 10 GB, and
+      OpenCLIP keys appear in the state dict
+    verified_blocks: false
+    note: >
+      [DISK] Recorded before n10 is written, because the failure is silent until
+      it is expensive: torch.save on the dual tower includes the frozen
+      ViT-bigG-14 -- 2.5B parameters, 10.2 GB -- which is reconstructible from
+      the pinned OpenCLIP weights and moves not at all. Table 3 has ten variants
+      plus the main line: 1.9 GB against 112 GB, on a SHARED volume with 374 GB
+      free.
+      The check is on the state dict's KEYS, not on file size, because a size
+      threshold would pass a checkpoint that happens to be small for another
+      reason -- a variant that trained fewer modules, say -- and would need
+      retuning every time the architecture changed.
+
   - id: L1-STAGE2-SAMPLE-CONSTRUCTION
     target: n13_train_stage2
     target_kind: node
@@ -1541,7 +1565,7 @@ level_3_gates:
 
 # ==================================================================
 gate_discipline:
-  total_l1: 63
+  total_l1: 64
   total_l2: 18
   total_gates: 7
   rejected_gate_candidates:

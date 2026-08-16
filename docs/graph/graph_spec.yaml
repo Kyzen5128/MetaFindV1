@@ -793,7 +793,20 @@ state:
         assume query=test. That assumption is recorded here, not deduced.
 
     - name: stage1_ckpt
-      type: "{uri, sha256, config_hash, data_hash, seed, code_revision, train_scope}"
+      type: "{uri, sha256, config_hash, data_hash, seed, code_revision, train_scope, trainable_only: true, n_params_saved, size_bytes}"
+      note: >
+        [DISK, recorded before it bites] `trainable_only` is not bookkeeping.
+        torch.save(model.state_dict()) on the dual tower writes ViT-bigG-14 too:
+        2.5B parameters at 10.2 GB, frozen, reconstructible from the pinned
+        OpenCLIP weights. The parameters that actually move are PointBERT
+        (32.5M), the projection and the fusion modules -- about 170 MB.
+        Table 3 has ten variants plus the main line, so the difference is
+        1.9 GB against 112 GB, and /mnt/data1 is a SHARED volume with 374 GB
+        free. A checkpoint that includes the frozen tower is also misleading in
+        a second way: it looks like a self-contained artifact while silently
+        depending on the same pinned weights anyway.
+        `n_params_saved` travels with it so the claim is checkable rather than
+        asserted by a filename.
       writers: [n10_train_stage1]
       readers: [G6_stage2_ready, n10b_post_stage1_encode, n11_gallery_index_staging, n11b_stage2_gallery_index, n13_train_stage2, n18_train_ablations]
       merge: write_once
@@ -837,7 +850,7 @@ state:
         so a retrained model is the safer reading. Recorded, not deduced.
 
     - name: variant_ckpts
-      type: "map[variant_id -> {uri, sha256}]"
+      type: "map[variant_id -> {uri, sha256, trainable_only: true, n_params_saved, size_bytes}]"
       writers: [n13_train_stage2, n18_train_ablations, sg3_train]
       readers: [n14_equivariance_probe, n15_eval_retrieval, n16_compose_scenes, n19_eval_ablations]
       merge: upsert_by_key
