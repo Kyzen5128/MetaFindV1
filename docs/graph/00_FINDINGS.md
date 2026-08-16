@@ -1115,7 +1115,34 @@ h_i^{l+1} = h_i + Σ φ_h(m_ij)                    (14)
 
 **實作依 2.5**（兩個獨立 MLP），記錄為選擇而非推導。
 
-### 三、三個已登記的矛盾，程式各站哪一邊
+### 三、逐項驗證程式（不是讀註解，是讀實作）
+
+複習之後把每一條都對回 `metafind/models/essgnn.py` 與 `dual_tower.py`：
+
+| 論文 | 程式 | |
+|---|---|---|
+| Eq. 2 `h + Σ f_h(...)` | `h_next = h + unsorted_segment_sum(m_h, row, ...)` | ✅ 殘差和 |
+| Eq. 3 `(x_i−x_j)·f_x(...)` | `trans = coord_diff * w`，`coord_diff = x[row] − x[col]` | ✅ 方向正確 |
+| Eq. 3 `f_x` 吃 `h^{l+1}` | `h_for_x = h_next if coord_feat == "updated"` | ✅ 依 2.5 |
+| `Pooling({h^{(L)}})` | `pooling` 設定，主線 `mean` | ✅ |
+| Eq. 6 `+ λ·e_layout` | `contribution = self.lam * layout` | ✅ 殘差相加 |
+| λ 可學 | `nn.Parameter(init_lambda)` | ✅ |
+| Eq. 8 兩方向 **取平均** | `0.5 * (loss_q2g + loss_g2q)` | ✅ 不是相加 |
+
+#### 驗出來的一個真錯誤：參數名 `log_lambda`
+
+它被**直接**當 λ 用（`contribution = self.lam * layout`），初始值 1.0，**沒有任何 exp**。
+2.6 只說「a learnable scalar」，沒有正值約束，所以**行為是對的、名字是錯的**。
+
+危險在於：讀到 `log_lambda` 的人會合理地「修正」成 `torch.exp(...)`，
+而那會讓 λ 從 1.0 變成 e ≈ 2.718，**悄悄改掉每一個 Table 2／Table 3 的數字**，
+不報錯、不變慢。
+
+已改名為 `layout_weight`。**現在改是安全的、之後就不是了** ——
+參數名是 checkpoint 的 key，而目前還沒有任何 checkpoint 存在。
+`stage2.py` 裡用字串比對挑可訓練參數的那一行也一併更新（它原本比對 `"lambda"`）。
+
+### 四、三個已登記的矛盾，程式各站哪一邊
 
 | | 正文說 | Appendix C／EGNN 說 | 程式 |
 |---|---|---|---|

@@ -64,20 +64,20 @@ def test_eq6_is_a_residual_on_the_fused_query():
 def test_lambda_is_learnable():
     """L1-LAMBDA: sec. 2.6 calls lambda a learnable scalar controlling layout."""
     model = MetaFindDualTower(cfg())
-    assert isinstance(model.query.log_lambda, torch.nn.Parameter)
+    assert isinstance(model.query.layout_weight, torch.nn.Parameter)
     assert model.query.lam.numel() == 1, "lambda must be a scalar, not a vector"
 
     e = embeds()
     model.query(e, layout=torch.randn(4, D)).sum().backward()
-    assert model.query.log_lambda.grad is not None
-    assert model.query.log_lambda.grad.abs().item() > 0
+    assert model.query.layout_weight.grad is not None
+    assert model.query.layout_weight.grad.abs().item() > 0
 
 
 def test_lambda_negative_injection():
     """A constant lambda must be detectable, or the previous test proves nothing."""
     model = MetaFindDualTower(cfg())
     with torch.no_grad():
-        model.query.log_lambda.zero_()
+        model.query.layout_weight.zero_()
     e = embeds()
     with torch.no_grad():
         a = model.query(e, layout=torch.randn(4, D))
@@ -92,7 +92,7 @@ def test_layout_free_query_ignores_the_layout_branch():
     e = embeds()
     with torch.no_grad():
         a = model.query(e, layout=None)
-        model.query.log_lambda.fill_(999.0)
+        model.query.layout_weight.fill_(999.0)
         b = model.query(e, layout=None)
     assert torch.allclose(a, b), "lambda leaked into a layout-free query"
 
@@ -232,7 +232,7 @@ def test_layout_path_end_to_end_with_batched_scenes():
     q = model.query(embeds(b=2), layout=layout)
     assert q.shape == (2, D)
     q.sum().backward()
-    assert model.query.log_lambda.grad is not None
+    assert model.query.layout_weight.grad is not None
     assert any(p.grad is not None for p in model.query.layout_encoder.parameters())
 
 

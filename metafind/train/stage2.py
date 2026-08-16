@@ -248,7 +248,7 @@ def freeze_for_stage2(model, backbone) -> dict:
         p.requires_grad_(False)
     for name, p in model.named_parameters():
         trains = name.startswith("query.fusion") or name.startswith("query.layout_encoder") \
-            or name.endswith("lam") or "lambda" in name
+            or name.endswith("layout_weight")
         p.requires_grad_(trains)
     return {name: p.requires_grad for name, p in model.named_parameters()}
 

@@ -198,16 +198,22 @@ class QueryTower(nn.Module):
                     "Eq. 6 adds e_layout to the fused query, so the widths must match"
                 )
             self.layout_encoder: nn.Module | None = ESSGNN(cfg.essgnn)
-            self.log_lambda = nn.Parameter(torch.tensor(float(cfg.init_lambda)))
+            # NAMED layout_weight, not log_lambda. It is used DIRECTLY as Eq. 6's
+            # lambda -- there is no exponential anywhere -- and 2.6 states
+            # only "a learnable scalar", with no positivity constraint to
+            # motivate a log parameterisation. The previous name invited a
+            # correction to exp(...), which would move lambda from 1.0 to e
+            # at init and shift every Table 2 and Table 3 number.
+            self.layout_weight = nn.Parameter(torch.tensor(float(cfg.init_lambda)))
         else:
             self.layout_encoder = None
-            self.register_parameter("log_lambda", None)
+            self.register_parameter("layout_weight", None)
 
     @property
     def lam(self) -> Tensor:
-        if self.log_lambda is None:
+        if self.layout_weight is None:
             raise AttributeError("this query tower has no layout branch")
-        return self.log_lambda
+        return self.layout_weight
 
     def forward(
         self,
