@@ -340,7 +340,10 @@ ProcTHOR 分支的任何故障都會停掉一個不依賴它的訓練。兩條�
 | `point_encoder+fuser` | PointBERT (32.5M) + fusion + 投影 | ✅ | **主線** |
 | `full` | 再加 ViT-bigG-14 (2.5B) | ❓ **未量測** | `actual=trainable` 的執行對象，由 **RA-3** 量測 |
 
-**[D-1 —— 條件式偏離，取決於 U-34]** ViT-bigG-14 的 text/image 端保持凍結。
+**[D-1 —— 條件式偏離，已判定不啟用]** ViT-bigG-14 的 text/image 端保持凍結。
+
+**U-34 已於 2026-08-16 判定為 `frozen`，D-1 因此不啟用。** 理由不是「4090 塞不下所以偏離」，而是：MetaFind 明確建立於 ULIP-2，ULIP-2 §3.3 明文凍結 OpenCLIP，而 MetaFind 全文從未聲明改變此策略。§2.6「Both query and gallery encoders are trained」講的是**塔**（point encoder／projection／fuser 本來就在 optimizer 裡），§3.4「entire encoder」對比的是 fuser-only ablation，§2.4「gallery frozen after pretraining」與 §2.6 是 Stage 1／Stage 2 的界線，不是矛盾。**不得寫成「論文明文說 CLIP 凍結」** —— 論文沒有這句。若日後取得官方 code 或作者回覆證實 optimizer 更新到 OpenCLIP，重開 U-34 並啟用 D-1。
+
 **ULIP-2 論文明文凍結 CLIP。** §3.3：
 
 > We adopt the largest version of encoders from OpenCLIP (**ViT-G/14**) [13] for most

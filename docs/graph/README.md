@@ -15,7 +15,7 @@
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
 | **[未定]** | 論文沒說，我們選了一個並記錄（累積 39 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**） |
-| **[偏離]** | 與論文不同，必須在報告聲明（**6 條 D-2…D-7**，外加 **1 條條件式 D-1** —— 它是否成立取決於 U-34） |
+| **[偏離]** | 與論文不同，必須在報告聲明（**6 條 D-2…D-7**。條件式的 **D-1** 已於 2026-08-16 判定**不啟用**） |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
 
@@ -108,11 +108,11 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 **不下載**：ULIP-2 預先取樣的點雲（185 GB）、ULIP-2 的渲染圖（474 GB，而且不是論文要的
 11 正交視角）、ShapeNet triplets（409 GB）。
 
-### 六項偏離（D-2…D-7）＋一項條件式（D-1）
+### 六項偏離（D-2…D-7）＋一項條件式（D-1，已判定不啟用）
 
 | id | 偏離 | 影響 |
 |---|---|---|
-| **D-1** *(條件式)* | ViT-bigG-14 的 CLIP 側保持凍結。`active_if: paper_clip_train_scope == 'trainable' AND actual_clip_train_scope == 'frozen'` | **U-34 未解前不算偏離** —— ULIP-2 §3.3 明文凍結 OpenCLIP，主線的凍結有其論文直接支持。RA-3 量測的是**另一個讀法**在本機是否可執行 |
+| **D-1** *(條件式・**不啟用**)* | ViT-bigG-14 的 CLIP 側保持凍結。`active_if: paper_clip_train_scope == 'trainable' AND actual_clip_train_scope == 'frozen'`；實際兩者皆為 `frozen`，條件不成立 | **U-34 已於 2026-08-16 判定為 `frozen`，D-1 因此不啟用。** 理由不是「4090 塞不下所以偏離」，而是：MetaFind 明確建立於 ULIP-2，ULIP-2 §3.3 明文凍結 OpenCLIP，而 MetaFind 全文從未聲明改變此策略。§2.6「Both query and gallery encoders are trained」講的是**塔**（point encoder／projection／fuser 本來就在 optimizer 裡），§3.4「entire encoder」對比的是 fuser-only ablation，§2.4「gallery frozen after pretraining」與 §2.6 是 Stage 1／Stage 2 的界線，不是矛盾。**不得寫成「論文明文說 CLIP 凍結」** —— 論文沒有這句。若日後取得官方 code 或作者回覆證實 optimizer 更新到 OpenCLIP，重開 U-34 並啟用 D-1。 RA-3 仍照跑，量的是**另一個讀法**在本機是否可執行，只記錄不阻斷 |
 | **D-2** | Qwen2.5-VL 取代 GPT-4o | **Table 1 與 Table 2 都受影響** —— 它不只換裁判，也換掉 46,052 筆標註（文字塔的訓練資料）。SC-1 因此只報告差距、不設門檻 |
 | **D-3** | 不重跑 6 個 baseline | 只能與論文公佈值比較，並註明協定不同 |
 | **D-4** | 不做人工評分 | Table 2 人工欄判 `INSUFFICIENT_EVIDENCE` |

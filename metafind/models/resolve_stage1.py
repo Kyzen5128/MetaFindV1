@@ -272,8 +272,39 @@ def serialize_annotation(annotation: dict, template: str = TEXT_TEMPLATE) -> str
     )
 
 
+# The reading travels with the decision, because the report has to state it in
+# exactly these terms and NOT as "MetaFind explicitly states that OpenCLIP is
+# frozen" -- MetaFind never writes that sentence. What it writes is that it
+# builds on ULIP-2; ULIP-2 3.3 is what states the freeze.
+CLIP_SCOPE_BASIS = {
+    "frozen": (
+        "MetaFind does not state a per-module freeze scope for OpenCLIP "
+        "anywhere. This reproduction follows ULIP-2's design because MetaFind "
+        "explicitly builds on ULIP-2, ULIP-2 3.3 states 'We adopt the largest "
+        "version of encoders from OpenCLIP (ViT-G/14) ... and freeze it during "
+        "pre-training', and MetaFind never states that it changes that policy. "
+        "The three sentences that read otherwise do not carry it: 2.6's 'Both "
+        "query and gallery encoders are trained' describes the TOWERS, which "
+        "train under a frozen CLIP because the point encoder, the projection "
+        "and the fuser are all in the optimizer; 3.4's 'Fine-tuning the entire "
+        "encoder outperformed training the fuser only' separates the full model "
+        "from the fuser-only ablation, a separation the trainable point encoder "
+        "already produces; and 2.4's 'gallery encoder is frozen after "
+        "pretraining' versus 2.6's 'is trained' is the Stage 1 / Stage 2 "
+        "boundary, not a Stage 1 contradiction. Reopen if MetaFind's code or "
+        "its authors show an optimizer update reaching OpenCLIP's parameters."
+    ),
+    "trainable": (
+        "Read from MetaFind 3.4, 'Fine-tuning the entire encoder outperformed "
+        "training the fuser only', taking 'the entire encoder' to reach "
+        "OpenCLIP. MetaFind never states this per module; recorded as our "
+        "reading. Under this reading a frozen run IS deviation D-1."
+    ),
+}
+
+
 def build_protocol(paper_clip_train_scope: str, actual_clip_train_scope: str,
-                   decided_by: str) -> dict:
+                   decided_by: str, confidence: str = "moderate") -> dict:
     if paper_clip_train_scope not in ("frozen", "trainable"):
         raise ValueError(f"paper_clip_train_scope must be frozen|trainable, "
                          f"got {paper_clip_train_scope!r}")
@@ -290,6 +321,8 @@ def build_protocol(paper_clip_train_scope: str, actual_clip_train_scope: str,
         "text_template": TEXT_TEMPLATE,
         "image_aggregation": IMAGE_AGGREGATION,
         "paper_clip_train_scope": paper_clip_train_scope,
+        "paper_clip_train_scope_basis": CLIP_SCOPE_BASIS[paper_clip_train_scope],
+        "paper_clip_train_scope_confidence": confidence,
         "actual_clip_train_scope": actual_clip_train_scope,
         "missing_modality_representation": MISSING_MODALITY,
         "decided_by": decided_by,
@@ -334,6 +367,9 @@ def main() -> int:
                     choices=("frozen", "trainable"),
                     help="U-34: what this run does. Defaults to frozen, which "
                          "ULIP-2 3.3 supports and 24 GB requires.")
+    ap.add_argument("--confidence", default="moderate",
+                    choices=("low", "moderate", "high"),
+                    help="how firm the U-34 reading is; the report quotes it")
     ap.add_argument("--decided-by", default=None,
                     help="who made the call; defaults to the invoking user")
     args = ap.parse_args()
@@ -342,7 +378,8 @@ def main() -> int:
 
     with runlog.run_progress(NODE):
         protocol = build_protocol(args.paper_clip_train_scope,
-                                  args.actual_clip_train_scope, decided_by)
+                                  args.actual_clip_train_scope, decided_by,
+                                  args.confidence)
         hyperparameters = build_hyperparameters(decided_by)
         _write(PROTOCOL_PATH, protocol)
         _write(HYPERPARAMETERS_PATH, hyperparameters)
