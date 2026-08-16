@@ -14,7 +14,7 @@
 | 標記 | 意思 |
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
-| **[未定]** | 論文沒說，我們選了一個並記錄。U registry 共 40 項，其中 34 項 unresolved、6 項 resolved（U-08a、U-08b、U-18、U-20、U-21、U-34，皆 2026-08-16）。**先前四個會擋住 Stage 2／Table 2 的項目已全部判定**；新增 **U-08c**（ProcTHOR 資產數四個數字互相矛盾，一律從安裝的 build 現場推導）|
+| **[未定]** | 論文沒說，我們選了一個並記錄。U registry 共 41 項，其中 33 項 unresolved、8 項 resolved（U-08、U-08a、U-08b、U-08d、U-18、U-20、U-21、U-34，皆 2026-08-16）。**先前四個會擋住 Stage 2／Table 2 的項目已全部判定**；新增 **U-08c**（ProcTHOR 資產數四個數字互相矛盾，一律從安裝的 build 現場推導）|
 | **[偏離]** | 與論文不同，必須在報告聲明（**6 條 D-2…D-7**。條件式的 **D-1** 已於 2026-08-16 判定**不啟用**） |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
@@ -88,8 +88,8 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | 1 | [`02_BUILD_STEPS.md`](02_BUILD_STEPS.md) | **從這裡開始**。逐步驟建置流程，每步標明論文怎麼說、我們怎麼做 |
 | 2 | [`01_GRAPH_SPEC.md`](01_GRAPH_SPEC.md) | 完整規格：分類、目標、state、節點、邊、路由、迴圈、失敗、驗證、gate、風險、修正紀錄 |
 | 3 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實測事實（F 系列）與架構決策（D 系列），**含論文的多處自相矛盾** |
-| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：54 個 state channel、66 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
-| 5 | [`node_registry.yaml`](node_registry.yaml) | 37 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
+| 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：55 個 state channel、69 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
+| 5 | [`node_registry.yaml`](node_registry.yaml) | 38 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
 | 6 | [`validation_plan.yaml`](validation_plan.yaml) | 60 個 L1、18 個 L2、7 個 gate、4 個 Required Audit |
 
 ## 一頁摘要
@@ -219,7 +219,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | **U-15** | 結構化標註怎麼序列化成 encoder 的輸入字串 | 只給欄位，沒給格式 |
 | **U-16** | query / gallery 兩塔是否共享權重 | 說「dedicated query encoder」、說兩者都訓練，但沒說共享關係 |
 
-### 實作狀態 —— 30 個非 gate 節點裡，**有程式的是 9 個**
+### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 9 個**
 
 規格完整不等於管線存在。這張表是為了讓讀者不會把前者讀成後者
 （第十九輪剛因為同一個理由修過 `L1-STAGE1-PROTOCOL-APPLIED` 的措辭）。
@@ -237,6 +237,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | `n05b_resolve_stage1_encoding` | **可執行** | `metafind/models/resolve_stage1.py`。釘死 U-15 文字模板（golden-string 測試）、U-14 取 11 視圖平均、U-11 learned token；**U-34 已判定 `frozen`**，連同 basis 與 confidence 一併記錄，主線再無執行期歧義。25 條測試 |
 | `n07b_procthor_asset_modalities` | **只有規格** | U-08b 判定後新增：ProcTHOR 資產的隔離渲染／深度外殼點雲／文字 |
 | `n11b_stage2_gallery_index` | **只有規格** | U-08a 判定後新增：用凍結的 Stage 1 塔編碼 ProcTHOR 資產，Stage 2 專屬索引 |
+| `n15a_resolve_eval_scene_protocol` | **只有規格** | U-27：Table 2 的 200 個 I-Design 請求，**仍需人決定** |
 | 其餘 **十九個**節點 | **只有規格** | 無 |
 
 另有兩塊不對應任何節點、但已可執行：

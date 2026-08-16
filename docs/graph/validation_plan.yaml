@@ -1381,12 +1381,24 @@ level_3_gates:
            room_dimensions) -- there is no way to hand it a finished ProcTHOR
            house, and procthor_to_idesign_adapter does not exist. A gate that
            can mark a protocol "resolved" when nothing downstream can execute
-           it is not a gate. Reading A stays an open candidate for U-21;
+           it is not a gate. U-21 resolved to Reading B; Reading A is the
+           `procthor_leave_one_out` diagnostic only;
            RESOLVING to it is what is refused, and this line changes the moment
            the adapter is specified and validated.]
       AND g0_source,
       query_list_source, placement_rule, new_node_t_i, new_phys_edges and
       new_sem_edges are all populated with a stated method
+      AND idesign_eval_requests holds exactly 200 entries
+      AND every entry has a non-empty prompt, a recorded prompt_sha256, valid
+          room_dimensions, n_objects > 0, a recorded seed and a provenance string
+          (U-27: paper 3.3 gives "200 randomly sampled scenes" and nothing else.
+           Under Reading B the prompts ARE the experiment, so an unrecorded
+           prompt set is an unreproducible Table 2, and the failure mode is
+           someone typing them at the console.)
+      AND composition_protocol.new_phys_edges and new_sem_edges each name a
+          concrete rule, not "recompute"
+          (U-18: line 7 feeds line 3 of the next iteration. A field that says
+           only "recompute" leaves ESSGNN reading edges nobody specified.)
     evidence: [L1-GATE-NORECORD]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G7_composition_protocol.yaml"

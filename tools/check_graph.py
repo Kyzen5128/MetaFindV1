@@ -264,11 +264,24 @@ for u in _u_entries:
 # ProcTHOR-to-Objaverse mapping the decision had removed. 1,949 structural
 # checks passed, because a channel's TYPE agreeing with its own readers says
 # nothing about whether it agrees with a decision recorded elsewhere.
-_STALE = re.compile(r"(UNKNOWN\s+(U-[0-9a-z]+)|\b(U-[0-9a-z]+)\s*--\s*BLOCKING)")
+# Three shapes, all seen in this repo: "[UNKNOWN U-nn]", "U-nn -- BLOCKING",
+# and prose that keeps a resolved reading alive as a live option ("Reading A
+# stays an open candidate for U-21", "BOTH READINGS REMAIN EPISTEMIC
+# CANDIDATES"). The third shape is the one that slipped through: it names no
+# bracket and no keyword, and it says exactly the opposite of RESOLVED.
+_STALE = re.compile(
+    r"(?:UNKNOWN\s+(U-[0-9a-z]+)"
+    r"|\b(U-[0-9a-z]+)\s*--\s*(?:BLOCKING|BOTH READINGS)"
+    r"|BOTH READINGS REMAIN[^.]*?\b(U-[0-9a-z]+)?"
+    r"|open candidate for (U-[0-9a-z]+)"
+    r"|(U-[0-9a-z]+)[^.]{0,80}?open candidate)"
+)
 for name, c in channels.items():
     blob = f"{c.get('type','')} {c.get('note','')}"
     for m in _STALE.finditer(blob):
-        uid = m.group(2) or m.group(3)
+        uid = next((g for g in m.groups() if g), None)
+        if uid is None:
+            continue
         check(f"channel {name} does not call {uid} unknown",
               uid not in resolved_ids,
               f"channel `{name}` still marks {uid} as UNKNOWN/BLOCKING, "
@@ -276,7 +289,9 @@ for name, c in channels.items():
 for nid, n in all_nodes.items():
     blob = f"{n.get('notes','')} {n.get('postcondition','')} {n.get('purpose','')}"
     for m in _STALE.finditer(blob):
-        uid = m.group(2) or m.group(3)
+        uid = next((g for g in m.groups() if g), None)
+        if uid is None:
+            continue
         check(f"node {nid} does not call {uid} unknown",
               uid not in resolved_ids,
               f"node `{nid}` still marks {uid} as UNKNOWN/BLOCKING, "
@@ -285,7 +300,9 @@ for item in plan["level_1"] + plan["level_2"] + plan["level_3_gates"]:
     blob = " ".join(str(v) for v in item.values())
     label = item.get("id") or item.get("gate_id")
     for m in _STALE.finditer(blob):
-        uid = m.group(2) or m.group(3)
+        uid = next((g for g in m.groups() if g), None)
+        if uid is None:
+            continue
         check(f"validation {label} does not call {uid} unknown",
               uid not in resolved_ids,
               f"{label} still marks {uid} as UNKNOWN/BLOCKING, "
@@ -300,7 +317,8 @@ for item in plan["level_1"] + plan["level_2"] + plan["level_3_gates"]:
 # it blocking is telling a reader to wait for a decision that has been made --
 # the same half-migration as U-34, in a different vocabulary.
 _OPEN_PHRASES = ("未解", "尚未確立", "取決於", "仍待", "阻斷級",
-                 "unresolved", "still open")
+                 "unresolved", "still open", "open candidate",
+                 "BOTH READINGS REMAIN", "epistemic candidate")
 # A correction log RECORDS that something was once open. Rewriting it to match
 # today's state would destroy the only account of how the decision was reached,
 # so everything from the log heading onward is exempt -- history is supposed to

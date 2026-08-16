@@ -83,7 +83,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 
 ## 3. State schema
 
-完整 54 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
+完整 55 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
 
 | channel | merge | 為什麼 |
 |---|---|---|
@@ -170,6 +170,7 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 | id | role | 說明 |
 |---|---|---|
 | `n15_eval_retrieval` | evaluate | 7 模態組合 × **2 gallery 協定** × 2 變體 |
+| `n15a_resolve_eval_scene_protocol` | **human** | **釘死 I-Design 被問的那 200 個 prompt、房間尺寸與物件數**（U-27）。U-21 決定了場景從哪來，沒說要問它什麼；沒有這個節點，200 個請求會用手打進 console 而不留紀錄 |
 | `n15b_resolve_composition_protocol` | **human** | **決定 U-18／U-21** —— `G_0` 來源與放置後的圖更新規則 |
 | **`G7_composition_protocol`** | evaluate | **G-INVALID**。未決 → `BLOCKED_EVIDENCE`(rc=3)。Table 1 不經過它 |
 | `n15c_prepare_eval_scenes` | compute | **新增**。→ 200 個評估場景。來源由 `composition_protocol.source` 決定；**Reading A 目前不是合法值**（無 ProcTHOR→I-Design adapter） |
@@ -500,6 +501,8 @@ graph TD
   n12 --> n15b[/n15b resolve_composition_protocol<br/>HUMAN · U-18/U-21/]:::term
   n09b --> n15b
   n07 --> n15b
+  n15b --> n15a[/n15a resolve_eval_scene_protocol<br/>HUMAN · U-27 · 200 個 I-Design 請求/]:::term
+  n15a --> G7
   n15b --> G7{{G7 composition_protocol<br/>G-INVALID}}:::gate
   G7 --> n15c[n15c prepare_eval_scenes<br/>I-Design x200 · R-01]:::compute
   n12 --> n16[[n16 compose_scenes<br/>SG4 · C3 · needs GLB]]:::sub
@@ -1494,3 +1497,94 @@ node     n11b_stage2_gallery_index       （層 10a —— 必須在 n10 之後�
 上一輪的教訓是「遷移的說法有幾種寫法」。**這一輪更深一層：
 把 UNKNOWN 標成 RESOLVED，真正的工作不在文字，在讓 graph 能執行那個決定。**
 文件全部改對、檢查全綠、而 trainer 拿不到正樣本 —— 這個狀態存在了整整一輪。
+
+### 2026-08-16 U-08d 與 U-27 —— 「四個 blocker 全解」那句話是錯的
+
+上一輪我寫了「**四個阻斷級判定全部解決,沒有任何未定項還標著阻斷級**」。
+**那句話不準確**,而它之所以看起來成立,是因為我用 `blocking` 這個旗標當判準,
+而不是問「這個決定現在真的跑得起來嗎」。
+
+外部審查找到兩個仍會實質卡住執行的缺口。
+
+#### P0-1　U-08 這把傘活得比它的零件久
+
+`U-08a`（正樣本是誰）、`U-08b`（模態哪來）都解了，
+但 umbrella `U-08`（**訓練樣本怎麼組**）還標著 UNKNOWN —— 而它不是多餘的殘留：
+
+```
+positive 已定義       ✅
+modalities 已定義     ✅
+gallery 已定義        ✅
+訓練 tuple 怎麼產生   ❌
+```
+
+一間房 64 個物件，到底每個都變成一個 leave-one-out 樣本、還是每間抽一個？
+目標要不要先從圖裡拿掉再算 ESSGNN？一個 epoch 是什麼？
+`stage2_protocol` 一個欄位都沒有 —— **那表示 DataLoader 的預設值會替論文回答**。
+
+登記為 **U-08d**，主線：
+
+```
+sampling_unit                  object_instance
+target_eligibility             assetId 在 procthor_asset_modalities 裡有entry
+target_removed_before_essgnn   true
+samples_per_house              all_eligible
+instance_resampling            fixed
+epoch_definition               列舉出來的樣本跑一輪
+```
+
+`target_removed_before_essgnn = true` 是**承重的那一條** ——
+留著目標等於讓 layout encoder 看到答案，loss 會下降而模型什麼都沒學到。
+
+**實測**：12,000 間房共 **827,730 個物件 instance**，train 那 9,600 間約 662,000 個。
+記下來是因為「每個 instance 一個樣本」和「每間房一個樣本」差兩個數量級（662,000 vs 9,600）。
+
+#### P0-2　U-21 決定了場景從哪來，沒說要問它什麼
+
+U-21 定了 Reading B：Table 2 的場景由 I-Design 生成。但 I-Design 的介面是
+`IDesign(no_of_objects, user_input, room_dimensions)` —— **graph 裡沒有任何 channel 提供這三樣**。
+
+`n15c` 讀的是 `composition_protocol`／`procthor_dataset`／`scene_graphs`／`scene_splits`，
+**沒有一樣是 prompt**。所以那 200 個請求會用手打進 console，不留紀錄。
+
+新增 `idesign_eval_requests` channel 與 `n15a_resolve_eval_scene_protocol` 節點，
+G7 驗「剛好 200 筆、每筆 prompt 非空、有 sha256、尺寸合法、物件數 > 0、有 seed 與 provenance」。
+
+**U-27 從 `blocking: false` 改成 `true`。** 它在 U-21 未決時不阻斷是對的 ——
+場景來源都沒定，列 prompt 清單言之過早。**U-21 一定案，它就變成 graph 與 Table 2 之間唯一的東西。**
+而在 Reading B 底下 **prompt 本身就是實驗**，沒記錄的 prompt 集等於不可重現的 Table 2。
+
+#### P1　U-18 的邊留了一個沒填的欄位
+
+`new_phys_edges` / `new_sem_edges` 只有欄位、沒有值。填「recompute」不算解決 ——
+**下一輪的 ESSGNN 真的會讀它**。現在釘死：
+
+```
+new_phys_edges   support 取自佈局來源自己的放置關係（I-Design 的 on/under；
+                 訓練時是被移除物件在 ProcTHOR 的原始 parent link）
+                 ＋ adjacency 用 n07 的規則重算（kNN k=8、對稱、排除 support 對）
+new_sem_edges    與 n08 同一條 SG2 pipeline、同 prompt、同模型、**同 cache key**，
+                 只跑新節點的配對 —— 描述看過的配對成本為零，
+                 這才讓「每一輪重算」在算力上成立
+```
+
+G7 現在明文拒絕只寫 `recompute`。
+
+#### checker 第三次補洞
+
+前兩輪的 staleness 檢查認得 `[UNKNOWN U-nn]` 與 `U-nn -- BLOCKING`。
+這次殘留的寫法是：
+
+```
+U-21 -- BOTH READINGS REMAIN EPISTEMIC CANDIDATES
+Reading A stays an open candidate for U-21
+```
+
+**沒有 bracket、沒有關鍵字，而且意思正好與 RESOLVED 相反。** 補進詞樣式後又抓到 3 處。
+
+#### 這一輪的教訓
+
+`blocking: false` 是一個**旗標**，不是一個**事實**。
+U-08 與 U-27 兩個都標著 false，而兩個都真的擋著執行 ——
+一個藏在活得比零件久的 umbrella 裡，一個是在別的 UNKNOWN 解掉之後**才**變成阻斷。
+**判斷「能不能跑」要沿著 dataflow 走一遍，不能查旗標。**

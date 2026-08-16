@@ -816,10 +816,16 @@ nodes:
       bidirectional Eq. 7a/7b averaged as Eq. 8.
       Note Stage 1 is one-directional and Stage 2 is bidirectional -- the paper
       is explicit about the difference.
-      [UNKNOWN U-08] The paper never defines how a training sample is built from
-      a ProcTHOR room: which object is the target, what the partial scene is, how
-      many samples per room, how negatives are drawn. Our protocol is stated in
-      02_BUILD_STEPS and must be reported as a choice, not a requirement.
+      [U-08d RESOLVED 2026-08-16] The paper never defines how a training sample
+      is built from a ProcTHOR room, so the protocol is ours and is reported as a
+      choice: one leave-one-out sample per eligible object instance, the target
+      REMOVED from the graph before ESSGNN runs, all eligible instances per
+      house, a fixed enumeration so reruns train on the same tuples, and an epoch
+      as one pass over them. MEASURED: 827,730 instances across the 12,000
+      houses, ~662,000 in the 9,600 train houses.
+      Removing the target is the load-bearing part -- leaving it in lets the
+      layout encoder see the answer, and the loss falls without the model
+      learning anything about compatibility.
       [PAPER 2.6 -- freeze scope] "Only the query-side fuser and the ESSGNN
       module are updated". That excludes the query-side TEXT, IMAGE and POINT
       encoders as well as the whole gallery tower. An earlier draft validated
@@ -889,6 +895,39 @@ nodes:
       denominator from the baselines' 98-99% PC-Only figure cannot work, since
       self-retrieval approaches 100% at either size.
 
+  - id: n15a_resolve_eval_scene_protocol
+    role: human
+    purpose: "Fix the 200 prompts, room dimensions and object counts I-Design is asked for."
+    decomposition_rationale: [N5_gate_point, N1_distinct_failure_mode]
+    reads: [composition_protocol]
+    writes: [idesign_eval_requests, run_progress]
+    precondition: "composition_protocol.status == resolved AND source == idesign_generated"
+    postcondition: >
+      idesign_eval_requests holds exactly 200 entries, each with a non-empty
+      prompt, valid room_dimensions, n_objects > 0, a recorded seed and a
+      provenance string.
+    deterministic: false
+    idempotent: false
+    idempotency_mechanism: N/A
+    idempotency_note: "A human decision, recorded once."
+    failure:
+      classes: [HUMAN_RECOVERABLE]
+      policies:
+        - {class: HUMAN_RECOVERABLE, action: interrupt, max_attempts: 3, backoff: fixed, on_exhausted: HALT_BLOCKED, record_fields: [scene_id, missing_field]}
+      partial_failure_semantics: halt
+      rollback: N/A
+    notes: >
+      [U-27 -- BLOCKING for Table 2] Added because U-21 resolved WHERE the scenes
+      come from without saying WHAT is asked for. n15c was left reading
+      composition_protocol, procthor_dataset, scene_graphs and scene_splits --
+      none of which is a prompt -- so the 200 requests would have arrived by
+      hand at the console with no record of what was run.
+      Paper 3.3 gives "200 randomly sampled scenes" and nothing else: no prompt
+      list, no room dimensions, no object counts. Under Reading B the prompts ARE
+      the experiment, so a different prompt set is a different Table 2 and
+      nothing downstream would show the substitution. That is why this is a node
+      with a gate behind it rather than a config file.
+
   - id: n15b_resolve_composition_protocol
     role: human
     purpose: "Materialise the resolved composition protocol for Algorithm 1."
@@ -940,7 +979,7 @@ nodes:
     role: evaluate
     purpose: "Refuse to compose scenes until the composition protocol and its evaluation input are defined."
     decomposition_rationale: [N5_gate_point]
-    reads: [composition_protocol]
+    reads: [composition_protocol, idesign_eval_requests]
     writes: [gate_records, run_progress]
     postcondition: "gate_record with is_terminal=true"
     deterministic: true
@@ -960,7 +999,7 @@ nodes:
     role: compute
     purpose: "Produce the 200 evaluation scenes: initial graph plus asset query list."
     decomposition_rationale: [N1_distinct_failure_mode, N3_checkpoint_needed]
-    reads: [composition_protocol, procthor_dataset, scene_graphs, scene_splits]
+    reads: [composition_protocol, idesign_eval_requests, procthor_dataset, scene_graphs, scene_splits]
     writes: [evaluation_scene_inputs, run_progress, cost_ledger, degraded_flags]
     precondition: "G7_composition_protocol verdict == PASS"
     postcondition: "200 scenes, each with a G_0 and a non-empty query list, recorded with the generator revision"
@@ -978,7 +1017,7 @@ nodes:
       rollback: N/A
     notes: >
       [PAPER 3.3] "200 randomly sampled scenes".
-      [U-21 -- BOTH READINGS REMAIN EPISTEMIC CANDIDATES; ONLY ONE IS EXECUTABLE]
+      [U-21 RESOLVED to Reading B 2026-08-16; Reading A survives only as the `procthor_leave_one_out` diagnostic and is never reported as Table 2]
       An earlier version read
       only composition_protocol, which silently committed to Reading B: with no
       ProcTHOR channel in its reads, "sample ProcTHOR scenes and run them
@@ -1105,7 +1144,7 @@ nodes:
     decomposition_rationale: [N4_independent_observability]
     reads: [variant_ckpts, variant_status, gallery_index, eval_protocols,
             scene_splits, variant_registry, composition_protocol, evaluation_scene_inputs,
-            splits, pointclouds, post_stage1_embeddings, asset_glb]
+            splits, pointclouds, post_stage1_embeddings, asset_glb, idesign_eval_requests]
     writes: [retrieval_metrics, composed_scenes, judge_scores, run_progress, cost_ledger]
     postcondition: "Every SUCCESS variant has metrics; every failed one is explicitly N/A with a reason"
     deterministic: false
