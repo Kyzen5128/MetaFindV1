@@ -197,3 +197,56 @@ def test_fusion_is_seeded():
     b = fuse_depth_shell(depths, poses, far_cut=10.0,
                          rng=np.random.default_rng(7))
     assert np.array_equal(a, b)
+
+
+# --- orphan sweep ----------------------------------------------------------
+
+PS_OUTPUT = """    PID    PPID CMD
+   1000       1 /home/k/.ai2thor/releases/thor-CloudRendering-abc/thor-CloudRendering-abc -screen-width 224
+   1001    9999 /home/k/.ai2thor/releases/thor-CloudRendering-abc/thor-CloudRendering-abc -screen-width 224
+   1002       1 python -m metafind.data.procthor_modalities
+   1003       1 grep thor-CloudRendering
+"""
+
+
+def sweep_with(monkeypatch, ps_text):
+    """Run the sweep against a fabricated `ps`, recording what it would kill.
+
+    Killing real processes to test a killer is not a test, it is a hazard: a
+    PPID that happens to be 1 on the machine running pytest would take out
+    something unrelated.
+    """
+    import subprocess
+    import metafind.data.procthor_modalities as m
+    from metafind.data.procthor_modalities import ThorRenderer
+
+    killed = []
+    monkeypatch.setattr(subprocess, "run",
+                        lambda *a, **k: type("R", (), {"stdout": ps_text})())
+    monkeypatch.setattr(m.os, "kill", lambda pid, sig: killed.append(pid))
+    ThorRenderer.sweep_orphans()
+    return killed
+
+
+def test_only_orphaned_thor_processes_are_killed(monkeypatch):
+    """PPID == 1 is the whole criterion: this node never runs two Controllers,
+    so a ProcTHOR Unity process adopted by init belongs to nobody."""
+    assert sweep_with(monkeypatch, PS_OUTPUT) == [1000]
+
+
+def test_a_live_child_is_left_alone(monkeypatch):
+    """1001's parent is a running python; killing it would break that run."""
+    assert 1001 not in sweep_with(monkeypatch, PS_OUTPUT)
+
+
+def test_the_python_process_itself_is_not_killed(monkeypatch):
+    """Its command line contains the module name, not the Unity binary's."""
+    assert 1002 not in sweep_with(monkeypatch, PS_OUTPUT)
+
+
+def test_a_matching_grep_line_is_ignored(monkeypatch):
+    assert 1003 not in sweep_with(monkeypatch, PS_OUTPUT)
+
+
+def test_nothing_to_sweep_kills_nothing(monkeypatch):
+    assert sweep_with(monkeypatch, "    PID    PPID CMD\n   1002       1 python foo\n") == []

@@ -1000,6 +1000,49 @@ allowed = typing.get_args(hints[field])   # ("squared", "euclidean")
 現在 `mlp_structure` 若不是 `linear_silu_linear` 直接拒絕，
 並且檢查 `essgnn.py` 真的還在建 SiLU MLP。
 
+## F29. 砍掉 n07b 會留下一個**孤兒 Unity 程序**，佔著 1.5 GB 的 GPU
+
+由使用者發現的：「1294384 在幹嘛沒停？」
+
+**實測**：
+
+```
+PID 1294384   PPID 1   已存活 2,761 秒（46 分鐘）
+              RSS 2.1 GB   GPU 1,545 MiB
+              thor-CloudRendering-f0825767... -screen-width 224 -screen-height 224
+```
+
+它是我第一次跑 n07b 時、為了修透明資產 bug 而砍掉的那個程序留下的。
+**我砍的是 python，而 AI2-THOR 的 Unity 二進位是它 fork 出來的子程序** ——
+父程序死掉之後它被 init 收養，繼續跑。
+
+### 諷刺的地方
+
+那次停 n07b 的**理由**就是「把 GPU 讓給別的工作」。
+結果孤兒抱著 1.5 GB 的 GPU 不放，整整 46 分鐘 —— **停下來的成本比不停還高**，
+而且沒有任何東西會講。
+
+`main()` 結尾有 `renderer.stop()`，但**那只涵蓋 `main()` 跑到結尾的路徑**。
+
+### 兩層修法，只有第二層是可靠的
+
+**第一層**：`atexit` ＋ `SIGTERM`／`SIGINT` handler。涵蓋乾淨的終止。
+
+**第二層（真正重要的）**：**啟動時掃掉 PPID == 1 的 thor 程序**。
+訊號處理擋不住 `SIGKILL`、OOM killer、或直接崩潰的直譯器 ——
+而那個孤兒正是這樣活下來的。啟動掃描**不需要上一輪配合**。
+
+判準是 `PPID == 1`：這個節點不會同時開兩個 Controller，
+所以一個被 init 收養的 ProcTHOR Unity 程序不屬於任何人。
+
+寫完立刻掃到 1 個（我測試時留下的）。
+
+### 測試的寫法
+
+**沒有真的殺程序來測。** 用假造的 `ps` 輸出 + monkeypatch 掉 `os.kill`，
+驗它「殺什麼、不殺什麼」：孤兒殺、有活父程序的不殺、python 自己不殺、grep 那行不殺。
+拿真程序測一個殺手不是測試，是危險 —— 跑 pytest 的機器上剛好 PPID 是 1 的東西會遭殃。
+
 ## 由 F1–F13 推導出的三個架構決策
 
 ### D1 — 不重訓 ULIP-2 本身，用官方 released checkpoint 當起點

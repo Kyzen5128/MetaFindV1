@@ -45,9 +45,11 @@ why every record carries provenance saying which kind it holds.
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import math
 import os
+import signal
 import time
 import traceback
 from pathlib import Path
@@ -265,13 +267,59 @@ def asset_ids_in_use() -> list[str]:
 
 
 class ThorRenderer:
-    """One Controller for the whole run; `reset` swaps the house per asset."""
+    """One Controller for the whole run; `reset` swaps the house per asset.
+
+    MEASURED: killing the Python process leaves the Unity binary ORPHANED. Its
+    parent becomes init, it keeps 2.1 GB of RAM and 1,545 MiB of GPU, and it
+    lives until someone notices -- 46 minutes, in the run that found this,
+    taking that memory from the job it was stopped to make room for.
+    `Controller.stop()` at the end of main() only covers the path where main()
+    reaches its end. Registered here instead, so a SIGTERM or an exception takes
+    the child with it.
+    """
+
+    @staticmethod
+    def sweep_orphans() -> int:
+        """Kill Unity processes left behind by a previous run.
+
+        The signal handlers below cover a clean SIGTERM. They do NOT cover
+        SIGKILL, an OOM kill, or a crashed interpreter -- and the orphan that
+        prompted this survived exactly that way, holding 2.1 GB of RAM and
+        1,545 MiB of GPU for 46 minutes while the job it had been stopped for
+        ran short of both.
+
+        A sweep at startup is the half that does not need the previous run to
+        cooperate. PPID == 1 identifies an orphan unambiguously here: this node
+        never runs two Controllers at once, so a ProcTHOR Unity process adopted
+        by init belongs to nobody.
+        """
+        import subprocess
+
+        out = subprocess.run(["ps", "-eo", "pid,ppid,cmd"],
+                             capture_output=True, text=True).stdout
+        killed = 0
+        for line in out.splitlines():
+            if "thor-CloudRendering" not in line or " grep " in line:
+                continue
+            parts = line.split()
+            if len(parts) < 2 or parts[1] != "1":
+                continue
+            try:
+                os.kill(int(parts[0]), signal.SIGKILL)
+                killed += 1
+            except (ProcessLookupError, PermissionError):
+                pass
+        if killed:
+            print(f"swept {killed} orphaned AI2-THOR process(es) from a "
+                  "previous run", flush=True)
+        return killed
 
     def __init__(self) -> None:
         import ai2thor
         from ai2thor.controller import Controller
         from ai2thor.platform import CloudRendering
 
+        self.sweep_orphans()
         self.version = ai2thor.__version__
         self._CloudRendering = CloudRendering
         first = json.loads((paths.PROCTHOR / "train.jsonl").open().readline())
@@ -282,6 +330,19 @@ class ThorRenderer:
             renderDepthImage=True, quality="Medium",
         )
         self.build_hash = self._build_hash()
+        self._stopped = False
+        atexit.register(self.stop)
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            previous = signal.getsignal(sig)
+
+            def handler(signum, frame, _prev=previous):
+                self.stop()
+                if callable(_prev):
+                    _prev(signum, frame)
+                else:
+                    raise SystemExit(128 + signum)
+
+            signal.signal(sig, handler)
 
     def _build_hash(self) -> str:
         for p in (Path.home() / ".ai2thor" / "releases").glob("thor-CloudRendering-*"):
@@ -330,7 +391,19 @@ class ThorRenderer:
                 "far_cut": depth_radius + largest * 2.0}
 
     def stop(self) -> None:
-        self.controller.stop()
+        if self._stopped:
+            return
+        self._stopped = True
+        try:
+            self.controller.stop()
+        except Exception:  # noqa: BLE001 -- shutting down; a failure here must
+            pass          # not mask the reason we are shutting down
+
+    def __enter__(self) -> "ThorRenderer":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.stop()
 
 
 def _write_asset(asset_id: str, cap: dict, text: str,
