@@ -463,15 +463,20 @@ def main() -> int:
     # of one thing.
     stage2_dropout = float(values.get("scene_dropout", PAPER_SCENE_DROPOUT))
     epochs = args.epochs or values["epochs"]
-    batches = unique_positive_batches(samples, values["batch_size"], rng)
+    # Batching is redrawn per epoch, inside the loop. Computing it once here
+    # meant every epoch saw the identical partition, so a given sample met the
+    # same negatives every time -- with 1,467 assets and a unique-positive
+    # constraint, that is a much smaller set of contrasts than the corpus
+    # supports. `rng` is seeded, so the sequence of partitions is still
+    # reproducible; it is just no longer constant.
     print(f"{len(samples):,} samples over {len(train_houses):,} houses, "
-          f"{len(batches):,} batches/epoch, {sum(grads.values()):,} trainable tensors",
-          flush=True)
+          f"{sum(grads.values()):,} trainable tensors", flush=True)
 
     started, step = time.time(), 0
     with runlog.run_progress(NODE):
         for epoch in range(epochs):
             model.train()
+            batches = unique_positive_batches(samples, values["batch_size"], rng)
             for batch in batches:
                 # [U-32 / 2.6] "omitted in 30% of BATCHES" -- ONE draw per batch,
                 # so every sample in a dropped batch loses the layout term and

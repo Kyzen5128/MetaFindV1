@@ -30,7 +30,7 @@
    "archive_sha256": "3bfe32974cceccb69b6ebcf9b685c1461c7882630ff11262bfb59644eeefb7ff",
    "main_tex": "example_paper.tex",
    "tex_files_read": 10,
-   "orphan_tex_ignored": 10,
+   "orphan_tex_ignored": 0,
    "display_formulas": 33,
    "numbered": 12,
    "unnumbered": 21,

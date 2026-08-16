@@ -1,6 +1,9 @@
 # MetaFind reproduction -- Graph Specification
 #
-# 2026-08-15. Every claim re-checked against docs/metafind_paper.md rather
+# 2026-08-16: formula authority moved to the authors' arXiv TeX source under
+# docs/paper/*_source/. Every contradiction was re-derived from it and ALL of
+# them survived -- none was a Markdown conversion artifact. See docs/audit/.
+# 2026-08-15. Every claim re-checked against the paper rather
 # than from memory. An earlier draft carried six errors that would have changed the
 # experimental result; see 01_GRAPH_SPEC.md section 16.
 #
@@ -952,6 +955,19 @@ state:
         [PAPER 3.3] says only "200 randomly sampled scenes". No prompt list, no
         room dimensions, no object counts. Every value here is OURS and the
         report must say so.
+        [2026-08-16, I-Design arXiv TeX] Two things changed, neither resolving
+        this. (a) A citable BASIS now exists: I-Design's own supplementary
+        publishes 60 prompts with room dimensions --
+        docs/paper/idesign_source/tabs/tab_promptlist_minimal.tex (20 short-form,
+        bedroom and living room) and tab_promptlist_others.tex (40 detailed,
+        across living room / home office / kitchen / bedroom / bathroom /
+        dining room / playroom / fitness room). Extending a published
+        distribution to 200 is defensible in a way inventing 200 is not.
+        (b) `no_of_objects` is NOT a paper-level input. I-Design's main.tex
+        describes its input as "an unstructured, grammar-free natural language
+        user input"; the object count is decided by its agents. The signature
+        below is the RELEASED CODE's entry point -- a measured implementation
+        fact -- and must not be read as the paper's interface.
         `prompt_sha256` and `provenance` exist because the prompts ARE the
         experiment under Reading B: a different prompt set is a different Table
         2, and nothing downstream would reveal the substitution.

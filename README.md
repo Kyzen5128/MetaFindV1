@@ -1,7 +1,10 @@
 # MetaFind 復現
 
 復現 *MetaFind: Scene-Aware 3D Asset Retrieval for Coherent Metaverse Scene Generation*
-（論文全文在 [`docs/metafind_paper.md`](docs/metafind_paper.md)）。
+論文權威是作者的 arXiv TeX source：[`docs/paper/metafind_source/`](docs/paper/metafind_source/)
+（公式逐條清單見 [`docs/audit/A_FORMULA_INVENTORY.md`](docs/audit/A_FORMULA_INVENTORY.md)）。
+[`docs/paper/metafind_paper.md`](docs/paper/metafind_paper.md) 是 PDF 轉出的便利副本，
+**公式一律不得以它為依據**。
 
 單張 RTX 4090。**Stage 1 訓練 PointBERT + fusion**，只有 ViT-bigG-14 凍結；本地 Qwen 取代 GPT-4o／GPT-4。
 
@@ -26,7 +29,8 @@ metafind/            我們寫的程式
 setup/               環境建置與驗證
 tests/               單元測試
 docs/
-  metafind_paper.md  論文
+  paper/             論文：*_source/ 是 arXiv TeX（權威），*_paper.md 是轉檔副本（非權威）
+  audit/             公式稽核 A–F → 見 audit/A_FORMULA_INVENTORY.md
   graph/             設計文件 → 見 graph/README.md
 data ->              symlink 到 /mnt/data1/kyzen/MetaFind（大型資料，不進 git）
 scratch/             參考用的雜項腳本

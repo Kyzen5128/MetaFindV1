@@ -14,7 +14,7 @@ authoritative for any formula, dimension, symbol or equation number.
 |---|---|---|---|---|---|---|
 | MetaFind | `2510.05057` | `neurips_2025.tex` | 5 | 0 | 20 | 75 |
 | ULIP-2 | `2305.08275` | `main.tex` | 4 | 4 | 3 | 46 |
-| EGNN | `2102.09844` | `example_paper.tex` | 10 | 10 | 33 | 523 |
+| EGNN | `2102.09844` | `example_paper.tex` | 10 | 0 | 33 | 523 |
 | I-Design | `2404.02838` | `main.tex` | 15 | 0 | 0 | 70 |
 
 Orphans are `.tex` files present in an archive that the main document

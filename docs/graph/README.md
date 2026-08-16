@@ -23,14 +23,22 @@
 
 ### 權威順序（衝突時以上位者為準）
 
-```
-Level 0 — MetaFind 本身
-  docs/metafind_paper.md（含 Appendix）
+**公式權威：arXiv TeX source > 已發表 PDF > 轉檔 Markdown。**
+`docs/paper/*_paper.md` 是 PDF 轉出來的**便利副本**，公式、維度、符號、
+equation numbering 一律不得以它為依據 —— 轉檔器把 LaTeX 反斜線當成 C 跳脫字元，
+`\frac` 變成換頁符加 rac，`\neq` 變成**真正的換行**（合法字元，控制字元普查抓不到）。
+每個檔案開頭都標了 NON-AUTHORITATIVE。
 
-Level 1 — 相依元件的「原論文」
-  ULIP-2 paper           §3.3 明文凍結 OpenCLIP、只訓 3D encoder
-  EGNN paper             squared distance、scalar φ_x、h⁰ 不變前提
-  I-Design paper
+```
+Level 0 — MetaFind 本身（作者 arXiv TeX source）
+  docs/paper/metafind_source/   neurips_2025.tex + 2methdology / 3experiments
+                                / appendix / 4backgound（見 SOURCE_MANIFEST.json）
+  公式逐條清單：docs/audit/A_FORMULA_INVENTORY.md
+
+Level 1 — 相依元件的「原論文」（同樣以 TeX source 為準）
+  docs/paper/ulip2_source/      main.tex — 明文 "freeze it during the pre-training"
+  docs/paper/egnn_source/       sections/model.tex — φ_x → R^1「outputs a scalar value」
+  docs/paper/idesign_source/    main.tex + supplementary.tex（含 60 條 prompt 清單）
 
 Level 2 — 相依元件的官方「實作」（證據，且低於它自己的論文）
   salesforce/ULIP        注意：ULIP-2 factory 未設 requires_grad=False，與其論文不一致

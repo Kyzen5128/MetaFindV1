@@ -36,3 +36,11 @@ credentials.json
 
 # graphify skill scratch (incomplete run; regenerable)
 graphify-out/
+
+# arXiv source: the .tex and SOURCE_MANIFEST.json are the formula authority and
+# ARE tracked. The figures are not -- they are tens of MB of PDF/PNG and are
+# regenerable from the .gz archives beside them, which are tracked and hashed.
+docs/paper/*_source/**/*.pdf
+docs/paper/*_source/**/*.png
+docs/paper/*_source/**/*.jpg
+docs/paper/*_source/**/*.eps

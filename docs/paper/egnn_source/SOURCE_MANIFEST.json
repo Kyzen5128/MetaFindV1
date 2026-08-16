@@ -53,18 +53,7 @@
  ],
  "supplement_files": [],
  "macro_files": [],
- "orphan_tex_files": [
-  "E(n) Equivariant Graph Neural Networks _ ICML 2021/example_paper.tex",
-  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/appendix.tex",
-  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/background.tex",
-  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/conclusions.tex",
-  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/experiments.tex",
-  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/index.tex",
-  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/introduction.tex",
-  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/model.tex",
-  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/related.tex",
-  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/template.tex"
- ],
+ "orphan_tex_files": [],
  "tex_sha256": {
   "example_paper.tex": "5fbe491d6c83d689ec4b37b705ad7a4c0061099fbcd6a4282a378049a6d2eb93",
   "sections/index.tex": "bd45a70ae2836b47ba09c73ee558a3252b9f3b1c8080f079264dcffd85dc2c3f",
