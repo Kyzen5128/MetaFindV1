@@ -235,7 +235,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | `n08_semantic_edges` | **可執行** | `metafind/data/semantic_edges.py`（key／prompt／驗證，30 條測試）＋ `semantic_edges_run.py`（Qwen 關係句 ＋ 凍結 CLIP 文字編碼器）。**實測 410 萬條語意邊只有 4,242 組唯一描述配對（快取命中 99.90%）**；三條負向注入實測會失敗。LLM 階段須等 n05 讓出 GPU |
 | `n09c_build_scene_splits` | ✅ **完成** | `metafind/data/scene_splits.py`。9,600 train／2,400 test（80/20，seed 20260816）、**洩漏 0**；13 條測試，負向注入實測會失敗。語意邊覆蓋率待 n08 |
 | `n05b_resolve_stage1_encoding` | **可執行** | `metafind/models/resolve_stage1.py`。釘死 U-15 文字模板（golden-string 測試）、U-14 取 11 視圖平均、U-11 learned token；**U-34 已判定 `frozen`**，連同 basis 與 confidence 一併記錄，主線再無執行期歧義。25 條測試 |
-| `n07b_procthor_asset_modalities` | **可執行** | `metafind/data/procthor_modalities.py`。AI2-THOR 隔離渲染，相機協定**由 `renders.py` import 而非抄寫**；點雲以 AI2-THOR 自報的 bounding box 驗證反投影 |
+| `n07b_procthor_asset_modalities` | ✅ **完成** | `metafind/data/procthor_modalities.py`。**1,467 / 1,467、隔離 0、28 個無點雲**（透明材質，F26）。相機協定**由 `renders.py` import 而非抄寫**；點雲以 AI2-THOR 自報的 bounding box 驗證反投影，判準需**比例與絕對誤差同時超標**（單一判準兩個方向都誤報過，F26）|
 | `n11b_stage2_gallery_index` | **只有規格** | U-08a 判定後新增：用凍結的 Stage 1 塔編碼 ProcTHOR 資產，Stage 2 專屬索引 |
 | `n15a_resolve_eval_scene_protocol` | **只有規格** | U-27：Table 2 的 200 個 I-Design 請求，**仍需人決定** |
 | `n09_build_splits` | **可執行** | `metafind/data/splits.py`。物件 80/20 ＋ **U-09 的兩種評估協定並行**（gallery=test 與 gallery=full），gallery_size 由切分推導、不寫死；18 條測試 |

@@ -959,6 +959,47 @@ n07b 剩餘        102 MB
 **檢查的是 state dict 的 key，不是檔案大小** —— 大小門檻會被「剛好比較小」的
 變體矇混過去，而且每次架構變動都要重調。
 
+## F28. 一個「驗協定沒打錯」的檢查，本身什麼都沒驗
+
+寫 n09b 時，我加了 `assert_matches_code()`：把協定餵進 `ESSGNNConfig.from_protocol`，
+再逐欄比對建出來的 config 與協定是否一致。看起來很嚴謹。
+
+**它接受 `distance="l2"`。**
+
+原因是 `ESSGNNConfig` 用 `Literal` 標註型別：
+
+```python
+Distance = Literal["squared", "euclidean"]
+```
+
+而 **dataclass 不會在執行期強制標註** —— 給什麼存什麼。所以：
+
+```
+協定寫 "l2"  ->  config.distance == "l2"  ->  兩者相等  ->  檢查通過
+```
+
+**這個檢查數學上永遠通過。** 它比沒有檢查更糟，因為它讓人以為驗過了。
+
+改成從標註本身讀出合法詞彙再比：
+
+```python
+hints = typing.get_type_hints(ESSGNNConfig)
+allowed = typing.get_args(hints[field])   # ("squared", "euclidean")
+```
+
+### 為什麼這個特別值得記
+
+**它是被「事後補的測試」抓到的，不是被程式碼審查抓到的。** 我寫完
+`assert_matches_code` 時很有信心；是後來寫 `test_a_value_outside_the_configs_vocabulary_is_refused`
+並看到它**沒有失敗**，才發現問題。
+
+而且它跟 `mlp_structure` 是同一件事的兩面：那個欄位 `ESSGNNConfig` 根本沒有，
+所以協定記了它、沒有任何程式讀它。**「記了但沒人讀」與「驗了但沒在驗」是同一個病**——
+一個宣告存在、實際不起作用的東西，比明確缺席危險。
+
+現在 `mlp_structure` 若不是 `linear_silu_linear` 直接拒絕，
+並且檢查 `essgnn.py` 真的還在建 SiLU MLP。
+
 ## 由 F1–F13 推導出的三個架構決策
 
 ### D1 — 不重訓 ULIP-2 本身，用官方 released checkpoint 當起點
