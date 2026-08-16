@@ -219,7 +219,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | **U-15** | 結構化標註怎麼序列化成 encoder 的輸入字串 | 只給欄位，沒給格式 |
 | **U-16** | query / gallery 兩塔是否共享權重 | 說「dedicated query encoder」、說兩者都訓練，但沒說共享關係 |
 
-### 實作狀態 —— 28 個非 gate 節點裡，**有程式的是 7 個**
+### 實作狀態 —— 28 個非 gate 節點裡，**有程式的是 8 個**
 
 規格完整不等於管線存在。這張表是為了讓讀者不會把前者讀成後者
 （第十九輪剛因為同一個理由修過 `L1-STAGE1-PROTOCOL-APPLIED` 的措辭）。
@@ -233,7 +233,8 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | `n05_annotate` | **可執行** | `metafind/data/annotate.py`（schema／prompt，27 條測試）＋ `annotate_run.py`（Qwen2.5-VL 生成與 C1 修復迴圈）。全量尚未跑完 |
 | `n07_scene_graphs` | **可執行** | `metafind/data/scene_graphs.py`。300 間房、0 隔離、房間對應 100%；support 邊來自 ProcTHOR 的 children 樹，座標保留原始值；16 條測試，兩條負向注入實測會失敗 |
 | `n08_semantic_edges` | **可執行** | `metafind/data/semantic_edges.py`（key／prompt／驗證，30 條測試）＋ `semantic_edges_run.py`（Qwen 關係句 ＋ 凍結 CLIP 文字編碼器）。**實測 410 萬條語意邊只有 4,242 組唯一描述配對（快取命中 99.90%）**；三條負向注入實測會失敗。LLM 階段須等 n05 讓出 GPU |
-| 其餘 **二十一個**節點 | **只有規格** | 無 |
+| `n09c_build_scene_splits` | ✅ **完成** | `metafind/data/scene_splits.py`。9,600 train／2,400 test（80/20，seed 20260816）、**洩漏 0**；13 條測試，負向注入實測會失敗。語意邊覆蓋率待 n08 |
+| 其餘 **二十個**節點 | **只有規格** | 無 |
 
 另有兩塊不對應任何節點、但已可執行：
 
@@ -245,7 +246,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 `metafind/models/`（`essgnn` / `dual_tower` / `fusion` / `losses` / `ulip_backbone` /
 `stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身 ——
 `n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer。
-178 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構與語意邊（pytest 參數化後展開成 228 個 case），**沒有一條涵蓋任何節點的執行**。
+188 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊與場景切分（pytest 參數化後展開成 241 個 case），**沒有一條涵蓋任何節點的執行**。
 
 ---
 
