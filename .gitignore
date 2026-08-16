@@ -33,3 +33,6 @@ credentials.json
 
 # pytest
 .pytest_cache/
+
+# graphify skill scratch (incomplete run; regenerable)
+graphify-out/
