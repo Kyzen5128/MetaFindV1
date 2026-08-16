@@ -1,0 +1,605 @@
+[
+ {
+  "id": "MF-1",
+  "source": "MF",
+  "line": 61,
+  "section": "2.1 Task Definition",
+  "equation": "1",
+  "raw_span": "A^* = \\operatorname{argmax}_{A \\in \\mathcal{A}} \\operatorname{sim}(f_{\\text{query}}(Q), f_{\\text{gallery}}(A)) \\quad (1)",
+  "sha256": "6dbbe25ca3c6295f4ff1ec50828db075b0a2ebe66dd9187dd6b3b14ba959477c"
+ },
+ {
+  "id": "MF-U1",
+  "source": "MF",
+  "line": 99,
+  "section": "2.5 ESSGNN: Scene-Aware Equivariant Graph Encoder",
+  "equation": null,
+  "raw_span": "h_i^{(0)} = \\operatorname{Concat}(x_i, t_i)",
+  "sha256": "e4467b804fef434201860cd419842e6c25d1e5dd28ff1bcb555ecd34f950c539"
+ },
+ {
+  "id": "MF-2",
+  "source": "MF",
+  "line": 105,
+  "section": "2.5 ESSGNN: Scene-Aware Equivariant Graph Encoder",
+  "equation": "2",
+  "raw_span": "h_i^{l+1} = h_i^l + \\sum_{j \\in \\mathcal{N}(i)} f_h(d_{ij}^l, h_i^l, h_j^l, e_{ij}; \\theta_h) \\quad (2)",
+  "sha256": "adc434dff1e234c609a0cb6bf92f169df1eabe6f4a240feb929c6efcc3d2ff46"
+ },
+ {
+  "id": "MF-3",
+  "source": "MF",
+  "line": 107,
+  "section": "2.5 ESSGNN: Scene-Aware Equivariant Graph Encoder",
+  "equation": "3",
+  "raw_span": "x_i^{l+1} = x_i^l + \\sum_{j \\in \\mathcal{N}(i)} (x_i^l - x_j^l) \\cdot f_x(d_{ij}^l, h_i^{l+1}, h_j^{l+1}, e_{ij}; \\theta_x) \\quad (3)",
+  "sha256": "9b547fc26fa8373150009555653992eab5e825944fa0ebc700da3fa1a86840aa"
+ },
+ {
+  "id": "MF-U4",
+  "source": "MF",
+  "line": 111,
+  "section": "2.5 ESSGNN: Scene-Aware Equivariant Graph Encoder",
+  "equation": null,
+  "raw_span": "e_{\\text{layout}} = \\operatorname{Pooling}(\\{h_i^{(L)}\\})",
+  "sha256": "950d2c3744703beeca22b083a4b863ad829266bc7e2df23dc3f29979fea55bed"
+ },
+ {
+  "id": "MF-4",
+  "source": "MF",
+  "line": 117,
+  "section": "2.5 ESSGNN: Scene-Aware Equivariant Graph Encoder",
+  "equation": "4",
+  "raw_span": "(R x^{l+1} + T, h^{l+1}) = \\text{ESSGNN}(R x^l + T, h^l, E) \\quad (4)",
+  "sha256": "5bde682bcbfe1ee7c5acdd12bdb526ba437832384f4380fdff02c5bccfa7d520"
+ },
+ {
+  "id": "MF-5",
+  "source": "MF",
+  "line": 125,
+  "section": "Stage 1: Cross-Modal Alignment Pretraining",
+  "equation": "5",
+  "raw_span": "\\mathcal{L}_{\\text{pre}} = -\\log \\frac{\\exp(\\operatorname{sim}(f_{\\text{query}}(Q), f_{\\text{gallery}}(A)) / \\tau)}{\\sum_{A' \\in \\mathcal{B}} \\exp(\\operatorname{sim}(f_{\\text{query}}(Q), f_{\\text{gallery}}(A')) / \\tau)} \\quad (5)",
+  "sha256": "c672927f1bb49325b92096ba6dd4e0739802203411a3c2c026880d9e4b627ebe"
+ },
+ {
+  "id": "MF-6",
+  "source": "MF",
+  "line": 132,
+  "section": "Stage 2: Layout-Aware Fine-Tuning",
+  "equation": "6",
+  "raw_span": "e_{\\text{query}} = \\operatorname{Fusion}(e_{\\text{text}}, e_{\\text{image}}, e_{\\text{pc}}) + \\lambda \\cdot e_{\\text{layout}} \\quad (6)",
+  "sha256": "c92076b702c8ade3c311b55b348a3311142c5c145f5beb463daef1c985b3e5b2"
+ },
+ {
+  "id": "MF-7a",
+  "source": "MF",
+  "line": 138,
+  "section": "Stage 2: Layout-Aware Fine-Tuning",
+  "equation": "7a",
+  "raw_span": "\\mathcal{L}_{\\text{layout}}^{q2g} = -\\log \\frac{\\exp(\\operatorname{sim}(e_{\\text{query}}, e_{\\text{gallery}}) / \\tau)}{\\sum_{e'_{\\text{gallery}} \\in \\mathcal{B}} \\exp(\\operatorname{sim}(e_{\\text{query}}, e'_{\\text{gallery}}) / \\tau)} \\quad (7a)",
+  "sha256": "23b31c024a6420a1df73447725066dac414257f9699f7f952a8fbf348c0d28a0"
+ },
+ {
+  "id": "MF-7b",
+  "source": "MF",
+  "line": 140,
+  "section": "Stage 2: Layout-Aware Fine-Tuning",
+  "equation": "7b",
+  "raw_span": "\\mathcal{L}_{\\text{layout}}^{g2q} = -\\log \\frac{\\exp(\\operatorname{sim}(e_{\\text{gallery}}, e_{\\text{query}}) / \\tau)}{\\sum_{e'_{\\text{query}} \\in \\mathcal{B}} \\exp(\\operatorname{sim}(e_{\\text{gallery}}, e'_{\\text{query}}) / \\tau)} \\quad (7b)",
+  "sha256": "ad30776c8179537d22500404c583cf458fdfe514d13f2b119bc341d04aa0638f"
+ },
+ {
+  "id": "MF-8",
+  "source": "MF",
+  "line": 144,
+  "section": "Stage 2: Layout-Aware Fine-Tuning",
+  "equation": "8",
+  "raw_span": "\\mathcal{L}_{\\text{layout}} = \\frac{1}{2} \\left( \\mathcal{L}_{\\text{layout}}^{q2g} + \\mathcal{L}_{\\text{layout}}^{g2q} \\right) \\quad (8)",
+  "sha256": "b1231d4675d2153c2726809a487815d000ef2cf300cd56f12b15736fd96753f5"
+ },
+ {
+  "id": "MF-9",
+  "source": "MF",
+  "line": 322,
+  "section": "Appendix C: Equivariance Proof of ESSGNN - Extension to Semantic Embedding",
+  "equation": "9",
+  "raw_span": "(Q x^{l+1} + g, h^{l+1}) = \\text{ESSGNN}(Q x^l + g, h^l, E) \\quad (9)",
+  "sha256": "512fc3475caca6c727e422b15f6e7076acf911ceb02599d34f004d601daeff41"
+ },
+ {
+  "id": "MF-10",
+  "source": "MF",
+  "line": 326,
+  "section": "Appendix C: Equivariance Proof of ESSGNN - Extension to Semantic Embedding",
+  "equation": "10",
+  "raw_span": "m_{ij} = \\phi_e \\left( h_i^l, h_j^l, \\|x_i^l - x_j^l\\|^2, e_{ij} \\right) \\quad (10)",
+  "sha256": "68e2fc13cbbf78156e634585cd5d909aa7f670bf897b0bfd5cc8c6be4a3c7e37"
+ },
+ {
+  "id": "MF-11",
+  "source": "MF",
+  "line": 330,
+  "section": "Appendix C: Equivariance Proof of ESSGNN - Extension to Semantic Embedding",
+  "equation": "11",
+  "raw_span": "\\|Q x_i^l + g - (Q x_j^l + g)\\|^2 = \\|Q(x_i^l - x_j^l)\\|^2 = \\|x_i^l - x_j^l\\|^2 \\quad (11)",
+  "sha256": "0ff85a1084e8da8ab7f06abc313e31d15e158a40d7a818fa6ce3a0ee6c9b2aa2"
+ },
+ {
+  "id": "MF-12",
+  "source": "MF",
+  "line": 334,
+  "section": "Appendix C: Equivariance Proof of ESSGNN - Extension to Semantic Embedding",
+  "equation": "12",
+  "raw_span": "m'_{ij} = \\phi_e \\left( h_i^l, h_j^l, \\|Q x_i^l + g - Q x_j^l - g\\|^2, e_{ij} \\right) = m_{ij} \\quad (12)",
+  "sha256": "084530a411ca93700520f193fef7354a74aebbd0a13f68a1e1243876e9290d2b"
+ },
+ {
+  "id": "MF-13",
+  "source": "MF",
+  "line": 338,
+  "section": "Appendix C: Equivariance Proof of ESSGNN - Extension to Semantic Embedding",
+  "equation": "13",
+  "raw_span": "x_i^{l+1} = x_i^l + \\sum_{j \\neq i} (x_i^l - x_j^l) \\cdot \\phi_x(m_{ij}) \\quad (13)",
+  "sha256": "96756eceb6e8449972d18caf688cb8d3678ae9b4764d6b1b98ce6328a9c568e5"
+ },
+ {
+  "id": "MF-U16",
+  "source": "MF",
+  "line": 342,
+  "section": "Appendix C: Equivariance Proof of ESSGNN - Extension to Semantic Embedding",
+  "equation": null,
+  "raw_span": "Q x_i^l + g + \\sum_{j \\neq i} (Q x_i^l + g - Q x_j^l - g) \\cdot \\phi_x(m_{ij}) = Q x_i^l + g + Q \\sum_{j \\neq i} (x_i^l - x_j^l) \\cdot \\phi_x(m_{ij})",
+  "sha256": "7b8300295379839bf3e709ef8c80350d41887109b5f72f076572f03e89e2012b"
+ },
+ {
+  "id": "MF-U17",
+  "source": "MF",
+  "line": 344,
+  "section": "Appendix C: Equivariance Proof of ESSGNN - Extension to Semantic Embedding",
+  "equation": null,
+  "raw_span": "= Q \\left[ x_i^l + \\sum_{j \\neq i} (x_i^l - x_j^l) \\cdot \\phi_x(m_{ij}) \\right] + g = Q x_i^{l+1} + g",
+  "sha256": "2b7a13105d6e0bb721d3b0f834f8195be5efc92044549d599cc35d70cf4513bf"
+ },
+ {
+  "id": "MF-14",
+  "source": "MF",
+  "line": 350,
+  "section": "Appendix C: Equivariance Proof of ESSGNN - Extension to Semantic Embedding",
+  "equation": "14",
+  "raw_span": "h_i^{l+1} = h_i^l + \\sum_{j \\neq i} \\phi_h(m_{ij}) \\quad (14)",
+  "sha256": "711f996d7c9687b0bf46c3e8708219ebb7f59b30b0698eac9f96cc328e387715"
+ },
+ {
+  "id": "MF-15",
+  "source": "MF",
+  "line": 356,
+  "section": "Appendix C: Equivariance Proof of ESSGNN - Extension to Semantic Embedding",
+  "equation": "15",
+  "raw_span": "(Q x^{l+1} + g, h^{l+1}) = \\text{ESSGNN}(Q x^l + g, h^l, E) \\quad (15)",
+  "sha256": "1e090719e202986e6d8fa01639353693a99b9890ad53f88828cb3c2ce7e012b5"
+ },
+ {
+  "id": "U2-1",
+  "source": "U2",
+  "line": 78,
+  "section": "3.3 Tri-modal Pre-training",
+  "equation": "1",
+  "raw_span": "\\mathcal{L}_{P2I} = -\\frac{1}{2} \\sum_{i} \\left[ \\log \\frac{\\exp(f_{P,i} \\cdot f_{I,i} / \\tau)}{\\sum_{j} \\exp(f_{P,i} \\cdot f_{I,j} / \\tau)} + \\log \\frac{\\exp(f_{P,i} \\cdot f_{I,i} / \\tau)}{\\sum_{j} \\exp(f_{P,j} \\cdot f_{I,i} / \\tau)} \\right] \\quad (1)",
+  "sha256": "ea997d1f1d97c77f3468c3d3e34b103739f323fa9b0d3b6708b9f7fcc04a1b8b"
+ },
+ {
+  "id": "U2-2",
+  "source": "U2",
+  "line": 83,
+  "section": "3.3 Tri-modal Pre-training",
+  "equation": "2",
+  "raw_span": "\\mathcal{L}_{P2T} = -\\frac{1}{2} \\sum_{i} \\left[ \\log \\frac{\\exp(f_{P,i} \\cdot f_{T,i} / \\tau)}{\\sum_{j} \\exp(f_{P,i} \\cdot f_{T,j} / \\tau)} + \\log \\frac{\\exp(f_{P,i} \\cdot f_{T,i} / \\tau)}{\\sum_{j} \\exp(f_{P,j} \\cdot f_{T,i} / \\tau)} \\right] \\quad (2)",
+  "sha256": "163dc36cff2453fc08829f0114383b72316960892340eea26b42a6ca5d0f214e"
+ },
+ {
+  "id": "U2-3",
+  "source": "U2",
+  "line": 86,
+  "section": "3.3 Tri-modal Pre-training",
+  "equation": "3",
+  "raw_span": "\\min_{E_P} \\mathcal{L}_{P2I} + \\mathcal{L}_{P2T} \\quad (3)",
+  "sha256": "70cfadabc504940255df2875d751dea18ecc56dbfcd4483b4e48f9d4ae4a3a6f"
+ },
+ {
+  "id": "EG-1",
+  "source": "EG",
+  "line": 40,
+  "section": "2.1 Equivariance",
+  "equation": "1",
+  "raw_span": "\\phi(T_g(x)) = S_g(\\phi(x)) \\quad (1)",
+  "sha256": "b42e3fa23dc09310f43eb86afdb264b712240f4781b06f84e8db5a3131771346"
+ },
+ {
+  "id": "EG-U1",
+  "source": "EG",
+  "line": 46,
+  "section": "2.1 Equivariance",
+  "equation": null,
+  "raw_span": "y + g = \\phi(x + g)",
+  "sha256": "4add8800d0aaf5058c05f0d71bf22ffea6a0989f44ec8805d052862e1b3a57c2"
+ },
+ {
+  "id": "EG-U2",
+  "source": "EG",
+  "line": 48,
+  "section": "2.1 Equivariance",
+  "equation": null,
+  "raw_span": "Qy = \\phi(Qx)",
+  "sha256": "825b85466b62afca7f06885498a7c0473f2bf16dac3d703174af1a6c98a92ed9"
+ },
+ {
+  "id": "EG-U3",
+  "source": "EG",
+  "line": 50,
+  "section": "2.1 Equivariance",
+  "equation": null,
+  "raw_span": "P(y) = \\phi(P(x))",
+  "sha256": "2f65c82c8bffa2af672cf04036501de491c5789d2297366300f641c9acfa2440"
+ },
+ {
+  "id": "EG-U4",
+  "source": "EG",
+  "line": 58,
+  "section": "2.2 Graph Neural Networks",
+  "equation": null,
+  "raw_span": "m_{ij} = \\phi_e(h_i^l, h_j^l, a_{ij})",
+  "sha256": "32ac4c8edd84ea4b6bc5a6573ea7f1d80fef440eff407d5acb23f23ab3cbec77"
+ },
+ {
+  "id": "EG-U5",
+  "source": "EG",
+  "line": 59,
+  "section": "2.2 Graph Neural Networks",
+  "equation": null,
+  "raw_span": "m_i = \\sum_{j \\in \\mathcal{N}(i)} m_{ij}",
+  "sha256": "563ca78cdb4d199d414699ca07e83258dae71f6ad4c4df3ef6d0b88b534fd1ac"
+ },
+ {
+  "id": "EG-2",
+  "source": "EG",
+  "line": 60,
+  "section": "2.2 Graph Neural Networks",
+  "equation": "2",
+  "raw_span": "h_i^{l+1} = \\phi_h(h_i^l, m_i) \\quad (2)",
+  "sha256": "28dde0527ced72053d13861e491642f28dcc42ac18eb4292b3ab4c05faec7db3"
+ },
+ {
+  "id": "EG-3",
+  "source": "EG",
+  "line": 71,
+  "section": "3. Equivariant Graph Neural Networks",
+  "equation": "3",
+  "raw_span": "m_{ij} = \\phi_e \\left( h_i^l, h_j^l, \\|x_i^l - x_j^l\\|^2, a_{ij} \\right) \\quad (3)",
+  "sha256": "ae646224197759ed9230529d20b96639ca134bfee227cccfb358da811ced16a3"
+ },
+ {
+  "id": "EG-4",
+  "source": "EG",
+  "line": 72,
+  "section": "3. Equivariant Graph Neural Networks",
+  "equation": "4",
+  "raw_span": "x_i^{l+1} = x_i^l + C \\sum_{j \\neq i} (x_i^l - x_j^l) \\phi_x(m_{ij}) \\quad (4)",
+  "sha256": "4b72472c76731585c2bca6dcde2148ec272f411f68a8d39603495f09b5a1b0c5"
+ },
+ {
+  "id": "EG-5",
+  "source": "EG",
+  "line": 73,
+  "section": "3. Equivariant Graph Neural Networks",
+  "equation": "5",
+  "raw_span": "m_i = \\sum_{j \\neq i} m_{ij} \\quad (5)",
+  "sha256": "4ac385484e71dcecc2a7e1dc19ce8976fbbdb6db7365f8c0be03c234e6c73182"
+ },
+ {
+  "id": "EG-6",
+  "source": "EG",
+  "line": 74,
+  "section": "3. Equivariant Graph Neural Networks",
+  "equation": "6",
+  "raw_span": "h_i^{l+1} = \\phi_h(h_i^l, m_i) \\quad (6)",
+  "sha256": "e7162d6a3b5b4fff2f510c736ea2256c2c1011e24444f58577321ef6f75b4c9f"
+ },
+ {
+  "id": "EG-14@3.1",
+  "source": "EG",
+  "line": 85,
+  "section": "3.1 Analysis on E(n) Equivariance",
+  "equation": "14",
+  "raw_span": "Qx^{l+1} + g, h^{l+1} = \\text{EGCL}(Qx^l + g, h^l) \\quad (14)",
+  "sha256": "797429255146ac9ee8c4959766403781f3ea80eaad9a5dffa304102da763a308"
+ },
+ {
+  "id": "EG-7a",
+  "source": "EG",
+  "line": 92,
+  "section": "3.2 Extending EGNNs for Vector Type Representations",
+  "equation": "7a",
+  "raw_span": "v_i^{l+1} = \\phi_v(h_i^l) v_i^{init} + C \\sum_{j \\neq i} (x_i^l - x_j^l) \\phi_x(m_{ij}) \\quad (7a)",
+  "sha256": "e02242e66c7be5469dd5c660dd0f7eae4fd1a670543179ce62c6f9cd639ffa3c"
+ },
+ {
+  "id": "EG-7b",
+  "source": "EG",
+  "line": 93,
+  "section": "3.2 Extending EGNNs for Vector Type Representations",
+  "equation": "7b",
+  "raw_span": "x_i^{l+1} = x_i^l + v_i^{l+1} \\quad (7b)",
+  "sha256": "656c28012f0b4f033db240da187dd7e50b119d867c59a2d79e2da118b7a4bf4d"
+ },
+ {
+  "id": "EG-8",
+  "source": "EG",
+  "line": 100,
+  "section": "3.3 Inferring the Edges",
+  "equation": "8",
+  "raw_span": "m_i = \\sum_{j \\in \\mathcal{N}(i)} m_{ij} = \\sum_{j \\neq i} e_{ij} m_{ij} \\quad (8)",
+  "sha256": "8659d7390561857b0b238cb80aeb6e25aba6841ccd56098bf0a2e2c7e85ddded"
+ },
+ {
+  "id": "EG-9",
+  "source": "EG",
+  "line": 152,
+  "section": "5.2 Graph Autoencoder",
+  "equation": "9",
+  "raw_span": "\\hat{A}_{ij} = g_e(z_i, z_j) = \\frac{1}{1 + \\exp(w \\|z_i - z_j\\|^2 + b)} \\quad (9)",
+  "sha256": "56afa25e929096510fe9dcf4c1c94b3e3647a4768eaa5335553fec118179a571"
+ },
+ {
+  "id": "EG-15@AppendixA",
+  "source": "EG",
+  "line": 248,
+  "section": "Appendix A: Equivariance Proof",
+  "equation": "15",
+  "raw_span": "Qx^{l+1} + g, h^{l+1} = \\text{EGCL}(Qx^l + g, h^l) \\quad (15)",
+  "sha256": "4586924c2904c4a4a2fe6355756d0db74db848d799ca8bb475e34b21e1dc63d6"
+ },
+ {
+  "id": "EG-11",
+  "source": "EG",
+  "line": 254,
+  "section": "Appendix A: Equivariance Proof",
+  "equation": "11",
+  "raw_span": "\\|(Qx_i^l + g) - (Qx_j^l + g)\\|^2 = \\|Q(x_i^l - x_j^l)\\|^2 = (x_i^l - x_j^l)^T Q^T Q (x_i^l - x_j^l) = \\|x_i^l - x_j^l\\|^2 \\quad (11)",
+  "sha256": "4539ceb83009bce5635d642be278c7cf677ccb495a396ae73beb9e0aeb2fc8ed"
+ },
+ {
+  "id": "EG-12@AppendixA",
+  "source": "EG",
+  "line": 258,
+  "section": "Appendix A: Equivariance Proof",
+  "equation": "12",
+  "raw_span": "m'_{ij} = \\phi_e \\left( h_i^l, h_j^l, \\|Qx_i^l + g - (Qx_j^l + g)\\|^2, a_{ij} \\right) = \\phi_e \\left( h_i^l, h_j^l, \\|x_i^l - x_j^l\\|^2, a_{ij} \\right) = m_{ij} \\quad (12)",
+  "sha256": "d2e79ed644087ccc9ed8db4d7526ecf09072870a42223082868cb6794a39e38d"
+ },
+ {
+  "id": "EG-U19",
+  "source": "EG",
+  "line": 262,
+  "section": "Appendix A: Equivariance Proof",
+  "equation": null,
+  "raw_span": "Qx_i^l + g + C \\sum_{j \\neq i} (Qx_i^l + g - [Qx_j^l + g]) \\phi_x(m_{ij}) = Qx_i^l + g + Q C \\sum_{j \\neq i} (x_i^l - x_j^l) \\phi_x(m_{ij})",
+  "sha256": "501dea25b44400622c923d634391b3292ffeb2dbc21a5f9f6af9a2118e23e29a"
+ },
+ {
+  "id": "EG-U20",
+  "source": "EG",
+  "line": 263,
+  "section": "Appendix A: Equivariance Proof",
+  "equation": null,
+  "raw_span": "= Q \\left[ x_i^l + C \\sum_{j \\neq i} (x_i^l - x_j^l) \\phi_x(m_{ij}) \\right] + g = Qx_i^{l+1} + g",
+  "sha256": "1283685a6667b71e2d03d3d705d5c1dfb3c151754122eae36604c1919a567fc7"
+ },
+ {
+  "id": "EG-U21",
+  "source": "EG",
+  "line": 267,
+  "section": "Appendix A: Equivariance Proof",
+  "equation": null,
+  "raw_span": "h_i^{l+1} = \\phi_h(h_i^l, m_i)",
+  "sha256": "d1b7939d4358b6b7c148f16cc0fb538f364cefe9bd03d91db71e9fa17ff25840"
+ },
+ {
+  "id": "EG-U22",
+  "source": "EG",
+  "line": 276,
+  "section": "Appendix B: Re-Formulation for Velocity Type Inputs",
+  "equation": null,
+  "raw_span": "m_{ij} = \\phi_e \\left( h_i^l, h_j^l, \\|x_i^l - x_j^l\\|^2, a_{ij} \\right)",
+  "sha256": "98659a2610fce75529fd77f2bf92d6c61aa90ed7d13134d2e2012fb9d0e6dd26"
+ },
+ {
+  "id": "EG-U23",
+  "source": "EG",
+  "line": 277,
+  "section": "Appendix B: Re-Formulation for Velocity Type Inputs",
+  "equation": null,
+  "raw_span": "v_i^{l+1} = \\phi_v(h_i^l) v_i^{init} + C \\sum_{j \\neq i} (x_i^l - x_j^l) \\phi_x(m_{ij})",
+  "sha256": "bca2f502ee15036ba897fd2c57b30947585985ef1c8a416885858015b4ae57f9"
+ },
+ {
+  "id": "EG-U24",
+  "source": "EG",
+  "line": 278,
+  "section": "Appendix B: Re-Formulation for Velocity Type Inputs",
+  "equation": null,
+  "raw_span": "x_i^{l+1} = x_i^l + v_i^{l+1}",
+  "sha256": "b3d2706de0cb6b969fc8e4129b7277576818f3391febd84989daa562c6287bd7"
+ },
+ {
+  "id": "EG-U25",
+  "source": "EG",
+  "line": 279,
+  "section": "Appendix B: Re-Formulation for Velocity Type Inputs",
+  "equation": null,
+  "raw_span": "m_i = \\sum_{j \\neq i} m_{ij}",
+  "sha256": "d47203644ad19fde9dcd082c3b09677175dfedca9159fef3ef2d91b2b03516f4"
+ },
+ {
+  "id": "EG-U26",
+  "source": "EG",
+  "line": 280,
+  "section": "Appendix B: Re-Formulation for Velocity Type Inputs",
+  "equation": null,
+  "raw_span": "h_i^{l+1} = \\phi_h(h_i^l, m_i)",
+  "sha256": "d1b7939d4358b6b7c148f16cc0fb538f364cefe9bd03d91db71e9fa17ff25840"
+ },
+ {
+  "id": "EG-U27",
+  "source": "EG",
+  "line": 285,
+  "section": "B.1 Equivariance Proof for Velocity Type Inputs",
+  "equation": null,
+  "raw_span": "h^{l+1}, Qx^{l+1} + g, Qv^{l+1} = \\text{EGCL}[h^l, Qx^l + g, Qv^{init}, E]",
+  "sha256": "bd1308b3d8de63622a6299a161accc74d721f69d2cc75acf13ec92bfd64f00f1"
+ },
+ {
+  "id": "EG-U28",
+  "source": "EG",
+  "line": 289,
+  "section": "B.1 Equivariance Proof for Velocity Type Inputs",
+  "equation": null,
+  "raw_span": "\\phi_v(h_i^l) Qv_i^{init} + C \\sum_{j \\neq i} (Qx_i^l + g - [Qx_j^l + g]) \\phi_x(m_{ij})",
+  "sha256": "0ce05157a868258291079d591b2432ba9030b6740f5e34d31f708e099e457064"
+ },
+ {
+  "id": "EG-U29",
+  "source": "EG",
+  "line": 290,
+  "section": "B.1 Equivariance Proof for Velocity Type Inputs",
+  "equation": null,
+  "raw_span": "= Q \\phi_v(h_i^l) v_i^{init} + Q C \\sum_{j \\neq i} (x_i^l - x_j^l) \\phi_x(m_{ij})",
+  "sha256": "f4d2dc9f8eb1a5336dfcabb994e04dc126a7711d643cc44f272faceb3ea36f5e"
+ },
+ {
+  "id": "EG-12@B.1",
+  "source": "EG",
+  "line": 291,
+  "section": "B.1 Equivariance Proof for Velocity Type Inputs",
+  "equation": "12",
+  "raw_span": "= Q \\left[ \\phi_v(h_i^l) v_i^{init} + C \\sum_{j \\neq i} (x_i^l - x_j^l) \\phi_x(m_{ij}) \\right] = Qv_i^{l+1} \\quad (12)",
+  "sha256": "32227ae1069f3413d2d14c076476f5a65ac6fa5748264d53b6084d8524f7b4d1"
+ },
+ {
+  "id": "EG-U31",
+  "source": "EG",
+  "line": 295,
+  "section": "B.1 Equivariance Proof for Velocity Type Inputs",
+  "equation": null,
+  "raw_span": "Qx_i^l + g + Qv_i^{l+1} = Q(x_i^l + v_i^{l+1}) + g = Qx_i^{l+1} + g",
+  "sha256": "b239a710d0cce711639875478cde272a543afd72b06f40825b95e0b6f3d9949f"
+ },
+ {
+  "id": "EG-U32",
+  "source": "EG",
+  "line": 304,
+  "section": "Appendix C: Implementation Details",
+  "equation": null,
+  "raw_span": "\\text{Input} \\to \\text{Linear} \\to \\text{Swish} \\to \\text{Linear} \\to \\text{Swish} \\to \\text{Output}",
+  "sha256": "e03b8159e2209ddf4f7fd0f9ecb96bc276fa579dc972be193a337fde6171f4b8"
+ },
+ {
+  "id": "EG-U33",
+  "source": "EG",
+  "line": 306,
+  "section": "Appendix C: Implementation Details",
+  "equation": null,
+  "raw_span": "m_{ij} \\to \\text{Linear} \\to \\text{Swish} \\to \\text{Linear} \\to \\text{Output}",
+  "sha256": "4fcb151925a2892fa76516960d32afc2568cd930b3005f5303e5e017dc33654e"
+ },
+ {
+  "id": "EG-U34",
+  "source": "EG",
+  "line": 308,
+  "section": "Appendix C: Implementation Details",
+  "equation": null,
+  "raw_span": "[h_i^l, m_i] \\to \\text{Linear} \\to \\text{Swish} \\to \\text{Linear} \\to \\text{Addition}(h_i^l) \\to h_i^{l+1}",
+  "sha256": "416928e485a6fec3ea5dbd4509c1e612f6d76549c67f384d33711c07733c4a99"
+ },
+ {
+  "id": "EG-U35",
+  "source": "EG",
+  "line": 350,
+  "section": "E.1 Invariance of Distance Norms under E(n)",
+  "equation": null,
+  "raw_span": "\\ell_2(Qx_i + t, Qx_j + t) = \\sqrt{(Qx_i + t - [Qx_j + t])^T (Qx_i + t - [Qx_j + t])}",
+  "sha256": "38ddcac4603bab5bebfa343715d547e633a5fe9247161998d0ddf2e54bee01f5"
+ },
+ {
+  "id": "EG-13",
+  "source": "EG",
+  "line": 351,
+  "section": "E.1 Invariance of Distance Norms under E(n)",
+  "equation": "13",
+  "raw_span": "= \\sqrt{(Q(x_i - x_j))^T Q(x_i - x_j)} = \\sqrt{(x_i - x_j)^T Q^T Q (x_i - x_j)} = \\ell_2(x_i, x_j) \\quad (13)",
+  "sha256": "89664fa050841f9a0e264d82e2886548c994bad4c9e59bdf865efa8253771a8b"
+ },
+ {
+  "id": "EG-U37",
+  "source": "EG",
+  "line": 363,
+  "section": "E.2 Uniqueness of Distance Norms Representation",
+  "equation": null,
+  "raw_span": "\\tilde{x}_i^T \\tilde{x}_i - 2 \\tilde{x}_i^T \\tilde{x}_j + \\tilde{x}_j^T \\tilde{x}_j = \\ell_2(\\tilde{x}_i, \\tilde{x}_j)^2 = \\ell_2(\\tilde{y}_i, \\tilde{y}_j)^2 = \\tilde{y}_i^T \\tilde{y}_i - 2 \\tilde{y}_i^T \\tilde{y}_j + \\tilde{y}_j^T \\tilde{y}_j",
+  "sha256": "068425edabd6fdbd109f4559f3433a390c12ccd63bbb684d078e10cbeab3620d"
+ },
+ {
+  "id": "EG-14@E.2",
+  "source": "EG",
+  "line": 367,
+  "section": "E.2 Uniqueness of Distance Norms Representation",
+  "equation": "14",
+  "raw_span": "\\langle \\tilde{x}_i, \\tilde{x}_j \\rangle = \\langle \\tilde{y}_i, \\tilde{y}_j \\rangle \\quad (14)",
+  "sha256": "f215da41d8b4d2bd1cfc7e10ec939fd6ab8265e3a43ffec7161cb703d69f6dfe"
+ },
+ {
+  "id": "EG-U39",
+  "source": "EG",
+  "line": 373,
+  "section": "E.2 Uniqueness of Distance Norms Representation",
+  "equation": null,
+  "raw_span": "\\| \\sum_i c_i \\tilde{x}_i \\|^2 = \\| \\sum_i c_i \\tilde{y}_i \\|^2 \\quad (*)",
+  "sha256": "b5eac26552b3b5a01be010170c90db51029bc10c104e223c6b5539ff0dc27bd2"
+ },
+ {
+  "id": "EG-U40",
+  "source": "EG",
+  "line": 377,
+  "section": "E.2 Uniqueness of Distance Norms Representation",
+  "equation": null,
+  "raw_span": "\\| \\tilde{y}_i - A\\tilde{x}_i \\|_2^2 = \\| \\tilde{y}_i - \\sum_j c_j y_{i_j} \\|_2^2",
+  "sha256": "114f89a5d8aa397e85cc4b2982e8c514e237bab32d851656bb98940a791b3504"
+ },
+ {
+  "id": "EG-U41",
+  "source": "EG",
+  "line": 378,
+  "section": "E.2 Uniqueness of Distance Norms Representation",
+  "equation": null,
+  "raw_span": "= \\langle \\tilde{y}_i, \\tilde{y}_i \\rangle - 2 \\langle \\tilde{y}_i, \\sum_j c_j y_{i_j} \\rangle + \\langle \\sum_j c_j y_{i_j}, \\sum_j c_j y_{i_j} \\rangle",
+  "sha256": "97d955ed4a86b20bf63a517786d244c4e3c4e2b4a5608cc6a84acbcb84a8e1ea"
+ },
+ {
+  "id": "EG-15@E.2",
+  "source": "EG",
+  "line": 379,
+  "section": "E.2 Uniqueness of Distance Norms Representation",
+  "equation": "15",
+  "raw_span": "\\stackrel{(*)}{=} \\langle \\tilde{x}_i, \\tilde{x}_i \\rangle - 2 \\langle \\tilde{x}_i, \\sum_j c_j x_{i_j} \\rangle + \\langle \\sum_j c_j x_{i_j}, \\sum_j c_j x_{i_j} \\rangle = 0 \\quad (15)",
+  "sha256": "fe1c40cefc64eae9f567d28e3b91f4d7f24aba0d84f385869e8723d999c5c0f7"
+ },
+ {
+  "id": "EG-16",
+  "source": "EG",
+  "line": 383,
+  "section": "E.2 Uniqueness of Distance Norms Representation",
+  "equation": "16",
+  "raw_span": "\\langle A x_{i_j}, A x_{i_k} \\rangle = \\langle y_{i_j}, y_{i_k} \\rangle = \\langle x_{i_j}, x_{i_k} \\rangle \\quad (16)",
+  "sha256": "fa46cdcd22f6199988ba7b6fca509eb3fb4ce9673c89bd82eef0c7ed626659fa"
+ }
+]

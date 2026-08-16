@@ -1,45 +1,39 @@
 {
  "metafind_paper.md": {
-  "repaired": {},
+  "repaired": {
+   "n": 0
+  },
   "total": 0,
   "control_bytes_left": 0,
-  "bare_fragments": {
-   "text": 31,
-   "tau": 1,
-   "approx": 2,
-   "to ": 73
-  },
-  "display_blocks": 20
+  "display_blocks": 20,
+  "neq_in_source": 5,
+  "bare_in_math": {}
  },
  "ulip2_paper.md": {
   "repaired": {
    "t": 13,
    "f": 6,
-   "r": 2
+   "r": 2,
+   "n": 0
   },
   "total": 21,
   "control_bytes_left": 0,
-  "bare_fragments": {
-   "text": 10,
-   "approx": 2,
-   "to ": 43
-  },
-  "display_blocks": 3
+  "display_blocks": 3,
+  "neq_in_source": 0,
+  "bare_in_math": {}
  },
  "egnn_paper.md": {
   "repaired": {
    "t": 113,
    "r": 17,
    "a": 2,
-   "f": 1
+   "f": 1,
+   "n": 19
   },
-  "total": 133,
+  "total": 152,
   "control_bytes_left": 0,
-  "bare_fragments": {
-   "times": 3,
-   "approx": 3,
-   "to ": 52
-  },
-  "display_blocks": 44
+  "display_blocks": 44,
+  "neq_in_source": 18,
+  "bare_in_math": {}
  }
 }

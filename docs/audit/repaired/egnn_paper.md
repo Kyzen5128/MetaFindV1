@@ -69,10 +69,8 @@ We consider a graph $G = (V, E)$ with nodes $v_i \in V$ and edges $e_{ij} \in E$
 Our **Equivariant Graph Convolutional Layer (EGCL)** takes as input the set of node embeddings $h^l = \{h_0^l, \dots, h_{M-1}^l\}$, coordinate embeddings $x^l = \{x_0^l, \dots, x_{M-1}^l\}$, and edge information $E = (e_{ij})$, and outputs a transformation on $h^{l+1}$ and $x^{l+1}$ [11]. Concisely, $h^{l+1}, x^{l+1} = \text{EGCL}[h^l, x^l, E]$ [11]. The equations defining this layer are [11]:
 
 $$m_{ij} = \phi_e \left( h_i^l, h_j^l, \|x_i^l - x_j^l\|^2, a_{ij} \right) \quad (3)$$
-$$x_i^{l+1} = x_i^l + C \sum_{j 
-eq i} (x_i^l - x_j^l) \phi_x(m_{ij}) \quad (4)$$
-$$m_i = \sum_{j 
-eq i} m_{ij} \quad (5)$$
+$$x_i^{l+1} = x_i^l + C \sum_{j \neq i} (x_i^l - x_j^l) \phi_x(m_{ij}) \quad (4)$$
+$$m_i = \sum_{j \neq i} m_{ij} \quad (5)$$
 $$h_i^{l+1} = \phi_h(h_i^l, m_i) \quad (6)$$
 
 The main differences from standard GNNs are found in Equations (3) and (4) [11]. In Equation (3), we input the relative squared distance $\|x_i^l - x_j^l\|^2$ into the edge operation $\phi_e$ [11].
@@ -89,11 +87,9 @@ $$Qx^{l+1} + g, h^{l+1} = \text{EGCL}(Qx^l + g, h^l) \quad (14)$$
 Intuitively, if $h^l$ is already $E(n)$ invariant, the resultant edge embedding $m_{ij}$ from Equation (3) will also be $E(n)$ invariant, because it only depends on $h^l$ and the squared distances $\|x_i^l - x_j^l\|^2$, which are $E(n)$ invariant [14]. Consequently, the coordinate update in Equation (4) transforms as a type-1 vector, and the feature update in Equation (6) remains invariant [14].
 
 ### 3.2 Extending EGNNs for Vector Type Representations
-In scenarios where we must explicitly keep track of a particle's momentum or initial velocity $v^{init} 
-eq 0$, we can include vector type representations by replacing Equation (4) with [15, 16]:
+In scenarios where we must explicitly keep track of a particle's momentum or initial velocity $v^{init} \neq 0$, we can include vector type representations by replacing Equation (4) with [15, 16]:
 
-$$v_i^{l+1} = \phi_v(h_i^l) v_i^{init} + C \sum_{j 
-eq i} (x_i^l - x_j^l) \phi_x(m_{ij}) \quad (7a)$$
+$$v_i^{l+1} = \phi_v(h_i^l) v_i^{init} + C \sum_{j \neq i} (x_i^l - x_j^l) \phi_x(m_{ij}) \quad (7a)$$
 $$x_i^{l+1} = x_i^l + v_i^{l+1} \quad (7b)$$
 
 where $\phi_v : \mathbb{R}^{n_f} \to \mathbb{R}^1$ scales the initial velocity [16]. If $v_i^{init} = 0$, both Equations (4) and (7) become mathematically equivalent [16].
@@ -101,8 +97,7 @@ where $\phi_v : \mathbb{R}^{n_f} \to \mathbb{R}^1$ scales the initial velocity [
 ### 3.3 Inferring the Edges
 When an adjacency matrix is not provided, we can assume a fully connected graph or infer relations dynamically by modifying the aggregation operation as [17, 18]:
 
-$$m_i = \sum_{j \in \mathcal{N}(i)} m_{ij} = \sum_{j 
-eq i} e_{ij} m_{ij} \quad (8)$$
+$$m_i = \sum_{j \in \mathcal{N}(i)} m_{ij} = \sum_{j \neq i} e_{ij} m_{ij} \quad (8)$$
 
 where $e_{ij} \approx \phi_{inf}(m_{ij})$ represents a soft estimation of edge existence [18]. $\phi_{inf} : \mathbb{R}^{n_f} \to [0, 1]^1$ is approximated by a linear layer followed by a sigmoid function [18]. This preserves the $E(n)$ properties because $m_{ij}$ is already $E(n)$ invariant [18].
 
@@ -118,15 +113,10 @@ Table 1 outlines the equations of EGNN alongside related methods under Gilmer's 
 | Method | Edge Message ($m_{ij}$) | Aggregation ($m_i$, $\hat{m}_i$) | Node Update ($h_i^{l+1}$, $x_i^{l+1}$) | Equivariance Class |
 | :--- | :---: | :---: | :---: | :---: |
 | **GNN** [10] | $\phi_e(h_i^l, h_j^l, a_{ij})$ | $m_i = \sum_{j \in \mathcal{N}(i)} m_{ij}$ | $h_i^{l+1} = \phi_h(h_i^l, m_i)$ | Non-equivariant |
-| **Radial Field** [24] | $\phi_{rf}(\|r_{ij}^l\|) r_{ij}^l$ | $m_i = \sum_{j 
-eq i} m_{ij}$ | $x_i^{l+1} = x_i^l + m_i$ | $E(n)$-Equivariant |
-| **TFN** [24] | $\sum_k W^{l,k}(r_{ij}^l) h_i^{l,k}$ | $m_i = \sum_{j 
-eq i} m_{ij}$ | $h_i^{l+1} = w_{ll} h_i^l + m_i$ | $SE(3)$-Equivariant |
-| **Schnet** [25] | $\phi_{cf}(\|r_{ij}^l\|) \phi_s(h_j^l)$ | $m_i = \sum_{j 
-eq i} m_{ij}$ | $h_i^{l+1} = \phi_h(h_i^l, m_i)$ | $E(n)$-Invariant |
-| **EGNN** [25] | $m_{ij} = \phi_e(h_i^l, h_j^l, \|r_{ij}^l\|^2, a_{ij})$<br>$\hat{m}_{ij} = r_{ij}^l \phi_x(m_{ij})$ | $m_i = \sum_{j 
-eq i} m_{ij}$<br>$\hat{m}_i = C \sum_{j 
-eq i} \hat{m}_{ij}$ | $h_i^{l+1} = \phi_h(h_i^l, m_i)$<br>$x_i^{l+1} = x_i^l + \hat{m}_i$ | **$E(n)$-Equivariant** |
+| **Radial Field** [24] | $\phi_{rf}(\|r_{ij}^l\|) r_{ij}^l$ | $m_i = \sum_{j \neq i} m_{ij}$ | $x_i^{l+1} = x_i^l + m_i$ | $E(n)$-Equivariant |
+| **TFN** [24] | $\sum_k W^{l,k}(r_{ij}^l) h_i^{l,k}$ | $m_i = \sum_{j \neq i} m_{ij}$ | $h_i^{l+1} = w_{ll} h_i^l + m_i$ | $SE(3)$-Equivariant |
+| **Schnet** [25] | $\phi_{cf}(\|r_{ij}^l\|) \phi_s(h_j^l)$ | $m_i = \sum_{j \neq i} m_{ij}$ | $h_i^{l+1} = \phi_h(h_i^l, m_i)$ | $E(n)$-Invariant |
+| **EGNN** [25] | $m_{ij} = \phi_e(h_i^l, h_j^l, \|r_{ij}^l\|^2, a_{ij})$<br>$\hat{m}_{ij} = r_{ij}^l \phi_x(m_{ij})$ | $m_i = \sum_{j \neq i} m_{ij}$<br>$\hat{m}_i = C \sum_{j \neq i} \hat{m}_{ij}$ | $h_i^{l+1} = \phi_h(h_i^l, m_i)$<br>$x_i^{l+1} = x_i^l + \hat{m}_i$ | **$E(n)$-Equivariant** |
 
 *Note: $r_{ij}^l = (x_i^l - x_j^l)$ is the spatial difference vector [20].*
 
@@ -192,8 +182,7 @@ We predict 12 chemical properties of small molecules in the QM9 dataset, contain
 | $\epsilon_{\text{HOMO}}$ | $\text{meV}$ | 43 | 41 | 34 | 46 | 30 | **25** | 40 | 35 | 29 |
 | $\epsilon_{\text{LUMO}}$ | $\text{meV}$ | 38 | 34 | 38 | 35 | 25 | **20** | 38 | 33 | 25 |
 | $\mu$ | $\text{D}$ | 0.030 | 0.033 | 0.038 | 0.043 | 0.032 | 0.030 | 0.064 | 0.051 | **0.029** |
-| $C_
-u$ | $\text{cal/mol K}$| 0.040 | 0.033 | 0.026 | 0.031 | 0.038 | **0.023** | 0.101 | 0.054 | 0.031 |
+| $C_\nu$ | $\text{cal/mol K}$| 0.040 | 0.033 | 0.026 | 0.031 | 0.038 | **0.023** | 0.101 | 0.054 | 0.031 |
 | $G$ | $\text{meV}$ | 19 | 14 | 20 | 14 | 22 | **8** | - | - | 12 |
 | $H$ | $\text{meV}$ | 17 | 14 | 21 | 14 | 24 | **7** | - | - | 12 |
 | $R^2$ | $\text{bohr}^3$ | 0.180 | 0.073 | 0.961 | 0.354 | 0.800 | 0.331 | - | - | **0.106** |
@@ -270,11 +259,8 @@ $$m'_{ij} = \phi_e \left( h_i^l, h_j^l, \|Qx_i^l + g - (Qx_j^l + g)\|^2, a_{ij} 
 
 Now, applying the transformation to Equation (4) [68, 69]:
 
-$$Qx_i^l + g + C \sum_{j 
-eq i} (Qx_i^l + g - [Qx_j^l + g]) \phi_x(m_{ij}) = Qx_i^l + g + Q C \sum_{j 
-eq i} (x_i^l - x_j^l) \phi_x(m_{ij})$$
-$$= Q \left[ x_i^l + C \sum_{j 
-eq i} (x_i^l - x_j^l) \phi_x(m_{ij}) \right] + g = Qx_i^{l+1} + g$$
+$$Qx_i^l + g + C \sum_{j \neq i} (Qx_i^l + g - [Qx_j^l + g]) \phi_x(m_{ij}) = Qx_i^l + g + Q C \sum_{j \neq i} (x_i^l - x_j^l) \phi_x(m_{ij})$$
+$$= Q \left[ x_i^l + C \sum_{j \neq i} (x_i^l - x_j^l) \phi_x(m_{ij}) \right] + g = Qx_i^{l+1} + g$$
 
 Since $m_{ij}$ is invariant, $m_i$ in Equation (5) is invariant [69]. Consequently, node feature updates $h_i^{l+1}$ in Equation (6) are invariant [69]:
 
@@ -288,11 +274,9 @@ This completes the proof [69].
 When velocity inputs are given, the EGCL layer computes $h^{l+1}, x^{l+1}, v^{l+1} = \text{EGCL}[h^l, x^l, v^{init}, E]$ as follows [70]:
 
 $$m_{ij} = \phi_e \left( h_i^l, h_j^l, \|x_i^l - x_j^l\|^2, a_{ij} \right)$$
-$$v_i^{l+1} = \phi_v(h_i^l) v_i^{init} + C \sum_{j 
-eq i} (x_i^l - x_j^l) \phi_x(m_{ij})$$
+$$v_i^{l+1} = \phi_v(h_i^l) v_i^{init} + C \sum_{j \neq i} (x_i^l - x_j^l) \phi_x(m_{ij})$$
 $$x_i^{l+1} = x_i^l + v_i^{l+1}$$
-$$m_i = \sum_{j 
-eq i} m_{ij}$$
+$$m_i = \sum_{j \neq i} m_{ij}$$
 $$h_i^{l+1} = \phi_h(h_i^l, m_i)$$
 
 #### B.1 Equivariance Proof for Velocity Type Inputs
@@ -302,12 +286,9 @@ $$h^{l+1}, Qx^{l+1} + g, Qv^{l+1} = \text{EGCL}[h^l, Qx^l + g, Qv^{init}, E]$$
 
 Applying transformations to the velocity update equation [72]:
 
-$$\phi_v(h_i^l) Qv_i^{init} + C \sum_{j 
-eq i} (Qx_i^l + g - [Qx_j^l + g]) \phi_x(m_{ij})$$
-$$= Q \phi_v(h_i^l) v_i^{init} + Q C \sum_{j 
-eq i} (x_i^l - x_j^l) \phi_x(m_{ij})$$
-$$= Q \left[ \phi_v(h_i^l) v_i^{init} + C \sum_{j 
-eq i} (x_i^l - x_j^l) \phi_x(m_{ij}) \right] = Qv_i^{l+1} \quad (12)$$
+$$\phi_v(h_i^l) Qv_i^{init} + C \sum_{j \neq i} (Qx_i^l + g - [Qx_j^l + g]) \phi_x(m_{ij})$$
+$$= Q \phi_v(h_i^l) v_i^{init} + Q C \sum_{j \neq i} (x_i^l - x_j^l) \phi_x(m_{ij})$$
+$$= Q \left[ \phi_v(h_i^l) v_i^{init} + C \sum_{j \neq i} (x_i^l - x_j^l) \phi_x(m_{ij}) \right] = Qv_i^{l+1} \quad (12)$$
 
 And the coordinate update [72]:
 
