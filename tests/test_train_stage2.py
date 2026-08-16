@@ -184,3 +184,71 @@ def test_removing_every_neighbour_leaves_an_empty_edge_set_not_a_crash():
     assert len(keep) == 1
     assert edge_index.shape == (2, 0)
     assert edge_attr.shape == (0, 4)
+
+
+# --- Table 3 variants: --variant must reach the model, not just the filename --
+
+def registry_file(tmp_path, monkeypatch, rows):
+    import json as _json
+    from metafind import paths as _paths
+    monkeypatch.setattr(_paths, "OUTPUTS", tmp_path)
+    (tmp_path / "variant_registry.json").write_text(_json.dumps(rows))
+
+
+FULL = {"variant_id": "full", "requires_training": True, "reuses_ckpt": None,
+        "train_scope": "point_encoder_and_fuser", "fusion": None,
+        "dropout": 0.30, "layout_encoder": "essgnn",
+        "composition_mode": "iterative"}
+CKPT = {"train_scope": "point_encoder_and_fuser"}
+
+
+def test_a_known_variant_resolves(tmp_path, monkeypatch):
+    from metafind.train.stage2 import load_variant
+    registry_file(tmp_path, monkeypatch, [FULL])
+    assert load_variant("full", CKPT)["layout_encoder"] == "essgnn"
+
+
+def test_no_layout_turns_the_branch_off(tmp_path, monkeypatch):
+    """The row that made the old bug invisible: it trained the FULL model and
+    saved it as stage2_no_layout.pt."""
+    from metafind.train.stage2 import load_variant
+    row = {**FULL, "variant_id": "no_layout", "layout_encoder": None}
+    registry_file(tmp_path, monkeypatch, [row])
+    assert load_variant("no_layout", CKPT)["layout_encoder"] is None
+
+
+def test_an_unknown_variant_is_refused(tmp_path, monkeypatch):
+    from metafind.train.stage2 import load_variant
+    registry_file(tmp_path, monkeypatch, [FULL])
+    with pytest.raises(ValueError, match="unknown variant"):
+        load_variant("typo_here", CKPT)
+
+
+def test_the_inference_only_row_refuses_to_train(tmp_path, monkeypatch):
+    """[L1-ABLATION-INFERENCE-ONLY] Algorithm 1 runs at inference, so
+    'w/o iterative retrieval' is the Full checkpoint evaluated differently."""
+    from metafind.train.stage2 import load_variant
+    row = {**FULL, "variant_id": "no_iterative", "requires_training": False,
+           "reuses_ckpt": "full", "train_scope": None,
+           "composition_mode": "parallel"}
+    registry_file(tmp_path, monkeypatch, [row])
+    with pytest.raises(ValueError, match="INFERENCE setting"):
+        load_variant("no_iterative", CKPT)
+
+
+def test_the_gat_row_is_refused_rather_than_run_with_essgnn(tmp_path, monkeypatch):
+    from metafind.train.stage2 import load_variant
+    row = {**FULL, "variant_id": "layout_gat", "layout_encoder": "gat"}
+    registry_file(tmp_path, monkeypatch, [row])
+    with pytest.raises(NotImplementedError, match="GAT"):
+        load_variant("layout_gat", CKPT)
+
+
+def test_a_stage1_field_mismatch_is_caught_not_applied(tmp_path, monkeypatch):
+    """`Train fuser only` is a STAGE 1 setting. Stage 2 cannot apply it after
+    the fact -- it can only refuse a checkpoint trained the other way."""
+    from metafind.train.stage2 import load_variant
+    row = {**FULL, "variant_id": "fuser_only", "train_scope": "fuser_only"}
+    registry_file(tmp_path, monkeypatch, [row])
+    with pytest.raises(ValueError, match="Re-run n10"):
+        load_variant("fuser_only", CKPT)

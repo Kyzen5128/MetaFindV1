@@ -228,7 +228,12 @@ def encode_query(model, backbone, graph: dict, target_index: int, asset_id: str,
         pc_vec = backbone.encode_pc(torch.from_numpy(prepare_depth_shell(cloud)))
 
     layout = None
-    if not drop_layout:
+    # `layout_encoder is None` is the "w/o Layout Context" row, and it is a
+    # different condition from `drop_layout`: scene dropout suppresses the term
+    # for 30% of batches in a model that HAS one, while this variant has none at
+    # all. Checking only drop_layout sent that row into encode_layout, which
+    # raises on a tower built without the branch.
+    if not drop_layout and model.query.layout_encoder is not None:
         keep, pos, edge_index, edge_attr, edge_missing = build_context_graph(
             graph, target_index, data.edge_dim, data.sem_cache, data.text_map)
         # [P1] `keep` alone, NOT `keep and edges > 0`. A context of one object,
@@ -360,8 +365,63 @@ def freeze_for_stage2(model, backbone) -> dict:
     return {name: p.requires_grad for name, p in model.named_parameters()}
 
 
+def load_variant(variant_id: str, ckpt_record: dict) -> dict:
+    """Resolve a Table 3 row into settings, and refuse the ones we cannot run.
+
+    `--variant` used to reach only the checkpoint FILENAME. Every row trained
+    and saved happily as `stage2_<id>.pt`, and every one of them was the full
+    model -- ten files, ten different names, identical architectures, and an
+    ablation table whose rows would have differed only by training noise. There
+    is no error to notice; the table simply would not have meant anything.
+
+    Two classes of row have to be separated, because only one of them is ours:
+
+    * Stage 2 fields -- `layout_encoder` -- are applied here.
+    * Stage 1 fields -- `train_scope`, `dropout`, `fusion`,
+      `missing_modality_representation` -- were baked into the checkpoint by
+      n10. This function CHECKS them against the loaded checkpoint rather than
+      applying them, because applying them here would produce a model whose
+      towers were trained under one setting and fine-tuned under another.
+    """
+    path = paths.OUTPUTS / "variant_registry.json"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path} not found -- run n05b_resolve_stage1_encoding first")
+    registry = {v["variant_id"]: v for v in json.loads(path.read_text())}
+    if variant_id not in registry:
+        raise ValueError(
+            f"unknown variant {variant_id!r}; the registry holds "
+            f"{sorted(registry)}")
+    variant = registry[variant_id]
+
+    # [L1-ABLATION-INFERENCE-ONLY] "w/o iterative retrieval" is not a model.
+    # Algorithm 1 runs at inference (2.7), so that row is the Full checkpoint
+    # evaluated with composition_mode=parallel. Training it would answer a
+    # question Table 3 is not asking.
+    if not variant["requires_training"]:
+        raise ValueError(
+            f"variant {variant_id!r} has requires_training=False and reuses "
+            f"{variant['reuses_ckpt']!r}; it is an INFERENCE setting "
+            f"(composition_mode={variant['composition_mode']!r}), not a run")
+
+    if variant["layout_encoder"] == "gat":
+        raise NotImplementedError(
+            "the 'w/ Layout Context (GAT)' row needs a GAT layout encoder, and "
+            "only ESSGNN is implemented. Running it with ESSGNN would put the "
+            "wrong label on a real result.")
+
+    # Stage 1 fields: verify, do not apply.
+    if variant["train_scope"] and variant["train_scope"] != ckpt_record["train_scope"]:
+        raise ValueError(
+            f"variant {variant_id!r} needs a Stage 1 checkpoint trained with "
+            f"train_scope={variant['train_scope']!r}, but stage1_ckpt records "
+            f"{ckpt_record['train_scope']!r}. Re-run n10 for this variant.")
+    return variant
+
+
 def build_stage2_model(encoding: dict, training: dict, hyperparameters: dict,
-                       arch_proto: dict, *, node_feat_dim: int, edge_feat_dim: int):
+                       arch_proto: dict, *, node_feat_dim: int, edge_feat_dim: int,
+                       use_layout: bool = True):
     """[P0-3] The Stage 2 dual tower -- WITH the ESSGNN branch.
 
     Stage 1's ``build_model`` sets ``use_layout=False``, which is right there:
@@ -403,7 +463,9 @@ def build_stage2_model(encoding: dict, training: dict, hyperparameters: dict,
     return MetaFindDualTower(DualTowerConfig(
         dim=EMBED_DIM, tower_sharing=training["tower_sharing"],
         query_fusion=fusion, gallery_fusion=fusion,
-        use_layout=True, essgnn=essgnn,
+        # [Table 3] "w/o Layout Context" is this flag. It is the one ablation
+        # field Stage 2 owns; the rest were fixed when n10 trained the towers.
+        use_layout=use_layout, essgnn=essgnn if use_layout else None,
         init_lambda=float(hyperparameters["values"].get("init_lambda", 1.0))))
 
 
@@ -461,9 +523,12 @@ def main() -> int:
     # use_layout=False -- correct there, since 2.6 puts ESSGNN in Stage 2 -- so
     # reusing it here left query.layout_encoder as None while encode_query below
     # calls encode_layout, which raises. Eq. 6's lambda was absent too.
+    variant = load_variant(args.variant, ckpt)
+    use_layout = variant["layout_encoder"] is not None
     model = build_stage2_model(encoding, training, hyperparameters, arch_proto,
                                node_feat_dim=data.node_dim,
-                               edge_feat_dim=data.edge_dim)
+                               edge_feat_dim=data.edge_dim,
+                               use_layout=use_layout)
     loss_fn = MetaFindContrastiveLoss(ContrastiveConfig(
         # [Eq. 7/8] symmetric, unlike Stage 1's Eq. 5
         bidirectional=True,
