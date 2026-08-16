@@ -14,7 +14,7 @@
 | 標記 | 意思 |
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
-| **[未定]** | 論文沒說，我們選了一個並記錄。U registry 共 41 項，其中 33 項 unresolved、8 項 resolved（U-08、U-08a、U-08b、U-08d、U-18、U-20、U-21、U-34，皆 2026-08-16）。**先前四個會擋住 Stage 2／Table 2 的項目已全部判定**；新增 **U-08c**（ProcTHOR 資產數四個數字互相矛盾，一律從安裝的 build 現場推導）|
+| **[未定]** | 論文沒說，我們選了一個並記錄。U registry 共 42 項，其中 33 項 unresolved、9 項 resolved（U-08／08a／08b／08d／08e、U-18、U-20、U-21、U-34，皆 2026-08-16）。**先前四個會擋住 Stage 2／Table 2 的項目已全部判定**；新增 **U-08c**（ProcTHOR 資產數四個數字互相矛盾，一律從安裝的 build 現場推導）|
 | **[偏離]** | 與論文不同，必須在報告聲明（**6 條 D-2…D-7**。條件式的 **D-1** 已於 2026-08-16 判定**不啟用**） |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
@@ -90,7 +90,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | 3 | [`00_FINDINGS.md`](00_FINDINGS.md) | 實測事實（F 系列）與架構決策（D 系列），**含論文的多處自相矛盾** |
 | 4 | [`graph_spec.yaml`](graph_spec.yaml) | 機器可讀：55 個 state channel、69 條邊、16 組 join policy、11 個決策點、3 個 cycle、UNKNOWN 登記表 |
 | 5 | [`node_registry.yaml`](node_registry.yaml) | 38 個節點 + 4 個 subgraph，含逐節點 failure policy 與 rollback |
-| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 60 個 L1、18 個 L2、7 個 gate、4 個 Required Audit |
+| 6 | [`validation_plan.yaml`](validation_plan.yaml) | 63 個 L1、18 個 L2、7 個 gate、4 個 Required Audit |
 
 ## 一頁摘要
 
@@ -155,7 +155,7 @@ G1 來源有效 → G2 點雲健全 → G3 物件語料 → G4 gallery 凍結 �
 - **G6**：`stage2_protocol`（U-08a／U-08b）**或 `essgnn_edge_protocol`（U-29／U-30／U-19）**未 `resolved`、或 `scene_splits` 有洩漏之前，Stage 2 不准訓練。
 - **G7**：`composition_protocol.status` 未 `resolved`（U-18／U-21）之前，不准合成場景。**Table 1 不經過它。**
 
-78 個檢查（60 個 L1 ＋ 18 個 L2）對 7 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
+81 個檢查（63 個 L1 ＋ 18 個 L2）對 7 個 gate。被降級的 gate 候選有 5 個，都寫明不符四判準的哪一條。
 
 `G2` 這一輪**縮小了判準**：它原本要求自取樣點雲必須與 ULIP 官方釋出的點雲一致，
 但論文從未說 MetaFind 沿用 ULIP 預取樣的點雲，而 Stage 1 本來就會 fine-tune point encoder。
@@ -219,7 +219,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | **U-15** | 結構化標註怎麼序列化成 encoder 的輸入字串 | 只給欄位，沒給格式 |
 | **U-16** | query / gallery 兩塔是否共享權重 | 說「dedicated query encoder」、說兩者都訓練，但沒說共享關係 |
 
-### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 9 個**
+### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 10 個**
 
 規格完整不等於管線存在。這張表是為了讓讀者不會把前者讀成後者
 （第十九輪剛因為同一個理由修過 `L1-STAGE1-PROTOCOL-APPLIED` 的措辭）。
@@ -235,7 +235,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | `n08_semantic_edges` | **可執行** | `metafind/data/semantic_edges.py`（key／prompt／驗證，30 條測試）＋ `semantic_edges_run.py`（Qwen 關係句 ＋ 凍結 CLIP 文字編碼器）。**實測 410 萬條語意邊只有 4,242 組唯一描述配對（快取命中 99.90%）**；三條負向注入實測會失敗。LLM 階段須等 n05 讓出 GPU |
 | `n09c_build_scene_splits` | ✅ **完成** | `metafind/data/scene_splits.py`。9,600 train／2,400 test（80/20，seed 20260816）、**洩漏 0**；13 條測試，負向注入實測會失敗。語意邊覆蓋率待 n08 |
 | `n05b_resolve_stage1_encoding` | **可執行** | `metafind/models/resolve_stage1.py`。釘死 U-15 文字模板（golden-string 測試）、U-14 取 11 視圖平均、U-11 learned token；**U-34 已判定 `frozen`**，連同 basis 與 confidence 一併記錄，主線再無執行期歧義。25 條測試 |
-| `n07b_procthor_asset_modalities` | **只有規格** | U-08b 判定後新增：ProcTHOR 資產的隔離渲染／深度外殼點雲／文字 |
+| `n07b_procthor_asset_modalities` | **可執行** | `metafind/data/procthor_modalities.py`。AI2-THOR 隔離渲染，相機協定**由 `renders.py` import 而非抄寫**；點雲以 AI2-THOR 自報的 bounding box 驗證反投影 |
 | `n11b_stage2_gallery_index` | **只有規格** | U-08a 判定後新增：用凍結的 Stage 1 塔編碼 ProcTHOR 資產，Stage 2 專屬索引 |
 | `n15a_resolve_eval_scene_protocol` | **只有規格** | U-27：Table 2 的 200 個 I-Design 請求，**仍需人決定** |
 | 其餘 **十九個**節點 | **只有規格** | 無 |
@@ -250,7 +250,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 `metafind/models/`（`essgnn` / `dual_tower` / `fusion` / `losses` / `ulip_backbone` /
 `stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身 ——
 `n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer。
-214 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、場景切分與 Stage 1 編碼協定（pytest 參數化後展開成 271 個 case），**沒有一條涵蓋任何節點的執行**。
+231 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態（pytest 參數化後展開成 290 個 case），**沒有一條涵蓋任何節點的執行**。
 
 ---
 

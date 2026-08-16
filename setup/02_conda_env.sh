@@ -96,7 +96,12 @@ if [[ ! -e "$HOME/.ai2thor" ]]; then
   mkdir -p "${ROOT}/ai2thor"
   ln -s "${ROOT}/ai2thor" "$HOME/.ai2thor"
 fi
-$PIP install "ai2thor>=5.0,<6" prior
+# EXACT, not a range. `>=5.0,<6` would let a rebuild take 5.1 and change the
+# Unity build underneath -- 12,000 houses would still load and headless
+# rendering would still work, while the asset database is no longer 1,934 and
+# F24/F25 are no longer the same experiment. A pin that only holds the major
+# version pins nothing that matters here.
+$PIP install "ai2thor==5.0.0" "prior==1.0.3"
 
 echo "==> 工程支撐：sidecar / progress / 測試"
 $PIP install tqdm orjson pandas pyarrow filelock pytest pytest-xdist rich

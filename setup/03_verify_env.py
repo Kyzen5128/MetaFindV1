@@ -23,6 +23,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import traceback
@@ -44,6 +45,13 @@ _CACHE = REPO / "data" / "cache"
 if _CACHE.parent.exists():
     os.environ.setdefault("HF_HOME", str(_CACHE / "hf"))
     os.environ.setdefault("TORCH_HOME", str(_CACHE / "torch"))
+
+# The exact environment F24 and F25 were measured on. Ranges are not pins: a
+# rebuild that takes ai2thor 5.1 renders fine, loads 12,000 houses, and reports
+# a different asset database, with nothing saying the experiment changed.
+PINNED_AI2THOR = "5.0.0"
+PINNED_THOR_BUILD = "f0825767cd50d69f666c7f282e54abfe58f1e917"
+PINNED_PROCTHOR_REV = "439193522244720b86d8c81cde2e51e3a4d150cf"
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -352,13 +360,20 @@ def t_ai2thor():
     from ai2thor.controller import Controller
     from ai2thor.platform import CloudRendering
 
-    assert ai2thor.__version__.startswith("5."), (
-        f"procthor-10k's current revision needs AI2-THOR 5.0+, got {ai2thor.__version__}"
+    assert ai2thor.__version__ == PINNED_AI2THOR, (
+        f"expected ai2thor {PINNED_AI2THOR}, got {ai2thor.__version__}. "
+        "F24 and F25 are pinned to this build; a different one may render fine and "
+        "still report a different asset database."
     )
 
     thor_home = Path.home() / ".ai2thor"
     assert thor_home.is_symlink(), (
         f"{thor_home} is not a symlink; the ~800MB Unity build would land on /"
+    )
+    builds = [d.name for d in (thor_home / "releases").glob("thor-CloudRendering-*")
+              if d.is_dir()]
+    assert any(b.endswith(PINNED_THOR_BUILD) for b in builds), (
+        f"expected CloudRendering build {PINNED_THOR_BUILD}, found {builds}"
     )
 
     # MEASURED: GetAssetDatabase returns nothing on a hand-authored iTHOR scene
@@ -394,12 +409,22 @@ def t_ai2thor():
 
 @check("L1-ENV-PRIOR  procthor-10k loads at the pinned revision")
 def t_prior():
+    """Split sizes alone are a weak pin -- a revision can change every house and
+    still be 10k/1k/1k. `prior` clones a git repo, so the revision is checkable,
+    and F25's 1,467 assets are a statement about THIS commit."""
     import prior
 
     ds = prior.load_dataset("procthor-10k")
     sizes = {k: len(ds[k]) for k in ("train", "val", "test")}
     assert sizes == {"train": 10000, "val": 1000, "test": 1000}, sizes
-    return f"{sum(sizes.values()):,} houses"
+
+    cache = Path.home() / ".prior" / "datasets" / "allenai" / "procthor-10k" / "cache"
+    assert cache.exists(), f"{cache} missing; cannot verify the dataset revision"
+    rev = json.loads(cache.read_text())["main"]
+    assert rev == PINNED_PROCTHOR_REV, (
+        f"procthor-10k is at {rev}, expected {PINNED_PROCTHOR_REV}"
+    )
+    return f"{sum(sizes.values()):,} houses @ {rev[:12]}"
 
 
 

@@ -22,6 +22,51 @@ level_1:
     expected_on_injection: "AssertionError -- proves the test reads the real width"
     verified_blocks: false
 
+  - id: L1-ENV-THOR
+    target: n01_env_bootstrap
+    target_kind: node
+    asserts: >
+      ai2thor is EXACTLY 5.0.0, the CloudRendering build is exactly
+      f0825767cd50d69f666c7f282e54abfe58f1e917, ~/.ai2thor is a symlink off the
+      root partition, headless CloudRendering returns a frame, and
+      GetAssetDatabase returns a non-empty database. The asset COUNT is reported,
+      not asserted -- U-08c makes it a derived quantity.
+    negative_injection: "pin the version as a range (>=5.0,<6) and rebuild"
+    expected_on_injection: "a later 5.x installs, renders fine, and reports a different asset database with nothing failing"
+    verified_blocks: false
+    note: >
+      Importing ai2thor proves nothing; the Unity build has to run. It fails for
+      reasons an import cannot see -- a missing build, a GPU the runtime refuses,
+      a driver mismatch -- and finding out inside a 1,467-asset render loop is
+      expensive.
+      MEASURED: GetAssetDatabase returns NOTHING on a hand-authored iTHOR scene
+      such as FloorPlan1. It belongs to the procedural API, so the probe must
+      load a ProcTHOR house. The first version of this check used FloorPlan1 and
+      failed -- which also confirmed F25's 1,934 was measured in the right
+      context.
+      The version is exact rather than a range because F24 and F25 are pinned to
+      this build. A range lets a rebuild render fine, load 12,000 houses, report
+      a different asset database, and say nothing.
+
+  - id: L1-ENV-PRIOR
+    target: n01_env_bootstrap
+    target_kind: node
+    asserts: >
+      prior is exactly 1.0.3 and procthor-10k resolves to commit
+      439193522244720b86d8c81cde2e51e3a4d150cf, with splits 10,000 / 1,000 /
+      1,000.
+    negative_injection: "check only the split sizes"
+    expected_on_injection: "a different revision with the same three counts passes"
+    verified_blocks: false
+    note: >
+      Split sizes are a weak pin: a revision can change every house and stay
+      10k/1k/1k. `prior` clones a git repo, so the revision is directly
+      checkable, and F25's 1,467 assets and 93 categories are statements about
+      THIS commit. The loader itself advertises an older revision
+      (ab3cacd0...), which is two commits earlier with the data update between
+      them -- so the two really are different artifacts even though their asset
+      sets happen to match.
+
   - id: L1-ENV-EGNN
     target: n01_env_bootstrap
     target_kind: node
@@ -576,6 +621,39 @@ level_1:
     expected_on_injection: "gallery parameters accumulate gradient"
     verified_blocks: false
     note: "[PAPER 2.6] 'Only the query-side fuser and the ESSGNN module are updated; the gallery encoder is frozen'."
+
+  - id: L1-STAGE2-SAMPLE-CONSTRUCTION
+    target: n13_train_stage2
+    target_kind: node
+    asserts: >
+      The Stage 2 sampler obeys stage2_protocol: the target is absent from the
+      graph the layout encoder receives; every eligible instance of a house is
+      enumerated, not a fixed k; the enumeration is identical across reruns with
+      the same seed; and no contrastive batch contains two samples with the same
+      positive_asset_id.
+    negative_injection: >
+      four, run separately: (1) leave the target in G_context; (2) set
+      samples_per_house to fixed_k; (3) set instance_resampling to per_epoch;
+      (4) let one batch carry the same positive_asset_id twice.
+    expected_on_injection: >
+      (1) the target's own node id appears in the graph handed to ESSGNN;
+      (2) the enumerated sample count no longer matches the eligible instance
+      count; (3) two runs at the same seed produce different sample sets;
+      (4) the batch's positive ids are not unique.
+    verified_blocks: false
+    note: >
+      [U-08d / U-08e] Both decisions were recorded in stage2_protocol and in
+      three documents, and neither was enforceable: nothing read the fields, so
+      a DataLoader could ignore all six and every structural check would stay
+      green. That is the same shape as the U-08a schema drift -- a decision that
+      exists only as a value nobody validates.
+      Injection (1) is the one that matters most and the one that would be
+      hardest to notice afterwards. A target left in G_context makes the loss
+      fall faster, which reads as the model learning.
+      Injection (4) is measurable rather than theoretical: at batch 64, 99.3% of
+      batches drawn from the real frequency distribution contain a duplicate
+      positive, and the duplicate's gallery embedding is bit-identical to the
+      positive's because the encoder is frozen.
 
   - id: L1-STAGE2-QUERY-ENCODERS-FROZEN
     target: n13_train_stage2
@@ -1309,6 +1387,20 @@ level_3_gates:
            equality is the only place that is checkable.)
       AND for every entry of stage2_positive_map, positive_asset_id equals the
           target's own assetId and is present in stage2_gallery_index
+      AND stage2_protocol.sampling_unit == "object_instance"
+          AND target_removed_before_essgnn == true
+          AND samples_per_house == "all_eligible"
+          AND instance_resampling == "fixed"
+          AND epoch_definition is non-empty                       (U-08d)
+          (target_removed_before_essgnn is the load-bearing one: leaving the
+           target in G_context lets the layout encoder see the answer, the loss
+           falls, and nothing downstream distinguishes that from learning.)
+      AND stage2_protocol.batch_positive_uniqueness == true       (U-08e)
+          (665,320 train instances over 1,467 assets. MEASURED: at batch 64,
+           99.3% of batches contain a duplicate positive. A frozen encoder gives
+           one assetId ONE embedding, so a duplicate is a negative that is
+           bit-identical to the positive and the gradient asks the model to
+           separate two identical vectors.)
       AND scene_splits is populated with disjoint train_houses and test_houses
           (house-level leakage_count == 0; moved here from G3, which no longer
            touches the ProcTHOR branch)
@@ -1339,7 +1431,7 @@ level_3_gates:
           physical_relation_encoding, semantic_missing_representation and
           directionality (U-29, U-30, U-19) -- without these the ESSGNN edge
           semantics are decided by whatever essgnn.py happens to do
-    evidence: [L1-STAGE2-POSITIVE-DEFINED, L1-STAGE2-QUERY-ENCODERS-FROZEN, L2-LEAK-SCENE]
+    evidence: [L1-STAGE2-POSITIVE-DEFINED, L1-STAGE2-SAMPLE-CONSTRUCTION, L1-STAGE2-QUERY-ENCODERS-FROZEN, L2-LEAK-SCENE]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G6_stage2_ready.yaml"
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
@@ -1449,7 +1541,7 @@ level_3_gates:
 
 # ==================================================================
 gate_discipline:
-  total_l1: 60
+  total_l1: 63
   total_l2: 18
   total_gates: 7
   rejected_gate_candidates:
