@@ -135,7 +135,28 @@ def assert_matches_code(arch: dict) -> None:
     Stage 2 -- hours after this node. Checking here means a typo in a Literal
     value fails in a second rather than after Stage 1 has trained.
     """
+    import typing
+
+    from metafind.models import essgnn as mod
     from metafind.models.essgnn import ESSGNNConfig
+
+    # MEASURED: comparing the built config's fields against the protocol proves
+    # NOTHING. ESSGNNConfig annotates them with Literal, and a dataclass does not
+    # enforce annotations at runtime -- it stores whatever it is handed, so the
+    # two always match and the check always passes. The first version of this
+    # function did exactly that and accepted distance="l2".
+    #
+    # The vocabularies have to be read off the annotations and compared.
+    hints = typing.get_type_hints(ESSGNNConfig)
+    for field, value in arch.items():
+        hint = hints.get(field)
+        allowed = typing.get_args(hint) if typing.get_origin(hint) is typing.Literal else None
+        if allowed and value not in allowed:
+            raise ValueError(
+                f"essgnn_arch_protocol.{field} = {value!r} is not one of "
+                f"{list(allowed)}. ESSGNNConfig would accept it silently and "
+                "the failure would surface inside Stage 2."
+            )
 
     cfg = ESSGNNConfig.from_protocol(
         {**arch, "status": "resolved"},
@@ -147,13 +168,19 @@ def assert_matches_code(arch: dict) -> None:
                 f"essgnn_arch_protocol.{field} = {arch[field]!r} did not survive "
                 f"ESSGNNConfig, which holds {getattr(cfg, field)!r}"
             )
-    # [U-35] mlp_structure has no config field; assert the code still matches
-    # the string rather than letting the two drift apart silently.
+    # [U-35] mlp_structure has no config field, so the string describes the
+    # code. Assert the description is still true, and refuse any other value --
+    # recording one essgnn.py does not implement is worse than recording none.
     import inspect
-    from metafind.models import essgnn as mod
 
     src = inspect.getsource(mod)
-    if arch["mlp_structure"] == "linear_silu_linear" and "nn.SiLU()" not in src:
+    if arch["mlp_structure"] != "linear_silu_linear":
+        raise ValueError(
+            f"mlp_structure = {arch['mlp_structure']!r}, but essgnn.py builds "
+            "one Linear-SiLU-Linear per MLP and has no field to configure "
+            "anything else"
+        )
+    if "nn.SiLU()" not in src:
         raise ValueError(
             "mlp_structure says linear_silu_linear but essgnn.py no longer "
             "builds SiLU MLPs"

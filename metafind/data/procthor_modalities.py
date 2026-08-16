@@ -108,6 +108,18 @@ DEPTH_DISTANCE_FACTOR = 2.5
 BBOX_RATIO_MIN = 0.5
 BBOX_RATIO_MAX = 3.0
 
+# The ratio alone has the MIRROR of the absolute bound's flaw. Wall_Decor_
+# Painting_6 is 7 mm thick; the shell measured 25 mm, a ratio of 3.4, from an
+# absolute discrepancy of EIGHTEEN MILLIMETRES on an object 0.8 m across. Its
+# other two axes agreed to within 4 mm. Dividing by a near-zero dimension makes
+# depth quantisation look like a catastrophe.
+#
+# So a failure needs BOTH: a ratio outside the band AND a discrepancy that is
+# large relative to the object itself. The orthographic-depth bug cleared both
+# by a wide margin -- 11.06 m of error on a 0.16 m object -- while the painting
+# and the beds clear neither.
+BBOX_ABS_ERROR_FRACTION = 0.25
+
 
 def strip_house(house: dict, asset_id: str) -> dict:
     """A house holding exactly one asset, lifted clear of everything else.
@@ -374,13 +386,18 @@ def _write_asset(asset_id: str, cap: dict, text: str,
         measured = hi - lo
         bbox_err = float(np.abs(measured - reported).max())
         ratio = float((measured / np.maximum(reported, 1e-6)).max())
-    if cloud is not None and not BBOX_RATIO_MIN <= ratio <= BBOX_RATIO_MAX:
-        raise ValueError(
-            f"cloud extent is {ratio:.2f}x the reported bounding box "
-            f"(allowed {BBOX_RATIO_MIN}-{BBOX_RATIO_MAX}); reported "
-            f"{reported.round(3).tolist()}, measured {measured.round(3).tolist()}. "
-            "The unprojection is producing geometry unrelated to the asset."
-        )
+    if cloud is not None:
+        ratio_bad = not BBOX_RATIO_MIN <= ratio <= BBOX_RATIO_MAX
+        scale_bad = bbox_err > BBOX_ABS_ERROR_FRACTION * float(reported.max())
+        if ratio_bad and scale_bad:
+            raise ValueError(
+                f"cloud extent is {ratio:.2f}x the reported bounding box "
+                f"(allowed {BBOX_RATIO_MIN}-{BBOX_RATIO_MAX}) AND the error is "
+                f"{bbox_err:.3f} m against a largest dimension of "
+                f"{reported.max():.3f} m; reported {reported.round(3).tolist()}, "
+                f"measured {measured.round(3).tolist()}. The unprojection is "
+                "producing geometry unrelated to the asset."
+            )
 
     return {
         "asset_id": asset_id,
