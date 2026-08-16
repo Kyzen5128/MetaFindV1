@@ -228,6 +228,34 @@ class ULIPBackbone:
                 p.requires_grad_(True)
             self.model.train()
 
+    def set_train_scope(self, scope: TrainScope) -> None:
+        """Change the scope AFTER construction, re-applying grads and modes.
+
+        Needed because loading a Stage 1 checkpoint and running inference want
+        DIFFERENT scopes on the same object. The checkpoint's point-encoder
+        section can only be restored into a backbone whose point encoder is
+        trainable -- `load_stage1_checkpoint` checks coverage against exactly
+        the `requires_grad` set -- but once restored, the gallery index and
+        Stage 2 must run it frozen and in eval.
+
+        Constructing with the inference scope and restoring afterwards is not an
+        option, and constructing with the training scope and forgetting to
+        switch back is the bug this method exists to make impossible to write:
+        `drop_path_rate` is **0.1** in ULIP-2's PointBERT config, so a point
+        encoder left in train() applies stochastic depth. The gallery index
+        would come out non-deterministic, and nothing downstream checks it.
+        """
+        self.cfg.train_scope = scope
+        self._apply_train_scope()
+
+    def is_frozen(self) -> bool:
+        """True when nothing is trainable AND nothing is in train() mode.
+
+        Both halves matter and only one of them is about gradients.
+        """
+        return (not any(p.requires_grad for p in self.model.parameters())
+                and not any(m.training for m in self.model.modules()))
+
     def trainable_parameters(self) -> list:
         """Exactly the parameters an optimizer should receive."""
         return [p for p in self.model.parameters() if p.requires_grad]

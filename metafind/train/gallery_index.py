@@ -189,6 +189,14 @@ def main() -> int:
                                            train_scope="point_encoder_and_fuser"))
     model, loss_fn = build_model(encoding, training, hyperparameters)
     load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt_record["uri"]))
+    # Restore first, THEN freeze. The checkpoint's point-encoder section can only
+    # land in a backbone whose point encoder is trainable, but the index must be
+    # built with it frozen and in eval: ULIP-2's PointBERT config sets
+    # drop_path_rate=0.1, so a point encoder left in train() applies stochastic
+    # depth and the index comes out non-deterministic. Nothing downstream would
+    # catch that -- the vectors would have the right shape and the wrong values.
+    backbone.set_train_scope("fuser_only")
+    assert backbone.is_frozen(), "the backbone is still trainable or in train mode"
     model.to(args.device).eval()
     model.freeze_gallery(True)
     encoder_sha = gallery_encoder_sha256(backbone, model)

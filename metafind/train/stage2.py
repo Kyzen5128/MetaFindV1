@@ -323,8 +323,20 @@ def freeze_for_stage2(model, backbone) -> dict:
     quietly stop matching what the query side produces.
     """
     model.freeze_gallery(True)
-    for p in backbone.parameters() if hasattr(backbone, "parameters") else []:
-        p.requires_grad_(False)
+    # `backbone` is a ULIPBackbone, which has no `.parameters()` -- the guard
+    # this replaces was `for p in backbone.parameters() if hasattr(...)`, and
+    # since the attribute does not exist the loop iterated over nothing. It read
+    # as a freeze and was a no-op. Harmless only while the backbone was built
+    # with train_scope="fuser_only"; the moment it was built trainable -- which
+    # it must be, to receive Stage 1's point encoder -- the paper's "only the
+    # query-side fusion layer and the ESSGNN module are updated" was violated
+    # silently, and the query point encoder drifted away from the frozen gallery
+    # index for the whole run.
+    backbone.set_train_scope("fuser_only")
+    if not backbone.is_frozen():
+        raise RuntimeError(
+            "the ULIP backbone is still trainable or in train() mode; 2.6 says "
+            "only the query fuser and the ESSGNN are updated in Stage 2")
     for name, p in model.named_parameters():
         trains = name.startswith("query.fusion") or name.startswith("query.layout_encoder") \
             or name.endswith("layout_weight")
