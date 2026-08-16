@@ -185,7 +185,7 @@ unidirectional Stage 1 — because a "fix" here silently changes the reported
 experiment. A symmetric Stage 1 would be a `[DEVIATION]` with its own row.
 
 <a id="c8"></a>
-### C8 — SE(3) is claimed as the answer to *scaling* sensitivity — **MODERATE, new**
+### C8 — SE(3) is claimed as the answer to *scaling* sensitivity — **MODERATE, already registered as RA-4**
 
 `2methdology.tex`, motivating ESSGNN:
 
@@ -203,10 +203,23 @@ appendix proof takes `Q` orthogonal and `g` a translation; a uniform scaling
 `x ↦ sx` changes `\|x_i - x_j\|^2` by `s^2` and the messages change with it.
 
 So the stated motivation names a failure mode the method provably does not
-address. This is not fatal — the claim in the contributions list (rotations and
-shifts) is correct, and only the §2.5 motivation over-reaches — but it forbids
-one thing: **no evaluation of ours may report scale robustness as a reproduced
-property.** Recorded so the claim is not inherited by our reporting.
+address. The contributions list's narrower claim (rotations, global shifts) is
+correct; only the §2.5/§3.4 motivation over-reaches.
+
+**This was already found, before this audit.** `docs/graph/README.md` registers
+it as **RA-4**, from a line-by-line reread of the same passage. The TeX confirms
+the wording and adds nothing. It is listed here so C is complete, not because it
+is new — and the registry's disposition is the better one and is adopted
+unchanged:
+
+> "沒有保證" is not "cannot work". An MLP may still learn behaviour insensitive
+> to scale within its training range. **RA-4 measures how far `e_layout`
+> actually moves; it does not predict.**
+
+An earlier draft of this document said no evaluation of ours may report scale
+robustness. That was stricter than the evidence supports: what is forbidden is
+attributing scale robustness to the SE(3) proof, not measuring whether it
+happens to hold.
 
 ---
 
@@ -253,7 +266,7 @@ Every one is `[IMPLEMENTATION CHOICE]`. **No quantitative result of this
 reproduction may be presented as reproducing the paper's numbers.**
 
 <a id="s5"></a>
-### S5 — two edge types are described, one enters the math
+### S5 — two edge types are described, one enters the math — **registered as U-29**
 
 §2.4 describes the scene graphs as having
 
@@ -268,9 +281,12 @@ text encoder. **The paper never says how physical-relation edges are numerically
 encoded** — whether they contribute their own `e_ij`, share the channel, are
 concatenated, or only determine `\mathcal{N}(i)`.
 
-`UNKNOWN`. The reading that requires no invention is that physical edges define
-the neighbourhood `\mathcal{N}(i)` and semantic edges supply `e_ij`, but the
-paper does not say so and this must not be written as though it did.
+`UNKNOWN`, and **already registered as U-29** in `02_BUILD_STEPS.md` — again
+found before this audit, not by it. `essgnn_edge_protocol` records
+`physical_relation_encoding = "neighbourhood_only"`: physical edges define
+`\mathcal{N}(i)`, semantic edges supply `e_ij`. That is the reading requiring no
+invention, but the paper does not say so and it must not be written as though it
+did.
 
 <a id="s6"></a>
 ### S6 — `t_i` has no stated encoder, and the coordinate output is never consumed

@@ -26,7 +26,7 @@ discovering a corrupt source is that everything built on it is worthless.
 | item | before | after | verdict |
 |---|---|---|---|
 | formula authority | `docs/paper/*_paper.md` (converted) | `docs/paper/*_source/` (arXiv TeX) | `NEEDS_CHANGE` |
-| paper Markdown | "Level 0 authority" | convenience copy, header marks it non-authoritative | `NEEDS_CHANGE` |
+| paper Markdown | "Level 0 authority" | **deleted** — a lossy copy kept for convenience is still a second authority | `OBSOLETE` |
 | `docs/audit/repaired/` | repaired Markdown, treated as source | deleted | `OBSOLETE` |
 | `repair_report.json`, `latex_sanity.json` | repair provenance | deleted; superseded by `formula_inventory_validation.json` | `OBSOLETE` |
 | A/B/C/D | built on repaired Markdown | rebuilt from TeX | `NEEDS_CHANGE` |
@@ -61,7 +61,8 @@ measured deviation with its cause; the TeX changes nothing.
 | 1.4 scene graphs | ProcTHOR, support ∪ adjacency | `VERIFIED` with a caveat, below |
 | 1.5 splits | 80/20 | `VERIFIED` — "In both datasets, we allocate 80% … 20%" |
 
-**Caveat on 1.4 — S5, new this pass.** The TeX describes two edge types:
+**Caveat on 1.4 — S5, which is U-29 and predates this pass.** The TeX describes
+two edge types:
 "(i) physical-relation edges … (ii) semantic-relation edges … obtained by
 prompting an LLM on object pairs". But `MF-2`, `MF-3` and `MF-10` carry exactly
 one edge term, `e_ij`, and both §2.5 and the appendix describe it as the
@@ -125,10 +126,11 @@ settled by it. **Verdict: the decision stands; its label was too strong.**
 | 3.2 equivariance validation | `VERIFIED`, strengthened | now runs on CUDA too; `L ≥ 2` requirement recorded (S6) |
 | 3.3 Table 2 / 3 | `UNRESOLVED` | U-27, below |
 
-**New constraint on 3.2 — C8.** The paper motivates ESSGNN by GAT sensitivity to
-"global translation **and scaling**", but SE(3) contains no scaling. Our
-equivariance validation must not report scale robustness; the contributions
-list's narrower claim (rotations, global shifts) is the one that holds.
+**On 3.2 — C8 is RA-4 and predates this pass.** The paper motivates ESSGNN by
+GAT sensitivity to "global translation **and scaling**", but SE(3) contains no
+scaling. RA-4 already had the right disposition and it stands: **measure how far
+`e_layout` moves under scaling; do not predict, and do not attribute any
+robustness found to the SE(3) proof.**
 
 ---
 
@@ -162,6 +164,9 @@ both were wrong.
 ## E.7 Contradictions: before and after
 
 Every C-entry was re-derived from the TeX. **None was a conversion artifact.**
+Two entries an earlier draft called "new" were not: C8 is RA-4 and S5 is U-29,
+both found by rereading the paper before this audit began. The TeX confirmed
+them; it did not discover them.
 
 | id | before | after |
 |---|---|---|
@@ -172,8 +177,8 @@ Every C-entry was re-derived from the TeX. **None was a conversion artifact.**
 | C5 `N(i)` vs `j ≠ i` | suspected | `VERIFIED` |
 | C6 distance vs squared | suspected | `VERIFIED` — `\|x_i^l - x_j^l\|_2` vs `\|x_i^l - x_j^l\|^2` |
 | C7 Stage 1 asymmetry | suspected | `VERIFIED` |
-| C8 SE(3) vs scaling | — | **NEW**, TeX-only |
-| S5 physical edges | — | **NEW**, TeX-only |
+| C8 SE(3) vs scaling | registered as **RA-4** | `VERIFIED` — the TeX confirms the wording and adds nothing |
+| S5 physical edges | registered as **U-29** | `VERIFIED` — still `UNKNOWN`, as U-29 already said |
 | S6 `t_i` encoder | partial | `VERIFIED` — "a text-derived feature", nothing more |
 | old "Eq. 7a/7b" | treated as the paper's numbering | **corrected** — the TeX has one numbered Eq. (7); the split was the converter's |
 

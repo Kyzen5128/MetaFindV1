@@ -1,7 +1,7 @@
 # MetaFind 復現 — 設計文件
 
 依 `graph-engineering` 方法產出，用於在單張 RTX 4090 上復現
-[MetaFind](../metafind_paper.md)。
+[MetaFind](../paper/metafind_source/)（作者 arXiv TeX）。
 
 **2026-08-15 全面改寫。** 先前的草稿有六個會實際改變實驗結果的錯誤（最嚴重的一個
 把論文列為較差的 ablation 裝成了主線），全部依論文原文逐條核對修正。
@@ -24,10 +24,14 @@
 ### 權威順序（衝突時以上位者為準）
 
 **公式權威：arXiv TeX source > 已發表 PDF > 轉檔 Markdown。**
-`docs/paper/*_paper.md` 是 PDF 轉出來的**便利副本**，公式、維度、符號、
-equation numbering 一律不得以它為依據 —— 轉檔器把 LaTeX 反斜線當成 C 跳脫字元，
-`\frac` 變成換頁符加 rac，`\neq` 變成**真正的換行**（合法字元，控制字元普查抓不到）。
-每個檔案開頭都標了 NON-AUTHORITATIVE。
+
+> **命名提醒：本文件與程式裡的「Eq. 7a／7b」是我們的簡稱，不是論文的編號。**
+> 作者 TeX 只有**一個**編號 (7)，同一式裡並列 q2g 與 g2q；7a/7b 的拆分是
+> PDF 轉檔造成的。當內部簡稱用沒問題，但**不得寫成「論文 Eq. 7a」**。
+PDF 轉出的 Markdown 副本**已刪除**。轉檔器把 LaTeX 反斜線當成 C 跳脫字元，
+`\frac` 變成換頁符加 rac，`\neq` 變成**真正的換行** —— 換行是合法字元，
+控制字元普查抓不到，所以它撐過了兩輪「已修好」。留著一份會靜默出錯的副本，
+就是留一套競爭權威。要看散文請直接讀 `docs/paper/*_source/*.tex`。
 
 ```
 Level 0 — MetaFind 本身（作者 arXiv TeX source）

@@ -4,7 +4,7 @@
 >
 > **權威順序**：`docs/paper/metafind_source/`（作者 arXiv TeX）> `02_BUILD_STEPS.md`（最新決策）
 > 公式逐條見 `docs/audit/A_FORMULA_INVENTORY.md`；矛盾見 `C_PAPER_CONTRADICTIONS.md`。
-> `docs/paper/*_paper.md` 是轉檔副本，**公式非權威**。
+> PDF 轉出的 Markdown 副本已刪除；散文與公式一律讀 `docs/paper/*_source/*.tex`。
 > > `01_GRAPH_SPEC.md` > 三個 YAML > 本文件。
 >
 > F 系列是實測，可信；**D 系列是決策，會隨新事實改變** —— 本文件的 D1/D2 已於 2026-08-15
