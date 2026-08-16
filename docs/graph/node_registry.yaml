@@ -369,6 +369,43 @@ nodes:
       unnormalised open-world coordinates, and pre-centring would remove the
       very global translation the design is meant to be robust to.
 
+  - id: n07b_procthor_asset_modalities
+    role: compute
+    purpose: "Isolated renders, depth-shell point clouds and text for every ProcTHOR asset."
+    decomposition_rationale: [N1_distinct_failure_mode, N7_parallelizable]
+    reads: [procthor_dataset, scene_graphs, procthor_object_text]
+    writes: [procthor_asset_modalities, quarantine, run_progress, cost_ledger]
+    postcondition: >
+      Every admitted assetId carries 11 isolated views under n04's protocol, a
+      depth-shell point cloud, its text, and the ai2thor version, build hash and
+      procthor revision that produced them.
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: natural
+    failure:
+      classes: [DETERMINISTIC_INPUT, RESOURCE]
+      policies:
+        - {class: DETERMINISTIC_INPUT, action: quarantine, max_attempts: 1, record_fields: [asset_id, stage]}
+        - {class: RESOURCE, action: retry, max_attempts: 2, backoff: fixed, on_exhausted: quarantine}
+      partial_failure_semantics: proceed_with_admitted
+      rollback: quarantine_forward
+    notes: >
+      [U-08b RESOLVED] Added because the resolution was otherwise unexecutable:
+      the decision said Stage 2's target is a ProcTHOR asset, and no node
+      produced anything a query encoder could read.
+      MEASURED (F24): the recipe is not obvious. A ProcTHOR house must be
+      stripped of doors, windows, walls and ceilings AND the asset lifted clear
+      of the floor, or the floor plane fills the frame and slices the object.
+      The working probe is tools/probes/thor_isolated_render_probe.py.
+      Images follow n04's protocol exactly -- 11 orbital views, orthographic,
+      224x224, white background -- so the two sides are comparable. The point
+      cloud is NOT n03's: a depth shell from those same views carries visible
+      geometry only, and the provenance field exists so no reader can mistake
+      the two.
+      [U-08c] The asset set is derived from the installed build, never from a
+      published figure. Which set -- the 1,467 that appear in the houses or the
+      1,934 in the asset database -- is U-08d and must be recorded per run.
+
   - id: n08_semantic_edges
     role: subgraph
     purpose: "LLM relation sentences between objects, encoded into edge features."
@@ -481,18 +518,21 @@ nodes:
 
   - id: n09b_resolve_stage2_protocol
     role: human
-    purpose: "Resolve every blocking Stage 2 protocol: the gallery positive and its modalities, the ESSGNN edge semantics, and the ESSGNN architecture."
+    purpose: "Materialise the resolved Stage 2 protocol into the channels n13 reads."
     decomposition_rationale: [N5_gate_point, N1_distinct_failure_mode]
     reads: [scene_graphs, asset_manifest, procthor_object_text, objaverse_annotations]
-    writes: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, run_progress]
+    writes: [stage2_protocol, stage2_positive_map, essgnn_edge_protocol, essgnn_arch_protocol, run_progress]
     precondition: "G3_object_corpus verdict == PASS"
     postcondition: >
-      stage2_protocol.status == resolved, naming both the pairing method and the
-      modality source; stage2_pairing populated accordingly.
+      stage2_protocol.status == resolved with gallery_scope == procthor and
+      positive_identity == same_asset_id; stage2_positive_map holds one entry per
+      admitted ProcTHOR asset whose positive_asset_id IS that asset's own id,
+      method == identity. Nothing here invents a decision -- it writes down what
+      U-08a and U-08b already recorded, in the form n13 can read.
     deterministic: false
     idempotent: false
     idempotency_mechanism: N/A
-    idempotency_note: "A human decision; recorded once and thereafter immutable via stage2_pairing's write_once."
+    idempotency_note: "A human decision; recorded once and thereafter immutable via stage2_positive_map's write_once."
     failure:
       classes: [HUMAN_RECOVERABLE]
       policies:
@@ -500,23 +540,32 @@ nodes:
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
-      [U-08a / U-08b -- BLOCKING] Split out from n09_build_splits deliberately.
-      An earlier draft had n09 write stage2_pairing as write_once while the
-      answer was still unknown, so writing an empty mapping would have locked the
-      channel before the decision existed.
-      The paper never states how a ProcTHOR target object corresponds to a
-      gallery entry, and measurement shows the two identifier spaces do not
-      intersect at all (995 ProcTHOR assetIds against 46,052 Objaverse uids,
-      empty intersection). Nor does it say where the target's text, image and
-      point cloud come from, since ProcTHOR ships metadata and coordinates only.
-      Both are decisions, not derivations, so a person makes them and they are
-      reported as choices.
+      [U-08a / U-08b RESOLVED 2026-08-16] This node no longer DECIDES anything.
+      It materialises:
+        gallery_scope        procthor
+        positive_identity    same_asset_id
+        method               identity
+        modality_source      ai2thor_isolated
+        image_protocol       n04-compatible, 11 orbital views, orthographic, 224px
+        pointcloud_source    multiview_depth_shell
+        query_pointcloud     optional
+      [WHY IT STILL EXISTS] Split out from n09_build_splits because an earlier
+      draft had n09 write the positive map as write_once while the answer was
+      unknown, so an empty mapping would have locked the channel before the
+      decision existed. That hazard is unchanged; something must fill a
+      write_once channel deliberately.
+      [WHAT THE OLD NOTE SAID] It called the positive undefined because the
+      ProcTHOR and Objaverse identifier spaces do not intersect. The measurement
+      is still true; the conclusion was ours, not the paper's. 2.6 freezes the
+      gallery ENCODER's weights and Eq. 7a/7b sum over the batch, so nothing
+      required the Stage 2 index to be Objaverse. Under gallery_scope = procthor
+      the intersection is irrelevant.
 
   - id: G6_stage2_ready
     role: evaluate
     purpose: "Refuse to train Stage 2 until its positive, its modalities and its scene corpus are all in place."
     decomposition_rationale: [N5_gate_point]
-    reads: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits, stage1_protocol]
+    reads: [stage2_protocol, stage2_positive_map, procthor_asset_modalities, stage2_gallery_index, stage1_ckpt, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits, stage1_protocol]
     writes: [gate_records, run_progress]
     postcondition: "gate_record with is_terminal=true"
     deterministic: true
@@ -681,6 +730,36 @@ nodes:
       embeddings let argmax return either id, so a correct index can score below
       1.0 and a broken one can reach it.
 
+  - id: n11b_stage2_gallery_index
+    role: model
+    purpose: "Encode the ProcTHOR assets with the FROZEN Stage 1 gallery tower."
+    decomposition_rationale: [N4_independent_observability, N5_gate_point]
+    reads: [procthor_asset_modalities, stage1_ckpt, stage1_encoding_protocol, pretrained_weights]
+    writes: [stage2_gallery_index, run_progress, cost_ledger]
+    postcondition: >
+      stage2_gallery_index.gallery_encoder_sha256 equals the Stage 1 checkpoint's
+      gallery tower hash, and every admitted assetId has an embedding.
+    deterministic: true
+    idempotent: true
+    idempotency_mechanism: natural
+    failure:
+      classes: [RESOURCE, DETERMINISTIC_INPUT]
+      policies:
+        - {class: RESOURCE, action: retry, max_attempts: 2, backoff: fixed, on_exhausted: HALT_BLOCKED}
+        - {class: DETERMINISTIC_INPUT, action: quarantine, max_attempts: 1, record_fields: [asset_id, missing_modality]}
+      partial_failure_semantics: proceed_with_admitted
+      rollback: quarantine_forward
+    notes: >
+      Separate from n11/n12, which build Stage 1's OBJAVERSE index -- Table 1's
+      protocol must not move, so the two indices never merge.
+      Runs after n10 because 2.6 freezes the gallery encoder DURING Stage 2,
+      which means the weights that produce this index are Stage 1's final ones.
+      Recording gallery_encoder_sha256 is what makes that checkable: an index
+      built by a drifted encoder trains the model against embeddings it will
+      never produce at inference, and no term in the loss would show it.
+      Modality-complete by 2.6, unlike the query side which may drop the point
+      cloud.
+
   - id: n12_promote_index
     role: mutate
     purpose: "Late commit of the artifact every downstream evaluation reads."
@@ -706,9 +785,10 @@ nodes:
     purpose: "Layout-aware fine-tuning of the fuser and ESSGNN."
     decomposition_rationale: [N3_checkpoint_needed, N6_side_effects, N8_reusable]
     reads: [stage1_ckpt, scene_graphs, sem_edge_cache, procthor_object_text,
-            stage2_protocol, stage2_pairing, essgnn_edge_protocol,
-            essgnn_arch_protocol, pointclouds, post_stage1_embeddings, splits,
-            scene_splits, split_seed, variant_registry, pretrained_weights]
+            procthor_asset_modalities, stage2_gallery_index,
+            stage2_protocol, stage2_positive_map, essgnn_edge_protocol,
+            essgnn_arch_protocol, scene_splits, split_seed,
+            variant_registry, pretrained_weights]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger, degraded_flags]
     precondition: "G3_object_corpus verdict == PASS; stage1_ckpt exists; G6_stage2_ready verdict == PASS (stage2_protocol.status == resolved AND essgnn_edge_protocol.status == resolved AND scene_splits valid)"
     postcondition: >
@@ -811,7 +891,7 @@ nodes:
 
   - id: n15b_resolve_composition_protocol
     role: human
-    purpose: "Decide where Algorithm 1's G_0 and query list come from, and what placing an asset does to the graph."
+    purpose: "Materialise the resolved composition protocol for Algorithm 1."
     decomposition_rationale: [N5_gate_point, N1_distinct_failure_mode]
     reads: [scene_graphs, gallery_index, stage2_protocol]
     writes: [composition_protocol, run_progress]
@@ -831,19 +911,30 @@ nodes:
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
-      [U-21 -- BLOCKING] Paper 3.3 evaluates "on the scene generation pipeline of
-      I-Design on a set of 200 randomly sampled scenes". An earlier draft had n16
-      read `scene_graphs`, which holds ProcTHOR houses. A ProcTHOR house is a
-      finished layout; Algorithm 1 needs a generation request. The Table 2
-      dataflow was therefore never closed, and no gate noticed because no channel
-      for I-Design output existed.
-      [U-18 -- BLOCKING] Algorithm 1 line 7 says only "Place A*_i into the scene,
-      update scene graph". Line 3 of the next iteration calls ESSGNN(G). For that
-      to be defined, the placed node needs t_i, a position, an orientation, a
-      scale, physical edges and semantic edges. The paper specifies none of it,
-      and the choice changes every subsequent retrieval in the sequence.
-      Same discipline as n09b: the decision is a person's, held in a mutable
-      channel until made, then committed.
+      [U-18 / U-21 RESOLVED 2026-08-16] Materialises rather than decides.
+        source              idesign_generated   (Reading B)
+        g0_source           already_placed_objects
+        query_list_source   idesign_planner
+        placement_rule      idesign_slot
+        new_node_t_i        retrieved_asset_annotation
+      [U-21] 3.3 names "the scene generation pipeline of I-Design", and our own
+      wrapper confirms the interface: tools/idesign_generate.py calls
+      IDesign(no_of_objects, user_input, room_dimensions) -- a prompt and room
+      dimensions, with nothing that accepts a ProcTHOR house. Under Reading B,
+      3.1 and 3.3 describe different stages and stop conflicting. "randomly
+      sampled scenes" leans toward Reading A but never says sampled FROM
+      ProcTHOR, so it cannot settle it. Reading A survives only as a
+      leave-one-out diagnostic and is NOT reported as Table 2.
+      [U-18] The layout source owns the slot; the retriever never invents
+      placement. Writing our own placement rule would make Table 2 measure
+      MetaFind retrieval plus our placement algorithm, and the aesthetic and
+      coherence scores could not be attributed to retrieval. t_i is the
+      RETRIEVED asset's annotation because 2.1 defines nodes as EXISTING
+      objects: after line 7, the retrieved asset is what exists. Keeping the
+      query text would describe the scene someone wanted, not the one there.
+      [WHY IT STILL EXISTS] This channel is the only thing stopping n16 from
+      reading `scene_graphs` -- ProcTHOR houses -- as generation requests, which
+      is what an earlier draft did with no gate noticing.
 
   - id: G7_composition_protocol
     role: evaluate
@@ -974,8 +1065,9 @@ nodes:
     purpose: "Train the Table 3 variants that are genuinely different models."
     decomposition_rationale: [N7_parallelizable, N8_reusable]
     reads: [variant_registry, stage1_ckpt, splits, scene_splits, scene_graphs,
-            sem_edge_cache, procthor_object_text, stage1_protocol, stage2_protocol,
-            stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol,
+            sem_edge_cache, procthor_object_text, procthor_asset_modalities,
+            stage2_gallery_index, stage1_protocol, stage2_protocol,
+            stage2_positive_map, essgnn_edge_protocol, essgnn_arch_protocol,
             pointclouds, post_stage1_embeddings, split_seed, stage1_hyperparameters, pretrained_weights]
     writes: [variant_ckpts, variant_status, run_progress, cost_ledger]
     precondition: "headline numbers exist; variant.requires_training is true"

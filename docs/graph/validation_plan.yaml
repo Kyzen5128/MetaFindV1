@@ -484,19 +484,30 @@ level_1:
       which is why this compares against parameters.
 
   - id: L1-STAGE2-POSITIVE-DEFINED
-    target: stage2_pairing
+    target: stage2_positive_map
     target_kind: channel
     asserts: >
-      Every ProcTHOR asset used as a Stage 2 target resolves to exactly one
-      gallery entry, with the mapping method recorded.
-    negative_injection: "train Stage 2 with an empty stage2_pairing"
-    expected_on_injection: "the loss has no positive and the stage refuses to start"
+      For every Stage 2 sample: positive_asset_id == the target's own assetId;
+      that id is present in stage2_gallery_index; its embedding loads; and it is
+      locatable within the batch. On the main line gallery_scope == procthor and
+      method == identity.
+    negative_injection: "set Fridge_19's positive to Chair_007"
+    expected_on_injection: "the identity assertion fails immediately"
     verified_blocks: false
     note: >
-      [U-08a] Measured: ProcTHOR assetIds and Objaverse uids have zero overlap
-      (995 vs 46,052 ids, empty intersection). Without this mapping Eq. 7a/7b is
-      undefined. This test exists so the gap fails loudly rather than being
-      papered over with a silent fallback.
+      [REWRITTEN 2026-08-16, U-08a] The previous version asserted that every
+      ProcTHOR asset "resolves to exactly one GALLERY ENTRY, with the mapping
+      method recorded", and injected an empty map. It was verifying a
+      cross-dataset correspondence that the resolution removed: the positive is
+      the target itself, so there is no mapping left to get wrong.
+      The empty-map injection was also weak -- it tests that a required channel
+      is non-empty, which any schema check already catches. Pointing a positive
+      at a DIFFERENT asset is the failure that can actually happen and that
+      nothing else would see: every count and every shape stays valid while the
+      model is trained to retrieve the wrong object.
+      The three existence clauses are separate from identity on purpose.
+      "Fridge_19's positive is Fridge_19" is satisfiable by an id that was never
+      encoded, and the loss then has a name with no vector behind it.
 
   # ---- channels
   - id: L1-MERGE-COMM
@@ -1267,20 +1278,37 @@ level_3_gates:
     gate_class: G-INVALID
     justification: >
       "If we carry this error forward, does the conclusion still hold?" -- no.
-      Eq. 7a/7b needs a gallery positive for the target object, and the target is
-      a ProcTHOR object while the gallery is Objaverse-LVIS. Measurement shows
-      the identifier spaces do not intersect at all: 995 ProcTHOR assetIds
-      against 46,052 Objaverse uids, empty intersection. Training Stage 2 with an
-      undefined or silently defaulted positive makes every Table 2 and Table 3
-      number meaningless, and nothing in the output would show it.
+      Eq. 7a/7b needs a gallery positive for the target object, and training
+      Stage 2 with an undefined or silently defaulted positive makes every Table
+      2 and Table 3 number meaningless with nothing in the output to show it.
+      [REFRAMED 2026-08-16] U-08a and U-08b are RESOLVED, so this gate no longer
+      waits for a decision -- it verifies the decision was IMPLEMENTED. That is
+      a different and harder question: the resolution can be recorded in every
+      document and still leave n13 with no ProcTHOR modalities to encode, no
+      Stage 2 index to look a positive up in, and no way to tell whether the
+      index was built by the frozen encoder or a drifted one. A protocol that
+      exists only as prose is exactly what this gate now catches.
     record_kind: gate
     position: "between n09b_resolve_stage2_protocol and n13_train_stage2"
     criterion: >
       stage2_protocol.status == "resolved"
-      AND pairing_method is named and recorded
-      AND modality_source is named and recorded
-      AND every ProcTHOR asset used as a Stage 2 target resolves to exactly one
-          gallery entry in stage2_pairing
+      AND stage2_protocol.gallery_scope == "procthor"
+          AND stage2_protocol.positive_identity == "same_asset_id"   (U-08a)
+      AND stage2_protocol.modality_source == "ai2thor_isolated"      (U-08b)
+      AND procthor_asset_modalities is populated: every admitted assetId carries
+          its text, its 11 isolated views and its depth-shell point cloud, each
+          stamped with the ai2thor version, build hash and procthor revision
+      AND stage2_gallery_index exists, its asset_ids cover every Stage 2 target,
+          and its n_assets was DERIVED from the installed build rather than
+          taken from any published figure (U-08c)
+      AND stage2_gallery_index.gallery_encoder_sha256 == the Stage 1 checkpoint's
+          gallery tower hash
+          (2.6 freezes the gallery encoder DURING Stage 2. An index built by a
+           drifted encoder trains the model against embeddings it will never
+           produce at inference, and no term in the loss would reveal it. The
+           equality is the only place that is checkable.)
+      AND for every entry of stage2_positive_map, positive_asset_id equals the
+          target's own assetId and is present in stage2_gallery_index
       AND scene_splits is populated with disjoint train_houses and test_houses
           (house-level leakage_count == 0; moved here from G3, which no longer
            touches the ProcTHOR branch)
@@ -1315,7 +1343,11 @@ level_3_gates:
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G6_stage2_ready.yaml"
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
-    on_fail: "Decide U-08a and U-08b, record the method, then re-run. Never fall back to a silent default positive."
+    on_fail: >
+      Do NOT re-decide U-08a or U-08b -- they are resolved. Find which part of
+      the resolution was not built: the protocol record, the ProcTHOR modality
+      artifact, the Stage 2 index, or the encoder-hash equality. Never fall back
+      to a silent default positive.
     on_blocked_evidence: >
       Unresolved is rc=3, not rc=2: nothing is broken, a decision is outstanding.
       Everything upstream of Stage 2 continues.

@@ -195,7 +195,10 @@ for g in plan["level_3_gates"]:
 # reader is most likely to mistake specification completeness for.
 readme_txt = (DOCS / "README.md").read_text()
 non_gate = [n for n in registry["nodes"] if not n["id"].startswith("G")]
-m = re.search(r"28 個非 gate 節點裡，\*\*有程式的是 (\d+) 個\*\*", readme_txt)
+# Both numbers come from the heading; hardcoding either one here meant that
+# adding a node broke the check with a NameError instead of a message saying
+# the count had moved.
+m = re.search(r"(\d+) 個非 gate 節點裡，\*\*有程式的是 (\d+) 個\*\*", readme_txt)
 check("README implementation-status heading present", m is not None,
       "the status table's heading changed shape; update this check with it")
 if m:
@@ -209,10 +212,10 @@ if m:
     # node id is not an implementation of it, and the first version of this
     # check counted three such comments as working code.
     implemented = re.findall(r"^# IMPLEMENTS-NODE: (\S+)$", src, re.M)
-    check("README non-gate node count", len(non_gate) == 28,
-          f"table says 28, registry has {len(non_gate)}")
-    check("README implemented-node count", len(implemented) == int(m.group(1)),
-          f"table says {m.group(1)}, filesystem shows {len(implemented)}: {sorted(implemented)}")
+    check("README non-gate node count", len(non_gate) == int(m.group(1)),
+          f"table says {m.group(1)}, registry has {len(non_gate)}")
+    check("README implemented-node count", len(implemented) == int(m.group(2)),
+          f"table says {m.group(2)}, filesystem shows {len(implemented)}: {sorted(implemented)}")
 
 _ru = spec["risks_unknowns"]
 _ru_items = _ru["unknowns"] if isinstance(_ru, dict) else _ru
@@ -253,6 +256,41 @@ for u in _u_entries:
     check(f"{u['id']} confidence vocabulary",
           u.get("confidence") in ("low", "moderate", "high"),
           f"{u['id']} confidence is {u.get('confidence')!r}, not low|moderate|high")
+
+# The machine spec itself must not still describe a resolved item as open.
+# This is the check the U-08a migration needed and did not have: the registry
+# said RESOLVED while `stage2_pairing`'s type was still
+# `{gallery_uid, method, confidence}` -- a schema encoding the very
+# ProcTHOR-to-Objaverse mapping the decision had removed. 1,949 structural
+# checks passed, because a channel's TYPE agreeing with its own readers says
+# nothing about whether it agrees with a decision recorded elsewhere.
+_STALE = re.compile(r"(UNKNOWN\s+(U-[0-9a-z]+)|\b(U-[0-9a-z]+)\s*--\s*BLOCKING)")
+for name, c in channels.items():
+    blob = f"{c.get('type','')} {c.get('note','')}"
+    for m in _STALE.finditer(blob):
+        uid = m.group(2) or m.group(3)
+        check(f"channel {name} does not call {uid} unknown",
+              uid not in resolved_ids,
+              f"channel `{name}` still marks {uid} as UNKNOWN/BLOCKING, "
+              f"but the registry resolved it")
+for nid, n in all_nodes.items():
+    blob = f"{n.get('notes','')} {n.get('postcondition','')} {n.get('purpose','')}"
+    for m in _STALE.finditer(blob):
+        uid = m.group(2) or m.group(3)
+        check(f"node {nid} does not call {uid} unknown",
+              uid not in resolved_ids,
+              f"node `{nid}` still marks {uid} as UNKNOWN/BLOCKING, "
+              f"but the registry resolved it")
+for item in plan["level_1"] + plan["level_2"] + plan["level_3_gates"]:
+    blob = " ".join(str(v) for v in item.values())
+    label = item.get("id") or item.get("gate_id")
+    for m in _STALE.finditer(blob):
+        uid = m.group(2) or m.group(3)
+        check(f"validation {label} does not call {uid} unknown",
+              uid not in resolved_ids,
+              f"{label} still marks {uid} as UNKNOWN/BLOCKING, "
+              f"but the registry resolved it")
+
 
 # Prose must not still call a resolved item open. This is the check that would
 # have caught the c43c72e half-migration on its own: the registry said RESOLVED

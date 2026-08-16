@@ -775,15 +775,38 @@ ProcTHOR 原論文 PDF 過大無法直接抓取、摘要沒給資產數，
 （`CounterTop|2|0` → `CounterTop`）推出來的，那**不見得等同 ProcTHOR 官方的
 category taxonomy**。這可能是量法差異而非矛盾，在確認 taxonomy 定義前不要當成發現。
 
-### 為什麼這件事現在變重要
+### 這個數字**不是** Eq. 7 的分母 —— 我一度寫錯，這裡更正
 
-U-08a 判定「Stage 2 用獨立的 ProcTHOR gallery」之後，**這個數字就是 Eq. 7a/7b
-分母的規模** —— 也就是對比損失的負樣本池。1,467 個候選比 Stage 1 的 46,052 個
-容易得多，Stage 2 的訓練訊號因此明顯較弱，而這會直接反映在 Table 2。
+我原本寫「1,467 就是 Eq. 7a/7b 分母的規模，也就是負樣本池」。**那是錯的。**
+論文 Eq. 5 下方明寫「`B` denotes the gallery **batch**」，Eq. 7a/7b 的分母同樣是
+`Σ_{e' ∈ B}` —— **in-batch negatives**。batch size 相同時，每一步看到的負樣本數
+不會因為資產庫從 3,000 變成 1,467 而減半。
 
-**所以規則是：資產數一律從安裝的 build 現場推導，連同版本一起記錄，
-不得寫死任何一個已發表的數字 —— 包括論文的 3,000+ 和 ProcTHOR 的 1,633。**
-這條登記為 U-08c。
+**而這個專案早就記錄過正確的事實**（見上文 F 系列：「Eq.(5) 的分母 `Σ_{A' ∈ B}`
+是 in-batch negatives —— 對比學習的檢索品質高度依賴 batch size」）。
+我不是遺漏了一個沒人查過的細節，是**寫出了與自己既有紀錄相反的話**，
+而 1,949 項檢查沒有一項看得到這種矛盾 —— 它們驗結構，不驗論述。
+
+**資產庫大小真正影響的是別的東西**，而且都無法定量推回 Table 2：
+
+| | 影響 |
+|---|---|
+| 負樣本多樣性 | 1,467 個 identity 抽 batch，重複得比 3,000 個頻繁 |
+| hard negative 出現率 | 資產越多，越容易出現視覺／語意相近的 chair A / chair B |
+| 目標覆蓋率 | 每個 asset identity 被看到的次數 |
+| sampling dynamics | epoch 長度、positive／negative 重複頻率 —— 而論文沒給 batch size、epoch 或 sampling recipe |
+
+**所以正確的說法是**：在本復現採用的 U-08a protocol 下，1,467 是 Stage 2 實際
+可觀測的**資產 identity universe**，不是 Eq. 7 每一步的負樣本數。
+Table 2 仍可與論文對照，但**不能宣稱 protocol 完全相同** ——
+影響程度標為 **MODERATE，方向未知**。
+
+### 還有一步推論不能做
+
+「MetaFind 說 3,000 → 所以作者的 Stage 2 gallery 就是 3,000」——**這一步不成立**。
+論文只說了 ProcTHOR 上做 Stage 2、gallery encoder 凍結、loss 用 batch negatives；
+**它從未說「把 ProcTHOR 全部 unique assets 建成一個 Stage 2 gallery」**。
+那是 U-08a 的復現選擇，是我們的，不是它的。
 
 ## 由 F1–F13 推導出的三個架構決策
 

@@ -296,7 +296,7 @@ state:
     - name: pretrained_weights
       type: "map[name -> {uri, sha256, revision, behavioural_check: {probe, expected, observed, passed}}]"
       writers: [n02_download]
-      readers: [G1_sources_valid, n06_encode_text_image, n10_train_stage1, n10b_post_stage1_encode, n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations, n22_publish_report]
+      readers: [G1_sources_valid, n06_encode_text_image, n10_train_stage1, n10b_post_stage1_encode, n11_gallery_index_staging, n11b_stage2_gallery_index, n13_train_stage2, n15_eval_retrieval, n18_train_ablations, n22_publish_report]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -315,7 +315,7 @@ state:
     - name: procthor_dataset
       type: "{path, sha256, train_count, val_count, test_count}"
       writers: [n02_download]
-      readers: [G1_sources_valid, n07_scene_graphs, n09c_build_scene_splits, n15c_prepare_eval_scenes]
+      readers: [G1_sources_valid, n07_scene_graphs, n07b_procthor_asset_modalities, n09c_build_scene_splits, n15c_prepare_eval_scenes]
       merge: write_once
       lifetime: persistent
       note: >
@@ -328,7 +328,7 @@ state:
     - name: pointclouds
       type: "map[uid -> {path, sha256, n_points, seed, sampler_version, rgb_scale, colour_source, coloured_point_fraction, raw_bbox_extents, raw_bbox_volume, centroid_offset, max_radius, per_axis_variance}]"
       writers: [n03_sample_pointclouds]
-      readers: [G2_pc_sanity, n09_build_splits, n10_train_stage1, n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations, n19_eval_ablations]
+      readers: [G2_pc_sanity, n09_build_splits, n10_train_stage1, n11_gallery_index_staging, n15_eval_retrieval, n18_train_ablations, n19_eval_ablations]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -373,7 +373,7 @@ state:
     - name: procthor_object_text
       type: "map[procthor_asset_id -> {text, source}]"
       writers: [n07_scene_graphs]
-      readers: [n08_semantic_edges, n09b_resolve_stage2_protocol, n09c_build_scene_splits, n13_train_stage2, n18_train_ablations]
+      readers: [n07b_procthor_asset_modalities, n08_semantic_edges, n09b_resolve_stage2_protocol, n09c_build_scene_splits, n13_train_stage2, n18_train_ablations]
       merge: upsert_by_key
       lifetime: persistent
       note: >
@@ -413,7 +413,7 @@ state:
     - name: scene_graphs
       type: "map[house_id -> {nodes, positions, phys_edges, sem_edge_ids, uri}]"
       writers: [n07_scene_graphs]
-      readers: [n08_semantic_edges, n09b_resolve_stage2_protocol, n09c_build_scene_splits, n13_train_stage2, n14_equivariance_probe, n15b_resolve_composition_protocol, n15c_prepare_eval_scenes, n18_train_ablations]
+      readers: [n07b_procthor_asset_modalities, n08_semantic_edges, n09b_resolve_stage2_protocol, n09c_build_scene_splits, n13_train_stage2, n14_equivariance_probe, n15b_resolve_composition_protocol, n15c_prepare_eval_scenes, n18_train_ablations]
       merge: upsert_by_key
       lifetime: persistent
 
@@ -433,7 +433,7 @@ state:
     - name: post_stage1_embeddings
       type: "{query: map[uid -> {text: uri, image: uri | list[uri] per view, aggregation, n_views}], gallery: map[uid -> same], towers_are_identical: bool, source: cache_passthrough|reencoded, produced_from_ckpt_sha}"
       writers: [n10b_post_stage1_encode]
-      readers: [n11_gallery_index_staging, n13_train_stage2, n15_eval_retrieval, n18_train_ablations, n19_eval_ablations]
+      readers: [n11_gallery_index_staging, n15_eval_retrieval, n18_train_ablations, n19_eval_ablations]
       merge: replace
       lifetime: persistent
       note: >
@@ -458,7 +458,7 @@ state:
     - name: stage1_encoding_protocol
       type: "{status: unresolved|resolved, text_serialization, image_aggregation, paper_clip_train_scope: frozen|trainable, paper_clip_train_scope_basis, paper_clip_train_scope_confidence: low|moderate|high, actual_clip_train_scope: frozen|trainable, missing_modality_representation: learned_token|validity_mask|drop_slot, decided_by, decided_at}"
       writers: [n05b_resolve_stage1_encoding]
-      readers: [G3_object_corpus, n06_encode_text_image, n10_train_stage1, n10b_post_stage1_encode, n11_gallery_index_staging, n15_eval_retrieval, n21_compare_to_paper]
+      readers: [G3_object_corpus, n06_encode_text_image, n10_train_stage1, n10b_post_stage1_encode, n11_gallery_index_staging, n11b_stage2_gallery_index, n15_eval_retrieval, n21_compare_to_paper]
       merge: replace
       lifetime: persistent
       note: >
@@ -604,49 +604,99 @@ state:
           directionality                  U-19: directed or symmetric, per edge type
 
     - name: stage2_protocol
-      type: "{status: unresolved|resolved, pairing_method, modality_source, scene_dropout_granularity: batch|sample, decided_by, decided_at}"
+      type: "{status: unresolved|resolved, gallery_scope: procthor|objaverse, positive_identity: same_asset_id|mapped, modality_source: ai2thor_isolated|objaverse_proxy, image_protocol, pointcloud_source, query_pointcloud: required|optional, scene_dropout_granularity: batch|sample, decided_by, decided_at}"
       writers: [n09b_resolve_stage2_protocol]
       readers: [G6_stage2_ready, n13_train_stage2, n15b_resolve_composition_protocol, n18_train_ablations]
       merge: replace
       lifetime: persistent
       note: >
-        [U-08a / U-08b / U-32] Holds the decision itself, and stays mutable
-        until it is made. scene_dropout_granularity is here rather than in
-        stage1_protocol because scene dropout is a Stage 2 mechanism. The
-        faithful reading of "omitted in 30% of batches" is `batch`, and that is
-        now the implementation's primary; `sample` remains available as an
-        explicit variant rather than an equally faithful alternative. An earlier draft had n09_build_splits write stage2_pairing as
-        write_once while U-08a was still open -- writing an empty mapping would
-        have locked the channel before the answer existed. The decision is now
-        its own node, and only once status == resolved is the mapping committed.
+        [U-08a / U-08b RESOLVED 2026-08-16] Main line: gallery_scope = procthor,
+        positive_identity = same_asset_id, modality_source = ai2thor_isolated,
+        image_protocol = n04-compatible, pointcloud_source =
+        multiview_depth_shell, query_pointcloud = optional.
+        [FIELDS RENAMED] `pairing_method` was the single field describing how a
+        ProcTHOR target reached an Objaverse gallery entry. There is no pairing
+        under the resolution -- the positive is the target -- so the field named
+        an operation that no longer happens, and G6 could not state what it
+        needed to check. `gallery_scope` and `positive_identity` say the two
+        things that actually vary, and the enums keep the rejected readings
+        expressible so an ablation can record one and be seen to differ.
+        `query_pointcloud: optional` is 2.4's "any subset of modalities" applied
+        to the one modality whose ProcTHOR version is not equivalent to the
+        gallery's: n03 samples a complete mesh, the ProcTHOR side is a
+        visible-hull depth shell, and the gallery encoder is frozen so PointBERT
+        cannot adapt to the shift.
 
-    - name: stage2_pairing
-      type: "map[procthor_asset_id -> {gallery_uid, method, confidence}]"
+    - name: procthor_asset_modalities
+      type: "map[procthor_asset_id -> {text, view_paths, view_bytes, pointcloud_uri, n_points, provenance: {ai2thor_version, build_hash, procthor_revision}}]"
+      writers: [n07b_procthor_asset_modalities]
+      readers: [G6_stage2_ready, n11b_stage2_gallery_index, n13_train_stage2, n18_train_ablations]
+      merge: upsert_by_key
+      lifetime: persistent
+      note: >
+        [U-08b RESOLVED 2026-08-16] The Stage 2 target's three modalities.
+        Without this channel the resolution was a sentence in a document: n13
+        would have had no way to obtain e_query for a ProcTHOR asset, and
+        "Fridge_19 -> Fridge_19" would have named a positive nobody could encode.
+        MEASURED (F24): AI2-THOR renders one asset in isolation under n04's
+        protocol -- 11 orbital views, orthographic, 224x224, white background --
+        once the house is stripped of doors, windows, walls and ceilings and the
+        asset is lifted clear of the floor.
+        The point cloud is NOT equivalent to n03's. n03 samples a complete mesh
+        surface; this is a depth shell back-projected from the same 11 views, so
+        it carries visible geometry only. The gallery encoder is frozen, so
+        PointBERT cannot adapt to that shift -- which is why the query side may
+        omit the point cloud entirely (2.4 permits any modality subset) and why
+        `provenance` travels with every entry.
+
+    - name: stage2_gallery_index
+      type: "{uri, sha256, n_assets, asset_ids, embedding_dim, gallery_encoder_sha256, modality_completeness}"
+      writers: [n11b_stage2_gallery_index]
+      readers: [G6_stage2_ready, n13_train_stage2, n18_train_ablations]
+      merge: write_once
+      lifetime: persistent
+      note: >
+        [U-08a RESOLVED] The index Eq. 7a/7b actually reads. Separate from
+        `gallery_index`, which is Stage 1's Objaverse index and stays exactly as
+        it is -- Table 1's protocol must not move.
+        `gallery_encoder_sha256` is the point of the channel: 2.6 says the
+        gallery encoder is frozen during Stage 2, and freezing is only checkable
+        if the weights that produced this index are pinned and compared against
+        the Stage 1 checkpoint. An index built by a drifted encoder would train
+        against embeddings the deployed model never produces, and nothing in the
+        loss would reveal it.
+        [U-08c] n_assets is DERIVED, never hard-coded. Four published or
+        measured figures disagree (MetaFind 3,000+, ProcTHOR 1,633, this build's
+        asset database 1,934, and 1,467 actually appearing in the 12,000
+        houses), so the count is whatever the installed build yields, recorded
+        with the provenance it came from.
+
+    - name: stage2_positive_map
+      type: "map[procthor_asset_id -> {positive_asset_id, gallery_scope: procthor|objaverse, method: identity|category_match|embedding_match, confidence}]"
       writers: [n09b_resolve_stage2_protocol]
       readers: [G6_stage2_ready, n13_train_stage2, n18_train_ablations]
       merge: write_once
       lifetime: persistent
       note: >
-        [UNKNOWN U-08a -- BLOCKING] Stage 2's positive for Eq. 7a/7b is the
-        gallery embedding of the target object. But the target is a ProcTHOR
-        object and the gallery is Objaverse-LVIS, and their identifier spaces do
-        not intersect at all (measured: 0 of 995 ProcTHOR assetIds appear among
-        the 46,052 Objaverse uids). Without a stated mapping the positive is
-        undefined and Stage 2 cannot be built.
-        The paper never addresses this. Candidate readings, none confirmed:
-          (a) map each ProcTHOR asset to a nearest Objaverse asset by category
-              or embedding, and use that as the positive
-          (b) build a separate gallery from ProcTHOR's own ~1,467 assets
-          (c) treat the target's own modalities as the positive, making Stage 2
-              a self-retrieval objective
-        Whichever is chosen must be recorded here with its method, and reported
-        as a choice rather than a paper requirement. Written only after
-        stage2_protocol reaches status == resolved.
+        [U-08a RESOLVED 2026-08-16] Main line: gallery_scope = procthor,
+        method = identity, positive_asset_id == the target's own assetId.
+        Fridge_19's positive is Fridge_19.
+        [RENAMED] This channel was `stage2_positive_map` and its type was
+        `{gallery_uid, method, confidence}` -- a ProcTHOR-to-OBJAVERSE mapping.
+        That schema encoded a premise the paper never states and that U-08a
+        removed: 2.6 freezes the gallery ENCODER's weights and Eq. 7a/7b sum
+        over the batch, so nothing binds the Stage 2 index to Objaverse.
+        A `gallery_uid` field has no referent under the resolved decision, and
+        leaving it would have let a reader rebuild the mapping the decision
+        exists to avoid. `positive_asset_id` names the thing that is actually
+        looked up in stage2_gallery_index.
+        The other two methods stay in the enum so an ablation can record them
+        and be seen to differ; they are pseudo-labels and are not the main line.
 
     - name: splits
       type: "{object: {train, test}}"
       writers: [n09_build_splits]
-      readers: [G3_object_corpus, n10_train_stage1, n13_train_stage2, n15_eval_retrieval, n18_train_ablations, n19_eval_ablations]
+      readers: [G3_object_corpus, n10_train_stage1, n15_eval_retrieval, n18_train_ablations, n19_eval_ablations]
       merge: write_once
       lifetime: persistent
       note: >
@@ -712,7 +762,7 @@ state:
     - name: stage1_ckpt
       type: "{uri, sha256, config_hash, data_hash, seed, code_revision, train_scope}"
       writers: [n10_train_stage1]
-      readers: [n10b_post_stage1_encode, n11_gallery_index_staging, n13_train_stage2, n18_train_ablations]
+      readers: [G6_stage2_ready, n10b_post_stage1_encode, n11_gallery_index_staging, n11b_stage2_gallery_index, n13_train_stage2, n18_train_ablations]
       merge: write_once
       lifetime: persistent
 
@@ -784,55 +834,40 @@ state:
       note: "Three separate quantities, one per level (SC-4/5/6)."
 
     - name: composition_protocol
-      type: "{status: unresolved|resolved, source: procthor_via_idesign|idesign_generated, g0_source, query_list_source, placement_rule, new_node_t_i, new_phys_edges, new_sem_edges, decided_by, decided_at}"
+      type: "{status: unresolved|resolved, source: idesign_generated|procthor_leave_one_out, g0_source, query_list_source, placement_rule, new_node_t_i, new_phys_edges, new_sem_edges, decided_by, decided_at}"
       writers: [n15b_resolve_composition_protocol]
       readers: [G7_composition_protocol, n15c_prepare_eval_scenes, n16_compose_scenes, n19_eval_ablations]
       merge: replace
       lifetime: persistent
       note: >
-        [UNKNOWN U-18 / U-21 -- BLOCKING for Table 2] Algorithm 1 requires an
-        initial scene graph G_0 and an asset query list {Q_1..Q_N}, and paper 3.3
-        says both come from "the scene generation pipeline of I-Design on a set
-        of 200 randomly sampled scenes". An earlier draft had n16 read
-        `scene_graphs`, which are ProcTHOR houses -- not I-Design output. The
-        Table 2 dataflow was never closed.
-        Line 7 of Algorithm 1 is "Place A*_i into the scene, update scene
-        graph: G <- G U {A*_i}" and nothing more. The very next iteration calls
-        ESSGNN(G), which needs, for the newly placed node: its t_i, its
-        position, its orientation, its scale, its physical edges and its
-        semantic edges. None of that is specified.
-        Held mutable until decided, exactly like stage2_protocol, so that
-        writing a placeholder cannot lock the channel before the answer exists.
-
-        [2026-08-15 -- CANDIDATE RESOLUTION, evidence-backed, awaiting n15b]
-        I-Design was installed and inspected. Its scene_graph.json supplies, per
-        planned object: position (written by backtrack()), facing (orientation),
-        size_in_meters (scale), is_on_the_floor, style, material, and
-        placement.objects_in_room[] whose prepositions are drawn from
-        {on, left of, right of, in front, behind, under} plus an is_adjacent
-        flag. That covers five of U-18's six blanks directly:
-
-          position       <- I-Design backtrack()
-          orientation    <- facing
-          scale          <- size_in_meters
-          physical edges <- placement prepositions; on/under => support,
-                            is_adjacent => adjacency
-          G_0            <- room_priors (6 layout elements, empty room)
-          Q_i            <- the plan objects, in backtrack order
-
-        The sixth, t_i for a newly placed node, is a CHOICE, and our candidate
-        is the retrieved asset's annotation rather than the plan text: it makes
-        e_layout reflect what retrieval actually returned, which is the
-        mechanism the paper credits iterative composition with.
-        [OVERREACH CORRECTED] An earlier version argued this was forced --
-        that plan-derived t_i would make iterative identical to parallel and
-        leave Table 3's "w/o iterative retrieval" row measuring nothing. That
-        does not follow. Iterative grows G by one placed node per step while
-        parallel evaluates every query against G_0, so e_layout(G_i) differs
-        from e_layout(G_0) whatever t_i is built from. Plan-derived t_i only
-        makes the sequence independent of WHICH asset was retrieved, not
-        identical to parallel. Recorded as a preference with a reason, not a
-        derivation.
+        [U-18 / U-21 RESOLVED 2026-08-16] Main line, fixed:
+          source              idesign_generated
+          g0_source           already_placed_objects
+          query_list_source   idesign_planner
+          placement_rule      idesign_slot
+          new_node_t_i        retrieved_asset_annotation
+        [ENUM CHANGED] `source` was `procthor_via_idesign|idesign_generated`,
+        two equally-weighted candidates. Leaving them equal would have made
+        "RESOLVED" a label on a document while n15c could still pick either at
+        run time. The second value is now `procthor_leave_one_out` and names
+        what it is: a DIAGNOSTIC that completes a held-out ProcTHOR scene, never
+        reported as Table 2.
+        [U-21] 3.3 names "the scene generation pipeline of I-Design", and its
+        interface takes a prompt and room dimensions -- verified against our own
+        wrapper, tools/idesign_generate.py, which calls
+        IDesign(no_of_objects, user_input, room_dimensions). Under this reading
+        3.1 and 3.3 describe different stages instead of conflicting. An earlier
+        draft had n16 read `scene_graphs`; a ProcTHOR house is a finished
+        layout, not a generation request, and no gate noticed because no channel
+        for I-Design output existed.
+        [U-18] Algorithm 1 line 7 is "Place A*_i into the scene, update scene
+        graph" and nothing more, while the next iteration calls ESSGNN(G). The
+        resolution is that the LAYOUT SOURCE owns the slot -- I-Design supplies
+        position, facing, size_in_meters and its placement prepositions, all of
+        which its scene_graph.json already carries -- and the retriever never
+        invents placement. `new_node_t_i` is the retrieved asset's annotation,
+        not the query text: 2.1 defines nodes as EXISTING objects, and after
+        line 7 the retrieved asset is what exists.
 
     - name: evaluation_scene_inputs
       type: "map[scene_id -> {g0_uri, query_list, room_type, source, source_revision, prompt, prompt_sha256, room_dimensions, n_objects_requested, seed, planner_model, generator_revision, generator_patch_sha256}]"
@@ -910,7 +945,7 @@ state:
 
     - name: quarantine
       type: "list[{uid, stage, failure_class, exception_type, exception_msg, code_revision, timestamp}]"
-      writers: [n03_sample_pointclouds, n04_render_views, n05_annotate, n07_scene_graphs, n08_semantic_edges]
+      writers: [n03_sample_pointclouds, n04_render_views, n05_annotate, n07_scene_graphs, n07b_procthor_asset_modalities, n08_semantic_edges]
       readers: [G3_object_corpus, n22_publish_report]
       merge: append
       lifetime: persistent
@@ -1025,6 +1060,10 @@ edges:
 
   - {id: e06, from: n03_sample_pointclouds, to: G2_pc_sanity, kind: data, guard: "", join_group: default, carries: [pointclouds]}
   - {id: e07, from: n04_render_views, to: n05_annotate, kind: data, guard: "", join_group: default, carries: [renders]}
+  - {id: e08b, from: n07_scene_graphs, to: n07b_procthor_asset_modalities, kind: data, guard: "", join_group: default, carries: [scene_graphs, procthor_object_text], rationale: "n07b needs the asset set the houses actually use, which is n07's output, not the raw JSONL."}
+  - {id: e08c, from: n07b_procthor_asset_modalities, to: n11b_stage2_gallery_index, kind: data, guard: "", join_group: default, carries: [procthor_asset_modalities]}
+  - {id: e08d, from: n10_train_stage1, to: n11b_stage2_gallery_index, kind: data, guard: "", join_group: default, carries: [stage1_ckpt], rationale: "2.6 freezes the gallery encoder DURING Stage 2, so the index must be built by Stage 1's FINAL weights. Encoding earlier would pin embeddings the deployed model never produces."}
+  - {id: e08e, from: n11b_stage2_gallery_index, to: G6_stage2_ready, kind: data, guard: "", join_group: default, carries: [stage2_gallery_index, procthor_asset_modalities, stage1_ckpt], rationale: "G6 verifies the decision was IMPLEMENTED, not merely recorded: no index, no Stage 2."}
   - {id: e08, from: n07_scene_graphs, to: n08_semantic_edges, kind: data, guard: "", join_group: default, carries: [scene_graphs, procthor_object_text]}
   - {id: e09a, from: n05_annotate, to: n05b_resolve_stage1_encoding, kind: data, guard: "", join_group: default, carries: [objaverse_annotations, renders]}
   - {id: e09, from: n05b_resolve_stage1_encoding, to: n06_encode_text_image, kind: data, guard: "stage1_encoding_protocol.actual_clip_train_scope == 'frozen'", join_group: default, carries: [objaverse_annotations, renders, stage1_encoding_protocol], rationale: "n06 cannot start before U-14/U-15/U-34 are answered: they decide what it should produce. Under `trainable` n06 does not run at all -- a cache is by construction the output of a network nobody is updating, so producing one would be 2-4 h spent on an artifact that reading would silently turn the run back into the frozen variant."}
@@ -1039,8 +1078,8 @@ edges:
 
   - {id: e13b, from: G3_object_corpus, to: n09b_resolve_stage2_protocol, kind: data, guard: "verdict == PASS", join_group: objaverse, carries: [asset_manifest, objaverse_annotations], rationale: "[CORRECTED] This carried scene_graphs, which G3 neither writes nor reads -- G3 was deliberately decoupled from the ProcTHOR branch, so it cannot testify that n07 has run. The ProcTHOR half now arrives on e13b2 from its actual producer."}
   - {id: e13b2, from: n07_scene_graphs, to: n09b_resolve_stage2_protocol, kind: data, guard: "", join_group: procthor, carries: [scene_graphs, procthor_object_text], rationale: "n09b decides how ProcTHOR assets pair to gallery entries (U-08a) and where the Stage 2 modalities come from (U-08b); both need the scene graphs themselves, from the node that builds them."}
-  - {id: e13c, from: n09b_resolve_stage2_protocol, to: G6_stage2_ready, kind: data, guard: "", join_group: default, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, stage1_protocol], rationale: "G6 must see Stage 1's tower_sharing: fully_shared cannot satisfy 2.6's Stage 2 freezing, and finding that out inside n13 wastes the whole Stage 1 run."}
-  - {id: e13d, from: G6_stage2_ready, to: n13_train_stage2, kind: data, guard: "verdict == PASS", join_group: protocol, carries: [stage2_protocol, stage2_pairing, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits, stage1_protocol]}
+  - {id: e13c, from: n09b_resolve_stage2_protocol, to: G6_stage2_ready, kind: data, guard: "", join_group: default, carries: [stage2_protocol, stage2_positive_map, essgnn_edge_protocol, essgnn_arch_protocol, stage1_protocol], rationale: "G6 must see Stage 1's tower_sharing: fully_shared cannot satisfy 2.6's Stage 2 freezing, and finding that out inside n13 wastes the whole Stage 1 run."}
+  - {id: e13d, from: G6_stage2_ready, to: n13_train_stage2, kind: data, guard: "verdict == PASS", join_group: protocol, carries: [stage2_protocol, stage2_positive_map, procthor_asset_modalities, stage2_gallery_index, essgnn_edge_protocol, essgnn_arch_protocol, scene_splits, stage1_protocol]}
   - {id: e13e, from: G6_stage2_ready, to: HALT_BLOCKED, kind: escalation, guard: "verdict == BLOCKED_EVIDENCE", join_group: default, carries: [stage2_protocol], rationale: "U-08a/U-08b unresolved is a pause awaiting a decision, not a failure."}
   - {id: e14, from: G3_object_corpus, to: n10_train_stage1, kind: data, guard: "verdict == PASS", join_group: default, carries: [splits, pointclouds, text_image_embeddings, renders, objaverse_annotations, stage1_protocol, stage1_encoding_protocol, stage1_hyperparameters]}
   - {id: e14b, from: n10_train_stage1, to: n10b_post_stage1_encode, kind: data, guard: "", join_group: default, carries: [stage1_ckpt, stage1_encoding_protocol, stage1_protocol, text_image_embeddings, renders, objaverse_annotations], rationale: "n10b needs the final encoders AND both possible sources: under actual=frozen it passes n06's cache through, under actual=trainable it re-encodes from renders and annotations."}
@@ -1074,9 +1113,9 @@ edges:
   - {id: e22b3, from: n07_scene_graphs, to: n15b_resolve_composition_protocol, kind: data, guard: "", join_group: procthor, carries: [scene_graphs]}
   - {id: e22c, from: n15b_resolve_composition_protocol, to: G7_composition_protocol, kind: data, guard: "", join_group: default, carries: [composition_protocol]}
   - {id: e22d, from: G7_composition_protocol, to: n15c_prepare_eval_scenes, kind: data, guard: "verdict == PASS", join_group: default, carries: [composition_protocol]}
-  - {id: e22d2, from: n09c_build_scene_splits, to: n15c_prepare_eval_scenes, kind: data, guard: "", join_group: procthor, carries: [scene_splits, scene_graphs], rationale: "U-21's procthor_via_idesign reading needs the held-out houses; sampling them from anything but the test split would leak."}
+  - {id: e22d2, from: n09c_build_scene_splits, to: n15c_prepare_eval_scenes, kind: data, guard: "composition_protocol.source == 'procthor_leave_one_out'", join_group: procthor, carries: [scene_splits, scene_graphs], rationale: "DIAGNOSTIC ONLY since U-21 resolved to Reading B. Table 2's scenes come from I-Design, so the main line must not be bound to ProcTHOR's held-out houses. The edge is kept and GUARDED rather than deleted: the leave-one-out diagnostic still needs the test split, and running it on anything else would leak."}
   - {id: e22e, from: n15c_prepare_eval_scenes, to: n16_compose_scenes, kind: data, guard: "", join_group: protocol, carries: [evaluation_scene_inputs, composition_protocol]}
-  - {id: e22f, from: G7_composition_protocol, to: HALT_BLOCKED, kind: escalation, guard: "verdict == BLOCKED_EVIDENCE", join_group: default, carries: [composition_protocol], rationale: "U-18/U-21 unresolved pauses Table 2 only; Table 1 is unaffected."}
+  - {id: e22f, from: G7_composition_protocol, to: HALT_BLOCKED, kind: escalation, guard: "verdict == BLOCKED_EVIDENCE", join_group: default, carries: [composition_protocol], rationale: "U-18/U-21 are resolved, so this escalation now fires on a protocol that was never MATERIALISED rather than on a decision nobody made. Table 2 pauses; Table 1 is unaffected either way."}
   - {id: e23, from: n13_train_stage2, to: n16_compose_scenes, kind: data, guard: "", join_group: default, carries: [variant_ckpts]}
   - {id: e24, from: n16_compose_scenes, to: n17_judge_scenes, kind: data, guard: "", join_group: default, carries: [composed_scenes]}
 
@@ -1250,6 +1289,7 @@ dependencies:
     - {node: G2_pc_sanity, depends_on: [n03_sample_pointclouds]}
     - {node: n05_annotate, depends_on: [n04_render_views]}
     - {node: n08_semantic_edges, depends_on: [n07_scene_graphs]}
+    - {node: n07b_procthor_asset_modalities, depends_on: [n07_scene_graphs]}
     - {node: n05b_resolve_stage1_encoding, depends_on: [n05_annotate]}
     - {node: n06_encode_text_image, depends_on: [n05b_resolve_stage1_encoding]}
     # [CORRECTED] n08_semantic_edges was still listed here after the branch split.
@@ -1275,7 +1315,8 @@ dependencies:
     - {node: n12_promote_index, depends_on: [G4_gallery_freeze]}
     - {node: n09b_resolve_stage2_protocol, depends_on: [G3_object_corpus, n07_scene_graphs]}
     - {node: n09c_build_scene_splits, depends_on: [n07_scene_graphs, n08_semantic_edges]}
-    - {node: G6_stage2_ready, depends_on: [n09b_resolve_stage2_protocol, n09c_build_scene_splits]}
+    - {node: n11b_stage2_gallery_index, depends_on: [n07b_procthor_asset_modalities, n10_train_stage1]}
+    - {node: G6_stage2_ready, depends_on: [n09b_resolve_stage2_protocol, n09c_build_scene_splits, n11b_stage2_gallery_index]}
     - {node: n13_train_stage2, depends_on: [n10_train_stage1, n10b_post_stage1_encode, G6_stage2_ready]}
     - {node: n14_equivariance_probe, depends_on: [n13_train_stage2]}
     - {node: n15_eval_retrieval, depends_on: [n12_promote_index, n13_train_stage2, n10b_post_stage1_encode]}
@@ -1308,7 +1349,7 @@ routing:
   - {decision_point: G2_pc_sanity, authority: A1, owner: edge, inputs: [cloud_shape, finiteness, centroid_offset, max_radius, per_axis_variance, self_retrieval_rank], destinations: [n09_build_splits, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: [{name: cloud_shape, from: pointclouds}, {name: finiteness, from: pointclouds}, {name: self_retrieval_rank, from: pointclouds}]}
   - {decision_point: G3_object_corpus, authority: A1, owner: edge, inputs: [leakage_count, admitted_size, quarantine_rate, eval_protocols, "stage1_encoding_protocol.status", "stage1_protocol.status"], destinations: [n10_train_stage1, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: [{name: leakage_count, from: splits}, {name: admitted_size, from: splits}, {name: quarantine_rate, from: quarantine}]}
   - {decision_point: G4_gallery_freeze, authority: A1, owner: edge, inputs: [index_dim, index_count, nan_count, zero_vector_count, target_is_argmax, target_in_tie_set], destinations: [n12_promote_index, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: [{name: index_dim, from: gallery_index_staging}, {name: index_count, from: gallery_index_staging}, {name: nan_count, from: gallery_index_staging}, {name: zero_vector_count, from: gallery_index_staging}, {name: target_is_argmax, from: gallery_index_staging}, {name: target_in_tie_set, from: gallery_index_staging}]}
-  - {decision_point: G6_stage2_ready, authority: A1, owner: edge, inputs: ["stage2_protocol.status", stage2_pairing, "essgnn_edge_protocol.status", "essgnn_arch_protocol.status", scene_splits], destinations: [n13_train_stage2, HALT_BLOCKED], default_destination: HALT_BLOCKED, derived_inputs: []}
+  - {decision_point: G6_stage2_ready, authority: A1, owner: edge, inputs: ["stage2_protocol.status", stage2_positive_map, "essgnn_edge_protocol.status", "essgnn_arch_protocol.status", scene_splits], destinations: [n13_train_stage2, HALT_BLOCKED], default_destination: HALT_BLOCKED, derived_inputs: []}
   - {decision_point: G7_composition_protocol, authority: A1, owner: edge, inputs: [composition_protocol.status, composition_protocol.source, g0_source, query_list_source, placement_rule, new_node_t_i, new_phys_edges, new_sem_edges], destinations: [n15c_prepare_eval_scenes, HALT_BLOCKED], default_destination: HALT_BLOCKED, derived_inputs: []}
   - {decision_point: G5_report_release, authority: A1, owner: edge, inputs: [verdict_completeness, report_sha256_matches, comparison_results, report_staging, gate_records, audit_records, degraded_flags], destinations: [n22_publish_report, HALT_FAILED], default_destination: HALT_FAILED, derived_inputs: [{name: verdict_completeness, from: comparison_results}, {name: report_sha256_matches, from: report_staging}]}
   - {decision_point: sg1_admit_or_repair, authority: A1, owner: edge, inputs: [schema_valid, item_attempt], destinations: [sg1_admit, sg1_generate, sg1_quarantine], default_destination: sg1_quarantine}
@@ -1390,13 +1431,14 @@ execution_order:
     - {layer: 3, parallel_nodes: [], gates: [G1_sources_valid], est: "-"}
     - {layer: 4, parallel_nodes: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs], gates: [], est: "1-3 h"}
     - {layer: 5, parallel_nodes: [], gates: [G2_pc_sanity], est: "-"}
-    - {layer: 6, parallel_nodes: [n05_annotate, n08_semantic_edges], gates: [], est: "1-2 days (Qwen over 46K assets) -- CRITICAL PATH"}
+    - {layer: 6, parallel_nodes: [n05_annotate, n08_semantic_edges, n07b_procthor_asset_modalities], gates: [], est: "1-2 days (Qwen over 46K assets) -- CRITICAL PATH. n07b is ~1.5K assets of AI2-THOR rendering and is not on it."}
     - {layer: 6b, parallel_nodes: [n05b_resolve_stage1_encoding], gates: [], est: "human decision -- BLOCKS n06 until U-14, U-15 and U-34 are answered"}
     - {layer: 7, parallel_nodes: [n06_encode_text_image], gates: [], est: "2-4 h"}
     - {layer: 8, parallel_nodes: [n09_build_splits, n09c_build_scene_splits], gates: [], est: "<1 h"}
     - {layer: 9, parallel_nodes: [], gates: [G3_object_corpus], est: "-"}
     - {layer: 10, parallel_nodes: [n10_train_stage1], gates: [], est: "hours to 1 day (trains the point encoder, unlike the earlier draft)"}
-    - {layer: 10b, parallel_nodes: [n09b_resolve_stage2_protocol], gates: [G6_stage2_ready], est: "human decision -- BLOCKS Stage 2 until U-08a and U-08b are answered"}
+    - {layer: "10a", parallel_nodes: [n11b_stage2_gallery_index], gates: [], est: "<1 h. Must follow n10 and precede G6: 2.6 freezes the gallery encoder DURING Stage 2, so this index is built by Stage 1's FINAL weights, and G6 verifies it exists before training starts."}
+    - {layer: 10b, parallel_nodes: [n09b_resolve_stage2_protocol], gates: [G6_stage2_ready], est: "<1 h. U-08a/U-08b are RESOLVED; n09b now MATERIALISES the recorded protocol rather than waiting for a decision, and G6 verifies the decision was implemented -- protocol resolved, modalities produced, gallery index built by the frozen encoder."}
     - {layer: 10c, parallel_nodes: [n10b_post_stage1_encode], gates: [], est: "0 h under actual=frozen (passthrough); 2-4 h under actual=trainable (re-encode)"}
     - {layer: 11, parallel_nodes: [n11_gallery_index_staging, n13_train_stage2], gates: [], est: "3-8 h"}
     - {layer: 12, parallel_nodes: [], gates: [G4_gallery_freeze], est: "-"}
@@ -1431,7 +1473,7 @@ risks_unknowns:
   - {id: U-08, marked: UNKNOWN, blocking: false, item: "how Stage 2 training samples are constructed from ProcTHOR", affects: "all of Table 2 and 3", resolution: "the paper never defines it; our protocol is stated explicitly in 02_BUILD_STEPS", fallback: "n/a"}
   - {id: U-08a, marked: RESOLVED, blocking: false, item: "which gallery entry is Stage 2's positive -- ProcTHOR assetIds and Objaverse uids have zero measured overlap (0 of 995)", affects: "Eq. 7a/7b have no positive; Stage 2 cannot be built", resolution: "n09b_resolve_stage2_protocol; enforced by G6_stage2_ready", fallback: "none -- this is a decision, not a computation", decided: "Stage 2 uses its own ProcTHOR gallery; the positive is the SAME assetId, so no ProcTHOR-to-Objaverse correspondence is needed at all.", decided_by: 'Kyzen (relayed GPT analysis, verified against paper text and our own I-Design wrapper)', decided_at: '2026-08-16', decision_basis: "The blocking premise was ours, not the paper's: we had assumed Stage 2 must reuse Stage 1's Objaverse catalog. VERIFIED against the text -- 2.6 says 'Only the query-side fuser and the ESSGNN module are updated; the gallery encoder is frozen', which fixes WEIGHTS, and Eq. 7a/7b sum over the batch B, not over a named catalog. Nothing binds the Stage 2 index to Objaverse. A frozen encoder and a rebuilt index are routine in retrieval; encoder is not index. So the target is a ProcTHOR asset, the positive is that same asset encoded by the same frozen gallery encoder, and the identity is Fridge_19 -> Fridge_19. Rejected: category-random and embedding-nearest Objaverse matches, both pseudo-labels; and scene-as-context-only with an Objaverse self-positive, which lets the model ignore ESSGNN entirely and still minimise the loss -- computable but no longer measuring scene-aware compatibility. MEASURED (F25): that gallery holds 1,467 assets, not the 3,000+ the paper cites.", confidence: moderate, reopen_if: "MetaFind code or its authors describe a different Stage 2 target, gallery scope, placement owner or evaluation scene source."}
   - {id: U-08b, marked: RESOLVED, blocking: false, item: "where the Stage 2 target's text / image / point cloud come from; ProcTHOR ships metadata and coordinates only", affects: "Eq. 6 has no modality inputs", resolution: "n09b_resolve_stage2_protocol; enforced by G6_stage2_ready", fallback: "none", decided: "ProcTHOR-side modalities are generated with AI2-THOR isolated rendering under n04's image protocol; point clouds are multi-view depth shells and the query side may omit the point cloud.", decided_by: 'Kyzen (relayed GPT analysis, verified against paper text and our own I-Design wrapper)', decided_at: '2026-08-16', decision_basis: "F24 measured that AI2-THOR renders a single ProcTHOR asset in isolation, orthographic, 11 views, white background, matching n04 -- so the 'no source for the modalities' premise was false. The genuine residual gap is the point cloud: n03 samples a complete mesh surface, depth back-projection reaches only the visible hull, and the gallery encoder is frozen so PointBERT cannot adapt to that shift. The paper's own design absorbs this: the query encoder accepts any modality subset (2.4), so the query may run text+image with the point cloud optional, while the gallery stays modality-complete as 2.6 requires. Classified as an UNSPECIFIED HIGH-IMPACT REPRODUCTION CHOICE rather than a deviation: a deviation is 'the paper says X, we do Y', and here the paper requires Stage 2 modalities while never specifying how ProcTHOR's are produced -- we are instantiating a missing protocol, not contradicting a stated one.", confidence: moderate, reopen_if: "MetaFind code or its authors describe a different Stage 2 target, gallery scope, placement owner or evaluation scene source."}
-  - {id: U-08c, marked: UNKNOWN, blocking: false, item: "how many ProcTHOR assets the Stage 2 gallery actually holds. Four figures disagree: MetaFind 2.3 says 3,000+, the ProcTHOR paper says 1633 across 108 categories, this build's GetAssetDatabase reports 1934, and 1467 distinct assetIds appear across the 12,000 houses. Category counts also differ, 108 published against 93 measured -- though ours is derived from the object-id prefix and may not be ProcTHOR's taxonomy, so that gap may be method rather than substance.", affects: "the denominator of Eq. 7a/7b, hence Stage 2 training signal strength and every Table 2 number", resolution: "derive the count from the INSTALLED asset database at run time and record it with the ai2thor version and CloudRendering build hash. Hard-code neither published figure.", fallback: "n/a -- the measured count is always available"}
+  - {id: U-08c, marked: UNKNOWN, blocking: false, item: "which ProcTHOR asset cardinality MetaFind actually used. [PAPER] MetaFind states >3,000 curated/unique ProcTHOR assets, twice (2.3 and 3.1), so it is the authors' own claim and not our misreading. [UPSTREAM] ProcTHOR 2022 states 1,633 household asset instances across 108 categories, and separates asset identity from material randomisation and object states, which makes the variant-counting explanation weak. [MEASURED] this AI2-THOR 5.0.0 build reports 1,934 asset-database entries; the re-downloaded 12,000 houses use 1,467 distinct assetIds. Ruled out: our copy being wrong (byte-identical on re-download), a revision difference (the older revision is identical), and houses sampling a larger library (the library is 1,934). Also ruled out: object instances, since ProcTHOR reports 76+/-48 objects per house, which is hundreds of thousands, not 3,000.", affects: "Stage 2 negative diversity, hard-negative frequency, target coverage and sampling dynamics -- NOT the mathematical definition of Eq. 7, whose negatives are in-batch. Table 2 stays comparable but not protocol-identical; impact MODERATE, direction unknown.", resolution: "Derive every executable cardinality from the installed versioned build. Hard-code no published figure. Record the provenance discrepancy as a table in the report. Run a Stage-2 asset-universe sensitivity diagnostic over subsets of the observed set rather than fabricating assets to reach 3,000.", open_alternatives: "(a) the authors used an unpublished or custom expanded asset universe; (b) they used the public corpus and reported the cardinality incorrectly. Both fit every public artifact; neither is asserted.", reopen_if: "official MetaFind code, an asset manifest, or author clarification reveals the Stage 2 asset universe."}
   - {id: U-09, marked: UNKNOWN, blocking: false, item: "gallery scope AND query scope for Table 1 -- paper 3.1 gives only '80% training, 20% testing' and never says the queries are the test split", affects: "every R@k", resolution: "run both gallery protocols and report both; query=test is recorded as an assumption", fallback: "n/a"}
   - {id: U-10, marked: UNKNOWN, blocking: false, item: "which IDesign aspect maps to Table 2's Scene Coherence", affects: "Table 2 column mapping", resolution: "record the assumed mapping", fallback: "n/a"}
   - {id: U-11, marked: UNKNOWN, blocking: false, item: "how an absent modality is represented -- paper 2.6 rules out zero-padding ('Rather than zero-padding, we apply masked embeddings') but does not say whether that is a learned mask token or a mask applied inside the fusion layer", affects: "every partial-modality query", resolution: "record our choice; the only paper-backed assertion is that it differs from zero-padding", fallback: "n/a"}

@@ -83,7 +83,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 
 ## 3. State schema
 
-完整 52 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
+完整 54 個 state channel 見 [`graph_spec.yaml`](graph_spec.yaml)。關鍵者：
 
 | channel | merge | 為什麼 |
 |---|---|---|
@@ -106,7 +106,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 | `essgnn_arch_protocol` | `replace` | **新增**。U-33／U-17／U-26／U-31／U-22。**`use_io_projections: bool = True` 這種預設不是決定，是官方 EGNN 的慣例靠繼承勝出**，而且改的是**架構**不是超參數。由 `G6` 強制 |
 | `essgnn_edge_protocol` | `replace` | **新增**。U-29／U-30／U-19。登記成 UNKNOWN 還不夠 —— `essgnn.py` **已經替它們做了決定**（假定每條邊都有固定寬度的語意嵌入），而 G6 沒擋。由 `G6` 強制 |
 | `stage2_protocol` | `replace` | **新增**。決定本身，未決前保持可改 |
-| `stage2_pairing` | `write_once` | **U-08a**。只有在協定 `resolved` 之後才寫入，避免用空值把 channel 鎖死 |
+| `stage2_positive_map` | `write_once` | **U-08a**。只有在協定 `resolved` 之後才寫入，避免用空值把 channel 鎖死 |
 | `sem_edge_cache` | `upsert_by_key` | **key = `sha256(desc_i, desc_j, prompt_ver, llm, encoder_ver)`**，非 category pair |
 | `text_image_embeddings` | `upsert_by_key` | CLIP 凍結 → 可快取 |
 | `pc_embeddings` | **不存在** | **point encoder 可訓練 → 不可預先快取**，見 §4 |
@@ -145,6 +145,7 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 | `n06_encode_text_image` | model | CLIP 凍結 → 可快取；**PC 不在此列**。**`actual=trainable` 時整個不執行**（`e09` 的 guard），此時 `n09` 改由 `e11b` 取得原始 renders／annotations |
 | `n07_scene_graphs` | compute | ProcTHOR → 節點（位置 + `t_i`）、物理邊（support 讀自 children 樹）。**`t_i` 來自 ProcTHOR metadata，不是 Objaverse 標註** |
 | `n08_semantic_edges` | model | Qwen 對 **ProcTHOR 物件描述**產生關係句 → frozen text encoder → `e_ij` |
+| `n07b_procthor_asset_modalities` | compute | **每個 ProcTHOR 資產的隔離渲染（11 視角正交，與 n04 同協定）＋ 深度外殼點雲 ＋ 文字**。U-08b 判定後新增 —— 沒有它，「Stage 2 的目標是 ProcTHOR 資產」只是文件上的一句話，`n13` 拿不到 `e_query` |
 | `n09_build_splits` | compute | **物件 80/20，只讀 Objaverse** |
 | `n09c_build_scene_splits` | compute | **新增**。房屋 80/20，只讀 ProcTHOR |
 | `n09b_resolve_stage2_protocol` | **human** | **決定 U-08a／U-08b** —— 正樣本對應與模態來源。論文沒說，只能由人決定 |
@@ -158,6 +159,7 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 | `n10_train_stage1` | mutate | **訓練 point encoder + fusion**（Eq.5，單向），30% 模態遮罩 |
 | `n10b_post_stage1_encode` | model | **Stage 1 之後**用最終 encoder 產出 `post_stage1_embeddings`（`frozen` 走 passthrough、`trainable` 重編）。**query／gallery 分開存** —— `fully_separate + trainable` 下兩塔權重不同 |
 | `n11_gallery_index_staging` | mutate | 凍結 gallery 塔，編碼全部 admitted 資產 → staging |
+| `n11b_stage2_gallery_index` | model | **用凍結的 Stage 1 gallery 塔編碼 ProcTHOR 資產 → Stage 2 專屬索引**。與 `n11`／`n12` 的 Objaverse 索引**永不合併**（Table 1 的協定不得移動）。記錄 `gallery_encoder_sha256`：§2.6 說 Stage 2 期間 gallery encoder 凍結，而「凍結」只有在產生索引的權重被釘住並與 Stage 1 checkpoint 比對時才可驗 |
 | **`G4_gallery_freeze`** | evaluate | **G-CONTAM**。維度、數量、無 NaN、**目標相似度 == 最大相似度且在 argmax tie set 內** |
 | `n12_promote_index` | mutate | late commit，`write_once` |
 | `n13_train_stage2` | mutate | 訓練 fuser + ESSGNN，gallery 凍結；Eq.6 殘差、30% scene dropout、Eq.7/8 雙向 |
@@ -466,6 +468,10 @@ graph TD
   n03 --> G2{{G2 pc_sanity<br/>G-INVALID}}:::gate
   n04 --> n05[[n05 annotate<br/>Qwen · SG1 · C1]]:::sub
   n07 --> n08[[n08 semantic_edges<br/>Qwen · SG2 · C2]]:::sub
+  n07 --> n07b[n07b procthor_asset_modalities<br/>AI2-THOR 隔離渲染 · 深度外殼 PC]:::compute
+  n07b --> n11b[n11b stage2_gallery_index<br/>凍結 Stage1 塔 · ProcTHOR 專屬]:::model
+  n10 --> n11b
+  n11b --> G6
   G2 --> n09[n09 build_splits<br/>Objaverse only]:::compute
   n05 --> n05b[/n05b resolve_stage1_encoding<br/>HUMAN · U-14 / U-15 / U-11<br/>record U-34=frozen/]:::term
   n05b -->|actual=frozen| n06[n06 encode_text_image<br/>CLIP frozen · SKIPPED if trainable]:::model
@@ -707,7 +713,7 @@ preposition 對齊 enum（無法映射者落到 "on"）
 |---|---|---|---|
 | 13 | `00_FINDINGS` 的 D1/D2 還是舊的凍結+全快取設計，而 README 叫人先讀它、稱它「硬事實」 | D1/D2 重寫；文件頂端加上**權威順序**，並註明 D 系列是決策、會改變 | 🔴 **會讓 agent 寫回舊版** |
 | 14 | `n07`/`n08` 讀 `annotations`（Objaverse 標註），但 `n07` 不是它的 writer，且 ProcTHOR assetId 與 Objaverse uid **交集為 0** | 拆成 `objaverse_annotations` 與 `procthor_object_text` 兩條 channel | 🔴 **provenance 與概念雙重錯誤** |
-| 15 | Stage 2 的**正樣本身分沒有閉合** —— 目標是 ProcTHOR 物件、gallery 是 Objaverse，沒有對應關係；`n13` 的 reads 甚至湊不出 Eq.6 的輸入 | 新增 `stage2_pairing` channel、U-08a／U-08b 標為**阻斷級**、補齊 `n13` 的 reads | 🔴 **Stage 2 建不起來** |
+| 15 | Stage 2 的**正樣本身分沒有閉合** —— 目標是 ProcTHOR 物件、gallery 是 Objaverse，沒有對應關係；`n13` 的 reads 甚至湊不出 Eq.6 的輸入 | 新增 `stage2_positive_map` channel、U-08a／U-08b 標為**阻斷級**、補齊 `n13` 的 reads | 🔴 **Stage 2 建不起來** |
 | 16 | `learned mask token` 被寫成論文要求 | 論文只排除 zero-padding → U-11，斷言改成「必須與 zero-padding 不同」 | 🔴 |
 | 17 | 「orthogonal = 正交投影」標成已解決 | 降為 U-03a，兩種投影都保留 | 🟠 |
 | 18 | 「size dimensions 只能是類別先驗」當成論文性質 | 那是**我們**加了 unit-sphere 正規化的後果，改成描述本實作 | 🟠 |
@@ -720,7 +726,7 @@ preposition 對齊 enum（無法映射者落到 "on"）
 | # | 問題 | 現在 | 嚴重度 |
 |---|---|---|---|
 | 22 | **ProcTHOR 沒有進 graph state** —— G1 的判準文字說要檢查 ProcTHOR，但它的 `reads` 裡沒有任何 ProcTHOR channel。Objaverse 齊全、ProcTHOR 完全不存在時 G1 會 **PASS** | 新增 `procthor_dataset` channel，接上 `n02 → G1 → n07 → n09c` | 🔴 **假 gate** |
-| 23 | `stage2_pairing` 由 `n09` 以 `write_once` 寫入，但 U-08a 還沒答案 —— 寫空值會把 channel 永遠鎖死 | 拆成可改的 `stage2_protocol` 與定案後的 `stage2_pairing`；移到 `n09b` + `G6` | 🔴 **自我鎖死** |
+| 23 | `stage2_positive_map` 由 `n09` 以 `write_once` 寫入，但 U-08a 還沒答案 —— 寫空值會把 channel 永遠鎖死 | 拆成可改的 `stage2_protocol` 與定案後的 `stage2_positive_map`；移到 `n09b` + `G6` | 🔴 **自我鎖死** |
 
 ### 2026-08-15 第四輪（外部審查後，逐項重讀論文）
 
@@ -1433,3 +1439,58 @@ U-21   讀法 B —— ProcTHOR 訓練、I-Design 產生 Table 2 的場景與 qu
 
 **這是同一個教訓的第二次**：檢查一個狀態遷移有沒有做完，關鍵不在規則本身，
 而在**遷移的說法有幾種寫法**。第一版只想到一種。
+
+### 2026-08-16 Stage 2 dataflow 閉合（外部審查：判讀已收斂但 graph 沒跟上）
+
+**上一輪把四個 UNKNOWN 標成 RESOLVED，卻沒有讓執行契約跟著改。**
+於是同一個專案裡，registry 說「正樣本就是同一個 assetId」，
+而 channel 的 type 還寫著 `{gallery_uid, method, confidence}` ——
+**那個 schema 編碼的正是這個決定要消除的 ProcTHOR→Objaverse 對應表。**
+
+**而 1,949 項檢查全綠。** 因為 channel 的 type 與它自己的 readers 一致，
+說明不了它與別處記錄的決定一致。**結構檢查看不到語意矛盾。**
+
+#### 缺的不只是措辭，是三個不存在的東西
+
+| 文件說 | graph 裡實際有 | |
+|---|---|---|
+| Stage 2 用 ProcTHOR gallery | 只有 Stage 1 的 Objaverse `gallery_index` | ❌ |
+| 目標的三個模態由 AI2-THOR 產生 | 沒有任何節點產生它 | ❌ |
+| 正樣本 = 同一個 assetId | schema 要求一個 `gallery_uid` | ❌ |
+
+所以 `Fridge_19 → Fridge_19` 只是文件上的一句話 —— **trainer 根本拿不到
+`e_gallery(Fridge_19)`**。
+
+#### 補上的東西
+
+```
+channel  procthor_asset_modalities     11 視角隔離渲染／深度外殼點雲／文字＋provenance
+channel  stage2_gallery_index          ProcTHOR 專屬索引，帶 gallery_encoder_sha256
+channel  stage2_pairing → stage2_positive_map   identity，不再有 gallery_uid
+node     n07b_procthor_asset_modalities  （層 6）
+node     n11b_stage2_gallery_index       （層 10a —— 必須在 n10 之後、G6 之前）
+```
+
+`n11b` 排在 n10 之後不是排程細節：§2.6 說 gallery encoder 在 **Stage 2 期間**凍結，
+所以索引必須由 Stage 1 的**最終**權重產生。`gallery_encoder_sha256` 是唯一能驗這件事的地方 ——
+**用漂移過的 encoder 建的索引，會讓模型對著它推論時永遠不會產生的 embedding 訓練，而 loss 裡沒有任何一項看得出來。**
+
+#### 三個節點的角色從「決定」改成「實作」
+
+`n09b`／`n15b` 不再是「等人決定」，而是「把已記錄的決定寫成 n13 讀得到的形式」。
+`G6` 同樣改寫 —— 從「協定 resolved 了嗎」改成**「這個決定真的被建出來了嗎」**：
+模態產出了嗎、索引存在嗎、索引的 encoder hash 等於 Stage 1 checkpoint 嗎。
+
+#### checker 補的兩條
+
+1. **機器規格自身不得把已 RESOLVED 的項目描述成 UNKNOWN／BLOCKING** ——
+   掃 channel 的 type/note、node 的 notes/postcondition/purpose、以及全部 validation 項目。
+   寫完立刻抓到 5 處。
+2. `28` 這個節點數在 checker 裡是**寫死的**，所以新增節點時它不是報「數字對不上」，
+   而是直接 `NameError` 炸掉。改成從標題讀。
+
+#### 這一輪真正的教訓
+
+上一輪的教訓是「遷移的說法有幾種寫法」。**這一輪更深一層：
+把 UNKNOWN 標成 RESOLVED，真正的工作不在文字，在讓 graph 能執行那個決定。**
+文件全部改對、檢查全綠、而 trainer 拿不到正樣本 —— 這個狀態存在了整整一輪。

@@ -516,11 +516,13 @@ is frozen」—— 凍的是**權重**；Eq. 7a/7b 的分母是 batch `B`，**�
 
 **選定 (b)。** (a) 與依 embedding 對應都是假標籤；(c) 最危險 —— 場景與正樣本之間沒有
 ground truth 關係，模型可以完全忽略 ESSGNN 仍然把 loss 降下去，算得出數字卻沒有在學
-scene-aware compatibility。已寫進 `stage2_pairing` channel，**報告中列為選擇而非論文規定**。
+scene-aware compatibility。已寫進 `stage2_positive_map` channel，**報告中列為選擇而非論文規定**。
 
 **[實測 F25]** 那個 gallery 是 **1,467** 個資產，不是論文轉述的「3,000+」。
-它就是 Eq. 7a/7b 的負樣本池大小，比 Stage 1 的 46,052 小得多，訓練訊號因此較弱 ——
-報告必須寫我們實際的數字。
+**但它不是 Eq. 7a/7b 的分母** —— 那是 in-batch negatives（`Σ_{e' ∈ B}`），
+batch size 相同時每一步的負樣本數不變。1,467 是 Stage 2 可觀測的
+**資產 identity universe**，影響的是負樣本多樣性、hard negative 出現率與
+覆蓋率，無法定量推回 Table 2。詳見 F25。報告寫我們實際量到的數字。
 
 ### U-08b　目標物件的三個模態從哪來 —— **已判定：AI2-THOR 隔離渲染**
 
@@ -539,7 +541,7 @@ scene-aware compatibility。已寫進 `stage2_pairing` channel，**報告中列�
 
 ### 因此
 
-`n13_train_stage2` 的 `reads` 已補上 `stage2_pairing`、`pointclouds`、
+`n13_train_stage2` 的 `reads` 已補上 `stage2_positive_map`、`pointclouds`、
 `post_stage1_embeddings`（**不是 `text_image_embeddings`** —— `actual=trainable` 下 `n06` 不執行，那個 channel 不存在；Stage 1 之後由 `n10b` 產出）、`procthor_object_text` —— 先前的清單根本湊不出 Eq.6 的輸入，
 也不知道正樣本是誰。
 
@@ -558,9 +560,9 @@ n13_train_stage2
 `stage2_protocol.status` 未達 `resolved` 之前，G6 回傳 **`BLOCKED_EVIDENCE`(rc=3)
 而不是 FAIL** —— 沒有東西壞掉，只是有個決定還沒做。Stage 2 以外的階段照常進行。
 
-先前把 `stage2_pairing` 交給 `n09_build_splits` 寫、而且是 `write_once`，
+先前把 `stage2_positive_map` 交給 `n09_build_splits` 寫、而且是 `write_once`，
 在答案還不存在時寫入空值就會**把 channel 永久鎖死**。現在拆成
-「可改的決定（`stage2_protocol`）」與「決定後才落定的對照表（`stage2_pairing`）」。
+「可改的決定（`stage2_protocol`）」與「決定後才落定的對照表（`stage2_positive_map`）」。
 
 ---
 
