@@ -261,11 +261,17 @@ class QueryTower(nn.Module):
         edge_index: Tensor,
         edge_attr: Tensor,
         batch: Tensor | None = None,
+        edge_missing: Tensor | None = None,
     ) -> Tensor:
-        """Run ESSGNN over a scene graph to obtain ``e_layout``."""
+        """Run ESSGNN over a scene graph to obtain ``e_layout``.
+
+        ``edge_missing`` marks edges with no cached LLM relation; ESSGNN swaps
+        in its learned missing-edge token for those rows (U-30).
+        """
         if self.layout_encoder is None:
             raise ValueError("this tower was built with use_layout=False")
-        out = self.layout_encoder(node_feat, pos, edge_index, edge_attr, batch=batch)
+        out = self.layout_encoder(node_feat, pos, edge_index, edge_attr,
+                                  batch=batch, edge_missing=edge_missing)
         return out.unsqueeze(0) if out.dim() == 1 else out
 
 

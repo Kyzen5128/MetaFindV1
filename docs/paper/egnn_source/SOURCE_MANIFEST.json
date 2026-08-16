@@ -1,0 +1,80 @@
+{
+ "paper_name": "egnn",
+ "arxiv_id": "2102.09844",
+ "archive_path": "docs/paper/EGNN.gz",
+ "archive_sha256": "3bfe32974cceccb69b6ebcf9b685c1461c7882630ff11262bfb59644eeefb7ff",
+ "main_tex": "example_paper.tex",
+ "included_tex_files": [
+  "example_paper.tex",
+  "sections/index.tex",
+  "sections/template.tex",
+  "sections/introduction.tex",
+  "sections/background.tex",
+  "sections/model.tex",
+  "sections/related.tex",
+  "sections/experiments.tex",
+  "sections/conclusions.tex",
+  "sections/appendix.tex"
+ ],
+ "include_tree": {
+  "file": "example_paper.tex",
+  "includes": [
+   {
+    "file": "sections/index.tex"
+   },
+   {
+    "file": "sections/template.tex"
+   },
+   {
+    "file": "sections/introduction.tex"
+   },
+   {
+    "file": "sections/background.tex"
+   },
+   {
+    "file": "sections/model.tex"
+   },
+   {
+    "file": "sections/related.tex"
+   },
+   {
+    "file": "sections/experiments.tex"
+   },
+   {
+    "file": "sections/conclusions.tex"
+   },
+   {
+    "file": "sections/appendix.tex"
+   }
+  ]
+ },
+ "appendix_files": [
+  "sections/appendix.tex"
+ ],
+ "supplement_files": [],
+ "macro_files": [],
+ "orphan_tex_files": [
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/example_paper.tex",
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/appendix.tex",
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/background.tex",
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/conclusions.tex",
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/experiments.tex",
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/index.tex",
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/introduction.tex",
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/model.tex",
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/related.tex",
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/sections/template.tex"
+ ],
+ "tex_sha256": {
+  "example_paper.tex": "5fbe491d6c83d689ec4b37b705ad7a4c0061099fbcd6a4282a378049a6d2eb93",
+  "sections/index.tex": "bd45a70ae2836b47ba09c73ee558a3252b9f3b1c8080f079264dcffd85dc2c3f",
+  "sections/template.tex": "a49930d937bbc85bfbad8c4e581080a330bc89b7c60cdd7352ff15a3041675aa",
+  "sections/introduction.tex": "afa73fc887428a51efa22a96d9733f3186aade10244cd38ef9e984b3fc4216f7",
+  "sections/background.tex": "8a5d871b1ef38fedaf5471fa3e6d5d0deb4326d7e0d1277df33f948d4c801466",
+  "sections/model.tex": "8bd683d3c21ea65ec8a49d31df0a86fde61c163c219e00ef1641096fb19cfb5a",
+  "sections/related.tex": "afced284811cdd38b7e4d33c419b3ebd26f75c91f98d939f1105f9360220615f",
+  "sections/experiments.tex": "fd24d310fc98196435da2d1a305c6383f9ba56da4e72fcb90b370b9d21de9fe4",
+  "sections/conclusions.tex": "2a76f29ed12709ce7cda67304d0e393deb1c8dd8d8587720f9b31ec621e162c9",
+  "sections/appendix.tex": "15f2575ae787dffae85fe450a3c1b35624800bddabf177305ff56a0f0dcdb638"
+ }
+}

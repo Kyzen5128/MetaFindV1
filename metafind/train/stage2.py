@@ -1,16 +1,15 @@
 """Layout-aware fine-tuning: train the query fuser and the ESSGNN.
 
-INCOMPLETE -- deliberately NOT carrying an `IMPLEMENTS-NODE` marker yet.
-
-The sample construction, the unique-positive batcher and the context-graph
-builder are written and testable. The training loop is NOT finished: encode_query
-references `modalities` and `text_vectors` that main() does not yet load, so this
-module cannot run.
+STILL NOT CARRYING AN `IMPLEMENTS-NODE` MARKER. The loop is complete -- sample
+construction, batching, context graphs, forward, Eq. 7/8, backward, checkpoint --
+but it has never been executed, because it needs `stage1_ckpt` (n10 has not run)
+and `sem_edge_cache` (n08 has not run).
 
 The marker is a claim, and the README's implementation count is computed from it.
-Adding it now would make the status table say 18 of 31 nodes work when one of
-them does not -- which is the exact class of false status this project keeps
-finding. It goes on when the smoke run passes.
+It goes on when a smoke run passes, not when the code looks finished. An earlier
+version of this docstring said the loop referenced names main() never loaded;
+that was true then and is not now, and the marker stayed off for the different
+reason above.
 
 Writes ``variant_ckpts``, ``variant_status``, ``run_progress``, ``cost_ledger``
 and ``degraded_flags``.
@@ -63,6 +62,12 @@ paths.setup_env()
 
 NODE = "n13_train_stage2"
 TRAINER_VERSION = 1
+
+# [PAPER 2.6] "the layout vector e_layout is omitted in 30% of batches". A
+# SEPARATE constant from stage1_config.PAPER_P_MASK, which is 2.6's other 30% --
+# per-modality masking in Stage 1. Equal values, different mechanisms; sharing
+# one symbol coupled Table 3's p_mask sweep to scene dropout.
+PAPER_SCENE_DROPOUT = 0.30
 
 CKPT_DIR = paths.CHECKPOINTS
 VARIANT_STATUS = paths.OUTPUTS / "variant_status.json"
@@ -145,36 +150,47 @@ def unique_positive_batches(samples: list[tuple[str, int, str]], batch_size: int
 
 
 def build_context_graph(graph: dict, target_index: int, edge_dim: int,
-                        sem_cache: dict, text_map: dict, missing_token: np.ndarray):
+                        sem_cache: dict, text_map: dict):
     """[U-08d] The house graph MINUS the target.
 
     Node indices are remapped because ESSGNN indexes edges positionally; leaving
     a hole would make every edge past the target point at the wrong node, and
     nothing downstream would object -- the shapes stay valid.
+
+    Returns ``(keep, pos, edge_index, edge_attr, edge_missing)``. The last is a
+    bool mask, not a filled-in token: ``essgnn_edge_protocol`` records
+    ``semantic_missing_representation = learned_missing_token``, and a token
+    substituted here would be a constant, not something the model learns. The
+    substitution happens inside ``ESSGNN.forward`` from an ``nn.Parameter``.
+
+    Rows of ``edge_attr`` under the mask are zeros ONLY as a placeholder that
+    never reaches an MLP -- ``torch.where`` replaces them before the first
+    layer. That is not a zero-fill in the L1-SEMEDGE-NO-ZEROFILL sense, and the
+    mask travelling beside the array is what keeps the distinction checkable.
     """
     keep = [n for n in graph["nodes"] if n["index"] != target_index]
     remap = {n["index"]: k for k, n in enumerate(keep)}
 
     pos = np.array([n["position"] for n in keep], dtype=np.float32)
-    rows, cols, attrs = [], [], []
+    rows, cols, attrs, missing = [], [], [], []
     for i, j in graph["sem_edge_ids"]:
         if i == target_index or j == target_index:
             continue
         ai = str(graph["nodes"][i]["asset_id"])
         aj = str(graph["nodes"][j]["asset_id"])
         vec = sem_cache.get(_edge_key(ai, aj, text_map))
-        # [U-30] A missing semantic edge gets the learned token, never zeros:
-        # a zero vector is a valid point in the space and indistinguishable
-        # downstream from a real relation.
-        attrs.append(missing_token if vec is None else vec)
+        attrs.append(np.zeros(edge_dim, np.float32) if vec is None else vec)
+        missing.append(vec is None)
         # [U-19] symmetric, matching what n07 stored
         rows += [remap[i], remap[j]]
         cols += [remap[j], remap[i]]
         attrs.append(attrs[-1])
+        missing.append(missing[-1])
     edge_index = np.array([rows, cols], dtype=np.int64) if rows else np.zeros((2, 0), np.int64)
     edge_attr = (np.stack(attrs).astype(np.float32) if attrs
                  else np.zeros((0, edge_dim), np.float32))
-    return keep, pos, edge_index, edge_attr
+    edge_missing = np.array(missing, dtype=bool)
+    return keep, pos, edge_index, edge_attr, edge_missing
 
 
 def _edge_key(a: str, b: str, text_map: dict) -> str:
@@ -206,16 +222,22 @@ def encode_query(model, backbone, graph: dict, target_index: int, asset_id: str,
             backbone.preprocess(Image.open(v).convert("RGB"))
             for v in rec["view_paths"]]))
         image = views.mean(dim=0, keepdim=True)
+        # [P0-4] same normalisation as the Stage 2 gallery -- query and gallery
+        # must see one input distribution or the retrieval compares two spaces.
         cloud = np.load(rec["pointcloud_uri"])["xyz"].astype(np.float32)
-        pc = np.concatenate([cloud, np.full_like(cloud, 0.5)], axis=1)[None]
-        pc_vec = backbone.encode_pc(torch.from_numpy(pc))
+        pc_vec = backbone.encode_pc(torch.from_numpy(prepare_depth_shell(cloud)))
 
     layout = None
     if not drop_layout:
-        keep, pos, edge_index, edge_attr = build_context_graph(
-            graph, target_index, data.edge_dim, data.sem_cache,
-            data.text_map, data.missing_token)
-        if keep and edge_index.shape[1] > 0:
+        keep, pos, edge_index, edge_attr, edge_missing = build_context_graph(
+            graph, target_index, data.edge_dim, data.sem_cache, data.text_map)
+        # [P1] `keep` alone, NOT `keep and edges > 0`. A context of one object,
+        # or of several with no cached relation between them, is still a
+        # context: with E=0 every message sum is empty, the layers reduce to the
+        # identity, and Pooling({h^(0)}) is a real -- if weak -- layout vector.
+        # Requiring an edge silently converted "sparse scene" into "no scene",
+        # which is the layout-free case Table 1 evaluates separately.
+        if keep:
             node_feat = torch.stack([
                 torch.from_numpy(data.node_vectors[str(n["asset_id"])]) for n in keep
             ]).to(device)
@@ -223,7 +245,8 @@ def encode_query(model, backbone, graph: dict, target_index: int, asset_id: str,
                 node_feat,
                 torch.from_numpy(pos).to(device),
                 torch.from_numpy(edge_index).to(device),
-                torch.from_numpy(edge_attr).to(device))
+                torch.from_numpy(edge_attr).to(device),
+                edge_missing=torch.from_numpy(edge_missing).to(device))
 
     embeds = {"text": text, "image": image, "pc": pc_vec}
     # [2.4] the query side may drop the point cloud; here it is present because
@@ -272,12 +295,11 @@ class Stage2Data:
             "text_encoder_version": cache["text_encoder_version"],
         }
 
-        # [U-30] The learned missing-edge token. NOT zeros -- a zero vector is a
-        # valid point in the space and indistinguishable from a real relation.
-        # Seeded so a rerun sees the same token; it is a parameter of the run,
-        # not of the model, until n13 learns one.
-        self.missing_token = np.random.default_rng(0).normal(
-            scale=0.02, size=self.edge_dim).astype(np.float32)
+        # [U-30] The missing-edge token lives on ESSGNN as an nn.Parameter and
+        # is genuinely learned; it used to be a seeded vector here, which the
+        # protocol already called `learned_missing_token` and which got no
+        # gradient, entered no optimizer and reached no checkpoint.
+        # build_context_graph now emits a bool mask instead.
 
     def graphs_for(self, house_ids) -> dict:
         return {h: json.loads((paths.SCENE_GRAPHS / f"{h}.json").read_text())
@@ -310,6 +332,45 @@ def freeze_for_stage2(model, backbone) -> dict:
     return {name: p.requires_grad for name, p in model.named_parameters()}
 
 
+def build_stage2_model(encoding: dict, training: dict, hyperparameters: dict,
+                       arch_proto: dict, edge_proto: dict):
+    """[P0-3] The Stage 2 dual tower -- WITH the ESSGNN branch.
+
+    Stage 1's ``build_model`` sets ``use_layout=False``, which is right there:
+    2.6 puts the layout encoder in Stage 2, and building it during Stage 1 would
+    put an untrained ESSGNN in the optimizer and in the checkpoint. Reusing that
+    constructor here left ``query.layout_encoder`` as None while ``encode_query``
+    called ``encode_layout``, and Eq. 6's lambda did not exist at all -- so
+    "Stage 2" would have been Stage 1 with a different loss, or a crash,
+    depending on which line ran first.
+
+    The ESSGNN config comes from the resolved ``essgnn_arch_protocol`` via
+    ``ESSGNNConfig.from_protocol``; hand-writing one here is what lets a run
+    drift from the architecture G6 approved.
+    """
+    from metafind.models.dual_tower import DualTowerConfig, MetaFindDualTower
+    from metafind.models.essgnn import ESSGNNConfig
+    from metafind.models.fusion import FusionConfig
+    from metafind.models.ulip_backbone import EMBED_DIM
+
+    zero_pad = encoding["missing_modality_representation"] == "zero_pad"
+    fusion = FusionConfig(kind=training["fusion"], dim=EMBED_DIM, zero_pad=zero_pad)
+    essgnn = ESSGNNConfig.from_protocol(
+        arch_proto,
+        # U-20: the t_i encoder is unstated by the paper (C's S6), so its width
+        # is read from what n08 actually wrote rather than assumed.
+        node_feat_dim=int(edge_proto["node_embedding_dim"]),
+        edge_feat_dim=int(edge_proto["edge_embedding_dim"]),
+        # Eq. 6 ADDS e_layout to the fused query, so this is not a free choice.
+        out_dim=EMBED_DIM,
+    )
+    return MetaFindDualTower(DualTowerConfig(
+        dim=EMBED_DIM, tower_sharing=training["tower_sharing"],
+        query_fusion=fusion, gallery_fusion=fusion,
+        use_layout=True, essgnn=essgnn,
+        init_lambda=float(hyperparameters["values"].get("init_lambda", 1.0))))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", default="full")
@@ -321,7 +382,8 @@ def main() -> int:
     import torch
     from metafind.train.stage1 import build_model, load_protocols
     from metafind.models.losses import ContrastiveConfig, MetaFindContrastiveLoss
-    from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
+    from metafind.models.ulip_backbone import (
+        BackboneConfig, ULIPBackbone, prepare_depth_shell)
 
     encoding, training, hyperparameters = load_protocols()
     stage2, edge_proto, arch_proto = load_stage2_protocols()
@@ -355,19 +417,36 @@ def main() -> int:
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
 
-    backbone = ULIPBackbone(BackboneConfig(device=args.device, train_scope="fuser_only"))
-    model, _ = build_model(encoding, training, hyperparameters)
-    state = torch.load(ckpt["uri"], map_location="cpu")
-    model.load_state_dict(state["trainable_state"], strict=False)
-    model.to(args.device)
-    grads = freeze_for_stage2(model, backbone)
-
+    # [P0-1] point_encoder_and_fuser so the checkpoint's fine-tuned PointBERT
+    # has somewhere to land; freeze_for_stage2 turns it off afterwards.
+    backbone = ULIPBackbone(BackboneConfig(device=args.device,
+                                           train_scope="point_encoder_and_fuser"))
+    # [P0-3] build_stage2_model, NOT Stage 1's build_model. Stage 1 builds with
+    # use_layout=False -- correct there, since 2.6 puts ESSGNN in Stage 2 -- so
+    # reusing it here left query.layout_encoder as None while encode_query below
+    # calls encode_layout, which raises. Eq. 6's lambda was absent too.
+    model = build_stage2_model(encoding, training, hyperparameters,
+                               arch_proto, edge_proto)
     loss_fn = MetaFindContrastiveLoss(ContrastiveConfig(
-        # [Eq. 7a/7b] symmetric, unlike Stage 1's Eq. 5
+        # [Eq. 7/8] symmetric, unlike Stage 1's Eq. 5
         bidirectional=True,
         learnable_temperature=values["learnable_temperature"],
         init_temperature=values["init_temperature"],
-        max_logit_scale=values["max_logit_scale"])).to(args.device)
+        max_logit_scale=values["max_logit_scale"]))
+
+    # Restore into all three, INCLUDING loss_fn: Stage 1's learned temperature
+    # carries into Stage 2 as its initialisation. The paper says nothing about
+    # tau across stages, so this is [IMPLEMENTATION CHOICE] -- but it is the one
+    # that makes Stage 2 a fine-tune rather than a restart, and starting from
+    # 0.07 again would discard a value Stage 1 spent its whole run learning.
+    # The ESSGNN and lambda are new here and correctly absent from the
+    # checkpoint; load_stage1_checkpoint checks coverage per module, so their
+    # absence from a Stage 1 file is not mistaken for a dropped tensor.
+    load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]),
+                           new_prefixes=("query.layout_encoder", "layout_weight"))
+    model.to(args.device)
+    loss_fn.to(args.device)
+    grads = freeze_for_stage2(model, backbone)
 
     params = [p for p in list(model.parameters()) + list(loss_fn.parameters())
               if p.requires_grad]
@@ -375,7 +454,14 @@ def main() -> int:
                             weight_decay=values["weight_decay"])
 
     graphs = data.graphs_for({h for h, _, _ in samples})
-    stage2_dropout = values["p_mask"]
+    # [P1] NOT values["p_mask"]. Both rates are 30% in the paper, which is
+    # exactly what made the alias invisible -- but they are different
+    # mechanisms: 2.6 masks each MODALITY independently at 30% in Stage 1, and
+    # drops the layout vector in 30% of BATCHES in Stage 2. Table 3 sweeps
+    # p_mask; under the alias, a p_mask=0.10 row would silently have moved
+    # scene dropout to 10% too, and the ablation would no longer be an ablation
+    # of one thing.
+    stage2_dropout = float(values.get("scene_dropout", PAPER_SCENE_DROPOUT))
     epochs = args.epochs or values["epochs"]
     batches = unique_positive_batches(samples, values["batch_size"], rng)
     print(f"{len(samples):,} samples over {len(train_houses):,} houses, "

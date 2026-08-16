@@ -1,0 +1,157 @@
+\begin{thebibliography}{10}
+
+\bibitem{ccelen2024design}
+Ata {\c{C}}elen, Guo Han, Konrad Schindler, Luc Van~Gool, Iro Armeni, Anton Obukhov, and Xi~Wang.
+\newblock I-design: Personalized llm interior designer.
+\newblock {\em arXiv preprint arXiv:2404.02838}, 2024.
+
+\bibitem{deitke2023objaverse}
+Matt Deitke, Dustin Schwenk, Jordi Salvador, Luca Weihs, Oscar Michel, Eli VanderBilt, Ludwig Schmidt, Kiana Ehsani, Aniruddha Kembhavi, and Ali Farhadi.
+\newblock Objaverse: A universe of annotated 3d objects.
+\newblock In {\em Proceedings of the IEEE/CVF conference on computer vision and pattern recognition}, pages 13142--13153, 2023.
+
+\bibitem{deitke2022}
+Matt Deitke, Eli VanderBilt, Alvaro Herrasti, Luca Weihs, Kiana Ehsani, Jordi Salvador, Winson Han, Eric Kolve, Aniruddha Kembhavi, and Roozbeh Mottaghi.
+\newblock Procthor: Large-scale embodied ai using procedural generation.
+\newblock {\em Advances in Neural Information Processing Systems}, 35:5982--5994, 2022.
+
+\bibitem{fang2023ctrl}
+Chuan Fang, Yuan Dong, Kunming Luo, Xiaotao Hu, Rakesh Shrestha, and Ping Tan.
+\newblock Ctrl-room: controllable text-to-3d room meshes generation with layout constraints.
+\newblock {\em arXiv preprint arXiv:2310.03602}, 2023.
+
+\bibitem{feng2023layoutgpt}
+Weixi Feng, Wanrong Zhu, Tsu-jui Fu, Varun Jampani, Arjun Akula, Xuehai He, Sugato Basu, Xin~Eric Wang, and William~Yang Wang.
+\newblock Layoutgpt: Compositional visual planning and generation with large language models.
+\newblock {\em Advances in Neural Information Processing Systems}, 36:18225--18250, 2023.
+
+\bibitem{fu2025s2mix}
+Xinwei Fu, Dan Song, Yue Yang, Yuyi Zhang, and Bo~Wang.
+\newblock S2mix: Style and semantic mix for cross-domain 3d model retrieval.
+\newblock {\em Journal of Visual Communication and Image Representation}, 107:104390, 2025.
+
+\bibitem{guo2015learning}
+Haiyun Guo, Jinqiao Wang, Min Xu, Zheng-Jun Zha, and Hanqing Lu.
+\newblock Learning multi-view deep features for small object retrieval in surveillance scenarios.
+\newblock In {\em Proceedings of the 23rd ACM international conference on Multimedia}, pages 859--862, 2015.
+
+\bibitem{karpukhin2020dense}
+Vladimir Karpukhin, Barlas Oguz, Sewon Min, Patrick~SH Lewis, Ledell Wu, Sergey Edunov, Danqi Chen, and Wen-tau Yih.
+\newblock Dense passage retrieval for open-domain question answering.
+\newblock In {\em EMNLP (1)}, pages 6769--6781, 2020.
+
+\bibitem{li2023uni3dl}
+Xiang Li, Jian Ding, Zhaoyang Chen, and Mohamed Elhoseiny.
+\newblock Uni3dl: Unified model for 3d and language understanding.
+\newblock {\em arXiv preprint arXiv:2312.03026}, 2023.
+
+\bibitem{liu2023openshape}
+Minghua Liu, Ruoxi Shi, Kaiming Kuang, Yinhao Zhu, Xuanlin Li, Shizhong Han, Hong Cai, Fatih Porikli, and Hao Su.
+\newblock Openshape: Scaling up 3d shape representation towards open-world understanding.
+\newblock {\em Advances in neural information processing systems}, 36:44860--44879, 2023.
+
+\bibitem{pan2024codevbenchllmsunderstanddevelopercentric}
+Zhenyu Pan, Rongyu Cao, Yongchang Cao, Yingwei Ma, Binhua Li, Fei Huang, Han Liu, and Yongbin Li.
+\newblock Codev-bench: How do llms understand developer-centric code completion?, 2024.
+
+\bibitem{pan2025metaspatial}
+Zhenyu Pan and Han Liu.
+\newblock Metaspatial: Reinforcing 3d spatial reasoning in vlms for the metaverse.
+\newblock {\em arXiv preprint arXiv:2503.18470}, 2025.
+
+\bibitem{pan2024chain}
+Zhenyu Pan, Haozheng Luo, Manling Li, and Han Liu.
+\newblock Chain-of-action: Faithful and multimodal question answering through large language models.
+\newblock {\em arXiv preprint arXiv:2403.17359}, 2024.
+
+\bibitem{pan2024convcoaimprovingopendomainquestion}
+Zhenyu Pan, Haozheng Luo, Manling Li, and Han Liu.
+\newblock Conv-coa: Improving open-domain question answering in large language models via conversational chain-of-action, 2024.
+
+\bibitem{pan2025code}
+Zhenyu Pan, Xuefeng Song, Yunkun Wang, Rongyu Cao, Binhua Li, Yongbin Li, and Han Liu.
+\newblock Do code llms understand design patterns?
+\newblock {\em arXiv preprint arXiv:2501.04835}, 2025.
+
+\bibitem{pan2025advevomarlshapinginternalizedsafety}
+Zhenyu Pan, Yiting Zhang, Zhuo Liu, Yolo~Yunlong Tang, Zeliang Zhang, Haozheng Luo, Yuwei Han, Jianshu Zhang, Dennis Wu, Hong-Yu Chen, Haoran Lu, Haoyang Fang, Manling Li, Chenliang Xu, Philip~S. Yu, and Han Liu.
+\newblock Advevo-marl: Shaping internalized safety through adversarial co-evolution in multi-agent reinforcement learning, 2025.
+
+\bibitem{pan2025evomarlcoevolutionarymultiagentreinforcement}
+Zhenyu Pan, Yiting Zhang, Yutong Zhang, Jianshu Zhang, Haozheng Luo, Yuwei Han, Dennis Wu, Hong-Yu Chen, Philip~S. Yu, Manling Li, and Han Liu.
+\newblock Evo-marl: Co-evolutionary multi-agent reinforcement learning for internalized safety, 2025.
+
+\bibitem{pan2025fairreasonbalancingreasoningsocial}
+Zhenyu Pan, Yutong Zhang, Jianshu Zhang, Haoran Lu, Haozheng Luo, Yuwei Han, Philip~S. Yu, Manling Li, and Han Liu.
+\newblock Fairreason: Balancing reasoning and social bias in mllms, 2025.
+
+\bibitem{ren2025sca3d}
+Junlong Ren, Hao Wu, Hui Xiong, and Hao Wang.
+\newblock Sca3d: Enhancing cross-modal 3d retrieval via 3d shape and caption paired data augmentation.
+\newblock {\em arXiv preprint arXiv:2502.19128}, 2025.
+
+\bibitem{sanghi2022clip}
+Aditya Sanghi, Hang Chu, Joseph~G Lambourne, Ye~Wang, Chin-Yi Cheng, Marco Fumero, and Kamal~Rahimi Malekshan.
+\newblock Clip-forge: Towards zero-shot text-to-shape generation.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition}, pages 18603--18613, 2022.
+
+\bibitem{satorras2021n}
+V{\i}ctor~Garcia Satorras, Emiel Hoogeboom, and Max Welling.
+\newblock E (n) equivariant graph neural networks.
+\newblock In {\em International conference on machine learning}, pages 9323--9332. PMLR, 2021.
+
+\bibitem{schult2024controlroom3d}
+Jonas Schult, Sam Tsai, Lukas H{\"o}llein, Bichen Wu, Jialiang Wang, Chih-Yao Ma, Kunpeng Li, Xiaofang Wang, Felix Wimbauer, Zijian He, et~al.
+\newblock Controlroom3d: Room generation using semantic proxy rooms.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition}, pages 6201--6210, 2024.
+
+\bibitem{shao2025sciscigpt}
+Erzhuo Shao, Yifang Wang, Yifan Qian, Zhenyu Pan, Han Liu, and Dashun Wang.
+\newblock Sciscigpt: Advancing human-ai collaboration in the science of science.
+\newblock {\em arXiv preprint arXiv:2504.05559}, 2025.
+
+\bibitem{song2020universal}
+Dan Song, Tian-Bao Li, Wen-Hui Li, Wei-Zhi Nie, Wu~Liu, and An-An Liu.
+\newblock Universal cross-domain 3d model retrieval.
+\newblock {\em IEEE Transactions on Multimedia}, 23:2721--2731, 2020.
+
+\bibitem{su2015multi}
+Hang Su, Subhransu Maji, Evangelos Kalogerakis, and Erik Learned-Miller.
+\newblock Multi-view convolutional neural networks for 3d shape recognition.
+\newblock In {\em Proceedings of the IEEE international conference on computer vision}, pages 945--953, 2015.
+
+\bibitem{sun2024layoutvlm}
+Fan-Yun Sun, Weiyu Liu, Siyi Gu, Dylan Lim, Goutam Bhat, Federico Tombari, Manling Li, Nick Haber, and Jiajun Wu.
+\newblock Layoutvlm: Differentiable optimization of 3d layout via vision-language models.
+\newblock {\em arXiv preprint arXiv:2412.02193}, 2024.
+
+\bibitem{wang2020unsupervised}
+Qian Wang and Toby Breckon.
+\newblock Unsupervised domain adaptation via structured prediction based selective pseudo-labeling.
+\newblock In {\em Proceedings of the AAAI conference on artificial intelligence}, volume~34, pages 6243--6250, 2020.
+
+\bibitem{wang2024omnibindlargescaleomnimultimodal}
+Zehan Wang, Ziang Zhang, Hang Zhang, Luping Liu, Rongjie Huang, Xize Cheng, Hengshuang Zhao, and Zhou Zhao.
+\newblock Omnibind: Large-scale omni multimodal representation via binding spaces, 2024.
+
+\bibitem{wu2024com3d}
+Hao Wu, Ruochong Li, Hao Wang, and Hui Xiong.
+\newblock Com3d: Leveraging cross-view correspondence and cross-modal mining for 3d retrieval.
+\newblock In {\em 2024 IEEE International Conference on Multimedia and Expo (ICME)}, pages 1--6. IEEE, 2024.
+
+\bibitem{xue2024ulip}
+Le~Xue, Ning Yu, Shu Zhang, Artemis Panagopoulou, Junnan Li, Roberto Mart{\'\i}n-Mart{\'\i}n, Jiajun Wu, Caiming Xiong, Ran Xu, Juan~Carlos Niebles, et~al.
+\newblock Ulip-2: Towards scalable multimodal pre-training for 3d understanding.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition}, pages 27091--27101, 2024.
+
+\bibitem{zhang2022pointclip}
+Renrui Zhang, Ziyu Guo, Wei Zhang, Kunchang Li, Xupeng Miao, Bin Cui, Yu~Qiao, Peng Gao, and Hongsheng Li.
+\newblock Pointclip: Point cloud understanding by clip.
+\newblock In {\em Proceedings of the IEEE/CVF conference on computer vision and pattern recognition}, pages 8552--8562, 2022.
+
+\bibitem{zhou2023uni3d}
+Junsheng Zhou, Jinsheng Wang, Baorui Ma, Yu-Shen Liu, Tiejun Huang, and Xinlong Wang.
+\newblock Uni3d: Exploring unified 3d representation at scale.
+\newblock {\em arXiv preprint arXiv:2310.06773}, 2023.
+
+\end{thebibliography}

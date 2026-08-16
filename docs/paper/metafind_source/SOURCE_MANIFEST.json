@@ -1,0 +1,46 @@
+{
+ "paper_name": "metafind",
+ "arxiv_id": "2510.05057",
+ "archive_path": "docs/paper/MetaFind.gz",
+ "archive_sha256": "61351d3456dd95dbc6bd641ce25802a4ce3dd492baa7881f856627a49438b4e5",
+ "main_tex": "neurips_2025.tex",
+ "included_tex_files": [
+  "neurips_2025.tex",
+  "2methdology.tex",
+  "3experiments.tex",
+  "appendix.tex",
+  "4backgound.tex"
+ ],
+ "include_tree": {
+  "file": "neurips_2025.tex",
+  "includes": [
+   {
+    "file": "2methdology.tex"
+   },
+   {
+    "file": "3experiments.tex"
+   },
+   {
+    "file": "appendix.tex",
+    "includes": [
+     {
+      "file": "4backgound.tex"
+     }
+    ]
+   }
+  ]
+ },
+ "appendix_files": [
+  "appendix.tex"
+ ],
+ "supplement_files": [],
+ "macro_files": [],
+ "orphan_tex_files": [],
+ "tex_sha256": {
+  "neurips_2025.tex": "3e4891915b2be9e59e4fd52b0f8d9400964b73ad60a30b438a5d781f883b708d",
+  "2methdology.tex": "4504c177dd4b5a43630b197492712939037941c3dc6edec143742d3ab40a7d96",
+  "3experiments.tex": "26a8e3102d46abda511c6cda131fb652c00c166b1619367b58816dc3299f99fd",
+  "appendix.tex": "f7b7120e9a0b300f3a734258c8e642ae4d8613af3295861965d7db944f014036",
+  "4backgound.tex": "b54e4176f975b4d88351003a5dac2e3f8c9d467b4ee8cdc27ad478c8852f59e0"
+ }
+}

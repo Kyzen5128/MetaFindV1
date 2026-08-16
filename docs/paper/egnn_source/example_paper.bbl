@@ -1,0 +1,267 @@
+\begin{thebibliography}{39}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Anderson et~al.(2019)Anderson, Hy, and Kondor]{anderson2019cormorant}
+Anderson, B., Hy, T.-S., and Kondor, R.
+\newblock Cormorant: Covariant molecular neural networks.
+\newblock \emph{arXiv preprint arXiv:1906.04015}, 2019.
+
+\bibitem[Bollob{\'a}s \& B{\'e}la(2001)Bollob{\'a}s and
+  B{\'e}la]{bollobas2001random}
+Bollob{\'a}s, B. and B{\'e}la, B.
+\newblock \emph{Random graphs}.
+\newblock Number~73. Cambridge university press, 2001.
+
+\bibitem[Bruna et~al.(2013)Bruna, Zaremba, Szlam, and LeCun]{bruna2013spectral}
+Bruna, J., Zaremba, W., Szlam, A., and LeCun, Y.
+\newblock Spectral networks and locally connected networks on graphs.
+\newblock \emph{arXiv preprint arXiv:1312.6203}, 2013.
+
+\bibitem[Cand{\`e}s \& Recht(2009)Cand{\`e}s and Recht]{candes2009exact}
+Cand{\`e}s, E.~J. and Recht, B.
+\newblock Exact matrix completion via convex optimization.
+\newblock \emph{Foundations of Computational mathematics}, 9\penalty0
+  (6):\penalty0 717--772, 2009.
+
+\bibitem[Chua et~al.(2018)Chua, Calandra, McAllister, and Levine]{chua2018deep}
+Chua, K., Calandra, R., McAllister, R., and Levine, S.
+\newblock Deep reinforcement learning in a handful of trials using
+  probabilistic dynamics models.
+\newblock \emph{arXiv preprint arXiv:1805.12114}, 2018.
+
+\bibitem[Cohen \& Welling(2016)Cohen and Welling]{cohen2016group}
+Cohen, T. and Welling, M.
+\newblock Group equivariant convolutional networks.
+\newblock In Balcan, M. and Weinberger, K.~Q. (eds.), \emph{Proceedings of the
+  33nd International Conference on Machine Learning, {ICML}}, 2016.
+
+\bibitem[Cohen \& Welling(2017)Cohen and Welling]{cohen2017steerable}
+Cohen, T.~S. and Welling, M.
+\newblock Steerable cnns.
+\newblock In \emph{5th International Conference on Learning Representations,
+  {ICLR}}, 2017.
+
+\bibitem[Defferrard et~al.(2016)Defferrard, Bresson, and
+  Vandergheynst]{defferrard2016convolutional}
+Defferrard, M., Bresson, X., and Vandergheynst, P.
+\newblock Convolutional neural networks on graphs with fast localized spectral
+  filtering.
+\newblock In \emph{Advances in neural information processing systems}, pp.\
+  3844--3852, 2016.
+
+\bibitem[Finzi et~al.(2020)Finzi, Stanton, Izmailov, and
+  Wilson]{finzi2020generalizing}
+Finzi, M., Stanton, S., Izmailov, P., and Wilson, A.~G.
+\newblock Generalizing convolutional neural networks for equivariance to lie
+  groups on arbitrary continuous data.
+\newblock \emph{arXiv preprint arXiv:2002.12880}, 2020.
+
+\bibitem[Fuchs et~al.(2020)Fuchs, Worrall, Fischer, and Welling]{fuchs2020se}
+Fuchs, F., Worrall, D., Fischer, V., and Welling, M.
+\newblock Se (3)-transformers: 3d roto-translation equivariant attention
+  networks.
+\newblock \emph{Advances in Neural Information Processing Systems}, 33, 2020.
+
+\bibitem[Gilmer et~al.(2017)Gilmer, Schoenholz, Riley, Vinyals, and
+  Dahl]{gilmer2017neural}
+Gilmer, J., Schoenholz, S.~S., Riley, P.~F., Vinyals, O., and Dahl, G.~E.
+\newblock Neural message passing for quantum chemistry.
+\newblock \emph{arXiv preprint arXiv:1704.01212}, 2017.
+
+\bibitem[Grover et~al.(2019)Grover, Zweig, and Ermon]{grover2019graphite}
+Grover, A., Zweig, A., and Ermon, S.
+\newblock Graphite: Iterative generative modeling of graphs.
+\newblock In \emph{International conference on machine learning}, pp.\
+  2434--2444. PMLR, 2019.
+
+\bibitem[Grzeszczuk et~al.(1998)Grzeszczuk, Terzopoulos, and
+  Hinton]{grzeszczuk1998neuroanimator}
+Grzeszczuk, R., Terzopoulos, D., and Hinton, G.
+\newblock Neuroanimator: Fast neural network emulation and control of
+  physics-based models.
+\newblock In \emph{Proceedings of the 25th annual conference on Computer
+  graphics and interactive techniques}, pp.\  9--20, 1998.
+
+\bibitem[Horie et~al.(2020)Horie, Morita, Hishinuma, Ihara, and
+  Mitsume]{horie2020isometric}
+Horie, M., Morita, N., Hishinuma, T., Ihara, Y., and Mitsume, N.
+\newblock Isometric transformation invariant and equivariant graph
+  convolutional networks.
+\newblock \emph{arXiv preprint arXiv:2005.06316}, 2020.
+
+\bibitem[Kipf et~al.(2018)Kipf, Fetaya, Wang, Welling, and
+  Zemel]{kipf2018neural}
+Kipf, T., Fetaya, E., Wang, K.-C., Welling, M., and Zemel, R.
+\newblock Neural relational inference for interacting systems.
+\newblock \emph{arXiv preprint arXiv:1802.04687}, 2018.
+
+\bibitem[Kipf \& Welling(2016{\natexlab{a}})Kipf and Welling]{kipf2016semi}
+Kipf, T.~N. and Welling, M.
+\newblock Semi-supervised classification with graph convolutional networks.
+\newblock \emph{arXiv preprint arXiv:1609.02907}, 2016{\natexlab{a}}.
+
+\bibitem[Kipf \& Welling(2016{\natexlab{b}})Kipf and
+  Welling]{kipf2016variational}
+Kipf, T.~N. and Welling, M.
+\newblock Variational graph auto-encoders.
+\newblock \emph{arXiv preprint arXiv:1611.07308}, 2016{\natexlab{b}}.
+
+\bibitem[Klicpera et~al.(2020{\natexlab{a}})Klicpera, Giri, Margraf, and
+  G{\"u}nnemann]{klicpera2020fast}
+Klicpera, J., Giri, S., Margraf, J.~T., and G{\"u}nnemann, S.
+\newblock Fast and uncertainty-aware directional message passing for
+  non-equilibrium molecules.
+\newblock \emph{arXiv preprint arXiv:2011.14115}, 2020{\natexlab{a}}.
+
+\bibitem[Klicpera et~al.(2020{\natexlab{b}})Klicpera, Gro{\ss}, and
+  G{\"u}nnemann]{klicpera2020directional}
+Klicpera, J., Gro{\ss}, J., and G{\"u}nnemann, S.
+\newblock Directional message passing for molecular graphs.
+\newblock \emph{arXiv preprint arXiv:2003.03123}, 2020{\natexlab{b}}.
+
+\bibitem[K{\"{o}}hler et~al.(2019)K{\"{o}}hler, Klein, and
+  No{\'{e}}]{kohler2019equivariant_workshop}
+K{\"{o}}hler, J., Klein, L., and No{\'{e}}, F.
+\newblock Equivariant flows: sampling configurations for multi-body systems
+  with symmetric energies.
+\newblock \emph{CoRR}, abs/1910.00753, 2019.
+
+\bibitem[K{\"o}hler et~al.(2020)K{\"o}hler, Klein, and
+  No{\'e}]{kohler2020equivariant_icml}
+K{\"o}hler, J., Klein, L., and No{\'e}, F.
+\newblock Equivariant flows: exact likelihood generative learning for symmetric
+  densities.
+\newblock \emph{arXiv preprint arXiv:2006.02425}, 2020.
+
+\bibitem[Kondor et~al.(2018)Kondor, Son, Pan, Anderson, and
+  Trivedi]{kondor2018covariant}
+Kondor, R., Son, H.~T., Pan, H., Anderson, B., and Trivedi, S.
+\newblock Covariant compositional networks for learning graphs.
+\newblock \emph{arXiv preprint arXiv:1801.02144}, 2018.
+
+\bibitem[Liu et~al.(2019)Liu, Kumar, Ba, Kiros, and Swersky]{liu2019graph}
+Liu, J., Kumar, A., Ba, J., Kiros, J., and Swersky, K.
+\newblock Graph normalizing flows.
+\newblock In \emph{Advances in Neural Information Processing Systems}, pp.\
+  13578--13588, 2019.
+
+\bibitem[Miller et~al.(2020)Miller, Geiger, Smidt, and
+  No{\'e}]{miller2020relevance}
+Miller, B.~K., Geiger, M., Smidt, T.~E., and No{\'e}, F.
+\newblock Relevance of rotationally equivariant convolutions for predicting
+  molecular properties.
+\newblock \emph{arXiv preprint arXiv:2008.08461}, 2020.
+
+\bibitem[Nagabandi et~al.(2018)Nagabandi, Kahn, Fearing, and
+  Levine]{nagabandi2018neural}
+Nagabandi, A., Kahn, G., Fearing, R.~S., and Levine, S.
+\newblock Neural network dynamics for model-based deep reinforcement learning
+  with model-free fine-tuning.
+\newblock In \emph{2018 IEEE International Conference on Robotics and
+  Automation (ICRA)}, pp.\  7559--7566. IEEE, 2018.
+
+\bibitem[Ramachandran et~al.(2017)Ramachandran, Zoph, and
+  Le]{ramachandran2017searching}
+Ramachandran, P., Zoph, B., and Le, Q.~V.
+\newblock Searching for activation functions.
+\newblock \emph{arXiv preprint arXiv:1710.05941}, 2017.
+
+\bibitem[Ramakrishnan et~al.(2014)Ramakrishnan, Dral, Rupp, and
+  Von~Lilienfeld]{ramakrishnan2014quantum}
+Ramakrishnan, R., Dral, P.~O., Rupp, M., and Von~Lilienfeld, O.~A.
+\newblock Quantum chemistry structures and properties of 134 kilo molecules.
+\newblock \emph{Scientific data}, 1\penalty0 (1):\penalty0 1--7, 2014.
+
+\bibitem[Rezende et~al.(2019)Rezende, Racani{\`{e}}re, Higgins, and
+  Toth]{rezende2019equivariantflows}
+Rezende, D.~J., Racani{\`{e}}re, S., Higgins, I., and Toth, P.
+\newblock Equivariant hamiltonian flows.
+\newblock \emph{CoRR}, abs/1909.13739, 2019.
+
+\bibitem[Romero \& Cordonnier(2021)Romero and Cordonnier]{romero2021group}
+Romero, D.~W. and Cordonnier, J.-B.
+\newblock Group equivariant stand-alone self-attention for vision.
+\newblock In \emph{International Conference on Learning Representations}, 2021.
+\newblock URL \url{https://openreview.net/forum?id=JkfYjnOEo6M}.
+
+\bibitem[Sch{\"u}tt et~al.(2017{\natexlab{a}})Sch{\"u}tt, Arbabzadah, Chmiela,
+  M{\"u}ller, and Tkatchenko]{schutt2017quantum}
+Sch{\"u}tt, K.~T., Arbabzadah, F., Chmiela, S., M{\"u}ller, K.~R., and
+  Tkatchenko, A.
+\newblock Quantum-chemical insights from deep tensor neural networks.
+\newblock \emph{Nature communications}, 8\penalty0 (1):\penalty0 1--8,
+  2017{\natexlab{a}}.
+
+\bibitem[Sch{\"u}tt et~al.(2017{\natexlab{b}})Sch{\"u}tt, Kindermans, Sauceda,
+  Chmiela, Tkatchenko, and M{\"u}ller]{schutt2017schnet}
+Sch{\"u}tt, K.~T., Kindermans, P.-J., Sauceda, H.~E., Chmiela, S., Tkatchenko,
+  A., and M{\"u}ller, K.-R.
+\newblock Schnet: A continuous-filter convolutional neural network for modeling
+  quantum interactions.
+\newblock \emph{arXiv preprint arXiv:1706.08566}, 2017{\natexlab{b}}.
+
+\bibitem[Serviansky et~al.(2020)Serviansky, Segol, Shlomi, Cranmer, Gross,
+  Maron, and Lipman]{serviansky2020set2graph}
+Serviansky, H., Segol, N., Shlomi, J., Cranmer, K., Gross, E., Maron, H., and
+  Lipman, Y.
+\newblock Set2graph: Learning graphs from sets.
+\newblock \emph{Advances in Neural Information Processing Systems}, 33, 2020.
+
+\bibitem[Simonovsky \& Komodakis(2018)Simonovsky and
+  Komodakis]{simonovsky2018graphvae}
+Simonovsky, M. and Komodakis, N.
+\newblock Graphvae: Towards generation of small graphs using variational
+  autoencoders.
+\newblock In \emph{International Conference on Artificial Neural Networks},
+  pp.\  412--422. Springer, 2018.
+
+\bibitem[Srinivasan \& Ribeiro(2019)Srinivasan and
+  Ribeiro]{srinivasan2019equivalence}
+Srinivasan, B. and Ribeiro, B.
+\newblock On the equivalence between positional node embeddings and structural
+  graph representations.
+\newblock \emph{arXiv preprint arXiv:1910.00452}, 2019.
+
+\bibitem[Thomas et~al.(2018)Thomas, Smidt, Kearnes, Yang, Li, Kohlhoff, and
+  Riley]{thomas2018tensor}
+Thomas, N., Smidt, T., Kearnes, S., Yang, L., Li, L., Kohlhoff, K., and Riley,
+  P.
+\newblock Tensor field networks: Rotation-and translation-equivariant neural
+  networks for 3d point clouds.
+\newblock \emph{arXiv preprint arXiv:1802.08219}, 2018.
+
+\bibitem[Uy et~al.(2019)Uy, Pham, Hua, Nguyen, and Yeung]{uy2019revisiting}
+Uy, M.~A., Pham, Q.-H., Hua, B.-S., Nguyen, T., and Yeung, S.-K.
+\newblock Revisiting point cloud classification: A new benchmark dataset and
+  classification model on real-world data.
+\newblock In \emph{Proceedings of the IEEE International Conference on Computer
+  Vision}, pp.\  1588--1597, 2019.
+
+\bibitem[Watters et~al.(2017)Watters, Zoran, Weber, Battaglia, Pascanu, and
+  Tacchetti]{watters2017visual}
+Watters, N., Zoran, D., Weber, T., Battaglia, P., Pascanu, R., and Tacchetti,
+  A.
+\newblock Visual interaction networks: Learning a physics simulator from video.
+\newblock \emph{Advances in neural information processing systems},
+  30:\penalty0 4539--4547, 2017.
+
+\bibitem[Weiler \& Cesa(2019)Weiler and Cesa]{weiler2019e2equivariant}
+Weiler, M. and Cesa, G.
+\newblock General e(2)-equivariant steerable cnns.
+\newblock In Wallach, H.~M., Larochelle, H., Beygelzimer, A.,
+  d'Alch{\'{e}}{-}Buc, F., Fox, E.~B., and Garnett, R. (eds.), \emph{Advances
+  in Neural Information Processing Systems 32: Annual Conference on Neural
+  Information Processing Systems}, 2019.
+
+\bibitem[You et~al.(2018)You, Ying, Ren, Hamilton, and
+  Leskovec]{you2018graphrnn}
+You, J., Ying, R., Ren, X., Hamilton, W.~L., and Leskovec, J.
+\newblock Graphrnn: Generating realistic graphs with deep auto-regressive
+  models.
+\newblock \emph{arXiv preprint arXiv:1802.08773}, 2018.
+
+\end{thebibliography}

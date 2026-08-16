@@ -1,0 +1,96 @@
+{
+ "paper_name": "idesign",
+ "arxiv_id": "2404.02838",
+ "archive_path": "docs/paper/I-Design.gz",
+ "archive_sha256": "68cf90feafec2225adbfa7b61ab919dcaf7b1c5905f3cd60bba57de5d7b98efd",
+ "main_tex": "main.tex",
+ "included_tex_files": [
+  "main.tex",
+  "figs/fig_overview.tex",
+  "figs/fig_agents.tex",
+  "figs/fig_backtracking.tex",
+  "figs/fig_gallery.tex",
+  "tabs/tab_evaluation.tex",
+  "tabs/tab_prompt.tex",
+  "figs/fig_user_study.tex",
+  "tabs/tab_user_study.tex",
+  "supplementary.tex",
+  "figs/fig_gallery_supp_liv.tex",
+  "figs/fig_gallery_supp_w_prompt.tex",
+  "figs/fig_scene_graph_supp.tex",
+  "tabs/tab_promptlist_minimal.tex",
+  "tabs/tab_promptlist_others.tex"
+ ],
+ "include_tree": {
+  "file": "main.tex",
+  "includes": [
+   {
+    "file": "figs/fig_overview.tex"
+   },
+   {
+    "file": "figs/fig_agents.tex"
+   },
+   {
+    "file": "figs/fig_backtracking.tex"
+   },
+   {
+    "file": "figs/fig_gallery.tex"
+   },
+   {
+    "file": "tabs/tab_evaluation.tex"
+   },
+   {
+    "file": "tabs/tab_prompt.tex"
+   },
+   {
+    "file": "figs/fig_user_study.tex"
+   },
+   {
+    "file": "tabs/tab_user_study.tex"
+   },
+   {
+    "file": "supplementary.tex",
+    "includes": [
+     {
+      "file": "figs/fig_gallery_supp_liv.tex"
+     },
+     {
+      "file": "figs/fig_gallery_supp_w_prompt.tex"
+     },
+     {
+      "file": "figs/fig_scene_graph_supp.tex"
+     },
+     {
+      "file": "tabs/tab_promptlist_minimal.tex"
+     },
+     {
+      "file": "tabs/tab_promptlist_others.tex"
+     }
+    ]
+   }
+  ]
+ },
+ "appendix_files": [],
+ "supplement_files": [
+  "supplementary.tex"
+ ],
+ "macro_files": [],
+ "orphan_tex_files": [],
+ "tex_sha256": {
+  "main.tex": "a0845a2b3200e8af56a040cb8ec781eb984b76d4182e89743ca253ccc55485fc",
+  "figs/fig_overview.tex": "cf6e0c995268689a4d36614e84a87c9cdb0c47708a7de8c1b2b4e13a2f32f191",
+  "figs/fig_agents.tex": "d3e5902de0dc1e3e90e421506eab7c065a6b01c153dcfaf3cb5e34d42ae4960b",
+  "figs/fig_backtracking.tex": "62d417d2f9935c3fdcf8729477ee60ad7d3ef4fffc54bde0d180c4689dfb98c2",
+  "figs/fig_gallery.tex": "5e7926e524cc1a96aa1d342825df0288b8d34b9c5cbe928e8a7b61bb7a73a30b",
+  "tabs/tab_evaluation.tex": "7706eebdc524925098cc5f06e72dde969170317a8ad1b1b85747393a2b655b14",
+  "tabs/tab_prompt.tex": "2c6aef996962b955e18d7d9fb85b6a26aed7307cf6ac34c05375ecf44d4229a7",
+  "figs/fig_user_study.tex": "1b38c6c31a0cc3d651a92abe3c57964035e77b70df846e168d3b5ff196558033",
+  "tabs/tab_user_study.tex": "05b48d34894d345a37625ce11e5659d371090a5b4a77837376e8924486f70eca",
+  "supplementary.tex": "f9abe77857e7e801704a2f0dc3141c08aee00cc5f0131d0424e95e70b2578769",
+  "figs/fig_gallery_supp_liv.tex": "a606daaf2b2315d2136d30d5cb0f23304eaf669f15da3a1bd013c376129ca00a",
+  "figs/fig_gallery_supp_w_prompt.tex": "4044ae03cbb63f6ec3e69325918c1a095fae7efda3a6d6037445e7b169d9d364",
+  "figs/fig_scene_graph_supp.tex": "72ad3a8d4d3d7fb746a9825e467fb1d7ea9697205cc29b8c6a59476d7489451e",
+  "tabs/tab_promptlist_minimal.tex": "d7b135cabe8057a105b1c1e9b139df9e469c2bac74b6515cdfdf6e15a7504213",
+  "tabs/tab_promptlist_others.tex": "8689e468054878c8f82f793b51adb419380c5aa24bf5f1fca37567d8bf121338"
+ }
+}

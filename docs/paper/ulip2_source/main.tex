@@ -1,0 +1,1474 @@
+% CVPR 2024 Paper Template; see https://github.com/cvpr-org/author-kit
+
+\documentclass[10pt,twocolumn,letterpaper]{article}
+
+%%%%%%%%% PAPER TYPE  - PLEASE UPDATE FOR FINAL VERSION
+% \usepackage{cvpr}              % To produce the CAMERA-READY version
+\usepackage{cvpr}      % To produce the REVIEW version
+% \usepackage[pagenumbers]{cvpr} % To force page numbers, e.g. for an arXiv version
+
+% Import additional packages in the preamble file, before hyperref
+\input{preamble}
+
+% It is strongly recommended to use hyperref, especially for the review version.
+% hyperref with option pagebackref eases the reviewers' job.
+% Please disable hyperref *only* if you encounter grave issues, 
+% e.g. with the file validation for the camera-ready version.
+%
+% If you comment hyperref and then uncomment it, you should delete *.aux before re-running LaTeX.
+% (Or just hit 'q' on the first LaTeX run, let it finish, and you should be clear).
+\definecolor{cvprblue}{rgb}{0.21,0.49,0.74}
+\usepackage[pagebackref,breaklinks,colorlinks,citecolor=cvprblue]{hyperref}
+
+%%%%%%%%% PAPER ID  - PLEASE UPDATE
+\def\paperID{10797} % *** Enter the Paper ID here
+\def\confName{CVPR}
+\def\confYear{2024}
+
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+% \usepackage{xcolor}         % colors
+\usepackage[accsupp]{axessibility}
+% Added packages below
+
+% \usepackage[pagebackref,breaklinks,colorlinks]{hyperref}
+
+\newcommand{\ning}[1]{\textcolor{blue}{Ning: #1}}
+\newcommand{\shu}[1]{\textcolor{red}{\small{[Shu: #1] }}}
+\newcommand{\Le}[1]{\textcolor{magenta}{Le: #1}}
+\newcommand{\JN}[1]{\textcolor{purple}{[junnan: #1]}}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{stfloats}
+\usepackage{multirow}
+% \usepackage[dvipsnames]{xcolor}
+% \usepackage{xcolor}
+\usepackage{pifont}
+\newcommand{\cmark}{\ding{51}}
+\newcommand{\xmark}{\ding{55}}
+\definecolor{DarkGreen}{rgb}{0.0, 0.5, 0.0}
+\usepackage{makecell}
+
+\usepackage{booktabs} % For professional looking tables
+\usepackage{multirow} % Support for multirow cells
+\usepackage{xcolor}   % Required for text color if needed
+\usepackage{array}
+% \usepackage[table]{xcolor}
+\usepackage{colortbl} % Include colortbl package
+
+
+\definecolor{Gray}{gray}{0.9}
+
+
+% \usepackage[table]{xcolor}
+
+
+%%%%%%%%% TITLE - PLEASE UPDATE
+\title{ULIP-2: Towards Scalable Multimodal Pre-training for 3D Understanding}
+
+%%%%%%%%% AUTHORS - PLEASE UPDATE
+\author{%
+\textbf{Le Xue$^{1}$} \thanks{\ Contact: lxue@salesforce.com}
+% {\tt\small lxue@salesforce.com}
+% For a paper whose authors are all at the same institution,
+% omit the following lines up until the closing ``}''.
+% Additional authors and addresses can be added with ``\and'',
+% just like the second author.
+% To save space, use either the email address or home page, not both
+\hspace*{0.5em}
+\textbf{Ning Yu$^{1}$} \hspace*{0.5em}
+\textbf{Shu Zhang$^{1}$} \hspace*{0.5em}
+\textbf{Artemis Panagopoulou$^{1,3}$} \hspace*{0.5em}
+\textbf{Junnan Li$^{1}$} \hspace*{0.5em} \\
+\textbf{Roberto Martín-Martín$^{4}$} \hspace*{0.5em}
+\textbf{Jiajun Wu$^{2}$} \hspace*{0.5em} \\
+\textbf{Caiming Xiong$^{1}$} \hspace*{0.5em}
+\textbf{Ran Xu$^{1}$} \hspace*{0.5em}
+\textbf{Juan Carlos Niebles$^{1,2}$} \hspace*{0.5em}
+% {\tt\small jniebles@salesforce.com}
+\textbf{Silvio Savarese$^{1, 2}$}
+\\
+% {\tt\small ssavarese@salesforce.com}\\
+$^{1}$ Salesforce AI Research \hspace*{0.1em} $^{2}$ Stanford University \hspace*{0.1em} \\
+$^{3}$ University of Pennsylvania  \hspace*{0.1em} ${^4}$ University of Texas at Austin
+}
+
+
+\begin{document}
+
+\newcommand{\customsize}{\fontsize{5}{8}\selectfont}
+
+\newcommand{\customsizePointnext}{\fontsize{8}{11}\selectfont}
+
+\newcommand{\customsizeTripletstats}{\fontsize{6}{9}\selectfont}
+
+
+
+\maketitle
+
+
+\begin{abstract}
+\vspace{-2mm}
+% Cross-modal supervision has recently emerged as a promising approach to addressing data scarcity in 3D understanding. However, current methods for getting multimodal data for 3D have been found to be insufficiently scalable, potentially restricting overall usefulness, performance, and scalability. 
+Recent advancements in multimodal pre-training have shown promising efficacy in 3D representation learning by aligning multimodal features across 3D shapes, their 2D counterparts, and language descriptions.
+However, the methods used by existing frameworks to curate such multimodal data, in particular language descriptions for 3D shapes, are not scalable, and the collected language descriptions are not diverse. %scalability and comprehensiveness, potentially constraining the full potential of multimodal learning.
+%The main bottleneck lies in the language modality's scalability and comprehensiveness.
+To address this, we introduce ULIP-2, a simple yet effective tri-modal pre-training framework that leverages large multimodal models to automatically generate holistic language descriptions for 3D shapes. It only needs 3D data as input, eliminating the need for any manual 3D annotations, and is therefore scalable to large datasets.
+ULIP-2 is also equipped with scaled-up backbones for better multimodal representation learning.
+We conduct experiments on two large-scale 3D datasets, Objaverse and ShapeNet, and augment them with tri-modal datasets of 3D point clouds, images, and language for training ULIP-2.
+Experiments show that ULIP-2 demonstrates substantial benefits in three downstream tasks: zero-shot 3D classification, standard 3D classification with fine-tuning, and 3D captioning (3D-to-language generation).
+It achieves a new SOTA of \textbf{50.6\% (top-1)} on Objaverse-LVIS and \textbf{84.7\% (top-1)} on ModelNet40 in zero-shot classification. In the ScanObjectNN benchmark for standard fine-tuning, ULIP-2 reaches an overall accuracy of \textbf{91.5\%} with a compact model of only 1.4 million parameters.
+ULIP-2 sheds light on a new paradigm for scalable multimodal 3D representation learning without human annotations and shows significant improvements over existing baselines.
+The code and datasets are released at https://github.com/salesforce/ULIP.
+% In response to this challenge, we present ULIP-2, an innovative approach that bridges the data scalability gap by generating comprehensive descriptions for each 2D rendering of a 3D object. Specifically, we employ a pre-trained multimodal large language model (LLM) to generate multiple detailed descriptions for each projected 2D image.
+% Our proposed method aligns the triplet modalities: comprehensive descriptions, images, and 3D point clouds. 
+% ULIP-2 is scalable to any large-scale dataset and can align comprehensive descriptions of an entire 3D object with the other two modalities through its various 2D projections.
+% Each 2D rendering of a 3D object can be viewed as a 2D observation of that object from a specific angle. The descriptions generated for this 2D rendering can be interpreted as the linguistic observations from that 2D rendering's view angle. By aligning this triplet—3D object, 2D image, and language description—our model can achieve a more detailed, comprehensive, and nuanced understanding of the 3D object.
+% To address this challenge, we introduce a novel approach, ULIP-2, which bridges the data scalability gap with comprehensive descriptions for every 2D observations of a 3D object. Specifically, a pre-trained multimodal large language model (LLM) is adopted to generate multiple detailed descriptions for a 2D projected image. Our proposed method aligns the triplet modalities: detailed descriptions, images, and 3D point clouds. ULIP-2 is scalable to any large-scale dataset, and is able to learn comprehensive descriptions of a whole 3D object through its various 2D projections. 
+% We show the effectiveness of ULIP-2 on the largest public 3D dataset, Objaverse, by embracing the power of generative descriptions. 
+% To address this challenge, we introduce ULIP++, an extension of the original ULIP framework that incorporates a scalable triplet creation method leveraging large-scale multimodal models trained on image-text pairs. We evaluate the proposed method using the well-known ShapeNet dataset and further explore its application to the recent large-scale 3D dataset, Objaverse. 
+% We pre-train ULIP-2 on two large-scale datasets: Objaverse and ShapeNet. We release our pre-processed description-image-pointcloud triplets of them, naming \textbf{ULIP-Objaverse Triplets} and \textbf{ULIP-ShapeNet Triplets}. Our experiments set a new record on the challenging real-world ScanobjectNN dataset, and show a significant improvement in ULIP's zero-shot classification accuracy. 
+% Notably, our approach only requires the 3D data itself, eliminating the need for 3D annotations, and showcasing the potential of our method in addressing data scarcity in 3D understanding.
+% We pre-train ULIP-2 on two large-scale datasets: Objaverse and ShapeNet. We release our pre-processed triplet datasets of description-image-point cloud, named \textbf{ULIP-Objaverse Triplets} and \textbf{ULIP-ShapeNet Triplets}. Our experiments set a new record on the challenging real-world  dataset ScanobjectNN and demonstrate a significant improvement on zero-shot classification accuracy over the original ULIP.
+% Remarkably, our approach requires only the 3D data itself, eliminating the need for 3D annotations. This demonstrates the potential of ULIP-2 as a practical solution for addressing data scarcity issues in 3D understanding.
+
+% \ning{Multimodal contrastive pre-training methods, such as ULIP, have recently demonstrated promising efficacy in 3D representation, by aligning features of 3D objects, their 2D rendering images, and text descriptions. However, these methods rely on human annotations of text descriptions that are neither scalable nor expressive, limiting their capabilities of understanding 3D data in downstream applications. To address the issue of data scarcity, we present ULIP-2, a simple yet effective upgrade from ULIP, that eliminates the need for manual text annotations and introduces visual captioning foundation models into multimodal contrastive pre-training. ULIP-2 automatically captions multiple descriptions for each 2D rendering of a 3D object using broad knowledge from foundation models. This approach benefits from the 360-degree linguistic descriptions of a 3D object, allowing for more comprehensive and nuanced 3D representations. We applied this method to two large-scale datasets, Objaverse and ShapeNet, and released our text-2D-3D triplet datasets, named \textit{ULIP-Objaverse Triplets} and \textit{ULIP-ShapeNet Triplets}. Our experiments demonstrate remarkable improvements over ULIP in downstream zero-shot classification and set a new record on the real-world ScanobjectNN point cloud classification leaderboard. ULIP-2 represents a breakthrough in scalable 3D representation learning free from human annotations, with its state-of-the-art performance shedding light on the way forward.}
+
+
+
+\end{abstract}
+
+%%%%%%%%% BODY TEXT
+\section{Introduction}
+\label{sec:intro}
+
+% ULIP limitation, manual effort, stability, multi view, single description, not holistic enough
+% take a step back, how to learn to understand a 3D object, ULIP  is blah,  how did we came up this approach
+% we did experiments, good results, also came with benefits
+
+%
+
+%-------------------------------------------------------------------------
+% Talk about the importance of 3D vision
+% Talk about the advantages and promising results for multimodal 3d vision
+% Talk about the limitation of current pre-training framework, especially ULIP, not scalable
+% Propose the ULIP++ framework, where we achieve impressive results, and make it scalable
+% \subsection{Multimodal 3D Vision}
+% \subsection{Data-centric Large Scale Pre-training}
+% \Le{3D understanding research is important, Multimodal supervision has gained attention}
+
+% \Le{ULIP is a pioneering work on aligning 3 modalities into one feature space and gained good results, but it has limitations: the current regime of ULIP might not be scalable and we found that the language modality is not aligned well with 3d compared to the alignment between 3d and image. see figure2, intuitively figure out why}
+
+% \Le{To investigate this issue, we take a step back, and try to think what is the correct other two counter-part modalities of 3D data; inspired by NERF, nerf is spatial continuous images; so intuitively, we are thinking what should be the counter part linguistic modality, we think if we can have linguistic description of a 3D object from any angle, the ensemble can be an estimation of the Linguistic modality of a 3D object, we can use the discrete spaces. it's a good estimation of holistic informative language modality.}
+
+% \Le{approach, human is expensive, and consider on the current development of Multimodal LLM, we propose to use it to perform the task of describe this 3d object from specific view, and demonstrate with thorough experiments.}
+
+% \Le{contribution, benefits, advantage.}
+
+
+% \ning{ULIP is not scalable. Bottle neck is the language description.}
+
+% \ning{Language descriptions should be view-point-dependent. 3D models need 3D description. Similar to NeRF that describe 3D by 2D images from different view points, our captions describe 3D by 2D captions.}
+
+% \ning{Better captioning models benefit feature learning.}
+
+% \ning{1. Automate the captioning process. Labor-free and scalable dataset.}
+
+% \ning{2. Multi-view and their diverse, rich, descriptive captions. ULIP has multi-view, but the same caption.}
+
+% \ning{3. Borrow LLM's broader knowledge to caption. LLM keeps evolving. Using our framework, easy to incorporate further-evolving LLM for 3D representation learning. Clearner than official captions.}
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figures/cvpr_figure1_v3.pdf}
+    \caption{Overview of the ULIP-2 pre-training framework and its downstream tasks. The above part is the ULIP-2 pre-training framework, ULIP-2 employs a large multimodal model to automatically generate detailed descriptions for each 2D-rendered image from holistic viewpoints of a 3D shape. ULIP-2 takes advantage of a pre-aligned and frozen vision-language feature space to achieve alignment among the triplet modalities: holistic texts, images, and 3D point clouds. After the pre-training, the 3D encoder will be used in the downstream tasks. As shown in the figure, only the 3D data is required for this pre-training process.}
+    
+        % \ning{Suggest switching the order between Figure 1 and 2.}
+    \label{fig:overview}
+     \vspace{-5mm}
+\end{figure}
+
+\vspace{-3mm}
+3D visual understanding has seen a surge of interests in recent years \cite{hu2020randla,graham20183d,li2021lidar,liu2019densepoint, xu2023pointllm, qi2023gpt4point} due to its growing applications in augmented reality and virtual reality (AR and VR) \cite{armeni20163d,liu2021group,misra2021end,vu2022softgroup, shu2023model}, autonomous driving \cite{li2022deepfusion,yin2021center}, and robotics \cite{cadena2016multi,wojek2011monocular}. Despite this, the collections and annotations of 3D data remain a costly and labor-intensive process \cite{chang2015shapenet, uy2019revisiting, wu20153d}. In response to this challenge, researchers have turned to other more abundantly available modalities, \emph{e.g.,} image and natural language, to provide supervisory signals for learning 3D representations. This approach has not only led to improved unimodal representation but also cultivated a richer multimodal representation capability. The results have been promising, and to some extent, have alleviated the need for single-modal dense annotations in the 3D domain.
+
+
+
+% \shu{Need to cite some recent papers}.
+% \JN{it is not very clear what are these encouraging results and why multimodal pre-training leads to these results}
+
+% For methods in this multimodal learning direction, one common challenge is to gather scalable and high quality well paired multimodal data for 3D.
+% We pinpoint that the bottleneck actually lies in the language modality for 3D.
+% Existing systems tried to prompt categories names and some short descriptions from meta data as the language counterpart of the 3D data.
+% However the process is neither scalable enough (because it still relies on some data annotation and the metadata might depends on the dataset collection process which can't be guaranteed), nor comprehensive enough (since it might not contain enough details and lacks variation).
+
+However, multimodal learning frameworks in this direction commonly face the challenge of assembling scalable, high-quality, and well-aligned multimodal data for 3D applications.
+We identify the language modality for 3D data as the critical bottleneck in this process. Existing frameworks tend to utilize manually annotated category names and short descriptions derived from metadata as the language counterparts for the 3D data.
+Those approaches~\citep{qi2023contrast,xue2022ulip}, however, lack scalability as they always rely on some degree of human annotations during the dataset collection process, which will be hard to scale up.
+Furthermore, existing methods are not comprehensive enough as the derived language information might not provide sufficient details and lacks variations, or appears to be noisy. This highlights the need for an innovative paradigm to provide language counterparts for 3D data that are both scalable and comprehensive, thus truly unleashing the potential of multimodal learning.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/cvpr_figure2.pdf}
+    \caption{An illustration of language description generation from 2D images. These images are rendered from a set of holistic viewpoints of a 3D object. In some views, the chair is not visible, while in other views, the scepter/sword cannot be seen. Combining descriptions of all views is essential for the model to learn comprehensive and holistic information about the 3D object. From the metadata, the manual caption for this object is “Estatua de Alfonso X - José Alcoverro (1892)“, which doesn’t include much semantic information and could potentially harm the multimodal pre-training, unlike ULIP-2's holistic captions.}
+    \label{fig:differentangle}
+
+\end{figure*}
+
+% ULIP \cite{xue2022ulip} is a pioneering work that learns a unified representation of language, images, and 3D point clouds by aligning triplets of these three modalities. It demonstrates the benefits of this alignment and alleviates the data scarcity issue in 3D to some extent. However, ULIP exhibits the following limitations:
+% \begin{enumerate}
+%     \item We find that the current ULIP regime is not scalable enough, as it depends on a 3D dataset's metadata for triplet creation, which relies on data collection and might be expensive to collect.
+%     \item We observe that the alignment between the language modality in ULIP is under-aligned compared to the alignment between the image modality.
+% \end{enumerate}
+% Overall, we identify that the bottleneck for unlocking the full potential of ULIP's pre-training lies in the language modality, in terms of its scalability and quality.
+% \JN{this part makes the paper to look like an extension of ULIP, and may discourage readers who are unfamiliar with ULIP. Maybe introduce the challenges first?}
+% However, it’s not clear what’s the best way to acquire and leverage language. Naive ways won't work, you can always say to do it by human annotators, but acquiring high-quality language descriptions of 3D objects from human annotators is expensive and not scalable. It's also not clear what the proper language counterpart modality should be.
+% To answer these questions, we first take a step back and examine what a 2D image counterpart modality should be for a 3D object. Semantically, if we can render 2D images of a 3D object from any point of view, then all the rendered images together should approximately contain all the information of this 3D object, thus make it the proper image counterpart modality for 3D. Similarly, if we can describe a 3D object from any view in language texts, then all the language descriptions from all the views should approximately contain all the information linguistically from this image thus make it the proper language modality for this 3D object.
+% In practice, we use a set of holistic views for efficiency. If we use the same set of views for creating the image modality and language modality, we can find that, this task actually equals to describe the rendered 2D image for that view angle. Given current exciting development of multimodal LLM, we propose to use it for doing this task, because in this way we can fully automatize this process in a scalable way.
+
+However, the optimal way to acquire and utilize language data for 3d modality is unclear. Although well-trained human annotators could potentially provide detailed language descriptions of 3D objects, such a method is both costly and lacks scalability. Moreover, identifying the appropriate language counterpart modality for a 3D shape is not a straightforward task.
+
+To address these issues, we first reconsider what the 2D image counterpart modality for a 3D shape should be. Semantically, if we can render 2D images of a 3D shape from any viewpoint,  the collection of all these rendered images should approximately encapsulate all information about this 3D shape, thus forming an appropriate image counterpart modality for 3D. By analogy, if we can linguistically describe a 3D shape from any viewpoint,  the compilation of all these language descriptions from all perspectives should also approximately encompass all linguistically expressible information about this shape, thus forming an appropriate language modality for the 3D shape.
+In practice, for efficiency, we may sample a finite fixed set of holistic viewpoints instead of "any viewpoint". If we apply the same set of viewpoints for creating the language modality as we render the images, this task naturally boils down to describing the rendered 2D image for a given viewpoint. Leveraging the advances in large multimodal models that are trained on extensive language and image data, we utilize their ability to generate detailed language descriptions for the rendered images. This method allows us to automate the process in a scalable way as it only needs 3D data itself, while the rich knowledge from the large multimodal models is also distilled into the language descriptions. As a result, this automated and scalable strategy enriches the language modality with detailed, holistic descriptions, further aiding multimodal 3D representation learning.
+
+% Acquiring high-quality language descriptions of 3D objects is expensive and not scalable. To address this bottleneck, we first examine what the proper language counterpart modality of a 3D object should be. We are inspired by NERF, which shows that rendering a 2D image from any viewpoint of a 3D object provides an implicit 3D representation of the object. Thus, all 2D rendered images together form a 3D object's 2D image modality counterpart, as they contain all the object's information but lie in the image modality. We refer to this as "spatial continuous images."
+% \JN{I feel that this concept of "spatial continuous images" adds addition complexity for the readers to comprehend. Maybe say something like "2D rendered images from all the views approximately contain all the semantic information of a 3D object?"}
+% Similarly, if we can describe a 3D object from any viewpoint, all the descriptions combined should cover all the linguistic information of the object (see Figure 2 for illustration).
+
+In light of the preceding reasoning, and also in response to the challenge of scalable and comprehensive multimodal 3D data acquisition, we introduce ULIP-2, a novel framework that encompasses an innovative approach to generate well-aligned, holistic multimodal data for 3D understanding, coupled with an efficient multimodal pre-training architecture capable of robustly aligning these multimodal data, thereby harnessing the full potential of multimodal learning.
+
+Given a 3D shape, our initial step involves extracting 3D point cloud data to serve as the 3D modality input. We then render this shape into a series of images from a fixed set of holistic viewpoints, providing the 2D modality input. For each rendered image, we employ a large multimodal model to generate a list of detailed descriptions, thereby establishing the language modality (as illustrated in Figure \ref{fig:differentangle}). This approach allows us to create scalable multimodal data for 3D, as it only requires the 3D data itself. Furthermore, by generating descriptions from a comprehensive set of holistic views, we address the prior issues of detail and comprehensiveness in the language modality. By employing an efficient multimodal pre-training architecture to align this multimodal data, we facilitate the learning of a comprehensive multimodal 3D representation, as described in Figure \ref{fig:overview}. Consequently, ULIP-2 offers a promising solution for scalable and comprehensive multimodal pre-training for 3D representation learning.
+
+% In light of the preceding reasoning, and also in response to the challenge of scalable and comprehensive multimodal 3D data acquisition, we propose ULIP-2, a novel framework which is composed of a novel approach to generate well-aligned holistic multimodal data for 3D understanding and an efficient multimodal pre-training architecture which can align the multimodal data.
+% Given a 3D object, we first extract 3D point clouds data as the 3D modality input. We then render this object into a set of images from a fixed set of holistic viewpoints, serving as the 2D modality input. For each rendered image, we leverage a Multimodal Large Language Model (LLM) to generate detailed descriptions, forming the language modality. See figure \ref{fig:differentangle} for an illustration. This approach allows us to create scalable multimodal data for 3D as it only necessitates the 3D data itself. Moreover, by generating descriptions from a comprehensive set of holistic views, we address the previously mentioned issue of detail and comprehensiveness in the language modality. Then by utilizing an efficient multimodal pre-training architecture to align those multimodal data, we can learn a good 3d representation. Therefore, ULIP-2 provides a promising solution for scalable and comprehensive multimodal data generation for 3D representation learning.
+% % \ning{ULIP-2 framework consists of language description generation and multimodal pre-training. Introduce how the pre-training looks like, and slightly mention ULIP. Refer to Figure \ref{fig:overview}.}
+
+% In light of the preceding analysis and in respose to the challenge of scalable and comprehensive multimodal 3D data acquisition, we propose ULIP-2, a novel framework that can align comprehensive holistic multimodal data to for 3D understanding. Our approach is inspired by ULIP, which is the pioneering work to align the 3D point clouds, 2D images, and text descriptions of the 3D object to learn a unified space of the these three modalities. Yet our proposed method is able to handle the comprehensive multimodal pre-training, where per-view detailed descriptions are incorporated. Specifically, we render the 3D object into a set of images from a fixed set of holistic viewpoints, serving as the 2D modality input. Inspired by Figure \ref{fig:differentangle}, we generate a set of descriptions from a comprehensive set of holistic views to overcome the insufficient language comprehensiveness issue. As described in Figure \ref{fig:overview}, the 3D point clouds, multi-view 2D images, and their corresponding generated sets of descriptions are encoded and aligned to the same embedding space. Therefore, ULIP-2 provides a promising solution for scalable and comprehensive multimodal data generation for 3D representation learning. 
+
+
+% Given the previous analysis and intuition, also in response to the comprehensive multimodal 3D data scalability challenge, we introduce ULIP-2, in practice we discretize the "spatial continuous images" to a set of images surrounding this 3D object as an estimation of the 2D image modality counterpart, and discretize the "spatial continuous language description" to language descriptions from a set of surrounding observation views. For convenience, for image modality counterpart and language modality counterpart, we use the same set of view angles. It's natural and mature to render a 2D image from a specific angle of view; for the task of getting language description from a specific angle of view, we find this task equals to describe the 2D rendered image from the specific angle of view for the 3D object, we found it's not practical to do it by human in a scalable way, and given the current exciting development of Multimodal generative LLM, we propose to use a SOTA Multimodal LLM to perform this task.
+% \JN{It is not very clear what challenges ULIP-2 aims to address and how it addresses those challenges.}
+
+% Besides, the texts in ULIP are often word-level short descriptions, and thus make contains limited semantic information. Moreover, word-level descriptions can only interpret a whole 3D object, while different 2D projections of the 3D object are not represented clearly. For instance, in Fig. \ref{fig:differentangle}, linguistic observations of the 3D statue are different in every 2D projection due to different view angle. In the front view, the chair is invisible while the chair is observed in some other views. Current 3D datasets' metadata cannot provide insights on these details.
+% To overcome the aforementioned limitations, we introduce ULIP-2, an extension to the ULIP pre-training framework. Our method is inspired by the development of state-of-the-art multimodal LLMs, which offer strong language generation ability from  the visual content. In ULIP-2, as shown in Fig. \ref{fig:overview}, we employ a powerful multimodal LLM and propose a scalable triplet creation method. When combining with ULIP's pre-training framework, ULIP-2 enables the model to understand 3D data without requiring any 3D annotations, regardless of format. Specifically, detailed description texts are generated for every 2D rendering of a 3D object. These texts are seen as the linguistic observations from the 2D rendering's view angle, and thus can represent different aspects of the comprehensive 3D object. In Fig. \ref{fig:differentangle}, ULIP-2 is able to utilize different rendering's descriptions to capture the information of both the chair and the sword, which cannot be seen from a single text description of the 3D object. Then, ULIP-2 aligns the feature space of detailed descriptions to the spaces of each corresponding 2D rendering and the whole 3D object. ULIP-2 can be applied to arbitrary 3D dataset. To the best of our knowledge, ULIP-2 is the first scalable 3D understanding approach that is applicable to any 3D dataset.
+% We adopt ULIP, an existing efficient multimodal pre-training framework for 3D understanding, and conduct comprehensive experiments using various backbones, training ULIP-2 on the well-known synthetic dataset ShapeNet and the largest-scale realistic dataset Objaverse. Our approach establishes a new SOTA record on ScanObjectNN and achieves impressive improvement in zero-shot classification compared to the original ULIP method.
+
+% ULIP-2 offers the following contributions:
+% \begin{enumerate}
+% \item It enables scalable multimodal pre-training without human annotations. ULIP-2 can be applied to any 3D dataset, regardless of whether the data is labeled or not, all we need is the 3D data itself.
+% % \JN{It might be better to claim more generic advantages rather than comparing with ULIP alone.}
+% \item We demonstrate that with holistic-view language descriptions, the alignment between the 3D and language modalities is significantly improved, and ULIP-2 can synergize with the growing capacity of 3D data and multimodal LLMs.
+% \JN{Any performance metric?} \ning{Mention the new SOTA results.}
+% \item We release our generated triplets of two large-scale 3D datasets, Objaverse and ShapeNet, as "ULIP-Objaverse Triplets" and "ULIP-ShapeNet Triplets." The statistics of these datasets can be found in Table \ref{table:triplet_stats}. To the best of our knowledge, we are the first one to release these large-scale well-paired comprehensive three-modality triplet dataset for 3D.
+% % \JN{What are the advantages of these datasets compared to others?}
+% \end{enumerate}
+
+% We adopt ULIP, a well-established and efficient multimodal pre-training framework for 3D understanding, and carry out comprehensive experiments using various backbones. We train ULIP-2 on two prominent datasets: the synthetic ShapeNet and the large-scale realistic dataset, Objaverse. Our method establishes a new state-of-the-art record on the ScanObjectNN benchmark and achieves substantial improvements in zero-shot classification over ULIP.
+
+% Compared to ULIP, better and scalable language data substitute, and scaled up (dataset, CLIP model, 3D backbone)
+ULIP-2 advances beyond its predecessor, ULIP, by (1) proposing a manual-effort-free data creation paradigm for comprehensive multimodal learning, (2) leveraging this scalable paradigm to extend multimodal 3D learning to larger datasets, while scaling up both the vision-language and 3D backbones and (3) when pre-trained on the same datasets, ULIP-2 delivers impressive improvements over ULIP on all downstream tasks.
+% \ning{add one more advancement that is the experimental performance improvements.}
+
+Our paper has the following main contributions:
+
+\begin{enumerate}
+\item ULIP-2 facilitates scalable multimodal pre-training without the need for human annotations, making it applicable to any 3D dataset, even unlabeled. It relies solely on the 3D data, enabling broader applicability and ease of use.
+\item ULIP-2 achieves significant advancements in multimodal representation learning. On the challenging open-world Objaverse-LVIS benchmark, ULIP-2 attains a top-1 accuracy of \textbf{50.6\%}, surpassing current SOTA (OpenShape \citep{liu2023openshape}) by significant \textbf{3.8\%}, despite ULIP-2 has a simpler and more streamlined framework; for zero-shot classification on ModelNet40, ULIP-2 reaches \textbf{84.7\%}, even outperforming some fully supervised 3D classification methods \citep{wu20153d}. Furthermore, it secures an overall accuracy of \textbf{91.5\%} on the ScanObjectNN benchmark with only 1.4 million parameters. The ULIP-2 encoder's 3D to language generation capabilities with LLMs are also demonstrated, highlighting its potential to keep pace with the growing LLM development. Moreover, ULIP-2 can effectively synergize with the ever-increasing capacity of 3D data and the development of large multimodal models.
+\item We release two large-scale tri-modal datasets, \textbf{"ULIP-Objaverse"} and \textbf{"ULIP-ShapeNet"} triplets, consisting of point clouds, images, and language descriptions. The statistics of the datasets are detailed in Table \ref{table:triplet_stats}.
+% \ning{Move this up as the 2nd item}
+\end{enumerate}
+
+
+
+%Overall, ULIP-2 represents a significant advancement in 3D representation learning, marking a leap forward in the development of scalable, comprehensive, and human annotation-free frameworks in the field.
+
+% \item With the generated rich descriptions of 3D objects, ULIP-2 makes the alignment ability of the triplet of comprehensive descriptions, 2D rendered image, and 3D object, significantly more powerful than ULIP. To help the research community explore the fundamental ability of multimodal learning, we release our generated triplets of two large-scale 3D dataset, Objaverse \cite{Deitke2022objaverse} and ShapeNet \cite{chang2015shapenet}, named as ULIP-Objaverse Triplets and ULIP-ShapeNet Triplets. \shu{Need to provide details of the dataset and the number of data that is released} 
+
+% \item ULIP-2 firstly utilizes the description texts of different 2D rendering of a 3D object, which helps the model to learn a holistic language observation of the whole 3D object.
+
+% \item ULIP-2 can synergize with the growing capacity of 3D data and the multimodal LLMs. 
+
+% \item We perform comprehensive experiments using various backbones. We train ULIP-2 on the well-known synthetic dataset ShapnNet55 and the largest-scale realistic dataset Objaverse.  Our approach establishes a new state-of-the-art (SOTA) record on ScanObjectNN, and achieves a notable improvement in zero-shot classification over the original ULIP method. 
+% The integration of our scalable triplet creation method with the powerful pre-training framework of ULIP offers two major advantages. First, it enables multimodal pre-training in a scalable manner. Second, it eliminates the dependency on a dataset's metadata, requiring only 3D data and its 2D counterpart, which expands its potential applications.
+
+% We conducted comprehensive experiments on the recently released large-scale realistic dataset, Objaverse, as well as the synthetic dataset ShapeNet, using various backbones and performing an extensive ablation study. Our approach establishes a new state-of-the-art for standard 3D classification on the challenging, realistic ScanobjectNN dataset and achieves a notable improvement in zero-shot classification over the original ULIP method.
+
+
+
+% \shu{Need to provide the released dataset size}
+
+
+% \ning{Data-scalable, annotation-free}
+
+% \ning{Scale up pre-training data and get rid of mannual annotations of captions using multimodal generative LLM.}
+
+% \ning{Our pre-trained model synergizes with the growing capacity of 3D data and the growing capability of multimodal generative LLM.}
+
+% \ning{Comprehensive experiments. A variety of backbones. Solid ablation study. Set up a new SOTA.}
+
+
+%------------------------------------------------------------------------
+\section{Related Work}
+%\label{sec:formatting}
+\vspace{-2mm}
+
+\noindent\textbf{Multimodal Representation Learning}. In recent years, multimodal representation learning has emerged as a popular research topic due to its remarkable capabilities and applications. Most research works focus on learning multimodal representation for only two modalities:  language and image modalities, which have led to remarkable outcomes. One line of research in this area emphasizes the interaction between image regions and caption tokens using Transformer-based architectures \cite{huang2021seeing,kim2021vilt,li2021align,zeng2021multi, panagopoulou2023x}, which exhibit strong predictive capabilities but are computationally expensive to train. Alternatively, methods such as CLIP \cite{radford2021learning} and SLIP \cite{mu2022slip} target generating single features for image and text independently and subsequently align these two modalities. This simplified architecture promotes robust and efficient large-scale pre-training, even on noisy data.
+
+% \ning{Remember to add non-contrastive tech such as Barlow Twins}
+
+Recent works have demonstrated promising results by extending multimodal representation learning to 3D modality. ULIP \cite{xue2022ulip} is one of the pioneering works in creating (3D point cloud - image - language) triplets, By aligning these three modalities together, ULIP enhances 3D representation learning and mitigates the need for single-modal dense 3D data annotations, thereby partially alleviating the data scarcity issue in 3D.
+A recent work \cite{zhang2022learning} seeks to learn 3D representations from pre-trained 2D encoders via Image-to-Point Masked Autoencoders. However, this approach does not involve alignment with the language modality, which potentially limits its capacity for more complex multimodal tasks.
+The concurrent work of ~\citep{liu2023openshape} further extends ULIP's framework to achieve stronger performance, but it still relies on manual annotation of 3D data and a complicated data engineering framework. However, ULIP-2 demonstrates that, with the proposed much simpler and streamlined framework, it can still achieve SOTA results on the challenging Objaverse-LVIS benchmark and outperform OpenShape by an impressive 3.8\% in Objaverse-LVIS top-1 accuracy.
+%The concurrent work of \cite{qi2023contrast} unifies the contrastive and generative modeling paradigms, but it shares similar scalability constraints with ULIP. Moreover, both of these two methods are not model-agnostic and require the employment of transformer architectures as the 3D encoder, which inherently increases the needed model size, while ULIP-2 is model-agnostic and can be integrated with any 3D backbone, thus offering a more flexible and scalable solution for multimodal 3D representation learning.
+
+% A recent work \cite{zhang2022learning}  tries to learn 3D representation from pre-trained 2D encoders, but it does not introduce alignment with language modality and thus restrict its ability for doing more multimodal tasks.
+% The concurrent work \cite{qi2023contrast} unifies the contrastive and generative modeling paradigms, while the scalability limitation is similar to ULIP. What's more, both methods mentioned above are not model-agnostic and require transformer architectures as the 3D encoder, which is always heavy in model size.
+
+Despite the development of methods such as ULIP to reduce the single-modal dense annotation effort, they ~\citep{xue2022ulip,qi2023contrast,liu2023openshape} still confront scalability challenges due to their dependency on dataset metadata and category names for obtaining the language counterpart modality. Additionally, the prompt-based pseudo-captions generated by these methods lack the fine-grained details, and variations that are necessary for comprehensive understanding. In contrast, ULIP-2 overcomes these limitations by leveraging the power and knowledge of state-of-the-art large multimodal models. This approach fundamentally diminishes data requirements and enriches the pre-train multimodal data, thereby enabling more efficient applications on larger datasets and yielding much stronger 3D representations.
+
+% \vspace{-2mm}
+\noindent\textbf{Generative Large Multimodal Models}. The expansion of transformer models, from GPT to GPT-4 \cite{vaswani2017attention,openai2023gpt4}, demonstrates the effectiveness of scale in multimodal tasks. This approach, originating from \cite{anderson2018bottom}, has seen considerable advancements in text generation from images \cite{lu2018neural, zhou2019grounded, zhou2020unified, cho2021unifying, wang2021simvlm, li2021align, li2020unimo, li2022blip, li2023blip}. Our study leverages BLIP-2 \cite{li2022blip} to generate diverse annotations for 3D shapes, facilitating learning richer multimodal 3D representations. We also conduct an ablation study in \ref{sec:ablate_large_multimodal_models} on the used large multimodal models which indicates that, ULIP-2 benefits from the advancements in large multimodal models, synergizing with the rapid improvements in the field.
+% \ning{mention that we also ablation study on BLIP}
+
+% \begin{table*}[htbp]
+%     \centering
+%     % \tiny
+%     \small
+%     % \customsize
+%     \begin{tabular}{lllcllll}
+%          \toprule
+%          \multirow{2}*{\textbf{Model}} & \textbf{Pre-train} & \textbf{Pre-train} & \textbf{Manual} & \multicolumn{2}{l}{\hspace{12pt}\textbf{ModelNet40}} & \multicolumn{2}{l}{\hspace{4pt}\textbf{Objaverse-LVIS}}\\
+%          %\cmidrule{4-5}
+%          & \textbf{dataset} & \textbf{method} & \textbf{effort?} & \textbf{top-1} & \textbf{top-5}  & \textbf{top-1} &\textbf{top-5}  \\
+%          \midrule
+         
+%          % Point-BERT & ShapeNet & OpenShape & \cmark & OpenCLIP ViT-G & 32.3 & 10k xyzrgb & 70.3 & 91.3 & 10.8 & 25.0 \\
+%          PointCLIP & -- & -- & -- & 19.3 & 34.8 & 1.9 & 5.8 \\
+%          PointCLIPv2 & -- & -- & -- & 63.6 & 85.0 & 4.7 & 12.9 \\
+%          ReCon & ShapeNet & -- & --  & 61.2 & 78.1 & 1.1 & 3.7 \\
+%          CLIP2Point & ShapeNet & -- & -- & 49.5 & 81.2 & 2.7 & 7.9 \\
+         
+%          \rowcolor{gray!10} Point-BERT & ShapeNet & OpenShape & \cmark & 70.3 & 91.3 & 10.8 & 25.0 \\
+%          \addlinespace
+%          \rowcolor{gray!10} Point-BERT & Objaverse+ShapeNet+(2 extra) & OpenShape & \cmark & 84.4 & 98.0 & 46.8 & 77.0 \\
+
+%          \midrule
+         
+%          \multirow{6}*{Point-BERT} & \multirow{2}*{ShapeNet} & ULIP \cite{xue2022ulip} & \cmark & 60.4 & 84.0  & 2.6 & 8.1  \\
+
+%          & & ULIP-2 & \xmark & 75.2 \textcolor{DarkGreen}{\tiny ($\uparrow 14.8$)} & 95.0 \textcolor{DarkGreen}{\tiny ($\uparrow 11.0$)}  & 16.4 \textcolor{DarkGreen}{\tiny ($\uparrow 13.8$)} &34.3 \textcolor{DarkGreen}{\tiny ($\uparrow 26.2$)}  \\
+         
+%          % \cmidrule(lr){2-8}
+%          % & \multirow{2}*{Objaverse (no LVIS)}
+%          % & ULIP \cite{xue2022ulip} & \cmark & 65.5 & 83.4 & 22.9 & 44.5 \\
+         
+%          % & & ULIP-2 & \xmark & 77.0 \textcolor{DarkGreen}{\tiny ($\uparrow 11.5$)} & 94.0 \textcolor{DarkGreen}{\tiny ($\uparrow 10.6$)}  & 35.7 \textcolor{DarkGreen}{\tiny ($\uparrow 12.8$)} & 62.9 \textcolor{DarkGreen}{\tiny ($\uparrow 18.4$)}  \\
+
+%          \cmidrule(lr){2-8}
+
+%          & \multirow{2}*{Objaverse(no LVIS)+ShapeNet}
+%          & ULIP \cite{xue2022ulip} & \cmark & 68.6 & 86.4 & 21.4 & 41.9 \\
+         
+%          & & ULIP-2 & \xmark & 84.0 \textcolor{DarkGreen}{\tiny ($\uparrow 15.4$)} & 97.2 \textcolor{DarkGreen}{\tiny ($\uparrow 10.8$)}  & 46.3 \textcolor{DarkGreen}{\tiny ($\uparrow 24.9$)} & 75.0 \textcolor{DarkGreen}{\tiny ($\uparrow 33.1$)}  \\
+
+%          \cmidrule(lr){2-8}
+
+
+         
+%          & \multirow{2}*{Objaverse+ShapeNet}
+%          %\cmidrule(lr){2-5}
+%          & ULIP \cite{xue2022ulip} & \cmark & 69.6 & 85.9 & 34.9 & 61.0 \\
+%          % & & ULIP-2 & \xmark & 74.1 \textcolor{DarkGreen}{\tiny ($\uparrow 4.5$)} & 93.6 \textcolor{DarkGreen}{\tiny ($\uparrow 7.7$)} & 38.3 \textcolor{DarkGreen}{\tiny ($\uparrow 3.4$)} & 64.7 \textcolor{DarkGreen}{\tiny ($\uparrow 3.7$)} \\
+
+%          % & & ULIP-2 & \xmark & 79.4 \textcolor{DarkGreen}{\tiny ($\uparrow 9.8$)} & 96.4 \textcolor{DarkGreen}{\tiny ($\uparrow 10.5$)}  & 48.9 \textcolor{DarkGreen}{\tiny ($\uparrow 14.0$)} & 77.1 \textcolor{DarkGreen}{\tiny ($\uparrow 16.1$)}  \\
+
+%          & & ULIP-2 & \xmark & \textbf{84.7} \textcolor{DarkGreen}{\tiny ($\uparrow 15.1$)} & \textbf{97.1} \textcolor{DarkGreen}{\tiny ($\uparrow 11.2$)}  & \textbf{50.6} \textcolor{DarkGreen}{\tiny ($\uparrow 15.7$)} & \textbf{79.1} \textcolor{DarkGreen}{\tiny ($\uparrow 18.1$)}  \\
+         
+%          % \cmidrule(lr){2-10}
+         
+%          \bottomrule
+%     \end{tabular}
+%     \caption{Zero-shot 3D classification on Objaverse-LVIS and ModelNet40.}
+%     \label{tab:zero-shot-lvis-modelnet}
+% \end{table*}
+
+
+\begin{table*}[h]
+    \centering
+    % \tiny
+    \small
+    % \customsize
+    \begin{tabular}{lllccccc}
+         \toprule
+         \multirow{2}*{\textbf{Model}} & \textbf{Pre-train} & \textbf{Pre-train} & \textbf{Manual} & \multicolumn{2}{l}{\textbf{Objaverse-LVIS}} & \multicolumn{2}{l}{\textbf{ModelNet40}}\\
+         & \textbf{dataset} & \textbf{method} & \textbf{captions?} & \textbf{top-1} & \textbf{top-5} & \textbf{top-1} & \textbf{top-5}  \\
+         \midrule
+         
+         % Point-BERT & ShapeNet & OpenShape & \cmark & OpenCLIP ViT-G & 32.3 & 10k xyzrgb & 70.3 & 91.3 & 10.8 & 25.0 \\
+         PointCLIP ~\citep{zhang2022pointclip} & -- & -- & -- & 1.9 & 5.8 & 19.3 & 34.8 \\
+         PointCLIPv2 ~\citep{Zhu2022PointCLIPV2} & -- & -- & -- & 4.7 & 12.9 & 63.6 & 85.0 \\
+         ReCon ~\citep{qi2023contrast} & ShapeNet & ReCon ~\citep{qi2023contrast} & \cmark  & 1.1 & 3.7 & 61.2 & 78.1 \\
+         CLIP2Point ~\citep{huang2022clip2point} & ShapeNet & CLIP2Point ~\citep{huang2022clip2point} & \xmark & 2.7 & 7.9 & 49.5 & 81.2 \\
+         
+         \rowcolor{gray!10} Point-BERT ~\citep{yu2022point} & ShapeNet & OpenShape ~\citep{liu2023openshape} & \cmark & 10.8 & 25.0 & 70.3 & 91.3 \\
+         \addlinespace
+         \rowcolor{gray!10} Point-BERT ~\citep{yu2022point} & Objaverse(no LVIS) + ShapeNet & OpenShape ~\citep{liu2023openshape} & \cmark & 38.8 & 68.8 & 83.9 & 97.6 \\
+         \addlinespace
+         \rowcolor{gray!10} Point-BERT ~\citep{yu2022point} & Objaverse + ShapeNet & OpenShape ~\citep{liu2023openshape} & \cmark & 46.5 & 76.3 & 82.6 & 96.9 \\
+         \addlinespace
+         \rowcolor{gray!10} Point-BERT ~\citep{yu2022point} & Objaverse + ShapeNet + (2 extra) & OpenShape ~\citep{liu2023openshape} & \cmark & 46.8 & 77.0 & 84.4 & \textbf{98.0} \\
+
+         \midrule
+         
+         \multirow{6}*{Point-BERT ~\citep{yu2022point}} & \multirow{2}*{ShapeNet} & ULIP \cite{xue2022ulip} & \cmark & 2.6 & 8.1 & 60.4 & 84.0  \\
+
+         & & ULIP-2 & \xmark & 16.4 & 34.3 & 75.2 & 95.0  \\
+         
+         \cmidrule(lr){2-8}
+
+         & \multirow{2}*{Objaverse(no LVIS) + ShapeNet}
+         & ULIP \cite{xue2022ulip} & \cmark & 21.4 & 41.9 & 68.6 & 86.4 \\
+         
+         & & ULIP-2 & \xmark & 46.3 & 75.0 & 84.0  & 97.2  \\
+
+         \cmidrule(lr){2-8}
+
+         & \multirow{2}*{Objaverse + ShapeNet}
+         & ULIP \cite{xue2022ulip} & \cmark & 34.9 & 61.0 & 69.6 & 85.9 \\
+         & & ULIP-2 & \xmark & \textbf{50.6} & \textbf{79.1}  & \textbf{84.7}  & 97.1  \\
+         
+         \bottomrule
+    \end{tabular}
+    \caption{Zero-shot 3D classification on Objaverse-LVIS and ModelNet40. The highlighted lines of OpenShape are from the current SOTA approach. Our method surpasses the current state-of-the-art (SOTA) OpenShape in zero-shot 3D classification, achieving a 3.8\% higher top-1 accuracy on Objaverse-LVIS, and demonstrating comparable performance on ModelNet40, despite using fewer pre-training datasets. A tick in the “Manual captions?” column means the pre-trained model leverages 3D captions that, to some degree, rely on manual efforts, while a cross means the opposite.}
+    % \ning{move this below the triplet statistics table}
+    \label{tab:zero-shot-lvis-modelnet}
+    % \vspace{-1mm}
+\end{table*}
+
+% \begin{table*}[h]
+%     \centering
+%     % \tiny
+%     \small
+%     % \customsize
+%     \begin{tabular}{lllccccc}
+%          \toprule
+%          \multirow{2}*{\textbf{Model}} & \textbf{Pre-train} & \textbf{Pre-train} & \textbf{Manual} & \multicolumn{2}{l}{\textbf{Objaverse-LVIS}} & \multicolumn{2}{l}{\textbf{ModelNet40}}\\
+%          & \textbf{dataset} & \textbf{method} & \textbf{captions?} & \textbf{top-1} & \textbf{top-5} & \textbf{top-1} & \textbf{top-5}  \\
+%          \midrule
+         
+%          % Point-BERT & ShapeNet & OpenShape & \cmark & OpenCLIP ViT-G & 32.3 & 10k xyzrgb & 70.3 & 91.3 & 10.8 & 25.0 \\
+%          PointCLIP ~\citep{zhang2022pointclip} & -- & -- & -- & 1.9 & 5.8 & 19.3 & 34.8 \\
+%          PointCLIPv2 ~\citep{Zhu2022PointCLIPV2} & -- & -- & -- & 4.7 & 12.9 & 63.6 & 85.0 \\
+%          ReCon ~\citep{qi2023contrast} & ShapeNet & ReCon ~\citep{qi2023contrast} & \cmark  & 1.1 & 3.7 & 61.2 & 78.1 \\
+%          CLIP2Point ~\citep{huang2022clip2point} & ShapeNet & CLIP2Point ~\citep{huang2022clip2point} & \xmark & 2.7 & 7.9 & 49.5 & 81.2 \\
+         
+%          \rowcolor{gray!10} Point-BERT ~\citep{yu2022point} & ShapeNet & OpenShape ~\citep{liu2023openshape} & \cmark & 10.8 & 25.0 & 70.3 & 91.3 \\
+%          \addlinespace
+%          \rowcolor{gray!10} Point-BERT ~\citep{yu2022point} & Objaverse + ShapeNet + (2 extra) & OpenShape ~\citep{liu2023openshape} & \cmark & 46.8 & 77.0 & 84.4 & \textbf{98.0} \\
+
+%          \midrule
+         
+%          \multirow{6}*{Point-BERT ~\citep{yu2022point}} & \multirow{2}*{ShapeNet} & ULIP \cite{xue2022ulip} & \cmark & 2.6 & 8.1 & 60.4 & 84.0  \\
+
+%          & & ULIP-2 & \xmark & 16.4 & 34.3 & 75.2 & 95.0  \\
+         
+%          \cmidrule(lr){2-8}
+
+%          & \multirow{2}*{Objaverse(no LVIS) + ShapeNet}
+%          & ULIP \cite{xue2022ulip} & \cmark & 21.4 & 41.9 & 68.6 & 86.4 \\
+         
+%          & & ULIP-2 & \xmark & 46.3 & 75.0 & 84.0  & 97.2  \\
+
+%          \cmidrule(lr){2-8}
+
+%          & \multirow{2}*{Objaverse + ShapeNet}
+%          & ULIP \cite{xue2022ulip} & \cmark & 34.9 & 61.0 & 69.6 & 85.9 \\
+%          & & ULIP-2 & \xmark & \textbf{50.6} & \textbf{79.1}  & \textbf{84.7}  & 97.1  \\
+         
+%          \bottomrule
+%     \end{tabular}
+%     \caption{Zero-shot 3D classification on Objaverse-LVIS and ModelNet40. The highlighted lines of OpenShape are from the current SOTA approach. Our method surpasses the current state-of-the-art (SOTA) OpenShape in zero-shot 3D classification, achieving a 3.8\% higher top-1 accuracy on Objaverse-LVIS, and demonstrating comparable performance on ModelNet40, despite using fewer pre-training datasets.}
+%     % \ning{move this below the triplet statistics table}
+%     \label{tab:zero-shot-lvis-modelnet}
+%     % \vspace{-4mm}
+% \end{table*}
+
+
+% \begin{table*}[h]
+%     \centering
+%     % \tiny
+%     \small
+%     % \customsize
+%     \begin{tabular}{lllcllll}
+%          \toprule
+%          \multirow{2}*{\textbf{Model}} & \textbf{Pre-train} & \textbf{Pre-train} & \textbf{Manual} & \multicolumn{2}{l}{\hspace{4pt}\textbf{Objaverse-LVIS}} & \multicolumn{2}{l}{\hspace{12pt}\textbf{ModelNet40}}\\
+%          & \textbf{dataset} & \textbf{method} & \textbf{captions?} & \textbf{top-1} & \textbf{top-5} & \textbf{top-1} & \textbf{top-5}  \\
+%          \midrule
+         
+%          % Point-BERT & ShapeNet & OpenShape & \cmark & OpenCLIP ViT-G & 32.3 & 10k xyzrgb & 70.3 & 91.3 & 10.8 & 25.0 \\
+%          PointCLIP & -- & -- & -- & 1.9 & 5.8 & 19.3 & 34.8 \\
+%          PointCLIPv2 & -- & -- & -- & 4.7 & 12.9 & 63.6 & 85.0 \\
+%          ReCon & ShapeNet & -- & --  & 1.1 & 3.7 & 61.2 & 78.1 \\
+%          CLIP2Point & ShapeNet & -- & -- & 2.7 & 7.9 & 49.5 & 81.2 \\
+         
+%          \rowcolor{gray!10} Point-BERT & ShapeNet & OpenShape & \cmark & 10.8 & 25.0 & 70.3 & 91.3 \\
+%          \addlinespace
+%          \rowcolor{gray!10} Point-BERT & Objaverse+ShapeNet+(2 extra) & OpenShape & \cmark & 46.8 & 77.0 & 84.4 & \textbf{98.0} \\
+
+%          \midrule
+         
+%          \multirow{6}*{Point-BERT} & \multirow{2}*{ShapeNet} & ULIP \cite{xue2022ulip} & \cmark & 2.6 & 8.1 & 60.4 & 84.0  \\
+
+%          & & ULIP-2 & \xmark & 16.4 \textcolor{DarkGreen}{\tiny ($\uparrow 13.8$)} & 34.3 \textcolor{DarkGreen}{\tiny ($\uparrow 26.2$)} & 75.2 \textcolor{DarkGreen}{\tiny ($\uparrow 14.8$)} & 95.0 \textcolor{DarkGreen}{\tiny ($\uparrow 11.0$)}  \\
+         
+%          \cmidrule(lr){2-8}
+
+%          & \multirow{2}*{Objaverse(no LVIS)+ShapeNet}
+%          & ULIP \cite{xue2022ulip} & \cmark & 21.4 & 41.9 & 68.6 & 86.4 \\
+         
+%          & & ULIP-2 & \xmark & 46.3 \textcolor{DarkGreen}{\tiny ($\uparrow 24.9$)} & 75.0 \textcolor{DarkGreen}{\tiny ($\uparrow 33.1$)} & 84.0 \textcolor{DarkGreen}{\tiny ($\uparrow 15.4$)} & 97.2 \textcolor{DarkGreen}{\tiny ($\uparrow 10.8$)}  \\
+
+%          \cmidrule(lr){2-8}
+
+%          & \multirow{2}*{Objaverse+ShapeNet}
+%          & ULIP \cite{xue2022ulip} & \cmark & 34.9 & 61.0 & 69.6 & 85.9 \\
+%          & & ULIP-2 & \xmark & \textbf{50.6} \textcolor{DarkGreen}{\tiny ($\uparrow 15.7$)} & \textbf{79.1} \textcolor{DarkGreen}{\tiny ($\uparrow 18.1$)} & \textbf{84.7} \textcolor{DarkGreen}{\tiny ($\uparrow 15.1$)} & 97.1 \textcolor{DarkGreen}{\tiny ($\uparrow 11.2$)}  \\
+         
+%          \bottomrule
+%     \end{tabular}
+%     \caption{Zero-shot 3D classification on Objaverse-LVIS and ModelNet40. \ning{remove the green difference numbers. articulate what does the grey background mean}}
+%     \label{tab:zero-shot-lvis-modelnet}
+% \end{table*}
+
+\vspace{-2mm}
+\noindent\textbf{3D Point Cloud Understanding}.
+% There are two main approaches for 3D point cloud modeling: voxel/grid-based formats \cite{maturana2015voxnet,shi2020pv} \ning{articulate more about this type of approach} and direct processing methods \ning{articulate more about this type of approach} like PointNet \cite{qi2017pointnet} and its successors \cite{qi2017pointnet++,qian2022pointnext}. Self-supervised learning techniques \ning{you said there are two main approaches, why suddenly the 3rd approach?}, exemplified by Point-BERT \cite{yu2022point}, are increasingly prominent. Our approach is complementary to these methods, suggesting that advancements in either domain could augment our work.
+PointNet~\citep{qi2017pointnet} is a pioneering work that processes 3D point clouds directly~\citep{qi2017pointnet++}. Building on this, PointNeXt~\citep{qian2022pointnext} emerges as a light-weight, high-performance variant. In the realm of self-supervised pre-training for point clouds, Point-BERT~\citep{yu2022point} moves a significant step forward with its transformer-based architecture, showcasing notable performance in zero-shot classification tasks. In ULIP-2, we leverage both Point-BERT and PointNeXt as our 3D encoders to harness their strong capabilities.
+
+
+
+% \section{Related Work}
+% %\label{sec:formatting}
+
+% \noindent\textbf{Multimodal Representation Learning}. The focus of recent multimodal representation learning is predominantly on language and image modalities, leveraging Transformer-based models for interaction between modalities \cite{huang2021seeing,kim2021vilt,li2021align,zeng2021multi} and alignment-based methods like CLIP \cite{radford2021learning} and SLIP \cite{mu2022slip}. Extensions to 3D modality, such as ULIP \cite{xue2022ulip} and Image-to-Point Masked Autoencoders \cite{zhang2022learning}, show promise but face limitations in complex multimodal tasks or require dense annotations. ULIP-2, our work, surpasses these methods in flexibility and scalability, achieving significant improvements on benchmarks like Objaverse-LVIS, without the constraints of dataset metadata dependency or limited pseudo-captioning capabilities of prior models \cite{xue2022ulip,qi2023contrast,liu2023openshape}.
+
+% \noindent\textbf{Generative Large Multimodal Models}. The expansion of transformer models, from GPT to GPT-4 \cite{vaswani2017attention,openai2023gpt4}, demonstrates the effectiveness of scale in multimodal tasks. This approach, originating from \cite{anderson2018bottom}, has seen considerable advancements in text generation from images \cite{lu2018neural, zhou2019grounded, zhou2020unified, cho2021unifying, wang2021simvlm, li2021align, li2020unimo, li2022blip, li2023blip}. Our study leverages BLIP-2 \cite{li2022blip} for generating diverse annotations for 3D objects, facilitating richer multimodal 3D representations.
+
+% \noindent\textbf{3D Point Cloud Understanding}.
+% In 3D point cloud modeling, two main approaches are voxel/grid-based formats \cite{maturana2015voxnet,shi2020pv} and direct processing methods like PointNet \cite{qi2017pointnet} and its successors \cite{qi2017pointnet++,qian2022pointnext}. Self-supervised learning techniques, exemplified by Point-BERT \cite{yu2022point}, are increasingly prominent. Our approach is complementary to these methods, suggesting that advancements in either domain could augment our work.
+
+
+
+%------------------------------------------------------------------------
+\section{Method}
+%\label{sec:formatting}
+
+% \begin{figure*}[t]
+%     \centering
+%     \includegraphics[width=1.0\linewidth]{figures/figure2.pdf}
+%     \caption{pass}
+%     \label{fig:alignment}
+%      %\vspace{-5mm}
+% \end{figure*}
+
+
+ULIP-2 assimilates the pre-training framework of ULIP and introduces a scalable and comprehensive multimodal triplet creation paradigm that not only eliminates the need for human annotations but also significantly improves the learned multimodal 3D representations. By merging ULIP’s efficient multimodal pre-training with this scalable triplet creation method, ULIP-2 paves the way for large-scale pre-training that essentially operates in a pseudo-self-supervised manner. We demonstrate that this method effectively mitigates the data scalability issue, and simultaneously advances the field of 3D representation learning to a new level of performance.
+
+%-------------------------------------------------------------------------
+
+\subsection{Preliminary: ULIP}
+
+ULIP \cite{xue2022ulip} presents an efficient multimodal pre-training framework that constructs triplets encompassing three modalities: (1) the 3D modality, obtained by extracting 3D point cloud data; (2) the image modality, generated by rendering images from 3D shapes across multiple viewpoints; and (3) the language modality, derived by prompting dataset metadata such as descriptive terms and category names into cohesive sentences.
+
+ULIP utilizes the ViT-B encoders from SLIP \cite{mu2022slip}, a pre-trained vision-language model and a variant of the CLIP model, to learn 3D representations. It accomplishes this by aligning 3D modality features to the feature space shared by language and image modalities. ULIP-2 shares a similar objective with ULIP in aligning the (image, text, 3D) modalities, which prompts us to adopt its pre-training framework. Given the close resemblance in setup between ULIP and ULIP-2, we choose ULIP as our experimental baseline.
+% ULIP \cite{xue2022ulip} is an efficient multimodal pre-training framework that creates triplets of three modalities: (1) the language modality, which is formed by prompting dataset metadata such as description words and category names into complete sentences; (2) the image modality, which is created by rendering images from 3D object files from multiple viewpoints; and (3) the 3D modality, which is obtained by extracting 3D point cloud data. 
+% % ULIP aligns the 3D modality features to a frozen power CLIP Image-Text feature space.
+% ULIP leverages the powerful pre-trained vision-language model, SLIP \cite{mu2022slip}, to learn 3D representation by aligning the 3D modality features into the feature space of the language and image modality. 
+
+
+% \subsection{Image Captioning}
+% pass
+
+\subsection{Scalable Triplet Creation}
+
+In ULIP-2, the model similarly utilizes three input modalities, though it only requires the 3D object data itself. As depicted in Fig. \ref{fig:overview}, given a 3D object, we extract 3D point clouds from the surface as the input to the 3D encoder and generate images from various viewing angles. We then leverage BLIP-2 \cite{li2023blip}, a cutting-edge large multimodal model, to generate descriptive texts for each rendered 2D image. For each image, we generate a set of sentences, rank them using CLIP similarities, and aggregate the top-1 description to form the language modality in the triplet.
+
+This scalable triplet creation approach facilitates dataset scaling, eliminating the need for dataset metadata collection and necessitating only the 3D data itself. Our method is capable of aligning 3D representations with holistic image-text pairs in any unannotated 3D dataset, thereby providing a more scalable and comprehensive solution.
+
+% \subsection{Scalable Triplet Creation}
+% In ULIP-2, there are three input modalities as well. However, only the 3D object is required from the dataset. As illustrated in Fig. \ref{fig:overview}, given a 3D object, we extract 3D point clouds from the surface as input for the 3D encoder and render images from different view angles. We then employ BLIP-2 \cite{li2023blip}, a state-of-the-art multimodal LLM, to generate descriptive texts for each rendered 2D image. For each image, we generate multiple sentences, rank them, and aggregate the top-$k$ sentences as the language modality in the triplet. This scalable triplet creation approach enables dataset scaling without relying on dataset metadata collection anymore, while only requiring 3D data itself. Our method is able to align the 3D representation to holistic image-text pairs in any unannotated dataset.
+
+\subsection{Tri-modal Pre-training}
+ULIP-2 aligns the triplet of 3D point clouds, 2D rendered images, and comprehensive descriptions to a unified feature space. We adopt the largest version of encoders from OpenCLIP (ViT-G/14) \cite{ilharco_gabriel_2021_5143773} for most of our experiments and freeze it during the pre-training. The feature space, already pre-aligned by OpenCLIP, serves as the target space where we aim to integrate the 3D modality.
+% This approach ensures a consistent and harmonized understanding across all three modalities.
+
+During tri-modal pre-training, given a 3D shape $\mathbf{O}$, we extract its 3D point cloud $\mathbf{P}$, randomly sample its 2D rendered image $\mathbf{I}\sim\mathsf{render}(\mathbf{O})$, with its BLIP-2 generated language description $\mathbf{T}\sim\mathsf{blip2}(\mathbf{I})$, where $\mathsf{render}$ is the 3D-to-2D rendering operation and $\mathsf{blip2}$ is to query BLIP-2 \cite{li2023blip} for image description. We then extract the image feature $\mathbf{f}^\text{I}=E_\text{I}(\mathbf{I})$ and text feature $\mathbf{f}^\text{T}=E_\text{T}(\mathbf{T})$ based on the pre-aligned and frozen image encoder $E_\text{I}$ and text encoder $E_\text{T}$ in OpenCLIP \cite{ilharco_gabriel_2021_5143773}. We target to train a 3D point cloud encoder $E_\text{P}$ such that its 3D feature $\mathbf{f}^\text{P}=E_\text{P}(\mathbf{P})$ is aligned with its image and text features. We formulate the 3D-to-image alignment using the contrastive loss similar in spirit to CLIP \cite{radford2021learning}:
+\begin{equation}
+\mathcal{L}_\text{P2I}=-\frac{1}{2}\sum_i\log\frac{\exp(\mathbf{f}_i^\text{P} \mathbf{f}_i^\text{I}/\tau)}{\sum_j\exp(\mathbf{f}_i^\text{P} \mathbf{f}_j^\text{I}/\tau)}+\log\frac{\exp(\mathbf{f}_i^\text{P} \mathbf{f}_i^\text{I}/\tau)}{\sum_j\exp(\mathbf{f}_j^\text{P} \mathbf{f}_i^\text{I}/\tau)},
+\end{equation}
+where $i$, $j$ are the sampling indices, and $\tau$ is a learnable temperature parameter. The first term indicates that the dot product of the 3D feature and the image feature of the same sample should stand out among other products where the \textit{image features} are from different samples. Likewise, the second term indicates that the dot product of the 3D feature and the image feature of the same sample should stand out among other products where the \textit{3D features} are from different samples.
+
+Similarly, we formulate the 3D-to-text alignment loss as:
+\begin{equation}
+\mathcal{L}_\text{P2T}=-\frac{1}{2}\sum_i\log\frac{\exp(\mathbf{f}_i^\text{P} \mathbf{f}_i^\text{T}/\tau)}{\sum_j\exp(\mathbf{f}_i^\text{P} \mathbf{f}_j^\text{T}/\tau)}+\log\frac{\exp(\mathbf{f}_i^\text{P} \mathbf{f}_i^\text{T}/\tau)}{\sum_j\exp(\mathbf{f}_j^\text{P} \mathbf{f}_i^\text{T}/\tau)}.
+\end{equation}
+
+Our final training objective is to train the 3D encoder $E_\text{P}$ that minimizes the sum of the two contrastive alignment losses above:
+\vspace{-2mm}
+\begin{equation}
+\min_{E_\text{P}}\mathcal{L}_\text{P2I}+\mathcal{L}_\text{P2T}.
+\end{equation}
+\vspace{-6mm}
+
+\subsection{Scaling Up the 3D Multimodal Learning}
+
+Recognizing the benefits of more powerful image and text encoders for learning more generalized multimodal 3D representations, we extend our exploration beyond the smaller ViT-B model, previously utilized in ULIP. Our experiments focus on upgrading this vision-language backbone in the tri-modal alignment framework. Additionally, we investigate scaling up the model size, while keeping the other settings unchanged. The effectiveness of these modifications is evaluated through zero-shot classification tasks on both ModelNet40 and Objaverse-LVIS datasets. See Table \ref{tab:ablate_scale_up}.
+
+
+% In a training step, given a 3D object indexed as $i$, we randomly sample a 2D rendered image indexed as $k$. We denote the features of 3D point clouds, 2D images, and their corresponding description texts as $h_i^P$, $h_{i, k}^I$, and $h_{i, k}^T$, where $k$ represents the view of image or text. The contrastive loss between the 3D object $M_P$ and the sampled 2D image $M_I$ can be defined as 
+% \begin{equation}
+% \begin{aligned}
+%  L_{(M_P, M_I)} =
+%    \sum_{(i,j)}-\frac{1}{2}log\frac{\exp\left(\frac{\mathbf{h}^{M_P}_i \mathbf{h}^{M_I}_{j, k}}{\tau}\right)}{\sum_l \exp\left(\frac{\mathbf{h}^{M_P}_i \mathbf{h}^{M_I}_{l, k}}{\tau}\right)} -\frac{1}{2}
+%     log\frac{\exp\left(\frac{\mathbf{h}^{M_P}_i \mathbf{h}^{M_I}_{j,k}}{\tau}\right)}{\sum_l \exp\left(\frac{\mathbf{h}^{M_P}_{l} \mathbf{h}^{M_I}_{j,k}}{\tau}\right)},
+% \end{aligned}
+% \end{equation}
+% where $(i, j)$ indicates a positive pair in a training batch. Similarly, the contrastive loss between the 3D object $M_P$ and a description text $M_T$ is defined as 
+% \begin{equation}
+% \begin{aligned}
+%  L_{(M_P, M_T)} =
+%    \sum_{(i,j)}-\frac{1}{2}log\frac{\exp\left(\frac{\mathbf{h}^{M_P}_i \mathbf{h}^{M_T}_{j, k}}{\tau}\right)}{\sum_l \exp\left(\frac{\mathbf{h}^{M_P}_i \mathbf{h}^{M_T}_{l, k}}{\tau}\right)} -\frac{1}{2}
+%     log\frac{\exp\left(\frac{\mathbf{h}^{M_P}_i \mathbf{h}^{M_T}_{j,k}}{\tau}\right)}{\sum_l \exp\left(\frac{\mathbf{h}^{M_P}_{l} \mathbf{h}^{M_T}_{j,k}}{\tau}\right)},
+% \end{aligned}
+% \end{equation}
+% where {$\tau$} is a learnable temperature parameter.
+
+% The overall loss $L_{M_P, M_I, M_T}$ is defined as a weighted combination of all modality pairs:
+% \begin{equation}
+%  \label{eq:final loss}
+%    L_{M_P, M_I, M_T} = \alpha L_{(M_I,M_T)}+ \beta L_{(M_I,M_P)} + \theta L_{(M_P,M_T)},
+% \end{equation}
+% where we set $\alpha$ as 0, and $\beta$ and $\theta$ as 1.
+
+% Let \(O\) represent the semantic information of a 3D object. For each view \(i\) where \(i \in \{1, 2, ..., N\}\), let \(I_i\) represent the semantic information of the rendered image from view \(i\) and \(L_i\) represent the semantic information of the linguistic description from view \(i\). 
+
+% We propose that the semantic information of the 3D object is approximately the sum of the semantic information captured in its rendered images and the linguistic descriptions, expressed as:
+
+% \[
+% \text{semantic}(O) \approx \sum_{i=1}^{N} \text{semantic}(I_i) \quad (\text{Image Semantics})
+% \]
+% \[
+% \text{semantic}(O) \approx \sum_{i=1}^{N} \text{semantic}(L_i) \quad (\text{Linguistic Descriptions})
+% \]
+
+% Where the first equation represents the sum of the semantics of its rendered images from all views, and the second equation represents the sum of the semantics of the linguistic descriptions from all views.
+
+
+\section{Experiments}
+
+\subsection{ULIP-Objaverse Triplets and ULIP-ShapeNet Triplets Creation}
+We extract triplets of 3D point clouds, images, and language descriptions based on two large-scale datasets of 3D shapes. The first dataset is Objaverse \cite{Deitke2022objaverse}, the recently released and largest-scale realistic 3D dataset. It has $\sim$ 800K real-world 3D shapes, each of which is associated with metadata containing a "name" field.  For each 3D shape, we use Blender \cite{kent20153d} to render 12 images, spaced equally by 360/12 degrees. For each rendered image, we employ BLIP-2-opt6.7B in BLIP-2~\citep{li2023blip} to generate 10 detailed descriptions independently, which are then ranked using CLIP-VIT-Large~\citep{radford2021learning} image-text similarity score. Based on an ablation study in Sec. \ref{sec:top_k_captions}, we use the top 1 description as the language modality input. Following ULIP and OpenShape, we use 10k, 8k, and 2k points from each 3D shape to accommodate different downstream tasks. Our generated well-paired triplets of comprehensive descriptions, 2D rendering images, and 3D point clouds are released as \textbf{ULIP-Objaverse} triplets.
+
+% \ning{Why Objaverse first ShapeNet second?}
+The second dataset is ShapeNet~\citep{chang2015shapenet}, a renowned synthetic dataset. We employ its publicly available subset which has $\sim$ 52.5K 3D shapes with 55 annotated categories. For each shape, we follow ULIP to sample 30 equally spaced view angles, for each view angle, we render an RGB image and a depth map. The image description generation method is the same as that in Objaverse. We release these triplets as \textbf{ULIP-ShapeNet} triplets. More implementation details and ablation studies are included in the Appendix.
+
+\begin{table}[t]
+  % \tiny
+  %\customsizeTripletstats
+  \small
+  \centering
+  \begin{tabular}{lcc}
+    \toprule
+    \textbf{Modality} & \textbf{ULIP-Objaverse} & \textbf{ULIP-ShapeNet} \\
+    \midrule
+    Point Clouds & $\sim$ 800k & $\sim$ 52.5k \\
+    Images & $\sim$ 10 million & $\sim$ 3 million \\
+    Language & $\sim$ 100 million & $\sim$ 30 million \\
+    % & (1k, 2k, 8k, 50k points for each) & \\
+    \bottomrule
+  \end{tabular}
+  \caption{Statistics of ULIP-Objaverse and ULIP-ShapeNet triplets.}
+    \label{table:triplet_stats}
+    \vspace{-4mm}
+\end{table}
+
+\subsection{Downstream Tasks}
+
+We use the ModelNet40~\citep{chang2015shapenet}, Objaverse-LVIS~\citep{Deitke2022objaverse}, and ScanObjectNN~\citep{Uy_2019_ICCV} datasets to benchmark ULIP-2. ModelNet40 is a synthetic CAD model dataset. It contains $\sim$ 9.8k training samples and $\sim$ 2.5k testing samples. Objaverse-LVIS is a subset of the Objaverse dataset with human-verified category labels. It has $\sim$ 46k samples spanning $\sim$ 1.2k categories, which is suitable for more challenging open-world zero-shot 3d shape classification. ScanObjectNN is a real-world 3D dataset with $\sim$ 2.9k samples under 15 categories. We follow the same dataset setup and preparation protocols used in ULIP and OpenShape, ensuring consistency in our comparisons.
+
+We conduct experiments on three downstream tasks: (1) the zero-shot 3D classification task involving multimodal inputs and (2) the standard 3D classification task involving a single modality and (3) the 3D captioning task involving 3D-to-language generation with LLMs.
+% We compare ULIP-2 to existing methods and show that ULIP-2 improves downstream task performances over existing methods by a significant margin.
+% In addition to its remarkable performance, ULIP-2 also offers a significant advantage in that it does not require any human annotation during the pre-training process. This eliminates a substantial amount of manual labor typically associated with such tasks, further underscoring the scalability and efficiency of our approach.
+% \subsection{Setup}
+
+\noindent\textbf{Evaluation Metrics}. We adopt the same evaluation metrics used in ULIP: top-1 and top-5 accuracy for the zero-shot 3D classification task; overall accuracy and class average accuracy for the standard 3D classification task. For the new downstream task, 3D-to-language generation, we follow X-InstructBLIP~\citep{xinstructblip} and employ CIDEr ~\citep{vedantam2015cider} score to quantitatively evaluate the quality of generated captions.
+% \subsection{Setup}
+
+\noindent\textbf{Backbones}. We pre-train ULIP-2 on two representative backbones: Point-BERT~\citep{yu2022point} is a transformer-based backbone that performs strongly in ULIP's zero-shot classification experiments. PointNeXt \cite{qian2022pointnext} is a work that proposes a lightweight backbone based on PointNet++ \cite{qi2017pointnet++} and delivers promising results on the ScanObjectNN benchmark.
+
+\subsection{Comparisons to Baselines}
+
+\noindent\textbf{Zero-Shot 3D Classification}. We follow the same procedure as in ULIP and OpenShape for zero-shot 3D classification, and compare with existing zero-shot approaches, including ~\citep{xue2022ulip, liu2023openshape, zhang2022pointclip, Zhu2022PointCLIPV2, qi2023contrast, huang2022clip2point}. We present the zero-shot 3D classification results on both Objaverse-LVIS and ModelNet40 in Table \ref{tab:zero-shot-lvis-modelnet}. First, we observe that, when \textbf{pre-trained on the same datasets}, benefit from ULIP-2 pre-training, Point-BERT obtains significantly better results than those pre-trained with ULIP. Specifically, when pre-train both ULIP and ULIP-2 on ShapeNet, ULIP-2 outperforms ModelNet40 top-1 accuracy over ULIP by \textbf{14.8\%} and outperforms Objaverse-LVIS top-1 accuracy by \textbf{13.8\%}. If pre-trained on Objaverse (excluding LVIS samples) and ShapeNet jointly, ULIP-2 outperforms ULIP by \textbf{15.4\%} on ModelNet40 top-1 accuracy and outperforms ULIP by \textbf{24.9\%} on Objaverse-LVIS top-1 accuracy. These gains underscore the efficacy of our approach, particularly the ranked holistic-view language descriptions and scaling strategies that amplify pre-training representation capabilities. The comprehensive language descriptions generated by the large multimodal model encapsulate its knowledge from a vast amount of language and image data, thus enriching the semantic richness of 3D shape descriptions and bolstering the alignment between language and 3D modalities.
+
+Moreover, with ULIP-2's simple and streamlined framework, it achieves performance outperforming pre-existing baselines including concurrent OpenShape~\citep{liu2023openshape}, which is also the current SOTA (46.8\% in Objaverse-LVIS top-1).
+% \ning{explain although ULIP-2 is slightly worse on ModelNet40 top-5 accuracy, we use less pre-training data.}
+% \ning{Any reason why using Objaverse is worse than using ShapeNet with PointNeXt?} 
+
+
+
+
+
+% \begin{table*}[htbp]
+%     \centering
+%     % \tiny
+%     \customsize
+%     \begin{tabular}{lclclccllll}
+%          \toprule
+%          \multirow{2}*{\textbf{Model}} & \textbf{Pre-train} & \textbf{Pre-train} & \textbf{Manual} & \textbf{Image \&\& Text} &\textbf{ \# Params} & \textbf{Pretrain} & \multicolumn{2}{l}{\hspace{18pt}\textbf{ModelNet40}} & \multicolumn{2}{l}{\hspace{8pt}\textbf{Objaverse-LVIS}}\\
+%          %\cmidrule{4-5}
+%          & \textbf{dataset} & \textbf{method} & \textbf{captions?} & \textbf{backbone} & \textbf{(M)} & \textbf{3D input} & \textbf{top-1} & \textbf{top-5}  & \textbf{top-1} &\textbf{top-5}  \\
+%          \midrule
+         
+%          % Point-BERT & ShapeNet & OpenShape & \cmark & OpenCLIP ViT-G & 32.3 & 10k xyzrgb & 70.3 & 91.3 & 10.8 & 25.0 \\
+%          PointCLIP~\cite{zhang2022pointclip} & -- & -- & -- & CLIP & -- & -- & 19.3 & 34.8 & 1.9 & 5.8 \\
+%          PointCLIP v2~\cite{Zhu2022PointCLIPV2} & -- & -- & -- & OpenCLIP ViT-B & -- & -- & 63.6 & 85.0 & 4.7 & 12.9 \\
+%          ReCon~\cite{qi2023contrast} & ShapeNet & -- & -- & OpenCLIP ViT-B & -- & -- & 61.2 & 78.1 & 1.1 & 3.7 \\
+%          CLIP2Point~\cite{huang2022clip2point} & ShapeNet & -- & -- & OpenCLIP ViT-B & -- & -- & 49.5 & 81.2 & 2.7 & 7.9 \\
+         
+
+%          Point-BERT~\cite{yu2022point} & ShapeNet & OpenShape~\cite{liu2023openshape} & \cmark & OpenCLIP ViT-G & 5.1 & 10k xyzrgb & 70.3 & 91.3 & 10.8 & 25.0 \\
+         
+%          Point-BERT~\cite{yu2022point} & \makecell{(Objaverse + ShapeNet +\\ ABO + 3D-Future)} & OpenShape~\cite{liu2023openshape} & \cmark & OpenCLIP ViT-G & 32.3 & 10k xyzrgb & 84.4 & 98.0 & 46.8 & 77.0 \\
+
+%          \midrule
+%          % \midrule
+
+         
+%          % PointCLIP  & \multicolumn{3}{c}{No multimodal pre-training} & 20.2 & --  & -- &--  \\
+%          % \cmidrule(lr){1-8}
+%          % & ReCon \cite{qi2023contrast} & \cmark\\
+%          %\cmidrule(lr){2-5}
+%          % \multirow{8}*{PointNeXt} & \multirow{2}*{ShapeNet} & ULIP \cite{xue2022ulip} & \cmark & 56.2 &  77.0 & 2.3  & 7.6  \\
+%          % & & ULIP-2 & \xmark & 66.3 \textcolor{DarkGreen}{\small ($\uparrow 10.1$)} & 83.7 \textcolor{DarkGreen}{\small ($\uparrow 4.3$)}  & 2.6 \textcolor{DarkGreen}{\small ($\uparrow 0.3$)} & 7.9 \textcolor{DarkGreen}{\small ($\uparrow 0.3$)}  \\
+%          % \cmidrule(lr){2-8}
+%          % & \multirow{2}*{Objaverse (no LVIS)} & ULIP \cite{xue2022ulip} & \cmark & 39.9 & 64.8 & 7.0 & 21.0\\
+%          % & & ULIP-2 & \xmark & 44.0 \textcolor{DarkGreen}{\small ($\uparrow 4.1$)} & 77.9 \textcolor{DarkGreen}{\small ($\uparrow 13.1$)} &  11.5 \textcolor{DarkGreen}{\small ($\uparrow 4.5$)} & 29.8 \textcolor{DarkGreen}{\small ($\uparrow 8.8$)} \\
+%          % \cmidrule(lr){2-8}
+%          % & \multirow{2}*{Objaverse} & ULIP \cite{xue2022ulip} & \cmark & 40.3  & 70.0 & 9.4 & 26.7 \\
+%          % & & ULIP-2 & \xmark & 45.5 \textcolor{DarkGreen}{\small ($\uparrow 5.2$)} & 79.8 \textcolor{DarkGreen}{\small ($\uparrow 9.8$)} & 13.6 \textcolor{DarkGreen}{\small ($\uparrow 4.2$)} & 33.8\textcolor{DarkGreen}{\small ($\uparrow 7.1$)} \\
+%          % \cmidrule(lr){2-8}
+%          % & \multirow{2}*{Objaverse + ShapeNet} & ULIP \cite{xue2022ulip} & \cmark & 45.3 & 69.0 & 8.5 & 23.6\\
+%          % & & ULIP-2 & \xmark & 52.7 \textcolor{DarkGreen}{\small ($\uparrow 7.4$)} & 83.1 \textcolor{DarkGreen}{\small ($\uparrow 14.1$)} & 13.8 \textcolor{DarkGreen}{\small ($\uparrow 5.3$)} & 33.9 \textcolor{DarkGreen}{\small ($\uparrow 10.3$)} \\
+%          % \cmidrule(lr){1-8}
+%          \multirow{11}*{Point-BERT~\cite{yu2022point}} & \multirow{4}*{ShapeNet} & ULIP \cite{xue2022ulip} & \cmark & SLIP & 21.9 & 8k xyz & 60.4 & 84.0  & 2.6 & 8.1  \\
+         
+%          & & ULIP-2 & \xmark & SLIP & 21.9 & 8k xyz & 69.7 \textcolor{DarkGreen}{\tiny ($\uparrow 9.3$)} & 88.8 \textcolor{DarkGreen}{\tiny ($\uparrow 4.4$)}  & 5.2 \textcolor{DarkGreen}{\tiny ($\uparrow 2.6$)} &13.0 \textcolor{DarkGreen}{\tiny ($\uparrow 4.9$)}  \\
+
+%          & & ULIP-2 & \xmark & OpenCLIP ViT-G & 5.3 & 10k xyzrgb & 75.3 \textcolor{DarkGreen}{\tiny ($\uparrow 14.9$)} & 94.6 \textcolor{DarkGreen}{\tiny ($\uparrow 10.6$)}  & 15.8 \textcolor{DarkGreen}{\tiny ($\uparrow 13.2$)} & 33.5 \textcolor{DarkGreen}{\tiny ($\uparrow 25.4$)}  \\
+
+%          & & ULIP-2 & \xmark & OpenCLIP ViT-G & 32.5 & 10k xyzrgb & 75.2 \textcolor{DarkGreen}{\tiny ($\uparrow 14.8$)} & 95.0 \textcolor{DarkGreen}{\tiny ($\uparrow 11.0$)}  & 16.4 \textcolor{DarkGreen}{\tiny ($\uparrow 13.8$)} &34.3 \textcolor{DarkGreen}{\tiny ($\uparrow 26.2$)}  \\
+         
+%          % & & ULIP-2 & \xmark & OpenCLIP ViT-G & 32.5 & 8k xyz & 69.7 \textcolor{DarkGreen}{\tiny ($\uparrow 9.3$)} & 88.8 \textcolor{DarkGreen}{\tiny ($\uparrow 4.4$)}  & 5.2 \textcolor{DarkGreen}{\tiny ($\uparrow 2.6$)} &13.0 \textcolor{DarkGreen}{\tiny ($\uparrow 4.9$)}  \\
+         
+%          \cmidrule(lr){2-11}
+
+
+%          % & \multirow{2}*{Objaverse}
+%          % %\cmidrule(lr){2-5}
+%          % & ULIP \cite{xue2022ulip} & \cmark & SLIP & 21.9 & 8k xyz & 67.2 & 84.6 & 30.9 & 55.3 \\
+%          % & & ULIP-2 & \xmark & SLIP & 21.9 & 8k xyz & 71.6 \textcolor{DarkGreen}{\tiny ($\uparrow 4.4$)} & 90.1 \textcolor{DarkGreen}{\tiny ($\uparrow 5.5$)} & 36.2 \textcolor{DarkGreen}{\tiny ($\uparrow 5.3$)} & 62.4 \textcolor{DarkGreen}{\tiny ($\uparrow 7.1$)}\\
+
+%          % % & & ULIP-2 & \xmark & OpenCLIP ViT-G & 32.5 & 8k xyz & 69.7 \textcolor{DarkGreen}{\tiny ($\uparrow 9.3$)} & 88.8 \textcolor{DarkGreen}{\tiny ($\uparrow 4.4$)}  & 5.2 \textcolor{DarkGreen}{\tiny ($\uparrow 2.6$)} &13.0 \textcolor{DarkGreen}{\tiny ($\uparrow 4.9$)}  \\
+         
+%          % \cmidrule(lr){2-11}
+
+         
+         
+%          & \multirow{3}*{Objaverse (no LVIS)}
+%          %\cmidrule(lr){2-5}
+%          & ULIP \cite{xue2022ulip} & \cmark & SLIP & 21.9 & 8k xyz & 65.5 & 83.4 & 22.9 & 44.5 \\
+%          & & ULIP-2 & \xmark & SLIP & 21.9 & 8k xyz & 71.4 \textcolor{DarkGreen}{\tiny ($\uparrow 5.9$)} & 89.7 \textcolor{DarkGreen}{\tiny ($\uparrow 6.3$)} & 28.3 \textcolor{DarkGreen}{\tiny ($\uparrow 5.4$)} & 52.6 \textcolor{DarkGreen}{\tiny ($\uparrow 8.1$)} \\
+
+%          & & ULIP-2 & \xmark & OpenCLIP ViT-G & 32.5 & 8k xyz & 77.0 \textcolor{DarkGreen}{\tiny ($\uparrow 11.5$)} & 94.0 \textcolor{DarkGreen}{\tiny ($\uparrow 10.6$)}  & 35.7 \textcolor{DarkGreen}{\tiny ($\uparrow 12.8$)} & 62.9 \textcolor{DarkGreen}{\tiny ($\uparrow 18.4$)}  \\
+%          \cmidrule(lr){2-11}
+
+
+         
+%          & \multirow{4}*{Objaverse + ShapeNet}
+%          %\cmidrule(lr){2-5}
+%          & ULIP \cite{xue2022ulip} & \cmark & SLIP & 21.9 & 8k xyz & 69.6 & 85.9 & 34.9 & 61.0 \\
+%          & & ULIP-2 & \xmark & SLIP & 21.9 & 8k xyz & 74.1 \textcolor{DarkGreen}{\tiny ($\uparrow 4.5$)} & 93.6 \textcolor{DarkGreen}{\tiny ($\uparrow 7.7$)} & 38.3 \textcolor{DarkGreen}{\tiny ($\uparrow 3.4$)} & 64.7 \textcolor{DarkGreen}{\tiny ($\uparrow 3.7$)} \\
+
+%          & & ULIP-2 & \xmark & OpenCLIP ViT-G & 32.5 & 8k xyz & 79.4 \textcolor{DarkGreen}{\tiny ($\uparrow 9.8$)} & 96.4 \textcolor{DarkGreen}{\tiny ($\uparrow 10.5$)}  & 48.9 \textcolor{DarkGreen}{\tiny ($\uparrow 14.0$)} & 77.1 \textcolor{DarkGreen}{\tiny ($\uparrow 16.1$)}  \\
+
+%          & & ULIP-2 & \xmark & OpenCLIP ViT-G & 32.5 & 10k xyzrgb & \textbf{84.7} \textcolor{DarkGreen}{\tiny ($\uparrow 14.8$)} & \textbf{97.1} \textcolor{DarkGreen}{\tiny ($\uparrow 11.2$)}  & \textbf{50.6} \textcolor{DarkGreen}{\tiny ($\uparrow 15.7$)} & \textbf{79.1} \textcolor{DarkGreen}{\tiny ($\uparrow 18.1$)}  \\
+         
+%          % \cmidrule(lr){2-10}
+         
+%          \bottomrule
+%     \end{tabular}
+%     \caption{Zero-shot 3D classification on ModelNet40 and Objaverse-LVIS before scaling up the model.}
+%     \label{tab:zero-shot-modelnet}
+% \end{table*}
+
+
+
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figures/updated_figure3.pdf}
+    \caption{3D-to-language multimodal generation using X-InstructBLIP framework~\citep{xinstructblip}.}
+    
+    \label{fig:xinstructblip}
+     %\vspace{-5mm}
+\end{figure}
+
+% \begin{table*}[htbp]
+%     \small
+%     \centering
+%     \begin{tabular}{llcccccc}
+%          \toprule
+%          \multirow{2}*{\textbf{Model (Pretrain)}} & \textbf{Pre-train} & \textbf{Image \&\& Text} &\textbf{ \# Params}  & \multicolumn{2}{c}{\textbf{ModelNet40}} & \multicolumn{2}{c}{\textbf{Objaverse-LVIS}}\\
+%          & \textbf{dataset} & \textbf{Encoders} & \textbf{(M)} & \textbf{top-1} & \textbf{top-5}  & \textbf{top-1} &\textbf{top-5}  \\
+%          \midrule
+%          \multirow{9}*{Point-BERT (w/ ULIP-2)} & Objaverse (no LVIS) & SLIP  & 21.9 & 71.4  & 89.7 & 28.3 & 52.6 \\
+%          & Objaverse (no LVIS) & OpenCLIP ViT-G & 21.9 & 76.3 & 94.1 & 35.0 & 62.5 \\
+%          \cmidrule{2-8}
+%          & Objaverse (no LVIS) & OpenCLIP ViT-G & 21.9 & 76.3 & 94.1 & 35.0 & 62.5  \\
+%          & Objaverse (no LVIS) & OpenCLIP ViT-G & 32.5  & 77.0 & 94.0 & 35.7 & 62.9  \\
+%          & Objaverse (no LVIS) & OpenCLIP ViT-G & 38.4  & 76.1 & 95.1 & 35.4 & 62.8  \\
+%          & Objaverse (no LVIS) & OpenCLIP ViT-G & 43.1  & 76.8 & 94.8  & 35.9 & 62.6  \\
+%          & Objaverse (no LVIS) & OpenCLIP ViT-G & 57.3  & 78.0 & 94.7  & 35.9 & 63.0  \\
+%          & Objaverse (no LVIS) & OpenCLIP ViT-G & 71.5  & 77.2 & 95.0  & 36.0 & 63.2  \\
+%          & Objaverse (no LVIS) & OpenCLIP ViT-G & 85.7  & 76.5 & 94.7  & 35.9 & 62.7  \\
+%          \midrule
+%          Point-BERT (w/ OpenShape) & O + S + A + F & OpenCLIP ViT-G & 32.3  & 84.4 & 98.0  & 46.8 & 77.0  \\
+%          Point-BERT (w/ ULIP-2(xyz)) & O + S & OpenCLIP ViT-G & 32.5  & 79.4 & 96.4  & 48.9 & 77.1  \\
+%          Point-BERT (w/ ULIP-2 (xyzrgb)) & O + S & OpenCLIP ViT-G & 32.5  & \textbf{84.7} & 97.1  & \textbf{50.6} & \textbf{79.1}  \\
+         
+%          \bottomrule
+%     \end{tabular}
+%     \caption{Zero-shot 3D classification on ModelNet40 and Objaverse-LVIS.}
+%     \label{tab:zero-shot-modelnet}
+% \end{table*}
+
+% \begin{table*}[htbp]
+%     \small
+%     \centering
+%     \begin{tabular}{llcccccc}
+%          \toprule
+%          \multirow{2}*{\textbf{Model (Pretrain)}} & \textbf{Pre-train} & \textbf{Image \&\& Text} &\textbf{ \# Params}  & \multicolumn{2}{c}{\textbf{ModelNet40}} & \multicolumn{2}{c}{\textbf{Objaverse-LVIS}}\\
+%          & \textbf{dataset} & \textbf{Backbone} & \textbf{(M)} & \textbf{top-1} & \textbf{top-5}  & \textbf{top-1} &\textbf{top-5}  \\
+%          \midrule
+%          \multirow{6}*{Point-BERT (w/ ULIP-2)} & Objaverse (no LVIS) & SLIP  & 21.9 & 71.4  & 89.7 & 28.3 & 52.6 \\
+%          & Objaverse (no LVIS) & OpenCLIP ViT-G & 21.9 & 76.3 & 94.1 & 35.0 & 62.5 \\
+%          \cmidrule{2-8}
+         
+%          & Objaverse (no LVIS) & OpenCLIP ViT-G & 21.9 & 76.3 & 94.1 & 35.0 & 62.5  \\
+%          % \rowcolor{light_gray}
+%          & Objaverse (no LVIS) & OpenCLIP ViT-G & 32.5  & 77.0 & 94.0 & 35.7 & 62.9  \\
+%          % & Objaverse (no LVIS) & OpenCLIP ViT-G & 38.4  & 76.1 & 95.1 & 35.4 & 62.8  \\
+%          & Objaverse (no LVIS) & OpenCLIP ViT-G & 43.1  & 76.8 & 94.8  & 35.9 & 62.6  \\
+%          % & Objaverse (no LVIS) & OpenCLIP ViT-G & 57.3  & 78.0 & 94.7  & 35.9 & 63.0  \\
+%          % & Objaverse (no LVIS) & OpenCLIP ViT-G & 71.5  & 77.2 & 95.0  & 36.0 & 63.2  \\
+%          & Objaverse (no LVIS) & OpenCLIP ViT-G & 85.7  & 76.5 & 94.7  & 35.9 & 62.7  \\
+
+         
+%          \bottomrule
+%     \end{tabular}
+%     \caption{Zero-shot 3D classification on ModelNet40 and Objaverse-LVIS for scaling up the 3D backbone model and the CLIP model.}
+%     \label{tab:zero-shot-modelnet}
+% \end{table*}
+
+
+
+\begin{table}[htb]
+    \centering
+    % \small
+    \resizebox{\linewidth}{!}{
+    \begin{tabular}{lccc}
+    \toprule
+          \multirow{2}*{\textbf{Model}} & \textbf{\#Params} & \textbf{Overall} & \textbf{Class-average} \\
+          &  \textbf{(M)} & \textbf{accuracy} & \textbf{accuracy} \\
+         \midrule
+         PointNet \cite{qi2017pointnet} &  3.5 & 68.2 & 63.4 \\
+         PointNet++ \cite{qi2017pointnet++} &  1.5 & 77.9 & 75.4 \\
+         DGCNN \cite{wu2018dgcnn} & 1.8 & 78.1 & 73.6 \\
+         MVTN \cite{hamdi2021mvtn} &  11.2 & 82.8 &  --\\
+         % Point-BERT \cite{yu2022point} & & & & 83.1 &  --\\
+         RepSurf-U \cite{ran2022surface} &  1.5 & 84.6 &  --\\
+         Point-MAE \cite{pang2022masked} &  22.1 & 85.2 & -- \\
+         % PointMAE \cite{pang2022masked} & & & & 85.2 &  --\\
+         % RepSurf-U (2x) \cite{ran2022surface} & & & & 86.0 &  --\\
+         PointMLP \cite{ma2022rethinking} & 12.6 &  85.7 & 84.4 \\
+         Point-M2AE \cite{zhang2022point} &  15.3 & 86.4 & -- \\
+         PointCMT \cite{yan2022let} & 12.6 & 86.7 & 84.8 \\
+         ACT \cite{dong2022autoencoders} & 22.1 & 88.2 & --\\
+         P2P \cite{wang2022p2p} &  - & 89.3 & -- \\
+         Recon-s \cite{qi2023contrast} &  19.0 & 89.5 & -- \\
+         I2P-MAE \cite{zhang2022learning} &  12.9 & 90.1 & -- \\
+         \midrule
+          % & \textbf{Manual} & \\
+          %  & \textbf{effort?} & \\
+         % \midrule
+         Point-BERT (official) & 22.1 & 83.1 &  --\\
+         % \cmidrule(lr){1-5}
+         Point-BERT (w/ ULIP) & 22.1 & 88.7 & --\\
+         Point-BERT (w/ ULIP-2)  & 22.1 & 89.7 
+         % \textcolor{DarkGreen}{\small ($\uparrow 6.6$)} 
+         & --\\
+         % Point-BERT (w/ ULIP-2) & \xmark & 32.5 & 90.0
+         % \textcolor{DarkGreen}{\small ($\uparrow 6.9$)}
+         % & --\\
+         \midrule
+         PointNeXt (from scratch)  & 1.4 & 87.5 & 85.9 \\
+         % \cmidrule(lr){1-5}
+         PointNeXt (w/ ULIP)  & 1.4 & 90.1 & 89.2 \\
+         PointNeXt (w/ ULIP-2) & 1.4 & 91.1
+         % \textcolor{DarkGreen}{\small ($\uparrow 3.6$)}
+         & 90.3
+         % \textcolor{DarkGreen}{\small ($\uparrow 4.4$)}
+         \\
+         PointNeXt (w/ ULIP-2)*  & 1.4 & \textbf{91.5} 
+         % \textcolor{DarkGreen}{\small ($\uparrow 4.0$)}
+         & \textbf{90.9}
+         % \textcolor{DarkGreen}{\small ($\uparrow 5.0$)}
+         \\
+         \bottomrule
+    \end{tabular}}
+    \caption{3D classification results on ScanObjectNN. ULIP-2 significantly outperforms the baselines. * means the voting \cite{ma2022rethinking} is used.} 
+    \label{tab:fintune-scan}
+    \vspace{-4mm}
+\end{table}
+
+% \begin{table*}[htb]
+%     \centering
+%     \resizebox{\linewidth}{!}{
+%     \begin{tabular}{lllclll}
+%     \toprule
+%           \multirow{2}*{\textbf{Model}} & & & & \textbf{\# Params} & \textbf{Overall} & \textbf{Class-average} \\
+%           & &  & & \textbf{(M)} & \textbf{accuracy} & \textbf{accuracy} \\
+%          \midrule
+%          PointNet \cite{qi2017pointnet} & & & & 3.5 & 68.2 & 63.4 \\
+%          PointNet++ \cite{qi2017pointnet++} & & & & 1.5 & 77.9 & 75.4 \\
+%          DGCNN \cite{wu2018dgcnn} & & & & 1.8 & 78.1 & 73.6 \\
+%          MVTN \cite{hamdi2021mvtn} & & & & 11.2 & 82.8 &  --\\
+%          % Point-BERT \cite{yu2022point} & & & & 83.1 &  --\\
+%          RepSurf-U \cite{ran2022surface} & & & & 1.5 & 84.6 &  --\\
+%          Point-MAE \cite{pang2022masked} & & & & 22.1 & 85.2 & -- \\
+%          % PointMAE \cite{pang2022masked} & & & & 85.2 &  --\\
+%          % RepSurf-U (2x) \cite{ran2022surface} & & & & 86.0 &  --\\
+%          PointMLP \cite{ma2022rethinking} & & & & 12.6 &  85.7 & 84.4 \\
+%          Point-M2AE \cite{zhang2022point} & & & & 15.3 & 86.43 & -- \\
+%          PointCMT \cite{yan2022let} & & & & 12.6 & 86.7 & 84.8 \\
+%          ACT \cite{dong2022autoencoders} & & & & 22.1 & 88.21 & --\\
+%          P2P \cite{wang2022p2p} & & & & - & 89.3 & -- \\
+%          I2P-MAE \cite{zhang2022learning} & & & & 12.9 & 90.11 & -- \\
+%          \midrule
+%          & \textbf{Pre-training} & \textbf{Pre-training} & \textbf{Manual} & \\
+%          & \textbf{dataset} & \textbf{methods} & \textbf{captions?} & \\
+%          \midrule
+%          \multirow{3}*{Point-BERT \cite{yu2022point}} & -- & -- & -- & 22.1 & 83.1 &  --\\
+%          \cmidrule(lr){2-4}
+%          & \multirow{2}*{Objaverse + ShapeNet} & ULIP \cite{xue2022ulip} & \cmark & 22.1 & 88.7 & --\\
+%          & & ULIP-2 (ours) & \xmark & 22.1 & 89.0 \textcolor{DarkGreen}{\small ($\uparrow 5.9$)} & --\\
+%          \midrule
+%          \multirow{4}*{PointNeXt \cite{qian2022pointnext}} & -- & -- & -- & 1.4 & 87.5 & 85.9 \\
+%          \cmidrule(lr){2-4}
+%          & \multirow{3}*{Objaverse + ShapeNet} & ULIP \cite{xue2022ulip} & \cmark & 1.4 & 90.1 & 89.2 \\
+%          & & ULIP-2 (ours) & \xmark & 1.4 & 90.8 \textcolor{DarkGreen}{\small ($\uparrow 3.3$)} & 90.3 \textcolor{DarkGreen}{\small ($\uparrow 4.4$)} \\
+%          & & ULIP-2 * (ours) & \xmark & 1.4 & \textbf{91.5} \textcolor{DarkGreen}{\small ($\uparrow 4.0$)} & \textbf{91.2} \textcolor{DarkGreen}{\small ($\uparrow 5.3$)} \\
+%          \bottomrule
+%     \end{tabular}}
+%     \caption{3D classification results on ScanObjectNN. ULIP-2 significantly outperforms the baselines. * means the voting technique \cite{ma2022rethinking} is used. The green numbers following \textcolor{DarkGreen}{$\uparrow$} indicate the amounts of improvement of our ULIP-2 over the corresponding ULIP baseline.} 
+%     % \ning{Report leaderborad results. Report ULIP results. Explain ULIP++ does not need annotated captions yet achieves comparable performance to ULIP. Report Objaverse pre-trained model results.}}
+%     \label{tab:fintune-scan}
+%     % \vspace{-4mm}
+% \end{table*}
+
+
+
+% \begin{table*}[htb]
+%     \centering
+%     \resizebox{\linewidth}{!}{
+%     \begin{tabular}{lllcccc}
+%     \toprule
+%           \multirow{2}*{\textbf{Model}} & & & & \textbf{\# Params} & \textbf{Overall} & \textbf{Class-average} \\
+%           & &  & & \textbf{(M)} & \textbf{accuracy} & \textbf{accuracy} \\
+%          \midrule
+%          PointNet \cite{qi2017pointnet} & & & & 3.5 & 68.2 & 63.4 \\
+%          PointNet++ \cite{qi2017pointnet++} & & & & 1.5 & 77.9 & 75.4 \\
+%          DGCNN \cite{wu2018dgcnn} & & & & 1.8 & 78.1 & 73.6 \\
+%          MVTN \cite{hamdi2021mvtn} & & & & 11.2 & 82.8 &  --\\
+%          % Point-BERT \cite{yu2022point} & & & & 83.1 &  --\\
+%          RepSurf-U \cite{ran2022surface} & & & & 1.5 & 84.6 &  --\\
+%          Point-MAE \cite{pang2022masked} & & & & 22.1 & 85.2 & -- \\
+%          % PointMAE \cite{pang2022masked} & & & & 85.2 &  --\\
+%          % RepSurf-U (2x) \cite{ran2022surface} & & & & 86.0 &  --\\
+%          PointMLP \cite{ma2022rethinking} & & & & 12.6 &  85.7 & 84.4 \\
+%          Point-M2AE \cite{zhang2022point} & & & & 15.3 & 86.43 & -- \\
+%          PointCMT \cite{yan2022let} & & & & 12.6 & 86.7 & 84.8 \\
+%          ACT \cite{dong2022autoencoders} & & & & 22.1 & 88.21 & --\\
+%          P2P \cite{wang2022p2p} & & & & - & 89.3 & -- \\
+%          I2P-MAE \cite{zhang2022learning} & & & & 12.9 & 90.11 & -- \\
+%          \midrule
+%          & \textbf{Pre-training} & \textbf{Pre-training} & \textbf{Manual} & \\
+%          & \textbf{dataset} & \textbf{methods} & \textbf{captions?} & \\
+%          \midrule
+%          \multirow{5}*{Point-BERT \cite{yu2022point}} & -- & -- & -- & 22.1 & 83.1 &  --\\
+%          \cmidrule(lr){2-4}
+%          & \multirow{2}*{ShapeNet \cite{chang2015shapenet}} & ULIP \cite{xue2022ulip} & \cmark & 22.1 & 86.4 &  --\\
+%          & & ULIP-2 (ours) & \xmark & 22.1 & 86.7\textcolor{DarkGreen}{\small ($\uparrow 3.6$)} & --\\
+%          \cmidrule(lr){2-4}
+%          & \multirow{2}*{Objaverse \cite{Deitke2022objaverse}} & ULIP \cite{xue2022ulip} & \cmark & 22.1 & 88.7 & --\\
+%          & & ULIP-2 (ours) & \xmark & 22.1 & 89.0 \textcolor{DarkGreen}{\small ($\uparrow 5.9$)} & --\\
+%          \midrule
+%          \multirow{6}*{PointNeXt \cite{qian2022pointnext}} & -- & -- & -- & 1.4 & 87.5 & 85.9 \\
+%          \cmidrule(lr){2-4}
+%          & \multirow{2}*{ShapeNet \cite{chang2015shapenet}} & ULIP \cite{xue2022ulip} & \cmark & 1.4  & 89.7  & 88.6 \\
+%          & & ULIP-2 (ours) & \xmark & 1.4 & 89.5 \textcolor{DarkGreen}{\small ($\uparrow 2.0$)} & 88.8 \textcolor{DarkGreen}{\small ($\uparrow 2.9$)}  \\
+%          \cmidrule(lr){2-4}
+%          & \multirow{3}*{Objaverse \cite{Deitke2022objaverse}} & ULIP \cite{xue2022ulip} & \cmark & 1.4 & 90.1 & 89.2 \\
+%          & & ULIP-2 (ours) & \xmark & 1.4 & 90.8 \textcolor{DarkGreen}{\small ($\uparrow 3.3$)} & 90.3 \textcolor{DarkGreen}{\small ($\uparrow 4.4$)} \\
+%          & & ULIP-2 * (ours) & \xmark & 1.4 & \textbf{91.5} \textcolor{DarkGreen}{\small ($\uparrow 4.0$)} & \textbf{91.2} \textcolor{DarkGreen}{\small ($\uparrow 5.3$)} \\
+%          \bottomrule
+%     \end{tabular}}
+%     \caption{3D classification results on ScanObjectNN. ULIP-2 significantly outperforms the baselines. * means the voting technique \cite{ma2022rethinking} is used. The green numbers following \textcolor{DarkGreen}{$\uparrow$} indicate the amounts of improvement of our ULIP-2 over the corresponding ULIP baseline.} 
+%     % \ning{Report leaderborad results. Report ULIP results. Explain ULIP++ does not need annotated captions yet achieves comparable performance to ULIP. Report Objaverse pre-trained model results.}}
+%     \label{tab:fintune-scan}
+%     % \vspace{-4mm}
+% \end{table*}
+
+
+\noindent\textbf{Standard 3D Classification}. We adhere to ULIP and community protocols for standard 3D classification. We present 3D classification results on ScanObjectNN hardest set in Table \ref{tab:fintune-scan}. When pre-trained on Objaverse and ShapeNet jointly for the same 3D encoder architecture with both ULIP and ULIP-2 frameworks, we observe that ULIP-2 (using the Point-BERT backbone) improves the baseline method (without multimodal pre-training) by 6.6\%. Using the PointNeXt backbone, ULIP-2 achieves a significant 4.0\% performance gain over training from scratch, achieving an overall accuracy of 91.5\% and establishing a new record on the ScanObjectNN benchmark with just 1.4 million parameters.
+
+\noindent\textbf{3D-to-Language Generation}. As depicted in Figure \ref{fig:xinstructblip}, we adopt the X-InstructBLIP methodology~\citep{xinstructblip} to integrate the ULIP-2 pre-trained encoder with a frozen large language model (LLM), endowing it with the capability to generate language from 3D data. For a fair comparison of 3D-to-language generation abilities, we plug frozen Point-BERT models into X-InstructBLIP's ~\citep{xinstructblip} framework, which are pre-trained under both ULIP and ULIP-2 frameworks with the same pre-training datasets (Objaverse + ShapeNet). Then we benchmark the 3D captioning abilities following ~\citep{xinstructblip}. All other variables are held constant during this evaluation. Captioning performance is measured using the PyCOCOTools Cider Score~\citep{vedantam2015cider}, offering a quantitative analysis of the models' captioning performance. Table \ref{tab:3d_captioning} shows that ULIP-2 pre-trained encoder can significantly improve the captioning score by 28.3\%, and Figure \ref{fig:xinstructblip} shows qualitatively the generated captions using ULIP-2 pre-trained model is more accurate and descriptive.
+
+\begin{table}[h]
+    \centering
+    \vspace{-3mm}
+    \small
+    \begin{tabular}{ccc}
+        \toprule
+        \textbf{Multimodal} & \textbf{Frozen 3D} & \textbf{CIDEr} \\
+        \textbf{generation framework} & \textbf{encoder} & \textbf{score} \\
+        \midrule
+        X-InstructBLIP & PB w/ ULIP & 132.2 \\
+        X-InstructBLIP & PB w/ ULIP-2 & \textbf{160.5}
+        % \textcolor{DarkGreen}{\tiny ($\uparrow 28.3$)}
+        \\
+        \bottomrule
+    \end{tabular}
+    \caption{3D-to-language generation using X-InstructBLIP ~\citep{xinstructblip}, pre-trained on the same Objaverse + ShapeNet datasets setting. PB w/ ULIP-2 means Point-BERT pre-trained with ULIP-2 framework.}
+    \label{tab:3d_captioning}
+    \vspace{-2mm}
+\end{table}
+
+
+
+
+% \begin{table*}[h]
+%     \centering
+%     \begin{tabular}{cccccc}
+%         \toprule
+%         \multirow{2}{*}{\makecell{3D backbone}} &
+%         \multirow{2}{*}{\makecell{Pre-training\\ methods}} &
+%         \multirow{2}{*}{\makecell{Manual\\ captions?}} &
+%         \multicolumn{2}{c}{\makecell{ModelNet}} &
+%         \multirow{2}{*}{\makecell{Objaverse\\ Captioning}} \\
+%         & & & \makecell{Classification} & \makecell{Open Vocabulary} & \\
+%         \midrule
+%         \multirow{2}{*}{Point-BERT} & ULIP-1 & Yes & 57.7 & 45.1 & 132.2 \\
+%          & ULIP-2 & No & \textbf{62.8} & \textbf{50.6} & \textbf{166.6} \\
+%          % & ULIP-2 (k=5) & No & 63.2 & 49.1 & \textbf{144.4} \\
+%         % ... other rows ...
+%         \bottomrule
+%     \end{tabular}
+%     \caption{Multimodal generation using X-InstructBLIP, pre-trained on the same Objaverse + ShapeNet datasets.}
+%     \label{tab:models_comparison}
+% \end{table*}
+
+% \ning{Remarkably, our state-of-the-art performance is not at cost of model complexity. On the contrary, it does not introduce additional number of parameters to PointNeXt which has the minimal size in Table \ref{tab:fintune-scan}.}
+
+% \ning{What are the protocols? How many training? How many testing?}
+
+% \begin{table*}[htb]
+%     \centering
+%     \begin{tabular}{lcc}
+%     \toprule
+%           \textbf{Model} & \textbf{Overall accuracy} & \textbf{Class-average accuracy} \\
+%          \midrule
+%          PointNet \cite{qi2017pointnet} & 68.2 & 63.4 \\
+%          PointNet++ \cite{qi2017pointnet++} & 77.9 & 75.4 \\
+%          DGCNN \cite{wu2018dgcnn} & 78.1 & 73.6 \\
+%          MVTN \cite{hamdi2021mvtn} & 82.8 &  --\\
+%          % Point-BERT \cite{yu2022point} & 83.1 &  --\\
+%          RepSurf-U \cite{ran2022surface} & 84.6 &  --\\
+%          Point-MAE \cite{pang2022masked} & 85.2 & -- \\
+%          % PointMAE \cite{pang2022masked} & 85.2 &  --\\
+%          RepSurf-U (2x) \cite{ran2022surface} & 86.0 &  --\\
+%          Point-M2AE \cite{zhang2022point} & 86.43 & -- \\
+%          PointCMT \cite{yan2022let} & 86.7 & 84.8 \\
+%          ACT \cite{dong2022autoencoders} & 88.21 & --\\
+%          P2P \cite{wang2022p2p} & 89.3 & -- \\
+%          I2P-MAE \cite{zhang2022learning} & 90.11 & -- \\
+%          \midrule
+%          Point-BERT \cite{yu2022point} & 83.1 &  --\\
+%          Point-BERT, ShapeNet, ULIP & 86.4 &  --\\
+%          Point-BERT, ShapeNet, ULIP-2 (ours) & \textbf{86.7}\textcolor{DarkGreen}{\small ($\uparrow 3.6$)} & --\\
+%          Point-BERT, Objaverse, ULIP & 88.7 & --\\
+%          Point-BERT, Objaverse, ULIP-2 (ours) & \textbf{89.0} \textcolor{DarkGreen}{\small ($\uparrow 5.9$)} & --\\
+%          \midrule
+%          PointNeXt \cite{qian2022pointnext} & 87.5 & 85.9 \\
+%          PointNeXt, ShapeNet, ULIP & 89.7  & 88.6 \\
+%          PointNeXt, ShapeNet, ULIP-2 (ours) & \textbf{89.5} \textcolor{DarkGreen}{\small ($\uparrow 2.0$)} & \textbf{88.8} \textcolor{DarkGreen}{\small ($\uparrow 2.9$)}  \\
+%          PointNeXt, Objaverse, ULIP & 90.1 & 89.2 \\
+%          PointNeXt, Objaverse, ULIP-2 (ours) & \textbf{90.8} \textcolor{DarkGreen}{\small ($\uparrow 3.3$)} & \textbf{90.3} \textcolor{DarkGreen}{\small ($\uparrow 4.4$)} \\
+%          PointNeXt, Objaverse, ULIP-2 * (ours) & \textbf{91.5} \textcolor{DarkGreen}{\small ($\uparrow 4.0$)} & \textbf{91.2} \textcolor{DarkGreen}{\small ($\uparrow 5.3$)} \\
+%          \bottomrule
+%     \end{tabular}
+%     \caption{3D classification results on ScanObjectNN. ULIP-2 significantly improves our baselines. * means voting technique is used.} 
+%     % \ning{Report leaderborad results. Report ULIP results. Explain ULIP++ does not need annotated captions yet achieves comparable performance to ULIP. Report Objaverse pre-trained model results.}}
+%     \label{tab:fintune-scan}
+% \end{table*}
+
+
+
+% \ning{Report 3D object detection benchmark.}
+\vspace{-6mm}
+\section{Ablation Study}
+
+\subsection{Ablation on the effect of the generated captions}
+\label{sec:ablate_captions}
+To ablate how the generated captions contribute to the performance, we conducted experiments aligned with the ULIP's settings, but with only one key modification: the language modality. Instead of using ULIP's manual descriptions, we utilized the top-1 ranked holistic-view captions generated by BLIP-2. Results in Table \ref{tab:ablate-captions} show significant improvements in zero-shot classification on ModelNet40 when using these generated captions, demonstrating their crucial impact compared to the manual captions used in ULIP.
+
+\begin{table}[h!]
+    \centering
+    % \tiny
+    % \customsizePointnext
+    \small
+    \begin{tabular}{ccc}
+         \toprule
+         \textbf{Pre-train} & \multicolumn{2}{l}{
+         \textbf{ModelNet40}}\\
+         %\cmidrule{4-5}
+         \textbf{language modality} & \textbf{top-1} & \textbf{top-5}\\
+         \midrule
+         
+         Manual captions & 60.4 &  84.0\\
+         Top-1 holistic BLIP-2 captions  & \textbf{69.7}
+         % \textcolor{DarkGreen}{\tiny ($\uparrow 9.3$)}
+         & \textbf{88.1}
+         % \textcolor{DarkGreen}{\tiny ($\uparrow 4.1$)}
+         \\
+
+         \bottomrule
+    \end{tabular}
+    \caption{Point-BERT zero-shot 3D classification on ModelNet40, pre-trained on ShapeNet with SLIP ViT-B encoders (used in ULIP).}
+    \label{tab:ablate-captions}
+\end{table}
+
+
+\subsection{Different Large Multimodal Models}
+\label{sec:ablate_large_multimodal_models}
+Considering that the language description quality from large multimodal models plays an important role in 3D representation pre-training, we conduct an ablation study over two such models. We use BLIP-2 ~\citep{li2023blip} throughout the benchmarking experiments above. We hereby compare it to its earlier version BLIP~\cite{li2022blip} for the zero-shot 3D classification task using Point-BERT backbone pre-trained on ShapeNet. Results in Table \ref{tab:ablate_large_multimodal_model} show that using BLIP-2 generated descriptions achieves better results than BLIP, thanks to its evolved image understanding capability, suggesting that as the large multimodal models advance, the performance of ULIP-2 can be expected to improve correspondingly.
+
+\begin{table}[h!]
+    \centering
+    \vspace{-2mm}
+    \begin{tabular}{lcc}
+        \toprule
+        \textbf{Large multimodal models}  & \textbf{top-1} & \textbf{top-5}
+        \\
+        \midrule
+        BLIP \cite{li2022blip} & 67.7 & 88.6 \\
+        BLIP-2 \cite{li2023blip} & \textbf{69.7} & \textbf{88.8}\\
+        \bottomrule
+    \end{tabular}
+    \caption{Zero-shot 3D classification on ModelNet40. Pre-trained on ShapeNet with SLIP ViT-B encoders.}
+    \label{tab:ablate_large_multimodal_model}
+    \vspace{-4mm}
+\end{table}
+
+% The performance difference is not significant because multiple descriptions for multiple 2D views reduce the sensitivity against the noise in descriptions.
+
+
+% \begin{table}[htbp]
+%     \centering
+%     \begin{tabular}{lccc}
+%         \toprule
+%         \textbf{Model} &\textbf{Large multimodal models}  & \textbf{top-1} & \textbf{top-5}
+%         \\
+%         \midrule
+%         \multirow{2}{*}{\shortstack{Point-BERT\\ w/ ULIP-2}} & BLIP \cite{li2022blip} & 67.3 & 88.6 \\
+%         & BLIP-2 \cite{li2023blip} & \textbf{69.7} & \textbf{88.8}\\
+%         \bottomrule
+%     \end{tabular}
+%     \caption{Zero-shot 3D classification on ModelNet40. Pre-trained on ShapeNet due to the computation efficiency.}
+%     \label{tab:ablation_vis_lang_models}
+% \end{table}
+
+
+
+\subsection{Number of 2D Views Per 3D Object}
+We further perform an ablation study for the zero-shot 3D classification performance w.r.t. the number of holistic views w/ its top-1 BLIP-2 caption in pre-training. Results in Table \ref{tab:ablate_num_views} demonstrate that, with the increase in the number of views, zero-shot classification accuracy increases accordingly. This validates our statement that diverse language descriptions of holistic views benefit multimodal 3D representation learning.
+
+% \begin{table}[htbp]
+%     \centering
+%     \begin{tabular}{lccc}
+%         \toprule
+%         \multirow{2}*{\textbf{Model}} & \multirow{2}*{\textbf{\# Views}} & \multicolumn{2}{c}{\textbf{Accuracy}}
+%         \\
+%         %\cmidrule{4-5}
+%           & & \textbf{top-1} & \textbf{top-5}
+%         \\
+%         \midrule
+%         \multirow{4}*{Point-BERT w/ ULIP-2} 
+%          & 1 & 54.8 & 77.9 \\
+%          & 2 & 58.1 & 80.5 \\
+%          & 15 & 69.3 & 88.6 \\
+%          & 30 & \textbf{69.7} & \textbf{88.8} \\
+%         \bottomrule
+%     \end{tabular}
+%     \caption{Zero-shot 3D classification on ModelNet40, pre-trained on ShapeNet for different numbers of views.}
+%     \label{tab:ablation_num_views}
+%     % \vspace{-4mm}
+% \end{table}
+
+\begin{table}[htbp]
+    \centering
+    \vspace{-2mm}
+    \begin{tabular}{ccc}
+        \toprule
+                     \multirow{2}*{\textbf{\# Holistic views}} & \multicolumn{2}{c}{\textbf{Accuracy}}
+        \\
+        %\cmidrule{4-5}
+         & \textbf{top-1} & \textbf{top-5}
+        \\
+        \midrule
+         1 & 54.8 & 77.9 \\
+         2 & 58.1 & 80.5 \\
+         15 & 69.3 & 88.6 \\
+         30 & \textbf{69.7} & \textbf{88.8} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Zero-shot 3D classification on ModelNet40, pre-trained on ShapeNet with SLIP ViT-B encoders.}
+    \label{tab:ablate_num_views}
+    \vspace{-4mm}
+\end{table}
+
+% \begin{table*}[htbp]
+%     \centering
+%     \begin{tabular}{llccc}
+%         \toprule
+%         \multirow{2}*{\textbf{Model}} & \multirow{2}*{\textbf{Pre-training dataset}} & \multirow{2}*{\textbf{\# Views}} & \multicolumn{2}{c}{\textbf{Accuracy}}
+%         \\
+%         %\cmidrule{4-5}
+%           & & & \textbf{top-1} & \textbf{top-5}
+%         \\
+%         \midrule
+%         \multirow{6}*{Point-BERT w/ ULIP-2}& \multirow{3}*{Objaverse} & 2 & 61.5 & 81.4 \\
+%          & & 6 & 67.9 & 87.0 \\
+%          & & 12 & \textbf{70.2} & \textbf{87.0} \\
+%          \cmidrule{2-5}
+%          & \multirow{3}*{ShapeNet} & 2 & 55.5 & 77.1 \\
+%          & & 15 & 64.2 & 85.3 \\
+%          & & 30 & \textbf{66.4} & \textbf{87.7} \\
+%         \bottomrule
+%     \end{tabular}
+%     \caption{Zero-shot 3D classification on ModelNet40, pre-trained on different numbers of views.}
+%     \label{tab:ablation_num_views}
+%     % \vspace{-4mm}
+% \end{table*}
+
+% \begin{table*}[h]
+%     \centering
+%     \begin{tabular}{lcccc}
+%         \toprule
+%         \multirow{2}*{\textbf{Model}} & \multirow{2}*{\textbf{Pre-training dataset}} & \multirow{2}*{\textbf{\# Views}} & \multicolumn{2}{c}{\textbf{Accuracy}}
+%         \\
+%         %\cmidrule{4-5}
+%           & & & \textbf{top-1} & \textbf{top-5}
+%         \\
+%         \midrule
+%         \multirow{6}*{Point-BERT w/ ULIP}& \multirow{3}*{Objaverse} & 2 & 64.4 & 81.9 \\
+%          & & 6 & 67.9 & 84.1 \\
+%          & & 12 & \textbf{67.2} & \textbf{83.1} \\
+%          \cmidrule{2-5}
+%          & \multirow{3}*{ShapeNet} & 2 & 50.1 & 75.1 \\
+%          & & 15 & 53.2 & 79.1 \\
+%          & & 30 & \textbf{60.4} & \textbf{84.0} \\
+%         \bottomrule
+%     \end{tabular}
+%     \caption{Zero-shot 3D classification on ModelNet40, pre-trained on different numbers of views.}
+%     \label{tab:ablation_num_views}
+% \end{table*}
+\vspace{-2mm}
+\subsection{Top-\texorpdfstring{$k$}{k} CLIP Ranked Captions Per 2D View}
+\label{sec:top_k_captions}
+To assess the effectiveness of our top-1 BLIP-2 caption strategy, we conducted an ablation study on selecting different top-k of the 10 independently-generated BLIP-2 captions for the multimodal pre-training. The results in Table \ref{tab:ablate_top_k} indicate that, using the top-1 CLIP score ranked caption yields the best performance. This makes intuitive sense: the top-1 CLIP-scored caption tends to be more noise-proof, which is advantageous for multimodal learning in our context.
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{ccc}
+        \toprule
+        \multirow{2}*{\textbf{Top-\(k\) BLIP-2 captions selected}} & \multicolumn{2}{c}{\textbf{Accuracy}}
+        \\
+        & \textbf{top-1} & \textbf{top-5}
+        \\
+        \midrule
+        1 & \textbf{69.7} & \textbf{88.8} \\
+        3 & 66.7 & 87.2 \\
+        5 & 66.4 & 87.7 \\
+        10 & 66.3 & 85.1 \\
+        \bottomrule
+    \end{tabular}
+    \caption{ULIP-2 zero-shot 3D classification on ModelNet40, pre-trained on ShapeNet with SLIP ViT-B. For example, top-5 BLIP-2 captions selected means that in the pre-training, we will ensemble the top-5 CLIP CLIP ranked captions as the language modality.}
+    \label{tab:ablate_top_k}
+    \vspace{-2mm}
+\end{table}
+
+% \begin{table}[h]
+%     \centering
+%     \begin{tabular}{cccc}
+%         \toprule
+%         \multirow{2}*{\textbf{\# Captions generated}} & \textbf{Top-\(k\)} & \multicolumn{2}{c}{\textbf{Accuracy}}
+%         \\
+%         & \textbf{selected} & \textbf{top-1} & \textbf{top-5}
+%         \\
+%         \midrule
+%         \multirow{4}{*}{10} & 1 & \textbf{69.7} & \textbf{88.8} \\
+%         & 3 & 66.7 & 87.2 \\
+%         & 5 & 66.4 & 87.7 \\
+%         & 10 & 66.3 & 85.1 \\
+%         \bottomrule
+%     \end{tabular}
+%     \caption{Zero-shot 3D classification on ModelNet40, pre-trained on ShapeNet.}
+%     \label{tab:ablation_num_captions}
+% \end{table}
+
+\subsection{Scaling Up the Backbone Models}
+\label{sec:ablate_scaling}
+
+We examined the effectiveness of increasing the size of both the CLIP model and the 3D backbone model on performance. As Table \ref{tab:ablate_scale_up} illustrates, a larger CLIP model improves results. For the 3D backbone, performance peaks at around 32.5M parameters, beyond which gains diminish. Therefore, this configuration is our chosen setup, balancing between performance and model size.
+
+\begin{table}[h]
+    \small
+    \centering
+    \vspace{-2mm}
+    % \rowcolors{5}{gray!25}{}
+    \begin{tabular}{cccccc}
+         \toprule
+        \textbf{CLIP} &\textbf{3D encoder }  & \multicolumn{2}{c}{\textbf{ModelNet40}} & \multicolumn{2}{c}{\textbf{Objaverse-LVIS}}\\
+        \textbf{size} & \textbf{\#Params(M)} & \textbf{top-1} & \textbf{top-5}  & \textbf{top-1} &\textbf{top-5}  \\
+         \midrule
+         ViT-B  & 21.9 & 71.4  & 89.7 & 28.3 & 52.6 \\
+         ViT-G & 21.9 & 76.3 & 94.1 & 35.0 & 62.5 \\
+         \cmidrule{1-6}
+          ViT-G & 5.3 & 75.0 & 94.7 & 34.1 & 61.1  \\
+          ViT-G & 21.9 & 76.3 & 94.1 & 35.0 & 62.5  \\
+         % \rowcolor{light_gray}
+          \rowcolor{gray!25} ViT-G & 32.5  & 77.0 & 94.0 & 35.7 & 62.9  \\
+          % \rowcolor{gray!25} 
+         % & Objaverse (no LVIS) & OpenCLIP ViT-G & 38.4  & 76.1 & 95.1 & 35.4 & 62.8  \\
+          ViT-G & 43.1  & 76.8 & 94.8  & 35.9 & 62.6  \\
+         % & Objaverse (no LVIS) & OpenCLIP ViT-G & 57.3  & 78.0 & 94.7  & 35.9 & 63.0  \\
+         % & Objaverse (no LVIS) & OpenCLIP ViT-G & 71.5  & 77.2 & 95.0  & 36.0 & 63.2  \\
+          ViT-G & 85.7  & 76.5 & 94.7  & 35.9 & 62.7  \\
+
+         
+         \bottomrule
+    \end{tabular}
+    \caption{Zero-shot 3D classification on ModelNet40 and Objaverse-LVIS, all models are Point-BERT models which are pre-trained on Objaverse(no-LVIS). The highlighted gray line is the model setting we use to scale ULIP-2 to the larger Objaverse dataset. The smallest 5.3M model is used when only pre-trained on ShapeNet.}
+    \label{tab:ablate_scale_up}
+    \vspace{-4mm}
+\end{table}
+
+
+
+
+% \begin{table}[h!]
+%     \centering
+%     % \tiny
+%     \customsizePointnext
+%     % \small
+%     \begin{tabular}{lcll}
+%          \toprule
+%          \multirow{2}*{\textbf{Model}}  & \textbf{Pre-train} & \multicolumn{2}{l}{\hspace{15pt}\textbf{ModelNet40}}\\
+%          %\cmidrule{4-5}
+%          & \textbf{language modality} & \textbf{top-1} & \textbf{top-5}\\
+%          \midrule
+         
+%          \multirow{2}*{Point-BERT} & Manual captions & 56.2 &  77.0\\
+%          & BLIP-2 generated captions & 66.3 \textcolor{DarkGreen}{\tiny ($\uparrow 10.1$)} & 83.7 \textcolor{DarkGreen}{\tiny ($\uparrow 4.3$)}\\
+
+%          \bottomrule
+%     \end{tabular}
+%     \caption{Point-BERT zero-shot 3D classification on ModelNet40, pre-trained on ShapeNet with SLIP image \&\& text backbones.}
+%     \label{tab:change-3d-backbone-zero-shot-modelnet}
+% \end{table}
+\vspace{-2mm}
+\section{Conclusion and Discussion}
+\vspace{-2mm}
+We present ULIP-2, a novel framework for multimodal 3D representation learning. By leveraging large multimodal models for language description generation and scaling up the multimodal 3D pre-training, ULIP-2 not only addresses the quality and scalability challenges in existing multimodal 3D datasets but also demonstrates significant improvements in all downstream tasks. We also release "ULIP-Objaverse" triplets and "ULIP-ShapeNet" triplets, two large-scale tri-modal datasets to foster further research.
+
+\vspace{-4mm}
+\paragraph{Limitations.}
+ULIP-2's pre-training primarily utilizes object-level 3D shape datasets, which inherently differ from scene-level 3D data in their distribution and complexity. Exploring the application of the ULIP-2 framework to scene-level 3D data understanding, and leveraging the knowledge learned from object-level 3D data for this purpose, represents a compelling avenue for future research.
+
+\vspace{-4mm}
+\paragraph{Broader Impact.}
+ULIP-2 aims to minimize human annotation in 3D multimodal pre-training, reducing labor but potentially impacting low-skilled job markets. This dual impact, a common concern in AI advancements, underscores the need for broader considerations in AI research.
+
+% Our reliance on publicly available datasets could introduce bias, as could the large multimodal models trained on public language data. Addressing these biases necessitates more diverse and balanced open-source datasets to prevent the generation of skewed content.
+
+
+
+% \section{Conclusion and Discussion}
+% % \vspace{-2mm}
+% We have introduced ULIP-2, a framework for multimodal 3D representation learning. It utilizes large multimodal models to generate comprehensive language descriptions of 3D objects, enabling us to overcome the limitations of existing 3D object datasets with regard to language descriptions' quality and scalability. Combined with an efficient multimodal pre-training framework and pre-train on our triplets of point clouds, images, and language from two large-scale 3D datasets, we demonstrate substantial and consistent improvements in zero-shot and standard 3D object classification over previous methods. Furthermore, our framework achieves a new state-of-the-art performance on the ScanObjectNN challenge leaderboard with a minimal number of parameters. To encourage future research, we release our pre-training multimodal triplets as "ULIP-Objaverse Triplets" and "ULIP-ShapeNet Triplets."
+
+% % \vspace{-2mm}
+% \paragraph{Broader Impact.}
+% This work is introduced for 3D multimodal pre-training without leveraging any human annotation effort. It has positive impacts such as reducing human labor. However, reducing human labor may also cause negative consequences such as job loss or displacement, particularly amongst low-skilled labor who may be most in need of gainful employment. The negative impact is not specific to this work and should be addressed broadly in the field of AI research.
+
+% % \vspace{-2mm}
+% \paragraph{Limitations.}
+% Our training data is from research public data and possibly contains biased information. Furthermore, the large multimodal models that we use to generate descriptions are trained on public language data and may generate biased language. The model could be improved if  more comprehensive and less biased open-source datasets become available, as this would help prevent the generation of improper content.
+
+%%%%%%%%% REFERENCES
+% {\small
+% \bibliographystyle{unsrt}
+% \bibliography{egbib}
+% }
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+% \end{document}
+
+%%%%%%%%% REFERENCES
+{
+    \small
+    \bibliographystyle{ieeenat_fullname}
+    \bibliography{main}
+}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% WARNING: do not forget to delete the supplementary pages from your submission 
+% \input{sec/X_suppl}
+\clearpage
+\appendix
+
+\input{appendix}
+
+
+
+\end{document}

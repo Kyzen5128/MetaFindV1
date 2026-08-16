@@ -1,0 +1,126 @@
+\appendix
+\part*{Appendix}
+{
+\setlength{\parskip}{-0em}
+\startcontents[sections]
+\printcontents[sections]{ }{1}{}
+}
+
+\label{sec:appendix}
+
+\section{Borader Impacts}
+\label{sec::broader}
+MetaFind facilitates accessible and coherent 3D scene generation, which can benefit fields like virtual reality, education, and game design. By supporting flexible multimodal queries, it lowers the barrier for non-experts to build rich virtual environments. However, risks include potential misuse in generating misleading content, propagation of bias from training data, and intellectual property concerns tied to retrieved assets. We recommend responsible dataset curation and human oversight to ensure ethical deployment.
+\input{4backgound}
+
+\section{Equivariance Proof of ESSGNN - Extension to Semantic Embedding} \label{sec:appendix_equiv_proof}
+
+
+
+In this section, we prove that our ESSGNN maintains SE(3) equivariance in 3D space. While the original EGNN \cite{satorras2021n} formulation allows the inclusion of edge features in the message function, these are typically discrete, task-specific features such as bond types or edge labels. In contrast, our ESSGNN introduces edge embeddings \( e_{ij} \) derived from LLM-generated natural language relation descriptions, which are subsequently encoded via a frozen text encoder. Importantly, these semantic edge embeddings are \textit{invariant to the input node positions} \( \rm x \), as they are computed solely from object-level text descriptions and do not depend on spatial coordinates. Therefore, although the semantics encoded in \( e_{ij} \) are richer and more expressive, the mathematical property required for equivariance—the independence of \( e_{ij} \) from \( \rm x \)—remains satisfied. As a result, the message and update equations remain SE(3)-equivariant under our semantic extension, and the original proof structure holds. We now restate and extend the proof below.
+
+
+Specifically, we show that for any translation vector \( g \in \mathbb{R}^3 \) and any orthogonal transformation \( Q \in \mathbb{R}^{3 \times 3} \), the model satisfies:
+
+\begin{equation}
+    Q\rm x^{l+1} + g,\; \rm h^{l+1} = \mathrm{ESSGNN}(Q\rm x^l + g,\; \rm h^l,\; E)
+\end{equation}
+
+where \( \rm x^l \) and \( \rm h^l \) are the positions and features of all nodes at layer \( l \), and \( E \) contains edge features including learned semantic embeddings \( e_{ij} \). We begin by assuming that \( \rm h^0 \) is invariant to SE(3) transformations on \( \rm x \), and that semantic edge embeddings \( e_{ij} \) are derived solely from object-level textual descriptions and thus independent of spatial coordinates. Under these assumptions, the edge message computation remains SE(3) invariant. Let us denote the pairwise edge message as:
+
+\begin{equation}
+    \rm m_{ij} = \phi_e\left(\rm h_i^l, \rm h_j^l, \| \rm x_i^l - \rm x_j^l \|^2, e_{ij} \right)
+\end{equation}
+    
+Now consider a translation and rotation of all node positions: \( \rm x_i^l \mapsto Q\rm x_i^l + g \). The Euclidean distance term becomes:
+
+\begin{equation}
+    \| Q\rm x_i^l + g - (Q\rm x_j^l + g) \|^2 = \| Q(\rm x_i^l - \rm x_j^l) \|^2 = \| \rm x_i^l - \rm x_j^l \|^2
+\end{equation}
+
+Hence the edge message is preserved:
+
+\begin{equation}
+    \rm m_{ij}' = \phi_e\left(\rm h_i^l, \rm h_j^l, \| Q\rm x_i^l + g - Q\rm x_j^l - g \|^2, e_{ij} \right) = \rm m_{ij}
+\end{equation}
+
+The position update in ESSGNN (adapted from EGNN) is defined as:
+
+\begin{equation}
+    \rm x_i^{l+1} = \rm x_i^l + \sum_{j \ne i} (\rm x_i^l - \rm x_j^l) \cdot \phi_x(\rm m_{ij})
+\end{equation}
+
+We now show that this equation is SE(3) equivariant. Applying the transformation:
+
+\begin{align*}
+    Q\rm x_i^l + g + \sum_{j \ne i} \left( Q\rm x_i^l + g - Q\rm x_j^l - g \right) \cdot \phi_x(\rm m_{ij}) &= Q\rm x_i^l + g + Q \sum_{j \ne i} (\rm x_i^l - \rm x_j^l) \cdot \phi_x(\rm m_{ij}) \\
+    &= Q \left( \rm x_i^l + \sum_{j \ne i} (\rm x_i^l - \rm x_j^l) \cdot \phi_x(\rm m_{ij}) \right) + g \\
+    &= Q\rm x_i^{l+1} + g
+\end{align*}
+
+Thus, the coordinate update is SE(3) equivariant.
+
+For the feature update:
+\begin{equation}
+    \rm h_i^{l+1} = \rm h_i^l + \sum_{j \ne i} \phi_h(\rm m_{ij})
+\end{equation}
+
+Since \( \rm m_{ij} \) is invariant to transformations of \( \rm x \), and both \( \rm h_i^l \), \( \rm h_j^l \) and \( e_{ij} \) are independent of the global pose, the feature update is invariant to SE(3) transformations of positions.
+
+Therefore, the ESSGNN update satisfies:
+
+\begin{equation}
+    Q\rm x^{l+1} + g,\; \rm h^{l+1} = \mathrm{ESSGNN}(Q\rm x^l + g,\; \rm h^l,\; E)
+\end{equation}
+
+This completes the proof that ESSGNN preserves SE(3) equivariance despite the inclusion of semantic edge embeddings. 
+
+\clearpage
+
+\section{Experimental Analysis} \label{sec:experimental analysis}
+
+As shown in Figure~\ref{fig:essgnn_comparison}:
+
+\textbf{Room 1}: Without ESSGNN, the room lacks stylistic coherence—the metallic fireplace and mismatched furniture deviate from the classical theme. With ESSGNN, the scene adopts a unified classical aesthetic with a dark-toned fireplace, matching sofa, and bookshelf.
+
+\textbf{Room 2}: Without ESSGNN, modern office furniture and cluttered seating break the archive theme and hinder functionality. With ESSGNN, compact wooden chairs are arranged around the table, better fitting the aged archive context and improving usability.
+
+
+\begin{figure*}[h]
+  \centering
+
+  \begin{subfigure}[b]{0.45\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{scene1_no_essgnn.png}
+    \caption{Without ESSGNN encoder}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.45\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{scene1_with_essgnn.png}
+    \caption{With ESSGNN encoder}
+  \end{subfigure}
+
+  \vspace{2mm}
+  \caption*{\textbf{Room 1 Description:} A classical-style lounge for group leisure and conversation}
+
+  \vspace{5mm}
+
+  \begin{subfigure}[b]{0.45\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{scene2_no_essgnn.png}
+    \caption{Without ESSGNN encoder}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.45\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{scene2_with_essgnn.png}
+    \caption{With ESSGNN encoder}
+  \end{subfigure}
+
+  \vspace{2mm}
+  \caption*{\textbf{Room 2 Description:} An aged archive room for research and consultation}
+
+  \caption{Comparison of scene generation with and without ESSGNN encoder.}
+  \label{fig:essgnn_comparison}
+\end{figure*}

@@ -119,6 +119,39 @@ def pc_norm(xyz: np.ndarray) -> np.ndarray:
     return centred / scale
 
 
+DEPTH_SHELL_GREY = 0.5
+
+
+def prepare_depth_shell(xyz: np.ndarray) -> np.ndarray:
+    """Turn a ProcTHOR depth-shell cloud into ULIP input. [P0-4]
+
+    n07b stores the fused shell in the SCENE's world frame, which is right --
+    that frame is what the AI2-THOR bounding-box check compares against, and
+    overwriting it would destroy the provenance that caught the orthographic
+    depth bug. But the world frame is not what the checkpoint expects: capture
+    lifts the asset to y = 40 m, so a stored cloud sits ~40 m off the origin at
+    a scale in metres, while every Objaverse cloud n03 wrote is already centred
+    and unit-scaled.
+
+    Feeding both to the same PointBERT would put the two galleries in different
+    input distributions -- a distribution shift OUR preprocessing created, not
+    one the paper's domain gap forces. (The unavoidable gap is complete mesh
+    surface versus visible depth shell; that one is real and gets declared.)
+
+    So the normalisation happens here, at encode time, on the way in.
+
+    Args:
+        xyz: ``(N, 3)`` world-frame points.
+
+    Returns:
+        ``(1, N, 6)`` -- normalised xyz plus a flat grey, because the depth
+        shell carries geometry only and a fabricated colour would be a claim.
+    """
+    normed = pc_norm(np.asarray(xyz, dtype=np.float64)).astype(np.float32)
+    rgb = np.full_like(normed, DEPTH_SHELL_GREY)
+    return np.concatenate([normed, rgb], axis=1)[None]
+
+
 class ULIPBackbone:
     """Loads ULIP-2 once and exposes its three modality encoders.
 

@@ -1,0 +1,63 @@
+{
+ "summary": {
+  "metafind": {
+   "title": "MetaFind",
+   "arxiv_id": "2510.05057",
+   "archive_sha256": "61351d3456dd95dbc6bd641ce25802a4ce3dd492baa7881f856627a49438b4e5",
+   "main_tex": "neurips_2025.tex",
+   "tex_files_read": 5,
+   "orphan_tex_ignored": 0,
+   "display_formulas": 20,
+   "numbered": 15,
+   "unnumbered": 5,
+   "inline_formulas": 75
+  },
+  "ulip2": {
+   "title": "ULIP-2",
+   "arxiv_id": "2305.08275",
+   "archive_sha256": "7d274247d248471817e6f19f7ca78fbdbb05ff5ac30fc816eac1207d8e551b33",
+   "main_tex": "main.tex",
+   "tex_files_read": 4,
+   "orphan_tex_ignored": 4,
+   "display_formulas": 3,
+   "numbered": 3,
+   "unnumbered": 0,
+   "inline_formulas": 46
+  },
+  "egnn": {
+   "title": "EGNN",
+   "arxiv_id": "2102.09844",
+   "archive_sha256": "3bfe32974cceccb69b6ebcf9b685c1461c7882630ff11262bfb59644eeefb7ff",
+   "main_tex": "example_paper.tex",
+   "tex_files_read": 10,
+   "orphan_tex_ignored": 10,
+   "display_formulas": 33,
+   "numbered": 12,
+   "unnumbered": 21,
+   "inline_formulas": 523
+  },
+  "idesign": {
+   "title": "I-Design",
+   "arxiv_id": "2404.02838",
+   "archive_sha256": "68cf90feafec2225adbfa7b61ab919dcaf7b1c5905f3cd60bba57de5d7b98efd",
+   "main_tex": "main.tex",
+   "tex_files_read": 15,
+   "orphan_tex_ignored": 0,
+   "display_formulas": 0,
+   "numbered": 0,
+   "unnumbered": 0,
+   "inline_formulas": 70
+  }
+ },
+ "formulas_total": 56,
+ "checks": [
+  "exact_latex is a substring of its source TeX",
+  "sha256 matches exact_latex",
+  "no literal ellipsis in exact_latex",
+  "formula ids are unique",
+  "sha256 survives the JSON round trip",
+  "every exact_latex appears verbatim in the markdown",
+  "no literal ellipsis in the markdown"
+ ],
+ "failures": []
+}

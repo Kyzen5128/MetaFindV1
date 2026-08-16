@@ -1,0 +1,74 @@
+\maketitlesupplementary
+\setcounter{page}{1}
+
+\section{Appendix}
+
+\label{sec:appendix}
+
+\subsection{Ablation on 3D Input}
+\label{sec:ablate_color}
+In order to fairly compare to OpenShape on Objaverse-LVIS benchmark, which utilizes 10k colored point clouds as the 3D input, we adopt the same 3D input preprocessing as in OpenShape. We conduct this ablation study to assess how color information influences zero-shot classification results on Objaverse-LVIS. To do this, we evaluated the ULIP-2 pre-trained Point-BERT model, pre-trained on Objaverse + ShapeNet. Our findings from Table \ref{tab:ablate_3d_input} show that ULIP-2 maintains strong performance on Objaverse-LVIS zero-shot classification tasks, even without using color information.
+\begin{table}[h!]
+    \centering
+    % \tiny
+    % \customsizePointnext
+    % \small
+    \begin{tabular}{ccc}
+         \toprule
+         \multirow{2}*{\textbf{3D Encoder Input}} & \multicolumn{2}{l}{\hspace{0pt}\textbf{Objaverse-LVIS}}\\
+         %\cmidrule{4-5}
+          & \textbf{top-1} & \textbf{top-5}\\
+         \midrule
+         
+         8k xyz & 48.9 &  77.1\\
+         10k xyzrgb & 50.6 & 79.1 \\
+
+         \bottomrule
+    \end{tabular}
+    \caption{Point-BERT w/ ULIP-2 zero-shot 3D classification on Objaverse-LVIS, pre-trained on Obajverse and ShapeNet jointly with OpenCLIP ViT-G encoders.}
+    \label{tab:ablate_3d_input}
+\end{table}
+
+
+\subsection{Different Kinds of 3D Backbones}
+\label{sec:ablate_3d_backbone}
+To verify ULIP-2's improvement is agnostic to 3D backbones, we conduct experiments on the PointNeXt backbone. Results in Table \ref{tab:ablate_different_3d_backbone} show that, with another kind of intrinsically different 3D backbone, ULIP-2 can still improve the performance significantly. Given that Point-BERT is a scale-up-friendly transformer-based architecture and has better zero-shot classification results, we mainly conduct experiments on Point-BERT for all our experiments.
+
+\begin{table}[h!]
+    \centering
+    % \tiny
+    % \customsizePointnext
+    % \small
+    \begin{tabular}{llcc}
+         \toprule
+         \multirow{2}*{\textbf{Model}}  & \textbf{Pre-train} & \multicolumn{2}{l}{\textbf{ModelNet40}}\\
+         %\cmidrule{4-5}
+         & \textbf{method} & \textbf{top-1} & \textbf{top-5}\\
+         \midrule
+         
+         \multirow{2}*{PointNeXt ~\citep{qian2022pointnext}} & ULIP \cite{xue2022ulip} & 56.2 &  77.0\\
+         & ULIP-2 & 72.8
+         % \textcolor{DarkGreen}{\tiny ($\uparrow 16.6$)}
+         & 95.7 
+         % \textcolor{DarkGreen}{\tiny ($\uparrow 18.7$)}
+         \\
+         \midrule
+         % \cmidrule(lr){2-8}
+         % & ULIP \cite{xue2022ulip} & \cmark & 39.9 & 64.8 & 7.0 & 21.0\\
+         % & ULIP-2 & \xmark & 44.0 \textcolor{DarkGreen}{\small ($\uparrow 4.1$)} & 77.9 \textcolor{DarkGreen}{\small ($\uparrow 13.1$)} &  11.5 \textcolor{DarkGreen}{\small ($\uparrow 4.5$)} & 29.8 \textcolor{DarkGreen}{\small ($\uparrow 8.8$)} \\
+         % % \cmidrule(lr){2-8}
+         % & ULIP \cite{xue2022ulip} & \cmark & 40.3  & 70.0 & 9.4 & 26.7 \\
+         % & ULIP-2 & \xmark & 45.5 \textcolor{DarkGreen}{\small ($\uparrow 5.2$)} & 79.8 \textcolor{DarkGreen}{\small ($\uparrow 9.8$)} & 13.6 \textcolor{DarkGreen}{\small ($\uparrow 4.2$)} & 33.8\textcolor{DarkGreen}{\small ($\uparrow 7.1$)} \\
+         % % \cmidrule(lr){2-8}
+         % & ULIP \cite{xue2022ulip} & \cmark & 45.3 & 69.0 & 8.5 & 23.6\\
+         % & ULIP-2 & \xmark & 52.7 \textcolor{DarkGreen}{\small ($\uparrow 7.4$)} & 83.1 \textcolor{DarkGreen}{\small ($\uparrow 14.1$)} & 13.8 \textcolor{DarkGreen}{\small ($\uparrow 5.3$)} & 33.9 \textcolor{DarkGreen}{\small ($\uparrow 10.3$)} \\
+
+         \multirow{2}*{Point-BERT ~\citep{yu2022point}} & ULIP ~\citep{xue2022ulip} & 60.4 & 84.0 \\
+         & ULIP-2 & \textbf{75.2} & \textbf{95.0}\\
+
+         \bottomrule
+    \end{tabular}
+    \caption{Zero-shot 3D classification on ModelNet40 with different 3D backbones, pre-trained on ShapeNet with SLIP ViT-B encoders.}
+    \label{tab:ablate_different_3d_backbone}
+\end{table}
+

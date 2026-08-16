@@ -296,6 +296,10 @@ def test_gradients_reach_every_parameter_except_the_final_f_x():
     }
     last = len(model.layers) - 1
     expected_dead = {n for n in dict(model.named_parameters()) if n.startswith(f"layers.{last}.f_x.")}
+    # The missing-edge token is only reached when `edge_missing` marks a row,
+    # and this scene has no missing edges. Its gradient is exercised by
+    # test_missing_edge_token_gets_gradient below; here it is correctly dead.
+    expected_dead.add("missing_edge_token")
 
     assert expected_dead, "test is misconfigured: no final-layer f_x parameters found"
     assert dead == expected_dead, (
@@ -303,6 +307,46 @@ def test_gradients_reach_every_parameter_except_the_final_f_x():
         f"  unexpectedly dead: {sorted(dead - expected_dead)}\n"
         f"  unexpectedly live: {sorted(expected_dead - dead)}"
     )
+
+
+def test_missing_edge_token_gets_gradient():
+    """[U-30] `learned_missing_token` has to actually be learned.
+
+    It was a seeded numpy vector built in the dataset for a while: the protocol
+    said "learned", the code produced a constant, and nothing objected because a
+    constant of the right width behaves identically at forward time.
+    """
+    model, nf, pos, ei, ea = make_scene(10)
+    missing = torch.zeros(ei.size(1), dtype=torch.bool)
+    missing[0] = True
+    model(nf, pos, ei, ea, edge_missing=missing).sum().backward()
+
+    g = model.missing_edge_token.grad
+    assert g is not None and g.abs().sum().item() > 0, (
+        "the missing-edge token received no gradient -- it is not being learned")
+
+
+def test_missing_edge_token_is_not_zeros():
+    """[L1-SEMEDGE-NO-ZEROFILL] Absence must not look like a real relation."""
+    model, *_ = make_scene(10)
+    assert model.missing_edge_token.abs().sum().item() > 0
+
+
+def test_marked_edges_actually_use_the_token_not_the_passed_row():
+    model, nf, pos, ei, ea = make_scene(10)
+    missing = torch.ones(ei.size(1), dtype=torch.bool)
+    # Every edge marked: the passed attributes are irrelevant, so scrambling
+    # them must not change the output.
+    a = model(nf, pos, ei, ea, edge_missing=missing)
+    b = model(nf, pos, ei, torch.randn_like(ea), edge_missing=missing)
+    assert torch.allclose(a, b, atol=1e-6), (
+        "edge_attr still reached the MLP for rows marked missing")
+
+
+def test_edge_missing_shape_is_checked():
+    model, nf, pos, ei, ea = make_scene(10)
+    with pytest.raises(ValueError, match="edge_missing"):
+        model(nf, pos, ei, ea, edge_missing=torch.zeros(ei.size(1) + 1, dtype=torch.bool))
 
 
 def test_intermediate_coordinate_updates_do_carry_gradient():

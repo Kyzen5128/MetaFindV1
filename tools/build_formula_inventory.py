@@ -1,349 +1,298 @@
 #!/usr/bin/env python3
-"""Repair the source papers and build A_FORMULA_INVENTORY, with round-trip proof.
+"""Extract every formula from the authors' arXiv TeX source.
 
-    python3 tools/build_formula_inventory.py
+    python3 tools/build_source_manifest.py     # first: resolve the include tree
+    python3 tools/build_formula_inventory.py   # then: this
 
-Two jobs, and the second is the one that kept going wrong.
+This replaces an earlier version that read converted Markdown. That approach was
+abandoned, not improved: the PDF-to-Markdown converter interpreted LaTeX
+backslash sequences as C string escapes, so `\\frac` arrived as a form feed plus
+"rac" and `\\neq` as a REAL newline -- which is a legal character, so a control-
+byte census skipped it and the whole `\\n`-prefixed command class stayed broken
+through two rounds of "repaired". No amount of repair makes a lossy conversion
+authoritative. The TeX is what the authors wrote.
 
-REPAIR. `ulip2_paper.md` and `egnn_paper.md` were written through a layer that
-interpreted LaTeX backslash sequences as C string escapes: `\\frac` became a form
-feed followed by "rac", `\\rangle` a carriage return followed by "angle". Every
-non-newline control byte is therefore a swallowed backslash, whatever follows
-it, so the repair does not need -- and must not use -- a list of command names.
-Guessing names is what left 11 `\\rangle` broken on the first attempt.
+Only files the main document actually includes are read, per SOURCE_MANIFEST.
+EGNN's archive ships a complete duplicate of itself in a subdirectory; walking
+every .tex on disk would double that paper's equation count.
 
-`\\n` is the exception and it is why `\\neq` survived two rounds of "fixed": it
-became a REAL newline, which is also a legal character. It can only be
-disambiguated inside math, by whether the following letters spell a LaTeX
-command beginning with n.
-
-SERIALISE. The inventory must contain each formula EXACTLY. Two things broke
-that before: putting LaTeX inside markdown table cells (pipes, and a width cap
-that inserted an ellipsis) and normalising whitespace on the way in. Formulas now
-live in fenced blocks; the table carries only identifiers.
-
-Nothing here is trusted. Every formula is hashed at the source and re-hashed
-after being written and read back, and the two must match.
+Equation numbers are ASSIGNED HERE by counting numbered environments in document
+order, because TeX does not store them -- LaTeX computes them at compile time.
+They are therefore OURS, and any disagreement with the published PDF is a bug in
+this counter, not in the paper. `\\label`s are extracted separately and are the
+authors' own; prefer them when citing.
 """
 
 from __future__ import annotations
 
-import collections
 import hashlib
 import json
 import re
-import sys
 from pathlib import Path
 
-DOCS = Path(__file__).resolve().parents[1] / "docs"
-REPAIRED = DOCS / "audit" / "repaired"
-INVENTORY = DOCS / "audit" / "A_FORMULA_INVENTORY.md"
-RECORDS = DOCS / "audit" / "A_FORMULA_INVENTORY.json"
+ROOT = Path(__file__).resolve().parents[1]
+PAPER = ROOT / "docs" / "paper"
+AUDIT = ROOT / "docs" / "audit"
 
-PAPERS = (("metafind_paper.md", "MF", "MetaFind"),
-          ("ulip2_paper.md", "U2", "ULIP-2"),
-          ("egnn_paper.md", "EG", "EGNN"))
+PAPERS = {"metafind": "MetaFind", "ulip2": "ULIP-2",
+          "egnn": "EGNN", "idesign": "I-Design"}
+SHORT = {"metafind": "MF", "ulip2": "U2", "egnn": "EG", "idesign": "ID"}
 
-# The seven C string escapes. LF is handled separately; the rest are unambiguous.
-ESC = {0x07: "a", 0x08: "b", 0x09: "t", 0x0b: "v", 0x0c: "f", 0x0d: "r"}
+# Numbered environments produce an equation number; starred ones do not.
+NUMBERED = ("equation", "align", "gather", "multline", "eqnarray", "flalign")
+STARRED = tuple(e + r"\*" for e in NUMBERED)
+ENVS = NUMBERED + STARRED + ("displaymath",)
 
-# LaTeX commands starting with n. An LF inside math followed by one of these is
-# a swallowed `\n`, not a line break.
-NCMDS = ("subseteq", "supseteq", "onumber", "ewline", "otin", "abla", "orm",
-         "eq", "i", "u", "e")
-
-FENCE = "```"
-
-
-def repair(name: str) -> tuple[str, dict]:
-    raw = (DOCS / name).read_bytes()
-    out, fixed = bytearray(), collections.Counter()
-    for b in raw:
-        if b in ESC:
-            out += b"\\" + ESC[b].encode()
-            fixed[ESC[b]] += 1
-        else:
-            out.append(b)
-    text = out.decode("utf8")
-
-    def fix_n(m: re.Match) -> str:
-        body = m.group(0)
-        for cmd in NCMDS:                       # longest first, see NCMDS order
-            body, k = re.subn("\n(" + cmd + ")(?![a-zA-Z])", "\\\\n\\1", body)
-            fixed["n"] += k
-        return body
-
-    text = re.sub(r"\$\$.+?\$\$", fix_n, text, flags=re.S)
-    text = re.sub(r"(?<!\$)\$[^$]+?\$(?!\$)", fix_n, text)
-    return text, dict(fixed)
+ENV_RE = re.compile(
+    r"\\begin\{(" + "|".join(ENVS) + r")\}(.*?)\\end\{\1\}", re.S)
+BRACKET_RE = re.compile(r"(?<!\\)\\\[(.*?)(?<!\\)\\\]", re.S)
+LABEL_RE = re.compile(r"\\label\{([^}]+)\}")
+SECTION_RE = re.compile(r"\\(sub)*section\*?\{([^}]*)\}")
 
 
-def headings(text: str) -> list[tuple[int, str]]:
-    return [(m.start(), m.group(1).strip())
-            for m in re.finditer(r"(?m)^#+\s*(.+)$", text)]
+def strip_comments(tex: str) -> str:
+    """Drop TeX comments so a commented-out equation never enters the inventory.
 
-
-def section_key(section: str) -> str:
-    """A short tag to tell same-numbered equations apart.
-
-    The EGNN paper restarts its numbering in the appendices, so `(14)` names
-    both the E(n)-equivariance statement in 3.1 and an inner-product identity in
-    E.2. Keying on the number alone silently merged them -- and the merge is not
-    cosmetic, it gave E.2's proof steps the CONCEPTUAL_SOURCE label belonging to
-    the equivariance result.
+    A percent sign preceded by a backslash is a literal, not a comment.
     """
-    toks = section.replace(":", " ").split()
-    if not toks:
-        return "?"
-    return (toks[0] + toks[1]) if toks[0] == "Appendix" else toks[0]
-
-
-def extract(text: str, short: str) -> list[dict]:
-    """Every display equation, VERBATIM.
-
-    The only transformation is reading the trailing `\\quad (n)` into its own
-    field; `raw_span` still holds the whole span exactly as it appears, so the
-    round-trip compares against the untouched source, not against something this
-    function decided was equivalent.
-    """
-    heads, rows = headings(text), []
-    for m in re.finditer(r"\$\$(.+?)\$\$", text, re.S):
-        body = m.group(1)
-        num = re.search(r"\\quad\s*\((\d+[a-z]?)\)\s*$", body.strip())
-        section = ""
-        for off, txt in heads:
-            if off < m.start():
-                section = txt
-            else:
+    out = []
+    for line in tex.split("\n"):
+        i, esc = 0, False
+        while i < len(line):
+            if line[i] == "\\":
+                esc = not esc
+            elif line[i] == "%" and not esc:
+                line = line[:i]
                 break
-        rows.append({
-            "id": f"{short}-{num.group(1) if num else 'U' + str(len(rows))}",
-            "source": short,
-            "line": text[:m.start()].count("\n") + 1,
-            "section": section,
-            "equation": num.group(1) if num else None,
-            "raw_span": body,                     # exactly as it appears
-            "sha256": hashlib.sha256(body.encode()).hexdigest(),
-        })
+            else:
+                esc = False
+            i += 1
+        out.append(line)
+    return "\n".join(out)
 
-    dupes = {i for i, n in collections.Counter(r["id"] for r in rows).items() if n > 1}
-    for r in rows:
-        if r["id"] in dupes:
-            r["id"] += "@" + section_key(r["section"])
+
+def sections_before(tex: str, pos: int) -> str:
+    last = ""
+    for m in SECTION_RE.finditer(tex):
+        if m.start() < pos:
+            last = m.group(2)
+        else:
+            break
+    return last
+
+
+def rows_matching(clean: str, raw: str, rel: str, short: str,
+                  counter: list[int]) -> list[dict]:
+    found = []
+    for m in ENV_RE.finditer(clean):
+        found.append((m.start(), m.group(1), m.group(2)))
+    for m in BRACKET_RE.finditer(clean):
+        found.append((m.start(), r"\[\]", m.group(1)))
+    found.sort()
+
+    rows = []
+    for start, env, body in found:
+        numbered = env in NUMBERED
+        base = env.rstrip(r"\*")
+        # A multi-row `align` takes one number PER ROW. Splitting matters twice
+        # over: counting the block as one would desynchronise every later
+        # equation in the paper, and MetaFind's Eq. (2) and Eq. (3) -- the two
+        # ESSGNN update rules, which differ in ways the whole audit turns on --
+        # live in a single align. Each row is stored separately and is still a
+        # literal substring of the source, so exactness is not traded away.
+        splittable = base in ("align", "gather", "eqnarray", "flalign")
+        parts = ([p for p in re.split(r"(?<!\\)\\\\", body) if p.strip()]
+                 if splittable else [body])
+
+        parent = hashlib.sha256(body.encode()).hexdigest() if len(parts) > 1 else None
+        for part in parts:
+            num = None
+            if numbered:
+                counter[0] += 1
+                num = counter[0]
+            rows.append({
+                "paper": short,
+                "source_tex": rel,
+                "source_line": clean[:start].count("\n") + 1,
+                "section": sections_before(clean, start),
+                "environment": env,
+                "equation_label": LABEL_RE.findall(part) or None,
+                "equation_number": num,
+                "numbered": numbered,
+                "exact_latex": part,
+                "sha256": hashlib.sha256(part.encode()).hexdigest(),
+                "parent_environment_sha256": parent,
+            })
     return rows
 
 
-def bare_commands(blob: str) -> dict:
-    cmds = ("rangle", "langle", "right", "left", "tilde", "text", "times",
-            "frac", "tau", "approx", "alpha", "theta", "neq", "nabla",
-            "operatorname", "mathcal", "mathbb", "phi", "sum", "exp", "log")
-    found = {}
-    for c in cmds:
-        n = len(re.findall(r"(?<![\\A-Za-z{])" + c + r"(?![A-Za-z}])", blob))
-        if n:
-            found[c] = n
-    return found
+def inline_formulas(clean: str) -> list[str]:
+    """Inline math, for the symbol/definition checks -- not part of the census."""
+    out = re.findall(r"(?<!\\)\\\((.+?)(?<!\\)\\\)", clean, re.S)
+    out += re.findall(r"(?<![\\$])\$([^$\n]+?)\$(?!\$)", clean)
+    return out
 
 
 def main() -> int:
-    REPAIRED.mkdir(parents=True, exist_ok=True)
-    repair_report, all_rows, failures = {}, [], []
+    AUDIT.mkdir(parents=True, exist_ok=True)
+    all_rows, inline, failures, summary = [], {}, [], {}
 
-    for name, short, _ in PAPERS:
-        text, fixed = repair(name)
-        (REPAIRED / name).write_text(text, newline="")
+    for name, title in PAPERS.items():
+        src = PAPER / f"{name}_source"
+        manifest_path = src / "SOURCE_MANIFEST.json"
+        if not manifest_path.is_file():
+            failures.append(f"{name}: no SOURCE_MANIFEST.json -- run "
+                            "tools/build_source_manifest.py first")
+            continue
+        manifest = json.loads(manifest_path.read_text())
 
-        # (8a) no control byte may survive
-        left = [b for b in (REPAIRED / name).read_bytes() if b in ESC]
-        if left:
-            failures.append(f"{name}: {len(left)} control bytes survived repair")
+        counter = [0]
+        rows, inl = [], []
+        for rel in manifest["included_tex_files"]:
+            raw = (src / rel).read_text(errors="replace")
+            clean = strip_comments(raw)
+            rows += rows_matching(clean, raw, rel, SHORT[name], counter)
+            inl += inline_formulas(clean)
 
-        blob = "\n".join(re.findall(r"\$\$.+?\$\$", text, re.S)
-                         + re.findall(r"(?<!\$)\$[^$\n]+?\$(?!\$)", text))
-        bare = bare_commands(blob)
-        if bare:
-            failures.append(f"{name}: bare commands inside math {bare}")
-        for label, ok in (("$$", text.count("$$") % 2 == 0),
-                          ("{}", blob.count("{") == blob.count("}")),
-                          ("left/right", blob.count("\\left") == blob.count("\\right")),
-                          ("langle/rangle", blob.count("\\langle") == blob.count("\\rangle"))):
-            if not ok:
-                failures.append(f"{name}: unbalanced {label}")
-
-        rows = extract(text, short)
+        for i, r in enumerate(rows):
+            base = f"{SHORT[name]}-{r['equation_number']}" \
+                if r["equation_number"] else f"{SHORT[name]}-U{i}"
+            r["id"] = base
         all_rows += rows
-        repair_report[name] = {
-            "repaired": fixed, "total": sum(fixed.values()),
-            "control_bytes_left": len(left), "display_blocks": len(rows),
-            "neq_in_source": text.count("\\" + "neq"),
-            "bare_in_math": bare,
+        inline[name] = inl
+        summary[name] = {
+            "title": title, "arxiv_id": manifest["arxiv_id"],
+            "archive_sha256": manifest["archive_sha256"],
+            "main_tex": manifest["main_tex"],
+            "tex_files_read": len(manifest["included_tex_files"]),
+            "orphan_tex_ignored": len(manifest["orphan_tex_files"]),
+            "display_formulas": len(rows),
+            "numbered": sum(1 for r in rows if r["numbered"]),
+            "unnumbered": sum(1 for r in rows if not r["numbered"]),
+            "inline_formulas": len(inl),
         }
 
-    RECORDS.write_text(json.dumps(all_rows, indent=1, ensure_ascii=False))
-    write_inventory(all_rows, repair_report)
+    # ---- validation: the inventory must be a faithful copy --------------------
+    for r in all_rows:
+        src = PAPER / f"{[k for k, v in SHORT.items() if v == r['paper']][0]}_source"
+        text = strip_comments((src / r["source_tex"]).read_text(errors="replace"))
+        if r["exact_latex"] not in text:
+            failures.append(f"{r['id']}: exact_latex is not a substring of its source")
+        if hashlib.sha256(r["exact_latex"].encode()).hexdigest() != r["sha256"]:
+            failures.append(f"{r['id']}: sha256 does not match exact_latex")
+        if "\u2026" in r["exact_latex"] or "..." in r["exact_latex"]:
+            # `\dots` and `\cdots` are legitimate LaTeX and are NOT this check;
+            # a literal ellipsis character means a serializer truncated us.
+            failures.append(f"{r['id']}: literal ellipsis inside exact_latex")
 
-    # ---- (6)(7)(8) round trip: read the inventory back and re-hash ----------
-    written = json.loads(RECORDS.read_text())
-    md = INVENTORY.read_text()
-    for row, back in zip(all_rows, written):
-        if back["sha256"] != row["sha256"]:
-            failures.append(f"{row['id']}: sha256 changed through JSON")
-        if row["raw_span"] not in md:
-            failures.append(f"{row['id']}: exact formula absent from the markdown")
-        if hashlib.sha256(back["raw_span"].encode()).hexdigest() != row["sha256"]:
-            failures.append(f"{row['id']}: re-hash of the stored span differs")
-
-    if "\u2026" in md:
-        failures.append("the inventory contains an ellipsis -- a formula was truncated")
-    for name, short, _ in PAPERS:
-        src_neq = repair_report[name]["neq_in_source"]
-        inv_neq = sum(r["raw_span"].count("\\" + "neq")
-                      for r in all_rows if r["source"] == short)
-        # only display math reaches the inventory, so source >= inventory
-        if inv_neq > src_neq:
-            failures.append(f"{name}: neq count grew {src_neq} -> {inv_neq}")
-    inv_bare = bare_commands("\n".join(r["raw_span"] for r in all_rows))
-    if inv_bare:
-        failures.append(f"inventory exact_formula holds bare commands {inv_bare}")
-    # ids address formulas in B/C/D; a collision silently merges two of them
-    for fid, n in collections.Counter(r["id"] for r in all_rows).items():
+    for fid, n in _counter(r["id"] for r in all_rows).items():
         if n > 1:
-            failures.append(f"formula id {fid} is not unique ({n} formulas)")
+            failures.append(f"formula id {fid} is not unique ({n} rows)")
 
-    (DOCS / "audit" / "repair_report.json").write_text(
-        json.dumps(repair_report, indent=1))
-    # (9) the sanity record covers the inventory too, not only the sources
-    (DOCS / "audit" / "latex_sanity.json").write_text(json.dumps({
-        "sources": {n: {"bare_in_math": repair_report[n]["bare_in_math"],
-                        "control_bytes_left": repair_report[n]["control_bytes_left"],
-                        "neq": repair_report[n]["neq_in_source"]}
-                    for n, _, _ in PAPERS},
-        "inventory": {
-            "formulas": len(all_rows),
-            "bare_in_exact_formula": inv_bare,
-            "ellipsis_in_markdown": "…" in md,
-            "sha256_mismatches": sum(1 for f in failures if "sha256" in f),
-            "neq_in_exact_formula": sum(r["raw_span"].count("\\" + "neq")
-                                        for r in all_rows),
-        },
-        "failures": failures,
-    }, indent=1))
+    RECORDS = AUDIT / "formula_inventory.json"
+    RECORDS.write_text(json.dumps(
+        {"summary": summary, "formulas": all_rows}, indent=1, ensure_ascii=False))
 
-    print(f"{len(all_rows)} display equations across {len(PAPERS)} papers")
-    for name, short, _ in PAPERS:
-        r = repair_report[name]
-        print(f"  {name:22} repaired {r['total']:3d}  blocks {r['display_blocks']:2d}  "
-              f"neq {r['neq_in_source']:2d}  control-left {r['control_bytes_left']}")
+    # round trip: read back from disk and re-hash
+    back = json.loads(RECORDS.read_text())["formulas"]
+    for a, b in zip(all_rows, back):
+        if hashlib.sha256(b["exact_latex"].encode()).hexdigest() != a["sha256"]:
+            failures.append(f"{a['id']}: sha256 changed through JSON round trip")
+
+    write_markdown(all_rows, summary)
+    md = (AUDIT / "A_FORMULA_INVENTORY.md").read_text()
+    for r in all_rows:
+        if r["exact_latex"].strip() not in md:
+            failures.append(f"{r['id']}: exact_latex absent from A_FORMULA_INVENTORY.md")
+    if "\u2026" in md:
+        failures.append("A_FORMULA_INVENTORY.md contains a literal ellipsis")
+
+    (AUDIT / "formula_inventory_validation.json").write_text(json.dumps({
+        "summary": summary, "formulas_total": len(all_rows),
+        "checks": ["exact_latex is a substring of its source TeX",
+                   "sha256 matches exact_latex",
+                   "no literal ellipsis in exact_latex",
+                   "formula ids are unique",
+                   "sha256 survives the JSON round trip",
+                   "every exact_latex appears verbatim in the markdown",
+                   "no literal ellipsis in the markdown"],
+        "failures": failures}, indent=1))
+
+    for name, s in summary.items():
+        print(f"{name:9} {s['display_formulas']:3} display "
+              f"({s['numbered']} numbered, {s['unnumbered']} unnumbered)  "
+              f"{s['inline_formulas']:4} inline  "
+              f"from {s['tex_files_read']} tex, {s['orphan_tex_ignored']} orphans ignored")
+    print(f"\n{len(all_rows)} display formulas total")
     if failures:
         print(f"\n{len(failures)} FAILURES")
-        for f in failures:
+        for f in failures[:40]:
             print("  " + f)
         return 1
-    print("\nround-trip, sha256, no-ellipsis and latex-sanity all pass")
+    print("round-trip, sha256, uniqueness and no-ellipsis all pass")
     return 0
 
 
-def write_inventory(rows: list[dict], report: dict) -> None:
-    REL = {**{f"MF-{e}": "DIRECTLY_USED" for e in
-              ("1", "2", "3", "4", "5", "6", "7a", "7b", "8", "9", "10",
-               "11", "12", "13", "14", "15")},
-           **{f"U2-{e}": "CONCEPTUAL_SOURCE" for e in ("1", "2", "3")},
-           "EG-1": "CONCEPTUAL_SOURCE", "EG-2": "CONCEPTUAL_SOURCE",
-           "EG-3": "MODIFIED", "EG-4": "MODIFIED", "EG-5": "MODIFIED",
-           "EG-6": "MODIFIED", "EG-11": "CONCEPTUAL_SOURCE",
-           "EG-14@3.1": "CONCEPTUAL_SOURCE", "EG-15@AppendixA": "CONCEPTUAL_SOURCE"}
-    NOTE = {"EG-7a": "velocity update; MetaFind has no velocity channel",
-            "EG-7b": "velocity update",
-            "EG-8": "edge inference; unrelated to MetaFind's LLM e_ij",
-            "EG-9": "edge inference",
-            "EG-12@AppendixA": "proof step", "EG-12@B.1": "velocity-variant proof step",
-            "EG-14@E.2": "E.2 inner-product identity, NOT the equivariance result",
-            "EG-15@E.2": "E.2 inner-product identity",
-            "EG-13": "E.1 distance-norm invariance",
-            "EG-16": "graph autoencoder / QM9 head",
-            "U2-1": "L_P2I, symmetric point<->image; MetaFind Stage 1 aligns fused towers",
-            "U2-2": "L_P2T, symmetric point<->text; same",
-            "U2-3": "min over E_P only; MetaFind trains both towers"}
-    UNNUM = {"h_i^{(0)}": "**unnumbered, load-bearing**: source of contradiction C3",
-             "e_{\\text{layout}}": "**unnumbered**: pooling type unspecified, see C"}
+def _counter(it):
+    d = {}
+    for x in it:
+        d[x] = d.get(x, 0) + 1
+    return d
 
-    def rel(r):
-        if r["equation"]:
-            return REL.get(r["id"], "NOT_USED" if r["source"] == "EG" else "UNKNOWN")
-        return "DIRECTLY_USED" if r["source"] == "MF" else "NOT_USED"
 
-    counts = collections.Counter(rel(r) for r in rows)
-    eg = collections.Counter(rel(r) for r in rows if r["source"] == "EG")
-
+def write_markdown(rows: list[dict], summary: dict) -> None:
     L = ["# A. FORMULA_INVENTORY", "",
-         "Every display equation in all three papers, verbatim. Generated by",
-         "`tools/build_formula_inventory.py`; do not edit by hand -- the round-trip",
-         "check compares this file against the repaired sources and will fail.", "",
-         "## Source integrity", "",
-         "| paper | control bytes repaired | left | display blocks | `\\neq` |",
-         "|---|---|---|---|---|"]
-    for name, _, _ in PAPERS:
-        r = report[name]
-        L.append(f"| `{name}` | **{r['total']}** | {r['control_bytes_left']} | "
-                 f"{r['display_blocks']} | {r['neq_in_source']} |")
+         "Every display formula in the four papers, taken from the authors' arXiv",
+         "TeX source. Generated by `tools/build_formula_inventory.py`; do not edit",
+         "by hand -- the validation compares this file against the TeX and fails.", "",
+         "## Authority", "",
+         "**arXiv TeX source > published PDF > converted Markdown.** The Markdown",
+         "under `docs/paper/*.md` is a convenience copy for prose search and is NOT",
+         "authoritative for any formula, dimension, symbol or equation number.", "",
+         "| paper | arXiv | main tex | files read | orphans ignored | display | inline |",
+         "|---|---|---|---|---|---|---|"]
+    for name, s in summary.items():
+        L.append(f"| {s['title']} | `{s['arxiv_id']}` | `{s['main_tex']}` | "
+                 f"{s['tex_files_read']} | {s['orphan_tex_ignored']} | "
+                 f"{s['display_formulas']} | {s['inline_formulas']} |")
     L += ["",
-          "`\\frac`→`<FF>rac`, `\\tau`→`<TAB>au`, `\\right`→`<CR>ight`,",
-          "`\\rangle`→`<CR>angle`, `\\tilde`→`<TAB>ilde`, `\\approx`→`<BEL>pprox`,",
-          "and `\\neq`→`<LF>eq`. **`metafind_paper.md` was never damaged.**", "",
-          "The last of those is why `\\neq` survived two rounds of \"repaired\": `\\n`",
-          "became a REAL newline, which is a legal character, so a byte census",
-          "correctly skips it. It is only recoverable inside math, by whether the",
-          "following letters spell a LaTeX command beginning with n.", "",
-          "## What is checked", "",
-          "Counting equations proves nothing -- when `\\rangle` was broken the count",
-          "was already right. These can fail:", "",
-          "1. no control byte survives repair",
-          "2. no bare command name inside any math span, in the sources",
-          "3. `$$`, `{}`, `\\left`/`\\right`, `\\langle`/`\\rangle` all balance",
-          "4. every formula is SHA256'd at the source and re-hashed after being",
-          "   written and read back; the two must be equal",
-          "5. every exact formula must appear verbatim in this markdown",
-          "6. no ellipsis anywhere -- a truncated formula is a failed inventory",
-          "7. `\\neq` counts are preserved from source to inventory",
-          "8. the inventory's own formulas are re-checked for bare commands", "",
-          "Formulas are in fenced blocks, never in table cells: a pipe ends a cell",
-          "and a width cap inserts an ellipsis. Both happened.", "",
-          f"**{len(rows)} equations** -- " +
-          ", ".join(f"{t} {sum(1 for r in rows if r['source'] == s)}"
-                    for _, s, t in PAPERS) + ".", "",
-          "## relationship_to_metafind", "",
-          "| | all | of which EGNN |", "|---|---|---|"]
-    for k in ("DIRECTLY_USED", "MODIFIED", "CONCEPTUAL_SOURCE", "NOT_USED", "UNKNOWN"):
-        if counts[k] or eg[k]:
-            L.append(f"| `{k}` | {counts[k]} | {eg[k]} |")
-    L += ["",
-          f"EGNN's {sum(1 for r in rows if r['source'] == 'EG')} split "
-          f"{eg['MODIFIED']} MODIFIED / {eg['CONCEPTUAL_SOURCE']} CONCEPTUAL_SOURCE "
-          f"/ {eg['NOT_USED']} NOT_USED. Appearing in the EGNN paper is not",
-          "evidence MetaFind uses it. The NOT_USED set is not only velocity,",
-          "edge inference, autoencoder and QM9 heads -- it also holds generic",
-          "equivariance examples, Appendix A proof steps, MLP implementation",
-          "formulas and two distance-representation proofs.", ""]
+          "Orphans are `.tex` files present in an archive that the main document",
+          "never includes. EGNN's archive ships a complete duplicate of itself in a",
+          "subdirectory; reading every file on disk would double its equation count.",
+          "", "## Equation numbers", "",
+          "TeX does not store equation numbers -- LaTeX computes them at compile",
+          "time. The numbers here are **assigned by this tool** by counting numbered",
+          "environments in document order, with each row of a multi-row `align`",
+          "taking its own number. They are ours; a disagreement with the published",
+          "PDF is a bug in the counter, not in the paper. `equation_label` holds the",
+          "authors' own `\\label`s and is the stable way to cite.", "",
+          "## What is validated", "",
+          "1. every `exact_latex` is a literal substring of its source `.tex`",
+          "2. SHA256 matches `exact_latex`, and survives the JSON round trip",
+          "3. no literal ellipsis character inside any formula (`\\dots` is fine --",
+          "   the check is for a serializer having truncated us)",
+          "4. formula ids are unique",
+          "5. every formula appears verbatim in this markdown", "",
+          "Formulas live in fenced blocks, never in table cells: a pipe ends a cell",
+          "and a width cap inserts an ellipsis.", ""]
 
-    for name, short, title in PAPERS:
-        sub = [r for r in rows if r["source"] == short]
-        L += [f"## {title} — `{name}` ({len(sub)})", ""]
+    for name, s in summary.items():
+        short = SHORT[name]
+        sub = [r for r in rows if r["paper"] == short]
+        L += [f"## {s['title']} ({len(sub)})", ""]
+        cur = None
         for r in sub:
-            eq = f"Eq. ({r['equation']})" if r["equation"] else "unnumbered"
-            note = NOTE.get(r["id"], "")
-            if not r["equation"]:
-                for key, txt in UNNUM.items():
-                    if key in r["raw_span"]:
-                        note = txt
-            L += [f"### `{r['id']}` — {eq}", "",
-                  f"- source: `{name}` line {r['line']}",
-                  f"- section: {r['section']}",
-                  f"- relationship_to_metafind: `{rel(r)}`",
-                  f"- sha256: `{r['sha256'][:16]}`"]
-            if note:
-                L.append(f"- note: {note}")
-            L += ["", FENCE + "latex", r["raw_span"].strip(), FENCE, ""]
-    INVENTORY.write_text("\n".join(L))
+            if r["section"] != cur:
+                cur = r["section"]
+                L += [f"### {cur or '(front matter)'}", ""]
+            num = f"({r['equation_number']})" if r["equation_number"] else "unnumbered"
+            L += [f"**`{r['id']}`** — {num} — `{r['source_tex']}` line {r['source_line']}"
+                  f" — `{r['environment']}`"]
+            if r["equation_label"]:
+                L.append(f"- label: " + ", ".join(f"`{x}`" for x in r["equation_label"]))
+            L += [f"- sha256: `{r['sha256'][:16]}`", "",
+                  "```latex", r["exact_latex"].strip(), "```", ""]
+    (AUDIT / "A_FORMULA_INVENTORY.md").write_text("\n".join(L))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,128 @@
+\documentclass{article}
+
+
+% if you need to pass options to natbib, use, e.g.:
+%     \PassOptionsToPackage{numbers, compress}{natbib}
+% before loading neurips_2024
+
+
+% ready for submission
+\usepackage[final]{neurips_2025}
+
+
+% to compile a preprint version, e.g., for submission to arXiv, add add the
+% [preprint] option:
+%     \usepackage[preprint]{neurips_2024}
+
+
+% to compile a camera-ready version, add the [final] option, e.g.:
+%     \usepackage[final]{neurips_2024}
+
+
+% to avoid loading the natbib package, add option nonatbib:
+%    \usepackage[nonatbib]{neurips_2024}
+
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{xcolor}         % colors
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{titletoc}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{multirow}
+\title{MetaFind: Scene-Aware 3D Asset Retrieval for Coherent Metaverse Scene Generation}
+\usepackage{subcaption}
+\usepackage{caption}
+
+% The \author macro works with any number of authors. There are two commands
+% used to separate the names and addresses of multiple authors: \And and \AND.
+%
+% Using \And between authors leaves it to LaTeX to determine where to break the
+% lines. Using \AND forces a line break at that point. So, if LaTeX puts 3 of 4
+% authors names on the first line, and the last on the second line, try using
+% \AND instead of \And before the third author name.
+
+
+\author{%
+  Zhenyu Pan\\
+  Northwestern University\\
+  \texttt{zhenyupan@u.northwestern.edu} \\
+  \And
+  Yucheng Lu\\
+  New York University\\
+  \texttt{yuchenglu@nyu.edu}   
+  \And
+  Han Liu\\
+  Northwestern University\\
+  \texttt{hanliu@northwestern.edu} \\
+}
+
+
+
+\begin{document}
+
+
+\maketitle
+
+
+\begin{abstract}
+We present \textbf{MetaFind}, a scene-aware tri-modal compositional retrieval framework designed to enhance scene generation in the metaverse by retrieving 3D assets from large-scale repositories. MetaFind addresses two core challenges: (i) inconsistent asset retrieval that overlooks spatial, semantic, and stylistic constraints, and (ii) the absence of a standardized retrieval paradigm specifically tailored for 3D asset retrieval, as existing approaches mainly rely on general-purpose 3D shape representation models. Our key innovation is a flexible retrieval mechanism that supports arbitrary combinations of text, image, and 3D modalities as queries, enhancing spatial reasoning and style consistency by jointly modeling object-level features (including appearance) and scene-level layout structures. Methodologically, MetaFind introduces a plug-and-play equivariant layout encoder \textbf{ESSGNN} that captures spatial relationships and object appearance features, ensuring retrieved 3D assets are contextually and stylistically coherent with the existing scene, regardless of coordinate frame transformations. The framework supports iterative scene construction by continuously adapting retrieval results to current scene updates. Empirical evaluations demonstrate the improved spatial and stylistic consistency of MetaFind in various retrieval tasks compared to baseline methods.
+
+\end{abstract}
+
+% \vspace{-0.1in}
+\section{Introduction}
+\label{sec:introduction}
+This work introduces MetaFind, a novel scene-aware 3D retrieval framework designed to facilitate coherent scene generation within the metaverse by retrieving 3D assets from extensive repositories. Effective scene generation heavily relies on retrieving relevant, consistent, and contextually appropriate 3D assets \cite{sun2024layoutvlm}; however, current methods face significant limitations, primarily due to two key challenges. First, existing retrieval frameworks often overlook critical factors such as spatial relationships, semantic coherence, and stylistic consistency, leading to retrieved assets that are visually and contextually incongruous when integrated into complex scenes \cite{liu2023openshape}. Second, unlike well-established retrieval paradigms in natural language processing (NLP), such as Dense Passage Retrieval (DPR) \cite{karpukhin2020dense}—which introduced a generalizable dual-encoder architecture—there is currently no standardized retrieval paradigm explicitly tailored to the requirements and characteristics of 3D asset retrieval. Finally, recent retrieval depends on generic 3D shape representation models, which fail to capture scene-specific contextual and stylistic nuances essential for coherent scene layout. 
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=1\linewidth]{MetaFind.drawio.png}
+    % \vspace{-0.3in}
+    \caption{Overall framework. MetaFind adopts a dual-tower design where both the user query and candidate assets are encoded using the ULIP-2 backbone. On the query side, we incorporate a plug-and-play ESSGNN module that encodes the current scene layout into a structured scene graph, which captures spatial relationships and object attributes. The user's input—text, image, point cloud, or any combination—is processed by ULIP-2 and fused with the scene context embedding from the ESSGNN to produce a layout-aware query representation. On the asset side, each 3D asset in the repository is pre-encoded independently by ULIP-2 into a fixed vector. At retrieval time, the similarity between the layout-aware query embedding and the precomputed asset embeddings is computed, and the top-matching asset is selected to be inserted into the scene.}
+    \label{fig:framework}
+    % \vspace{-0.3in}
+\end{figure*}
+
+Recent approaches try to address these challenges by introducing various strategies. Early efforts enhance retrieval through 3D representations, focusing on object-level geometric features \cite{guo2015learning,su2015multi}. Subsequent studies address cross-domain retrieval limitations through advanced techniques. Methods like SPL \cite{wang2020unsupervised} leverage domain alignment strategies, minimizing inter-domain discrepancies. UCD \cite{song2020universal} proposes sample-level weighting combined with domain and class alignment mechanisms, achieving improved performance but still relying on labeled data and introducing prediction bias. More recently, S2Mix \cite{fu2025s2mix} and SCA3D \cite{ren2025sca3d} introduce style fusion layers and cross-modal data augmentation techniques to enhance retrieval performance. Despite these improvements, the current approaches are limited as they mainly consider object-centric features without adequately capturing crucial spatial, contextual, and scene-level relationships. Furthermore, they only support single-modality queries (3D-to-3D, text-to-3D, or image-to-3D), lacking the flexibility to handle compositional queries across multiple modalities. To address these limitations, MetaFind introduces a retrieval paradigm that supports compositional multi-modal queries and incorporates spatial reasoning, semantic coherence, and stylistic consistency to ensure seamless integration of retrieved 3D assets into complex scenes.
+
+
+To this end, we propose MetaFind, a dual-tower retrieval framework that integrates fine-grained object-level semantics with global scene-level spatial reasoning to enable context-aware, multimodal 3D asset retrieval. Unlike prior methods that only rely on object-centric cues (images or 3D shapes or text descriptions), MetaFind incorporates the spatial background by modeling the current scene layout as a structured graph. This layout-aware design allows the retriever to reason about placement constraints, positional dependencies, and contextual fit, enhancing spatial, semantic, and stylistic consistency. Moreover, MetaFind supports flexible multimodal queries, where the input can be any combination of text, image, point cloud, and layout context. This compositional design ensures robustness under missing modality conditions and adaptability to diverse use cases, including interactive scene editing, layout-conditioned asset generation, and large-scale virtual environment construction.
+
+As shown in Figure\ref{fig:framework}, MetaFind builds upon ULIP2 \cite{xue2024ulip}, a tri-modal learning framework that aligns text, image, and point cloud into a shared embedding space. We adopt a dual-encoder architecture \cite{karpukhin2020dense}, where the query encoder flexibly encodes any user-provided modality combination, and the gallery encoder precomputes embeddings for all 3D assets to enable efficient retrieval. To supervise this alignment, we annotate 48K 3D assets from the Objaverse-LVIS subset \cite{deitke2023objaverse}, each rendered from 11 views and processed with GPT-4o to generate structured text descriptions. For layout-level reasoning, we introduce the Equivariant Spatial-Semantic Graph Neural Network (ESSGNN), an EGNN-based encoder designed to model rooms as graphs where nodes represent existing objects with 3D coordinates and text features and edges reflect spatial-semantic relationships. Unlike GNNs, ESSGNN maintains equivariance to rotation and translation by separating spatial and semantic channels, ensuring that scene embeddings remain stable across coordinate shifts and alignments—an essential property for robust layout modeling in unnormalized or dynamic environments. This encoder is trained on ProcTHOR \cite{deitke2022}, which contains over 10,000 generated houses. The ESSGNN outputs a layout context vector, which is fused with the query embedding to produce a layout-aware retrieval representation. We adopt a two-stage training: (1) pretraining on object-level data for cross-modal grounding and (2) fine-tuning on room-level scenes for layout-aware adaptation. This architecture ensures strong generalization, modularity, and robustness across complex retrieval conditions.
+
+
+In summary, we contribute on: (1) we present \textbf{MetaFind}, a novel layout-aware multimodal 3D asset retrieval framework tailored for coherent scene generation, which jointly considers object-level features and scene-level spatial context; (2) we introduce a plug-and-play \textbf{ESSGNN} layout encoder that models the evolving scene as a structured graph, capturing spatial relationships, contextual dependencies, and semantic attributes to guide retrieval decisions, with built-in SE(3) equivariance to prevent degradation under arbitrary scene rotations or global shifts in coordinate systems; (3) we design MetaFind to support flexible and robust multimodal querying, allowing arbitrary combinations of multi-modalities as input, enabling strong performance under diverse and incomplete input conditions; and (4) we demonstrate through comprehensive experiments that MetaFind outperforms baselines in both standard retrieval and layout-aware scene construction, and that our proposed iterative retrieval pipeline enhances contextual consistency and realism compared to current methods.
+
+% \vspace{-0.1in}
+\section{Methodology}
+% \vspace{-0.1in}
+\input{2methdology}
+% \vspace{-0.1in}
+\input{3experiments}
+% \vspace{-0.1in}
+\section{Summary, Limitation, and Future Work}
+% \vspace{-0.1in}
+\label{sec:summary}
+In this work, we present \textbf{MetaFind}, a scene-aware, multimodal 3D asset retrieval framework that unifies object-level semantics and scene-level spatial reasoning through a dual-tower design and a plug-and-play ESSGNN layout encoder. MetaFind demonstrates strong retrieval performance across both complete and partial modality settings, and significantly improves scene coherence and realism in iterative composition tasks. However, asset annotations rely on GPT-4o, which can introduce language bias, hallucinations, and occasional mislabeling (e.g., culturally skewed terms or incorrect attributes), potentially affecting training and evaluation. This work does not explicitly debias these annotations. Looking forward, we plan to extend MetaFind by incorporating real-world human-in-the-loop feedback for adaptive scene refinement, and scaling to open-world settings with dynamic object catalogs and evolving scene goals.
+
+\clearpage
+
+\section{Acknowledgments}
+We gratefully acknowledge support from the NVIDIA Academic Grant (“Interactive Spatial Reasoning and 3D Scene Generation with RL-Enhanced VLMs”) and the provision of cloud computing resources, which enabled systematic training and evaluation of our MetaFind and other baselines. This paper is a core component of that project. The views expressed are those of the authors and do not necessarily reflect those of NVIDIA.
+% \clearpage
+\bibliographystyle{plain}
+\bibliography{custom}
+
+\clearpage
+\input{appendix}
+
+\end{document}

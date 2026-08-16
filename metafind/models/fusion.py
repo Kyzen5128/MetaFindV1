@@ -108,17 +108,29 @@ def sample_modality_mask(
     """
     if not 0.0 <= p_mask <= 1.0:
         raise ValueError(f"p_mask must be in [0, 1], got {p_mask}")
+    # [P0-5] Drawn on the GENERATOR's device, then moved. Passing a CPU
+    # generator to a CUDA `torch.rand` raises "Expected a cuda device type for
+    # generator but found cpu", and n10 builds exactly that pairing -- a CPU
+    # generator (which the DataLoader also needs) with device="cuda". Every CPU
+    # test passed because the mismatch cannot occur there.
+    #
+    # Drawing on the generator's own device rather than fixing the pairing has a
+    # second benefit worth more than the bug: one seed now yields the SAME mask
+    # on CPU and on GPU, so a CPU test exercises the sequence the GPU run will
+    # see. Sampling on CUDA instead would have made the two diverge silently.
+    gen_device = generator.device if generator is not None else device
     present = (
-        torch.rand(batch_size, len(MODALITIES), device=device, generator=generator) >= p_mask
+        torch.rand(batch_size, len(MODALITIES), device=gen_device, generator=generator)
+        >= p_mask
     )
     if not allow_empty:
         empty = ~present.any(dim=-1)
         if empty.any():
             keep = torch.randint(
-                len(MODALITIES), (int(empty.sum()),), device=device, generator=generator
+                len(MODALITIES), (int(empty.sum()),), device=gen_device, generator=generator
             )
             present[empty, keep] = True
-    return present
+    return present.to(device)
 
 
 class ModalityFusion(nn.Module):

@@ -88,26 +88,31 @@ def graph() -> dict:
     }
 
 
-def data_bits(dim: int = 4):
+def data_bits():
     text_map = {f"A{i}": f"a thing {i}" for i in range(4)}
     text_map["_meta"] = {"prompt_version": 1, "llm_model": "m",
                          "text_encoder_version": "v"}
-    return {}, text_map, np.full(dim, 0.5, dtype=np.float32)
+    return {}, text_map
+
+
+def _key(text_map: dict, a: str, b: str) -> str:
+    from metafind.train.stage2 import _edge_key
+    return _edge_key(a, b, text_map)
 
 
 def test_the_target_node_is_absent_from_the_context():
     """[U-08d] The load-bearing one. Leaving the target in lets ESSGNN read the
     answer off its own input: the loss falls and nothing distinguishes that from
     learning."""
-    sem, text, tok = data_bits()
-    keep, pos, edge_index, edge_attr = build_context_graph(graph(), 2, 4, sem, text, tok)
+    sem, text = data_bits()
+    keep, pos, edge_index, edge_attr, edge_missing = build_context_graph(graph(), 2, 4, sem, text)
     assert [n["index"] for n in keep] == [0, 1, 3]
     assert pos.shape == (3, 3)
 
 
 def test_every_edge_touching_the_target_is_removed():
-    sem, text, tok = data_bits()
-    _, _, edge_index, _ = build_context_graph(graph(), 2, 4, sem, text, tok)
+    sem, text = data_bits()
+    _, _, edge_index, _, edge_missing = build_context_graph(graph(), 2, 4, sem, text)
     # [1,2] and [2,3] go; [0,1] and [0,3] remain, each stored both ways
     assert edge_index.shape[1] == 4
 
@@ -115,8 +120,8 @@ def test_every_edge_touching_the_target_is_removed():
 def test_node_indices_are_remapped_not_left_with_holes():
     """ESSGNN indexes edges positionally. A hole would make every edge past the
     target point at the wrong node, and every shape would still be valid."""
-    sem, text, tok = data_bits()
-    keep, _, edge_index, _ = build_context_graph(graph(), 1, 4, sem, text, tok)
+    sem, text = data_bits()
+    keep, _, edge_index, _, edge_missing = build_context_graph(graph(), 1, 4, sem, text)
     assert edge_index.max() < len(keep)
     assert set(edge_index.flatten().tolist()) <= set(range(len(keep)))
 
@@ -124,29 +129,49 @@ def test_node_indices_are_remapped_not_left_with_holes():
 def test_edges_are_stored_symmetrically():
     """[U-19] Matching what n07 wrote. A directed reading would ask ESSGNN for
     edges the scene graphs do not contain."""
-    sem, text, tok = data_bits()
-    _, _, edge_index, _ = build_context_graph(graph(), 2, 4, sem, text, tok)
+    sem, text = data_bits()
+    _, _, edge_index, _, edge_missing = build_context_graph(graph(), 2, 4, sem, text)
     pairs = set(zip(edge_index[0].tolist(), edge_index[1].tolist()))
     assert all((b, a) in pairs for a, b in pairs)
 
 
-def test_a_missing_semantic_edge_uses_the_token_not_zeros():
-    """[U-30] f_h's width is fixed so the slots need filling, and zero is a
-    valid point in the space -- indistinguishable from a real relation."""
-    sem, text, tok = data_bits()
-    _, _, _, edge_attr = build_context_graph(graph(), 2, 4, sem, text, tok)
+def test_a_missing_semantic_edge_is_MARKED_not_filled_here():
+    """[U-30] The builder reports absence; ESSGNN substitutes a LEARNED token.
+
+    This used to assert that the builder wrote a token into `edge_attr`. It did,
+    and the token was a seeded numpy constant -- so `essgnn_edge_protocol`'s
+    `semantic_missing_representation = learned_missing_token` described
+    something no optimizer ever touched. The mask is what lets the substitution
+    happen against an nn.Parameter instead; the zeros left behind never reach an
+    MLP, and test_marked_edges_actually_use_the_token_not_the_passed_row in
+    test_essgnn.py is what proves it.
+    """
+    sem, text = data_bits()
+    _, _, _, edge_attr, edge_missing = build_context_graph(graph(), 2, 4, sem, text)
     assert edge_attr.shape[1] == 4
-    assert np.abs(edge_attr).sum() > 0, "the missing-edge fill was all zeros"
-    assert np.allclose(edge_attr[0], tok)
+    assert edge_missing.shape == (edge_attr.shape[0],)
+    assert edge_missing.all(), "sem_cache is empty here, so every edge is missing"
+
+
+def test_the_missing_mask_lines_up_with_edge_attr_rows():
+    """A mask one row out would swap a real relation for the token silently."""
+    sem, text = data_bits()
+    sem[_key(text, "A0", "A1")] = np.arange(4, dtype=np.float32)
+    _, _, edge_index, edge_attr, edge_missing = build_context_graph(
+        graph(), 2, 4, sem, text)
+    assert edge_missing.shape == (edge_index.shape[1],)
+    present = ~edge_missing
+    assert present.sum() == 2, "the cached A0-A1 edge should be present both ways"
+    assert np.allclose(edge_attr[present][0], np.arange(4, dtype=np.float32))
 
 
 def test_edge_attr_rows_match_edge_count():
     """A mismatch here is a silent misalignment: ESSGNN would pair edge k with
     attribute k and both arrays would look fine."""
-    sem, text, tok = data_bits()
+    sem, text = data_bits()
     for target in range(4):
-        _, _, edge_index, edge_attr = build_context_graph(
-            graph(), target, 4, sem, text, tok)
+        _, _, edge_index, edge_attr, edge_missing = build_context_graph(
+            graph(), target, 4, sem, text)
         assert edge_attr.shape[0] == edge_index.shape[1]
 
 
@@ -154,8 +179,8 @@ def test_removing_every_neighbour_leaves_an_empty_edge_set_not_a_crash():
     g = {"nodes": [{"index": 0, "asset_id": "A0", "position": [0.0, 0.0, 0.0]},
                    {"index": 1, "asset_id": "A1", "position": [1.0, 0.0, 0.0]}],
          "sem_edge_ids": [[0, 1]]}
-    sem, text, tok = data_bits()
-    keep, _, edge_index, edge_attr = build_context_graph(g, 1, 4, sem, text, tok)
+    sem, text = data_bits()
+    keep, _, edge_index, edge_attr, edge_missing = build_context_graph(g, 1, 4, sem, text)
     assert len(keep) == 1
     assert edge_index.shape == (2, 0)
     assert edge_attr.shape == (0, 4)

@@ -1,0 +1,213 @@
+\begin{thebibliography}{10}
+\providecommand{\url}[1]{\texttt{#1}}
+\providecommand{\urlprefix}{URL }
+\providecommand{\doi}[1]{https://doi.org/#1}
+
+\bibitem{achiam2023gpt}
+Achiam, J., Adler, S., Agarwal, S., Ahmad, L., Akkaya, I., Aleman, F.L., Almeida, D., Altenschmidt, J., Altman, S., Anadkat, S., et~al.: {GPT-4} technical report. arXiv preprint arXiv:2303.08774  (2023)
+
+\bibitem{armeni20193d}
+Armeni, I., He, Z.Y., Gwak, J., Zamir, A.R., Fischer, M., Malik, J., Savarese, S.: 3d scene graph: A structure for unified semantics, 3d space, and camera. In: IEEE/CVF International Conference on Computer Vision (ICCV). pp. 5664--5673 (2019)
+
+\bibitem{bautista2022gaudi}
+Bautista, M.A., Guo, P., Abnar, S., Talbott, W., Toshev, A., Chen, Z., Dinh, L., Zhai, S., Goh, H., Ulbricht, D., et~al.: {GAUDI}: A neural architect for immersive 3d scene generation. Advances in Neural Information Processing Systems (NeurIPS)  \textbf{35},  25102--25116 (2022)
+
+\bibitem{blender}
+{Blender Online Community}: Blender - a 3D modelling and rendering package. Blender Foundation, Stichting Blender Foundation, Amsterdam (2018), \url{http://www.blender.org}
+
+\bibitem{bradley1952rank}
+Bradley, R.A., Terry, M.E.: Rank analysis of incomplete block designs: I. the method of paired comparisons. Biometrika  \textbf{39}(3/4),  324--345 (1952)
+
+\bibitem{cai2022diffdreamer}
+Cai, S., Chan, E.R., Peng, S., Shahbazi, M., Obukhov, A., Van~Gool, L., Wetzstein, G.: Diffdreamer: Towards consistent unsupervised single-view scene extrapolation with conditional diffusion models. In: ICCV (2023)
+
+\bibitem{chang2015text}
+Chang, A., Monroe, W., Savva, M., Potts, C., Manning, C.D.: Text to 3d scene generation with rich lexical grounding. arXiv preprint arXiv:1505.06289  (2015)
+
+\bibitem{chang2015shapenet}
+Chang, A.X., Funkhouser, T., Guibas, L., Hanrahan, P., Huang, Q., Li, Z., Savarese, S., Savva, M., Song, S., Su, H., et~al.: Shapenet: An information-rich 3d model repository. arXiv preprint arXiv:1512.03012  (2015)
+
+\bibitem{chen2023autoagents}
+Chen, G., Dong, S., Shu, Y., Zhang, G., Sesay, J., Karlsson, B.F., Fu, J., Shi, Y.: {AutoAgents}: A framework for automatic agent generation. arXiv preprint arXiv:2309.17288  (2023)
+
+\bibitem{ching2018interior}
+Ching, F.D., Binggeli, C.: Interior design illustrated. John Wiley \& Sons (2018)
+
+\bibitem{chung2023luciddreamer}
+Chung, J., Lee, S., Nam, H., Lee, J., Lee, K.M.: {LucidDreamer}: Domain-free generation of 3d gaussian splatting scenes. arXiv preprint arXiv:2311.13384  (2023)
+
+\bibitem{deitke2023objaverse}
+Deitke, M., Schwenk, D., Salvador, J., Weihs, L., Michel, O., VanderBilt, E., Schmidt, L., Ehsani, K., Kembhavi, A., Farhadi, A.: Objaverse: A universe of annotated 3d objects. In: IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR). pp. 13142--13153 (2023)
+
+\bibitem{deitke2022️}
+Deitke, M., VanderBilt, E., Herrasti, A., Weihs, L., Ehsani, K., Salvador, J., Han, W., Kolve, E., Kembhavi, A., Mottaghi, R.: {ProcTHOR}: Large-scale embodied ai using procedural generation. Advances in Neural Information Processing Systems (NeurIPS)  \textbf{35},  5982--5994 (2022)
+
+\bibitem{dhariwal2021diffusion}
+Dhariwal, P., Nichol, A.: Diffusion models beat gans on image synthesis. Advances in Neural Information Processing Systems (NeurIPS)  \textbf{34},  8780--8794 (2021)
+
+\bibitem{fang2023ctrl}
+Fang, C., Hu, X., Luo, K., Tan, P.: {Ctrl-Room}: Controllable text-to-3d room meshes generation with layout constraints. arXiv preprint arXiv:2310.03602  (2023)
+
+\bibitem{feng2023layoutgpt}
+Feng, W., Zhu, W., Fu, T.j., Jampani, V., Akula, A., He, X., Basu, S., Wang, X.E., Wang, W.Y.: Layoutgpt: Compositional visual planning and generation with large language models. arXiv preprint arXiv:2305.15393  (2023)
+
+\bibitem{fridman2024scenescape}
+Fridman, R., Abecasis, A., Kasten, Y., Dekel, T.: {SceneScape}: Text-driven consistent scene generation. Advances in Neural Information Processing Systems (NeurIPS)  \textbf{36} (2024)
+
+\bibitem{fu20213df}
+Fu, H., Cai, B., Gao, L., Zhang, L.X., Wang, J., Li, C., Zeng, Q., Sun, C., Jia, R., Zhao, B., et~al.: {3D-FRONT}: 3d furnished rooms with layouts and semantics. In: IEEE/CVF International Conference on Computer Vision (ICCV). pp. 10933--10942 (2021)
+
+\bibitem{fu20213d}
+Fu, H., Jia, R., Gao, L., Gong, M., Zhao, B., Maybank, S., Tao, D.: {3D-FUTURE}: 3d furniture shape with texture. International Journal of Computer Vision  \textbf{129},  3313--3337 (2021)
+
+\bibitem{ho2020denoising}
+Ho, J., Jain, A., Abbeel, P.: Denoising diffusion probabilistic models. Advances in Neural Information Processing Systems (NeurIPS)  \textbf{33},  6840--6851 (2020)
+
+\bibitem{hollein2023text2room}
+H{\"o}llein, L., Cao, A., Owens, A., Johnson, J., Nie{\ss}ner, M.: {Text2Room}: Extracting textured 3d meshes from 2d text-to-image models. arXiv preprint arXiv:2303.11989  (2023)
+
+\bibitem{hong2023lrm}
+Hong, Y., Zhang, K., Gu, J., Bi, S., Zhou, Y., Liu, D., Liu, F., Sunkavalli, K., Bui, T., Tan, H.: {LRM}: Large reconstruction model for single image to 3d. arXiv preprint arXiv:2311.04400  (2023)
+
+\bibitem{huang2023aladdin}
+Huang, I., Krishna, V., Atekha, O., Guibas, L.: Aladdin: Zero-shot hallucination of stylized 3d assets from abstract scene descriptions. arXiv preprint arXiv:2306.06212  (2023)
+
+\bibitem{jin2023genegpt}
+Jin, Q., Yang, Y., Chen, Q., Lu, Z.: {GeneGPT}: Augmenting large language models with domain tools for improved access to biomedical information. ArXiv preprint arXiv:2304.09667  (2023)
+
+\bibitem{kar2019meta}
+Kar, A., Prakash, A., Liu, M.Y., Cameracci, E., Yuan, J., Rusiniak, M., Acuna, D., Torralba, A., Fidler, S.: {Meta-Sim}: Learning to generate synthetic datasets. In: IEEE/CVF International Conference on Computer Vision (ICCV). pp. 4551--4560 (2019)
+
+\bibitem{ke2023repurposing}
+Ke, B., Obukhov, A., Huang, S., Metzger, N., Daudt, R.C., Schindler, K.: Repurposing diffusion-based image generators for monocular depth estimation. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) (2024)
+
+\bibitem{lee2022conceptual}
+Lee, K.T., Im, J.B., Park, S.J., Kim, J.H.: Conceptual framework to support personalized indoor space design decision-making: A systematic literature review. Buildings  \textbf{12}(6), ~716 (2022)
+
+\bibitem{InteriorNet18}
+Li, W., Saeedi, S., McCormac, J., Clark, R., Tzoumanikas, D., Ye, Q., Huang, Y., Tang, R., Leutenegger, S.: {InteriorNet}: Mega-scale multi-sensor photo-realistic indoor scenes dataset. In: British Machine Vision Conference (BMVC) (2018)
+
+\bibitem{lin2023swiftsage}
+Lin, B.Y., Fu, Y., Yang, K., Brahman, F., Huang, S., Bhagavatula, C., Ammanabrolu, P., Choi, Y., Ren, X.: Swiftsage: A generative agent with fast and slow thinking for complex interactive tasks. arXiv preprint arXiv:2305.17390  (2023)
+
+\bibitem{lin2024instructscene}
+Lin, C., Mu, Y.: Instructscene: Instruction-driven 3d indoor scene synthesis with semantic graph prior. arXiv preprint arXiv:2402.04717  (2024)
+
+\bibitem{liu2023cliplayout}
+Liu, J., Xiong, W., Jones, I., Nie, Y., Gupta, A., Oğuz, B.: Clip-layout: Style-consistent indoor scene synthesis with semantic furniture embedding (2023)
+
+\bibitem{liu2024openshape}
+Liu, M., Shi, R., Kuang, K., Zhu, Y., Li, X., Han, S., Cai, H., Porikli, F., Su, H.: {OpenShape}: Scaling up 3d shape representation towards open-world understanding. Advances in Neural Information Processing Systems (NeurIPS)  \textbf{36} (2024)
+
+\bibitem{liu2024one}
+Liu, M., Xu, C., Jin, H., Chen, L., Varma~T, M., Xu, Z., Su, H.: One-2-3-45: Any single image to 3d mesh in 45 seconds without per-shape optimization. Advances in Neural Information Processing Systems (NeurIPS)  \textbf{36} (2024)
+
+\bibitem{long2023wonder3d}
+Long, X., Guo, Y.C., Lin, C., Liu, Y., Dou, Z., Liu, L., Ma, Y., Zhang, S.H., Habermann, M., Theobalt, C., et~al.: {Wonder3D}: Single image to 3d using cross-domain diffusion. arXiv preprint arXiv:2310.15008  (2023)
+
+\bibitem{merrell2011interactive}
+Merrell, P., Schkufza, E., Li, Z., Agrawala, M., Koltun, V.: Interactive furniture layout using interior design guidelines. ACM transactions on graphics (TOG)  \textbf{30}(4),  1--10 (2011)
+
+\bibitem{paschalidou2021atiss}
+Paschalidou, D., Kar, A., Shugrina, M., Kreis, K., Geiger, A., Fidler, S.: {ATISS}: Autoregressive transformers for indoor scene synthesis. Advances in Neural Information Processing Systems (NeurIPS)  \textbf{34},  12013--12026 (2021)
+
+\bibitem{poole2022dreamfusion}
+Poole, B., Jain, A., Barron, J.T., Mildenhall, B.: {DreamFusion}: Text-to-3d using 2d diffusion. arXiv preprint arXiv:2209.14988  (2022)
+
+\bibitem{purkait2020sg}
+Purkait, P., Zach, C., Reid, I.: {SG-VAE}: Scene grammar variational autoencoder to generate new indoor scenes. In: European Conference on Computer Vision (ECCV). pp. 155--171. Springer (2020)
+
+\bibitem{qi2018human}
+Qi, S., Zhu, Y., Huang, S., Jiang, C., Zhu, S.C.: Human-centric indoor scene synthesis using stochastic grammar. In: IEEE Conference on Computer Vision and Pattern Recognition (CVPR). pp. 5899--5908 (2018)
+
+\bibitem{qian2023communicative}
+Qian, C., Cong, X., Liu, W., Yang, C., Chen, W., Su, Y., Dang, Y., Li, J., Xu, J., Li, D., Liu, Z., Sun, M.: Communicative agents for software development. arXiv preprint arXiv:2307.07924  (2023)
+
+\bibitem{radford2021learning}
+Radford, A., Kim, J.W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., Krueger, G., Sutskever, I.: Learning transferable visual models from natural language supervision. arXiv preprint arXiv:2103.00020  (2021)
+
+\bibitem{rombach2022high}
+Rombach, R., Blattmann, A., Lorenz, D., Esser, P., Ommer, B.: High-resolution image synthesis with latent diffusion models. In: IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR). pp. 10684--10695 (2022)
+
+\bibitem{shen2023make}
+Shen, L., Li, X., Sun, H., Peng, J., Xian, K., Cao, Z., Lin, G.: Make-it-4d: Synthesizing a consistent long-term dynamic scene video from a single image. In: ACM International Conference on Multimedia. pp. 8167--8175 (2023)
+
+\bibitem{shen2023hugginggpt}
+Shen, Y., Song, K., Tan, X., Li, D., Lu, W., Zhuang, Y.: {HuggingGPT}: Solving {AI} tasks with {ChatGPT} and its friends in {Hugging Face}. arXiv preprint arXiv:2303.17580  (2023)
+
+\bibitem{song2023llm}
+Song, C.H., Wu, J., Washington, C., Sadler, B.M., Chao, W.L., Su, Y.: {LLM-Planner}: Few-shot grounded planning for embodied agents with large language models. In: IEEE/CVF International Conference on Computer Vision (CVPR). pp. 2998--3009 (2023)
+
+\bibitem{song2017semantic}
+Song, S., Yu, F., Zeng, A., Chang, A.X., Savva, M., Funkhouser, T.: Semantic scene completion from a single depth image. In: IEEE Conference on Computer Vision and Pattern Recognition (CVPR). pp. 1746--1754 (2017)
+
+\bibitem{subjectify}
+Subjectify.us: Crowd-sourced subjective quality evaluation platform (Accessed: Jan 2024)
+
+\bibitem{tang2023diffuscene}
+Tang, J., Nie, Y., Markhasin, L., Dai, A., Thies, J., Nie{\ss}ner, M.: Diffuscene: Scene graph denoising diffusion probabilistic model for generative indoor scene synthesis. arXiv preprint arXiv:2303.14207  (2023)
+
+\bibitem{Tang2023mvdiffusion}
+Tang, S., Zhang, F., Chen, J., Wang, P., Furukawa, Y.: {MVDiffusion}: Enabling holistic multi-view image generation with correspondence-aware diffusion. arXiv  (2023)
+
+\bibitem{tseng2023consistent}
+Tseng, H.Y., Li, Q., Kim, C., Alsisan, S., Huang, J.B., Kopf, J.: Consistent view synthesis with pose-guided diffusion models. In: IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR). pp. 16773--16783 (2023)
+
+\bibitem{wang2019planit}
+Wang, K., Lin, Y.A., Weissmann, B., Savva, M., Chang, A.X., Ritchie, D.: {PlanIT}: Planning and instantiating indoor scenes with relation graph and spatial prior networks. ACM Transactions on Graphics (TOG)  \textbf{38}(4),  1--15 (2019)
+
+\bibitem{wang2023breathing}
+Wang, T., Kanakis, M., Schindler, K., Van~Gool, L., Obukhov, A.: Breathing new life into 3d assets with generative repainting. In: Proceedings of the British Machine Vision Conference (BMVC). BMVA Press (2023)
+
+\bibitem{wang2021sceneformer}
+Wang, X., Yeshwanth, C., Nie{\ss}ner, M.: Sceneformer: Indoor scene generation with transformers. In: 2021 International Conference on 3D Vision (3DV). pp. 106--115. IEEE (2021)
+
+\bibitem{wang2023jarvis}
+Wang, Z., Cai, S., Liu, A., Jin, Y., Hou, J., Zhang, B., Lin, H., He, Z., Zheng, Z., Yang, Y., et~al.: Jarvis-1: Open-world multi-task agents with memory-augmented multimodal language models. arXiv preprint arXiv:2311.05997  (2023)
+
+\bibitem{wei2022chain}
+Wei, J., Wang, X., Schuurmans, D., Bosma, M., Xia, F., Chi, E., Le, Q.V., Zhou, D., et~al.: Chain-of-thought prompting elicits reasoning in large language models. Advances in Neural Information Processing Systems  \textbf{35},  24824--24837 (2022)
+
+\bibitem{wei2023lego}
+Wei, Q.A., Ding, S., Park, J.J., Sajnani, R., Poulenard, A., Sridhar, S., Guibas, L.: {LEGO-Net}: Learning regular rearrangements of objects in rooms. In: IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR). pp. 19037--19047 (2023)
+
+\bibitem{weiss2018fast}
+Weiss, T., Litteneker, A., Duncan, N., Nakada, M., Jiang, C., Yu, L.F., Terzopoulos, D.: Fast and scalable position-based layout synthesis. IEEE Transactions on Visualization and Computer Graphics  \textbf{25}(12),  3231--3243 (2018)
+
+\bibitem{wen2023anyhome}
+Wen, Z., Liu, Z., Sridhar, S., Fu, R.: {AnyHome}: Open-vocabulary generation of structured and textured 3d homes. arXiv preprint arXiv:2312.06644  (2023)
+
+\bibitem{wu2023autogen}
+Wu, Q., Bansal, G., Zhang, J., Wu, Y., Li, B., Zhu, E., Jiang, L., Zhang, X., Zhang, S., Liu, J., Awadallah, A.H., White, R.W., Burger, D., Wang, C.: {AutoGen}: Enabling next-gen {LLM} applications via multi-agent conversation framework. arXiv preprint arXiv:2308.08155  (2023)
+
+\bibitem{wu2024gpt}
+Wu, T., Yang, G., Li, Z., Zhang, K., Liu, Z., Guibas, L., Lin, D., Wetzstein, G.: {GPT-4V} (ision) is a human-aligned evaluator for text-to-3d generation. arXiv preprint arXiv:2401.04092  (2024)
+
+\bibitem{wu20153d}
+Wu, Z., Song, S., Khosla, A., Yu, F., Zhang, L., Tang, X., Xiao, J.: 3d shapenets: A deep representation for volumetric shapes. In: IEEE Conference on Computer Vision and Pattern Recognition (CVPR). pp. 1912--1920 (2015)
+
+\bibitem{xu2002constraint}
+Xu, K., Stewart, J., Fiume, E.: Constraint-based automatic placement for scene composition. In: Graphics Interface. vol.~2, pp. 25--34 (2002)
+
+\bibitem{yang2023auto}
+Yang, H., Yue, S., He, Y.: {Auto-GPT} for online decision making: Benchmarks and additional opinions. arXiv preprint arXiv:2306.02224  (2023)
+
+\bibitem{yang2023harnessing}
+Yang, J., Jin, H., Tang, R., Han, X., Feng, Q., Jiang, H., Zhong, S., Yin, B., Hu, X.: Harnessing the power of llms in practice: A survey on chatgpt and beyond. ACM Transactions on Knowledge Discovery from Data  (2023)
+
+\bibitem{yu2023wonderjourney}
+Yu, H.X., Duan, H., Hur, J., Sargent, K., Rubinstein, M., Freeman, W.T., Cole, F., Sun, D., Snavely, N., Wu, J., et~al.: {WonderJourney}: Going from anywhere to everywhere. arXiv preprint arXiv:2312.03884  (2023)
+
+\bibitem{zhai2023commonscenes}
+Zhai, G., {\"O}rnek, E.P., Wu, S.C., Di, Y., Tombari, F., Navab, N., Busam, B.: {CommonScenes}: Generating commonsense 3d indoor scenes with scene graphs. arXiv preprint arXiv:2305.16283  (2023)
+
+\bibitem{zhai2024commonscenes}
+Zhai, G., {\"O}rnek, E.P., Wu, S.C., Di, Y., Tombari, F., Navab, N., Busam, B.: {CommonScenes}: Generating commonsense 3d indoor scenes with scene graphs. Advances in Neural Information Processing Systems (NeurIPS)  \textbf{36} (2024)
+
+\bibitem{zhang2023adding}
+Zhang, L., Rao, A., Agrawala, M.: Adding conditional control to text-to-image diffusion models. In: IEEE/CVF International Conference on Computer Vision (ICCV). pp. 3836--3847 (2023)
+
+\bibitem{Structured3D}
+Zheng, J., Zhang, J., Li, J., Tang, R., Gao, S., Zhou, Z.: {Structured3D}: A large photo-realistic dataset for structured 3d modeling. In: European Conference on Computer Vision (ECCV) (2020)
+
+\end{thebibliography}

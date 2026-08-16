@@ -56,7 +56,7 @@ from metafind.models.stage1_config import (  # noqa: E402
 )
 
 NODE = "n10_train_stage1"
-TRAINER_VERSION = 1
+TRAINER_VERSION = 2   # v2 saves backbone + tower + loss; v1 dropped the point encoder
 
 CKPT_PATH = paths.CHECKPOINTS / "stage1.pt"
 CKPT_RECORD = paths.CHECKPOINTS / "stage1_ckpt.json"
@@ -131,7 +131,7 @@ def collate(batch: list[dict]):
     }
 
 
-def trainable_state_dict(model) -> dict:
+def trainable_state_dict(module) -> dict:
     """[L1-CKPT-TRAINABLE-ONLY] Only what the optimizer moves.
 
     Keyed off ``requires_grad`` rather than off a name prefix: a prefix list
@@ -140,19 +140,49 @@ def trainable_state_dict(model) -> dict:
     tensor.
     """
     return {name: p.detach().cpu()
-            for name, p in model.named_parameters() if p.requires_grad}
+            for name, p in module.named_parameters() if p.requires_grad}
 
 
-def save_checkpoint(model, hyperparameters: dict, encoding: dict, training: dict,
-                    seed: int, epoch: int) -> dict:
+# The three modules Stage 1's optimizer touches. Naming them here rather than in
+# save_checkpoint's body is what OPTIMIZER_COVERS_CHECKPOINT can assert against.
+CKPT_SECTIONS = ("backbone_trainable_state", "tower_trainable_state",
+                 "loss_trainable_state")
+
+
+def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
+                    encoding: dict, training: dict, seed: int, epoch: int) -> dict:
+    """Save EVERY trainable module, not just the dual tower.
+
+    The optimizer is built from three modules::
+
+        backbone.trainable_parameters()   # PointBERT + pc_projection
+        model.parameters()                # query/gallery fusion
+        loss_fn.parameters()              # logit_scale, if learnable
+
+    An earlier version passed only ``model`` here. Everything still ran: the
+    save succeeded, the reload succeeded, the shapes were right, and the
+    fine-tuned PointBERT was silently discarded at the end of every epoch --
+    downstream code rebuilt the backbone from the ORIGINAL ULIP-2 weights, so
+    Stage 1's point-tower training had no effect on anything that followed. It
+    is the same failure shape as the checkpoint-bloat and placeholder-tensor
+    bugs: correct-looking artifact, no error, wrong contents.
+
+    ``assert_checkpoint_covers_optimizer`` below is the check that would have
+    caught it, and it runs on every save.
+    """
     import torch
 
     paths.CHECKPOINTS.mkdir(parents=True, exist_ok=True)
-    state = trainable_state_dict(model)
-    n_params = sum(v.numel() for v in state.values())
+    sections = {
+        "backbone_trainable_state": trainable_state_dict(backbone.model),
+        "tower_trainable_state": trainable_state_dict(model),
+        "loss_trainable_state": trainable_state_dict(loss_fn),
+    }
+    assert_checkpoint_covers_optimizer(backbone, model, loss_fn, sections)
+    n_params = sum(v.numel() for s in sections.values() for v in s.values())
 
     tmp = CKPT_PATH.with_suffix(".part")
-    torch.save({"trainable_state": state,
+    torch.save({**sections,
                 "trainer_version": TRAINER_VERSION,
                 "epoch": epoch,
                 "train_scope": training.get("train_scope", "point_encoder_and_fuser")},
@@ -169,6 +199,8 @@ def save_checkpoint(model, hyperparameters: dict, encoding: dict, training: dict
         "train_scope": training.get("train_scope", "point_encoder_and_fuser"),
         "trainable_only": True,
         "n_params_saved": int(n_params),
+        "n_params_by_section": {k: int(sum(v.numel() for v in s.values()))
+                                for k, s in sections.items()},
         "size_bytes": CKPT_PATH.stat().st_size,
         "clip_train_scope": encoding["actual_clip_train_scope"],
     }
@@ -179,6 +211,75 @@ def save_checkpoint(model, hyperparameters: dict, encoding: dict, training: dict
         os.fsync(fh.fileno())
     tmp.replace(CKPT_RECORD)
     return record
+
+
+def assert_checkpoint_covers_optimizer(backbone, model, loss_fn, sections: dict) -> None:
+    """Every tensor the optimizer moves must appear in the checkpoint.
+
+    Compares by IDENTITY, not by name or count. A name comparison would pass if
+    two modules happened to expose the same key, and a count comparison would
+    pass if one tensor were swapped for another of equal size.
+    """
+    in_opt = {id(p) for p in
+              list(backbone.trainable_parameters()) + list(model.parameters())
+              + list(loss_fn.parameters()) if p.requires_grad}
+    saved = set()
+    for module in (backbone.model, model, loss_fn):
+        saved |= {id(p) for p in module.parameters() if p.requires_grad}
+    if missing := in_opt - saved:
+        raise RuntimeError(
+            f"{len(missing)} parameter(s) are in the optimizer but in none of the "
+            f"checkpoint sections {CKPT_SECTIONS}; Stage 1 would train them and "
+            "throw the result away")
+    if not in_opt:
+        raise RuntimeError("the optimizer has no trainable parameters at all")
+
+
+def load_stage1_checkpoint(backbone, model, loss_fn, path=None,
+                           new_prefixes: tuple[str, ...] = ()) -> dict:
+    """Restore all three trainable modules, refusing anything partial.
+
+    ``strict=False`` is required because each section holds only the trainable
+    subset -- but the missing keys are then CHECKED against what should have
+    been there, so "legitimately new" and "silently dropped" stay distinguished.
+
+    Args:
+        new_prefixes: parameter-name prefixes the caller KNOWS this checkpoint
+            cannot contain. Stage 2 passes the ESSGNN and Eq. 6's lambda, which
+            do not exist in Stage 1 by design (2.6 introduces them in Stage 2).
+            Anything trainable and not covered by a declared prefix is an error,
+            so the escape hatch has to be opened deliberately and per name --
+            a blanket `strict=False` is what let the point encoder vanish.
+    """
+    import torch
+
+    path = path or CKPT_PATH
+    ckpt = torch.load(path, map_location="cpu", weights_only=False)
+    if absent := [s for s in CKPT_SECTIONS if s not in ckpt]:
+        raise ValueError(
+            f"{path} is missing {absent}. Checkpoints written before "
+            f"trainer_version {TRAINER_VERSION} stored only the dual tower and "
+            "silently dropped the fine-tuned point encoder; they cannot be "
+            "upgraded, only retrained.")
+
+    for section, module in (("backbone_trainable_state", backbone.model),
+                            ("tower_trainable_state", model),
+                            ("loss_trainable_state", loss_fn)):
+        state = ckpt[section]
+        _, unexpected = module.load_state_dict(state, strict=False)
+        if unexpected:
+            raise ValueError(f"{section} holds keys {module} does not have: "
+                             f"{sorted(unexpected)[:5]}")
+        trainable = {n for n, p in module.named_parameters() if p.requires_grad}
+        gap = {n for n in trainable - set(state)
+               if not n.startswith(new_prefixes)} if new_prefixes else \
+            trainable - set(state)
+        if gap:
+            raise ValueError(
+                f"{section} does not cover {len(gap)} trainable parameter(s), "
+                f"e.g. {sorted(gap)[:3]} -- restoring would leave them at their "
+                "freshly-initialised values")
+    return ckpt
 
 
 def build_model(encoding: dict, training: dict, hyperparameters: dict):
@@ -297,8 +398,8 @@ def main() -> int:
                           f"acc {out.get('acc_q2g', torch.tensor(0.0)).item():.3f}, "
                           f"tau {loss_fn.temperature.item():.4f}", flush=True)
 
-            record = save_checkpoint(model, hyperparameters, encoding, training,
-                                     seed, epoch)
+            record = save_checkpoint(backbone, model, loss_fn, hyperparameters,
+                                     encoding, training, seed, epoch)
             print(f"  epoch {epoch} saved: {record['n_params_saved']:,} params, "
                   f"{record['size_bytes'] / 1e6:.0f} MB", flush=True)
 

@@ -1,0 +1,48 @@
+{
+ "paper_name": "ulip2",
+ "arxiv_id": "2305.08275",
+ "archive_path": "docs/paper/Ulip2.gz",
+ "archive_sha256": "7d274247d248471817e6f19f7ca78fbdbb05ff5ac30fc816eac1207d8e551b33",
+ "main_tex": "main.tex",
+ "included_tex_files": [
+  "main.tex",
+  "preamble.tex",
+  "sec/X_suppl.tex",
+  "appendix.tex"
+ ],
+ "include_tree": {
+  "file": "main.tex",
+  "includes": [
+   {
+    "file": "preamble.tex"
+   },
+   {
+    "file": "sec/X_suppl.tex"
+   },
+   {
+    "file": "appendix.tex"
+   }
+  ]
+ },
+ "appendix_files": [
+  "appendix.tex"
+ ],
+ "supplement_files": [
+  "sec/X_suppl.tex"
+ ],
+ "macro_files": [
+  "preamble.tex"
+ ],
+ "orphan_tex_files": [
+  "sec/0_abstract.tex",
+  "sec/1_intro.tex",
+  "sec/2_formatting.tex",
+  "sec/3_finalcopy.tex"
+ ],
+ "tex_sha256": {
+  "main.tex": "fa8d168503a03241e1155ad9dd6fe2a65af1fd2945b9d58a6b35cb60dbf14985",
+  "preamble.tex": "ee28998974caf71411898ad1cd8a1dc6d95d58fcf7659d525f4ea1b7dc8c62b4",
+  "sec/X_suppl.tex": "594291f94cf3b925908dc127a93f3525c1998e96abf37a14f69d6077a7e58bd7",
+  "appendix.tex": "06c1896d308076c6b21bc681047504aceb8139a67cb3f7763e34d30e90a0db6e"
+ }
+}

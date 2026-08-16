@@ -67,18 +67,31 @@ def load_checkpoint_record() -> dict:
     return json.loads(path.read_text())
 
 
-def gallery_encoder_sha256(model) -> str:
-    """A digest over the gallery tower's parameters, in a stable order.
+def gallery_encoder_sha256(backbone, model) -> str:
+    """A digest over EVERYTHING that produces a gallery embedding.
+
+    The gallery path is::
+
+        text  -> OpenCLIP  --+
+        image -> OpenCLIP  --+--> gallery fusion -> e_gallery
+        pc    -> PointBERT -> pc_projection --+
+
+    so hashing the fusion alone is not an encoder identity. An earlier version
+    did exactly that, and the name `gallery_encoder_sha256` made it read as more
+    than it was: two runs with DIFFERENT fine-tuned PointBERTs and the same
+    fusion produced the same digest, and G4's "gallery encoder matches Stage 1"
+    would have passed while the embeddings differed.
 
     Sorted by name because Python's parameter iteration order is stable but not
     guaranteed across refactors, and a hash that changes when a module is
-    reordered would report drift that did not happen -- which is worse than no
-    hash, because it teaches everyone to ignore it.
+    reordered would report drift that did not happen -- worse than no hash,
+    because it teaches everyone to ignore it.
     """
     h = hashlib.sha256()
-    for name, p in sorted(model.gallery.named_parameters()):
-        h.update(name.encode())
-        h.update(p.detach().cpu().numpy().tobytes())
+    for tag, module in (("backbone", backbone.model), ("gallery", model.gallery)):
+        for name, p in sorted(module.named_parameters()):
+            h.update(f"{tag}.{name}".encode())
+            h.update(p.detach().cpu().numpy().tobytes())
     return h.hexdigest()
 
 
@@ -157,22 +170,28 @@ def main() -> int:
         return promote(args.gate_passed)
 
     import torch
-    from metafind.train.stage1 import build_model, load_protocols
-    from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
+    from metafind.train.stage1 import (
+        build_model, load_protocols, load_stage1_checkpoint)
+    from metafind.models.ulip_backbone import (
+        BackboneConfig, ULIPBackbone, prepare_depth_shell)
 
     encoding, training, hyperparameters = load_protocols()
     ckpt_record = load_checkpoint_record()
 
+    # train_scope="point_encoder_and_fuser", NOT "fuser_only": the scope decides
+    # which parameters carry requires_grad, and load_stage1_checkpoint checks the
+    # backbone section against exactly that set. Building with "fuser_only" here
+    # would freeze the point encoder before restoring it, so Stage 1's
+    # fine-tuned PointBERT would be declared "not expected" and dropped -- the
+    # original bug, moved one line down. Freezing for inference happens after
+    # the restore, via freeze_gallery / eval.
     backbone = ULIPBackbone(BackboneConfig(device=args.device,
-                                           train_scope="fuser_only"))
-    model, _ = build_model(encoding, training, hyperparameters)
-    state = torch.load(ckpt_record["uri"], map_location="cpu")
-    missing, unexpected = model.load_state_dict(state["trainable_state"], strict=False)
-    if unexpected:
-        raise ValueError(f"checkpoint holds keys the model does not have: {unexpected[:5]}")
+                                           train_scope="point_encoder_and_fuser"))
+    model, loss_fn = build_model(encoding, training, hyperparameters)
+    load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt_record["uri"]))
     model.to(args.device).eval()
     model.freeze_gallery(True)
-    encoder_sha = gallery_encoder_sha256(model)
+    encoder_sha = gallery_encoder_sha256(backbone, model)
 
     node = "n11_gallery_index_staging" if args.mode == "stage1" else "n11b_stage2_gallery_index"
     started = time.time()
@@ -228,11 +247,13 @@ def main() -> int:
                     excluded.append({"asset_id": rec["asset_id"],
                                      "reason": rec["pointcloud_missing_reason"]})
                     continue
+                # [P0-4] pc_norm happens INSIDE prepare_depth_shell: n07b stores
+                # world-frame points (asset lifted to y=40 m), n03 stores
+                # unit-normalised ones, and the checkpoint was trained on the
+                # latter. The grey channel is there because the shell has no
+                # colour, not because grey is a measurement.
                 cloud = np.load(rec["pointcloud_uri"])["xyz"].astype(np.float32)
-                # n03 gives xyz+rgb; the depth shell has geometry only, so the
-                # colour channels are the mid-grey the renderer shows for an
-                # untextured surface rather than a fabricated value.
-                pc = np.concatenate([cloud, np.full_like(cloud, 0.5)], axis=1)[None]
+                pc = prepare_depth_shell(cloud)
                 with torch.no_grad():
                     text_vec = backbone.encode_text([rec["text"]])
                     view_vecs = backbone.encode_image(torch.stack([

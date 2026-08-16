@@ -354,6 +354,17 @@ class ESSGNN(nn.Module):
             self.edge_proj = nn.Linear(cfg.edge_feat_dim, cfg.edge_proj_dim)
             edge_dim = cfg.edge_proj_dim
 
+        # [U-30] The missing-semantic-edge token, and it is genuinely LEARNED.
+        # essgnn_edge_protocol records the decision as `learned_missing_token`;
+        # it used to be a seeded numpy vector built in the dataset, which is not
+        # a parameter, gets no gradient, enters no optimizer and lands in no
+        # checkpoint -- so the protocol described something the code did not do.
+        # Zeros remain forbidden either way: zero is a valid point in the edge
+        # space and would read as a real relation rather than as absence
+        # (L1-SEMEDGE-NO-ZEROFILL).
+        self.missing_edge_token = nn.Parameter(torch.zeros(cfg.edge_feat_dim))
+        nn.init.normal_(self.missing_edge_token, std=0.02)
+
         if cfg.layer_sharing == "shared":
             # One layer, applied L times. Not a saving -- a different model.
             shared = ESSGCL(cfg, edge_dim)
@@ -370,6 +381,7 @@ class ESSGNN(nn.Module):
         edge_index: Tensor,
         edge_attr: Tensor,
         batch: Tensor | None = None,
+        edge_missing: Tensor | None = None,
     ) -> Tensor:
         """Encode one or more scene graphs into layout vectors.
 
@@ -386,6 +398,11 @@ class ESSGNN(nn.Module):
             edge_attr: ``(E, edge_feat_dim)``.
             batch: optional ``(N,)`` graph id per node for batched graphs. If
                 omitted, all nodes are treated as one graph.
+            edge_missing: optional ``(E,)`` bool. True where the scene graph has
+                an edge but no LLM relation was cached for it. Those rows of
+                ``edge_attr`` are replaced by the learned missing-edge token.
+                Passing the token in through ``edge_attr`` instead would work
+                numerically and would not train it.
 
         Returns:
             ``(out_dim,)`` when ``batch`` is None, else ``(n_graphs, out_dim)``.
@@ -399,6 +416,16 @@ class ESSGNN(nn.Module):
                 f"edge_attr has {edge_attr.size(0)} rows but edge_index has "
                 f"{edge_index.size(1)} edges"
             )
+
+        if edge_missing is not None:
+            if edge_missing.shape != (edge_index.size(1),):
+                raise ValueError(
+                    f"edge_missing must be (E,) = ({edge_index.size(1)},), got "
+                    f"{tuple(edge_missing.shape)}")
+            edge_attr = torch.where(
+                edge_missing.unsqueeze(-1),
+                self.missing_edge_token.to(edge_attr.dtype).expand_as(edge_attr),
+                edge_attr)
 
         h0 = torch.cat([pos, node_feat], dim=-1) if self.cfg.h0_mode == "concat_xt" else node_feat
         h = self.embed_in(h0)
