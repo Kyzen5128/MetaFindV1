@@ -728,30 +728,43 @@ rgb_data = np.ones_like(point_set) * 0.4      # dataset_3d.py:292, 297
 而這次是在一個我原本打算只花二十分鐘查證的探針上發生的。
 凡是產生影像的節點，驗收一定要包含「真的把圖打開看」。
 
-## F25. Stage 2 的 gallery 只有 **1,467** 個資產，不是論文說的「3,000+」
-
+## F25. ProcTHOR 的資產數有**四個互不相同的數字** —— 一個都不能寫死
 MetaFind 2.3 轉述 ProcTHOR「over 10,000 generated houses constructed from a
-curated collection of more than **3,000 unique assets**」。
+curated collection of more than **3,000 unique assets**」。查下去之後，
+這個數字四邊都對不上：
 
-**兩種獨立量法都對不上那個數字：**
+| 來源 | 資產數 | 類別數 | 怎麼得到的 |
+|---|---|---|---|
+| MetaFind §2.3 | **3,000+** | — | 論文轉述 |
+| ProcTHOR 原論文 | **1,633** | **108** | 原文「1633 household assets across 108 categories」 |
+| 本機 build 的資產庫 | **1,934** | — | `controller.step(action="GetAssetDatabase")` |
+| 12,000 間房子實際用到 | **1,467** | **93** | 掃 train 10k + val 1k + test 1k 全部 `assetId` |
 
-| 量的是什麼 | 方法 | 結果 |
-|---|---|---|
-| 12,000 間房子實際用到的 | 掃過 train 10k + val 1k + test 1k 的所有 `assetId` | **1,467** |
-| AI2-THOR 資產庫本身有的 | `controller.step(action="GetAssetDatabase")` | **1,934** |
+**可重現性**：以上兩個實測值綁定這個 build ——
 
-我原本以為差異可以用「資產庫有 3,000+、房子只用了一部分」解釋。
-**查了資產庫本身之後，這個解釋也不成立** —— 庫裡只有 1,934 個。
+```
+ai2thor            5.0.0
+CloudRendering     thor-CloudRendering-f0825767cd50d69f666c7f282e54abfe58f1e917
+procthor-10k       train 10,000 / val 1,000 / test 1,000
+```
 
-ProcTHOR 原論文的 PDF 過大無法直接抓取，摘要也沒有給資產數，
-所以我無法斷定「3,000+」出自何處或指的是什麼（可能含材質變體、可能是不同版本）。
-**能確定的是：我們手上這個 build 沒有 3,000 個資產，而我們只能用手上有的。**
+**我不知道 3,000+ 從哪來。** ProcTHOR 原論文 PDF 過大無法直接抓取，
+摘要沒給資產數。可能是版本差異、可能含材質變體、也可能是轉述時的誤植 ——
+**沒有證據前不要替它編一個解釋**。1,934 與 1,467 都比較接近 1,633 而不是 3,000+。
 
-**為什麼這個數字現在變重要**：U-08a 判定為「Stage 2 用獨立的 ProcTHOR gallery」，
-所以這 1,467 就是 Stage 2 對比損失的**負樣本池大小**。它決定 Eq. 7a/7b 分母的
-規模，而那直接影響 loss 的難度 —— 1,467 個候選比 46,052 個容易得多，
-Stage 2 的訓練訊號因此比 Stage 1 弱。報告必須寫出這個數字，不能沿用論文的
-「3,000+」，那不是我們跑的東西。
+**類別數 93 vs 108 的差距要小心解讀。** 我的 93 是從物件 id 前綴
+（`CounterTop|2|0` → `CounterTop`）推出來的，那**不見得等同 ProcTHOR 官方的
+category taxonomy**。這可能是量法差異而非矛盾，在確認 taxonomy 定義前不要當成發現。
+
+### 為什麼這件事現在變重要
+
+U-08a 判定「Stage 2 用獨立的 ProcTHOR gallery」之後，**這個數字就是 Eq. 7a/7b
+分母的規模** —— 也就是對比損失的負樣本池。1,467 個候選比 Stage 1 的 46,052 個
+容易得多，Stage 2 的訓練訊號因此明顯較弱，而這會直接反映在 Table 2。
+
+**所以規則是：資產數一律從安裝的 build 現場推導，連同版本一起記錄，
+不得寫死任何一個已發表的數字 —— 包括論文的 3,000+ 和 ProcTHOR 的 1,633。**
+這條登記為 U-08c。
 
 ## 由 F1–F13 推導出的三個架構決策
 
