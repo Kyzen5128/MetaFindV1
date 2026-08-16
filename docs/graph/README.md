@@ -14,7 +14,7 @@
 | 標記 | 意思 |
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
-| **[未定]** | 論文沒說，我們選了一個並記錄（累積 39 條，其中 **U-08a／U-08b／U-18／U-21 為阻斷級**；**U-34／U-20 已於 2026-08-16 判定**） |
+| **[未定]** | 論文沒說，我們選了一個並記錄。U registry 共 39 項，其中 37 項 unresolved、2 項 resolved（U-20、U-34，皆 2026-08-16）。**U-08a／U-08b／U-18／U-21 為阻斷級** |
 | **[偏離]** | 與論文不同，必須在報告聲明（**6 條 D-2…D-7**。條件式的 **D-1** 已於 2026-08-16 判定**不啟用**） |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
@@ -234,7 +234,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | `n07_scene_graphs` | **可執行** | `metafind/data/scene_graphs.py`。300 間房、0 隔離、房間對應 100%；support 邊來自 ProcTHOR 的 children 樹，座標保留原始值；16 條測試，兩條負向注入實測會失敗 |
 | `n08_semantic_edges` | **可執行** | `metafind/data/semantic_edges.py`（key／prompt／驗證，30 條測試）＋ `semantic_edges_run.py`（Qwen 關係句 ＋ 凍結 CLIP 文字編碼器）。**實測 410 萬條語意邊只有 4,242 組唯一描述配對（快取命中 99.90%）**；三條負向注入實測會失敗。LLM 階段須等 n05 讓出 GPU |
 | `n09c_build_scene_splits` | ✅ **完成** | `metafind/data/scene_splits.py`。9,600 train／2,400 test（80/20，seed 20260816）、**洩漏 0**；13 條測試，負向注入實測會失敗。語意邊覆蓋率待 n08 |
-| `n05b_resolve_stage1_encoding` | **可執行** | `metafind/models/resolve_stage1.py`。釘死 U-15 文字模板（golden-string 測試）、U-14 取 11 視圖平均、U-11 learned token；**U-34 刻意無預設,須人為指定**。25 條測試 |
+| `n05b_resolve_stage1_encoding` | **可執行** | `metafind/models/resolve_stage1.py`。釘死 U-15 文字模板（golden-string 測試）、U-14 取 11 視圖平均、U-11 learned token；**U-34 已判定 `frozen`**，連同 basis 與 confidence 一併記錄，主線再無執行期歧義。25 條測試 |
 | 其餘 **十九個**節點 | **只有規格** | 無 |
 
 另有兩塊不對應任何節點、但已可執行：

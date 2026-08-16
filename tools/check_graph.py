@@ -216,11 +216,69 @@ if m:
 
 _ru = spec["risks_unknowns"]
 _ru_items = _ru["unknowns"] if isinstance(_ru, dict) else _ru
-unknown_ids = {u["id"] for u in _ru_items
-               if isinstance(u, dict) and str(u.get("id", "")).startswith("U-")}
-m3 = re.search(r"累積 (\d+) 條", readme_txt)
-check("README UNKNOWN count", m3 is not None and int(m3.group(1)) == len(unknown_ids),
-      f"README says {m3.group(1) if m3 else '?'}, registry has {len(unknown_ids)}")
+_u_entries = [u for u in _ru_items
+              if isinstance(u, dict) and str(u.get("id", "")).startswith("U-")]
+registered_ids = {u["id"] for u in _u_entries}
+# `marked` is what separates these. Counting every U- id as UNKNOWN is what let
+# U-34 sit in the registry as RESOLVED while three documents still called it
+# open: the checker had no way to tell the two apart, so the contradiction was
+# invisible to it.
+unknown_ids = {u["id"] for u in _u_entries if u.get("marked") == "UNKNOWN"}
+resolved_ids = {u["id"] for u in _u_entries if u.get("marked") == "RESOLVED"}
+
+m3 = re.search(r"U registry 共 (\d+) 項，其中 (\d+) 項 unresolved、(\d+) 項 resolved", readme_txt)
+check("README UNKNOWN tally present", m3 is not None,
+      "the UNKNOWN tally changed shape; update this check with it")
+if m3:
+    total, unres, res = (int(m3.group(i)) for i in (1, 2, 3))
+    check("README UNKNOWN total", total == len(registered_ids),
+          f"README says {total}, registry has {len(registered_ids)}")
+    check("README unresolved count", unres == len(unknown_ids),
+          f"README says {unres}, registry has {len(unknown_ids)}")
+    check("README resolved count", res == len(resolved_ids),
+          f"README says {res}, registry has {len(resolved_ids)}: {sorted(resolved_ids)}")
+
+# A RESOLVED entry must carry its provenance. Without this an entry can be
+# flipped to RESOLVED with no decision, no decider and no evidence, and every
+# downstream document that repeats the decision has nothing to cite -- which is
+# exactly the state that made U-34's half-migration invisible.
+for u in _u_entries:
+    if u.get("marked") != "RESOLVED":
+        continue
+    for field in ("decided", "decided_by", "decided_at", "decision_basis",
+                  "confidence"):
+        check(f"{u['id']} RESOLVED carries {field}",
+              bool(str(u.get(field, "")).strip()),
+              f"{u['id']} is marked RESOLVED but has no {field}")
+    check(f"{u['id']} confidence vocabulary",
+          u.get("confidence") in ("low", "moderate", "high"),
+          f"{u['id']} confidence is {u.get('confidence')!r}, not low|moderate|high")
+
+# Prose must not still call a resolved item open. This is the check that would
+# have caught the c43c72e half-migration on its own: the registry said RESOLVED
+# while three documents still said "取決於 U-34", and nothing compared them.
+_OPEN_PHRASES = ("未解", "尚未確立", "取決於", "仍待", "unresolved", "still open")
+# A correction log RECORDS that something was once open. Rewriting it to match
+# today's state would destroy the only account of how the decision was reached,
+# so everything from the log heading onward is exempt -- history is supposed to
+# disagree with the present.
+_HISTORY_HEADING = "## 16. 修正紀錄"
+for doc in ("README.md", "01_GRAPH_SPEC.md", "02_BUILD_STEPS.md", "00_FINDINGS.md"):
+    body = (DOCS / doc).read_text()
+    live = body.split(_HISTORY_HEADING)[0]
+    for uid in sorted(resolved_ids):
+        for line in live.splitlines():
+            if uid not in line:
+                continue
+            # The tally line legitimately says "37 unresolved, 2 resolved (U-20,
+            # U-34)". It is the one place both words belong on one line.
+            if "項 unresolved" in line and "項 resolved" in line:
+                continue
+            hit = next((p for p in _OPEN_PHRASES if p in line), None)
+            check(f"{doc} does not call {uid} open",
+                  hit is None,
+                  f"{doc} says {uid} is `{hit}` but the registry marks it "
+                  f"RESOLVED: {line.strip()[:150]}")
 
 # Deviation ids must agree across the machine spec and every human table that
 # lists them. This went stale the moment D-7 was added: three documents said

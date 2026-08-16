@@ -1182,6 +1182,11 @@ level_3_gates:
       AND stage1_encoding_protocol.status == "resolved", with text_serialization,
           image_aggregation, paper_clip_train_scope, actual_clip_train_scope and
           missing_modality_representation each naming a choice
+      AND paper_clip_train_scope_basis is non-empty
+      AND paper_clip_train_scope_confidence in {low, moderate, high}
+          -- without these two, a protocol reading `paper_clip_train_scope: frozen`
+          with an empty basis PASSES, and n21 reaches the report with a decision
+          it cannot cite. The scope alone does not say why.
           (U-15, U-14, U-34 x2, U-11)
           [CORRECTED] This listed three fields after the channel grew to five.
           A protocol missing paper_clip_train_scope or
@@ -1454,8 +1459,11 @@ required_audits:
     record_kind: required_audit
     blocks: false
     why_not_a_gate: >
-      [REFRAMED] This audit measures whether U-34's TRAINABLE reading is
-      executable here -- not whether D-1 is justified.
+      [REFRAMED 2026-08-16] U-34 is RESOLVED to frozen for the reproduction
+      mainline, so this audit no longer stands for an undecided reading. It
+      measures the ALTERNATIVE full/OpenCLIP-trainable configuration for
+      sensitivity and hardware feasibility only, and it settles nothing about
+      D-1 -- D-1 is already inactive because paper and actual scope agree.
 
       MetaFind 3.4 concludes that fine-tuning the entire encoder beats training
       the fuser only, without saying which modules "entire" covers. Read as
@@ -1465,17 +1473,20 @@ required_audits:
       What a failure proves and does not prove: it shows THAT INTERPRETATION is
       infeasible on this hardware. It does not show the paper requires that
       interpretation -- ULIP-2, which MetaFind builds on, freezes OpenCLIP in
-      its own 3.3, so the frozen reading has direct support and may simply be
-      correct. Blocking on this would be blocking on an open question.
+      its own 3.3, and the reproduction has resolved U-34 that way. Blocking on
+      this would be blocking the mainline on the feasibility of a configuration
+      the mainline does not use.
     criterion: "train_scope=full completes without exhausting GPU memory"
-    claim_controlled: "We tested U-34's trainable reading rather than assuming it infeasible."
+    claim_controlled: "We tested the alternative trainable-scope configuration rather than assuming it infeasible."
     claim_on_failure: >
       "'Entire encoder' in our reproduction means the 3D encoder plus fusion.
-      OpenCLIP stays frozen, which is what ULIP-2's own section 3.3 specifies
-      and is therefore a defensible reading of MetaFind rather than only a
-      hardware concession; whether MetaFind intended otherwise is U-34, open.
-      Where the trainable reading was attempted it did not fit on 24 GB, which
-      bounds what we can say about it -- not what the paper says."
+      OpenCLIP stays frozen. That is the reproduction's resolved reading of
+      U-34, taken because MetaFind explicitly builds on ULIP-2, ULIP-2's own
+      3.3 freezes OpenCLIP, and MetaFind never states a change to that policy --
+      NOT because MetaFind says CLIP is frozen, which it does not say anywhere.
+      Where the alternative trainable-scope configuration was attempted it did
+      not fit on 24 GB, which bounds what we can say about that configuration --
+      not what the paper says."
     must_not_affect: [G3_object_corpus, G4_gallery_freeze, G5_report_release, "other Table 3 rows"]
     record_path: "outputs/logs/audits/RA3_train_scope.yaml"
 

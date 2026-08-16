@@ -72,7 +72,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 
 | id | 偏離 | 理由 | 影響 |
 |---|---|---|---|
-| **D-1** | ViT-bigG-14 保持凍結 | 2.5B 參數在 24GB 上無法訓練 | **狀態：取決於 U-34，目前尚未確立為偏離**。先前的理由是「ULIP-2 公開程式沒有凍 CLIP」——那對**程式**的觀察正確，但拿來論證**設計**是錯的：ULIP-2 §3.3 明文凍結，而同檔的 ULIP-1 factory 都有明確凍結、只有 ULIP-2 的沒有，比較像疏漏。U-34 若解為 `frozen`，這根本不是偏離；若解為 `trainable`，才是偏離，且 RA-3 是「另一條路跑不動」的證據 |
+| **D-1** | ViT-bigG-14 保持凍結 | — | **狀態：`resolved_inactive`（2026-08-16）**。`paper_clip_train_scope = actual_clip_train_scope = frozen`，`active_if` 為 false，**不列為 active deviation**。判定它的是**讀法**，不是硬體 —— 這一格先前寫「2.5B 在 24GB 上無法訓練」，那已不是 D-1 成立與否的理由。**判讀依據**：MetaFind 明確建立於 ULIP-2；ULIP-2 §3.3 明文 "freeze it during pre-training"；MetaFind 全文未逐 module 聲明改變此策略。**不得寫成「MetaFind 明文說 OpenCLIP frozen」** —— 論文沒有這句。重開條件：取得官方 code 或作者回覆，證實 optimizer 更新到 OpenCLIP 參數。 規則保留不刪：它是「論文要訓練、我們凍結」這個狀態的唯一編碼，重開後即可再次生效。RA-3 保留，但改為 **alternative trainable-scope 可行性稽核**，只記錄不阻斷 |
 | **D-2** | Qwen2.5-VL 取代 GPT-4o | 專案決定 | **Table 1 與 Table 2 都受影響** —— Qwen 不只換掉裁判，也換掉 46,052 筆資產標註（文字塔的訓練資料）。所以 SC-1 只報告差距、不設門檻 |
 | **D-3** | 不重跑 baseline | 只復現 MetaFind | SC-2 只能與論文公佈值比較 |
 | **D-4** | 不做人工評分 | 無標註人力 | Table 2 人工欄 `INSUFFICIENT_EVIDENCE` |
@@ -99,7 +99,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 | `objaverse_annotations` | `upsert_by_key` | **以 Objaverse uid 為 key**。ProcTHOR 物件屬於另一個命名空間，不得讀這條 |
 | `procthor_object_text` | `upsert_by_key` | **新增**。ProcTHOR 場景圖的 `t_i` 與語意邊的輸入，來自 ProcTHOR 自己的 metadata |
 | `procthor_dataset` | `write_once` | **新增**。先前 ProcTHOR 根本沒進 graph state，導致 G1 無從檢查它 |
-| `stage1_encoding_protocol` | `replace` | **決定 `n06` 該編碼什麼，由 `n05b`（層 6b）產出，早於 `n06`**。U-15（`text_serialization`）／U-14（`image_aggregation`）／**U-34 拆成 `paper_clip_train_scope` 與 `actual_clip_train_scope`**／U-11（`missing_modality_representation`）。<br>**U-34 為什麼要兩個欄位**：D-1 的內容是「論文要訓 CLIP 而我們凍了」——那是**兩者之間的落差**，一個欄位寫不出來。單欄位時把它設成 `trainable` 反而在 run **沒有偏離**的時候標記 D-1 為 active，而 D-1 真正描述的狀態根本無法表示。只有 `actual` 會分支 graph |
+| `stage1_encoding_protocol` | `replace` | **決定 `n06` 該編碼什麼，由 `n05b`（層 6b）產出，早於 `n06`**。U-15（`text_serialization`）／U-14（`image_aggregation`）／**U-34（已解決 = `frozen`）拆成 `paper_clip_train_scope` 與 `actual_clip_train_scope`，另附 `_basis` 與 `_confidence`**／U-11（`missing_modality_representation`）。<br>**U-34 為什麼要兩個欄位**：D-1 的內容是「論文要訓 CLIP 而我們凍了」——那是**兩者之間的落差**，一個欄位寫不出來。單欄位時把它設成 `trainable` 反而在 run **沒有偏離**的時候標記 D-1 為 active，而 D-1 真正描述的狀態根本無法表示。只有 `actual` 會分支 graph。**兩欄保留是為了 provenance 與日後重開，不是因為 U-34 還沒決定** |
 | `stage1_hyperparameters` | `replace` | **U-22 的實體 artifact**（`uri` / `sha256` / `values`），由 `n05b` 產出。先前只有 `stage1_protocol` 裡的一個 hash，而**沒有任何 channel 存放被它指涉的東西** —— constructor 從 graph 外收一個 dict，G3 宣稱要 dereference 卻沒有可讀的來源。`sha256` 必須等於 `hyperparameter_config_hash` |
 | `stage1_protocol` | `replace` | **訓練期才用到的那一半**：U-13（`fusion`）／U-16（`tower_sharing`）／U-23（`allow_all_masked`）／U-24（`similarity`）／U-22（`hyperparameter_config_hash`）。原本 U-13…U-24 只寫在散文裡，`n10` 仍可用程式預設開跑。**發現 UNKNOWN 不等於把它放進 graph。** 由 `G3` 檢查記錄完整，**`G6` 另外檢查 `tower_sharing != fully_shared`** |
 | `post_stage1_embeddings` | `replace` | **新增**。`n11`／`n13`／`n15`／`n18` 原本無條件讀 `text_image_embeddings`，但 `actual=trainable` 時 `n06` 根本不跑 —— **那條路訓得完卻無處可去**。改由 `n10b`（層 10c）在 Stage 1 之後產出，且 **query／gallery 分開存**，因為 `fully_separate + trainable` 時兩塔握有不同的 CLIP 權重 |
@@ -141,7 +141,7 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 | **`G2_pc_sanity`** | evaluate | **G-INVALID**。形狀／有限／`pc_norm`／非退化／自我可辨識。**與 ULIP 官方點雲的比較降為 L2 診斷** |
 | `n04_render_views` | compute | 11 個視角、224px；**投影方式為設定值，預設正交（U-03a，不是論文明文）** |
 | `n05_annotate` | model | Qwen2.5-VL → category / dimensions / materials / placement_constraints |
-| `n05b_resolve_stage1_encoding` | **human** | **決定 `n06` 該編碼什麼**（層 6b，早於 `n06`）：U-15 序列化／U-14 視圖聚合／U-34 的 `paper_`＋`actual_clip_train_scope`／U-11 缺席模態表示；並產出 `stage1_hyperparameters` 與 `variant_registry` |
+| `n05b_resolve_stage1_encoding` | **human** | **決定 `n06` 該編碼什麼**（層 6b，早於 `n06`）：U-15 序列化／U-14 視圖聚合／U-11 缺席模態表示；並**記錄已解決的 U-34 = `frozen`** 連同 `paper_clip_train_scope_basis` 與 `_confidence`（供 `n21` 引用）；並產出 `stage1_hyperparameters` 與 `variant_registry` |
 | `n06_encode_text_image` | model | CLIP 凍結 → 可快取；**PC 不在此列**。**`actual=trainable` 時整個不執行**（`e09` 的 guard），此時 `n09` 改由 `e11b` 取得原始 renders／annotations |
 | `n07_scene_graphs` | compute | ProcTHOR → 節點（位置 + `t_i`）、物理邊（support 讀自 children 樹）。**`t_i` 來自 ProcTHOR metadata，不是 Objaverse 標註** |
 | `n08_semantic_edges` | model | Qwen 對 **ProcTHOR 物件描述**產生關係句 → frozen text encoder → `e_ij` |
@@ -467,7 +467,7 @@ graph TD
   n04 --> n05[[n05 annotate<br/>Qwen · SG1 · C1]]:::sub
   n07 --> n08[[n08 semantic_edges<br/>Qwen · SG2 · C2]]:::sub
   G2 --> n09[n09 build_splits<br/>Objaverse only]:::compute
-  n05 --> n05b[/n05b resolve_stage1_encoding<br/>HUMAN · U-14/U-15/U-34/U-11/]:::term
+  n05 --> n05b[/n05b resolve_stage1_encoding<br/>HUMAN · U-14 / U-15 / U-11<br/>record U-34=frozen/]:::term
   n05b -->|actual=frozen| n06[n06 encode_text_image<br/>CLIP frozen · SKIPPED if trainable]:::model
   n06 -->|actual=frozen| n09
   n05b -->|actual=trainable| n09
@@ -611,7 +611,7 @@ graph TD
 | **U-29** | UNKNOWN | **物理邊到底怎麼進 ESSGNN**。§2.3 定義 physical（support／adjacency）與 semantic 兩種邊，但 §2.5 的 `f_h`／`f_x` 只吃**一個**邊參數 `e_ij`，而 §2.5 與 Appendix C 都把 `e_ij` 定義成**語意**邊（LLM 關係句 → frozen text encoder）。物理邊是只決定 `N(i)`？自己帶 feature？與語意邊合併成一條？還是平行的另一條？support 與 adjacency 進網路後分不分得出來？全部沒說 | 記錄選擇 —— **這是架構決定，不是超參數** |
 | **U-30** | UNKNOWN | **沒有語意嵌入的邊，`e_ij` 的張量契約是什麼**。`f_h : ℝ^(2d+1+e) → ℝ^d` 輸入寬度**固定**，所以缺 `e_ij` 的邊仍要填滿那 `e` 格。規格禁止補零（零向量與真實嵌入無法區分）並記 `semantic_edge_missing`，但**記旗標不等於說明 MLP 收到什麼** | 記錄機制；必須與合法嵌入可區分 |
 | **U-35** | UNKNOWN | **`f_h`／`f_x` 的 MLP 內部結構**。§2.5 只寫 "approximated using MLPs"，深度、激活、輸出端有沒有激活全部沒說。我們的 `_mlp` 對兩者用**同一個**形狀（Linear → SiLU → Linear），那從來不是一個決定，只是它剛好長這樣。<br>**EGNN 原論文 Appendix C 給的是三種不同形狀**：`φ_e` = Linear → Swish → Linear → **Swish**（輸出端有激活）、`φ_x` = Linear → Swish → Linear（沒有）、`φ_h` = Linear → Swish → Linear **＋ `h_i` 殘差**。所以我們的 `f_x` 恰好等同 EGNN 的 `φ_x`，`f_h` **三個都不是**。SiLU 與 Swish 是同一個函數，真正的差別只在尾端激活與殘差 | `essgnn_arch_protocol.mlp_structure` 記錄，由 `G6` 強制。**EGNN 的 Appendix C 只提供選項清單，不提供答案** —— 依賴方的論文不能替 MetaFind 補它沒說的事，而這裡 MetaFind 是真的沉默，不是有歧義 |
-| **U-34** | UNKNOWN | **Stage 1 有沒有訓練 OpenCLIP 的 text／image encoder**。<br>**支持凍結**：MetaFind 建立在 ULIP-2 之上，而 ULIP-2 §3.3 明文 "We adopt the largest version of encoders from OpenCLIP (**ViT-G/14**) ... and **freeze it during pre-training**"，並說特徵是 "based on the **frozen** encoders"、目標函數 `min_{E_P}` 只訓 3D encoder（Eq. 3）。<br>**[更正]** 先前這裡把兩句併成一句寫成 "pre-aligned and frozen image encoder and text encoder" 並當成引文，**原文沒有那一句**。<br>**支持可訓練**：MetaFind §2.6 "Both query and gallery encoders are trained"、§3.4 "fine-tuning the **entire** encoder"、且 §2.4 特地把自己與「凍結 text/image encoder 的既有做法」對比。<br>**MetaFind 從未逐個 module 列出誰訓練** | `stage1_encoding_protocol.clip_train_scope`（n05b 決定，早於 n06 編碼）記錄採用的讀法；主線 `frozen`（有 ULIP-2 論文直接支持）。RA-3 量測 `trainable` 那個讀法在本機是否可執行。<br>**`blocking: false`，但透過 G3 實質阻擋執行** —— 兩個讀法都能寫成報告，可是 n06 要編碼什麼取決於它，所以 G3 未放行前 Stage 1 跑不了 |
+| **U-34** | **RESOLVED → `frozen`**（confidence: moderate，2026-08-16）| **Stage 1 有沒有訓練 OpenCLIP 的 text／image encoder**。<br>**支持凍結**：MetaFind 建立在 ULIP-2 之上，而 ULIP-2 §3.3 明文 "We adopt the largest version of encoders from OpenCLIP (**ViT-G/14**) ... and **freeze it during pre-training**"，並說特徵是 "based on the **frozen** encoders"、目標函數 `min_{E_P}` 只訓 3D encoder（Eq. 3）。<br>**[更正]** 先前這裡把兩句併成一句寫成 "pre-aligned and frozen image encoder and text encoder" 並當成引文，**原文沒有那一句**。<br>**支持可訓練**：MetaFind §2.6 "Both query and gallery encoders are trained"、§3.4 "fine-tuning the **entire** encoder"、且 §2.4 特地把自己與「凍結 text/image encoder 的既有做法」對比。<br>**MetaFind 從未逐個 module 列出誰訓練** | **已解決**：`paper_clip_train_scope = frozen`、`actual_clip_train_scope = frozen`，由 n05b 連同 basis 與 confidence 一併記錄，n21 讀取後寫進報告。**判讀依據**：MetaFind 明確建立於 ULIP-2；ULIP-2 §3.3 明文 "freeze it during pre-training"；MetaFind 全文未逐 module 聲明改變此策略。**不得寫成「MetaFind 明文說 OpenCLIP frozen」** —— 論文沒有這句。重開條件：取得官方 code 或作者回覆，證實 optimizer 更新到 OpenCLIP 參數。<br>RA-3 保留為 **alternative full/OpenCLIP-trainable 配置的敏感度與可行性稽核**，不再代表一個未決的論文讀法 |
 | **U-33** | UNKNOWN | **ESSGNN 有沒有保留 EGNN 的輸入／輸出投影**。§2.5 是 `t_i → h⁰ → L 層 → Pooling = e_layout`，**兩端都沒有投影**；官方 EGNN（`egnn_clean.py`）有 `embedding_in`／`embedding_out`，本實作沿用了。**多兩層可學參數不是同一個架構，而 upstream 慣例不是論文真值** | `use_io_projections` 旗標。`True` 沿用官方 EGNN（現行主線），`False` 字面復現 §2.5 但要求 `node_feat_dim == hidden_dim == out_dim` |
 | **U-32** | UNKNOWN | **scene dropout 的粒度**。§2.6 寫 "omitted in 30% of **batches**"，字面是**整批**一起丟；**現行主線就是 batch-level**（`scene_dropout_granularity="batch"`），`sample` 保留為變體。對 in-batch 對比 loss 而言兩者的訓練分布不同 | `stage2_protocol.scene_dropout_granularity` 記錄，G6 檢查。注意 §2.6 另一個 30%（Stage 1 的 modality masking）明文 "independently"，那個才真的是 per-sample |
 | **U-31** | UNKNOWN・**可執行** | **ESSGNN 的 L 層是否共用參數**。§2.5 寫 `θ_h`、`θ_x` 都沒有層索引。這會改變參數量，也改變 F11：獨立層時最後一層座標頭沒有 loss path，**共用參數時同一個 `f_x` 仍會從前 L−1 層收到梯度** | 實作用每層獨立權重，記錄為選擇 |
@@ -1327,3 +1327,58 @@ MetaSpatial（同組，arXiv:2503.18470）有公開 Blender 程式，但**沒有
 只看該節點與它直接的上下游接縫，實作、smoke、故意注入失敗、確認 channel 真的產生、
 下游讀得到，然後鎖定。審查者的判斷我同意，而且第 21–24 輪就是證據：
 **`n03` 一實作就抓到純規格審查看不到的東西，而這輪三個 P0 裡有兩個是新檢查抓的，不是重讀抓的。**
+### 2026-08-16 U-34 判定（外部討論轉達）＋ 半途遷移的教訓
+
+**U-34 判定為 `frozen`（confidence: moderate），D-1 評估為 `resolved_inactive`。**
+
+判定的關鍵不是新證據，而是把三句看似反證的話讀清楚：
+
+| 原本被當成「支持 trainable」 | 重讀後 |
+|---|---|
+| §2.6 "Both query and gallery encoders are trained" | 講的是**塔**。CLIP 凍結時 PointBERT／projection／fusion 本來就在 optimizer 裡，這句在兩種讀法下都成立，**什麼都沒區分** |
+| §3.4 "Fine-tuning the entire encoder outperformed training the fuser only" | 對比的是 fuser-only ablation。光是 point encoder 可訓練就造成這個對比，不需要梯度走到 ViT-bigG-14 |
+| §2.4 "gallery encoder is frozen after pretraining" vs §2.6 "is trained" | 是 **Stage 1／Stage 2 的界線**，不是 Stage 1 內部矛盾。我先前把它當成 Stage 1 的證據，那是讀錯 |
+
+我原本傾向宣告 D-1，理由是「多宣告一條偏離比漏宣告安全」。**那個理由在這裡不成立** ——
+宣告 D-1 等於斷言論文要求了它其實沒要求的事，那本身也是一種錯誤宣稱。
+
+**全專案唯一說法**：
+
+```
+U-34   RESOLVED / frozen / moderate
+paper  OpenCLIP text+image = frozen
+actual OpenCLIP text+image = frozen；PointBERT／pc_projection／fusion = trainable
+D-1    RESOLVED_INACTIVE（active_if 為 false，規則保留供重開）
+RA-3   保留，改為 alternative full/OpenCLIP-trainable 配置的敏感度與可行性稽核
+```
+
+> **我們不是宣稱「MetaFind 明文說 OpenCLIP frozen」。** 我們是依據
+> MetaFind 明確建立於 ULIP-2、ULIP-2 明文 frozen OpenCLIP、且 MetaFind
+> 未明示改變該 policy，而將 U-34 的復現判讀解為 `frozen`。
+
+#### 真正的教訓：半途遷移，而 checker 看不見
+
+`c43c72e` 把 machine registry 改成 `RESOLVED`，但 `01_GRAPH_SPEC`、`02_BUILD_STEPS`、
+`00_FINDINGS`、兩份 README **仍寫著「取決於 U-34」「U-34 未解前」**。
+於是同一個專案裡同時存在新結論與舊未定文字 —— 而 **1,842 項檢查全部通過**。
+
+原因是 checker 這樣數 UNKNOWN：
+
+```python
+unknown_ids = {u["id"] for u in _ru_items if u["id"].startswith("U-")}
+```
+
+**`marked` 根本沒被看**。RESOLVED 和 UNKNOWN 對它是同一件事，所以矛盾對它不存在。
+
+已新增三條結構檢查：
+
+1. UNKNOWN／RESOLVED **分開計數**，README tally 三個數字都要對得上
+2. `marked: RESOLVED` 必須帶 `decided`／`decided_by`／`decided_at`／`decision_basis`／`confidence`，
+   且 confidence 屬於 `{low, moderate, high}` —— 否則可以標 RESOLVED 卻沒有任何依據
+3. 正文若在提到某個 RESOLVED 編號的同一行說「未解／尚未確立／取決於／unresolved」，**直接 FAIL**。
+   §16 以後的內容豁免 —— **修正紀錄本來就該與現況不一致，改寫它等於毀掉決策過程的唯一紀錄**
+
+第 3 條寫完立刻抓到 6 處殘留，**包括我自己在修正過程中新寫的一句「仍待決」**。
+
+**這輪的通用教訓**：把一個 UNKNOWN 標成 RESOLVED 不是一次 commit，是一次遷移。
+機器可讀的狀態改了而人類可讀的正文沒改，比兩邊都沒改更危險 —— 因為它看起來已經完成了。

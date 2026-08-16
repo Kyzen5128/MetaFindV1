@@ -739,9 +739,10 @@ actual=trainable  三者皆不可快取；Stage 1 之後由 n10b 用訓練後的
 
 **U-34 已於 2026-08-16 判定為 `frozen`，D-1 因此不啟用。** 理由不是「4090 塞不下所以偏離」，而是：MetaFind 明確建立於 ULIP-2，ULIP-2 §3.3 明文凍結 OpenCLIP，而 MetaFind 全文從未聲明改變此策略。§2.6「Both query and gallery encoders are trained」講的是**塔**（point encoder／projection／fuser 本來就在 optimizer 裡），§3.4「entire encoder」對比的是 fuser-only ablation，§2.4「gallery frozen after pretraining」與 §2.6 是 Stage 1／Stage 2 的界線，不是矛盾。**不得寫成「論文明文說 CLIP 凍結」** —— 論文沒有這句。若日後取得官方 code 或作者回覆證實 optimizer 更新到 OpenCLIP，重開 U-34 並啟用 D-1。
 
-**這未必是偏離**：ULIP-2 §3.3 明文凍結 OpenCLIP，而 MetaFind 建立在 ULIP-2 之上，
-所以主線可能正是忠實做法。是否偏離取決於 MetaFind 的 "entire encoder" 是否涵蓋 CLIP（U-34）。
-兩種讀法都會在報告中陳述，並附上實際採用的 `clip_train_scope`。
+**它不是偏離**：ULIP-2 §3.3 明文凍結 OpenCLIP，MetaFind 建立在 ULIP-2 之上且從未
+聲明改變此策略，所以主線就是忠實做法。報告陳述的是這個判讀與它的依據，
+以及實際採用的 `actual_clip_train_scope = frozen`；`trainable` 那條路仍記錄為
+RA-3 的 alternative 稽核對象，不是一個並列的未決讀法。
 
 ### D3 — 原始 mesh 保留，不刪除
 

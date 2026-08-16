@@ -45,14 +45,14 @@ scratch/             參考用的雜項腳本
 
 ## 已知偏離論文之處
 
-**正式偏離六項（D-2…D-7）＋條件式一項（D-1）**，編號以
+**正式偏離六項（D-2…D-7）＋條件式一項（D-1，已判定 `resolved_inactive`）**，編號以
 [`docs/graph/graph_spec.yaml`](docs/graph/graph_spec.yaml) 為準：D-2…D-7 在
 `boundary.deviations`，D-1 在 `boundary.conditional_deviations`，
 `active_if: paper_clip_train_scope == 'trainable' AND actual_clip_train_scope == 'frozen'`。
 
 | id | 內容 |
 |---|---|
-| **D-1** *(條件式)* | ViT-bigG-14 的 CLIP 側保持凍結。**U-34 未解前不算偏離** —— ULIP-2 §3.3 明文凍結 OpenCLIP，主線可能根本是忠實做法 |
+| **D-1** *(條件式・`resolved_inactive`)* | ViT-bigG-14 的 CLIP 側保持凍結。**U-34 已於 2026-08-16 判定為 `frozen`**，故 `paper = actual = frozen`、`active_if` 為 false，**不列為 active deviation**。判讀依據：MetaFind 明確建立於 ULIP-2；ULIP-2 §3.3 明文 "freeze it during pre-training"；MetaFind 全文未逐 module 聲明改變此策略。**不得寫成「MetaFind 明文說 OpenCLIP frozen」**。 規則保留供日後重開 |
 | **D-2** | Qwen2.5-VL 取代 **GPT-4o**（資產標註與場景評分） |
 | **D-3** | 不重跑 6 個 baseline |
 | **D-4** | 不做人工評分 |
@@ -67,7 +67,7 @@ scratch/             參考用的雜項腳本
 > 後來 D-1 被寫成「已確立的偏離」，理由是 ULIP-2 公開程式沒有凍 CLIP。
 > **那個推論已撤回**：ULIP-2 §3.3 明文 "freeze it during the pre-training"，
 > 公開程式沒設 `requires_grad=False` 是它自己對不上論文，不是設計如此。
-> D-1 現在取決於 **U-34**（MetaFind 到底要不要訓練 CLIP，論文沒逐個 module 說）。
+> D-1 之後改為條件式，繫於 **U-34**；U-34 已於 2026-08-16 判定為 `frozen`，D-1 因此不啟用。
 
 論文自身的矛盾（F 系列、RA 系列）另見 [`docs/graph/00_FINDINGS.md`](docs/graph/00_FINDINGS.md)
 與 [`01_GRAPH_SPEC.md` §11](docs/graph/01_GRAPH_SPEC.md)。

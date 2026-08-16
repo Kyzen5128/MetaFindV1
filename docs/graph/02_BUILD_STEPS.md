@@ -18,7 +18,7 @@
 
 | id | 偏離 |
 |---|---|
-| **D-1** *(條件式)* | ViT-bigG-14 的 CLIP 側保持凍結。**取決於 U-34**：若 MetaFind 的 "entire encoder" 不含 CLIP，這根本不是偏離（ULIP-2 §3.3 明文凍結）；只有 U-34 解為 `trainable` 時才成立 |
+| **D-1** *(條件式・`resolved_inactive`)* | ViT-bigG-14 的 CLIP 側保持凍結。**U-34 已於 2026-08-16 判定為 `frozen`**，故 `paper = actual = frozen`、`active_if` 為 false，**不列為 active deviation**。規則保留供日後重開 |
 | **D-2** | Qwen2.5-VL 取代 **GPT-4o**（資產標註與場景評分） |
 | **D-3** | 不重跑 6 個 baseline |
 | **D-4** | 不做人工評分 |
@@ -331,8 +331,8 @@ ProcTHOR 分支的任何故障都會停掉一個不依賴它的訓練。兩條�
 那正是 Table 3 的 `Train fuser only` 那一列 —— **論文明確報告它較差（8.7 vs 11.4）**。
 把它當主線等於一開始就跑錯實驗。
 
-**改為三個等級。第二個是 `actual_clip_train_scope = frozen` 目前選定的執行方式 ——
-不是「MetaFind 必然如此」。** U-34 未解前，把它寫成主線就是把一個解讀寫成事實：
+**改為三個等級。第二個是本復現選定的判讀與主線執行方式。**
+MetaFind 未逐 module 明說誰訓練；本復現依其對 ULIP-2 的繼承關係，將 U-34 判讀為 `frozen`（2026-08-16，confidence: moderate）。第三個等級不是並列的另一種讀法，而是 RA-3 的 alternative 稽核對象：
 
 | 等級 | 訓練什麼 | 4090 可行 | 定位 |
 |---|---|---|---|
@@ -374,10 +374,15 @@ text encoder** in OpenCLIP」，那**不是原文**——它把上面兩句併�
 > 那比較像是它自己對不上自己的論文。
 > **這正是這個專案一直在防的錯誤，只是這次是我犯的。**
 
-至於 MetaFind 是否要求解凍 CLIP —— **[未定 U-34]**。
+至於 MetaFind 是否要求解凍 CLIP —— **U-34，2026-08-16 判定為 `frozen`**。
 §2.6 寫 "Both query and gallery encoders are trained"、§3.4 寫 "fine-tuning the
 **entire** encoder"、§2.4 還特地與「凍結 text/image encoder 的既有做法」對比；
-但它**從未逐個 module 說誰訓練**。所以 D-1 是不是偏離，取決於 U-34。
+但它**從未逐個 module 說誰訓練**。這三句都不足以推出 CLIP 被訓練：§2.6 講的是**塔**
+（PointBERT／projection／fusion 本來就在 optimizer 裡，兩種讀法下都成立），
+§3.4 對比的是 fuser-only ablation（光是 point encoder 可訓練就造成這個對比），
+§2.4 與 §2.6 的差異是 Stage 1／Stage 2 的界線。
+**判讀依據**：MetaFind 明確建立於 ULIP-2；ULIP-2 §3.3 明文 "freeze it during pre-training"；MetaFind 全文未逐 module 聲明改變此策略。**不得寫成「MetaFind 明文說 OpenCLIP frozen」** —— 論文沒有這句。重開條件：取得官方 code 或作者回覆，證實 optimizer 更新到 OpenCLIP 參數。
+
 報告中須聲明「entire encoder」在我們的設定下指 3D encoder + fusion，不含 CLIP。
 
 **只有「點雲」的 embedding 快取限定 `fuser_only` 那一列。**

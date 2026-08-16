@@ -257,8 +257,11 @@ nodes:
     precondition: "annotations and renders exist for the admitted set"
     postcondition: >
       stage1_encoding_protocol.status == resolved, naming text_serialization,
-      image_aggregation, paper_clip_train_scope, actual_clip_train_scope and
-      missing_modality_representation.
+      image_aggregation, paper_clip_train_scope, actual_clip_train_scope,
+      missing_modality_representation, and -- for the CLIP scope -- the
+      paper_clip_train_scope_basis and paper_clip_train_scope_confidence that
+      the report has to cite. A scope recorded with an empty basis is a
+      decision with no provenance, and n21 would have nothing to quote.
     deterministic: false
     idempotent: false
     idempotency_mechanism: N/A
@@ -266,7 +269,7 @@ nodes:
     failure:
       classes: [HUMAN_RECOVERABLE]
       policies:
-        - {class: HUMAN_RECOVERABLE, action: interrupt, max_attempts: 3, backoff: fixed, on_exhausted: HALT_BLOCKED, record_fields: [status, text_serialization, image_aggregation, paper_clip_train_scope, actual_clip_train_scope, missing_modality_representation]}
+        - {class: HUMAN_RECOVERABLE, action: interrupt, max_attempts: 3, backoff: fixed, on_exhausted: HALT_BLOCKED, record_fields: [status, text_serialization, image_aggregation, paper_clip_train_scope, paper_clip_train_scope_basis, paper_clip_train_scope_confidence, actual_clip_train_scope, missing_modality_representation]}
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
@@ -277,11 +280,16 @@ nodes:
         U-15 text_serialization  the exact string the encoder sees
         U-14 image_aggregation   how 11 views become one e_image; a per-step
              choice cannot be honoured once the cache holds one vector
-        U-34 paper_clip_train_scope   our reading of what MetaFind requires
-        U-34 actual_clip_train_scope  what this run does. Under `trainable`
-             nothing may be cached at all, because gradient has to reach
-             OpenCLIP. Only this one branches the graph; D-1 is the GAP
-             between the two and was inexpressible while they were one field
+        U-34 paper_clip_train_scope / actual_clip_train_scope
+             RESOLVED 2026-08-16, both = frozen. n05b RECORDS that decision
+             together with its basis and confidence; it no longer chooses it.
+             The two fields stay separate because D-1 is the GAP between them
+             and was inexpressible while they were one field -- keeping both
+             is provenance and a reopen path, not evidence that the question
+             is still open. `trainable` remains an explicit ALTERNATIVE audit
+             configuration (RA-3), not an unresolved mainline reading. Under
+             `trainable` nothing may be cached at all, because gradient has to
+             reach OpenCLIP; only this one branches the graph
         U-11 missing_modality_representation  how an absent modality is
              represented. 2.6 only rules out zero-padding; it never says what
              replaces it, and `learned_token` was being chosen by a
@@ -577,7 +585,7 @@ nodes:
       IS that 8.7 row, installed as the primary path.
       train_scope has three values: fuser_only (the Table 3 ablation),
       point_encoder_and_fuser (the main line), full (includes CLIP, not feasible
-      on 24 GB -- see D-1 and RA-3).
+      on 24 GB. That is an ALTERNATIVE RA-3 feasibility configuration, not the mainline: U-34 is resolved frozen, so D-1 is inactive and feasibility is measured rather than assumed either way.)
       Loss is Eq. 5, one-directional. ULIP's ULIPWithImageLoss is a single-tower
       tri-modal objective and cannot be reused.
       [U-34] Reads renders and objaverse_annotations as well as the cache,
@@ -1054,7 +1062,7 @@ nodes:
     role: evaluate
     purpose: "Give every table cell exactly one of three verdicts."
     decomposition_rationale: [N4_independent_observability, N5_gate_point]
-    reads: [aggregated_tables, retrieval_metrics, judge_scores, equivariance_report, degraded_flags, variant_status, eval_protocols]
+    reads: [aggregated_tables, retrieval_metrics, judge_scores, equivariance_report, degraded_flags, variant_status, eval_protocols, stage1_encoding_protocol]
     writes: [comparison_results, report_staging, run_progress]
     postcondition: "SC-1..SC-8 each evaluated with a recorded observed value and delta"
     deterministic: true
