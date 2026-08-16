@@ -745,8 +745,17 @@ curated collection of more than **3,000 unique assets**」。查下去之後，
 ```
 ai2thor            5.0.0
 CloudRendering     thor-CloudRendering-f0825767cd50d69f666c7f282e54abfe58f1e917
-procthor-10k       train 10,000 / val 1,000 / test 1,000
+procthor-10k       allenai/procthor-10k @ 439193522244720b86d8c81cde2e51e3a4d150cf
+                   （"update procthor-10k"；train 10,000 / val 1,000 / test 1,000）
 ```
+
+`prior` 下載的其實是一個 **git repo**，所以資料集有精確的 commit 可引用，
+不必只寫「10k/1k/1k」。它的 `README.md` 與 `main.py` 都**沒有提到資產數**，
+`main.py` 只是解壓那三個 `.jsonl.gz`。
+
+順帶一提，我先前拿來對照的舊 revision `ab3cacd0` 是 `4391935` 的**前兩個 commit**，
+而 `4391935` 的訊息正是「update procthor-10k」——**資料確實被改過**。
+但兩個版本的資產集合完全相同（1,467／93），所以那次更新沒有動到資產。
 
 ### 排除掉的三個解釋
 
