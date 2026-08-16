@@ -226,7 +226,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 
 | 節點 | 狀態 | 程式 |
 |---|---|---|
-| `n01_env_bootstrap` | **可執行** | `setup/01_storage.sh`、`02_conda_env.sh`、`03_verify_env.py`（7/7 通過） |
+| `n01_env_bootstrap` | **可執行** | `setup/01_storage.sh`、`02_conda_env.sh`、`03_verify_env.py`（10/10 通過，含 AI2-THOR headless 渲染與 procthor-10k 載入） |
 | `n02_download` | ✅ **完成** | `metafind/data/download.py`。46,052 個 GLB（351 GB）、0 失敗 |
 | `n03_sample_pointclouds` | ✅ **完成** | `metafind/data/pointclouds.py`。46,052 朵點雲（5.6 GB）、**0 隔離**；顏色對照官方 ULIP 雲平均差 0.0021；19 條測試 |
 | `n04_render_views` | ✅ **完成** | `metafind/data/renders.py`。45,955 個資產（7.3 GB）、**隔離率 0.21%**（G3 門檻 2%）；11 張視圖全相異且無空白；11 條測試 |

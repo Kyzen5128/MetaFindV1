@@ -83,6 +83,21 @@ $PIP install trimesh scipy objaverse
 echo "==> Qwen 標註（本地 VLM）"
 $PIP install "transformers>=4.51" accelerate qwen-vl-utils pillow
 
+echo "==> ProcTHOR / AI2-THOR（場景資料集與 Stage 2 的資產模態）"
+# `prior` 下載 procthor-10k；`ai2thor` 是實際渲染它的 Unity 應用。
+# 版本不是隨意的：procthor-10k 的目前 revision 要求 AI2-THOR 5.0+，
+# 而 F24／F25 的所有實測數字都綁在這個 build 上。
+#   ai2thor 5.0.0
+#   CloudRendering  thor-CloudRendering-f0825767cd50d69f666c7f282e54abfe58f1e917
+#   procthor-10k    allenai/procthor-10k @ 439193522244720b86d8c81cde2e51e3a4d150cf
+# Unity build（約 800 MB）預設下載到 ~/.ai2thor，也就是根目錄。
+# 這裡先把它導到資料碟，理由與 HF_HOME 相同（見 01_storage.sh）。
+if [[ ! -e "$HOME/.ai2thor" ]]; then
+  mkdir -p "${ROOT}/ai2thor"
+  ln -s "${ROOT}/ai2thor" "$HOME/.ai2thor"
+fi
+$PIP install "ai2thor>=5.0,<6" prior
+
 echo "==> 工程支撐：sidecar / progress / 測試"
 $PIP install tqdm orjson pandas pyarrow filelock pytest pytest-xdist rich
 

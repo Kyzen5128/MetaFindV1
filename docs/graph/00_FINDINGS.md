@@ -740,6 +740,8 @@ curated collection of more than **3,000 unique assets**」。查下去之後，
 | 本機 build 的資產庫 | **1,934** | — | `controller.step(action="GetAssetDatabase")` |
 | 12,000 間房子實際用到 | **1,467** | **93** | 掃 train 10k + val 1k + test 1k 全部 `assetId` |
 
+**注意**：`GetAssetDatabase` 屬於 **procedural API**，在 `FloorPlan1` 這種手工做的 iTHOR 場景上會回傳空的。n01 的驗證第一版用了 `FloorPlan1` 因而失敗 —— 那次失敗同時也證實了 1,934 是在正確的情境下量到的。
+
 **可重現性**：以上兩個實測值綁定這個 build ——
 
 ```

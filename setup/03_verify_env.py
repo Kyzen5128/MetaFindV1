@@ -48,7 +48,15 @@ if _CACHE.parent.exists():
 RESULTS: list[tuple[str, bool, str]] = []
 
 
-def check(name: str):
+# Decorated checks register themselves here. main() used to call them from a
+# hand-written tuple, which meant a check could be written, decorated, and never
+# run -- exactly what happened when L1-ENV-THOR was added and silently skipped.
+# A test that does not run is worse than a missing one: the report says PASS for
+# everything it did run and nothing says the list got shorter.
+REGISTRY: list[tuple] = []
+
+
+def check(name: str, full_only: bool = False):
     """Decorator that records pass/fail instead of aborting on the first failure."""
 
     def deco(fn):
@@ -61,6 +69,7 @@ def check(name: str):
                 if os.environ.get("METAFIND_VERBOSE"):
                     traceback.print_exc()
 
+        REGISTRY.append((name, wrapped, full_only))
         return wrapped
 
     return deco
@@ -282,7 +291,7 @@ def t_storage():
     return f"{target}, {free_gb:.0f}GB free, HF_HOME+TORCH_HOME on data volume"
 
 
-@check("L1-ENV-ULIP   ULIP-2 model builds, pc_projection is 1280-d")
+@check("L1-ENV-ULIP   ULIP-2 model builds, pc_projection is 1280-d", full_only=True)
 def t_ulip():
     import torch
 
@@ -325,15 +334,86 @@ def t_ulip():
 # --------------------------------------------------------------------------- main
 
 
+@check("L1-ENV-THOR   AI2-THOR renders headless on the pinned build")
+def t_ai2thor():
+    """Importing ai2thor proves nothing -- the Unity build has to actually run.
+
+    n07b, and therefore the whole Stage 2 target-modality branch, depends on
+    CloudRendering working without an X server. That fails for reasons import
+    cannot see: a missing build, a GPU the runtime will not take, a driver
+    mismatch. It is cheap to find out here and expensive to find out inside a
+    1,467-asset render loop.
+
+    The build hash is asserted because F24 and F25's measurements are pinned to
+    it: 1,934 asset-database entries, and the isolated-render recipe. A
+    different build could change both without changing any number we print.
+    """
+    import ai2thor
+    from ai2thor.controller import Controller
+    from ai2thor.platform import CloudRendering
+
+    assert ai2thor.__version__.startswith("5."), (
+        f"procthor-10k's current revision needs AI2-THOR 5.0+, got {ai2thor.__version__}"
+    )
+
+    thor_home = Path.home() / ".ai2thor"
+    assert thor_home.is_symlink(), (
+        f"{thor_home} is not a symlink; the ~800MB Unity build would land on /"
+    )
+
+    # MEASURED: GetAssetDatabase returns nothing on a hand-authored iTHOR scene
+    # such as FloorPlan1 -- it belongs to the PROCEDURAL API, so the scene has to
+    # be a ProcTHOR house. The first version of this check used FloorPlan1 and
+    # failed for that reason, which also confirms F25's 1,934 was measured in the
+    # right context.
+    import json
+
+    house_path = Path(os.environ.get("METAFIND_DATA", REPO / "data")) / \
+        "datasets" / "procthor-10k" / "train.jsonl"
+    if not house_path.exists():
+        return f"{ai2thor.__version__}, skipped the render probe (no procthor-10k yet)"
+    with house_path.open() as fh:
+        house = json.loads(fh.readline())
+
+    c = Controller(scene=house, platform=CloudRendering,
+                   width=64, height=64, quality="Low")
+    try:
+        frame = c.last_event.frame
+        assert frame is not None and frame.shape == (64, 64, 3), (
+            f"CloudRendering returned {None if frame is None else frame.shape}"
+        )
+        db = c.step(action="GetAssetDatabase").metadata["actionReturn"]
+        assert db, "GetAssetDatabase returned nothing"
+        # Reported, not asserted: U-08c's whole point is that this count is
+        # derived per build rather than fixed. F25 recorded 1934 on
+        # thor-CloudRendering-f0825767cd50d69f666c7f282e54abfe58f1e917.
+        return f"{ai2thor.__version__}, {len(db)} assets in the database"
+    finally:
+        c.stop()
+
+
+@check("L1-ENV-PRIOR  procthor-10k loads at the pinned revision")
+def t_prior():
+    import prior
+
+    ds = prior.load_dataset("procthor-10k")
+    sizes = {k: len(ds[k]) for k in ("train", "val", "test")}
+    assert sizes == {"train": 10000, "val": 1000, "test": 1000}, sizes
+    return f"{sum(sizes.values()):,} houses"
+
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--full", action="store_true", help="include the ~10GB ViT-bigG-14 download")
     args = ap.parse_args()
 
-    for fn in (t_torch, t_patch, t_fps, t_vendor, t_egnn, t_equivar, t_determinism, t_storage):
+    skipped = []
+    for name, fn, full_only in REGISTRY:
+        if full_only and not args.full:
+            skipped.append(name)
+            continue
         fn()
-    if args.full:
-        t_ulip()
 
     width = max(len(n) for n, _, _ in RESULTS)
     print("\nn01_env_bootstrap -- verification")
@@ -347,8 +427,9 @@ def main() -> int:
         print(f"\n{len(failed)} check(s) failed: {', '.join(failed)}")
         print("Per graph spec: n01 failures are DETERMINISTIC_INPUT -- do NOT retry, fix versions.")
         return 2
-    if not args.full:
-        print("\nNote: L1-ENV-ULIP skipped. Re-run with --full once you are ready to")
+    if skipped:
+        print(f"\nNote: skipped {', '.join(s.split()[0] for s in skipped)}. "
+              "Re-run with --full once you are ready to")
         print("      download ViT-bigG-14 (~10GB into data/cache/hf).")
     print("\nn01_env_bootstrap postcondition satisfied.")
     return 0
