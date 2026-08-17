@@ -105,6 +105,25 @@ def _stdout_writable() -> bool:
         return False
 
 
+def train_metrics(run: str, **fields: Any) -> None:
+    """One row per logged training step, for plotting afterwards.
+
+    Separate from ``cost_ledger`` because these are per-STEP and there are
+    thousands of them, while the ledger is one row per node run. Separate from
+    stdout because a printed line is not data: "loss 3.9214" scrolls past and
+    cannot be plotted, differenced, or compared against the previous run.
+
+    ``run`` names the file, so Stage 1, a Stage 2 variant and a re-run at a new
+    seed each land in their own series and can be drawn on one axis.
+
+    Every field is optional and written as given. A metric that only exists in
+    one stage -- ``lambda`` in Stage 2, ``acc_g2q`` in the bidirectional loss --
+    simply appears in the rows where it applies, and the plotter skips the rest.
+    """
+    _append(paths.LOGS / f"train_{run}.jsonl",
+            {"ts": time.time(), **fields})
+
+
 def cost_ledger(**resources: float) -> None:
     """Append to cost_ledger. merge is numeric_add, so partial runs accumulate."""
     _append(paths.LOGS / "cost_ledger.jsonl",

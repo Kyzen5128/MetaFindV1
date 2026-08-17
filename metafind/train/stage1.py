@@ -417,6 +417,21 @@ def main() -> int:
                 sched.step()
                 step += 1
 
+                if step % 20 == 0:
+                    # Written every 20 steps, printed every 100. The file is
+                    # what gets plotted, and a curve sampled at 100 hides the
+                    # early collapse that matters most -- the first few hundred
+                    # steps are where a broken loss or a runaway temperature
+                    # shows, and by step 100 it is one point.
+                    runlog.train_metrics(
+                        "stage1", epoch=epoch, step=step,
+                        loss=round(out["loss"].item(), 6),
+                        acc_q2g=round(out.get("acc_q2g", torch.tensor(0.0)).item(), 6),
+                        tau=round(loss_fn.temperature.item(), 6),
+                        lr=round(sched.get_last_lr()[0], 8),
+                        grad_norm=round(float(sum(
+                            p.grad.norm().item() ** 2 for p in params
+                            if p.grad is not None) ** 0.5), 6))
                 if step % 100 == 0:
                     print(f"  epoch {epoch} step {step}: loss {out['loss'].item():.4f}, "
                           f"acc {out.get('acc_q2g', torch.tensor(0.0)).item():.3f}, "

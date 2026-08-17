@@ -604,6 +604,22 @@ def main() -> int:
                 opt.step()
                 step += 1
 
+                if step % 20 == 0:
+                    runlog.train_metrics(
+                        f"stage2_{args.variant}", epoch=epoch, step=step,
+                        loss=round(out["loss"].item(), 6),
+                        loss_q2g=round(out["loss_q2g"].item(), 6),
+                        loss_g2q=round(out["loss_g2q"].item(), 6),
+                        acc_q2g=round(out.get("acc_q2g", torch.tensor(0.0)).item(), 6),
+                        tau=round(loss_fn.temperature.item(), 6),
+                        # Eq. 6's learnable scalar. Watching it is the cheapest
+                        # read on whether the layout branch is contributing at
+                        # all: if lambda decays toward zero the model is
+                        # learning to ignore ESSGNN, which is a result about the
+                        # method and not a bug to hide.
+                        **({"lam": round(model.query.lam.item(), 6)}
+                           if model.query.layout_encoder is not None else {}),
+                        layout_dropped=int(drop))
                 if step % 50 == 0:
                     print(f"  epoch {epoch} step {step}: loss {out['loss'].item():.4f}, "
                           f"tau {loss_fn.temperature.item():.4f}, "

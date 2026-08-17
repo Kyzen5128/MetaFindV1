@@ -24,8 +24,17 @@ mkdir -p "$LOGS"
 
 say() { echo "[$(date '+%F %H:%M:%S')] $*"; }
 
+# Plot before exiting on failure too. A run that went wrong is exactly the one
+# worth looking at, and the curves are often what SAYS what went wrong -- a loss
+# that never moved, a temperature that ran away. An earlier version put the plot
+# call after the last check, so the only path that skipped it was the failing
+# one.
+curves() { $PY "$REPO/tools/plot_training.py" 2>&1 | sed 's/^/  /'; }
+
 die() {
     say "STOPPED: $*"
+    curves
+    say "curves (such as they are) -> $OUT/training_curves.html"
     say "nothing after this point ran"
     exit 1
 }
@@ -101,6 +110,10 @@ assert n["backbone_trainable_state"] > 1_000_000, (
 rec = json.loads((paths.CHECKPOINTS / "stage1_ckpt.json").read_text())
 print(f"  record: {rec['n_params_saved']:,} params, {rec['size_bytes']/1e6:.0f} MB")
 CHECK
+
+# ---------------------------------------------------------------- curves
+curves
+say "curves -> $OUT/training_curves.html"
 
 say "=== all three steps finished and verified ==="
 say "next, and NOT automated: n11 gallery index, then n13"
