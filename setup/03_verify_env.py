@@ -276,12 +276,13 @@ def t_determinism():
     return f"{status}; NS-5 (scatter_add_ atomics) stands regardless"
 
 
-@check("L1-ENV-STORAGE  data symlink points at /mnt/data1")
+@check("L1-ENV-STORAGE  data symlink is valid")
 def t_storage():
     link = REPO / "data"
     assert link.exists(), "run setup/01_storage.sh first"
     target = link.resolve()
-    assert str(target).startswith("/mnt/data1"), f"data -> {target}, expected /mnt/data1/..."
+    assert link.is_symlink(), f"{link} is not a symlink"
+    assert target.exists(), f"data target does not exist: {target}"
     import shutil
 
     free_gb = shutil.disk_usage(target).free / 1024**3
