@@ -72,13 +72,16 @@ import numpy as np
 import torch
 from torch import Tensor
 
+from metafind import paths
+
 __all__ = ["BackboneConfig", "ULIPBackbone", "pc_norm"]
 
-DEFAULT_CKPT = (
-    Path(__file__).resolve().parents[2]
-    / "data/sources/ulip2/ULIP-2/pretrained_models"
-    / "ULIP-2-PointBERT-10k-xyzrgb-pc-vit_g-objaverse_shapenet-pretrained.pt"
-)
+# From paths, NOT recomputed here. This used to build its own string ending in
+# `data/sources/ulip2/...` while n02_download writes to `paths.ULIP2_CKPT`, which
+# is `data/models/ulip2/...`. The 402 MB file had been on disk since 2026-08-15
+# and every consumer reported it missing -- two spellings of one location, and
+# nothing compared them because each side was internally consistent.
+DEFAULT_CKPT = paths.ULIP2_CKPT
 ULIP_REPO = Path(__file__).resolve().parents[1] / "vendor" / "ulip"
 
 EMBED_DIM = 1280  # open_clip ViT-bigG-14 (finding F2)
