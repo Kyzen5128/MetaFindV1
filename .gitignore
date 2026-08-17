@@ -45,3 +45,8 @@ docs/paper/*_source/**/*.png
 docs/paper/*_source/**/*.jpg
 docs/paper/*_source/**/*.eps
 graphify-out/
+
+# Local Claude / Graphify settings
+CLAUDE.md
+.claude/
+graphify-out/
