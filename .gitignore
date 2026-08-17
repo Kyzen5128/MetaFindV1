@@ -44,3 +44,4 @@ docs/paper/*_source/**/*.pdf
 docs/paper/*_source/**/*.png
 docs/paper/*_source/**/*.jpg
 docs/paper/*_source/**/*.eps
+graphify-out/
