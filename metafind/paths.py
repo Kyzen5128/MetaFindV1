@@ -1,6 +1,7 @@
 """Every path the project uses, in one place.
 
-Layout under ``data/`` (a symlink to /mnt/data1/kyzen/MetaFind)::
+Layout under ``data/`` -- the repo directory itself, or a symlink to
+wherever ``METAFIND_DATA`` points::
 
     datasets/           raw data, exactly as the paper names it
       objaverse-lvis/     46,052 GLB assets + the uid manifest
@@ -107,3 +108,26 @@ def describe() -> str:
         ("outputs", OUTPUTS),
     ]
     return "\n".join(f"  {name:28s} {size(path):>8s}" for name, path in rows)
+
+
+def _shell_exports() -> str:
+    """Every root as `NAME=value` lines, for `eval "$(python -m metafind.paths)"`.
+
+    The shell scripts used to spell the data root themselves. Six of them did,
+    all with the previous machine's `/mnt/data1/kyzen/MetaFind`, so on any other
+    machine `tools/status.sh` reported every stage as 0 complete and the setup
+    scripts tried to chown a directory belonging to another user. Python code
+    was never affected -- it imports this module -- which is exactly why the
+    drift went unnoticed: the pipeline ran while the scripts that observe it
+    pointed somewhere else.
+    """
+    return "\n".join(f"METAFIND_{k}={v}" for k, v in (
+        ("DATA", DATA), ("DATASETS", DATASETS), ("OBJAVERSE", OBJAVERSE),
+        ("PROCTHOR", PROCTHOR), ("MODELS", MODELS), ("HF_CACHE", HF_CACHE),
+        ("OUTPUTS", OUTPUTS), ("LOGS", LOGS), ("CHECKPOINTS", CHECKPOINTS),
+        ("REPO", REPO),
+    ))
+
+
+if __name__ == "__main__":
+    print(_shell_exports())

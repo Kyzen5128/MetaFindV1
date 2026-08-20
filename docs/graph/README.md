@@ -1,6 +1,6 @@
 # MetaFind 復現 — 設計文件
 
-依 `graph-engineering` 方法產出，用於在單張 RTX 4090 上復現
+依 `graph-engineering` 方法產出，用於在單張 RTX 4090（此處的 `RTX 4090` 為前一台機器；本機實測為 RTX 5090 32GB，凡以 24GB 為前提的可行性判斷都要重新量測） 上復現
 [MetaFind](../paper/metafind_source/)（作者 arXiv TeX）。
 
 **2026-08-15 全面改寫。** 先前的草稿有六個會實際改變實驗結果的錯誤（最嚴重的一個
@@ -243,7 +243,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | `n03_sample_pointclouds` | ✅ **完成** | `metafind/data/pointclouds.py`。46,052 朵點雲（5.6 GB）、**0 隔離**；顏色對照官方 ULIP 雲平均差 0.0021；19 條測試 |
 | `n04_render_views` | ✅ **完成** | `metafind/data/renders.py`。45,955 個資產（7.3 GB）、**隔離率 0.21%**（G3 門檻 2%）；11 張視圖全相異且無空白；11 條測試 |
 | `n05_annotate` | **可執行** | `metafind/data/annotate.py`（schema／prompt，27 條測試）＋ `annotate_run.py`（Qwen2.5-VL 生成與 C1 修復迴圈）。全量尚未跑完 |
-| `n07_scene_graphs` | **可執行** | `metafind/data/scene_graphs.py`。300 間房、0 隔離、房間對應 100%；support 邊來自 ProcTHOR 的 children 樹，座標保留原始值；16 條測試，兩條負向注入實測會失敗 |
+| `n07_scene_graphs` | ✅ **完成** | `metafind/data/scene_graphs.py`。12,000 間房、0 隔離、房間對應 100%；support 邊來自 ProcTHOR 的 children 樹，座標保留原始值；16 條測試，兩條負向注入實測會失敗 |
 | `n08_semantic_edges` | **可執行** | `metafind/data/semantic_edges.py`（key／prompt／驗證，30 條測試）＋ `semantic_edges_run.py`（Qwen 關係句 ＋ 凍結 CLIP 文字編碼器）。**實測 410 萬條語意邊只有 4,242 組唯一描述配對（快取命中 99.90%）**；三條負向注入實測會失敗。LLM 階段須等 n05 讓出 GPU |
 | `n09c_build_scene_splits` | ✅ **完成** | `metafind/data/scene_splits.py`。9,600 train／2,400 test（80/20，seed 20260816）、**洩漏 0**；13 條測試，負向注入實測會失敗。語意邊覆蓋率待 n08 |
 | `n05b_resolve_stage1_encoding` | **可執行** | `metafind/models/resolve_stage1.py`。釘死 U-15 文字模板（golden-string 測試）、U-14 取 11 視圖平均、U-11 learned token；**U-34 已判定 `frozen`**，連同 basis 與 confidence 一併記錄，主線再無執行期歧義。25 條測試 |
@@ -267,7 +267,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 `metafind/models/`（`essgnn` / `dual_tower` / `fusion` / `losses` / `ulip_backbone` /
 `stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身 ——
 `n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer。
-349 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態（pytest 參數化後展開成 417 個 case），**沒有一條涵蓋任何節點的執行**。
+359 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態（pytest 參數化後展開成 417 個 case），**沒有一條涵蓋任何節點的執行**。
 
 ---
 

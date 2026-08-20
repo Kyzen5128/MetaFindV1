@@ -31,10 +31,12 @@ from metafind.models.stage1_config import (
 
 GOLDEN_ANNOTATION = {
     "category": "dining chair",
+    "synset": "chair.n.01",
     "description": "A wooden dining chair with a slatted back and four tapered legs",
-    "dimensions": {"length_m": 0.45, "width_m": 0.5, "height_m": 0.9},
+    "width": 50.0, "length": 45.0, "height": 90.0,
+    "mass": 6.0,
     "materials": ["wood", "fabric"],
-    "placement_constraints": ["floor"],
+    "onCeiling": False, "onWall": False, "onFloor": True, "onObject": False,
 }
 
 # [L1-TEXT-SERIALIZATION] The golden string. If this test fails, either the
@@ -44,8 +46,8 @@ GOLDEN_ANNOTATION = {
 GOLDEN_STRING = (
     "A wooden dining chair with a slatted back and four tapered legs. "
     "A dining chair made of wood, fabric, "
-    "roughly 0.45 by 0.50 by 0.90 metres, "
-    "typically placed floor."
+    "roughly 50 by 45 by 90 centimetres, "
+    "typically placed on the floor."
 )
 
 
@@ -81,12 +83,26 @@ def test_a_description_already_ending_in_a_period_gains_no_second_one():
     assert serialize_annotation(ann).startswith("A plain stool. A dining chair")
 
 
-def test_multiple_placement_values_read_as_prose():
-    ann = dict(GOLDEN_ANNOTATION, placement_constraints=["tabletop", "wall_mounted"])
-    assert "typically placed tabletop or wall mounted." in serialize_annotation(ann)
+def test_two_placement_flags_read_as_prose():
+    """[PAPER Figure 2] The flags are independent, so combinations are normal.
+
+    A book is on a table or a shelf but can also sit on the floor: onFloor and
+    onObject are both true and the sentence has to say so without reading as a
+    serialised list.
+    """
+    ann = dict(GOLDEN_ANNOTATION, onFloor=True, onObject=True)
+    assert "typically placed on the floor or on other objects." in serialize_annotation(ann)
 
 
-@pytest.mark.parametrize("field", ["materials", "placement_constraints"])
+def test_all_flags_false_reads_as_prose_not_as_an_error():
+    """v1 demanded a positive placement value and `unconstrained` absorbed
+    30.7% of the corpus. An abstract shape genuinely belongs nowhere."""
+    ann = dict(GOLDEN_ANNOTATION, onFloor=False, onObject=False,
+               onWall=False, onCeiling=False)
+    assert "with no typical placement." in serialize_annotation(ann)
+
+
+@pytest.mark.parametrize("field", ["materials"])
 def test_an_empty_list_field_is_refused_not_rendered_as_punctuation(field):
     """"made of ," and "typically placed ." encode fine and rank badly.
 
@@ -99,8 +115,12 @@ def test_an_empty_list_field_is_refused_not_rendered_as_punctuation(field):
 
 
 def test_underscores_never_reach_the_encoder():
-    ann = dict(GOLDEN_ANNOTATION, placement_constraints=["ceiling_mounted"])
-    assert "_" not in serialize_annotation(ann)
+    """The flag NAMES are camelCase identifiers (`onCeiling`); the sentence must
+    carry their prose rendering, never the identifier."""
+    ann = dict(GOLDEN_ANNOTATION, onFloor=False, onCeiling=True)
+    out = serialize_annotation(ann)
+    assert "_" not in out and "onCeiling" not in out
+    assert "typically mounted on a ceiling." in out
 
 
 # --- the 77-token budget ---------------------------------------------------
@@ -114,7 +134,7 @@ def test_an_overlong_description_is_capped_at_a_word_boundary():
     """
     ann = dict(GOLDEN_ANNOTATION, description="wooden " * 200)
     out = serialize_annotation(ann)
-    assert "typically placed floor." in out
+    assert "typically placed on the floor." in out
     assert len(out) < 400
     # capped at a boundary, not mid-word
     assert "wooden woode." not in out

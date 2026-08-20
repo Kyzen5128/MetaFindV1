@@ -18,7 +18,11 @@ set -euo pipefail
 
 ENV_NAME=MetaFind
 PY_VER=3.11
-ROOT=/mnt/data1/kyzen/MetaFind
+# Roots come from metafind/paths.py, never spelled here. Six scripts used
+# to hardcode the previous machine's /mnt/data1/kyzen/MetaFind, so on any
+# other checkout they silently observed an empty directory.
+eval "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && ${METAFIND_PYTHON:-python3} -m metafind.paths)"
+ROOT="$METAFIND_DATA"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

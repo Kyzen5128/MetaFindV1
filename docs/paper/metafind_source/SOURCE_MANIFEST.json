@@ -42,5 +42,30 @@
   "3experiments.tex": "26a8e3102d46abda511c6cda131fb652c00c166b1619367b58816dc3299f99fd",
   "appendix.tex": "f7b7120e9a0b300f3a734258c8e642ae4d8613af3295861965d7db944f014036",
   "4backgound.tex": "b54e4176f975b4d88351003a5dac2e3f8c9d467b4ee8cdc27ad478c8852f59e0"
- }
+ },
+ "referenced_figures": [
+  "MetaFind.drawio.png",
+  "data-preprocess.png",
+  "scene1_no_essgnn.png",
+  "scene1_with_essgnn.png",
+  "scene2_no_essgnn.png",
+  "scene2_with_essgnn.png"
+ ],
+ "figure_sha256": {
+  "MetaFind.drawio.png": "65d2a356678560023a07b9131d71380cb6c447cf46cac0112c6410b57fc893c5",
+  "data-preprocess.png": "775fbd85d4579baa676a5f0029f73ef5c6080227be9260f8053402ac4ad522dc",
+  "scene1_no_essgnn.png": "ca7947a536c816b86404df5ed18950fb8dced0a67315e404c88fe466f4df1fd6",
+  "scene1_with_essgnn.png": "09305e4de64b6a8460a8d0446dcb7c0d15978dde21fd5dc7874fe673930f6400",
+  "scene2_no_essgnn.png": "3a5fbc2a63b8b5fd2ac35207ce1188245d46a221a95c1d9d363451806fc09981",
+  "scene2_with_essgnn.png": "f95e4f6214550380ca2af983a7d1d2c421189b5e6986ef24e0d990392bd7ace9"
+ },
+ "images_in_archive": [
+  "MetaFind.drawio.png",
+  "data-preprocess.png",
+  "scene1_no_essgnn.png",
+  "scene1_with_essgnn.png",
+  "scene2_no_essgnn.png",
+  "scene2_with_essgnn.png"
+ ],
+ "missing_figures": []
 }

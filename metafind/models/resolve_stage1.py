@@ -95,9 +95,37 @@ TEXT_SERIALIZATION = "metafind_v1_natural"
 # description first because it is the part a caption-trained encoder reads best.
 TEXT_TEMPLATE = (
     "{description} A {category} made of {materials}, "
-    "roughly {length:.2f} by {width:.2f} by {height:.2f} metres, "
-    "typically placed {placement}."
+    "roughly {width:.0f} by {length:.0f} by {height:.0f} centimetres, "
+    "{placement}."
 )
+
+# [U-15, IMPLEMENTATION CHOICE -- CONFIRM BEFORE THE FULL RUN]
+# Paper Figure 2 gives the annotation SCHEMA but nothing about how it becomes
+# the string CLIP sees, so this template is ours. Three fields the figure
+# prints are deliberately NOT serialised:
+#
+#   synset   an identifier, not language. "robot.n.01" is noise to a text tower
+#            trained on captions, and it costs tokens inside a 77-token budget.
+#   volume   redundant -- it is width * length * height, already in the string.
+#   mass     kept on disk, left out of the text. Unlike the size numbers, whose
+#            PROPORTIONS are visually grounded (MEASURED r = 0.52-0.62 against
+#            the mesh bounding box), mass has no visual support of any kind and
+#            no ground truth in Objaverse.
+#
+# All three stay in the annotation record; only the encoder input omits them.
+PLACEMENT_PHRASES = {
+    # Rendered from the four independent booleans, so the sentence says exactly
+    # what the annotation says. v1 flattened an 8-label list into "typically
+    # placed handheld", which is where "gaming chair ... typically placed
+    # handheld" reached CLIP.
+    ("onCeiling",): "typically mounted on a ceiling",
+    ("onWall",): "typically mounted on a wall",
+    ("onFloor",): "typically placed on the floor",
+    ("onObject",): "typically placed on top of other objects",
+    ("onFloor", "onObject"): "typically placed on the floor or on other objects",
+    ("onWall", "onCeiling"): "typically mounted on a wall or ceiling",
+}
+NO_PLACEMENT_PHRASE = "with no typical placement"
 
 # CLIP's text tower truncates at 77 tokens SILENTLY, and the description leads
 # the sentence -- so an overlong one does not lose itself, it loses the TAIL,
@@ -261,16 +289,11 @@ def serialize_annotation(annotation: dict, template: str = TEXT_TEMPLATE) -> str
     # placed .", which encodes fine, ranks badly, and looks like nothing is
     # wrong. A guard that depends on a check in another module is a guard that
     # disappears the first time someone calls this function from somewhere else.
-    for field in ("materials", "placement_constraints"):
-        if not annotation[field]:
-            raise ValueError(f"`{field}` is empty; the serialized string would "
-                             "be malformed rather than merely short")
+    if not annotation["materials"]:
+        raise ValueError("`materials` is empty; the serialized string would "
+                         "be malformed rather than merely short")
 
-    dims = annotation["dimensions"]
     materials = ", ".join(annotation["materials"][:MAX_MATERIALS])
-    placement = annotation["placement_constraints"][:MAX_PLACEMENT]
-    placement_text = (placement[0].replace("_", " ") if len(placement) == 1
-                      else " or ".join(p.replace("_", " ") for p in placement))
     description = _cap(annotation["description"].strip(), MAX_DESCRIPTION_CHARS)
     if description and not description.endswith("."):
         description += "."
@@ -278,9 +301,34 @@ def serialize_annotation(annotation: dict, template: str = TEXT_TEMPLATE) -> str
         description=description,
         category=_cap(annotation["category"], MAX_CATEGORY_CHARS).rstrip("."),
         materials=materials,
-        length=dims["length_m"], width=dims["width_m"], height=dims["height_m"],
-        placement=placement_text,
+        width=annotation["width"],
+        length=annotation["length"],
+        height=annotation["height"],
+        placement=placement_phrase(annotation),
     )
+
+
+def placement_phrase(annotation: dict) -> str:
+    """The four booleans as one clause.
+
+    An all-false annotation is a real answer, not an error: an abstract shape
+    belongs nowhere in particular. It gets NO_PLACEMENT_PHRASE rather than being
+    rejected, which is the opposite of v1, where the schema demanded a positive
+    answer and `unconstrained` absorbed 30.7% of the corpus.
+
+    Combinations outside PLACEMENT_PHRASES fall back to joining the individual
+    phrases, so a new combination reads as prose instead of raising.
+    """
+    on = tuple(f for f in ("onCeiling", "onWall", "onFloor", "onObject")
+               if annotation.get(f))
+    if not on:
+        return NO_PLACEMENT_PHRASE
+    if (phrase := PLACEMENT_PHRASES.get(on)) is not None:
+        return phrase
+    if (phrase := PLACEMENT_PHRASES.get(tuple(sorted(on)))) is not None:
+        return phrase
+    parts = [PLACEMENT_PHRASES[(f,)] for f in on]
+    return parts[0] + " or ".join([""] + [p.split(" ", 2)[-1] for p in parts[1:]])
 
 
 # The reading travels with the decision, because the report has to state it in

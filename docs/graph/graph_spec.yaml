@@ -824,7 +824,7 @@ state:
         OpenCLIP weights. The parameters that actually move are PointBERT
         (32.5M), the projection and the fusion modules -- about 170 MB.
         Table 3 has ten variants plus the main line, so the difference is
-        1.9 GB against 112 GB, and /mnt/data1 is a SHARED volume with 374 GB
+        1.9 GB against 112 GB, and $METAFIND_DATA is a SHARED volume with 374 GB
         free. A checkpoint that includes the frozen tower is also misleading in
         a second way: it looks like a self-contained artifact while silently
         depending on the same pinned weights anyway.

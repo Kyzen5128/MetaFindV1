@@ -84,9 +84,32 @@ def load_stage2_protocols() -> tuple[dict, dict, dict]:
             raise ValueError(f"{name} is {proto.get('status')!r}")
         return proto
 
-    return (read("stage2_protocol.json", "n09b_resolve_stage2_protocol"),
-            read("essgnn_edge_protocol.json", "n09b_resolve_stage2_protocol"),
-            read("essgnn_arch_protocol.json", "n09b_resolve_stage2_protocol"))
+    stage2 = read("stage2_protocol.json", "n09b_resolve_stage2_protocol")
+    edge = read("essgnn_edge_protocol.json", "n09b_resolve_stage2_protocol")
+    arch = read("essgnn_arch_protocol.json", "n09b_resolve_stage2_protocol")
+
+    # `status: resolved` is a CLAIM, and until now nothing checked it on the way
+    # in. n09b validates what it writes, but an artifact written before the code
+    # moved keeps its old contents and its old status: the file on disk said
+    # `resolved` for two days while `ESSGNNConfig.from_protocol` refused it for a
+    # missing `architecture_family`, and the failure would only have surfaced
+    # after Stage 1 finished and Stage 2 started building a model.
+    #
+    # Widths are placeholders -- they come from the checkpoint and the edge
+    # encoder at real construction time, and none of the fields being checked
+    # here depend on them.
+    from metafind.models.essgnn import ESSGNNConfig
+
+    try:
+        ESSGNNConfig.from_protocol(arch, node_feat_dim=1, edge_feat_dim=1, out_dim=1)
+    except (ValueError, KeyError) as exc:
+        raise ValueError(
+            f"essgnn_arch_protocol.json claims status={arch.get('status')!r} but "
+            f"cannot build an ESSGNNConfig: {exc}. The artifact is stale relative "
+            "to the code -- re-run `python -m metafind.models.resolve_stage2`."
+        ) from exc
+
+    return stage2, edge, arch
 
 
 def enumerate_samples(train_houses: list[str], eligible: set[str]) -> list[tuple[str, int, str]]:

@@ -38,5 +38,33 @@
   "main.tex": "fa8d168503a03241e1155ad9dd6fe2a65af1fd2945b9d58a6b35cb60dbf14985",
   "preamble.tex": "ee28998974caf71411898ad1cd8a1dc6d95d58fcf7659d525f4ea1b7dc8c62b4",
   "appendix.tex": "06c1896d308076c6b21bc681047504aceb8139a67cb3f7763e34d30e90a0db6e"
- }
+ },
+ "referenced_figures": [
+  "figures/cvpr_figure1_v3.pdf",
+  "figures/cvpr_figure2.pdf",
+  "figures/updated_figure3.pdf"
+ ],
+ "figure_sha256": {
+  "figures/cvpr_figure1_v3.pdf": "79c23f90e12ef81feb70fc8b807fe814ebd8998a6c4c90ffb99f7d0cb036f54a",
+  "figures/cvpr_figure2.pdf": "76d4cffa24b4da9764e3b3ded615292111a62ad68dae8799e4adc6ca2c587880",
+  "figures/updated_figure3.pdf": "cee6c39f19e19c64b10ccea1f93e72de9e41e7403d89f9eff58c8faf57bd1454"
+ },
+ "images_in_archive": [
+  "figures/cvpr_3d_captioning.pdf",
+  "figures/cvpr_3d_captioning_v2.pdf",
+  "figures/cvpr_figure1.pdf",
+  "figures/cvpr_figure1_v3.pdf",
+  "figures/cvpr_figure2.pdf",
+  "figures/figure1.pdf",
+  "figures/figure1_v2.pdf",
+  "figures/figure1_v3.pdf",
+  "figures/figure2.pdf",
+  "figures/figure2_v2.pdf",
+  "figures/figure2_v3.pdf",
+  "figures/figure3.pdf",
+  "figures/sample_ulip_objaverse_triplets.pdf",
+  "figures/sample_ulip_triplets.pdf",
+  "figures/updated_figure3.pdf"
+ ],
+ "missing_figures": []
 }

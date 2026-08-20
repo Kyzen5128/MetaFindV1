@@ -15,7 +15,7 @@ import pytest
 
 from metafind.data.annotate import (
     MAX_ATTEMPTS,
-    PLACEMENT_VOCABULARY,
+    PLACEMENT_FLAGS,
     AnnotationError,
     build_prompt,
     build_repair_prompt,
@@ -27,10 +27,12 @@ from metafind.data.annotate import (
 def _valid(**over):
     obj = {
         "category": "dining chair",
+        "synset": "chair.n.01",
         "description": "A wooden dining chair with a slatted back.",
-        "dimensions": {"length_m": 0.5, "width_m": 0.5, "height_m": 0.9},
+        "width": 50.0, "length": 50.0, "height": 90.0,
+        "mass": 6.0,
         "materials": ["wood", "fabric"],
-        "placement_constraints": ["floor"],
+        "onCeiling": False, "onWall": False, "onFloor": True, "onObject": False,
     }
     obj.update(over)
     return obj
@@ -49,14 +51,19 @@ def test_prompt_says_the_renders_are_scale_normalised():
     p = build_prompt(11).lower()
     assert "scale-normalised" in p or "scale normalised" in p
     assert "not from the picture" in p
-    assert "metres" in p
+    assert "centimetres" in p
 
 
-def test_prompt_lists_the_closed_vocabulary():
-    """A closed set the model is never shown is not closed, only enforced."""
+def test_prompt_names_all_four_placement_flags():
+    """[PAPER Figure 2] Four INDEPENDENT booleans, not a category choice.
+
+    A flag the model is never shown cannot be answered, and v1's single-choice
+    vocabulary is exactly what put `handheld` on a gaming chair.
+    """
     p = build_prompt(11)
-    for term in PLACEMENT_VOCABULARY:
-        assert term in p, term
+    for flag in PLACEMENT_FLAGS:
+        assert flag in p, flag
+    assert "INDEPENDENT" in p
 
 
 def test_prompt_is_stable():
@@ -97,12 +104,25 @@ def test_unparseable_response_names_the_problem():
 def test_a_valid_annotation_passes():
     a = validate_annotation(_valid())
     assert a.category == "dining chair"
-    assert a.dimensions["height_m"] == 0.9
-    assert a.placement_constraints == ["floor"]
+    assert a.synset == "chair.n.01"
+    assert a.height == 90.0
+    assert (a.on_floor, a.on_object, a.on_wall, a.on_ceiling) == (True, False, False, False)
 
 
-@pytest.mark.parametrize("field", ["category", "description", "dimensions",
-                                   "materials", "placement_constraints"])
+def test_volume_is_derived_not_asked():
+    """[PAPER Figure 2] volume 36000 = width 30 * length 30 * height 40.
+
+    Asking the model for a fourth number invites one that disagrees with the
+    other three, with no way afterwards to tell which was wrong.
+    """
+    a = validate_annotation(_valid(width=30, length=30, height=40))
+    assert a.volume == 36000
+    assert "volume" not in build_prompt(11)
+
+
+@pytest.mark.parametrize("field", ["category", "synset", "description", "width",
+                                   "length", "height", "mass", "materials",
+                                   "onCeiling", "onWall", "onFloor", "onObject"])
 def test_each_required_field_missing_is_rejected(field):
     obj = _valid()
     del obj[field]
@@ -110,51 +130,94 @@ def test_each_required_field_missing_is_rejected(field):
         validate_annotation(obj)
 
 
-def test_placement_outside_the_vocabulary_is_rejected():
-    """The whole point of a closed set."""
-    with pytest.raises(AnnotationError, match="not allowed"):
-        validate_annotation(_valid(placement_constraints=["on the roof"]))
+@pytest.mark.parametrize("flag", list(PLACEMENT_FLAGS))
+def test_placement_flags_must_be_booleans(flag):
+    """A string where a boolean belongs is v1's category-choice habit leaking
+    back in. `"onFloor": "yes"` is truthy and would pass a bare `if`."""
+    with pytest.raises(AnnotationError, match="true or false"):
+        validate_annotation(_valid(**{flag: "yes"}))
 
 
-def test_millimetres_are_rejected_with_the_unit_named():
-    """The commonest failure: 900 for a chair rather than 0.9.
+def test_all_four_false_is_accepted():
+    """An abstract shape belongs nowhere in particular, and that is an answer.
 
-    The message must say METRES, because it is fed straight back into the
-    repair prompt and "value out of range" tells the model nothing.
+    v1 demanded a positive value and `unconstrained` absorbed 30.7% of the
+    corpus as a result.
     """
-    with pytest.raises(AnnotationError, match="METRES"):
-        validate_annotation(_valid(dimensions={"length_m": 500, "width_m": 500,
-                                               "height_m": 900}))
+    a = validate_annotation(_valid(onCeiling=False, onWall=False,
+                                   onFloor=False, onObject=False))
+    assert not any((a.on_ceiling, a.on_wall, a.on_floor, a.on_object))
 
 
-@pytest.mark.parametrize("dims", [
-    {"length_m": 0.5, "width_m": 0.5},                       # missing a key
-    {"length_m": "0.5", "width_m": 0.5, "height_m": 0.9},    # string
-    {"length_m": True, "width_m": 0.5, "height_m": 0.9},     # bool is not a number
-    {"length_m": 0.0, "width_m": 0.5, "height_m": 0.9},      # zero
-])
-def test_bad_dimensions_are_rejected(dims):
+def test_all_four_true_is_accepted():
+    """The flags are independent, so every combination is representable."""
+    a = validate_annotation(_valid(onCeiling=True, onWall=True,
+                                   onFloor=True, onObject=True))
+    assert all((a.on_ceiling, a.on_wall, a.on_floor, a.on_object))
+
+
+def test_metres_are_rejected_with_the_unit_named():
+    """v1's failure inverted. That schema was metres and kept receiving
+    millimetres; this one is centimetres and will receive metres -- 0.9 for a
+    chair rather than 90. The message must say CENTIMETRES, because it goes
+    straight back into the repair prompt.
+    """
+    with pytest.raises(AnnotationError, match="CENTIMETRES"):
+        validate_annotation(_valid(width=0.5, length=0.5, height=0.9))
+
+
+@pytest.mark.parametrize("bad", ["0.5", True, 0.0, None])
+def test_bad_dimensions_are_rejected(bad):
     with pytest.raises(AnnotationError):
-        validate_annotation(_valid(dimensions=dims))
+        validate_annotation(_valid(height=bad))
+
+
+@pytest.mark.parametrize("bad", ["2.5", True, 0.0, None])
+def test_bad_mass_is_rejected(bad):
+    with pytest.raises(AnnotationError):
+        validate_annotation(_valid(mass=bad))
+
+
+@pytest.mark.parametrize("bad", ["robot", "robot.n", "robot.x.01", "robot.n.aa"])
+def test_malformed_synset_is_rejected(bad):
+    with pytest.raises(AnnotationError, match="WordNet"):
+        validate_annotation(_valid(synset=bad))
+
+
+def test_synset_shape_is_checked_but_existence_is_not():
+    """No WordNet corpus here, so a well-formed invention passes.
+
+    Recorded rather than hidden: the check is a SHAPE check, and validity is
+    measured downstream instead of being assumed.
+    """
+    a = validate_annotation(_valid(synset="notathing.n.07"))
+    assert a.synset == "notathing.n.07"
 
 
 def test_a_single_string_is_accepted_where_a_list_is_expected():
     """Models return "wood" for a one-material object constantly. Spending a
     repair attempt on that would be spending it on nothing."""
-    a = validate_annotation(_valid(materials="wood", placement_constraints="floor"))
-    assert a.materials == ["wood"] and a.placement_constraints == ["floor"]
+    a = validate_annotation(_valid(materials="wood"))
+    assert a.materials == ["wood"]
 
 
-def test_duplicate_placement_values_are_collapsed():
-    a = validate_annotation(_valid(placement_constraints=["floor", "floor"]))
-    assert a.placement_constraints == ["floor"]
+def test_material_spelling_variants_are_folded():
+    """[MATERIAL_SYNONYMS] v1 emitted `metal` 34.3% AND `metallic` 10.7% as
+    separate tokens; a text encoder reads those as two different materials."""
+    a = validate_annotation(_valid(materials=["Metallic", "metal", "WOODEN"]))
+    assert a.materials == ["metal", "wood"]
 
 
-def test_empty_lists_are_rejected():
+def test_nothing_is_dropped_from_materials():
+    """Only spellings are merged. Deciding what "is not a material" is a
+    judgement the paper does not license, so `textured` survives."""
+    a = validate_annotation(_valid(materials=["textured", "plastic"]))
+    assert a.materials == ["textured", "plastic"]
+
+
+def test_empty_materials_is_rejected():
     with pytest.raises(AnnotationError):
         validate_annotation(_valid(materials=[]))
-    with pytest.raises(AnnotationError):
-        validate_annotation(_valid(placement_constraints=[]))
 
 
 # ------------------------------------------------------ L1-ANNOT-REPAIR

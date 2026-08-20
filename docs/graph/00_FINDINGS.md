@@ -137,7 +137,7 @@ data/dataset_3d.py:544:from torch._six import string_classes
 
 ---
 
-## F5. 單張 RTX 4090 (24GB) vs 官方腳本假設 **8 張 GPU**
+## F5. 單張 RTX 4090（此處的 `RTX 4090` 為前一台機器；本機實測為 RTX 5090 32GB，凡以 24GB 為前提的可行性判斷都要重新量測） (24GB) vs 官方腳本假設 **8 張 GPU**
 
 **證據**
 
@@ -167,13 +167,13 @@ Eq.(5) 的分母 `Σ_{A' ∈ B}` 是 **in-batch negatives** —— 對比學習�
 
 ---
 
-## F6. 磁碟：`/` 吃緊，資料改放 `/mnt/data1` —— 但那是**共用碟**，風險未完全解除
+## F6. 磁碟：`/` 吃緊，資料改放 `$METAFIND_DATA` —— 但那是**共用碟**，風險未完全解除
 
 **證據**
 
 ```
 /dev/mapper/vgubuntu-root  3.6T  3.5T  108G  98% /            ← home 所在，很緊
-/dev/sda1                  3.6T  2.7T  779G  78% /mnt/data1   ← 資料放這裡
+/dev/sda1                  3.6T  2.7T  779G  78% $METAFIND_DATA   ← 資料放這裡
 README.md:37: Skip downloading the full rendered_images (~1TB) if not needed.
 README.md:36: A 420GB subset is available ... under the `only_rgb_depth_images` folder
 data/objaverse-lvis  →  不存在，需下載
@@ -200,7 +200,7 @@ data/objaverse-lvis  →  不存在，需下載
 反方向錯得最離譜的是 GLB 與模型權重。**兩邊互相抵銷，總量看起來還好，
 但沒有一項是準的** —— 這種表只要沒重新量過就會一直錯下去。
 
-> **2026-08-16 更新**：`/mnt/data1` 是**共用磁碟**，不是我們獨佔。
+> **2026-08-16 更新**：`$METAFIND_DATA` 是**共用磁碟**，不是我們獨佔。
 > 3.6 TB 裡我們佔 392 GB，其餘是 `abo_dataset` 1.7 TB、`cheng` 804 GB、
 > `yucheng` 163 GB 等他人資料，目前全碟剩 374 GB。
 > **先前寫「779GB 可用、90GB 綽綽有餘」已不成立** ——
@@ -485,7 +485,7 @@ scale-normalised 的渲染圖 —— 它**不可能量到**真實尺寸，只能
 
 | | |
 |---|---|
-| `/mnt/data1` 實際讀取吞吐 | **74 MB/s** |
+| `$METAFIND_DATA` 實際讀取吞吐 | **74 MB/s** |
 | 46,052 個 GLB 總量 | **351 GB** |
 | `n03` 單獨的讀取需求 | **70 MB/s**（平均 7.6 MB × 553 資產/分） |
 | RAM | 62 GB（可用 37 GB，**快取不下 351 GB**） |
@@ -944,7 +944,7 @@ n07b 剩餘        102 MB
 而且可以從釘死的 OpenCLIP 權重完整重建。存進去等於把一份 10 GB 的唯讀資料
 複製十一次。
 
-`/mnt/data1` 是**共用碟**，目前只剩 374 GB。112 GB 不是「有點浪費」，
+`$METAFIND_DATA` 是**共用碟**，目前只剩 374 GB。112 GB 不是「有點浪費」，
 是會影響到別人。
 
 ### 為什麼這值得在寫程式前就登記

@@ -8,14 +8,18 @@
 # happening" while n05 still has hours to go. This reads the actual artifacts
 # instead of a log tail.
 
-OUT=/mnt/data1/kyzen/MetaFind/outputs
+# Roots come from metafind/paths.py, never spelled here. Six scripts used
+# to hardcode the previous machine's /mnt/data1/kyzen/MetaFind, so on any
+# other checkout they silently observed an empty directory.
+eval "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && ${METAFIND_PYTHON:-python3} -m metafind.paths)"
+OUT="$METAFIND_OUTPUTS"
 LOGS=$OUT/logs
 
 printf '\n=== %s ===\n\n' "$(date '+%F %H:%M:%S')"
 
 # ---- what is running now
 if pgrep -f "metafind.data.annotate_run" > /dev/null; then
-    printf '  跑中   n05 標註   %s\n' "$(tail -1 "$LOGS/n05_full.log" 2>/dev/null | tr -s ' ')"
+    printf '  跑中   n05 標註   %s\n' "$(tail -1 "$LOGS/n05_v3_full.log" 2>/dev/null | tr -s ' ')"
 elif pgrep -f "metafind.data.semantic_edges_run" > /dev/null; then
     printf '  跑中   n08 語意邊  %s\n' "$(tail -1 "$LOGS/n08_full.log" 2>/dev/null | tr -s ' ')"
 elif pgrep -f "metafind.train.stage1" > /dev/null; then
@@ -38,10 +42,17 @@ count() { printf '  %-22s %s\n' "$1" "$2"; }
 # `ls | wc -l` doubles them, which is exactly the kind of number that reads as
 # plausible and is wrong.
 recs() { find "$1" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l; }
+v3_count() { "${METAFIND_PYTHON:-python3}" -c '
+import json, glob, sys
+print(sum(1 for f in glob.glob(sys.argv[1] + "/*.json")
+          if json.load(open(f)).get("prompt_version") == 3))' "$1"; }
 count "n02 模型下載"   "$(find "$OUT/../datasets" -name '*.glb' 2>/dev/null | wc -l) 個"
 count "n03 點雲"       "$(recs "$OUT/pointclouds") 個"
 count "n04 渲染"       "$(recs "$OUT/renders") 個"
-count "n05 標註"       "$(recs "$OUT/annotations") / 45,955"
+# n05 的 sidecar 有兩代 schema（prompt_version 1 = 舊的 5 欄位，
+# 3 = 論文 Figure 2 的 13 欄位）。光數檔案會把還沒重跑的 v1 算成完成，
+# 這正是「看起來做完了、其實還有幾小時」的那種讀數。
+count "n05 標註(v3)"   "$(v3_count "$OUT/annotations") / 45,955"
 count "n07 場景圖"     "$(recs "$OUT/scene_graphs") 個"
 count "n07b 資產模態"  "$(recs "$OUT/procthor_modalities") / 1,467"
 [ -f "$OUT/sem_edge_cache.json" ] \

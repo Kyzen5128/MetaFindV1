@@ -277,11 +277,21 @@ reproduction of Table 1 can be attributed to the paper.
 <a id="s4"></a>
 ### S4 — no training hyperparameters exist in the paper
 
-Searched across all five included `.tex` files and absent: layer count `L`,
-hidden width `d`, edge width `e`, batch size, learning rate, optimiser, epochs,
-`τ`'s value or whether it is learnable, `λ`'s initialisation, and the OpenCLIP
-variant. The only stated numbers are the two 30% rates (modality masking in
-Stage 1, scene dropout in Stage 2).
+**[CORRECTED 2026-08-19] This entry previously listed `τ` among the absences
+and claimed "the only stated numbers are the two 30% rates". Both are wrong.**
+`3experiments.tex:15` ends the Baselines paragraph with:
+
+> "The temperature is 0.5 for all experiments."
+
+Eq. 5 introduces `τ` without a value, which is where the earlier reading
+stopped; the number is given in the experimental setup instead. `τ = 0.5` is a
+**PAPER FACT**, now carried in code as `metafind.models.losses.PAPER_TAU`, and
+a run departing from it warns at construction.
+
+Still absent after that correction: layer count `L`, hidden width `d`, edge
+width `e`, batch size, learning rate, optimiser, epochs, `λ`'s initialisation,
+and the OpenCLIP variant. The stated numbers are the two 30% rates (modality
+masking in Stage 1, scene dropout in Stage 2) **and `τ = 0.5`**.
 
 Every one is `[IMPLEMENTATION CHOICE]`. **No quantitative result of this
 reproduction may be presented as reproducing the paper's numbers.**

@@ -1,3 +1,4 @@
+from metafind import paths
 """Probe: can one ProcTHOR asset be rendered in isolation, comparable to n04?
 
 Answer: yes. Recorded as F24. Kept because the answer took three attempts and
@@ -21,7 +22,7 @@ import numpy as np
 from ai2thor.controller import Controller
 from ai2thor.platform import CloudRendering
 
-house = json.loads(open('/mnt/data1/kyzen/MetaFind/datasets/procthor-10k/train.jsonl').readline())
+house = json.loads(open(paths.PROCTHOR / 'train.jsonl').readline())
 solo = json.loads(json.dumps(house))
 solo["objects"] = [{"assetId": "Fridge_19", "id": "Fridge|0|0",
                     "position": {"x": 4.0, "y": 40.0, "z": 3.0},

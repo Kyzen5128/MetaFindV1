@@ -92,5 +92,40 @@
   "figs/fig_scene_graph_supp.tex": "72ad3a8d4d3d7fb746a9825e467fb1d7ea9697205cc29b8c6a59476d7489451e",
   "tabs/tab_promptlist_minimal.tex": "d7b135cabe8057a105b1c1e9b139df9e469c2bac74b6515cdfdf6e15a7504213",
   "tabs/tab_promptlist_others.tex": "8689e468054878c8f82f793b51adb419380c5aa24bf5f1fca37567d8bf121338"
- }
+ },
+ "referenced_figures": [
+  "images/Scene_Graph_Supp_1.png",
+  "images/ValidationQuestionBed.png",
+  "images/ValidationQuestionLiv.png",
+  "images/agents.png",
+  "images/backtracking.png",
+  "images/gallery.jpg",
+  "images/gallery_supp_liv.png",
+  "images/gallery_supp_w_prompt.png",
+  "images/overview.png"
+ ],
+ "figure_sha256": {
+  "images/Scene_Graph_Supp_1.png": "7b8ab97c5d6864785bcac0f9b59b69caa0d067bb8d64c5a1c3b0d39d80c6d68c",
+  "images/ValidationQuestionBed.png": "308c7c08772b389caf71d7b17cd9e43c31c211a8c2ff5f8b6771265d3805af61",
+  "images/ValidationQuestionLiv.png": "e4191f6cf131864b4fe5521db80b1e8cd2918a75c367ca429595b830884cd112",
+  "images/agents.png": "7acf56d39b0893dc2437d06b7258d3a31d262b68c732c12f3f799677096a7005",
+  "images/backtracking.png": "7795e66c67e4f60988776d119c6872717973a92b60dee40049923888d200ef8e",
+  "images/gallery.jpg": "4837c0b4703d05194676bad7fbf279d8f0b12488fb8c0a0f4e91912f8e1d90de",
+  "images/gallery_supp_liv.png": "3632885f6a4ae9e0cabf265b7ea8052aff03001980f0e01e76060fb9e063e2d9",
+  "images/gallery_supp_w_prompt.png": "6e26d1d18d4bbb71c3321af33c054916bb2a84f5b20d6aa18b2f6742a4790c27",
+  "images/overview.png": "3333e0b086627375c9617aa8f2a7d3cfa03eed6b3ec3b30576a99173320a38a6"
+ },
+ "images_in_archive": [
+  "eijkel2.eps",
+  "images/Scene_Graph_Supp_1.png",
+  "images/ValidationQuestionBed.png",
+  "images/ValidationQuestionLiv.png",
+  "images/agents.png",
+  "images/backtracking.png",
+  "images/gallery.jpg",
+  "images/gallery_supp_liv.png",
+  "images/gallery_supp_w_prompt.png",
+  "images/overview.png"
+ ],
+ "missing_figures": []
 }

@@ -58,5 +58,28 @@
   "sections/experiments.tex": "fd24d310fc98196435da2d1a305c6383f9ba56da4e72fcb90b370b9d21de9fe4",
   "sections/conclusions.tex": "2a76f29ed12709ce7cda67304d0e393deb1c8dd8d8587720f9b31ec621e162c9",
   "sections/appendix.tex": "15f2575ae787dffae85fe450a3c1b35624800bddabf177305ff56a0f0dcdb638"
- }
+ },
+ "referenced_figures": [
+  "Figures/n_body.png",
+  "Figures/on_breakin_symmetry.png",
+  "Figures/overview_equivariance.pdf",
+  "Figures/sweep_pe.png"
+ ],
+ "figure_sha256": {
+  "Figures/n_body.png": "71a095d461a91eff2c6b936527a8ff423c8f9ebe5427f95fbd2312458a2bcf05",
+  "Figures/on_breakin_symmetry.png": "f1e8a267602e1cac5ef00478d5160a3e0f6369f99f0633c63406232aa809bd08",
+  "Figures/overview_equivariance.pdf": "1f9bf99cceaae4330107c2808c56791c07aa77cfff1fc01240f5c00584119bd3",
+  "Figures/sweep_pe.png": "f955e83bb2f09444f596a2b1c6c079b718057e634b1f9703a8c64426e5e243ff"
+ },
+ "images_in_archive": [
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/Figures/n_body.png",
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/Figures/on_breakin_symmetry.png",
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/Figures/overview_equivariance.pdf",
+  "E(n) Equivariant Graph Neural Networks _ ICML 2021/Figures/sweep_pe.png",
+  "Figures/n_body.png",
+  "Figures/on_breakin_symmetry.png",
+  "Figures/overview_equivariance.pdf",
+  "Figures/sweep_pe.png"
+ ],
+ "missing_figures": []
 }

@@ -55,6 +55,7 @@ paths.setup_env()
 from metafind.data.annotate import (
     MAX_ATTEMPTS,
     PROMPT_VERSION,
+    REQUIRED_FIELDS,
     AnnotationError,
     build_prompt,
     build_repair_prompt,
@@ -84,9 +85,12 @@ def is_complete(uid: str) -> bool:
         rec = json.loads(sc.read_text())
     except (OSError, json.JSONDecodeError):
         return False
-    return all(k in rec for k in ("category", "description", "dimensions",
-                                  "materials", "placement_constraints",
-                                  "annotator_model"))
+    # Includes prompt_version: a v1 sidecar has every v2 field name it shares
+    # but a different schema, and treating it as done would silently mix two
+    # annotation generations in one corpus.
+    return (all(k in rec for k in REQUIRED_FIELDS)
+            and rec.get("prompt_version") == PROMPT_VERSION
+            and "annotator_model" in rec)
 
 
 class Annotator:
@@ -207,6 +211,12 @@ def rebuild_index(index_path: Path) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int)
+    # A specific uid list, for validation batches. `--limit N` takes the first N
+    # of a SORTED corpus, which is fine for a smoke test and useless for
+    # measuring against ground truth: the assets that happen to sort first are
+    # not the assets AI2-THOR can adjudicate.
+    ap.add_argument("--uids-file", type=Path,
+                    help="annotate exactly these uids, one per line")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--model", default=MODEL_ID)
     args = ap.parse_args()
@@ -222,7 +232,15 @@ def main() -> int:
             r = json.loads(line)
             renders[r["uid"]] = r
 
-    todo = [u for u in sorted(renders) if args.force or not is_complete(u)]
+    if args.uids_file:
+        wanted = [u for u in args.uids_file.read_text().split() if u]
+        missing = [u for u in wanted if u not in renders]
+        if missing:
+            print(f"{len(missing)} uid(s) have no render, e.g. {missing[:3]}", flush=True)
+            return 2
+        todo = [u for u in wanted if args.force or not is_complete(u)]
+    else:
+        todo = [u for u in sorted(renders) if args.force or not is_complete(u)]
     if args.limit:
         todo = todo[: args.limit]
     print(f"{len(renders):,} rendered assets, {len(todo):,} to annotate", flush=True)

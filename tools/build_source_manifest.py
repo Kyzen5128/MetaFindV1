@@ -17,6 +17,7 @@ about the include graph, not about the authors' intent.
 from __future__ import annotations
 
 import hashlib
+import tarfile
 import json
 import re
 from pathlib import Path
@@ -103,6 +104,55 @@ def walk(root: Path, main: Path) -> tuple[list[str], dict]:
     return order, tree
 
 
+GRAPHIC = re.compile(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}")
+
+
+def figures(root: Path, archive: Path, order: list[str]) -> dict:
+    """Which images the TeX references, and whether we actually have them.
+
+    This exists because we did not have them, and nothing said so. The manifest
+    recorded only `.tex` hashes, the extraction pulled only `.tex`, and six
+    figures sat unread inside the archive for the whole project. One of them --
+    MetaFind's `data-preprocess.png` -- prints the annotation schema, so n05 was
+    built against an invented schema while the paper's own was on disk. Every
+    audit inherited the same blind spot, because "we read the paper" was true of
+    the text and false of the figures.
+
+    A figure named by the TeX and missing from disk is now a recorded fact.
+    """
+    referenced = sorted({m for f in order
+                         for m in GRAPHIC.findall(strip_comments((root / f).read_text()))})
+    in_archive: list[str] = []
+    try:
+        with tarfile.open(archive, "r:gz") as tf:
+            in_archive = sorted(n for n in tf.getnames()
+                                if Path(n).suffix.lower() in IMAGE_SUFFIXES)
+    except (tarfile.TarError, OSError):
+        pass  # single-file gzip or unreadable: the on-disk check below still runs
+
+    def present(ref: str) -> str | None:
+        # TeX may omit the extension; graphicx resolves it.
+        for cand in ([root / ref] if Path(ref).suffix else
+                     [root / (ref + s) for s in sorted(IMAGE_SUFFIXES)]):
+            if cand.is_file():
+                return str(cand.relative_to(root))
+        return None
+
+    found = {ref: present(ref) for ref in referenced}
+    missing = sorted(r for r, p in found.items() if p is None)
+    return {
+        "referenced_figures": referenced,
+        "figure_sha256": {p: hashlib.sha256((root / p).read_bytes()).hexdigest()
+                          for p in sorted(v for v in found.values() if v)},
+        "images_in_archive": in_archive,
+        # Non-empty means the paper cannot be read in full from this checkout.
+        "missing_figures": missing,
+    }
+
+
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".pdf", ".eps", ".svg"}
+
+
 def main() -> int:
     out = {}
     for name, meta in PAPERS.items():
@@ -139,6 +189,7 @@ def main() -> int:
             "orphan_tex_files": orphans,
             "tex_sha256": {f: hashlib.sha256((root / f).read_bytes()).hexdigest()
                            for f in order},
+            **figures(root, archive, order),
         }
         (root / "SOURCE_MANIFEST.json").write_text(
             json.dumps(manifest, indent=1, ensure_ascii=False))

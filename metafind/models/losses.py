@@ -18,22 +18,33 @@ Stage 1 and Stage 2 use different objectives, and the difference is real:
 Under-specified in the paper
 ----------------------------
 
-U-22  ``tau``. Eq. 5 calls it "a temperature hyperparameter", which reads as
-      fixed, but no value is given anywhere.
+tau   [PAPER FACT] MetaFind DOES give a value, and this module said for months
+      that it did not. `3experiments.tex:15`, last sentence of the Baselines
+      paragraph:
 
-      Two claims used to be bundled here, and they have different standing:
+          "The temperature is 0.5 for all experiments."
 
-      * *Learnable* -- ULIP-2's PAPER says so directly. Its Eq. 1 and Eq. 2 both
-        define "tau is a learnable temperature parameter". Since MetaFind's
-        towers inherit ULIP-2's embedding space, that is dependency-paper
-        evidence, not a convention we assumed.
-      * *Initialised to log(1/0.07)* -- NOT in the ULIP-2 paper. It comes from
-        CLIP's convention and ULIP's code. Keeping it labelled as though the
-        paper supplied it would repeat the D-1 mistake of arguing about a
-        dependency's design from its implementation.
+      Eq. 5 introduces it as "a temperature hyperparameter" without a number,
+      which is where the earlier reading stopped; the value is stated in the
+      experimental setup instead. `docs/audit/C_PAPER_CONTRADICTIONS.md` S4 also
+      lists tau among the paper's silences and says "the only stated numbers are
+      the two 30% rates". Both are wrong.
 
-      Neither is a default any more: both arrive through the hyperparameter
-      artifact that ``Stage1RuntimeConfig`` requires and hashes.
+      What follows for this class:
+
+      * A run reproducing the paper's tables uses `learnable_temperature=False`
+        and `init_temperature=0.5`. Anything else is a DEVIATION and has to say
+        so, because tau scales every logit in Eq. 5, 7a, 7b and 8.
+      * `learnable_temperature=True` with 0.07 is CLIP's and ULIP-2's
+        convention, not MetaFind's. ULIP-2's Eq. 1/2 do define a learnable tau,
+        which is why it was adopted -- but MetaFind states a fixed 0.5 for its
+        own experiments, and a dependency's design does not override the paper
+        being reproduced.
+
+      Neither is a default here: both arrive through the hyperparameter artifact
+      that ``Stage1RuntimeConfig`` requires and hashes. PAPER_TAU below is the
+      value a faithful run must carry, so the number lives in code rather than
+      in a comment nobody greps.
 
 U-24  ``sim(.,.)``, described only as "the similarity function". Cosine
       similarity is assumed, matching ULIP, OpenShape and CLIP. Recorded as an
@@ -44,13 +55,19 @@ U-24  ``sim(.,.)``, described only as "the similarity function". Cosine
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-__all__ = ["ContrastiveConfig", "MetaFindContrastiveLoss"]
+__all__ = ["PAPER_TAU", "ContrastiveConfig", "MetaFindContrastiveLoss"]
+
+# [PAPER FACT] 3experiments.tex:15 -- "The temperature is 0.5 for all
+# experiments." A run that does not use this is not reproducing the paper's
+# tables, whatever else it gets right.
+PAPER_TAU = 0.5
 
 
 @dataclass
@@ -88,6 +105,21 @@ class MetaFindContrastiveLoss(nn.Module):
         self.cfg = cfg = cfg or ContrastiveConfig()
         if not 0.0 < cfg.init_temperature:
             raise ValueError(f"init_temperature must be positive, got {cfg.init_temperature}")
+
+        # [PAPER FACT] 3experiments.tex:15 fixes tau at 0.5. Departing from it is
+        # allowed -- the fixed-0.5 objective may simply train worse, and that is
+        # itself a reportable result -- but it must be VISIBLE at construction,
+        # not discovered when someone compares tables months later. Warn, never
+        # raise: an ablation that deliberately sweeps tau is a legitimate run.
+        if cfg.learnable_temperature or cfg.init_temperature != PAPER_TAU:
+            warnings.warn(
+                f"tau deviates from the paper: MetaFind fixes it at {PAPER_TAU} "
+                f"for all experiments (3experiments.tex:15), this run uses "
+                f"init_temperature={cfg.init_temperature} "
+                f"learnable={cfg.learnable_temperature}. Record it as a DEVIATION "
+                "if the results are compared with the paper's tables.",
+                stacklevel=2,
+            )
 
         scale = math.log(1.0 / cfg.init_temperature)
         if cfg.learnable_temperature:

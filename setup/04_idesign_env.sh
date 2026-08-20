@@ -42,8 +42,12 @@ set -euo pipefail
 IDESIGN_REPO=${IDESIGN_REPO:-/home/kyzen/IDesign}
 IDESIGN_COMMIT=7bc891c            # 釘住；I-Design repo 無 LICENSE，不 vendor 進本 repo
 PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/patches"
-SERVE_PREFIX=/mnt/data1/kyzen/MetaFind/envs/serve
-DATA_ROOT=/mnt/data1/kyzen/MetaFind
+# Roots come from metafind/paths.py, never spelled here. Six scripts used
+# to hardcode the previous machine's /mnt/data1/kyzen/MetaFind, so on any
+# other checkout they silently observed an empty directory.
+eval "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && ${METAFIND_PYTHON:-python3} -m metafind.paths)"
+SERVE_PREFIX="$METAFIND_DATA/envs/serve"
+DATA_ROOT="$METAFIND_DATA"
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 

@@ -37,7 +37,7 @@ cycle 僅存在於 subgraph 內。
 
 ### Goal
 
-> 在單張 RTX 4090 上復現 MetaFind，產出可與論文 Table 1／2／3 逐格對照的結果，
+> 在單張 RTX 4090（此處的 `RTX 4090` 為前一台機器；本機實測為 RTX 5090 32GB，凡以 24GB 為前提的可行性判斷都要重新量測） 上復現 MetaFind，產出可與論文 Table 1／2／3 逐格對照的結果，
 > 每一格給出「復現 / 未復現 / 證據不足」三者之一。
 
 ### Success criteria

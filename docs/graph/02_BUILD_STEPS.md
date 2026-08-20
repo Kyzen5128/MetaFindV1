@@ -51,7 +51,7 @@
 ## 資料與路徑
 
 ```
-data/ -> /mnt/data1/kyzen/MetaFind/
+data/ -> $METAFIND_DATA/
 ├── datasets/          原始資料，只讀
 │   ├── objaverse-lvis/   manifest + 46,052 個 GLB
 │   └── procthor-10k/     train/val/test.jsonl

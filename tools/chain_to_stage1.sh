@@ -18,7 +18,11 @@ set -uo pipefail
 
 REPO=/home/kyzen/MetaFindV1
 PY=$HOME/miniconda3/envs/MetaFind/bin/python
-OUT=/mnt/data1/kyzen/MetaFind/outputs
+# Roots come from metafind/paths.py, never spelled here. Six scripts used
+# to hardcode the previous machine's /mnt/data1/kyzen/MetaFind, so on any
+# other checkout they silently observed an empty directory.
+eval "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && ${METAFIND_PYTHON:-python3} -m metafind.paths)"
+OUT="$METAFIND_OUTPUTS"
 LOGS=$OUT/logs
 
 cd "$REPO" || exit 1

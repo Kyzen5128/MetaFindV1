@@ -6,12 +6,12 @@
 PDF 轉出的 Markdown 副本已刪除 —— 轉檔會把 LaTeX 反斜線當成 C 跳脫字元，
 留著就是留一套會靜默出錯的競爭權威。
 
-單張 RTX 4090。**Stage 1 訓練 PointBERT + fusion**，只有 ViT-bigG-14 凍結；本地 Qwen 取代 GPT-4o／GPT-4。
+單張 24GB 以上的 GPU（本機實測為 RTX 5090 32GB）。**Stage 1 訓練 PointBERT + fusion**，只有 ViT-bigG-14 凍結；本地 Qwen 取代 GPT-4o／GPT-4。
 
 ## 快速開始
 
 ```bash
-bash setup/01_storage.sh          # 建 /mnt/data1/kyzen/MetaFind 並做 ./data symlink（需 sudo）
+bash setup/01_storage.sh          # 建資料目錄（預設 <repo>/data，可用 METAFIND_DATA 覆寫）
 bash setup/02_conda_env.sh        # 建 conda 環境 MetaFind
 conda activate MetaFind
 python setup/03_verify_env.py     # 驗證環境（加 --full 會下載 10GB 的 ViT-bigG-14）
@@ -32,7 +32,7 @@ docs/
   paper/             論文：*.gz 是 arXiv 原始壓縮檔，*_source/ 是解壓後的 TeX（唯一權威）
   audit/             公式稽核 A–F → 見 audit/A_FORMULA_INVENTORY.md
   graph/             設計文件 → 見 graph/README.md
-data ->              symlink 到 /mnt/data1/kyzen/MetaFind（大型資料，不進 git）
+data/                資料根目錄，或指向 METAFIND_DATA 的 symlink（不進 git）
 scratch/             參考用的雜項腳本
 ```
 

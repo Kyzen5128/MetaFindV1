@@ -46,7 +46,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-DEFAULT_OUT = Path("/mnt/data1/kyzen/MetaFind/outputs/idesign")
+from metafind import paths
+
+DEFAULT_OUT = paths.OUTPUTS / "idesign"
 
 # [CORRECTED] These used to be "A creative vibrant livingroom" and "An aged
 # archive room" at [4.0, 4.0, 2.5] with n=15 and n=12 -- invented, while the

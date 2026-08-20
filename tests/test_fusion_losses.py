@@ -277,3 +277,44 @@ def test_gradients_reach_fusion_and_loss_end_to_end():
 
     dead = [n for n, p in fuse.named_parameters() if p.grad is None]
     assert not dead, f"no gradient reached: {dead}"
+
+
+# --- tau is a PAPER FACT, not a silence ------------------------------------
+
+def test_paper_tau_matches_the_papers_stated_value():
+    """[PAPER FACT] 3experiments.tex:15 "The temperature is 0.5 for all
+    experiments."
+
+    This constant existed only after the module spent months asserting the
+    opposite -- both `losses.py` and `C_PAPER_CONTRADICTIONS.md` S4 listed tau
+    among the paper's silences. Pinning the number here means the next reader
+    who "corrects" it back to CLIP's 0.07 has to delete a test that cites the
+    line, rather than editing a comment.
+    """
+    from metafind.models.losses import PAPER_TAU
+    assert PAPER_TAU == 0.5
+
+
+def test_the_paper_setting_is_silent_and_any_other_warns():
+    """A deviation from a stated paper value has to be visible when it is made.
+
+    Not raised: sweeping tau is a legitimate ablation. But it must not be
+    discoverable only by diffing tables months later.
+    """
+    import warnings
+    from metafind.models.losses import (
+        PAPER_TAU, ContrastiveConfig, MetaFindContrastiveLoss)
+
+    with warnings.catch_warnings(record=True) as clean:
+        warnings.simplefilter("always")
+        MetaFindContrastiveLoss(ContrastiveConfig(
+            learnable_temperature=False, init_temperature=PAPER_TAU))
+    assert not clean, "the paper's own setting must not warn"
+
+    for cfg in (ContrastiveConfig(),                                    # CLIP's default
+                ContrastiveConfig(learnable_temperature=False,
+                                  init_temperature=0.07)):              # fixed, wrong value
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            MetaFindContrastiveLoss(cfg)
+        assert w and "0.5" in str(w[0].message), cfg
