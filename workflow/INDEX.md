@@ -6,7 +6,7 @@
 
 **Initialized:** 2026-08-20
 **Corrected:** 2026-08-20 (Master correction pass)
-**Active formal tasks:** none. No task directory has been created. No decision file has been created. Awaiting user approval.
+**Active formal work:** none. `D0-008` accepted with follow-up 2026-08-21. `D10_stage1-encoding-contract` is **READY** — approved 2026-08-21, `TASK.md` written, awaiting user approval to start the task conversation.
 **Execution policy:** sequential — one ACTIVE task at a time.
 
 ---
@@ -32,9 +32,12 @@
 
 ## Active Tasks
 
-| ID | Task | Role | Status | Depends On | Parallel Safe | Task Path |
+| ID | Task | Role | Status | Depends On | Parallel Safe | Path |
 |---|---|---|---|---|---|---|
 | — | None | — | — | — | — | — |
+
+`D0-008_stage1-text-template` is **DONE** — accepted with follow-up 2026-08-21.
+`D10_stage1-encoding-contract` is **READY** — contract at `workflow/tasks/D10_stage1-encoding-contract/TASK.md`. Becomes ACTIVE when the user approves starting its conversation. Nothing is ACTIVE now.
 
 ---
 
@@ -43,8 +46,9 @@
 | ID | Task | Role | Status | Depends On | Blocks | Conv. Mode | Parallel Safe |
 |---|---|---|---|---|---|---|---|
 | `D9_paper-figures-audit` | Read all 38 extracted paper figures; mark each U-register entry resolved / refuted / untouched; register new contradictions | D1+ | **READY** | — | evidence for D0-002, D0-004 | NEW CONVERSATION | **YES** (writes only `docs/`) |
-| `D1_n06-reencode` | Full n06 re-encode of text + image embeddings over the admitted corpus | D1+ | **BLOCKED** | D0-008 | D3 | NEW CONVERSATION | YES once unblocked (writes only `data/outputs/embeddings/`) |
-| `D2_stage1-prereq` | Apply C-001 + C-002; re-run n05b; run n09_build_splits; produce `splits.json`, `eval_protocols.json`, `stage1_protocol.json`; verify G3 | D1+ | **BLOCKED** | D0-002, D0-003, D0-008 | D3 | NEW CONVERSATION | NO |
+| `D10_stage1-encoding-contract` | Clear the cache-validity BLOCKER (B-1…B-4); implement the ratified U-15 template (E-1, E-2, S-1, S-2); apply R-1/R-2/R-3; re-annotate the one truncated record; update the golden test; add the pre-flight gate | D1+ | **READY** — approved 2026-08-21, contract written, conversation not yet started | D0-008 (accepted) | D1, D2 | NEW CONVERSATION | NO |
+| `D1_n06-reencode` | Full n06 re-encode of text + image embeddings over the admitted corpus | D1+ | **BLOCKED** | **D10** | D3 | NEW CONVERSATION | YES once unblocked (writes only `data/outputs/embeddings/`) |
+| `D2_stage1-prereq` | Apply C-001; re-run n05b (carries C-002); run n09_build_splits; produce `splits.json`, `eval_protocols.json`, `stage1_protocol.json`; verify G3 | D1+ | **BLOCKED** | D0-002, D0-003, D10 | D3 | NEW CONVERSATION | NO |
 | `D3_stage1-train` | Stage 1 smoke (limited assets, 1 epoch) then full training; checkpoint, curves, full provenance | D1+ | **BLOCKED** | D1, D2, D0-003 (hard) (+ D0-005 conditionally) | D4 | NEW CONVERSATION | NO |
 | `D4_gallery-index` | n11 staging → G4 freeze → n12 promote; encoder fingerprint cross-check | D1+ | **BLOCKED** | D3 | D5, D7 | NEW CONVERSATION | NO |
 | `D5_stage2-prereq` | ESSGNN axis resolution, n08 node-text handling, n11b stage-2 gallery index | D1+ | **BLOCKED** | D0-004, D0-006, D4 | D6 | NEW CONVERSATION | NO |
@@ -60,8 +64,8 @@ Not yet scoped as work packages, deliberately: n14 equivariance probe, n18/n19 a
 
 | ID | Blocked By | Required Resolution |
 |---|---|---|
-| `D1_n06-reencode` | D0-008 | Ratify the Stage 1 text serialization template. The artifact refresh itself is correction C-002, in-scope execution |
-| `D2_stage1-prereq` | D0-002, D0-003, D0-008 | `tower_sharing` mode; disposition of the 3 `prompt_version:1` annotations; template ratification. Plus corrections C-001 and C-002, which are in-scope execution. All land in artifacts n09 writes or hashes |
+| `D1_n06-reencode` | **D10** | D0-008 is accepted, but ratification alone does not unblock D1. Follow-up F-1 — the cache completion/validity BLOCKER, exit criteria B-1…B-4 — must be cleared, and the ratified template must actually be implemented |
+| `D2_stage1-prereq` | D0-002, D0-003, D10 | `tower_sharing` mode; disposition of the 3 `prompt_version:1` annotations. Plus correction C-001 (τ = 0.5), in-scope execution. All land in artifacts n09 writes or hashes |
 | `D3_stage1-train` | D1, D2, D0-003 | Complete embedding cache (45,952 `.npz`); three protocol files present and G3-valid; splits must not contain uids with no embedding, or `stage1.py:109` raises `FileNotFoundError`. Plus D0-005 if D0-002 selects `fully_separate` |
 | `D4_gallery-index` | D3 | A Stage 1 checkpoint must exist |
 | `D5_stage2-prereq` | D0-004, D0-006, D4 | ESSGNN axis coupling; node-text handling; promoted gallery index |
@@ -73,11 +77,13 @@ Not yet scoped as work packages, deliberately: n14 equivariance probe, n18/n19 a
 
 ## Decision Queue
 
-Candidates identified by Master. **None opened.** No file exists under `workflow/decisions/` yet.
+Candidates identified by Master. **`D0-008` is ACCEPTED (2026-08-21).** The other six have no decision file and none is open.
+
+A candidate becomes a formal decision only when Master creates its file under `workflow/decisions/` after user approval. Master prepares sections 1–5 (framing and evidence pointers); D0 owns sections 6–11; Master fills section 12 on review.
 
 | ID | Question | Status | Decision File | Blocks | On Critical Path |
 |---|---|---|---|---|---|
-| D0-008 | Ratify the centimetre `TEXT_TEMPLATE` (U-15) as the recorded Stage 1 IMPLEMENTATION CHOICE, including field order and the omission of `synset` / `volume` / `mass` | `OPEN` | — | D1, D2 | **YES — first** |
+| D0-008 | Ratify the Stage 1 text serialization template (U-15) | **`ACCEPTED`** 2026-08-21, with follow-up | `workflow/decisions/D0-008_stage1-text-template.md` | resolved | done |
 | D0-002 | U-16 `tower_sharing`: `shared_backbone_separate_fusion` / `fully_shared` / `fully_separate` | `OPEN` | — | D2, D3, Stage 2 feasibility | **YES** |
 | D0-003 | The 3 `prompt_version:1` annotations: admit, drop, or re-annotate. **Hard blocker for D3** — if admitted, `stage1.py:109` raises `FileNotFoundError` | `OPEN` | — | D2, D3 | **YES** |
 | D0-005 | `build_model()` bypasses `Stage1RuntimeConfig`; single backbone; shared `FusionConfig` object | `OPEN` | — | D3 | Conditional on D0-002 |
@@ -133,9 +139,11 @@ No task currently requires `FORK REQUIRED`. Mark it only when a task depends on 
 
 ## Completed Tasks
 
-| ID | Task | Accepted By Master | Handoff | Codex Review |
+| ID | Task | Accepted By Master | Result Artifact | Codex Review |
 |---|---|---|---|---|
-| — | None | — | — | — |
+| `D0-008_stage1-text-template` | Ratify the Stage 1 text serialization template (U-15) | **ACCEPT WITH FOLLOW-UP**, 2026-08-21 | `workflow/decisions/D0-008_stage1-text-template.md` §11 | 2 rounds, `gpt-5.6-sol` xhigh; 13 findings, 11 confirmed/partially confirmed; recorded in §9–§10 of the decision file |
+
+Follow-ups carried from D0-008: **F-1** (cache-validity BLOCKER) through **F-5** are D10's scope; **F-6** done by Master at acceptance; **F-7** routes to D0-003; **F-8**/**F-9** deferred. Full table in §12.4 of the decision file.
 
 ---
 

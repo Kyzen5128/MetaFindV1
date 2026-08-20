@@ -99,6 +99,27 @@ Accepted and reflected in on-disk artifacts. These are IMPLEMENTATION CHOICES un
 | n04 unit-sphere normalisation | kept | Objaverse units span ~1.3e5×; absolute scale never usable | IMPLEMENTATION CHOICE |
 | Gallery scopes reported | both A_test_gallery and B_full_gallery, `gallery_size` derived not hardcoded | `splits.py:104-124`, U-09 | IMPLEMENTATION CHOICE |
 
+**Stage 1 text serialization (U-15) — RATIFIED by D0-008, accepted by Master 2026-08-21.**
+
+```
+{description} {Category} made of {materials}, roughly {W} by {L} by {H} centimetres, {placement}.
+```
+
+`{Category}` = category with first character upper-cased. `W`/`L`/`H` render at one decimal with a trailing `.0` stripped, **uniformly at every magnitude** — no `< 1 cm` threshold. No `"A "` article and **no a/an heuristic** (explicit user constraint).
+
+| Element | Class |
+|---|---|
+| That a serialization format exists at all | IMPLEMENTATION CHOICE — the paper is silent (PAPER FACT as to silence, verified across all 5 `.tex` files + Figure 2) |
+| Field set (description, category, materials, dimensions, placement) | PAPER FACT (`2methdology.tex:28` + Figure 2); concatenating them into one prompt is an IMPLEMENTATION CHOICE |
+| Field order | IMPLEMENTATION CHOICE. **The paper does not constrain serialization order.** The paper's attribute order is category → *dimensions* → materials; the code emits category → *materials* → dimensions. Any future claim that §2.3 mandates an order must cite new evidence |
+| Centimetres | **INFERENCE** as to MetaFind's intent (density plausibility of Figure 2's mass/size pairing + unstated Holodeck schema match). **OBSERVED DATA** as to this corpus: all 45,952 v3 records store `dimension_unit: "cm"`. The volume-arithmetic support is **WITHDRAWN** — `30×30×40=36000` is unit-invariant |
+| `width, length, height` ordering | INFERENCE from Figure 2, which prints that order |
+| Dimension precision, article removal | IMPLEMENTATION CHOICE, user-approved (E-1, E-2, S-1, S-2). **Not** bug fixes — the prior behaviour did what it said; the choice was defective |
+| Omission of `synset` / `volume` / `mass` | IMPLEMENTATION CHOICE with **unknown retrieval impact**. The "volume is redundant" justification is **WITHDRAWN**: a frozen text tower is not guaranteed to multiply three numerals. `resolve_stage1.py:111`'s `r = 0.52-0.62` is **UNVERIFIED** here and must not be reported as MEASURED |
+| Placement phrasing | IMPLEMENTATION CHOICE. `onWall`→"mounted", `onObject`→"on top of", all-false→"no typical placement" are **inventions**, not schema-preserving paraphrases |
+
+Decision file: `workflow/decisions/D0-008_stage1-text-template.md`. **The ratified template is not yet implemented** — see §6.
+
 Rows sourced from the previous workflow rather than re-verified this session: the `f_x` scalar equivariance figures (2.2e-16 vs 0.43) and the Objaverse scale-span figure (~1.3e5×). The decisions are reflected in code; the supporting numbers are unverified.
 
 **Established but not yet reflected in artifacts — corrections pending, not open questions:**
@@ -110,7 +131,7 @@ Rows sourced from the previous workflow rather than re-verified this session: th
 
 Do not re-open τ as a research question. Using anything other than 0.5 is a **DEVIATION** requiring registration and disclosure wherever results are compared with the paper's tables.
 
-**Genuinely open — do not treat as decided:** `tower_sharing`, handling of the 3 `prompt_version:1` annotations, ratification of the Stage 1 text serialization template, the ESSGNN axis coupling, `build_model()` construction path, node-text enrichment, Table 2 protocol. See `workflow/INDEX.md` §Decision Queue.
+**Genuinely open — do not treat as decided:** `tower_sharing`, handling of the 3 `prompt_version:1` annotations, the ESSGNN axis coupling, `build_model()` construction path, node-text enrichment, Table 2 protocol. See `workflow/INDEX.md` §Decision Queue.
 
 ---
 
@@ -140,11 +161,17 @@ Repository health: `python -m pytest tests/ -q` → **442 passed, 0 skipped, 0 d
 
 **n06 expected successful output = 45,952 `.npz` + 3 quarantine records.** n06 attempts 45,955 (`annotations` glob ∩ `renders_index.jsonl`, `encode_text_image.py:177-179`); the 3 `prompt_version:1` records carry a different schema and raise `KeyError: 'width'` in `serialize_annotation()`, so they are quarantined without output (`encode_text_image.py:213-221`). Keep the three numbers distinct: **45,955 annotation files · 45,952 valid v3 · 3 v1 residuals.**
 
+**BLOCKER — a resumed n06 would silently build a two-distribution gallery.** `is_complete()` (`encode_text_image.py:73-83`) checks only sidecar existence, `encoder_version`, and NPZ existence. It compares **nothing about the text**. A plain re-run would skip all 5,276 metre-derived embeddings as "complete" and encode only the rest in centimetres — no error, no warning, and an identical `text_serialization` label on both halves. `gallery_index.py` fingerprints the checkpoint, not the text, so Table 1 would come out self-consistent and wrong. `"metafind_v1_natural"` already labels two different transformations and is not a valid cache identity. **Do not run n06 until D0-008 follow-up F-1 (exit criteria B-1…B-4) is cleared.**
+
 **The recorded Stage 1 encoding protocol does not describe the encoder.** `data/outputs/stage1_encoding_protocol.json` records
 `"... roughly {length:.2f} by {width:.2f} by {height:.2f} metres, typically placed {placement}."`
-while `resolve_stage1.py:95-99` defines
+while `resolve_stage1.py:96-100` defines
 `"... roughly {width:.0f} by {length:.0f} by {height:.0f} centimetres, {placement}."`
-n06 uses the **code** constant (`encode_text_image.py:194` → `serialize_annotation`, default `TEXT_TEMPLATE`); the artifact field is written but never read back. `tools/check_graph.py` does not catch the mismatch. The code additionally carries `# [U-15, IMPLEMENTATION CHOICE -- CONFIRM BEFORE THE FULL RUN]` at `resolve_stage1.py:101`. **Do not re-run n06 until D0-008 is accepted.**
+n06 uses the **code** constant (`encode_text_image.py:194` → `serialize_annotation`, default `TEXT_TEMPLATE`); the artifact field is written but never read back. `tools/check_graph.py` does not catch the mismatch. The code additionally carries `# [U-15, IMPLEMENTATION CHOICE -- CONFIRM BEFORE THE FULL RUN]` at `resolve_stage1.py:102`; that marker is discharged by D0-008 but the code still holds the pre-ratification template.
+
+**Measured defects in the current serializer** (full corpus, 45,952 v3 records, re-verified by Master 2026-08-21): **161** records render a stored non-zero dimension as `0` under `:.0f`; **3,643** emit `"A airplane"`-style ungrammatical articles; **1** record (`3e91980a22da4c0da975cc8ef776972c`, 89 true BPE tokens) exceeds CLIP's 77-token limit and is **recorded and then encoded anyway**. The ratified template removes all three at zero token cost.
+
+**Four in-code justifications do not describe the code**: the field-order claim (`resolve_stage1.py:93-95`), the "every variable-length part is bounded" claim (`:141-149`, `MAX_PLACEMENT` at `:162` is unused), the unreachable `PLACEMENT_PHRASES[("onWall","onCeiling")]` entry, and the withdrawn volume-redundancy argument. Do not trust in-code rationale in this module without checking it.
 
 **The embedding cache is stale, not merely incomplete.** Cached text uses the old metre-based template and pre-v3 dimension values; current v3 annotations use centimetres and different numbers. Mixing the two would train Stage 1 on two text distributions. `data/outputs/annotations_v1_prompt1/` (45,953) and `annotations_v2_sample/` (200) are backups — **do not delete**.
 
@@ -232,7 +259,7 @@ Facts every task owner should know:
 
 ### Historical (reference only, not authority)
 - `_workflow_old_20260820/` — previous mainline, support-line, TASKS registry, and A–F task cards
-- `Session Handoff.md` — session working memory only. **Currently absent from the working tree** (deleted after commit `4a4ebbe`, not by any workflow task; recoverable with `git restore "Session Handoff.md"`). It is not authority either way
+- `Session Handoff.md` — **deleted from the repository** in commit `1837477` ("chore: establish multi-agent research workflow"), superseded by this workflow. Recoverable from history with `git show 169bd5b:"Session Handoff.md"` if ever needed. It was never authority; Master session continuity now belongs in `workflow/MASTER_SESSION_HANDOFF.md`
 
 ---
 

@@ -142,8 +142,9 @@ This expected-output figure is a **runtime property of n06 and holds regardless 
 
 | ID | Work package | Blocked by |
 |---|---|---|
-| `D1_n06-reencode` | Full text/image re-encode | D0-008 |
-| `D2_stage1-prereq` | Apply C-001 + C-002, re-run n05b, run n09, verify G3 | D0-002, D0-003, D0-008 |
+| `D10_stage1-encoding-contract` | Clear the cache-validity BLOCKER; implement the ratified template; re-annotate the truncated record; add the pre-flight gate | **READY** — approved 2026-08-21, contract written, awaiting approval to start the conversation |
+| `D1_n06-reencode` | Full text/image re-encode | **D10** (D0-008 is accepted but does not unblock D1 — follow-up F-1 does) |
+| `D2_stage1-prereq` | Apply C-001, re-run n05b, run n09, verify G3 | D0-002, D0-003, D10 |
 | `D3_stage1-train` | Stage 1 smoke → full training | D1, D2 (hard: D0-003, or the DataLoader raises `FileNotFoundError`; plus D0-005 if D0-002 selects `fully_separate`) |
 | `D4_gallery-index` | n11 → G4 → n12 | D3 |
 | `D5_stage2-prereq` | ESSGNN axis + n08 node text + n11b | D0-004, D0-006, D4 |
@@ -153,7 +154,7 @@ This expected-output figure is a **runtime property of n06 and holds regardless 
 
 ### DECISION REQUIRED
 
-Seven registered candidates. Full registry: `workflow/INDEX.md` §Decision Queue. Critical-path summary:
+Seven registered candidates, one resolved. Full registry: `workflow/INDEX.md` §Decision Queue. Critical-path summary:
 
 | ID | Question | Blocks |
 |---|---|---|
@@ -163,7 +164,7 @@ Seven registered candidates. Full registry: `workflow/INDEX.md` §Decision Queue
 | D0-005 | `build_model()` bypasses `Stage1RuntimeConfig` | D3, conditional on D0-002 |
 | D0-006 | n08 node-text information collapse | D5 |
 | D0-007 | Table 2 evaluation protocol (200 scenes, 1–5 scale) | D8 |
-| D0-008 | Ratify the Stage 1 text serialization template (U-15) | **D1** → D2 → D3 |
+| ~~D0-008~~ | ~~Ratify the Stage 1 text serialization template (U-15)~~ — **ACCEPTED WITH FOLLOW-UP 2026-08-21** | resolved; follow-up F-1 now blocks D1 |
 
 ### Implementation Corrections — not D0 decisions
 
@@ -181,10 +182,10 @@ Known mismatches between an established requirement and the current artifact/cod
 ```
 D9 (figures audit)  ─────────┐  may refine D0-002 / D0-004 evidence
                              │  PARALLEL SAFE with everything below
-D0-008 ratify template ──► D1 (n06 re-encode, ~4 h GPU) ──┐
-                             │                            │
-D0-002 U-16 ─────────────────┼──► D2 (n05b refresh + C-001 ┴─► D3 (Stage 1 train)
-D0-003 stragglers ───────────┘     + C-002 + n09 + G3)            │
+D0-008 ACCEPTED ──► D10 (encoding contract) ──► D1 (n06 re-encode, ~4 h GPU) ─┐
+                             │                                                │
+D0-002 U-16 ─────────────────┼──► D2 (n05b + C-001 + C-002 + n09 + G3) ────────┴─► D3
+D0-003 stragglers ───────────┘                                                     │
                                                                   ▼
                                                     D4 (gallery index n11/G4/n12)
                                                          │              │
@@ -197,7 +198,7 @@ D0-003 stragglers ───────────┘     + C-002 + n09 + G3)  
                                                D8 (Table 2 eval)
 ```
 
-Critical path: **D0-008 → D1 → D2 → D3 → D4 → {D7, D5 → D6 → D8}**, with D0-002 and D0-003 required before D2.
+Critical path: **D0-008 (done) → D10 → D1 → D2 → D3 → D4 → {D7, D5 → D6 → D8}**, with D0-002 and D0-003 required before D2.
 
 Execution is **sequential by default**. No parallel run is proposed at this time.
 
@@ -209,10 +210,11 @@ Ordering constraint: D2 must re-run n05b to refresh `stage1_encoding_protocol.js
 
 **Task:** None
 **Owner:** None
-**Started:** —
 **Status:** —
 
-No formal task is ACTIVE. Awaiting user approval before any D-task begins.
+`D0-008_stage1-text-template` was returned `RECOMMENDED` by D0 on 2026-08-21 and resolved by Master the same day as **`ACCEPT WITH FOLLOW-UP`**. See Section 12 of the decision file.
+
+`D10_stage1-encoding-contract` is **READY** — approved by the user 2026-08-21 with one revision to Definition of Done item 2 (the cache-validity proof must be established without running the encoder). Contract written to `workflow/tasks/D10_stage1-encoding-contract/TASK.md`. Awaiting user approval to start the task conversation. Nothing is ACTIVE.
 
 ---
 
@@ -224,7 +226,9 @@ See `workflow/INDEX.md`.
 
 ## 8. D0 Research / Architecture Decisions
 
-Eight candidates registered, none opened. No decision file has been created under `workflow/decisions/`.
+Seven candidates registered. **One is open: `D0-008`** — approved by the user on 2026-08-20 and created at `workflow/decisions/D0-008_stage1-text-template.md`. The remaining six have no decision file.
+
+τ was previously registered here as `D0-001`; it is now correction `C-001` and is documented immediately below.
 
 The old workflow (`_workflow_old_20260820/`) recorded D-α through D-η. Those labels are **not** carried forward. Each candidate below was independently re-derived from current repository evidence during this initialization.
 
@@ -284,7 +288,9 @@ The primary evidence is sufficient and uncontested, so there is no two-way resea
 - Also open: MetaFind Table 2 uses a 1–5 scale, I-Design uses 0–10 — comparability claim needs establishing before D8.
 - Far from the critical path. Registered so it is not rediscovered later.
 
-**D0-008 — Ratify the Stage 1 text serialization template (U-15)**
+**D0-008 — Ratify the Stage 1 text serialization template (U-15)** · **OPEN — assigned to D0**
+
+Formal decision file: `workflow/decisions/D0-008_stage1-text-template.md`. **That file is the authority for this decision from here on**; the summary below is Master's framing only and must not be edited to contradict it.
 
 **Not a new project finding.** `_workflow_old_20260820/任務/A_n06-reencode/TASK.md` already recorded the artifact-versus-code template mismatch (its lines 18, 32-37, and acceptance item 133 — "`stage1_encoding_protocol.json` 的 `text_template` == `resolve_stage1.TEXT_TEMPLATE`"). What this initialization adds is independent re-verification against the current repository, plus the τ interaction below that the old card did not cover.
 
@@ -293,8 +299,8 @@ Scope split:
 - The **artifact refresh** (making `stage1_encoding_protocol.json` describe runtime truth) is execution work, tracked as correction **C-002**, carried out in D1/D2. It is not a research question.
 - The **open question for D0** is narrower: ratify `TEXT_TEMPLATE` as the recorded Stage 1 IMPLEMENTATION CHOICE, because the code explicitly asks for that sign-off and paper 2.3 supplies no format. This is a thin evidence dossier and a ratification, not a deep investigation.
 
-- OBSERVED IMPLEMENTATION: `metafind/models/resolve_stage1.py:101` carries an explicit in-code marker: `# [U-15, IMPLEMENTATION CHOICE -- CONFIRM BEFORE THE FULL RUN]`. The template has never been formally confirmed.
-- OBSERVED IMPLEMENTATION: `TEXT_TEMPLATE` (`resolve_stage1.py:95-99`) is
+- OBSERVED IMPLEMENTATION: `metafind/models/resolve_stage1.py:102` carries an explicit in-code marker: `# [U-15, IMPLEMENTATION CHOICE -- CONFIRM BEFORE THE FULL RUN]`. The template has never been formally confirmed.
+- OBSERVED IMPLEMENTATION: `TEXT_TEMPLATE` (`resolve_stage1.py:96-100`) is
   `"{description} A {category} made of {materials}, roughly {width:.0f} by {length:.0f} by {height:.0f} centimetres, {placement}."`
 - OBSERVED DATA: `data/outputs/stage1_encoding_protocol.json` records a **different** template —
   `"... roughly {length:.2f} by {width:.2f} by {height:.2f} metres, typically placed {placement}."`
@@ -303,13 +309,15 @@ Scope split:
 - Consequence 1: the recorded encoding provenance misdescribes what the encoder actually does. `tools/check_graph.py` does not catch it — 2275 checks pass with the mismatch in place.
 - Consequence 2: running D1 now spends ~4 GPU-hours producing embeddings under a template the code itself flags as unconfirmed, with wrong recorded provenance.
 - Consequence 3 (**ordering constraint, ties to C-001**): re-running n05b to refresh the protocol also rewrites `stage1_hyperparameters.json` in the same call (`resolve_stage1.py:443-444`). So the template ratification and the τ correction must be settled before n05b is re-run, or n05b has to run twice.
-- Question for D0: ratify the current centimetre template — including its field order and the deliberate omission of `synset`, `volume`, and `mass` (`resolve_stage1.py:101-114`) — as the recorded Stage 1 IMPLEMENTATION CHOICE.
+- Question for D0: ratify the current centimetre template — including its field order and the deliberate omission of `synset`, `volume`, and `mass` (`resolve_stage1.py:102-115`) — as the recorded Stage 1 IMPLEMENTATION CHOICE.
 
 ---
 
 ## 9. Integration Status
 
-No task result has been integrated into this workflow. `workflow/tasks/` contains templates only.
+**Integrated: `D0-008_stage1-text-template`, accepted with follow-up 2026-08-21.** Master independently re-verified the load-bearing claims before resolution rather than accepting on assertion — verification log in Section 12.1 of the decision file. `CONTEXT.md` §5 and §6 updated per follow-up F-6.
+
+`workflow/tasks/` still contains templates only; no D1+ execution task has run.
 
 Prior work under `_workflow_old_20260820/` was used as a **navigation aid only**. Every claim promoted into this file, `CONTEXT.md`, or `INDEX.md` was re-verified against the current repository this session, or is explicitly marked as unverified.
 
@@ -328,7 +336,9 @@ Corrections found against the old workflow during re-verification:
 
 ### Task-level Codex Reviews
 
-None.
+| Work | Reviewer | Rounds | Outcome | Master's verification |
+|---|---|---|---|---|
+| `D0-008_stage1-text-template` | Codex `gpt-5.6-sol`, xhigh, read-only sandbox | 2 (round 1 budget-exhausted, honestly not counted; round 2 complete) | `BLOCKED BY UNKNOWN` / REJECT-as-written, 13 findings | 11 CONFIRMED or PARTIALLY CONFIRMED, 2 rejected/reduced with stated reasons. Codex surfaced the project's critical blocker (MIF-4), which D0's own scope had missed |
 
 ### Milestone / Integration Reviews
 
@@ -366,27 +376,31 @@ n09 writes `tower_sharing` and the hyperparameter hash into `stage1_protocol.jso
 **B4 — Table 1 evaluation has no implementation.**
 n15_eval_retrieval is spec only. The reproduction cannot produce Table 1 in its current state, independent of training.
 
+**B6 — A resumed n06 would silently build a two-distribution gallery. THE CRITICAL BLOCKER.**
+`is_complete()` (`encode_text_image.py:73-83`) compares nothing about the text — only sidecar existence, `encoder_version`, and NPZ existence. A plain re-run skips all 5,276 metre-derived embeddings as "complete" and encodes the rest in centimetres. No error, no warning, identical `text_serialization` on both halves; `gallery_index.py` fingerprints the checkpoint, not the text. **Table 1 would be self-consistent and wrong.** Surfaced by Codex adversarial review during D0-008, confirmed by Master by direct code reading, classified BLOCKER by Kyzen. Exit criteria B-1…B-4 in decision §11.2. Cleared by `D10`. **This is the only blocker in the project capable of producing confident wrong numbers with no error anywhere in the chain.**
+
 **B5 — The recorded Stage 1 encoding protocol does not describe what the encoder does.**
-`stage1_encoding_protocol.json` records the v1 metre-based template; `serialize_annotation()` produces the v3 centimetre template, and that is what n06 uses. The code additionally flags the template `CONFIRM BEFORE THE FULL RUN` (`resolve_stage1.py:101`). Re-encoding before this is settled burns ~4 GPU-hours against an unratified template with mis-recorded provenance. **Previously recorded** in `_workflow_old_20260820/任務/A_n06-reencode/TASK.md`; re-verified against the current repository during this initialization. Cleared by D0-008 (ratification) plus correction C-002 (artifact refresh).
+`stage1_encoding_protocol.json` records the v1 metre-based template; `serialize_annotation()` produces the v3 centimetre template, and that is what n06 uses. The code additionally flags the template `CONFIRM BEFORE THE FULL RUN` (`resolve_stage1.py:102`). Re-encoding before this is settled burns ~4 GPU-hours against an unratified template with mis-recorded provenance. **Previously recorded** in `_workflow_old_20260820/任務/A_n06-reencode/TASK.md`; re-verified against the current repository during this initialization. Ratification is done (D0-008 ACCEPTED 2026-08-21). The artifact refresh (C-002) and the template implementation are now `D10`'s scope.
 
 ---
 
 ## 12. Next Recommended Action
 
-**One task. Sequential.**
+**`D0-008` is accepted. `D10_stage1-encoding-contract` is READY — contract written, awaiting approval to start its conversation.**
 
-**Recommended: open `D0-008` — ratify the Stage 1 text serialization template (U-15).**
+Accepting D0-008 ratified the template but deliberately did **not** unblock `D1_n06-reencode`. Follow-up F-1 — the cache completion/validity BLOCKER — stands between them, and it is the one defect in this project that can produce confident wrong numbers with no error anywhere in the chain.
 
-Reasoning:
+D10 is the single task that clears every gate in front of the ~4 GPU-hour encode. Contract written at `workflow/tasks/D10_stage1-encoding-contract/TASK.md`. Per the user's revision, its Definition of Done item 2 requires the cache-validity claim to be proven through completion / cache-validity / pre-flight logic **only** — no encoder run, no GPU embedding generation.
 
-- It is the single item standing in front of `D1_n06-reencode`, which is the longest job on the critical path (~4 GPU-hours).
-- It is cheap: a thin evidence dossier and a sign-off, not an investigation. Paper 2.3 supplies no format, so there is nothing to discover — only a choice to ratify and record.
-- Starting D1 first risks spending those hours against an unratified template and recording provenance that does not match runtime.
-- Settling it also fixes the ordering constraint with C-001: the template and τ must both be known before n05b is re-run, otherwise n05b runs twice.
+**Queued behind it, in order:**
 
-**Not recommended right now:** starting `D9_paper-figures-audit` concurrently. It is READY and it is genuinely cheap, but the default policy is one ACTIVE execution task, and D9 does not unblock the critical path. Master will revisit parallelisation once `D1_n06-reencode` is running — a multi-hour GPU job is the standard case where a docs-only task is worth marking `PARALLEL SAFE`, and that will be proposed to the user separately for approval at that time.
+1. `D1_n06-reencode` — unblocks on acceptance of D10. ~4 GPU-hours.
+2. `D0-002` and `D0-003` — required before D2; both can be opened while D1 runs.
+3. `D2_stage1-prereq` — carries correction C-001 (τ = 0.5) plus n09.
 
-**Master must not start this without user approval.**
+**Parallelisation, still deferred:** once `D1_n06-reencode` is ACTIVE and running, Master will propose marking `D9_paper-figures-audit` `PARALLEL SAFE` for separate user approval. Not proposed now — D10 is short and sequential is correct for it.
+
+**Master must not start D10's conversation without user approval.**
 
 ---
 
