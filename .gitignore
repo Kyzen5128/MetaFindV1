@@ -50,3 +50,9 @@ graphify-out/
 CLAUDE.md
 .claude/
 graphify-out/
+
+# Workflow session continuity — local working memory, never commit
+/Session Handoff.md
+/workflow/MASTER_SESSION_HANDOFF.md
+/workflow/decisions/*_SESSION_HANDOFF.md
+/workflow/tasks/*/SESSION_HANDOFF.md

@@ -59,6 +59,8 @@ Before execution, read:
 2. applicable `.claude/rules/`
 3. `/home/kyzen/MetaFindV1/workflow/CONTEXT.md`
 4. this `TASK.md`
+5. if this is a resumed unfinished task and
+   `workflow/tasks/<task-id>/SESSION_HANDOFF.md` exists, read it before resuming
 
 Then read only the additional files listed under Authoritative Inputs / Relevant Files.
 
@@ -354,3 +356,135 @@ Master returns one of:
 - `BLOCKED`
 
 Only Master updates global task state in `workflow/INDEX.md`.
+
+---
+
+## 18. Impact Check / Escalation Trigger
+
+A D-task is responsible for its bounded work package.
+
+It is not expected to understand every downstream consequence in the project.
+
+However, the task must actively detect when its own assumptions, evidence,
+runtime behavior, interfaces, or task contract appear inconsistent.
+
+### Use `/impact-check` when any of the following occurs
+
+- TASK.md assumptions do not match repository reality;
+- implementation does not match the referenced specification;
+- implementation appears inconsistent with primary evidence;
+- runtime behavior contradicts expected behavior;
+- an input or output artifact has unexpected semantics;
+- a declared dependency appears incorrect;
+- fixing the issue may affect another task or stage;
+- verification cannot establish the property it claims to verify;
+- continuing may waste substantial compute;
+- continuing may produce scientifically invalid artifacts;
+- the task owner cannot confidently determine whether the issue is local.
+
+The engineer does NOT need to prove project-wide impact before invoking the
+skill.
+
+A concrete inconsistency plus evidence is sufficient.
+
+Run:
+
+`/impact-check`
+
+The skill performs scoped cross-task impact triage using:
+
+- `workflow/MASTER.md`
+- `workflow/CONTEXT.md`
+- `workflow/INDEX.md`
+- this TASK.md
+- scoped repository / Graphify retrieval
+- relevant authority evidence when necessary
+
+It must classify the finding as one of:
+
+- `LOCAL`
+- `MASTER-IMPACTING`
+- `D0-CANDIDATE`
+- `BLOCKER`
+
+---
+
+### LOCAL
+
+If `/impact-check` returns `LOCAL`:
+
+- the intended behavior is unambiguous;
+- the issue remains inside task scope;
+- no research meaning changes;
+- no other task contract or dependency changes.
+
+The current D-task may fix the issue, verify the correction, and record it in
+HANDOFF.md.
+
+---
+
+### MASTER-IMPACTING
+
+If `/impact-check` returns `MASTER-IMPACTING`:
+
+report the generated:
+
+`MASTER-IMPACTING FINDING`
+
+to Master.
+
+Do not silently update:
+
+- `workflow/MASTER.md`
+- `workflow/CONTEXT.md`
+- `workflow/INDEX.md`
+- another task's TASK.md
+
+Master performs project-level triage.
+
+---
+
+### D0-CANDIDATE
+
+If `/impact-check` returns `D0-CANDIDATE`:
+
+report it to Master.
+
+The D-task does not directly start D0.
+
+Master decides whether the issue requires a formal D0 research / architecture
+decision.
+
+---
+
+### BLOCKER
+
+If `/impact-check` returns `BLOCKER`:
+
+stop at the nearest safe point.
+
+Report:
+
+`TASK BLOCKER — MASTER REVIEW REQUIRED`
+
+Do not continue merely to satisfy the original Definition of Done.
+
+A safely blocked task is preferable to a completed invalid task.
+
+---
+
+### Engineer Detection Rule
+
+The engineer's responsibility is not:
+
+> know the whole project.
+
+The engineer's responsibility is:
+
+> notice when the evidence it observes does not match the contract it was given.
+
+When uncertain whether an inconsistency is local or project-impacting:
+
+use `/impact-check`.
+
+Do not guess.

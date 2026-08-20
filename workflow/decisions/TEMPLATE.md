@@ -30,6 +30,30 @@ Current:
 
 ---
 
+## Session Continuity
+
+If this formal D0 decision is resumed in a new conversation and:
+
+`workflow/decisions/<decision-id>_SESSION_HANDOFF.md`
+
+exists, read it after the formal workflow state and this decision file.
+
+The session handoff is temporary working memory only.
+
+It must not override:
+
+- primary evidence;
+- accepted project state;
+- this formal decision record;
+- verified repository / runtime evidence.
+
+When the investigation is complete, record the formal result in this decision
+file and return it to Master.
+
+Do not use the session handoff as the completed decision artifact.
+
+---
+
 ## 1. Question
 
 State exactly what must be decided.
