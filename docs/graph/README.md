@@ -15,7 +15,7 @@
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
 | **[未定]** | 論文沒說，我們選了一個並記錄。U registry 共 42 項，其中 32 項 unresolved、10 項 resolved（U-08／08a／08b／08d／08e、U-18、U-20、U-21、U-34 於 2026-08-16；**U-26 於 2026-08-17**）。**先前四個會擋住 Stage 2／Table 2 的項目已全部判定，U-26 的 ESSGNN 架構也已選定（附錄的 shared-message 版，標為 `[INFERENCE]`，2.5 版留作對照假設）**；新增 **U-08c**（ProcTHOR 資產數四個數字互相矛盾，一律從安裝的 build 現場推導）|
-| **[偏離]** | 與論文不同，必須在報告聲明（**6 條 D-2…D-7**。條件式的 **D-1** 已於 2026-08-16 判定**不啟用**） |
+| **[偏離]** | 與論文不同，必須在報告聲明（**7 條 D-2…D-8**。條件式的 **D-1** 已於 2026-08-16 判定**不啟用**） |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
 
@@ -120,15 +120,16 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 **不下載**：ULIP-2 預先取樣的點雲（185 GB）、ULIP-2 的渲染圖（474 GB，而且不是論文要的
 11 正交視角）、ShapeNet triplets（409 GB）。
 
-### 六項偏離（D-2…D-7）＋一項條件式（D-1，已判定不啟用）
+### 七項偏離（D-2…D-8）＋一項條件式（D-1，已判定不啟用）
 
 | id | 偏離 | 影響 |
 |---|---|---|
 | **D-1** *(條件式・**不啟用**)* | ViT-bigG-14 的 CLIP 側保持凍結。`active_if: paper_clip_train_scope == 'trainable' AND actual_clip_train_scope == 'frozen'`；實際兩者皆為 `frozen`，條件不成立 | **U-34 已於 2026-08-16 判定為 `frozen`，D-1 因此不啟用。** 理由不是「4090 塞不下所以偏離」，而是：MetaFind 明確建立於 ULIP-2，ULIP-2 §3.3 明文凍結 OpenCLIP，而 MetaFind 全文從未聲明改變此策略。§2.6「Both query and gallery encoders are trained」講的是**塔**（point encoder／projection／fuser 本來就在 optimizer 裡），§3.4「entire encoder」對比的是 fuser-only ablation，§2.4「gallery frozen after pretraining」與 §2.6 是 Stage 1／Stage 2 的界線，不是矛盾。**不得寫成「論文明文說 CLIP 凍結」** —— 論文沒有這句。若日後取得官方 code 或作者回覆證實 optimizer 更新到 OpenCLIP，重開 U-34 並啟用 D-1。 RA-3 仍照跑，量的是**另一個讀法**在本機是否可執行，只記錄不阻斷 |
-| **D-2** | Qwen2.5-VL 取代 GPT-4o | **Table 1 與 Table 2 都受影響** —— 它不只換裁判，也換掉 46,052 筆標註（文字塔的訓練資料）。SC-1 因此只報告差距、不設門檻 |
+| **D-2** | Qwen3.8-27B 取代 GPT-4o（**資產標註 n05**）。使用者決定 U-6，2026-08-21 | **主要影響 Table 1** —— 45,952 筆標註是文字塔的訓練資料。SC-1 只報告差距、不設門檻。標註另錨定於 Objaverse-LVIS 真值類別，該錨定本身也是已記錄偏離。**GPT-4o 可用性為 UNRESOLVED，非已證實不可得** |
+| **D-8** | Qwen2.5-VL 取代 GPT-4o（**場景評分 n17**）。2026-08-21 由 D-2 拆出 | **影響 Table 2**。裁判不是 GPT-4o，SC-3 僅保留方向性結論 |
 | **D-3** | 不重跑 6 個 baseline | 只能與論文公佈值比較，並註明協定不同 |
 | **D-4** | 不做人工評分 | Table 2 人工欄判 `INSUFFICIENT_EVIDENCE` |
-| **D-5** | I-Design 中所有設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` | **與 D-2 不同**（那是 GPT-4o／標註與評分）。換規劃器改變**場景本身** → Table 2 全部與 Table 3 場景欄位移；**Table 1 不受影響**。做法是 patch `filter_dict`，**沒有別名** |
+| **D-5** | I-Design 中所有設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` | **與 D-2／D-8 不同**（那是 GPT-4o／標註與評分）。換規劃器改變**場景本身** → Table 2 全部與 Table 3 場景欄位移；**Table 1 不受影響**。做法是 patch `filter_dict`，**沒有別名** |
 | **D-6** | 對 I-Design 的**行為性**修改（patch 02／03）：佈局引用正規化、丟棄懸空引用、合併重複 id、修正迴圈上限、重試換 seed、耗盡放棄場景 | 改的是管線**產出什麼**，不只是誰產出。**偏離的是公開實作** —— 論文作者的整合程式從未公開，不能斷言他們沒做類似修改 |
 | **D-7** | I-Design 的 **JSON-constrained decoding 未重現**。補充材料 §7：*"All agents utilize GPT-4's JSON mode to restrict outputs exclusively to valid JSON"*，而我們的 vLLM 沒開任何 guided decoding。**與 D-5 不同**——D-5 是誰回答，D-7 是回答受不受結構約束。Qwen 因此**可能吐出結構上不合法的 JSON，GPT-4 在那個模式下不可能**，那會落進 Engineer 的 schema 驗證重試迴圈。分開編號是因為兩者可獨立修復：開了 guided JSON 就能退掉 D-7，D-5 原封不動  影響同 D-5：Table 2 全部與 Table 3 場景欄；Table 1 不受影響 |
 
@@ -267,7 +268,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 `metafind/models/`（`essgnn` / `dual_tower` / `fusion` / `losses` / `ulip_backbone` /
 `stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身 ——
 `n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer。
-435 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態（pytest 參數化後展開成 547 個 case），**沒有一條涵蓋任何節點的執行**。
+456 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態（pytest 參數化後展開成 582 個 case），**沒有一條涵蓋任何節點的執行**。
 
 ---
 

@@ -81,6 +81,69 @@ Keep the Issue and the Decision in separate rows. Do not merge them.
 
 ---
 
+### `DL-007` — n05 v5 anchors object identity on the Objaverse-LVIS label. **This is a DEVIATION.**
+
+**Registered by Master 2026-08-21 during the re-initialization audit. It had no ledger entry, which was a gap: it is the most scientifically material change made to the pipeline this week.**
+
+| | |
+|---|---|
+| **Source** | `D14_n05-v5-reannotate`, design `workflow/n05_v5_design.md`, approved by the user 2026-08-21 |
+| **Issue / Finding** | n05 asked the VLM to *identify* objects from 224×224 renders it often cannot read, so it collapsed onto high-frequency priors. **LVIS ground truth:** 1,156 distinct categories, top-20 share **7.1%**. **Qwen output:** 3,036 categories, top-20 share **22.3%** — 3× more concentrated than the truth. `toy` is the single most common answer at 1,542 (3.4%), a word `build_prompt` **explicitly forbids**. Agreement with LVIS: category matches 29.0%, LVIS word appears in the description 28.4%, **neither 67.8%** |
+| **Why it is not a `category`-only defect** | `build_prompt` says *"Estimate its size from what kind of object it is, not from the picture"* — dimensions and placement are **by design** derived from the category. Observed: `LVIS pinecone → "a dark brown hairbrush"`, `LVIS mug → "a cylindrical pillow"`, `LVIS truck → "a modern air conditioner unit"`. **A wrong category is a wrong record, not a wrong field** |
+| **Evidence references** | `workflow/MIF_n05_diagnosis.md` · `workflow/MIF_n05_category_vs_lvis.md` · `objaverse_lvis_metadata.json → value_to_key_mapping` (46,207 uid→category, fetched by `download.py:70`, **read by nothing**) · `annotate.py:366` `build_prompt(n_views)` receives only `n_views` · `annotate.py:510` `validate_annotation()` never checks semantic correctness |
+| **Resolution not driven by resolution** | correlation(best-view occupancy, LVIS agreement) = **+0.054**, agreement flat at ~28–30% across a ~100× range of effective object pixels. **Re-rendering would not have fixed it** and is explicitly out of scope |
+| **Decision / Resolution** | n05 v5 supplies the LVIS category to the model as the anchored identity; the model may **refine downward** but not replace laterally; it also emits `identity_confirmed`. `PROMPT_VERSION 5`, `SCHEMA_VERSION 3`, `VALIDATOR_VERSION 3`, contract `metafind_annot_v5@f5b2bfb2e5f61fe7` |
+| **Authority classification** | **DEVIATION.** The paper has the VLM *generate* the category: `2methdology.tex:28` and `neurips_2025.tex:100` both say GPT-4o produces the structured annotations; Figure 2's caption (`2methdology.tex:24`) says the VLM *generates* attributes including category. **Feeding the dataset label in is a departure and must never be described as paper-faithful.** `D14/TASK.md` `R-E` binds |
+| **What remains UNRESOLVED** | **`D0-010` has not been researched** — its §6–§11 are empty. The choice between *prompt hint* / *hard value* / *cross-check* / *record-only* was made by design ratification, **not** by a completed evidence audit. Also unresolved: whether anchoring merely substitutes LVIS's own errors for Qwen's, and whether `identity_confirmed` detects that or rubber-stamps the anchor (`IC-1`) |
+| **USER final decision** | design **approved** 2026-08-21; **the deviation registration itself is pending** and reaches the user through `D14`'s acceptance brief |
+| **Affected components** | `annotate.py`, `annotate_run.py`, `lvis_synsets.json`, the entire annotation corpus, every Stage 1 text embedding, both tables' comparability with the paper |
+| **Status** | `AWAITING_USER_REVIEW` |
+| **Date** | design approved 2026-08-21 · registered here 2026-08-21 |
+
+**Registry gap, open:** `docs/graph/graph_spec.yaml` carries **no deviation entry** for LVIS anchoring. And `tools/check_graph.py:373-383` compares deviation **ids only, never the `what:` text** (`FU-A`), so a missing or falsified deviation description passes every gate silently.
+
+---
+
+### `DL-006` — the n05 annotation model is `Qwen3.8-27B`
+
+**Registered by Master 2026-08-21 during the re-initialization audit. The user's decision (U-6) was made in conversation on 2026-08-21 and had no ledger entry.**
+
+| | |
+|---|---|
+| **Source** | User decision **U-6**, 「走本地 Qwen3.8-27B」, recorded in `workflow/tasks/D14_n05-v5-reannotate/USER_DIRECTIVES.md` |
+| **Issue / Finding** | n05 ran `Qwen/Qwen2.5-VL-7B-Instruct` as a stand-in for GPT-4o. A 7B model was a candidate cause of the identity-collapse defect in `DL-007` |
+| **Decision / Resolution** | The annotation model becomes local **`Qwen3.8-27B`**, weights at `/mnt/data1/kyzen/models/Qwen3.8-27B`. Enacted at `annotate_run.py:72`. Master verified 2026-08-21: **18/18 shards, 56 GB, download complete** |
+| **Authority classification** | **USER DECISION.** The substitution itself remains a **DEVIATION** — the paper says GPT-4o twice. Recorded under the split `D-2` (see `DL-005`). Reaching GPT-4o would narrow `D-2`, never discharge it |
+| **Correction of record** | `D14/TASK.md` §7 originally justified its model prohibition with *"GPT-4o is unavailable"*. **Master wrote that without verifying it**, inferring it from the code comment at `annotate_run.py:71`. D14's finding F-2 shows OpenAI's official deprecation page does not list base `gpt-4o` and schedules `gpt-4o-2024-05-13` for shutdown **2026-10-23**, while secondary sources disagree. **The conflict is UNRESOLVED, not resolved**, and the API has never been exercised. It must not be restated as settled |
+| **UNRESOLVED and material** | **The model has never been loaded.** 56 GB at bf16 does not fit the RTX 5090's 32,607 MiB, so **quantization is required and has not been tested.** Quantization changes annotation quality, which makes it an **experimental condition**, not an engineering detail. **No Phase 3 runtime estimate is evidence-backed** — the "~19.6 GPU-h" figure belongs to the 7B model. Tracked as blocker **R2** (`MASTER.md` §11) |
+| **USER final decision** | **`APPROVE`** — the model choice (U-6). The quantization condition and the runtime estimate are **not** covered by it |
+| **Affected components** | `annotate_run.py:72` · deviation `D-2` · `D14` Phase 2 and Phase 3 · every annotation record |
+| **Status** | **`USER_APPROVED`** for the model choice; the quantization condition is **OPEN** |
+| **Date** | 2026-08-21 |
+
+---
+
+### `DL-005` — deviation `D-2` split into `D-2` (annotation) and `D-8` (scene judging)
+
+| | |
+|---|---|
+| **Source** | Master, executing D14's escalation **P-2**, 2026-08-21 |
+| **Issue / Finding** | `graph_spec.yaml` recorded one deviation — *"Qwen2.5-VL replaces GPT-4o for annotation **and** scene judging"*. After user decision **U-6** the annotation model became `Qwen3.8-27B` while the judge (n17) stayed `Qwen2.5-VL`. **One id would denote two different substitutions** |
+| **Evidence references** | `graph_spec.yaml:130` (pre-split) · `annotate_run.py:72` (`MODEL_ID` already changed) · `2methdology.tex:28`, `neurips_2025.tex:100` (paper says GPT-4o) |
+| **Decision / Resolution** | **Split, not rewrite-in-place.** `D-2` = Qwen3.8-27B for **asset annotation (n05)**. New `D-8` = Qwen2.5-VL for **scene judging (n17)**. Deviation count 六項 → 七項, synchronised across 5 files: `graph_spec.yaml`, root `README.md`, `docs/graph/README.md`, `02_BUILD_STEPS.md`, `01_GRAPH_SPEC.md`. `check_graph.py` → **2275 checks, all pass** |
+| **Why split rather than rewrite** | One id covering two different substitute models is the exact ambiguity that produced this escalation, and the two will diverge further — n17 may change model later. D14 recommended splitting; Master agreed |
+| **Authority classification** | The model change itself is a **USER DECISION** (U-6). This split is **bookkeeping that follows from it** — it records an existing fact accurately, it does not make a new choice |
+| **USER final decision** | **pending** — reaches the user through D14's acceptance brief |
+| **Affected components** | `docs/graph/graph_spec.yaml`, both `README.md`, `02_BUILD_STEPS.md`, `01_GRAPH_SPEC.md`; the reproduction report's deviation section |
+| **Status** | `AWAITING_USER_REVIEW` — executed, not yet ratified |
+| **Date** | 2026-08-21 |
+
+**Correction carried in the same edit.** `D-2`'s stated reason was *"GPT-4o is unavailable"*. **Master wrote that without verifying it**, inferring it from a code comment. D14's finding F-2 showed OpenAI's official deprecation page does not list base `gpt-4o` and schedules `gpt-4o-2024-05-13` for shutdown **2026-10-23**, while secondary sources disagree. **That conflict is UNRESOLVED.** The registry now records availability as UNRESOLVED rather than as established, in `graph_spec.yaml`, both READMEs, and `TASK.md` §7.
+
+**Open gate weakness, registered not fixed:** `tools/check_graph.py:373-383` compares deviation **ids only** — regex `\|\s*\*\*(D-[0-9])\*\*` — and never reads the `what:` text. **A deviation whose description has gone false passes every gate silently.** That is how `D-2` stayed wrong. Found by D14. Not in D14's scope; unassigned.
+
+---
+
 ### `DL-004` — MetaFind §2.5 `f_x → R³`: verdict and implementation
 
 | | |
@@ -109,6 +172,60 @@ Keep the Issue and the Decision in separate rows. Do not merge them.
 | MIF-4b | No `R³`-variant equivariance test exists. **Narrower than reported:** `test_se3_equivariance` runs at `n_layers=3` (`test_essgnn.py:102`, `:112`) and `test_equivariance_negative_injection` (`:129`) proves it non-vacuous |
 | MIF-5 | `normalize_coord_diff` has no MetaFind authority. `essgnn.py:189` defaults `False`, zero current impact. **Independent candidate — not D0-009's to touch** |
 | — | Correct `E_GRAPH_REVALIDATION.md:175`'s `[UPSTREAM] settles it` |
+
+---
+
+### `DL-003-A1` — PREPARED AMENDMENT to `DL-003` / AC-1, to land WITH D14 Phase 3
+
+**Status: `PREPARED, NOT IN FORCE`.** Drafted by Master 2026-08-21 at D14's request (P-5), so the
+amendment lands **with** Phase 3 rather than being retrofitted after it. `DL-003` stands unchanged
+until Phase 3 completes.
+
+**Why an amendment is needed.** `DL-003` records the corpus as **accepted legacy-v3 validated under
+`VALIDATOR_VERSION 2`**, and the provenance registry declares that as a population of **45,952**.
+D14 Phase 3 re-annotates those same 45,952 under `PROMPT_VERSION 5` / `VALIDATOR_VERSION 3` /
+`SCHEMA_VERSION 3`, contract `metafind_annot_v5@f5b2bfb2e5f61fe7`. **The moment Phase 3 finishes,
+`DL-003`'s description of the corpus becomes false.**
+
+### What changes
+
+| | before Phase 3 | after Phase 3 |
+|---|---|---|
+| 45,952 records | `accepted_legacy_v3`, `VALIDATOR_VERSION 2` | annotated under the **current** contract `metafind_annot_v5@…` |
+| how they satisfy AC-1.a | by **registry declaration** | by `is_complete()` — they carry the current `annotation_contract` |
+| 3 legacy-v1 residuals | `legacy_v1_residual_unresolved` | **unchanged.** `D0-003` still UNRESOLVED |
+| registry `accepted_legacy_v3` population | 45,952 | **0** — the state becomes historical |
+
+### What must NOT change
+
+- **AC-1.a still holds: a bare `annotate_run` queues 0 records TOTAL.** After Phase 3 the 45,952
+  satisfy it through `is_complete()` instead of through the registry, and the 3 residuals still
+  satisfy it through their declaration. **The guarantee is identical; only the mechanism moves.**
+- **AC-1.b still holds:** `--force` still re-annotates; the named-migration form still works.
+- **AC-1.c still holds:** three states remain explicit, never inferred from a missing field.
+- **`D0-003` remains UNRESOLVED.** Nothing in Phase 3 or this amendment resolves it, and the
+  3 residuals must be byte-identical at Phase 3's end.
+
+### Required of D14 at Phase 3
+
+1. Update the registry so `accepted_legacy_v3` no longer claims a population that has moved on.
+   **Do not delete the state** — mark it historical, with the date and the contract that superseded it.
+2. Re-prove AC-1.a **after** the registry update: bare run queues **0 TOTAL**, 0 legacy-v3, 0 residuals.
+3. Re-prove AC-1.b: `--force` still yields a non-empty work list.
+4. Confirm the 3 residuals' declaration survived untouched.
+
+**If AC-1.a cannot be re-proved after the registry update, that is a `MASTER-IMPACTING FINDING`, not
+a registry-editing problem.** The protection is the point; the registry is only how it is expressed.
+
+### Authority
+
+The re-annotation itself is a **USER DECISION** (U-6, U-10, and the design ratified 2026-08-21).
+This amendment is **bookkeeping that follows from it** — it records a consequence, it does not make
+a new choice. It still reaches the user through D14's acceptance brief.
+
+**Superseded on landing:** `DL-003`'s "legacy-v3 validated under `VALIDATOR_VERSION 2`" description
+of the 45,952, and `AC-1.e`'s instruction to record them as such. **`DL-003` is not deleted** — it is
+the true record of what was accepted on 2026-08-21.
 
 ---
 

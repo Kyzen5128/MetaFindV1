@@ -49,15 +49,16 @@ scratch/             參考用的雜項腳本
 
 ## 已知偏離論文之處
 
-**正式偏離六項（D-2…D-7）＋條件式一項（D-1，已判定 `resolved_inactive`）**，編號以
-[`docs/graph/graph_spec.yaml`](docs/graph/graph_spec.yaml) 為準：D-2…D-7 在
+**正式偏離七項（D-2…D-8）＋條件式一項（D-1，已判定 `resolved_inactive`）**，編號以
+[`docs/graph/graph_spec.yaml`](docs/graph/graph_spec.yaml) 為準：D-2…D-8 在
 `boundary.deviations`，D-1 在 `boundary.conditional_deviations`，
 `active_if: paper_clip_train_scope == 'trainable' AND actual_clip_train_scope == 'frozen'`。
 
 | id | 內容 |
 |---|---|
 | **D-1** *(條件式・`resolved_inactive`)* | ViT-bigG-14 的 CLIP 側保持凍結。**U-34 已於 2026-08-16 判定為 `frozen`**，故 `paper = actual = frozen`、`active_if` 為 false，**不列為 active deviation**。判讀依據：MetaFind 明確建立於 ULIP-2；ULIP-2 §3.3 明文 "freeze it during pre-training"；MetaFind 全文未逐 module 聲明改變此策略。**不得寫成「MetaFind 明文說 OpenCLIP frozen」**。 規則保留供日後重開 |
-| **D-2** | Qwen2.5-VL 取代 **GPT-4o**（資產標註與場景評分） |
+| **D-2** | Qwen3.8-27B 取代 **GPT-4o**（**資產標註 n05**）。使用者決定 U-6，2026-08-21。GPT-4o 可用性為 **UNRESOLVED**，非已證實不可得 |
+| **D-8** | Qwen2.5-VL 取代 **GPT-4o**（**場景評分 n17**） |
 | **D-3** | 不重跑 6 個 baseline |
 | **D-4** | 不做人工評分 |
 | **D-5** | I-Design 中所有設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` |

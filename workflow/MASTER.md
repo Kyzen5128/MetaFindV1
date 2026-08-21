@@ -7,6 +7,10 @@
 **Initialized:** 2026-08-20
 **Repository state at initialization:** `4a4ebbe` + untracked `workflow/`, `_workflow_old_20260820/`; deleted `TASKS.md`, `主線.md`, `支線任務.md`
 
+**Last corrected:** 2026-08-21 (Master re-initialization audit). `git HEAD 468bbac` + 13 modified / 7 untracked, **none committed**.
+Every count in §4, §6, §11 and §12 was re-measured against disk on that date. Sections that had gone stale are marked
+**[CORRECTED 2026-08-21]**; the superseded figure is stated rather than deleted, so the drift stays auditable.
+
 ---
 
 ## 1. Project Goal
@@ -25,14 +29,18 @@ Working code alone is not the deliverable. Traceable reproduction fidelity is.
 
 ---
 
-## 2. Current Project Phase
+## 2. Current Project Phase **[CORRECTED 2026-08-21]**
 
-**Phase: Stage 1 data preparation — INCOMPLETE.**
+**Phase: n05 annotation corpus is being rebuilt. Everything downstream is halted behind it.**
 
-Two things must not be collapsed into one statement:
+> Superseded wording: *"Stage 1 data preparation — INCOMPLETE … n06 has produced 5,276 of the expected embeddings."*
+> That described the project before the n05 category defect was found on 2026-08-21.
 
-- **Raw / upstream preprocessing: COMPLETE.** Download, point clouds, renders, annotation, scene graphs, ProcTHOR modalities, semantic edges, and the Stage 2 protocol resolvers have all run and their artifacts are on disk.
-- **Stage 1 prerequisite data preparation: INCOMPLETE.** n06 has produced 5,276 of the expected embeddings and what it did produce is stale. n09 has never run, so none of `splits.json`, `eval_protocols.json`, or `stage1_protocol.json` exists. The recorded Stage 1 encoding protocol does not match the encoder.
+Three things must not be collapsed into one statement:
+
+- **Raw / upstream preprocessing: COMPLETE.** Download, point clouds, renders, scene graphs, ProcTHOR modalities, semantic edges, and the Stage 2 protocol resolvers have all run and their artifacts are on disk.
+- **The n05 annotation corpus is DEFECTIVE and is being replaced.** Qwen was asked to *identify* objects it could not read and collapsed onto high-frequency priors; because `build_prompt` derives dimensions and placement from the category, a wrong category is a **wrong record, not a wrong field**. Diagnosis: `workflow/MIF_n05_diagnosis.md`. Replacement design: `workflow/n05_v5_design.md`. Executing task: **`D14_n05-v5-reannotate`, ACTIVE**, Phase 1 complete, holding at the Phase 2 gate.
+- **Stage 1 prerequisite data preparation: HALTED, not merely incomplete.** `D1_n06-reencode` was **STOPPED** at `2026-08-21T14:15:48` after **20,053 / 45,952** `.npz`. Those embeddings encode the defective categories and are **invalid**, not partial progress. n09 has never run, so `splits.json`, `eval_protocols.json` and `stage1_protocol.json` are all absent.
 
 Stage 1 has never trained. `data/outputs/checkpoints/` is empty. Everything from Stage 1 training onward is unexecuted.
 
@@ -85,7 +93,7 @@ Status classification is deliberately strict. Artifacts on disk are OBSERVED DAT
 | Node | Evidence |
 |---|---|
 | n02–n04 | `pointclouds_index.jsonl` 46,052 · `renders_index.jsonl` 45,955 |
-| n05 annotate | `data/outputs/annotations/` = 45,955 files: **45,952 `prompt_version:3` + 3 `prompt_version:1`** |
+| n05 annotate | `data/outputs/annotations/` = 45,955 files: **45,952 `prompt_version:3` + 3 `prompt_version:1`**. **[CORRECTED 2026-08-21] "DONE" here means the files exist. The v3 corpus is semantically DEFECTIVE** — see §2 and `MIF_n05_diagnosis.md`. It is being replaced by `D14`. Do not treat this row as an accepted corpus |
 | n05b resolve_stage1_encoding | `stage1_encoding_protocol.json`, `stage1_hyperparameters.json` (sha256 self-consistent) |
 | n07 scene_graphs | `data/outputs/scene_graphs/` = 12,000 files |
 | n07b procthor_modalities | `procthor_node_embeddings.{json,npz}`, `procthor_object_text.json` |
@@ -93,20 +101,20 @@ Status classification is deliberately strict. Artifacts on disk are OBSERVED DAT
 | n09b resolve_stage2_protocol | `stage2_protocol.json`, `essgnn_arch_protocol.json`, `essgnn_edge_protocol.json`, `stage2_positive_map.json` |
 | n09c build_scene_splits | `scene_splits.json` |
 
-Repository health, verified 2026-08-20:
+Repository health, **re-run by Master 2026-08-21** (supersedes the 2026-08-20 figures):
 
-- `python -m pytest tests/ -q` → **442 passed, 0 failed, 0 skipped, 0 deselected**, 22 warnings (all τ-deviation warnings). 442 collected.
+- `python -m pytest tests/ -q` → **582 passed**, 0 failed, 0 skipped, 22 warnings (all τ-deviation warnings, raised from a **test fixture** — the production artifact carries τ = 0.5 per `DL-003`).
 - `tools/check_graph.py` → **2275 checks, all pass**.
 
-These establish that the code executes and is internally consistent. They do **not** establish paper fidelity for any component.
+> **[CORRECTED 2026-08-21] The suite grew 442 → 547 → 582** as `D2a` and then `D14` added coverage. `442` remains the correct record for 2026-08-20 and for every document dated then; it is **not** the current baseline. Use `pytest tests/ -q` with no `--ignore` flag as the standard health check.
 
-> **Correction.** An earlier line in this initialization reported 437 passed. That was an artifact of the command used, not a change in the suite — the run carried `--ignore=tests/test_cuda_smoke.py`, and `test_cuda_smoke.py` collects exactly 5 tests (442 − 5 = 437). Per-file collection sums to 442 across 20 files. No test disappeared, none is skipped, and CUDA is available (`torch.cuda.is_available() → True`, RTX 5090, 31.4 GB), so the CUDA tests genuinely execute. The prior record of 442 passed is confirmed. **Use `pytest tests/ -q` with no ignore flag as the standard health check.**
+These establish that the code executes and is internally consistent. They do **not** establish paper fidelity for any component.
 
 ### NOT DONE
 
 | Node | Observed state |
 |---|---|
-| n06 encode_text_image | **5,276 present**, and the cached text is **stale** — see §11 B1. Expected successful output is **45,952** — see the count breakdown below |
+| n06 encode_text_image | **[CORRECTED 2026-08-21] 20,053 `.npz` present** (was 5,276 before `D1` ran), and **all of them are invalid** — they encode the defective v3 categories, and every one is already cache-invalid under `DL-002`'s text-bound `is_complete()`. `D1` was **STOPPED** at `2026-08-21T14:15:48`; nothing was deleted. Expected successful output of a future full run is **45,952** — see the count breakdown below |
 | n09 build_splits | **never executed.** `splits.json`, `eval_protocols.json`, `stage1_protocol.json` all absent |
 | n10 train_stage1 | **never executed.** `data/outputs/checkpoints/` is empty |
 | n10b post_stage1_encode | **not implemented** (no `IMPLEMENTS-NODE` marker anywhere) |
@@ -130,14 +138,15 @@ These establish that the code executes and is internally consistent. They do **n
 
 This expected-output figure is a **runtime property of n06 and holds regardless of how D0-003 is decided.** D0-003 governs something different: whether those 3 uids are admitted by n09 into the splits and gallery. If they are, Stage 1 crashes — see D0-003 in §8.
 
-### READY
+### ACTIVE / READY **[CORRECTED 2026-08-21]**
 
-| ID | Work package | Why ready |
+| ID | Work package | State |
 |---|---|---|
-| **`D1_n06-reencode`** | **`READY` — APPROVED 2026-08-21.** `D0-008` ✅ · `D2a` ✅ · `D10` ✅. `load_protocol()` passes, pre-flight passes, all 5,276 stale embeddings are cache-invalid, the corpus is protected. ~4 GPU-hours, expected output **45,952** `.npz` + **3** quarantine records. Baseline `cf234fb`. **Conversation not yet opened** |
-| `D9_paper-figures-audit` | Read all 38 extracted paper figures against the U-register | Zero cost, no GPU, read-only on `data/`, writes only `docs/`. No unresolved decision required |
-
-`D1_n06-reencode` was initially assessed READY. Re-verification moved it to BLOCKED — see D0-008 and blocker B5.
+| **`D14_n05-v5-reannotate`** | Category-anchored re-annotation | **`ACTIVE`.** Approved 2026-08-21 (U-10 authorises Phase 1 + Phase 2 **only**). **Phase 1 COMPLETE** — v5 prompt, validator v3, `identity_confirmed`, 1,156-entry synset lookup, contract `metafind_annot_v5@f5b2bfb2e5f61fe7`, 582 tests pass. **Holding at the Phase 2 gate.** Five escalations `P-1`…`P-5` filed; `IC-1` and `IC-2` **await a Master or user ruling** |
+| `D15_n03-n04-code-audit` | Read-only audit of n03/n04 against `/home/kyzen/upstream/ULIP @ 95d480fe` | **`PLANNED`** — contract written, not approved. **§6 of its contract contains a factual error corrected 2026-08-21**; see §11 R1 |
+| `D16_gates-g1-g2` | First gates G1/G2 + the `gate_record` schema | **`BLOCKED`** on `D15` and on user resolution of `OQ-1` / `OQ-2` |
+| ~~`D1_n06-reencode`~~ | Full n06 re-encode | **`STOPPED` 2026-08-21T14:15:48**, 20,053 npz, nothing deleted. **Must re-run after `D14`.** Its `TASK.md` preconditions (5,276 npz, 547 tests) are stale and marked as such |
+| `D9_paper-figures-audit` | Read all 38 extracted paper figures against the U-register | **`READY`.** Zero cost, no GPU, read-only on `data/`, writes only `docs/` |
 
 ### BLOCKED
 
@@ -155,10 +164,11 @@ This expected-output figure is a **runtime property of n06 and holds regardless 
 
 ### DECISION REQUIRED
 
-Eight registered candidates, one resolved. Full registry: `workflow/INDEX.md` §Decision Queue. Critical-path summary:
+**[CORRECTED 2026-08-21]** Nine registered candidates, two resolved. Full registry: `workflow/INDEX.md` §Decision Queue. Critical-path summary:
 
 | ID | Question | Blocks |
 |---|---|---|
+| **D0-010** | **How the Objaverse-LVIS ground-truth category enters n05** — prompt hint / hard value / cross-check / record-only; and whether the GPT-4o → Qwen substitution is a material cause. **Decision file exists; §6–§11 are EMPTY — no research has been done** | **`D14` Phase 3, therefore everything downstream** |
 | D0-002 | U-16 tower sharing mode | D2 → D3, and Stage 2 feasibility |
 | D0-003 | The 3 `prompt_version:1` annotations — admit, drop, or re-annotate | D2 (corpus denominator) and **D3 (hard: `stage1.py:109` raises `FileNotFoundError` if admitted)** |
 | D0-004 | ESSGNN `coord_feat` / `architecture_family` coupling | D5, ablation design |
@@ -179,16 +189,26 @@ Known mismatches between an established requirement and the current artifact/cod
 
 ---
 
-## 5. Dependency / Execution Order
+## 5. Dependency / Execution Order **[CORRECTED 2026-08-21]**
+
+> Superseded: the chain that began `D0-008 → D10 → D1`. All three are `USER_APPROVED` and `D1` has since been stopped. The head of the critical path is now the annotation corpus.
 
 ```
-D9 (figures audit)  ─────────┐  may refine D0-002 / D0-004 evidence
-                             │  PARALLEL SAFE with everything below
-D0-008 ACCEPTED ──► D10 (encoding contract) ──► D1 (n06 re-encode, ~4 h GPU) ─┐
-                             │                                                │
-D0-002 U-16 ─────────────────┼──► D2 (n05b + C-001 + C-002 + n09 + G3) ────────┴─► D3
-D0-003 stragglers ───────────┘                                                     │
-                                                                  ▼
+R1 orientation verification (read-only, cheap) ──► must land before D16 writes G2
+                                                   and before D3 spends a training run
+D0-010 (category source) ──┐
+                           ├──► D14 Phase 2 (300-500 sample) ──► [HARD HOLD: user's go only]
+D14 Phase 1 COMPLETE ──────┘                                            │
+                                                                        ▼
+                                                   D14 Phase 3 (full re-annotation)
+                                                                        │
+                                                                        ▼
+                                                   D1 (n06 re-encode, 45,952 npz)
+                                                                        │
+D0-002 U-16 ─────────┐                                                  │
+D0-003 stragglers ───┴──► D2 (n05b + n09 + G3)  ────────────────────────┴─► D3
+                          (gate n09 ONLY - independent of n06)             │
+                                                                          ▼
                                                     D4 (gallery index n11/G4/n12)
                                                          │              │
                                     D0-004 ──► D5 (Stage 2 prereq)      └──► D7 (Table 1 eval)
@@ -198,31 +218,48 @@ D0-003 stragglers ───────────┘                          
                                                       │
                                     D0-007 ──►        ▼
                                                D8 (Table 2 eval)
+
+D9 (figures audit) · D15 (n03/n04 audit) · D0-002 / D0-003 / D0-010 research
+        └── all PARALLEL SAFE with the chain above; none writes data/outputs/
 ```
 
-Critical path: **D0-008 (done) → D10 → D1 → D2 → D3 → D4 → {D7, D5 → D6 → D8}**, with D0-002 and D0-003 required before D2.
+Critical path: **R1 → D0-010 → D14 Phase 2 → [user gate] → D14 Phase 3 → D1 → D2 → D3 → D4 → {D7, D5 → D6 → D8}**, with D0-002 and D0-003 required before n09 (D2).
 
-Execution is **sequential by default**. No parallel run is proposed at this time.
+Execution is **sequential by default** for anything that writes `data/outputs/` or holds the GPU. Read-only research and audits may run alongside.
 
 Ordering constraint: D2 must re-run n05b to refresh `stage1_encoding_protocol.json`, and `resolve_stage1.py:443-444` rewrites `stage1_hyperparameters.json` in the same call. So the template ratification (D0-008) and the τ correction (C-001) must both be settled before n05b runs, or n05b runs twice.
 
 ---
 
-## 6. Active Assignment
+## 6. Active Assignment **[CORRECTED 2026-08-21]**
 
-**Two concurrent work items, both user-approved 2026-08-21.** Master verified `WORKFLOW.md` §7's five conditions for this pair; see `INDEX.md`.
+> Superseded: this section described `D2a` and `D0-009` as the live pair. Both closed on 2026-08-21 (`DL-003`, `DL-004`).
 
-| | `D2a_stage1-protocol-refresh` | `D0-009_essgnn-fx-codomain` |
+**One ACTIVE work item: `D14_n05-v5-reannotate`.**
+
+| | `D14_n05-v5-reannotate` |
+|---|---|
+| Role | `D1+` execution |
+| Status | **`ACTIVE`.** Phase 1 COMPLETE, holding at the Phase 2 gate |
+| Carries | v5 category-anchored annotation · LVIS anchor · `identity_confirmed` · exact mesh proportions · synset lookup · model change to `Qwen3.8-27B` (U-6) |
+| Writes | `annotate.py`, `annotate_run.py`, `tests/test_annotate.py`, `lvis_synsets.json`, its own task dir. Phase 3 only: `data/outputs/annotations/**` |
+| Authorisation | **U-10 covers Phase 1 + Phase 2 only.** `R-A` makes the Phase 3 gate absolute — good Phase 2 numbers are **not** permission |
+
+**Owed to D14 by Master, still outstanding:**
+
+| | Item | State |
 |---|---|---|
-| Role | `D1+` execution | `D0` paper audit |
-| Status | **execution `COMPLETE` · integration `USER_APPROVED` 2026-08-21 (`DL-003`)** | `OPEN` / `INVESTIGATING` — running |
-| Carries | C-001 τ=0.5 · C-002 protocol refresh · **AC-1** · legacy-v3 provenance | MetaFind §2.5 `f_x → R³`, read-only |
-| Writes | `resolve_stage1.py`, `annotate_run.py`, `annotate.py`, tests, 2 protocol artifacts | **only** its own decision file |
-| Conversation | NEW | NEW |
+| `P-1` | Amend `TASK.md` §7 for U-6, and qualify the unverified "GPT-4o is unavailable" premise | **GRANTED**, applied in `D14/TASK.md` §7 |
+| `P-2` | Split deviation `D-2` into `D-2` (annotation) + `D-8` (scene judge) | **EXECUTED** across 5 files; ledger `DL-005` is `AWAITING_USER_REVIEW` |
+| `P-3` | Two integers in `docs/graph/README.md` | **GRANTED**; `check_graph.py` back to 2275 all-pass |
+| `P-4` | Correct the `/mnt/data1` claim in `CLAUDE.md` §9 / `CONTEXT.md` §9 | `CONTEXT.md` **DONE**. `CLAUDE.md` is project instruction — **user only** |
+| `P-5` | Prepare the `DL-003` / AC-1 amendment for Phase 3 | **DRAFTED** as `DL-003-A1`, `PREPARED, NOT IN FORCE` |
+| `IC-1` | Record `exact` / `refined` / `divergent` category relations and reject nothing | **UNRULED — owed to the user** |
+| `IC-2` | `synset` follows the LVIS anchor, not the model's refined category | **UNRULED — owed to the user** |
 
-**Scope wall.** Neither may modify the other's scope. A finding bearing on the other is a `MASTER-IMPACTING FINDING`, reported and not acted on.
+**Concurrent, permitted, none writing `data/outputs/`:** `D0-010` research · `D0-002` / `D0-003` research · `D15` (once its §6 error is fixed) · R1 orientation verification.
 
-**Dependency, unchanged:** `D2a USER_APPROVED → D10 final USER REVIEW with AC-1 evidence → D10 USER_APPROVED → D1_n06-reencode`. **D2a's completion does not start D1.**
+**Scope wall.** No item may modify another's scope. A finding bearing on another is a `MASTER-IMPACTING FINDING`, reported and not acted on.
 
 `D0-008_stage1-text-template` was returned `RECOMMENDED` by D0 on 2026-08-21 and Master recorded `ACCEPT WITH FOLLOW-UP` the same day — **before the user review gate was adopted.**
 
@@ -268,8 +305,11 @@ The primary evidence is sufficient and uncontested, so there is no two-way resea
 
 - **PAPER FACT — τ = 0.5.** `docs/paper/metafind_source/3experiments.tex:15`: "The temperature is 0.5 for all experiments." Verified verbatim. A grep for `emperature` across `docs/paper/metafind_source/*.tex` returns three hits: `2methdology.tex:79` and `:99` both say only "τ is a temperature hyperparameter" and give no value; `3experiments.tex:15` gives 0.5. **No conflicting statement exists in the paper source.**
 - **INFERENCE (strongly supported) — `learnable_temperature: false`.** The paper states a fixed value held across all experiments. A learnable τ initialised at 0.5 would not remain 0.5, so a learnable temperature cannot satisfy the sentence. The paper does not use the word "learnable"; this is inference, not paper fact.
-- **ARTIFACT MISMATCH.** `data/outputs/stage1_hyperparameters.json` records `init_temperature: 0.07`, `learnable_temperature: true`, `decided_by: "Kyzen (relayed GPT analysis, 2026-08-16)"`. This contradicts the paper fact.
-- **IMPLEMENTATION GAP.** `metafind/models/resolve_stage1.py:197-211` hardcodes `init_temperature: 0.07` and `learnable_temperature: True` in `DEFAULT_HYPERPARAMETERS`, and `main()` calls `build_hyperparameters(decided_by)` with **no overrides** (`resolve_stage1.py:442`) and exposes no CLI flag for them. **There is currently no supported way to produce τ = 0.5 through n05b.** The in-code comment at `resolve_stage1.py:205-206` names the source of 0.07 explicitly: "CLIP's own convention" — an upstream convention, not a MetaFind specification.
+- ~~**ARTIFACT MISMATCH.**~~ **RESOLVED by `D2a`, 2026-08-21.** `stage1_hyperparameters.json` now records `init_temperature: 0.5`, `learnable_temperature: false`, `decided_by: "D2a_stage1-protocol-refresh"`. Re-verified 2026-08-21.
+- ~~**IMPLEMENTATION GAP.**~~ **RESOLVED by `D2a`, 2026-08-21.** The paragraph below is retained as a record of the original finding; **its concluding claim is now false.**
+  > `metafind/models/resolve_stage1.py:197-211` hardcodes `init_temperature: 0.07` and `learnable_temperature: True` in `DEFAULT_HYPERPARAMETERS` … **There is currently no supported way to produce τ = 0.5 through n05b.**
+
+  Current state, verified 2026-08-21: `resolve_stage1.py:272-273` defaults to `init_temperature: 0.5`, `learnable_temperature: False`, and `stage1.py:335-336` reads those values out of the artifact. **The training path uses τ = 0.5 fixed.** The `tau deviates from the paper` warnings still visible in `pytest` output come from *tests* constructing `ContrastiveConfig` with library defaults (0.07 / learnable), **not** from the training path — do not read them as evidence that the gap is open. Evidence: `workflow/tasks/D15_n03-n04-code-audit/FINDINGS.md`, FIND-13.
 - **OBSERVED IMPLEMENTATION.** `metafind/models/losses.py:70` already defines `PAPER_TAU = 0.5` and warns on every deviating construction (`losses.py:114-120`). All 22 warnings in the test run come from this.
 
 **What is actually required:** an implementation correction inside `D2_stage1-prereq` — add an override path for the hyperparameters, set τ = 0.5, re-run n05b, and re-run n09 so `stage1_protocol.json` hashes the corrected artifact. No D0 investigation is needed.
@@ -408,10 +448,38 @@ Scheduled milestone reviews (per `workflow/WORKFLOW.md` §14):
 
 ---
 
-## 11. Current Blockers
+## 11. Current Blockers **[CORRECTED 2026-08-21]**
 
-**B1 — Stage 1 has no usable embedding cache.**
-`data/outputs/embeddings/` holds 5,276 `.npz` against an expected successful output of 45,952. The cached text is also stale, verified directly rather than inferred from timestamps:
+### The four live blockers, highest first
+
+**R1 — the point-cloud corpus may be systematically mis-oriented, and the two measurements in existence contradict each other. UNVERIFIED. CRITICAL.**
+
+| Source | Population | Result |
+|---|---|---|
+| `docs/graph/00_FINDINGS.md` **F21** | **6** assets | same-asset Chamfer median **0.00318** vs cross-asset baseline **0.05880** → "geometry matches" |
+| A prior session's measurement, 2026-08-21 (**not recorded in the repository until now**) | **286** overlapping assets from the official ULIP-2 `000-009` shard | median Chamfer **0.0903 at 0°** vs **0.0230 at 180° yaw**; **269/286 (94.1%)** improve under 180°; poor-tier share 47.9% → 2.4% |
+
+Both cannot be right. Untested candidate explanations: (a) the 180° result is an artifact — official `.npy` clouds are **uncentered** (centroid up to 0.588) while ours are **pre-centered**, so omitting `pc_norm` on the official side shifts the whole distribution; (b) F21's n=6 is too small; (c) a genuine frame divergence between `pointclouds.py:118` (per-geometry `apply_transform`) and `renders.py:150` (per-vertex `transform_points` + `scene.apply_transform(fit)`).
+
+A decisive test — encode both orientations through the frozen ULIP-2 checkpoint and compare against the official image embeddings — was written and **timed out without a result**.
+
+**Why it outranks everything else:** if real, all 46,052 point clouds are invalid, therefore Stage 1, therefore both tables — **and no error is raised anywhere in the chain.** It must be settled before `D16` writes G2's criteria and before `D3` spends a training run.
+
+**Consequential correction:** `workflow/tasks/D15_n03-n04-code-audit/TASK.md` §6 stated *"`L2-PC-ULIP-REF` has never been run and the reference clouds are not on disk."* **Both halves are false** — F21 ran a version of it, and the reference shard was extracted on 2026-08-21. Corrected in that file on 2026-08-21.
+
+**R2 — `D14` Phase 3's cost is not evidence-backed. HIGH.**
+`Qwen3.8-27B` is **56 GB** at bf16 (18/18 shards present at `/mnt/data1/kyzen/models/Qwen3.8-27B`) on a **32,607 MiB** RTX 5090. Quantization is **required and has never been loaded or benchmarked**. The "~19.6 GPU-h" figure belongs to the **7B** model. Quantization also changes annotation quality, which makes it an **experimental condition**, not an engineering detail.
+
+**R3 — the whole dataset now lives on an SMR drive. HIGH.**
+`data → /mnt/data1/kyzen/MetaFind` since 2026-08-21 21:32; `/home/kyzen/data` no longer exists. `/mnt/data1` is `ST4000DM004`, **SMR**, measured `w_await` above **5,000 ms** under mixed small-file write load. n05 writes 45,952 small `.json`; n06 writes 45,952 small `.npz` — the drive's worst case. **Every runtime estimate in this project predates the migration and is unmeasured against it.**
+
+**R4 — Table 1 and Table 2 have zero implementation. HIGH.**
+n15, n15a/b/c, n16, n17, n18–n22 are spec only. The reproduction **cannot produce its headline result today**, independent of training, and no task owns it.
+
+### Carried blockers
+
+**B1 — Stage 1 has no usable embedding cache. [CORRECTED: the count was 5,276; it is now 20,053, and all of them are invalid.]**
+`data/outputs/embeddings/` holds **20,053** `.npz` against an expected successful output of 45,952. They were produced by the stopped `D1` run against the **defective v3 annotation corpus**, so they are invalid for a second and stronger reason than the template staleness described below. Nothing has been deleted. The original staleness evidence, verified directly rather than inferred from timestamps:
 
 ```
 cached  (embeddings/000074a3....json)
@@ -439,23 +507,25 @@ n15_eval_retrieval is spec only. The reproduction cannot produce Table 1 in its 
 
 ---
 
-## 12. Next Recommended Action
+## 12. Next Recommended Action **[CORRECTED 2026-08-21]**
 
-**`D0-008` is accepted. `D10_stage1-encoding-contract` is READY — contract written, awaiting approval to start its conversation.**
+> Superseded: *"`D10_stage1-encoding-contract` is READY … then `D1_n06-reencode`."* `D10` is `USER_APPROVED` (`DL-002`) and `D1` has been stopped. Acting on the old text would have restarted a 4-hour encode against a corpus that is about to be replaced.
 
-Accepting D0-008 ratified the template but deliberately did **not** unblock `D1_n06-reencode`. Follow-up F-1 — the cache completion/validity BLOCKER — stands between them, and it is the one defect in this project that can produce confident wrong numbers with no error anywhere in the chain.
+**Three actions, in this order. Only the third costs meaningful GPU time.**
 
-D10 is the single task that clears every gate in front of the ~4 GPU-hour encode. Contract written at `workflow/tasks/D10_stage1-encoding-contract/TASK.md`. Per the user's revision, its Definition of Done item 2 requires the cache-validity claim to be proven through completion / cache-validity / pre-flight logic **only** — no encoder run, no GPU embedding generation.
+| # | Action | Cost | Why it is first |
+|---|---|---|---|
+| **1** | **Verify R1** — finish the frozen-checkpoint orientation test over a proper sample, with `pc_norm` applied identically to both sides | minutes of GPU, read-only | It can invalidate all 46,052 point clouds. Every downstream hour is wasted if it is real, and it raises no error on its own |
+| **2** | **Open `D0-010`** — the actual research for §6–§11 of `workflow/decisions/D0-010_n05-category-source.md` | no GPU | It is the declared blocker on an irreversible whole-corpus re-annotation |
+| **3** | **`D14` Phase 2** — the stratified 300–500 asset sample | small GPU | It produces the numbers the Phase 3 go/no-go needs. **R2 must be settled first**: the 27B model has never been loaded, and quantization is untested |
 
-**Queued behind it, in order:**
+**Parallel-safe alongside all three, writing nothing under `data/outputs/`:** `D15` (after its §6 correction) · `D0-002` / `D0-003` research · `D9_paper-figures-audit` · B4 evaluation design.
 
-1. `D1_n06-reencode` — unblocks on acceptance of D10. ~4 GPU-hours.
-2. `D0-002` and `D0-003` — required before D2; both can be opened while D1 runs.
-3. `D2_stage1-prereq` — carries correction C-001 (τ = 0.5) plus n09.
+**Standing prohibitions:**
 
-**Parallelisation, still deferred:** once `D1_n06-reencode` is ACTIVE and running, Master will propose marking `D9_paper-figures-audit` `PARALLEL SAFE` for separate user approval. Not proposed now — D10 is short and sequential is correct for it.
-
-**Master must not start D10's conversation without user approval.**
+- **`D14` Phase 3 does not begin without the user's explicit go.** `R-A` is absolute; good Phase 2 numbers are not permission.
+- **`D1_n06-reencode` does not restart automatically** after `D14`, and its `TASK.md` preconditions must be refreshed first.
+- Master must not start any task conversation without user approval.
 
 ---
 

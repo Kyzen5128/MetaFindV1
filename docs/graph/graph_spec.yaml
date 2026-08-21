@@ -126,15 +126,25 @@ boundary:
   deviations:
     # NOTE: D-1 is NOT here. It lives under conditional_deviations below,
     # because whether it is a deviation at all depends on U-34.
+    # SPLIT 2026-08-21. D-2 previously covered annotation AND scene judging with
+    # one substitute model. The annotation model changed (Qwen3.8-27B, user
+    # decision U-6) while the judge did not, so one id would now denote two
+    # different substitutions. Scene judging moved to D-8.
     - id: D-2
-      what: "Qwen2.5-VL replaces GPT-4o for annotation and scene judging"
+      what: "Qwen3.8-27B replaces GPT-4o for ASSET ANNOTATION (n05)"
+      why: "user decision U-6, 2026-08-21. GPT-4o availability is UNRESOLVED, not established"
+      impact: >
+        Affects Table 1 primarily. The 45,952 asset annotations are the text
+        tower's training data, so Table 1's absolute values shift. SC-1 reports
+        the deviation rather than thresholding it. Annotation is additionally
+        anchored on the Objaverse-LVIS ground-truth category, which is itself a
+        recorded deviation from "the VLM generates the annotations".
+    - id: D-8
+      what: "Qwen2.5-VL replaces GPT-4o for SCENE JUDGING (n17)"
       why: "project decision"
       impact: >
-        Affects BOTH tables, not just Table 2. Qwen replaces the judge (Table 2)
-        AND the 46,052 asset annotations, which are the text tower's training
-        data, so Table 1's absolute values shift too. SC-1 therefore reports the
-        deviation rather than thresholding it; SC-2 and SC-3 keep only
-        directional claims.
+        Affects Table 2. The judge is not GPT-4o, so SC-3 keeps only directional
+        claims. Unchanged by the 2026-08-21 annotation-model decision.
     - id: D-3
       what: "The six baselines are not re-run"
       why: "scope is MetaFind only"

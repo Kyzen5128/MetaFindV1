@@ -13,9 +13,22 @@
 
 ## Status
 
-`ACTIVE` — **APPROVED by the user 2026-08-21**, after two rounds of contract review (one `MODIFY` cycle covering the exact command, resume semantics, the complete write surface, the post-run NPZ audit, and D0-009 parallel safety).
+**`STOPPED` — halted by the user at `2026-08-21T14:15:48` after 20,053 / 45,952 `.npz`. Nothing was deleted. Now `BLOCKED` on `D14_n05-v5-reannotate`. [CORRECTED BY MASTER 2026-08-21.]**
 
-The D1 execution conversation sets this to `ACTIVE` at start. That is the only edit to this file the executor may make.
+**Cause of the stop:** n05's categories were found to diverge from the Objaverse-LVIS ground truth (`workflow/MIF_n05_diagnosis.md`). Because `build_prompt` derives dimensions and placement from the category, the defect contaminates the whole annotation record, so **all 20,053 embeddings produced by this run are invalid** — they are not partial progress and must not be resumed from.
+
+**This contract must NOT be executed as written.** Its preconditions were measured before the stop and are now stale:
+
+| §  | Says | Actually |
+|---|---|---|
+| §6, §12 | embeddings at start = **5,276** | **20,053** |
+| §12, DoD 10 | `pytest tests/ -q` → **547 passed** | **582 passed** |
+| §6 | the corpus is the accepted legacy-v3 45,952 | that corpus is being **replaced** by `D14` under `PROMPT_VERSION 5` |
+| everywhere | data root under `/home/kyzen/data/MetaFind` | **`/mnt/data1/kyzen/MetaFind`** — an **SMR** drive; the ~4 GPU-hour estimate predates the migration and is unmeasured against it |
+
+**Before D1 is re-proposed, Master must refresh this contract against the post-`D14` corpus.** The original approval (2026-08-21, baseline `cf234fb`) does not carry over to a different corpus.
+
+> Superseded text, retained for the record: *"`ACTIVE` — **APPROVED by the user 2026-08-21**, after two rounds of contract review… The D1 execution conversation sets this to `ACTIVE` at start."*
 
 **Baseline at approval:** `git rev-parse HEAD` = `cf234fb`, working tree clean apart from this file. `D0-008` (`DL-001`), `D10` (`DL-002`), `D2a` (`DL-003`) all `USER_APPROVED`.
 

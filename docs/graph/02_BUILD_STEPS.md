@@ -6,7 +6,7 @@
 > **三種東西必須分開，不可混為一談：**
 > **[論文]** 原文明確規定 ｜ **[未定]** 論文沒說，我們選了一個並記錄 ｜ **[偏離]** 與論文不同，必須在報告中聲明
 
-**正式偏離六項（D-2…D-7）＋條件式一項（D-1）**，編號與 `README.md`、
+**正式偏離七項（D-2…D-8）＋條件式一項（D-1）**，編號與 `README.md`、
 `graph_spec.yaml` 一致，不得另編。D-1 放在 `boundary.conditional_deviations`，
 `active_if: paper_clip_train_scope == 'trainable' AND actual_clip_train_scope == 'frozen'`。
 
@@ -19,7 +19,8 @@
 | id | 偏離 |
 |---|---|
 | **D-1** *(條件式・`resolved_inactive`)* | ViT-bigG-14 的 CLIP 側保持凍結。**U-34 已於 2026-08-16 判定為 `frozen`**，故 `paper = actual = frozen`、`active_if` 為 false，**不列為 active deviation**。規則保留供日後重開 |
-| **D-2** | Qwen2.5-VL 取代 **GPT-4o**（資產標註與場景評分） |
+| **D-2** | Qwen3.8-27B 取代 **GPT-4o**（**資產標註 n05**），使用者決定 U-6 |
+| **D-8** | Qwen2.5-VL 取代 **GPT-4o**（**場景評分 n17**） |
 | **D-3** | 不重跑 6 個 baseline |
 | **D-4** | 不做人工評分 |
 | **D-5** | I-Design 中**所有**設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` |
@@ -37,7 +38,7 @@
 （先前這裡只寫「五個規劃 agent」；公開 repo 至少六個 AssistantAgent 角色，
 所以改成描述 patch 實際做的事，不數 agent。）
 
-**D-5 與 D-2 是兩件事。** D-2 換的是 GPT-4o（標註／評分），D-5 換的是 GPT-4（I-Design 規劃器）。
+**D-5、D-2、D-8 是三件事。** D-2 換的是標註模型（n05），D-8 換的是評分模型（n17），D-5 換的是 GPT-4（I-Design 規劃器）。
 換規劃器會**改變場景本身**，Table 2 全部與 Table 3 場景欄一起位移；Table 1 完全不受影響。
 做法是**直接 patch I-Design 的 `filter_dict`**（`setup/patches/idesign-01`），
 模型名從頭到尾都是 `qwen2.5-7b-instruct`，**沒有用別名**。
@@ -113,7 +114,7 @@ Algorithm 1 的 iterative composition 需要**真實幾何**才能放進場景�
 （這**不是偏離** —— 論文沒說要刪，這只是一個工程決定。先前誤編為「偏離 D-1」，
 與 README／`graph_spec.yaml` 的 D-1 = ViT-bigG 凍結衝突，已更正。）
 
-**[偏離 D-2] Qwen2.5-VL 取代 GPT-4o**（§2.3 明寫 GPT-4o）。
+**[偏離 D-2] Qwen3.8-27B 取代 GPT-4o**（§2.3 明寫 GPT-4o）。使用者決定 U-6，2026-08-21。
 標註是文字塔的訓練資料，換標註器等於換文字分布 → 每筆標註記錄 `annotator_model`，
 報告中列為偏離。
 
@@ -769,7 +770,7 @@ Algorithm 1 是 §2.7 的**推論期程序**，不是模型結構。那一列是
 至少還需要點雲、快取的 text/image embedding、語意邊、ProcTHOR 物件文字、
 以及已決議的 Stage 2 協定。那是一份**不可能被滿足的 dependency contract**，已補齊。
 
-**[偏離 D-2]** 場景評分用 Qwen2.5-VL 取代 GPT-4o。
+**[偏離 D-8]** 場景評分用 Qwen2.5-VL 取代 GPT-4o。（2026-08-21 由 D-2 拆出）
 IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Table 2 是 4 個面向 1–5 分，
 論文沒有公佈它改過的 prompt → **[未定 U-10]**，其中 Scene Coherence 對應哪個面向不明。
 

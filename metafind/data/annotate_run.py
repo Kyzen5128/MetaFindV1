@@ -65,10 +65,16 @@ from metafind.data.annotate import (
     build_repair_prompt,
     parse_annotation,
     validate_annotation,
+    LVIS_SYNSETS,
 )
 
 NODE = "n05_annotate"
-MODEL_ID = "Qwen/Qwen2.5-VL-7B-Instruct"  # D-2: stands in for GPT-4o
+MODEL_ID = "/mnt/data1/kyzen/models/Qwen3.8-27B"  # D-2: stands in for GPT-4o.
+# [DEVIATION D-2, re-pointed 2026-08-21 on the user's decision] The paper
+# annotates with GPT-4o (`2methdology.tex:28`, `neurips_2025.tex:100`).
+# It did so with Qwen2.5-VL-7B-Instruct before this task. Neither is GPT-4o;
+# the deviation is RE-POINTED, not discharged, and must never be written up
+# as paper-faithful.
 MAX_NEW_TOKENS = 512
 
 
@@ -287,16 +293,67 @@ def build_work_list(candidates, force: bool,
             states)
 
 
+# --- v5 anchors -----------------------------------------------------------
+#
+# Two inputs that PROMPT_VERSION 5 requires and v4 never read: the dataset's own
+# category, and the mesh's own proportions. Both were on disk the whole time.
+
+def load_lvis_categories() -> dict[str, str]:
+    """uid -> Objaverse-LVIS category. `value_to_key_mapping` was downloaded by
+    `download.py:70` and, until this task, read by nothing in the pipeline."""
+    src = paths.DATASETS / "objaverse-lvis" / "objaverse_lvis_metadata.json"
+    with src.open(encoding="utf-8") as fh:
+        mapping = json.load(fh)["value_to_key_mapping"]
+    unknown = {c for c in mapping.values() if c not in LVIS_SYNSETS}
+    if unknown:
+        raise SystemExit(
+            f"{len(unknown)} LVIS categories have no synset in the lookup table, "
+            f"e.g. {sorted(unknown)[:5]}. Rebuild the table rather than annotating "
+            "past it."
+        )
+    return mapping
+
+
+def load_proportions() -> dict[str, tuple[float, float, float]]:
+    """uid -> (y, x, z) normalised so the largest is 1.0.
+
+    [OBSERVED DATA] The axis convention is Y-up. Reproduced independently for
+    this task over 1,365 assets whose LVIS category is unambiguously tall and
+    962 unambiguously flat: tall meshes average [x .543, y .946, z .474] and are
+    y-longest 83.6% of the time; flat meshes average [x .882, y .372, z .716]
+    and are y-longest 11.5% of the time. `height` is the y axis.
+    """
+    out: dict[str, tuple[float, float, float]] = {}
+    src = paths.LOGS / "pointclouds_index.jsonl"
+    with src.open(encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            ext = rec.get("raw_bbox_extents")
+            if not ext or len(ext) != 3:
+                continue
+            longest = max(ext)
+            if longest <= 0:
+                continue
+            x, y, z = (v / longest for v in ext)
+            out[rec["uid"]] = (y, x, z)
+    return out
+
+
 class Annotator:
-    """Holds the model. One instance per process; loading costs ~30 s and 16 GB."""
+    """Holds the model. One instance per process."""
 
     def __init__(self, model_id: str = MODEL_ID, device: str = "cuda") -> None:
         import torch
-        from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+        from transformers import AutoProcessor, AutoModelForImageTextToText
 
         self.model_id = model_id
         self.processor = AutoProcessor.from_pretrained(model_id)
-        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+        # Resolved from the checkpoint's own `architectures`, not pinned to one
+        # class: D-2 has now named two different model families, and a hardcoded
+        # class turns "swap the annotator" into an edit of the loader.
+        self.model = AutoModelForImageTextToText.from_pretrained(
             model_id, dtype=torch.bfloat16, device_map=device,
         )
         self.model.eval()
@@ -341,10 +398,12 @@ class Annotator:
         )[0]
 
 
-def annotate_one(ann: Annotator, uid: str, render_rec: dict) -> tuple[dict | None, dict | None]:
+def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
+                 lvis_category: str,
+                 proportions: tuple[float, float, float]) -> tuple[dict | None, dict | None]:
     """SG1 for one asset. Returns ``(record, quarantine_entry)`` -- exactly one is None."""
     views = render_rec["view_paths"]
-    prompt = build_prompt(len(views))
+    prompt = build_prompt(len(views), lvis_category, proportions)
     current = prompt
     last_error = ""
     last_raw = ""
@@ -353,7 +412,11 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict) -> tuple[dict | Non
         raw = ann.generate(views, current)
         last_raw = raw
         try:
-            annotation = validate_annotation(parse_annotation(raw))
+            annotation = validate_annotation(
+                parse_annotation(raw),
+                lvis_category=lvis_category,
+                proportions=proportions,
+            )
         except AnnotationError as exc:
             last_error = str(exc)
             if attempt < MAX_ATTEMPTS:
@@ -372,6 +435,9 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict) -> tuple[dict | Non
             # with it so the estimate can be audited -- and it is a WEAK ground
             # truth, since Objaverse authors choose their own units.
             "raw_bbox_extents": render_rec.get("raw_bbox_extents"),
+            # The exact triple the prompt showed the model, so the derived
+            # width/length can be recomputed from the record alone.
+            "mesh_proportions_yxz": list(proportions),
         }
         return rec, None
 
@@ -458,6 +524,23 @@ def main() -> int:
             print(f"  {state:<34} {n:>7,}  (not queued)", flush=True)
     if args.limit:
         todo = todo[: args.limit]
+
+    # [PROMPT_VERSION 5] Both anchors are resolved BEFORE the model loads. An
+    # asset with no LVIS category or no mesh proportions cannot be annotated
+    # under v5 at all, and discovering that 19 hours into a run -- or silently
+    # falling back to a v4-style guess -- are both worse than stopping here.
+    lvis_categories = load_lvis_categories()
+    proportions = load_proportions()
+    no_anchor = [u for u in todo if u not in lvis_categories or u not in proportions]
+    if no_anchor:
+        print(f"{len(no_anchor):,} queued uid(s) have no LVIS category or no mesh "
+              f"proportions, e.g. {no_anchor[:3]}.\n"
+              "Refusing: v5 is category-anchored, and an asset without an anchor "
+              "would have to be annotated under a different contract than the rest "
+              "of the corpus. Exclude them explicitly or resolve the gap.",
+              flush=True)
+        return 3
+
     print(f"{len(renders):,} rendered assets, {len(todo):,} to annotate", flush=True)
     if not todo:
         return 0
@@ -467,7 +550,11 @@ def main() -> int:
     with runlog.run_progress(NODE):
         for uid in todo:
             try:
-                rec, bad = annotate_one(ann, uid, renders[uid])
+                rec, bad = annotate_one(
+                    ann, uid, renders[uid],
+                    lvis_category=lvis_categories[uid],
+                    proportions=proportions[uid],
+                )
             except Exception as exc:  # noqa: BLE001 -- one asset must not stop the run
                 runlog.quarantine(NODE, [{
                     "uid": uid,

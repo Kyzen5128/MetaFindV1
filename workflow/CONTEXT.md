@@ -147,21 +147,26 @@ Do not re-open τ as a research question. Using anything other than 0.5 is a **D
 
 **Not implemented at all:** n10b, n14, n15, n15a, n15b, n15c, n16, n17, n18–n22.
 
-Key artifact counts, verified 2026-08-20:
+Key artifact counts, **re-measured by Master 2026-08-21** (supersedes the 2026-08-20 snapshot):
 
 ```
 pointclouds_index.jsonl        46,052
 renders_index.jsonl            45,955
 annotations_index.jsonl        45,955
 data/outputs/annotations/      45,955  (45,952 prompt_version 3 + 3 prompt_version 1)
+                                       ← the v3 corpus is SEMANTICALLY DEFECTIVE; D14 is replacing it
 admitted (pc ∩ renders ∩ ann)  45,955
-data/outputs/embeddings/        5,276 npz  ← PARTIAL AND STALE
+data/outputs/embeddings/       20,053 npz  ← [CORRECTED, was 5,276] D1 STOPPED 2026-08-21T14:15:48.
+                                             ALL INVALID: stale template AND defective categories.
+                                             Nothing deleted. Do not resume from them.
 data/outputs/scene_graphs/     12,000
-data/outputs/checkpoints/           0  ← empty
+data/outputs/checkpoints/           0  ← empty, never trained
 splits.json / eval_protocols.json / stage1_protocol.json   ABSENT
 ```
 
-Repository health: `python -m pytest tests/ -q` → **442 passed, 0 skipped, 0 deselected** (442 collected). `tools/check_graph.py` → 2275 checks, all pass. **Neither is evidence of paper fidelity.** Use the plain command with no `--ignore`; `test_cuda_smoke.py` contributes 5 of the 442 and CUDA is available, so those tests really run.
+**The n05 annotation corpus is defective.** Qwen was asked to *identify* objects it could not read and collapsed onto high-frequency priors (`toy` 3.4%, `bookshelf` 2.4% vs LVIS's most common class `chair` at 1.0%; top-20 share 22.3% vs the ground truth's 7.1%). Because `build_prompt` derives dimensions and placement from the category, **a wrong category is a wrong record, not a wrong field.** Diagnosis: `workflow/MIF_n05_diagnosis.md`. Replacement design: `workflow/n05_v5_design.md`. Executing task: `D14_n05-v5-reannotate`, ACTIVE, holding at its Phase 2 gate. **Never describe the on-disk v3 corpus as accepted.**
+
+Repository health: `python -m pytest tests/ -q` → **582 passed, 0 skipped** (`[CORRECTED, was 442]` — the suite grew 442 → 547 → 582 as `D2a` and `D14` added coverage). `tools/check_graph.py` → 2275 checks, all pass. **Neither is evidence of paper fidelity.** Use the plain command with no `--ignore`; `test_cuda_smoke.py` genuinely runs.
 
 **n06 expected successful output = 45,952 `.npz` + 3 quarantine records.** n06 attempts 45,955 (`annotations` glob ∩ `renders_index.jsonl`, `encode_text_image.py:177-179`); the 3 `prompt_version:1` records carry a different schema and raise `KeyError: 'width'` in `serialize_annotation()`, so they are quarantined without output (`encode_text_image.py:213-221`). Keep the three numbers distinct: **45,955 annotation files · 45,952 valid v3 · 3 v1 residuals.**
 
@@ -182,7 +187,9 @@ The work-list predicate now lives in `build_work_list()` (`annotate_run.py:439`)
 
 **Historical — the defect this replaced:**
 
-**BLOCKER (resolved) — a resumed n06 would silently build a two-distribution gallery.** `is_complete()` (`encode_text_image.py:73-83`) checks only sidecar existence, `encoder_version`, and NPZ existence. It compares **nothing about the text**. A plain re-run would skip all 5,276 metre-derived embeddings as "complete" and encode only the rest in centimetres — no error, no warning, and an identical `text_serialization` label on both halves. `gallery_index.py` fingerprints the checkpoint, not the text, so Table 1 would come out self-consistent and wrong. `"metafind_v1_natural"` already labels two different transformations and is not a valid cache identity. **`D1_n06-reencode` is UNBLOCKED as of 2026-08-21.** `D0-008` (`DL-001`), `D10` (`DL-002`) and `D2a` (`DL-003`) are all `USER_APPROVED`. `load_protocol()` passes, the pre-flight passes, and all 5,276 stale embeddings are cache-invalid without being deleted.
+**BLOCKER (resolved) — a resumed n06 would silently build a two-distribution gallery.** `is_complete()` (`encode_text_image.py:73-83`) checks only sidecar existence, `encoder_version`, and NPZ existence. It compares **nothing about the text**. A plain re-run would skip all 5,276 metre-derived embeddings as "complete" and encode only the rest in centimetres — no error, no warning, and an identical `text_serialization` label on both halves. `gallery_index.py` fingerprints the checkpoint, not the text, so Table 1 would come out self-consistent and wrong. `"metafind_v1_natural"` already labels two different transformations and is not a valid cache identity. `D0-008` (`DL-001`), `D10` (`DL-002`) and `D2a` (`DL-003`) are all `USER_APPROVED`; `load_protocol()` passes, the pre-flight passes, and every stale embedding is cache-invalid without being deleted.
+
+**[CORRECTED 2026-08-21] `D1_n06-reencode` is NOT runnable.** This paragraph previously ended *"`D1_n06-reencode` is UNBLOCKED as of 2026-08-21."* That was true for about six hours. D1 then ran, was **STOPPED at `2026-08-21T14:15:48`** at 20,053 npz on the user's order, and is now blocked behind `D14`'s replacement of the annotation corpus. Its `TASK.md` preconditions (5,276 npz at start, 547 tests) are stale.
 
 **The recorded Stage 1 encoding protocol does not describe the encoder.** `data/outputs/stage1_encoding_protocol.json` records
 `"... roughly {length:.2f} by {width:.2f} by {height:.2f} metres, typically placed {placement}."`
@@ -240,10 +247,14 @@ Facts every task owner should know:
 ## 9. Runtime / Environment Facts
 
 - Repository: `/home/kyzen/MetaFindV1`
-- Data root: `/home/kyzen/data/MetaFind`, linked as `/home/kyzen/MetaFindV1/data`
+- **Data root: `/mnt/data1/kyzen/MetaFind`, linked as `/home/kyzen/MetaFindV1/data`. [CORRECTED 2026-08-21]**
+  Was `/home/kyzen/data/MetaFind`. **The migration is complete** — the symlink was repointed 2026-08-21 21:32 and `/home/kyzen/data` **no longer exists**. `CLAUDE.md` §9 still carries the old path; it is project instruction and only the user may correct it.
+  **Consequence, unmeasured:** the dataset now sits on the SMR drive described below. Every runtime estimate recorded anywhere in this project predates the move.
 - Python: `/home/kyzen/miniconda3/envs/MetaFind/bin/python` (conda env `MetaFind`)
 - Run modules as `python -m metafind.<module>` from the repository root.
-- Paths under `/mnt/data1` belong to a previous machine and are invalid. Use `metafind/paths.py`.
+- **`/mnt/data1` IS valid on this host** — corrected 2026-08-21 (D14 finding F-1, re-verified by Master). It is a mounted 3.6 TB ext4 volume, `3.4 TB free`, `/mnt/data1/kyzen` writable, filesystem created 2026-08-20. **`CLAUDE.md` §9 still carries the stale claim that it belongs to a previous machine; that file is project instruction and only the user may correct it.** Whether `/mnt/data1` becomes a sanctioned location for project artifacts is **undecided**.
+- **`/mnt/data1` is an SMR drive** (`ST4000DM004`, measured 2026-08-21). Sustained small-file writes collapse to single-digit MB/s once its CMR cache fills — `w_await` measured above **5,000 ms** under mixed load, versus <10 ms normal. **Suits cold, read-mostly bulk data; poor for high-frequency small-file work.** n06 writes 45,952 small `.npz`, which is the worst case for this drive. **Decide placement per directory, not for `data/` as a whole.**
+- Use `metafind/paths.py` for project paths regardless.
 - GPU: **verified 2026-08-20 — `NVIDIA GeForce RTX 5090`, 31.4 GB, `torch.cuda.is_available() → True`.** Documentation elsewhere in the repo has been reported as stating different hardware; treat those statements as stale. Record the actual device for any experiment.
 - Observed n06 throughput: ~190–197 assets/min (partial run, 2026-08-17). A projection, not a guarantee.
 - Observed n08 runtime: ~22 min (old workflow claim, not re-verified).

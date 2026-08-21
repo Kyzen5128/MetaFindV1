@@ -159,10 +159,21 @@ nodes:
       pc_norm (centroid at origin, max radius 1), non-degeneracy, and that a
       sampled cloud retrieves its own asset well above chance. The ULIP
       comparison survives as L2-PC-ULIP-REF, a diagnostic.
-      It is NOT demoted because it was failing -- it has never been run and the
-      reference clouds are not on disk. It is demoted because it tested the wrong
-      claim. If the authors are found to say MetaFind reuses ULIP's
+      It is NOT demoted because it was failing. It is demoted because it tested
+      the wrong claim. If the authors are found to say MetaFind reuses ULIP's
       preprocessing, it becomes a gate again.
+      [CORRECTED 2026-08-21] This note previously read "it has never been run and
+      the reference clouds are not on disk". The second half was false: the
+      official ULIP-2 Objaverse-LVIS clouds have been present since 2026-08-15 at
+      models/hf-cache/datasets--SFXX--ULIP (ULIP-2/objaverse_lvis/000-009.tar.gz,
+      4,999 .npy). L2-PC-ULIP-REF has now been RUN over the 286 overlapping uids
+      -- see workflow/tasks/D15_n03-n04-code-audit/FINDINGS.md, FIND-6 and FIND-7.
+      Result: our clouds carry a systematic 180-degree yaw about Y relative to
+      ULIP's (chamfer median 0.090 -> 0.023 when corrected, 94.1% of assets), and
+      that yaw has NO measurable effect on the frozen ULIP-2 embedding (R@1 98.0%
+      at 0 deg vs 97.5% at 180 deg, against 99.0% for ULIP's own clouds and 0.5%
+      chance). The self-retrieval criterion this gate names is therefore already
+      measurable with the harness in that task directory.
 
   - id: n04_render_views
     role: compute
