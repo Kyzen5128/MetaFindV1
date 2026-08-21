@@ -20,13 +20,16 @@ Use only:
 - `ACTIVE`
 - `BLOCKED`
 - `REVIEW`
-- `DONE`
+- `AWAITING_USER_REVIEW` — execution finished and reviewed; the user has not yet decided
+- `DONE` — user-approved and integrated. **Nothing else means DONE**
 - `REWORK`
 - `REJECTED`
 
 Current:
 
 `PLANNED`
+
+> Finishing execution does not make a task `DONE`. See Section 17.
 
 ---
 
@@ -302,6 +305,42 @@ Do not treat unavailable review as PASS.
 
 ---
 
+## 15A. Required Completion Reporting — Finding vs Decision
+
+`WORKFLOW.md` §13A. At completion, the task must report these **separately**. Do not merge them.
+
+| | |
+|---|---|
+| **FINDING** | What is true. Observation, contradiction, measurement, defect |
+| **EVIDENCE** | Where it came from — file:line, paper section, measurement, runtime output |
+| **IMPLEMENTATION / PROPOSED DECISION** | What was done, or what is proposed to be done |
+| **AUTHORITY** | Under whose authority — an accepted D0 decision, this TASK.md, a user ruling, or **proposed and not yet authorised** |
+| **IMPACT** | Affected tasks, artifacts, stages |
+| **UNKNOWN / UNRESOLVED** | What is still not established |
+
+### What a D-task may do
+
+- discover a problem;
+- verify a problem;
+- implement a choice **this TASK.md already authorises**;
+- propose a recommendation.
+
+### What a D-task may not do
+
+A D-task must **not** declare a material project decision FINAL on the strength of:
+
+- tests passing;
+- Codex returning PASS;
+- Claude and Codex agreeing.
+
+None of those is authority. Convergence between models is not independent confirmation.
+
+A material decision (`WORKFLOW.md` §13B) becomes project state only after Master's integration review, a USER REVIEW BRIEF, and the **user's** approval.
+
+If execution reveals that a material choice is needed which this TASK.md does not authorise, report it under `Items Requiring USER Awareness / Decision` in the HANDOFF and, where it affects other work, as a `MASTER-IMPACTING FINDING`. Do not decide it locally.
+
+---
+
 ## 16. Required Handoff
 
 At completion, write:
@@ -338,7 +377,7 @@ Do not start the next task.
 
 ---
 
-## 17. Master Acceptance
+## 17. Master Recommendation and the User Review Gate
 
 After task completion, Master reviews:
 
@@ -347,7 +386,7 @@ After task completion, Master reviews:
 - CODEX_REVIEW.md
 - relevant repository state
 
-Master returns one of:
+Master returns one **MASTER RECOMMENDATION**:
 
 - `ACCEPT`
 - `ACCEPT WITH FOLLOW-UP`
@@ -355,7 +394,32 @@ Master returns one of:
 - `REJECT`
 - `BLOCKED`
 
-Only Master updates global task state in `workflow/INDEX.md`.
+**This is a recommendation, not an acceptance.**
+
+`REWORK` / `REJECT` / `BLOCKED` are immediate routing results — they return work to the owner and change no project state. Master still informs the user, and must not smuggle a new material scientific decision in through routing.
+
+`ACCEPT` / `ACCEPT WITH FOLLOW-UP` **change project state** and therefore proceed to the gate:
+
+```
+task completion
+→ Master integration review
+→ MASTER RECOMMENDATION
+→ USER REVIEW BRIEF   (workflow/USER_REVIEW_TEMPLATE.md)
+→ USER decision: APPROVE / REJECT / MODIFY / INVESTIGATE MORE
+→ on APPROVE: FINAL ACCEPTED
+```
+
+Until the user approves:
+
+- the task's integration status is `AWAITING_USER_REVIEW`;
+- the task is **not** DONE;
+- downstream tasks are **not** unblocked;
+- `MASTER.md`, `CONTEXT.md`, and `INDEX.md` are **not** updated with the result;
+- the entry sits at `AWAITING_USER_REVIEW` in `workflow/DECISION_LEDGER.md`.
+
+> **Execution complete ≠ decision accepted.** A task may be `execution: COMPLETE` and `integration: AWAITING_USER_REVIEW` at the same time. These are two different facts and INDEX.md records them separately.
+
+Only Master updates global task state in `workflow/INDEX.md`, and only after the user's approval.
 
 ---
 

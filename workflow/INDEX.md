@@ -6,24 +6,47 @@
 
 **Initialized:** 2026-08-20
 **Corrected:** 2026-08-20 (Master correction pass)
-**Active formal work:** none. `D0-008` accepted with follow-up 2026-08-21. `D10_stage1-encoding-contract` is **READY** — approved 2026-08-21, `TASK.md` written, awaiting user approval to start the task conversation.
+**Active formal work:** `D0-009_essgnn-fx-codomain` (INVESTIGATING). **`D0-008` (`DL-001`), `D10` (`DL-002`) and `D2a` (`DL-003`) are all `USER_APPROVED` as of 2026-08-21.** The migration backlog is empty. **`D1_n06-reencode` is UNBLOCKED and READY** — TASK.md proposed, awaiting user review; not started.
 **Execution policy:** sequential — one ACTIVE task at a time.
 
 ---
 
 ## Status Definitions
 
-`PLANNED` · `READY` · `ACTIVE` · `BLOCKED` · `REVIEW` · `DONE` · `REWORK` · `REJECTED`
+**Execution status and integration status are two different facts. Do not merge them.**
 
+> `task execution complete` **≠** `project decision accepted`
+>
+> A task can legitimately be execution `COMPLETE` and integration `AWAITING_USER_REVIEW` at the same time.
+
+### Execution status
+
+`PLANNED` · `READY` · `ACTIVE` · `BLOCKED` · `REVIEW` · `COMPLETE` · `REWORK` · `REJECTED`
+
+- `PLANNED` — scope depends on results or decisions that do not exist yet; the contract cannot be written honestly today.
 - `READY` — every known dependency is satisfied and no unresolved decision gates it.
 - `BLOCKED` — must name the blocker explicitly.
-- `PLANNED` — scope depends on results or decisions that do not exist yet; the contract cannot be written honestly today.
+- `COMPLETE` — the work is finished and verified. **This is not acceptance.**
+
+### Integration status
+
+`—` · `AWAITING_USER_REVIEW` · `USER_APPROVED` · `USER_REJECTED` · `REWORK` · `BLOCKED`
+
+- `AWAITING_USER_REVIEW` — Master has recommended; the user has not decided. **Not project state.**
+- `USER_APPROVED` — the user approved. FINAL ACCEPTED, integrated.
+- `USER_REJECTED` — the user rejected. The finding may stand; the remedy does not.
+- `REWORK` / `BLOCKED` — returned to its owner by Master routing; changes no project state.
+
+`DONE` requires execution `COMPLETE` **and** integration `USER_APPROVED`.
+
+Governing rules: `workflow/WORKFLOW.md` §13B. Project-level record: `workflow/DECISION_LEDGER.md`.
 
 ---
 
 ## Role Definitions
 
-- `MASTER` — orchestration, integration, status, dependency control
+- `USER` — **final research / project authority.** The only role that can convert a recommendation into FINAL ACCEPTED
+- `MASTER` — orchestration, integration review, recommendation, status, dependency control
 - `D0` — research / architecture / evidence decisions requested by Master
 - `D1+` — bounded stage / work-package execution
 - `CODEX` — independent reviewer
@@ -32,12 +55,29 @@
 
 ## Active Tasks
 
-| ID | Task | Role | Status | Depends On | Parallel Safe | Path |
-|---|---|---|---|---|---|---|
-| — | None | — | — | — | — | — |
+| ID | Task | Role | Execution | Integration | Depends On | Parallel Safe | Path |
+|---|---|---|---|---|---|---|---|
+| `D0-009_essgnn-fx-codomain` | MetaFind §2.5 `f_x → R³` — paper-level audit, read-only | `D0` | **`INVESTIGATING`** — user-approved 2026-08-21 | — | — | — (D2a has finished) | `workflow/decisions/D0-009_essgnn-fx-codomain.md` |
 
-`D0-008_stage1-text-template` is **DONE** — accepted with follow-up 2026-08-21.
-`D10_stage1-encoding-contract` is **READY** — contract at `workflow/tasks/D10_stage1-encoding-contract/TASK.md`. Becomes ACTIVE when the user approves starting its conversation. Nothing is ACTIVE now.
+`D2a_stage1-protocol-refresh` — **execution `COMPLETE`, integration `USER_APPROVED` 2026-08-21** (`DL-003`), MIF-2 ratified. Only `D0-009` remains running.
+
+**Two concurrent work items were approved 2026-08-21; D2a has since completed.** Master verified `WORKFLOW.md` §7's five conditions for this pair: no dependency, no filesystem overlap (D0-009 writes only its decision file; D2a touches nothing under `workflow/decisions/`), no scientific conflict (Stage 1 encoding vs Stage 2 geometry), each independently verifiable, and the audit is long enough that concurrency saves real time.
+
+**Scope wall — neither may modify the other's scope.** A finding that bears on the other is a `MASTER-IMPACTING FINDING`, reported and not acted on.
+
+`D0-008_stage1-text-template` — execution `COMPLETE`, integration **`USER_APPROVED`** (2026-08-21, ledger `DL-001`). Migration through the user review gate is complete.
+`D10_stage1-encoding-contract` — execution **`COMPLETE`**, integration **`AWAITING_USER_REVIEW / MODIFIED`** (`DL-002`). Master reviewed 2026-08-21 and recommended ACCEPT WITH FOLLOW-UP; user returned **`MODIFY`**, approving the implementation in principle but **withholding acceptance** pending condition **`AC-1`** (legacy-v3 rerun protection). Brief: `workflow/tasks/D10_stage1-encoding-contract/USER_REVIEW.md` §7.0.
+
+**Dependency correction accepted (user decision #5, 2026-08-21):** the Stage 1 critical path is `n05b (C-001 + C-002) → n06`, **not** `D1 → D2`. Verified: `splits.py` never reads an embedding and `encode_text_image.py` never reads anything n09 writes, so **n06 and n09 are independent**. `D0-002` and `D0-003` gate **n09 only**.
+
+```
+[D2a: n05b — C-001 τ=0.5 + C-002 protocol + AC-1 + provenance]  ──►  D1 (n06)
+[D0-002 tower_sharing · D0-003 the 3 v1 records]                ──►  n09 (splits)
+                        D1 + n09                                ──►  D3
+```
+
+`D2a_stage1-protocol-refresh` — **READY, user-approved 2026-08-21.** Carries `AC-1`.
+`D10_stage1-encoding-contract` — execution `COMPLETE`, integration `AWAITING_USER_REVIEW / MODIFIED`, blocked on `AC-1` which `D2a` carries.
 
 ---
 
@@ -47,7 +87,7 @@
 |---|---|---|---|---|---|---|---|
 | `D9_paper-figures-audit` | Read all 38 extracted paper figures; mark each U-register entry resolved / refuted / untouched; register new contradictions | D1+ | **READY** | — | evidence for D0-002, D0-004 | NEW CONVERSATION | **YES** (writes only `docs/`) |
 | `D10_stage1-encoding-contract` | Clear the cache-validity BLOCKER (B-1…B-4); implement the ratified U-15 template (E-1, E-2, S-1, S-2); apply R-1/R-2/R-3; re-annotate the one truncated record; update the golden test; add the pre-flight gate | D1+ | **READY** — approved 2026-08-21, contract written, conversation not yet started | D0-008 (accepted) | D1, D2 | NEW CONVERSATION | NO |
-| `D1_n06-reencode` | Full n06 re-encode of text + image embeddings over the admitted corpus | D1+ | **BLOCKED** | **D10** | D3 | NEW CONVERSATION | YES once unblocked (writes only `data/outputs/embeddings/`) |
+| `D1_n06-reencode` | Full n06 re-encode of text + image embeddings over the admitted corpus | D1+ | **`READY` — UNBLOCKED 2026-08-21** (TASK.md proposed, awaiting user review) | D0-008 ✅ · D2a ✅ · D10 ✅ | D3 | NEW CONVERSATION | writes only `data/outputs/embeddings/` |
 | `D2_stage1-prereq` | Apply C-001; re-run n05b (carries C-002); run n09_build_splits; produce `splits.json`, `eval_protocols.json`, `stage1_protocol.json`; verify G3 | D1+ | **BLOCKED** | D0-002, D0-003, D10 | D3 | NEW CONVERSATION | NO |
 | `D3_stage1-train` | Stage 1 smoke (limited assets, 1 epoch) then full training; checkpoint, curves, full provenance | D1+ | **BLOCKED** | D1, D2, D0-003 (hard) (+ D0-005 conditionally) | D4 | NEW CONVERSATION | NO |
 | `D4_gallery-index` | n11 staging → G4 freeze → n12 promote; encoder fingerprint cross-check | D1+ | **BLOCKED** | D3 | D5, D7 | NEW CONVERSATION | NO |
@@ -64,7 +104,7 @@ Not yet scoped as work packages, deliberately: n14 equivariance probe, n18/n19 a
 
 | ID | Blocked By | Required Resolution |
 |---|---|---|
-| `D1_n06-reencode` | **D10** | D0-008 is accepted, but ratification alone does not unblock D1. Follow-up F-1 — the cache completion/validity BLOCKER, exit criteria B-1…B-4 — must be cleared, and the ratified template must actually be implemented |
+| ~~`D1_n06-reencode`~~ | — | **UNBLOCKED 2026-08-21.** All three prerequisites `USER_APPROVED` |
 | `D2_stage1-prereq` | D0-002, D0-003, D10 | `tower_sharing` mode; disposition of the 3 `prompt_version:1` annotations. Plus correction C-001 (τ = 0.5), in-scope execution. All land in artifacts n09 writes or hashes |
 | `D3_stage1-train` | D1, D2, D0-003 | Complete embedding cache (45,952 `.npz`); three protocol files present and G3-valid; splits must not contain uids with no embedding, or `stage1.py:109` raises `FileNotFoundError`. Plus D0-005 if D0-002 selects `fully_separate` |
 | `D4_gallery-index` | D3 | A Stage 1 checkpoint must exist |
@@ -77,17 +117,18 @@ Not yet scoped as work packages, deliberately: n14 equivariance probe, n18/n19 a
 
 ## Decision Queue
 
-Candidates identified by Master. **`D0-008` is ACCEPTED (2026-08-21).** The other six have no decision file and none is open.
+Candidates identified by Master. **`D0-008` is `USER_APPROVED` (2026-08-21, ledger `DL-001`).** The other six have no decision file and none is open.
 
 A candidate becomes a formal decision only when Master creates its file under `workflow/decisions/` after user approval. Master prepares sections 1–5 (framing and evidence pointers); D0 owns sections 6–11; Master fills section 12 on review.
 
 | ID | Question | Status | Decision File | Blocks | On Critical Path |
 |---|---|---|---|---|---|
-| D0-008 | Ratify the Stage 1 text serialization template (U-15) | **`ACCEPTED`** 2026-08-21, with follow-up | `workflow/decisions/D0-008_stage1-text-template.md` | resolved | done |
+| D0-008 | Ratify the Stage 1 text serialization template (U-15) | **`USER_APPROVED`** 2026-08-21 (`DL-001`) | `workflow/decisions/D0-008_stage1-text-template.md` | resolved | done |
 | D0-002 | U-16 `tower_sharing`: `shared_backbone_separate_fusion` / `fully_shared` / `fully_separate` | `OPEN` | — | D2, D3, Stage 2 feasibility | **YES** |
 | D0-003 | The 3 `prompt_version:1` annotations: admit, drop, or re-annotate. **Hard blocker for D3** — if admitted, `stage1.py:109` raises `FileNotFoundError` | `OPEN` | — | D2, D3 | **YES** |
 | D0-005 | `build_model()` bypasses `Stage1RuntimeConfig`; single backbone; shared `FusionConfig` object | `OPEN` | — | D3 | Conditional on D0-002 |
 | D0-004 | ESSGNN `coord_feat` / `architecture_family` coupling | `OPEN` | — | D5, ablation design | No |
+| **D0-009** | **MetaFind §2.5 `f_x → R³` — how to reproduce it faithfully.** Registered 2026-08-21 at the user's instruction. Master framing only; **no audit performed** | `OPEN` — awaiting user approval to open the D0 conversation | `workflow/decisions/D0-009_essgnn-fx-codomain.md` | D5 Stage 2, `essgnn.py`, equivariance tests, `docs/audit/` C3 | No — Stage 2 has never run |
 | D0-006 | n08 node-text information collapse (`object_text()` is category-only) | `OPEN` | — | D5 | No |
 | D0-007 | Table 2 protocol: 200-scene construction, 1–5 vs 0–10 scale comparability | `OPEN` | — | D8 | No |
 
@@ -139,9 +180,13 @@ No task currently requires `FORK REQUIRED`. Mark it only when a task depends on 
 
 ## Completed Tasks
 
+> A row here means **execution complete**. It does not mean the project accepted the result — check the integration column.
+
 | ID | Task | Accepted By Master | Result Artifact | Codex Review |
 |---|---|---|---|---|
-| `D0-008_stage1-text-template` | Ratify the Stage 1 text serialization template (U-15) | **ACCEPT WITH FOLLOW-UP**, 2026-08-21 | `workflow/decisions/D0-008_stage1-text-template.md` §11 | 2 rounds, `gpt-5.6-sol` xhigh; 13 findings, 11 confirmed/partially confirmed; recorded in §9–§10 of the decision file |
+| `D0-008_stage1-text-template` | Ratify the Stage 1 text serialization template (U-15) | Master recommended ACCEPT WITH FOLLOW-UP; **user `MODIFY` → `APPROVE` 2026-08-21**. Integration: **`USER_APPROVED`** (`DL-001`) |
+| `D10_stage1-encoding-contract` | Stage 1 encoding contract: cache validity, ratified serializer, P-1…P-5 | Master recommended ACCEPT WITH FOLLOW-UP; **user `MODIFY` → `APPROVE` 2026-08-21** after `AC-1` was demonstrated. Integration: **`USER_APPROVED`** (`DL-002`). **`G-7` not ratified — independently OPEN** |
+| `D2a_stage1-protocol-refresh` | τ = 0.5 · protocol refresh · AC-1 rerun protection · legacy-v3 provenance | Master recommended ACCEPT WITH FOLLOW-UP; **user `APPROVE` 2026-08-21, MIF-2 ratified**. Integration: **`USER_APPROVED`** (`DL-003`) | `workflow/decisions/D0-008_stage1-text-template.md` §11 | 2 rounds, `gpt-5.6-sol` xhigh; 13 findings, 11 confirmed/partially confirmed; recorded in §9–§10 of the decision file |
 
 Follow-ups carried from D0-008: **F-1** (cache-validity BLOCKER) through **F-5** are D10's scope; **F-6** done by Master at acceptance; **F-7** routes to D0-003; **F-8**/**F-9** deferred. Full table in §12.4 of the decision file.
 
@@ -160,7 +205,10 @@ Decisions: `D0-<number>_<short-slug>` → `workflow/decisions/<decision-id>.md`
 2. A task becomes `ACTIVE` only after user approval.
 3. `READY` means all known dependencies are satisfied and no unresolved decision gates it.
 4. `BLOCKED` must name the blocker explicitly.
-5. `DONE` means: Definition of Done satisfied, verification completed, Codex review completed, and Master accepted the HANDOFF.
+5. `DONE` means **all** of: Definition of Done satisfied · verification completed · Codex review completed · Master issued an ACCEPT-class **recommendation** · a USER REVIEW BRIEF was delivered · **the user returned `APPROVE`** · Master integrated the result.
+   Master's recommendation alone is not `DONE`. Neither is Claude + Codex consensus.
 6. Sequential execution is the default.
 7. Parallel execution requires explicit `Parallel Safe = YES` with verified dependency and filesystem non-conflict.
 8. D-task conversations must not modify this file.
+9. Execution status and integration status are recorded separately. Never write `DONE` for a task whose integration is `AWAITING_USER_REVIEW`.
+10. Every material decision recorded here must have a matching entry in `workflow/DECISION_LEDGER.md`. If the two disagree, the ledger is the project-level record.

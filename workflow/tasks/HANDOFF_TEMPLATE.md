@@ -16,14 +16,17 @@
 
 Use one:
 
-- `DONE`
+- `EXECUTION COMPLETE` — the task's work is finished and verified. **This is the normal completion status**
 - `BLOCKED`
 - `NEEDS MASTER DECISION`
 - `REWORK REQUIRED`
 
 Current:
 
-`DONE`
+`EXECUTION COMPLETE`
+
+> A task does not declare itself `DONE`. `DONE` means user-approved and integrated, and only Master records it after the user's approval (`WORKFLOW.md` §13B).
+> **Execution complete ≠ decision accepted.**
 
 ---
 
@@ -229,7 +232,62 @@ If none:
 
 ---
 
-## 15. Recommended Master Update
+## 15. USER REVIEW INPUT
+
+> **This is not the USER REVIEW BRIEF.** It is the input Master uses to write one (`workflow/USER_REVIEW_TEMPLATE.md`).
+>
+> Keep it short and factual. Master compresses further.
+>
+> **A material item must not be omitted because every AI agreed on it.** Consensus between Claude, Codex, and Master is exactly when the user most needs to see the item. Convergence between models is not independent confirmation.
+
+### Material Findings
+
+State what is **true**, not what to do about it.
+
+- Finding:
+  Evidence / provenance: (file:line · paper section · measurement · runtime output)
+
+### Material Decisions / Implementation Choices
+
+Everything materially decided or implemented during this task — **including choices already implemented but not yet ratified by the user.**
+
+- What was done:
+  Authority: (accepted D0 decision · this TASK.md · user ruling · **proposed, not yet authorised**)
+
+### Claude ↔ Codex Material Disagreement
+
+- Disagreement:
+  Verified disposition: `CONFIRMED` / `PLAUSIBLE` / `REJECTED` / `UNVERIFIED`
+
+If none:
+
+`No material disagreement.`
+
+State this even when you believe Codex was wrong.
+
+### Impact
+
+- Affected task / artifact / stage:
+
+### Remaining UNKNOWN / Blocker
+
+If none:
+
+`None known.`
+
+### Items Requiring USER Awareness / Decision
+
+List every material item under `WORKFLOW.md` §13B, even under full consensus:
+
+paper interpretation · architecture · implementation choice · deviation · dataset semantics · annotation semantics · preprocessing · training protocol · evaluation protocol · shared artifact semantics · cache validity · checkpoint validity · dependency ordering · scientifically meaningful assumption · anything that can materially change reproduction results
+
+When in doubt, list it.
+
+- ...
+
+---
+
+## 16. Recommended Master Update
 
 State exactly what Master should consider updating after acceptance.
 
@@ -243,7 +301,7 @@ Examples:
 
 ---
 
-## 16. Recommended Next Action
+## 17. Recommended Next Action
 
 Recommendation:
 
@@ -253,16 +311,18 @@ Master decides the next action.
 
 ---
 
-## 17. Completion Statement
+## 18. Completion Statement
 
 This task has stopped execution after producing this HANDOFF.
 
-The task does not claim project-level or milestone-level completion.
+The task does not claim project-level or milestone-level completion, and does not claim that any material decision is accepted.
 
-Master must review and return:
+Master must review and return one **MASTER RECOMMENDATION**:
 
 - `ACCEPT`
 - `ACCEPT WITH FOLLOW-UP`
 - `REWORK`
 - `REJECT`
 - `BLOCKED`
+
+`ACCEPT` and `ACCEPT WITH FOLLOW-UP` are recommendations only. They proceed to a USER REVIEW BRIEF and the user's decision. This task becomes `DONE` only on the user's `APPROVE` (`WORKFLOW.md` §13B).

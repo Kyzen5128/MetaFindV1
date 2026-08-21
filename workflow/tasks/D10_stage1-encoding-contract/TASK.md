@@ -13,12 +13,13 @@
 
 ## Status
 
-`READY`
+**Execution: `COMPLETE`. Integration: `USER_APPROVED` 2026-08-21. FINAL ACCEPTED.**
 
-Approved by user 2026-08-21. Contract finalized by Master 2026-08-21.
-Becomes `ACTIVE` when the user approves starting the task conversation.
+Master recommended ACCEPT WITH FOLLOW-UP; the user returned `MODIFY` (acceptance withheld pending `AC-1`), then `APPROVE` after `D2a` demonstrated `AC-1`.
 
----
+Ledger `DL-002`. Briefs: `USER_REVIEW.md` (Rev 2) and `USER_REVIEW_FINAL.md`.
+
+**`G-7` is NOT ratified by this acceptance** — see the ledger.
 
 ## 1. Objective
 

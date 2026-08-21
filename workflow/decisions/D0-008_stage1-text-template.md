@@ -21,12 +21,13 @@ Use only: `OPEN` · `INVESTIGATING` · `REVIEW` · `RECOMMENDED` · `ACCEPTED` �
 
 Current:
 
-`ACCEPTED`
+`USER_APPROVED`
 
 Opened by Master on user approval 2026-08-20. Returned `RECOMMENDED` by D0 2026-08-21.
-**Master resolution 2026-08-21: `ACCEPT WITH FOLLOW-UP`** — see Section 12.
+Master recommendation 2026-08-21: `ACCEPT WITH FOLLOW-UP` — Section 12.
+**USER decision 2026-08-21: `MODIFY` → `APPROVE`. FINAL ACCEPTED.** — Sections 13 and 14.
 
-Acceptance ratifies the serialization design. It does **not** unblock `D1_n06-reencode`: follow-up F-1 (the cache completion/validity BLOCKER, §11.2 B-1…B-4) must be cleared first.
+This ratifies the **serialization design**. It does **not** authorise n06 to run: the cache completion/validity gate (§11.2, B-1…B-4) is an execution question owned by `D10_stage1-encoding-contract` and resolved in D10's own integration review. It is explicitly outside what the user approved here.
 
 ---
 
@@ -1012,6 +1013,73 @@ Two things distinguish this decision and are worth recording.
 First, D0 **overturned its own Section 8** after Codex review rather than defending it, and said so in the document. The pre-review recommendation was retained for the audit trail and explicitly marked as superseded. The withdrawal of the volume-redundancy argument — which D0 had itself introduced as supporting evidence — is the clearest instance.
 
 Second, the finding that actually matters was not in the decision's original scope at all. `is_complete()` ignoring text (MIF-4) is the one defect here capable of producing **confident wrong numbers with no error anywhere in the chain**: a resumed n06 would build a gallery from two text distributions, `gallery_index.py` fingerprints the checkpoint rather than the text, and Table 1 would come out self-consistent and wrong. It was surfaced by adversarial review, confirmed by direct code reading, escalated rather than absorbed, and correctly left blocking. That is the review process working as designed.
+
+## 13. USER REVIEW BRIEF
+
+Written by Master 2026-08-21 per `workflow/USER_REVIEW_TEMPLATE.md`.
+
+**File:** `workflow/decisions/D0-008_USER_REVIEW.md`
+
+Two revisions:
+
+- **Revision 1** — first brief delivered.
+- **Revision 2** — issued after the user returned `MODIFY`. Two corrections plus one binding classification:
+  1. **Numbering collision fixed.** Revision 1 used `F1–F7` for findings and `F-1…F-9` for follow-ups in the same document, so "F-1" meant both "the paper is silent" and "the cache-validity blocker". Findings are now `FIND-n`; follow-ups are now `FU-n`.
+  2. **Scope corrected.** §6 no longer gates this decision on the n06 execution blocker. `FIND-6` (`is_complete()` ignores text) was surfaced by Codex during *this* decision's review and is retained as a finding here, but its remedy and execution disposition belong to `D10`'s integration review.
+  3. **Follow-ups enumerated individually** rather than as an unqualified range.
+
+---
+
+## 14. USER Final Decision
+
+**User action: `MODIFY`, then `APPROVE`. 2026-08-21.**
+
+### 14.1 What the user approved
+
+The Stage 1 text serialization design as specified in §11.3, in principle and in full:
+
+- E-1, E-2, E-3, S-1, S-2
+- the final ratified template
+- `width → length → height`
+- centimetres
+- R-3 — **delete** the unreachable `PLACEMENT_PHRASES[("onWall","onCeiling")]` entry
+- omission of `synset` / `volume` / `mass`
+
+### 14.2 User's binding modification
+
+> *"synset / volume / mass 的省略請明確記為 IMPLEMENTATION CHOICE，其 retrieval impact 仍為 UNKNOWN。不得表述成 PAPER FACT 或已證明 redundant。"*
+
+The omission of `synset`, `volume`, and `mass` is recorded as an **IMPLEMENTATION CHOICE** whose **retrieval impact is UNKNOWN**.
+
+It must **not** be stated as a PAPER FACT.
+It must **not** be described as proven redundant — the redundancy argument was withdrawn under Codex finding C-6.
+
+This wording is binding on all downstream documents, comments, and the reproduction report.
+
+### 14.3 Explicitly outside this approval
+
+The n06 cache completion / validity gate (§11.2, B-1…B-4). It is an execution question owned by `D10_stage1-encoding-contract`. Approving this decision neither clears nor waives it.
+
+### 14.4 Outstanding follow-ups
+
+Carried at approval, enumerated in `D0-008_USER_REVIEW.md` §7:
+
+| Owner | Items |
+|---|---|
+| `D10` | FU-2 (apply E-1/E-2/S-1/S-2) · FU-3 (apply R-1/R-2/R-3) · FU-4 (re-annotate per E-3) · FU-5 (golden string + coverage) |
+| Master | FU-6 (CONTEXT.md §5 per MIF-3 — done at acceptance) · FU-7 (route MIF-2 to D0-003) |
+| Deferred | FU-8 (reproduce or retire `r = 0.52-0.62`) · FU-9 (latent zero-impact defects) |
+| **Not carried here** | FU-1 — owned by D10 |
+
+### 14.5 Effect
+
+Status → `USER_APPROVED`. **FINAL ACCEPTED.**
+
+Master integrates into global project state and records the entry in `workflow/DECISION_LEDGER.md`.
+
+Master's Section 12 recommendation is retained unchanged alongside this decision.
+
+---
 
 ## D0 Operating Rules
 

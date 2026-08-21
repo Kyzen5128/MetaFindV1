@@ -8,6 +8,23 @@
 
 # 1. Roles
 
+## USER — Final Research / Project Authority
+
+The user is the final decision maker for this project.
+
+Master, D0, D-tasks, and Codex investigate, implement, review, and recommend. **None of them decides.**
+
+The user holds two distinct gates:
+
+1. **Start gate** — nothing formal begins without user approval (Section 5).
+2. **Acceptance gate** — no material decision becomes project state without user approval (Section 13B).
+
+The user is the only role that can convert a recommendation into `FINAL ACCEPTED`.
+
+The user is not required to read full investigations. Master must present decisions in a compact, decision-ready form — the USER REVIEW BRIEF (Section 13C).
+
+---
+
 ## MASTER — Project Lead / Integration Owner
 
 Master maintains the full project view.
@@ -24,7 +41,8 @@ Master is responsible for:
 - proposing the next task to the user;
 - receiving HANDOFF results;
 - validating task completion;
-- integrating accepted results;
+- producing the USER REVIEW BRIEF for every material decision;
+- integrating results **after** user approval;
 - updating MASTER.md, CONTEXT.md, and INDEX.md;
 - requesting milestone-level Codex review;
 - preserving the global architecture and research direction.
@@ -43,6 +61,11 @@ Master normally does not:
 Master proposes.
 The user approves.
 A dedicated task conversation executes.
+
+Master then reviews and **recommends**.
+The user makes the final decision.
+
+Master's `ACCEPT` is a recommendation, not an acceptance. See Section 13B.
 
 ---
 
@@ -77,7 +100,9 @@ D0 should:
 
 D0 does not mark its own recommendation ACCEPTED.
 
-Master decides acceptance.
+Master reviews and recommends.
+
+**The user decides acceptance.** A D0 recommendation that Master endorses is still only a recommendation until the user approves it through the gate in Section 13B.
 
 Formal accepted decisions live under:
 
@@ -415,6 +440,10 @@ Possible initial states:
 
 # 5. User Approval Gate
 
+The user holds **two** gates. Do not conflate them.
+
+## 5.1 Start gate — may this work begin?
+
 Master does not automatically launch formal work.
 
 Flow:
@@ -426,7 +455,22 @@ Master
 → task becomes ACTIVE
 → dedicated conversation starts
 
-The user remains the final execution-control gate.
+## 5.2 Acceptance gate — does this result become project state?
+
+Master does not automatically accept a finished result.
+
+Flow:
+
+Task or D0 returns
+→ Master integration review
+→ Master produces a MASTER RECOMMENDATION
+→ Master writes a USER REVIEW BRIEF
+→ user returns APPROVE / REJECT / MODIFY / INVESTIGATE MORE
+→ only on APPROVE does the decision become `FINAL ACCEPTED`
+
+The full acceptance gate is specified in Sections 13A–13C.
+
+The user remains the final execution-control gate **and** the final research-decision authority.
 
 ---
 
@@ -494,13 +538,18 @@ MASTER
 → Claude verifies findings
 → D0 recommends
 → MASTER reviews
-→ ACCEPT / REWORK / REJECT / BLOCKED
+→ MASTER RECOMMENDATION: ACCEPT / ACCEPT WITH FOLLOW-UP / REWORK / REJECT / BLOCKED
+→ MASTER writes USER REVIEW BRIEF
+→ USER: APPROVE / REJECT / MODIFY / INVESTIGATE MORE
+→ on APPROVE: `FINAL ACCEPTED`
 
-Until Master accepts it:
+Until the **user** approves it:
 
 the recommendation is not project-wide truth.
 
-Accepted decisions may update:
+Master's endorsement narrows the question and vouches for the evidence. It does not settle it.
+
+Finally accepted decisions may update:
 
 - `workflow/decisions/`
 - `workflow/CONTEXT.md`
@@ -569,7 +618,22 @@ MASTER performs integration review
 
 ↓
 
+MASTER RECOMMENDATION:
 ACCEPT / ACCEPT WITH FOLLOW-UP / REWORK / REJECT / BLOCKED
+
+↓
+
+MASTER writes USER REVIEW BRIEF
+(required whenever the result carries a material decision — Section 13C)
+
+↓
+
+USER: APPROVE / REJECT / MODIFY / INVESTIGATE MORE
+
+↓
+
+on APPROVE: `FINAL ACCEPTED`
+Master integrates into global project state
 
 ---
 
@@ -675,6 +739,8 @@ must be reported:
 
 It is not PASS.
 
+It must also be stated in the USER REVIEW BRIEF (Section 13C). The user decides whether to proceed without independent review; Master does not make that call silently.
+
 ---
 
 # 13. Master Integration Review
@@ -690,7 +756,7 @@ Master reviews:
 - task Definition of Done;
 - Master-impacting findings.
 
-Master returns one:
+Master returns one **MASTER RECOMMENDATION**:
 
 - ACCEPT
 - ACCEPT WITH FOLLOW-UP
@@ -698,12 +764,191 @@ Master returns one:
 - REJECT
 - BLOCKED
 
-Only after acceptance may Master:
+**This is a recommendation, not an acceptance.**
 
-- mark task DONE;
+`REWORK`, `REJECT`, and `BLOCKED` may be acted on immediately — they return work to the task owner and change no project state. Master should still inform the user.
+
+`ACCEPT` and `ACCEPT WITH FOLLOW-UP` **do change project state** and therefore do not take effect on their own. They proceed to the user review gate in Section 13B.
+
+Only after the **user** approves may Master:
+
+- mark a task DONE;
 - unblock downstream tasks;
 - update CONTEXT.md;
-- change overall pipeline status.
+- change overall pipeline status;
+- record any decision as `FINAL ACCEPTED`.
+
+---
+
+# 13A. Finding vs Decision
+
+These are different things and must never be merged into one statement.
+
+## FINDING
+
+A finding is **what was discovered**.
+
+- an observation, a contradiction, a measurement, a defect, a piece of evidence;
+- it has an evidence class (PAPER FACT, OBSERVED IMPLEMENTATION, OBSERVED DATA, INFERENCE, UNKNOWN, …);
+- it has a verification status (CONFIRMED / PLAUSIBLE / REJECTED / UNVERIFIED);
+- it is true or false independently of what anyone wants to do about it.
+
+Claude, Codex, D0, and D-tasks may all **produce and verify findings**. That is their job.
+
+## DECISION
+
+A decision is **what will be done about a finding**.
+
+- adopt, reject, defer, deviate, correct, re-scope, re-order;
+- it is a choice, not an observation;
+- it changes project state, artifacts, or scientific interpretation.
+
+**Only the user makes material decisions.** See Section 13B for what counts as material.
+
+## Why the separation matters
+
+A confirmed finding does not imply its remedy. "The serializer renders 0.5 cm as 0" is a finding. "Therefore change the formatter" is a decision — and a different remedy, or accepting the defect as a disclosed limitation, may be the right call.
+
+Collapsing the two lets an AI-selected remedy enter the project wearing the authority of a verified measurement.
+
+When reporting, always state them separately:
+
+```
+FINDING:   <what is true>  [evidence class] [verification status]
+DECISION:  <what to do>    [proposed by]    [requires user approval: yes/no]
+```
+
+An AI may state a **proposed** decision and argue for it. It may not enact a material one.
+
+---
+
+# 13B. User Review Gate
+
+## The rule
+
+> A material decision becomes `FINAL ACCEPTED` **only** when the user approves it.
+>
+> Unanimity among Master, D0, the D-task, and Codex does **not** substitute for user approval.
+
+Agreement between models is not independent confirmation. Models share training data, share framing, and are given the same brief. Convergence is weak evidence, and it is never authority.
+
+## What is material
+
+Any decision that could materially change the reproduced results, or that fixes an interpretation the reproduction will be judged on. Including:
+
+- paper interpretation;
+- architecture;
+- implementation choice;
+- deviation;
+- dataset / annotation semantics;
+- preprocessing;
+- training protocol;
+- evaluation protocol;
+- shared artifact semantics;
+- cache / checkpoint validity;
+- dependency ordering;
+- scientifically meaningful assumptions;
+- anything else that could materially change reproduced results.
+
+**When in doubt, treat it as material.** The cost of an unnecessary brief is a short paragraph. The cost of a silently adopted decision is a reproduction nobody can defend.
+
+## What is not material
+
+Routine execution that changes no scientific behaviour and no shared contract: local refactors within an approved scope, test scaffolding, log formatting, documentation corrections that only make a comment describe existing code accurately.
+
+These are reported in the HANDOFF and do not require their own brief. They may still be mentioned in a brief's summary if they help the user judge the whole.
+
+## The four user actions
+
+| Action | Meaning | Effect |
+|---|---|---|
+| `APPROVE` | The proposed decision is adopted | Becomes `FINAL ACCEPTED`. Master integrates into global project state |
+| `REJECT` | The proposed decision is not adopted | Master records the rejection and its reason. The finding stands; the remedy does not |
+| `MODIFY` | Adopted with changes the user specifies | Master records the user's version as the decision, not the proposed one. If the modification is substantial, Master re-verifies before integrating |
+| `INVESTIGATE MORE` | Not enough evidence to decide | Master defines the additional investigation and returns it to D0 or a D-task. State stays unresolved |
+
+The user's wording is authoritative. If the user's instruction and Master's recommendation differ, the user's instruction governs. Master may state a disagreement once, with evidence, and must then proceed as instructed.
+
+## Recording
+
+- The user's action, its date, and any modification are recorded in the decision file's Master Resolution section, or in the task's acceptance record.
+- A decision file's status becomes `ACCEPTED` only after user `APPROVE`.
+- Master's recommendation is retained alongside it. If the user's decision differs, both are kept — the disagreement is part of the record.
+
+## What this does not change
+
+This gate adds a step. It removes nothing.
+
+Verification, Codex adversarial review, Claude's verification of Codex findings, Master integration review, impact-check escalation, sequential execution, scope control, and session-continuity rules all apply **unchanged and in full, before** the gate is reached. The gate is the last step, not a replacement for the earlier ones.
+
+A brief must never be used to hand the user an unreviewed result. If Codex review was unavailable, the brief says so and says it is not a PASS.
+
+---
+
+# 13C. USER REVIEW BRIEF
+
+Master writes this after integration review, whenever the result carries a material decision.
+
+## Design constraint
+
+**Keep it short.** The brief is a decision aid, not a re-narration of the investigation.
+
+Do not restate the full research process. The decision file and the HANDOFF hold the detail; the brief points at them. Aim for something the user can act on without opening anything else — while making it obvious where to look if they want to.
+
+If a section has nothing in it, write `None` and move on. Do not pad.
+
+## Required structure
+
+```
+# USER REVIEW BRIEF — <decision-id or task-id>
+
+## What was found
+<the findings, briefly. Separate each finding from its remedy.>
+
+## Evidence
+<where it came from: file, line, paper section, measurement.
+ Say what was measured directly and what was accepted on report.>
+
+## Claude / Codex disagreement
+<any unresolved disagreement, and each side's position.
+ "None" if they converged — and say so plainly, since convergence
+ is not confirmation.>
+
+## Finding verification status
+CONFIRMED:   <...>
+PLAUSIBLE:   <...>
+REJECTED:    <...>  (with why)
+UNVERIFIED:  <...>
+
+## Proposed decision
+<what Master recommends doing. One paragraph.>
+
+## Decision authority / classification
+<PAPER FACT / UPSTREAM FACT / OBSERVED IMPLEMENTATION / OBSERVED DATA /
+ INFERENCE / IMPLEMENTATION CHOICE / DEVIATION / UNKNOWN>
+<and: is this Master's call, or genuinely the user's? Say which.>
+
+## Impact
+<tasks, artifacts, stages affected. What becomes unblocked or blocked.>
+
+## Remaining UNKNOWN
+<what is still not established, and whether it matters for this decision.>
+
+## What you need to decide
+<the specific question, stated as a question.
+ APPROVE / REJECT / MODIFY / INVESTIGATE MORE>
+```
+
+## Honesty requirements
+
+The brief must not oversell. Specifically:
+
+- Distinguish what Master **re-verified directly** from what it **accepted on the task's report**.
+- State disagreement even when Master thinks Codex was wrong.
+- Never present an INFERENCE or IMPLEMENTATION CHOICE as a PAPER FACT.
+- Never let "all tests pass" stand in for research fidelity.
+- If the recommendation rests on an unverified number, say so in the brief, not only in the decision file.
+- If Master's own earlier statement was corrected during review, say so.
 
 ---
 
@@ -729,7 +974,11 @@ The review asks whether:
 - paper fidelity has been independently verified;
 - no task-local assumption became an unnoticed global assumption.
 
-Only after milestone review and Master acceptance should a milestone be marked complete.
+A milestone is marked complete only after milestone review, Master's recommendation, **and user approval through the Section 13B gate.**
+
+A milestone completion is always material: it asserts that a stage of the reproduction is done. Master writes a USER REVIEW BRIEF for it like any other material decision, and the brief must state plainly what remains UNVERIFIED at the point of completion.
+
+Task-level user approvals do not aggregate into milestone approval. The user approves the milestone as its own decision.
 
 ---
 
@@ -780,6 +1029,9 @@ This keeps Master useful as a long-lived project supervisor.
 
 The system should behave like:
 
+USER
+= principal investigator / final authority
+
 MASTER
 = project supervisor
 
@@ -799,6 +1051,12 @@ Conversation context
 = temporary working memory
 
 The architecture and project state must survive even if any individual conversation is discarded.
+
+And one thing more:
+
+**No AI in this system decides what is scientifically true or what the reproduction will claim.**
+
+They find, verify, challenge, and recommend. The user decides. A workflow that lets agreement between models stand in for that is not a research workflow — it is a machine for laundering assumptions into conclusions.
 
 ---
 
@@ -1261,3 +1519,55 @@ This preserves focused task execution without sacrificing project-level error
 detection.
 
 ---
+
+---
+
+## 18.x Escalation and the User Review Gate
+
+Escalation decides **who handles** a finding. It does not decide **what is done** about it.
+
+An escalation that ends in a local fix, a task rework, or a new task is routing, and needs no brief of its own.
+
+An escalation that produces a **material decision** under Section 13B — a changed research interpretation, a changed architecture, a changed dependency order, a changed artifact contract — still passes through the user review gate before it becomes project state. Master triage selects the route; it does not confer acceptance.
+
+`/impact-check` classifies impact. Classification is a finding, not a decision (Section 13A).
+
+---
+
+# 19. Migration
+
+The user review gate (Sections 13A–13C) applies to all work from the point it was adopted.
+
+**It is not retroactive.** Completed evidence gathering and completed Codex reviews are not re-run because the gate was added afterwards.
+
+## D0-008 — migration case
+
+`D0-008_stage1-text-template` completed its investigation, its Codex adversarial review, and Claude's verification of Codex findings before this gate existed.
+
+It is **not** re-opened. Specifically:
+
+- its evidence survey is not re-gathered;
+- its Codex adversarial review is not re-run;
+- its Claude verification of Codex findings is not repeated;
+- Section 11 stands as returned.
+
+From Section 11 onward it follows the current flow:
+
+```
+D0-008 Section 11 (returned)
+→ Master integration review
+→ MASTER RECOMMENDATION
+→ USER REVIEW BRIEF
+→ USER final decision
+→ on APPROVE: FINAL ACCEPTED
+```
+
+If Master already recorded an acceptance in that decision's Master Resolution section before this gate was adopted, that acceptance is reclassified as a **MASTER RECOMMENDATION**. Master owes the user a USER REVIEW BRIEF for it, and the decision reaches `FINAL ACCEPTED` only on the user's `APPROVE`.
+
+Master must not treat a pre-gate acceptance as though the gate had been satisfied.
+
+## General rule for other pre-gate work
+
+Any decision recorded as accepted before this gate was adopted, and which is **material** under Section 13B, is subject to the same treatment: reclassified as a recommendation, briefed to the user, and finalised only on approval.
+
+Work that is not material does not need retrospective briefing.

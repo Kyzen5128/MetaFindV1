@@ -99,7 +99,11 @@ Accepted and reflected in on-disk artifacts. These are IMPLEMENTATION CHOICES un
 | n04 unit-sphere normalisation | kept | Objaverse units span ~1.3e5×; absolute scale never usable | IMPLEMENTATION CHOICE |
 | Gallery scopes reported | both A_test_gallery and B_full_gallery, `gallery_size` derived not hardcoded | `splits.py:104-124`, U-09 | IMPLEMENTATION CHOICE |
 
-**Stage 1 text serialization (U-15) — RATIFIED by D0-008, accepted by Master 2026-08-21.**
+**Stage 1 text serialization (U-15) — RATIFIED. `USER_APPROVED` 2026-08-21.**
+
+Decision: `workflow/decisions/D0-008_stage1-text-template.md` §14. Brief: `D0-008_USER_REVIEW.md`. Ledger: `workflow/DECISION_LEDGER.md`.
+
+**Ratified in design only.** This does not authorise n06 to run — the cache completion/validity gate is owned by `D10_stage1-encoding-contract`. **The ratified template is not yet implemented in `resolve_stage1.py`.**
 
 ```
 {description} {Category} made of {materials}, roughly {W} by {L} by {H} centimetres, {placement}.
@@ -115,19 +119,19 @@ Accepted and reflected in on-disk artifacts. These are IMPLEMENTATION CHOICES un
 | Centimetres | **INFERENCE** as to MetaFind's intent (density plausibility of Figure 2's mass/size pairing + unstated Holodeck schema match). **OBSERVED DATA** as to this corpus: all 45,952 v3 records store `dimension_unit: "cm"`. The volume-arithmetic support is **WITHDRAWN** — `30×30×40=36000` is unit-invariant |
 | `width, length, height` ordering | INFERENCE from Figure 2, which prints that order |
 | Dimension precision, article removal | IMPLEMENTATION CHOICE, user-approved (E-1, E-2, S-1, S-2). **Not** bug fixes — the prior behaviour did what it said; the choice was defective |
-| Omission of `synset` / `volume` / `mass` | IMPLEMENTATION CHOICE with **unknown retrieval impact**. The "volume is redundant" justification is **WITHDRAWN**: a frozen text tower is not guaranteed to multiply three numerals. `resolve_stage1.py:111`'s `r = 0.52-0.62` is **UNVERIFIED** here and must not be reported as MEASURED |
+| Omission of `synset` / `volume` / `mass` | **IMPLEMENTATION CHOICE. Retrieval impact UNKNOWN.** *Binding user wording, 2026-08-21:* must **not** be stated as a PAPER FACT, and must **not** be described as proven redundant. The "volume is redundant" justification is **WITHDRAWN** (Codex C-6): a frozen text tower is not guaranteed to multiply three numerals. `resolve_stage1.py:111`'s `r = 0.52-0.62` is **UNVERIFIED** here and must not be reported as MEASURED |
 | Placement phrasing | IMPLEMENTATION CHOICE. `onWall`→"mounted", `onObject`→"on top of", all-false→"no typical placement" are **inventions**, not schema-preserving paraphrases |
 
 Decision file: `workflow/decisions/D0-008_stage1-text-template.md`. **The ratified template is not yet implemented** — see §6.
 
 Rows sourced from the previous workflow rather than re-verified this session: the `f_x` scalar equivariance figures (2.2e-16 vs 0.43) and the Objaverse scale-span figure (~1.3e5×). The decisions are reflected in code; the supporting numbers are unverified.
 
-**Established but not yet reflected in artifacts — corrections pending, not open questions:**
+**Corrections C-001 and C-002 — COMPLETED 2026-08-21 by `D2a_stage1-protocol-refresh` (`DL-003`):**
 
 | | Established | Current artifact / code | Owner |
 |---|---|---|---|
-| Temperature τ | **PAPER FACT τ = 0.5** (`3experiments.tex:15`, the only value the paper states; no conflicting statement in the source). Non-learnable is a strongly supported INFERENCE, not paper wording | `stage1_hyperparameters.json` records `0.07` / `learnable: true`; `resolve_stage1.py:197-211` hardcodes it with no override path | C-001, executed in D2 |
-| Encoding protocol record | The artifact must describe what `serialize_annotation()` actually emits | `stage1_encoding_protocol.json` records the v1 metre template | C-002, executed in D1/D2 |
+| Temperature τ | **RESOLVED 2026-08-21 (`DL-003`).** `stage1_hyperparameters.json` now records `init_temperature: 0.5`, `learnable_temperature: false` | τ = 0.5 is a **PAPER FACT** (`3experiments.tex:15`). `learnable_temperature: false` is a **USER-RATIFIED IMPLEMENTATION CHOICE** — the paper uses "learnable" for `f_h`/`f_x` (`2methdology.tex:54`) and λ (`:87`), but calls τ a "temperature **hyperparameter**" twice (`:79`, `:99`) and never states it is non-learnable. **Never write this as a PAPER FACT** |
+| Encoding protocol record | **RESOLVED 2026-08-21 (`DL-003`).** `stage1_encoding_protocol.json` now records the ratified template and `metafind_v2_cm@8e4b1fcc66c7f48c`. `load_protocol()` passes | — |
 
 Do not re-open τ as a research question. Using anything other than 0.5 is a **DEVIATION** requiring registration and disclosure wherever results are compared with the paper's tables.
 
@@ -161,7 +165,24 @@ Repository health: `python -m pytest tests/ -q` → **442 passed, 0 skipped, 0 d
 
 **n06 expected successful output = 45,952 `.npz` + 3 quarantine records.** n06 attempts 45,955 (`annotations` glob ∩ `renders_index.jsonl`, `encode_text_image.py:177-179`); the 3 `prompt_version:1` records carry a different schema and raise `KeyError: 'width'` in `serialize_annotation()`, so they are quarantined without output (`encode_text_image.py:213-221`). Keep the three numbers distinct: **45,955 annotation files · 45,952 valid v3 · 3 v1 residuals.**
 
-**BLOCKER — a resumed n06 would silently build a two-distribution gallery.** `is_complete()` (`encode_text_image.py:73-83`) checks only sidecar existence, `encoder_version`, and NPZ existence. It compares **nothing about the text**. A plain re-run would skip all 5,276 metre-derived embeddings as "complete" and encode only the rest in centimetres — no error, no warning, and an identical `text_serialization` label on both halves. `gallery_index.py` fingerprints the checkpoint, not the text, so Table 1 would come out self-consistent and wrong. `"metafind_v1_natural"` already labels two different transformations and is not a valid cache identity. **Do not run n06 until D0-008 follow-up F-1 (exit criteria B-1…B-4) is cleared.**
+**RESOLVED 2026-08-21 (`DL-003`). The annotation corpus is now protected, and the protocol is refreshed.**
+
+```
+bare `annotate_run` (no --force) queues     0 records TOTAL
+  accepted legacy-v3                        0
+  legacy-v1 residuals                       0
+--force still queues                   45,955   (capability preserved)
+state histogram   {accepted_legacy_v3: 45952, legacy_v1_residual_unresolved: 3}
+load_protocol()   PASS -> metafind_v2_cm@8e4b1fcc66c7f48c
+```
+
+**The declared registry is `data/outputs/annotation_provenance.json`.** Three states are explicit there — `accepted_legacy_v3` (45,952), `legacy_v1_residual_unresolved` (3), and annotated-under-current-contract — never inferred from a missing field. **The corpus is `legacy-v3 validated under VALIDATOR_VERSION 2`. It is not v4-generated and must never be described as such.** `D0-003` remains **UNRESOLVED**; the 3 residuals are labelled accordingly.
+
+The work-list predicate now lives in `build_work_list()` (`annotate_run.py:439`), **not** in `is_complete()` alone. Any check written against `is_complete()` gives a false negative.
+
+**Historical — the defect this replaced:**
+
+**BLOCKER (resolved) — a resumed n06 would silently build a two-distribution gallery.** `is_complete()` (`encode_text_image.py:73-83`) checks only sidecar existence, `encoder_version`, and NPZ existence. It compares **nothing about the text**. A plain re-run would skip all 5,276 metre-derived embeddings as "complete" and encode only the rest in centimetres — no error, no warning, and an identical `text_serialization` label on both halves. `gallery_index.py` fingerprints the checkpoint, not the text, so Table 1 would come out self-consistent and wrong. `"metafind_v1_natural"` already labels two different transformations and is not a valid cache identity. **`D1_n06-reencode` is UNBLOCKED as of 2026-08-21.** `D0-008` (`DL-001`), `D10` (`DL-002`) and `D2a` (`DL-003`) are all `USER_APPROVED`. `load_protocol()` passes, the pre-flight passes, and all 5,276 stale embeddings are cache-invalid without being deleted.
 
 **The recorded Stage 1 encoding protocol does not describe the encoder.** `data/outputs/stage1_encoding_protocol.json` records
 `"... roughly {length:.2f} by {width:.2f} by {height:.2f} metres, typically placed {placement}."`

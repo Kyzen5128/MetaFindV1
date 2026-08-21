@@ -134,6 +134,7 @@ This expected-output figure is a **runtime property of n06 and holds regardless 
 
 | ID | Work package | Why ready |
 |---|---|---|
+| **`D1_n06-reencode`** | **UNBLOCKED 2026-08-21.** `D0-008` ✅ · `D2a` ✅ · `D10` ✅. `load_protocol()` passes, pre-flight passes, all 5,276 stale embeddings are cache-invalid, the corpus is protected. ~4 GPU-hours, expected output **45,952** `.npz` + **3** quarantine records. **TASK.md proposed, awaiting user review — not started** |
 | `D9_paper-figures-audit` | Read all 38 extracted paper figures against the U-register | Zero cost, no GPU, read-only on `data/`, writes only `docs/`. No unresolved decision required |
 
 `D1_n06-reencode` was initially assessed READY. Re-verification moved it to BLOCKED — see D0-008 and blocker B5.
@@ -154,7 +155,7 @@ This expected-output figure is a **runtime property of n06 and holds regardless 
 
 ### DECISION REQUIRED
 
-Seven registered candidates, one resolved. Full registry: `workflow/INDEX.md` §Decision Queue. Critical-path summary:
+Eight registered candidates, one resolved. Full registry: `workflow/INDEX.md` §Decision Queue. Critical-path summary:
 
 | ID | Question | Blocks |
 |---|---|---|
@@ -164,7 +165,8 @@ Seven registered candidates, one resolved. Full registry: `workflow/INDEX.md` §
 | D0-005 | `build_model()` bypasses `Stage1RuntimeConfig` | D3, conditional on D0-002 |
 | D0-006 | n08 node-text information collapse | D5 |
 | D0-007 | Table 2 evaluation protocol (200 scenes, 1–5 scale) | D8 |
-| ~~D0-008~~ | ~~Ratify the Stage 1 text serialization template (U-15)~~ — **ACCEPTED WITH FOLLOW-UP 2026-08-21** | resolved; follow-up F-1 now blocks D1 |
+| **D0-009** | **MetaFind §2.5 `f_x → R³`** — the reproduction currently uses a scalar, justified partly by upstream EGNN. Registered 2026-08-21 | D5 Stage 2, `essgnn.py`, `docs/audit/` C3 |
+| ~~D0-008~~ | ~~Ratify the Stage 1 text serialization template (U-15)~~ — **`USER_APPROVED` 2026-08-21** (`DL-001`) | resolved. Implementation is FU-2, owned by D10 |
 
 ### Implementation Corrections — not D0 decisions
 
@@ -208,13 +210,41 @@ Ordering constraint: D2 must re-run n05b to refresh `stage1_encoding_protocol.js
 
 ## 6. Active Assignment
 
-**Task:** None
-**Owner:** None
-**Status:** —
+**Two concurrent work items, both user-approved 2026-08-21.** Master verified `WORKFLOW.md` §7's five conditions for this pair; see `INDEX.md`.
 
-`D0-008_stage1-text-template` was returned `RECOMMENDED` by D0 on 2026-08-21 and resolved by Master the same day as **`ACCEPT WITH FOLLOW-UP`**. See Section 12 of the decision file.
+| | `D2a_stage1-protocol-refresh` | `D0-009_essgnn-fx-codomain` |
+|---|---|---|
+| Role | `D1+` execution | `D0` paper audit |
+| Status | **execution `COMPLETE` · integration `USER_APPROVED` 2026-08-21 (`DL-003`)** | `OPEN` / `INVESTIGATING` — running |
+| Carries | C-001 τ=0.5 · C-002 protocol refresh · **AC-1** · legacy-v3 provenance | MetaFind §2.5 `f_x → R³`, read-only |
+| Writes | `resolve_stage1.py`, `annotate_run.py`, `annotate.py`, tests, 2 protocol artifacts | **only** its own decision file |
+| Conversation | NEW | NEW |
 
-`D10_stage1-encoding-contract` is **READY** — approved by the user 2026-08-21 with one revision to Definition of Done item 2 (the cache-validity proof must be established without running the encoder). Contract written to `workflow/tasks/D10_stage1-encoding-contract/TASK.md`. Awaiting user approval to start the task conversation. Nothing is ACTIVE.
+**Scope wall.** Neither may modify the other's scope. A finding bearing on the other is a `MASTER-IMPACTING FINDING`, reported and not acted on.
+
+**Dependency, unchanged:** `D2a USER_APPROVED → D10 final USER REVIEW with AC-1 evidence → D10 USER_APPROVED → D1_n06-reencode`. **D2a's completion does not start D1.**
+
+`D0-008_stage1-text-template` was returned `RECOMMENDED` by D0 on 2026-08-21 and Master recorded `ACCEPT WITH FOLLOW-UP` the same day — **before the user review gate was adopted.**
+
+**Migration backlog is empty.** Both pre-gate items reached `USER_APPROVED` on 2026-08-21: `D0-008` (`DL-001`) and `D10` (`DL-002`).
+
+Migration completed 2026-08-21. Master delivered the USER REVIEW BRIEF (`workflow/decisions/D0-008_USER_REVIEW.md`); the user returned `MODIFY`, Master applied the corrections, and the user returned **`APPROVE`**.
+
+**Status: `USER_APPROVED`. FINAL ACCEPTED.** Ledger entry `DL-001`.
+
+Its investigation, Codex adversarial review, and Claude's verification were **not** re-run.
+
+`D10_stage1-encoding-contract` executed against that pre-gate acceptance. Master reviewed it on 2026-08-21 and recommended `ACCEPT WITH FOLLOW-UP`; the user returned **`MODIFY`**.
+
+**`D10` is `USER_APPROVED` 2026-08-21 (`DL-002`). FINAL ACCEPTED.** `AC-1` — its sole blocking condition — was satisfied by `D2a` and verified by Master through the production work-list path.
+
+**`G-7` is NOT ratified by that acceptance.** It stays independently OPEN: D10's Decisions §5 (four comment corrections, zero behavioural impact) and §6 (`math.isfinite()` guard placement, 0 records affected). D10 being FINAL must not be read as approving them.
+
+**`D1_n06-reencode` is now UNBLOCKED.**
+
+Decision-state files: `workflow/DECISION_LEDGER.md` (project-level record), `workflow/USER_REVIEW_TEMPLATE.md` (brief format).
+
+`D10_stage1-encoding-contract` — execution `COMPLETE`, integration `AWAITING_USER_REVIEW / MODIFIED`, blocked on `AC-1`, which `D2a` carries.
 
 ---
 
@@ -288,6 +318,17 @@ The primary evidence is sufficient and uncontested, so there is no two-way resea
 - Also open: MetaFind Table 2 uses a 1–5 scale, I-Design uses 0–10 — comparability claim needs establishing before D8.
 - Far from the critical path. Registered so it is not rediscovered later.
 
+**D0-009 — MetaFind §2.5 `f_x → R³`: how to reproduce it faithfully** · **OPEN — registered 2026-08-21, awaiting user approval to open the D0 conversation**
+
+Formal decision file: `workflow/decisions/D0-009_essgnn-fx-codomain.md`. **Master performed no paper audit** — sections 1–5 are framing and evidence pointers only.
+
+- OBSERVED IMPLEMENTATION: `essgnn.py:311-312` uses a **scalar** `f_x` (`_mlp(..., 1)`), hardcoded with no configuration flag. `essgnn.py:39-44` records the reason as "it is simply an error in the paper", citing the Appendix proof **and the reference EGNN**.
+- **The records disagree with each other.** `docs/audit/D_IMPLEMENTATION_FORMULA_CONTRACT.md:124` calls it `[PAPER CONTRADICTION] — C3`; `docs/audit/E_GRAPH_REVALIDATION.md:175` calls C3 `VERIFIED`, settled by `[UPSTREAM]`; `docs/audit/F_CODE_GRAPH_CONSISTENCY.md:27` calls it `CONSISTENT`.
+- **Why it is being reopened.** The user's governing principle for this decision is that **upstream is supplementary evidence and may not override MetaFind's main text.** The `[UPSTREAM] settles it` reasoning at `E_GRAPH_REVALIDATION.md:175` is inadmissible as a settlement under that principle, so the question returns to MetaFind's own evidence. It may reach the same conclusion.
+- `CONTEXT.md` §5 records the position as a DEVIATION, resting on equivariance figures (`2.2e-16 vs 0.43`) that are **UNVERIFIED** in this repository.
+- Out of scope, already decided by the user: `h^l` vs `h^{l+1}`. §2.5's sequential update stands.
+- Cheap to settle now: Stage 2 has never run, `checkpoints/` is empty, and no Stage 2 artifact depends on it yet.
+
 **D0-008 — Ratify the Stage 1 text serialization template (U-15)** · **OPEN — assigned to D0**
 
 Formal decision file: `workflow/decisions/D0-008_stage1-text-template.md`. **That file is the authority for this decision from here on**; the summary below is Master's framing only and must not be edited to contradict it.
@@ -315,7 +356,9 @@ Scope split:
 
 ## 9. Integration Status
 
-**Integrated: `D0-008_stage1-text-template`, accepted with follow-up 2026-08-21.** Master independently re-verified the load-bearing claims before resolution rather than accepting on assertion — verification log in Section 12.1 of the decision file. `CONTEXT.md` §5 and §6 updated per follow-up F-6.
+**`D0-008_stage1-text-template` — `USER_APPROVED` 2026-08-21. FINAL ACCEPTED.** Ledger `DL-001`. Integrated into `CONTEXT.md` §5 (FU-6), `MASTER.md`, `INDEX.md`, and the Decision Ledger.
+
+**Ratified in design only.** The template is **not yet implemented** in `resolve_stage1.py` (FU-2, owned by D10), and this approval does **not** authorise n06 to run — the cache completion/validity gate is D10's. Master independently re-verified the load-bearing claims before resolution rather than accepting on assertion — verification log in Section 12.1 of the decision file. `CONTEXT.md` §5 and §6 updated per follow-up F-6.
 
 `workflow/tasks/` still contains templates only; no D1+ execution task has run.
 
@@ -343,6 +386,18 @@ Corrections found against the old workflow during re-verification:
 ### Milestone / Integration Reviews
 
 None.
+
+### User Review Gate status
+
+| Item | Master recommendation | User decision | Ledger status |
+|---|---|---|---|
+| `D0-008_stage1-text-template` | ACCEPT WITH FOLLOW-UP (2026-08-21) | **`MODIFY` → `APPROVE`** 2026-08-21 | **`USER_APPROVED`** (`DL-001`) |
+| `D10_stage1-encoding-contract` | ACCEPT WITH FOLLOW-UP (2026-08-21) | `MODIFY` → **`APPROVE`** 2026-08-21 | **`USER_APPROVED`** (`DL-002`). `AC-1` cleared. **`G-7` NOT ratified — independently OPEN** |
+| `D2a_stage1-protocol-refresh` | ACCEPT WITH FOLLOW-UP (2026-08-21) | **`APPROVE`** 2026-08-21, MIF-2 ratified | **`USER_APPROVED`** (`DL-003`) |
+
+Full record: `workflow/DECISION_LEDGER.md`.
+
+A milestone completion is always material. Task-level user approvals do **not** aggregate into milestone approval — the user approves each milestone as its own decision (`WORKFLOW.md` §14).
 
 Scheduled milestone reviews (per `workflow/WORKFLOW.md` §14):
 
@@ -429,8 +484,10 @@ Execution flow:
 5. Codex performs independent review.
 6. Task writes `HANDOFF.md`.
 7. User tells Master the task is finished.
-8. Master reads `TASK.md`, `HANDOFF.md`, `CODEX_REVIEW.md`.
-9. Master returns ACCEPT / ACCEPT WITH FOLLOW-UP / REWORK / REJECT / BLOCKED.
-10. Only after acceptance does Master update global project state.
+8. Master reads `TASK.md`, `HANDOFF.md`, `CODEX_REVIEW.md`, and re-verifies the load-bearing claims.
+9. Master returns a MASTER RECOMMENDATION: ACCEPT / ACCEPT WITH FOLLOW-UP / REWORK / REJECT / BLOCKED.
+10. For ACCEPT-class recommendations, Master writes a USER REVIEW BRIEF and records the entry as `AWAITING_USER_REVIEW` in `workflow/DECISION_LEDGER.md`.
+11. User returns APPROVE / REJECT / MODIFY / INVESTIGATE MORE.
+12. Only after the user's APPROVE does Master update global project state and mark the task DONE.
 
 Execution is sequential by default. Parallel execution requires explicit `PARALLEL SAFE: YES` with verified dependency and filesystem non-conflict.
