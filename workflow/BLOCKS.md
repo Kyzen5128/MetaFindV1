@@ -85,6 +85,60 @@ of their block. Nothing was renamed; no decision file moved.
 
 ---
 
+## Skills — where each one is used, by whom
+
+Full policy: **`workflow/SKILLS.md`**. Summary only here.
+
+**Skills are method tools, never authority.** Skill PASS ≠ scientific PASS. Tests PASS ≠
+reproduction fidelity. Codex PASS ≠ Block PASS. Reviewer PASS ≠ USER acceptance.
+
+| Layer | Skill | Who calls it |
+|---|---|---|
+| Block start | `grilling` + `domain-modeling` | Master, with Owner and Reviewer |
+| Contract | SPEC, 15 sections (`blocks/SPEC_TEMPLATE.md`) | Owner |
+| Build | `tdd` at agreed seams · `research` · `diagnosing-bugs` | Owner |
+| Completion claim | `code-review`, **extended to 4 axes** | Owner |
+| Independent, synchronous | `research` · `diagnosing-bugs` · `code-review` · `improve-codebase-architecture` | Reviewer |
+| Milestone adversarial | Codex | Master requests |
+| Acceptance | `grilling`, **one item at a time** | Master → USER |
+
+**Six skills carry `disable-model-invocation: true` and Claude cannot call them** — verified
+2026-08-22. `grill-with-docs` and `implement` are thin wrappers Claude reproduces directly;
+`improve-codebase-architecture` must be **run by the USER**; `to-spec`, `handoff` and `grill-me`
+are not used. Details and reasons: `SKILLS.md` §1 and §4.
+
+### The four axes
+
+`STANDARDS` · `SPEC` · `SOURCE / EVIDENCE` · `SCIENTIFIC / SEMANTIC` — **reported separately,
+never merged into one PASS.** Axis 4 assumes the code runs and the tests pass, and asks how the
+result could still be scientifically wrong.
+
+### When none of this applies
+
+Internal work items inside an approved SPEC, comments, formatting, read-only investigation, and
+re-runs of accepted deterministic steps need **no** grill, spec, review, Codex or USER gate.
+We removed fine-grained D-tasks deliberately; do not rebuild them out of skills. `SKILLS.md` §5.
+
+---
+
+## Formal acceptance flow
+
+```
+Block Plan
+  → USER approves scope
+  → Owner implementation + self-verification
+       ↕  Reviewer synchronous independent verification
+  → 4-axis completion review
+  → Codex milestone adversarial review
+  → Master integration
+  → USER Acceptance Grill          (one material criterion per round)
+  → USER FINAL ACCEPTED
+```
+
+No step is skipped at a Block milestone. Every step is skipped for an internal work item.
+
+---
+
 ## Block state
 
 | Block | State | Engineer | Reviewer | Next |

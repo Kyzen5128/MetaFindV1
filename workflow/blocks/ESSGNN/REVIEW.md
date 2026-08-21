@@ -29,6 +29,41 @@ directory, or a separate git worktree — never the engineer's production files.
 **The reviewer may not decide a material remedy.** Findings go to Master via `HANDOFF.md`;
 only the USER makes anything FINAL.
 
+## Skills the Reviewer uses
+
+Policy: `workflow/SKILLS.md` §10. Skills are method tools, never authority.
+
+| Skill | Use it for | Claude may invoke |
+|---|---|---|
+| `mattpocock-skills:research` | source-of-truth and contract audit against primary sources | yes |
+| `mattpocock-skills:diagnosing-bugs` | contradictions, conflicting measurements, suspected silent failure | yes |
+| `mattpocock-skills:code-review` | an independent 4-axis pass, separate from the Owner's | yes |
+| `improve-codebase-architecture` | milestone-only architecture survey | **no — ask the USER to run `/improve-codebase-architecture`** |
+
+### Four axes, reported separately
+
+`STANDARDS` · `SPEC` · `SOURCE / EVIDENCE` · `SCIENTIFIC / SEMANTIC`.
+Axis 4 assumes the code runs, the tests pass and the SPEC is met, then asks how the result could
+**still** be scientifically wrong: wrong units, coordinate or frame mismatch, generated artifact
+disagreeing with its source, label noise, silent corruption, downstream contamination, evaluation
+leakage. Never merge the four into one verdict.
+
+### Differential testing is the sharpest tool here
+
+Compare two things that should agree — official upstream artifact vs ours, source metadata vs
+generated annotation, before vs after, configuration A vs B. Build a red-capable loop, reproduce,
+minimise, form **falsifiable** hypotheses, instrument, then fix. **Do not read the code and guess
+the cause first.** This is how the 180 degree yaw was found, and how it was then shown not to move
+the embedding (`workflow/tasks/D15_n03-n04-code-audit/FINDINGS.md`).
+
+### Review early, not at the end
+
+Before full annotation, corpus generation, n06 full encode, any multi-hour GPU run, full training,
+or full evaluation, the sources, the contract, a real sample and the semantic consistency must
+**already** have been audited. A review that starts after the run is a post-mortem.
+
+---
+
 ## Finding format
 
 ```

@@ -267,12 +267,17 @@ Facts every task owner should know:
 ### Project control
 - `CLAUDE.md` — project research / engineering rules
 - `.claude/rules/` — research-rigor, experiments, paper-reproduction, code-changes
-- `workflow/WORKFLOW.md` — the operating protocol
+- **`workflow/BLOCKS.md`** — block ownership, roles, the `HANDOFF.md` communication rule. **Governs structure**
+- **`workflow/SKILLS.md`** — which engineering skill is used at which layer, by whom, and when it is worth it. **Governs method**
+- **`workflow/blocks/<BLOCK>/`** — `BLOCK.md`, `REVIEW.md`, `HANDOFF.md`, `SPEC_<milestone>.md`
+- **`workflow/blocks/SPEC_TEMPLATE.md`** — the 15-section implementation contract
+- `workflow/WORKFLOW.md` — the operating protocol. **Superseded in part**: its D-task role model yields to `BLOCKS.md` and `SKILLS.md` (see its §20). Still binding: §13A, §13B, §13C, §18
 - `workflow/MASTER.md` — Master global control state
 - `workflow/CONTEXT.md` — this file
 - `workflow/INDEX.md` — task registry and decision queue
+- `workflow/DECISION_LEDGER.md` — **the project-level record of material decisions**
 - `workflow/decisions/` — accepted D0 decisions
-- `workflow/tasks/<task-id>/` — `TASK.md`, `HANDOFF.md`, `CODEX_REVIEW.md`
+- `workflow/tasks/<task-id>/` — `TASK.md`, `HANDOFF.md`, `CODEX_REVIEW.md`. Now **internal work items of a block**, not the unit of work
 
 ### Research evidence
 - `docs/paper/metafind_source/` — MetaFind TeX + 6 figures (`2methdology.tex`, `3experiments.tex`, `appendix.tex`, `MetaFind.drawio.png`, `data-preprocess.png`)

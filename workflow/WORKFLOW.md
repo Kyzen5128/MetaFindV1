@@ -3,6 +3,12 @@
 > Operating protocol for Master, D0, D1/D2/D3..., and Codex.
 > This file defines how work moves through the project.
 > It does not contain scientific conclusions or task-specific implementation details.
+>
+> **Superseded in part, 2026-08-21/22.** The project moved to a **Block-centric** structure
+> (`workflow/BLOCKS.md`) and formally integrated the engineering skills
+> (`workflow/SKILLS.md`). Where this file's D-task role model conflicts with those two, **they
+> win** — see §20. What still binds unchanged: §13A Finding vs Decision, §13B User Review Gate,
+> §13C USER REVIEW BRIEF, §18 escalation, and the USER's final authority.
 
 ---
 
@@ -1571,3 +1577,77 @@ Master must not treat a pre-gate acceptance as though the gate had been satisfie
 Any decision recorded as accepted before this gate was adopted, and which is **material** under Section 13B, is subject to the same treatment: reclassified as a recommendation, briefed to the user, and finalised only on approval.
 
 Work that is not material does not need retrospective briefing.
+
+
+---
+
+# 20. Block-Centric Workflow and Skill Integration
+
+**USER decision 2026-08-21 / 2026-08-22.** Two documents now sit above this one for anything
+concerning structure and method:
+
+| Document | Governs |
+|---|---|
+| `workflow/BLOCKS.md` | block ownership, roles, the `HANDOFF.md` communication rule |
+| `workflow/SKILLS.md` | which skill is used at which layer, by whom, and when it is worth it |
+| `workflow/blocks/SPEC_TEMPLATE.md` | the 15-section implementation contract |
+
+## 20.1 What replaced what
+
+**Replaced.** Fine-grained `D<n>` task cards as the unit of work. Work is now owned by a **Block**
+that holds an entire technical chain. Existing `workflow/tasks/D*` directories are unchanged and
+become internal work items of their block; `workflow/INDEX.md` remains the registry.
+
+**Unchanged, and still binding.** §13A Finding vs Decision · §13B User Review Gate · §13C USER
+REVIEW BRIEF · §18 escalation and Master-impacting findings · the authority hierarchy in
+`CLAUDE.md` §3 · `workflow/DECISION_LEDGER.md` as the project-level record · the USER as final
+research authority.
+
+## 20.2 Roles
+
+`USER` · `MASTER` · **`BLOCK OWNER`** · **`BLOCK REVIEWER`** · **`INTEGRATOR`** · `CODEX`.
+
+The Block Reviewer is an independent Claude context working **synchronously** with the Owner.
+**Codex does not replace the Block Reviewer** — it is the third layer, adversarial and
+context-free, and Codex PASS is not Block PASS.
+
+## 20.3 The acceptance flow
+
+```
+Block Plan
+  → USER approves scope
+  → Owner implementation + self-verification
+       ↕  Reviewer synchronous independent verification
+  → 4-axis completion review
+  → Codex milestone adversarial review
+  → Master integration
+  → USER Acceptance Grill          (one material criterion per round)
+  → USER FINAL ACCEPTED
+```
+
+This **extends** §13B rather than replacing it. §13B said the user returns
+APPROVE / REJECT / MODIFY / INVESTIGATE MORE on a brief. It now happens **item by item**, in
+`grilling` mode: Master looks up the evidence first, presents one criterion, and waits. Nothing is
+`FINAL ACCEPTED` until every material criterion has been through a round. Full format:
+`SKILLS.md` §11.
+
+## 20.4 Four-axis review replaces the single completion claim
+
+`STANDARDS` · `SPEC` · `SOURCE / EVIDENCE` · `SCIENTIFIC / SEMANTIC`, **reported separately**.
+Axis 4 assumes the code runs, the tests pass and the SPEC is met, then asks how the result could
+still be scientifically wrong. `SKILLS.md` §9.
+
+## 20.5 Do not rebuild fine-grained process out of skills
+
+Skills are method tools, not authority. They apply to **material** changes, high-risk pipeline
+stages, the moment **before an expensive run**, and Block milestones.
+
+They do **not** apply to internal work items inside an approved SPEC, comments, formatting,
+read-only investigation, or re-runs of accepted deterministic steps. The Block Owner manages those
+alone. `SKILLS.md` §5.
+
+## 20.6 Handoff
+
+`session-handoff` and the block `HANDOFF.md` only. A handoff is temporary continuity — never a
+formal finding, decision, or acceptance. Persistent state goes back into the block and Master
+workflow files.

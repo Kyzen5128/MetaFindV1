@@ -7,6 +7,16 @@
 **Initialized:** 2026-08-20
 **Repository state at initialization:** `4a4ebbe` + untracked `workflow/`, `_workflow_old_20260820/`; deleted `TASKS.md`, `主線.md`, `支線任務.md`
 
+> **⚠ STALE — do not act on §4, §6, §11 or §12 without checking.** This file still describes the
+> pre-Block D-task world of 2026-08-20/21. Since then: the project moved to **two blocks**
+> (`workflow/BLOCKS.md`), the engineering skills were integrated (`workflow/SKILLS.md`), `D0-003`
+> was resolved (`DL-006`), **every old-model artifact was deleted** — `annotations/` and
+> `embeddings/` are now **empty** — and `D15`'s findings verified n03/n04 against upstream.
+> **Current state: `workflow/MASTER_INITIALIZATION_REPORT.md` and
+> `workflow/MASTER_SESSION_HANDOFF.md`.** Known-wrong lines here include the n06 count (5,276),
+> the test count (442), and `MASTER.md:273`'s claim that τ = 0.5 has no code path — `D2a` fixed
+> that on 2026-08-21. Rewriting this file is queued, not done.
+
 **Last corrected:** 2026-08-21 (Master re-initialization audit). `git HEAD 468bbac` + 13 modified / 7 untracked, **none committed**.
 Every count in §4, §6, §11 and §12 was re-measured against disk on that date. Sections that had gone stale are marked
 **[CORRECTED 2026-08-21]**; the superseded figure is stated rather than deleted, so the drift stays auditable.
