@@ -705,3 +705,85 @@ already agrees, and any movement there would mean the fix broke something that w
 
 `STATE` — nothing modified. `F-N03-1` moves from OPEN to **DIAGNOSED**; it closes when the
 regeneration reproduces ULIP's numbers.
+
+---
+
+### 2026-08-22 · ULIP2 ENGINEER · **`S-5` MET** — the render correction verified against upstream
+
+**Against ULIP-2's released `image_feat`, over the 286 assets present in both corpora: R@1 rises
+from 83.2% to 95.8%. The corrected renders land beside the point tower's 98.0%.**
+
+Tool: `tools/verify_renders_against_ulip.py` (new). Repo `2a8ded4` plus the renderer changes.
+
+#### The measurement
+
+Same 286 assets, same frozen ViT-bigG-14, same aggregation. The only difference is which pixels
+the encoder is shown: **the v2 renders still on disk**, or the same assets re-rendered under v3.
+The target is ULIP's own `image_feat`, which we did not produce and cannot tune.
+
+| | R@1 | R@5 | median rank | matched cos | mismatched cos | gap |
+|---|---|---|---|---|---|---|
+| **v2 — on-disk renders** | **83.2%** | 92.7% | 1 | 0.8371 | 0.5565 | 0.2806 |
+| **v3 — corrected** | **95.8%** | 98.6% | 1 | 0.8782 | 0.5378 | **0.3404** |
+
+Chance R@1 over this pool is **0.35%**.
+
+#### Three things this establishes
+
+**1. The harness reproduces `FIND-9` independently.** FIND-9 measured **83.5%** over 200 assets
+with a script that no longer exists. This tool, written from scratch against a different sample of
+286, measures **83.2%** for the same corpus. The agreement is 0.3 points.
+
+**2. The stated hypothesis is confirmed.** It was recorded before the fix: *"the 14.5-point gap
+between the render tower's 83.5% and the point tower's 98.0% is what the renderer-v2 defects would
+be expected to cost."* Correcting the up axis, the background and the framing **recovers 12.6 of
+those 14.5 points.** The prediction was made first and the measurement was not free to land
+anywhere.
+
+**3. The signal sharpened, it did not merely shift.** Matched cosine rose 0.8371 → 0.8782 while
+mismatched **fell** 0.5565 → 0.5378. A change that only brightened or rescaled the images would
+move both together.
+
+#### Correction of record — an alarm the engineer raised and then disproved
+
+Mid-investigation this block reported that the image tower's weights were **random** and that the
+measurement was void. **That was wrong, and it is recorded rather than quietly dropped.**
+
+- The trigger was real: `open_clip` logs *"No pretrained weights loaded for model 'ViT-bigG-14'.
+  Model initialized randomly"*, and the ULIP-2 checkpoint turns out to contain **228 tensors, all
+  `point_encoder` / `pc_projection` / `logit_scale`, and zero CLIP tensors** — so the checkpoint is
+  not where the image tower's weights come from.
+- The warning comes from `ulip_backbone.py:195-196`, which constructs a **throwaway**
+  `create_model_and_transforms("ViT-bigG-14", pretrained=None)` solely to obtain `self.preprocess`.
+  The model actually used is built by the vendored path at `ULIP_models.py:354-355` with
+  `pretrained='laion2b_s39b_b160k'`, and those weights are on disk (11 GB under
+  `data/models/hf-cache/hub/models--laion--CLIP-ViT-bigG-14-laion2B-39B-b160k`).
+- **Disproved independently of ULIP.** Five assets whose LVIS category is unambiguous, encoded
+  against `"a 3d model of a {category}"`: matched cosine **0.400**, mismatched **0.298**, and the
+  argmax lands on the correct text **5 / 5**. Random weights cannot do that.
+
+**What actually misled the engineer** was a different test: encoding ULIP's *own* released PNGs
+and comparing to their `image_feat` gave a diagonal (0.68, 0.76) *below* the off-diagonal
+(0.70, 0.78). That is explained by `FIND-8`, already on record: ULIP's transform is
+`RandomResizedCrop(224, scale=(0.5,1.0))` with **ImageNet** mean/std, not OpenCLIP's centre crop,
+and the released images are a resized re-release. **Their features are not reproducible from their
+published pixels with our transform, and that is a property of their pipeline, not of ours.**
+
+The A/B above is unaffected: both arms use the same transform, so the comparison is internally
+consistent, and `FIND-9` measured the transform difference as immaterial (83.5% OpenCLIP norm vs
+82.5% ImageNet norm).
+
+#### Still not established
+
+- **The elevation is NOT solved.** R@1 over a 60-asset pool read 100.0 / 98.3 / 98.3 at 5° / 15° /
+  25°, which is a 1-asset difference and cannot separate them. `ORBIT_ELEVATION_DEG` stays at 20°
+  as an IMPLEMENTATION CHOICE, **not** as a solved value, and `U-03` stays `UNKNOWN`.
+- **`U-03a` (projection) is untouched.** The silhouette sweep that appeared to favour orthographic
+  over perspective by 0.89 to 0.57 **did not normalise the framing between them**, so it measured
+  object size, not projection. That comparison is withdrawn.
+- **95.8% is agreement with ULIP-2, not with MetaFind.** MetaFind never states a camera. Under
+  `U-O` this is the best available target, and it remains an `IMPLEMENTATION CHOICE` with upstream
+  provenance.
+
+`STATE` — the corpus has **not** been regenerated. 286 assets were re-rendered in memory for this
+measurement and their PNGs deleted; `data/outputs/renders/` still holds v2.
