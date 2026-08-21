@@ -96,6 +96,54 @@ Keep the Issue and the Decision in separate rows. Do not merge them.
 
 ---
 
+## Registered defect in this file — `DL-006` is used twice
+
+**Two different decisions carry the id `DL-006`.** Neither entry is edited; an edited record is
+not a record. Cite them by **date**, never by id alone:
+
+| | |
+|---|---|
+| `DL-006` **(2026-08-22)** | the three legacy-v1 residuals are deleted and re-annotated under v5 |
+| `DL-006` **(2026-08-21)** | the n05 annotation model is `Qwen3.8-27B` — **superseded by `DL-008`** |
+
+Registered by Master 2026-08-22 during the re-initialization audit. `DL-008` is the next free
+id; nothing reuses `DL-006`.
+
+---
+
+### `DL-009` — execution order: `ULIP2` runs to completion before `ESSGNN` opens
+
+| | |
+|---|---|
+| **Source** | USER, 2026-08-22: 「我想先完成 ULIP2 再接續完成」 |
+| **Decision / Resolution** | **Sequential, not parallel.** `ULIP2` is the only open block. `ESSGNN` and `INTEGRATOR` are `ON HOLD` and unstaffed; the USER opens them |
+| **Consequence Master carries, not a block** | `Q-TOWER` and `Q-BUILDMODEL` are Integrator-owned but **block ULIP2's own n09 splits**. While `INTEGRATOR` is on hold, **Master holds those two seams** and brings them to the USER when ULIP2 reaches n09. No block silently absorbs an Integrator question |
+| **Consequence, cost — recorded so it is not rediscovered as a surprise** | Table 1 and Table 2 are ~10 nodes with **zero code** (verified 2026-08-22: no `metafind/eval/` directory exists at all), and **none of them needs a trained model** to be designed and unit-tested. Serialising means that work does not begin until ULIP2 finishes. **This is the USER's accepted trade** |
+| **Authority classification** | **USER DECISION** — project sequencing |
+| **USER final decision** | **`APPROVE`** — 2026-08-22, the USER's own wording above |
+| **Status** | **`USER_APPROVED`** — FINAL ACCEPTED |
+| **Date** | 2026-08-22 |
+
+---
+
+### `DL-008` — the annotator is chosen by a lightweight bake-off. **Supersedes the model lock in `DL-006` (2026-08-21).**
+
+| | |
+|---|---|
+| **Source** | USER, 2026-08-22: 「LLM 選用我想在標註時跑個輕量測試作比較 我再決定 到底要選誰」 |
+| **What is approved** | **the procedure only** — a lightweight sample run per candidate, then the USER picks the winner |
+| **What is NOT approved** | **the winner.** No model is selected by this entry. `annotate_run.py:72`'s hardcoded `MODEL_ID = "/mnt/data1/kyzen/models/Qwen3.8-27B"` is **leftover state from the superseded entry, not a live decision** |
+| **Supersedes** | `DL-006` **(2026-08-21)** — "the n05 annotation model is `Qwen3.8-27B`". That entry is **not deleted**; it was true when written. The model choice is **reopened** |
+| **Measured candidate state — Master, 2026-08-22, `/mnt/data1/kyzen/models/`** | `gemma-4-31B-it-qat-w4a16` — **22,188 MiB**, `config.json` `quantization_config.quant_method: compressed-tensors`, official quantization-aware-trained, 0 `.incomplete`. **READY** · `gemma-4-12B-it` — **22,812 MiB**, bf16, no quantization at all, 0 `.incomplete`. **READY** · `Qwen3.8-27B` — **55.56 GB bf16**, 18/18 shards verified against `model.safetensors.index.json` `total_size`. **The w4a16 build named in `ULIP2/BLOCK.md` §11 does not exist on disk and has never been produced.** NOT READY |
+| **Consequence for the deviation registry — Master routes, no block decides** | `graph_spec.yaml:133` states `D-2` as *"Qwen3.8-27B replaces GPT-4o for ASSET ANNOTATION (n05)"*. **If any other arm wins that text becomes false**, and `check_graph.py:373-383` compares deviation **ids only, never the `what:` text**, so a falsified description passes every gate silently. Registered debt `D-2`/`FU-A` is therefore no longer theoretical |
+| **Standing, unchanged** | **The annotator is not GPT-4o whichever arm wins.** Deviation `D-2` is re-pointed, never discharged, and must never be written up as paper-faithful. LVIS category anchoring remains a separate DEVIATION (`DL-007`) |
+| **Authority classification** | **USER DECISION** on procedure. The eventual winner is an **IMPLEMENTATION CHOICE backed by a measurement on this hardware and this sample** — never a general claim that one model is better than another |
+| **USER final decision** | **`APPROVE`** — the procedure, 2026-08-22. The winner is **PENDING USER** |
+| **Status** | **`USER_APPROVED`** for the procedure · the model itself is **REOPENED, PENDING USER** |
+| **Date** | 2026-08-22 |
+
+---
+
 ### `DL-006` — `D0-003` resolved: the 3 legacy-v1 residuals are deleted and re-annotated under v5
 
 | | |

@@ -29,8 +29,10 @@ UNKNOWN throughout.
 **Data preparation. Nothing has ever been trained.**
 
 ```
-pointclouds     46,052   verified against official ULIP-2 artifacts
-renders         46,045   verified against official ULIP-2 artifacts
+pointclouds     46,052   .npz + .json each; verified against official ULIP-2 artifacts
+renders         46,045   directories, 506,495 PNG = 46,045 x 11 exactly
+    of which    45,955   USABLE -- in renders_index.jsonl, with a sidecar.  <-- the real population
+    and             90   directories with 11 blank PNGs, no index entry, no sidecar
 scene_graphs    12,000
 procthor_modalities      1,467
 
@@ -52,6 +54,13 @@ free                      3.0 TB
 
 **Neither the test suite nor the graph checker is evidence of paper fidelity.** They establish
 that the code executes and that the spec documents agree with each other.
+
+**The corpus denominator is 45,955** — `DL-006` (2026-08-22), `renders_index.jsonl`,
+`annotate_run.py:142`, `tools/status.sh:55`, `tools/chain_after_n05.sh:56` all agree. `45,952`
+is the pre-`DL-006` figure (45,955 minus the 3 deleted residuals) and is **stale wherever it
+still appears** outside a historical record. The 97-asset gap from 46,052 point clouds is n04's
+quarantine: `quarantine_n04_render_views.jsonl`, 143 lines / 99 unique uids, all
+`DETERMINISTIC_INPUT`, e.g. *"every view is blank -- the asset never entered frame"*.
 
 ### Pipeline
 
@@ -96,7 +105,7 @@ pending decision, and the longest pole in the project.
 
 ```
 M1  annotator selection    three candidates, 300-500 sampled assets each
-M2  full annotation        45,952 assets, multi-day, runs once
+M2  full annotation        45,955 assets, multi-day, runs once
 M3  encode + splits        needs Q-TOWER decided first
 M4  Stage 1 training       the project's first checkpoint
 M5  gallery index + Table 1
@@ -117,7 +126,14 @@ Full record with evidence: `workflow/DECISION_LEDGER.md`.
 | `DL-003` | τ = 0.5 with `learnable_temperature: false`; protocol refreshed |
 | `DL-004` | ESSGNN `f_x` stays a **scalar** coordinate multiplier. Verdict **`PAPER-AMBIGUOUS`** |
 | `DL-005` | Deviation `D-2` split into `D-2` (annotation model) and `D-8` (scene judge model) — *awaiting USER* |
-| `DL-006` | The three legacy annotation residuals are deleted and re-annotated with everything else |
+| `DL-006` (08-22) | The three legacy annotation residuals are deleted and re-annotated with everything else |
+| ~~`DL-006` (08-21)~~ | ~~n05's annotation model is `Qwen3.8-27B`~~ — **SUPERSEDED by `DL-008`** |
+| `DL-007` | n05 v5 anchors object identity on the Objaverse-LVIS label. **A DEVIATION** — *awaiting USER* |
+| `DL-008` | The annotator is chosen by a lightweight bake-off. **Procedure approved; the winner is PENDING USER** |
+| `DL-009` | Execution order: `ULIP2` runs to completion before `ESSGNN` opens |
+
+> **`DL-006` is used twice.** Two different decisions share the id. Always cite it by date.
+> Registered at the top of `DECISION_LEDGER.md`. `DL-003-A1` is `PREPARED, NOT IN FORCE`.
 
 **Standing prohibitions carried by these decisions:**
 
@@ -160,7 +176,7 @@ Every one of these is a **USER decision**. Blocks investigate and recommend; the
 
 | | Item |
 |---|---|
-| D-1 | `data/outputs/annotation_provenance.json` still declares 45,952 accepted records that no longer exist. Rebuild it through `tools/declare_annotation_provenance.py` — never by hand |
+| D-1 | `data/outputs/annotation_provenance.json` (4.9 MB) still declares `accepted_legacy_v3: 45,952` + `legacy_v1_residual_unresolved: 3` — **45,955 records, none of which exist**; `data/outputs/annotations/` is empty. Rebuild it through `tools/declare_annotation_provenance.py` — never by hand. Assigned: ULIP2 W-3 |
 | D-2 | The gate checker compares deviation **ids** only and never reads their text, so a deviation whose description has gone false passes silently |
 | D-3 | `tools/check_graph.py` asserts a unit-test count recorded in `docs/graph/README.md`; adding tests moves it and the gate fails until the figure is updated |
 | D-4 | `sidecar_path()` performs no uid validation. Not reachable in this pipeline without a hand-written malicious input |
@@ -174,8 +190,8 @@ Every one of these is a **USER decision**. Blocks investigate and recommend; the
 ```
 ULIP2 annotator bake-off  (sample only, 300-500 assets per candidate)
    → USER picks the winner
-   → n05 full run          45,952 assets, multi-day, runs ONCE
-   → n06 encode            45,952 embeddings
+   → n05 full run          45,955 assets, multi-day, runs ONCE
+   → n06 encode            45,955 embeddings
    → Q-TOWER decided → n09 splits
    → n10 Stage 1 training  ← the project's first checkpoint
    → n11 / G4 / n12 gallery
@@ -192,7 +208,7 @@ unimplemented nodes, and none of them needs a trained model to be designed and u
 
 | | Risk |
 |---|---|
-| **R-1** | **The annotator has never successfully run at 27B scale.** Both candidates exceed 32 GB at bf16, so quantization is required and has not been loaded or benchmarked. No full-run cost estimate is evidence-backed |
+| **R-1** | **No annotator has ever been loaded on this machine at any scale.** Measured 2026-08-22: the two Gemma arms are on disk and fit (`gemma-4-31B-it-qat-w4a16` 22,188 MiB official QAT · `gemma-4-12B-it` 22,812 MiB bf16), but **neither has been loaded, and `Qwen3.8-27B` exists only as 55.56 GB bf16 — its w4a16 build has never been produced.** No full-run cost estimate is evidence-backed; the `~19.6 GPU-h` figure in `evidence/n05_v5_design.md:141` belongs to the old 7B model |
 | **R-2** | **The data root is an SMR drive.** Small-file write bursts collapse to single-digit MB/s once its cache fills. n05 and n06 each write ~46,000 small files. Every runtime estimate predates the move |
 | **R-3** | **Table 1 and Table 2 have no implementation and no owner's attention.** The reproduction cannot produce its headline result today, independent of training |
 | **R-4** | **The project has no annotation corpus at all.** Deliberate — the old one disagreed with the dataset's own labels on most of the corpus — but nothing downstream can run until a full run succeeds |

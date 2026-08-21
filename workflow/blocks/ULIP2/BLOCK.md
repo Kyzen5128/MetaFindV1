@@ -32,13 +32,23 @@ Scene graphs, semantic edges, ESSGNN, Stage 2, scene composition, the scene judg
 ## 4. Current state — measured 2026-08-22
 
 ```
-pointclouds     46,052   verified against official ULIP-2 artifacts
-renders         46,045   verified against official ULIP-2 artifacts
+pointclouds     46,052   .npz + .json each; verified against official ULIP-2 artifacts
+renders         46,045   directories, 506,495 PNG = 46,045 x 11 exactly
+    of which    45,955   USABLE -- in renders_index.jsonl, with a sidecar
+    and             90   directories of 11 blank PNGs, no index entry, no sidecar
 annotations          0   the corpus was deleted; none has been produced since
-embeddings           0
+embeddings           0   the directory does not exist
 checkpoints          0   nothing has ever been trained
+annotations_index.jsonl  ABSENT -- splits.py:170 reads it unconditionally, so n09
+                         raises FileNotFoundError until n05 runs
 splits.json · eval_protocols.json · stage1_protocol.json      absent
 ```
+
+**Your corpus denominator is 45,955, not 45,952.** `DL-006` (2026-08-22) folded the 3 deleted
+residuals back in. Code and tools already agree — `annotate_run.py:142`, `tools/status.sh:55`,
+`tools/chain_after_n05.sh:56`. The 97-asset gap from 46,052 is n04's quarantine
+(`quarantine_n04_render_views.jsonl`, 143 lines / 99 unique uids, all `DETERMINISTIC_INPUT`,
+*"every view is blank -- the asset never entered frame"*). **Do not re-render them** (§7).
 
 `pytest tests/ -q` → 582 passed. `tools/check_graph.py` → 2275 checks, all pass.
 Neither is evidence of paper fidelity.
@@ -60,18 +70,33 @@ New *evidence* against any of these is a MASTER-IMPACTING FINDING. Preference is
 
 ## 6. Open work
 
-| # | Item | State |
+### Milestone 1 — the annotator bake-off. Everything here is M1.
+
+Assigned by Master 2026-08-22 under `DL-008`. **`E` = Engineer · `R` = Reviewer.**
+Report through `HANDOFF.md`. Report **FINDING** and **DECISION** separately, always.
+
+| # | Owner | Item | State |
+|---|---|---|---|
+| **W-1** | E | **Multi-arm runner.** `annotate_run.py:72` hardcodes one `MODEL_ID`. The bake-off needs arm selection, per-arm output isolation, and the §11 metric block emitted per arm. `DL-008`: that hardcoded value is **leftover state, not a decision** | first |
+| **W-2** | E | **Run the two ready arms first** — `gemma-4-31B-it-qat-w4a16`, then `gemma-4-12B-it`. Both are on disk and need zero preparation, so the USER gets numbers soonest. Same sample, same prompt, same seed, one arm at a time | after W-1 |
+| **W-3** | E | **Rebuild `annotation_provenance.json`** via `tools/declare_annotation_provenance.py`. It declares 45,955 records that do not exist (debt `D-1`). Never by hand | any time |
+| **W-4** | E | **Qwen arm — produce the w4a16 build.** §11 claims `~15 GB`; **measured, it does not exist.** Only 55.56 GB bf16 is on disk. If quantizing proves expensive or degrades the model, **report it, do not drop the arm** | parallel with W-2 |
+| **W-5** | R | **Audit `Q-CATEGORY` against `DL-007`.** `DL-007` says the LVIS-anchor design was **approved 2026-08-21**, yet `Q-CATEGORY` is listed as *"no investigation has been done"*. **Are these the same question?** If yes, `Q-CATEGORY` is answered and should be closed; if no, name precisely what is still open. This changes whether M2 may start | first, blocks M2 |
+| **W-6** | R | **`DL-007` admits `D0-010` was never researched** — its §6–§11 are empty, so LVIS anchoring passed by *design ratification, not evidence audit*. It is the most scientifically material change in the pipeline. Produce the missing audit: prompt hint / hard value / cross-check / record-only, with evidence for each | before M2 |
+| **W-7** | R | **`IC-1` — is `identity_confirmed` a rubber stamp?** We feed the LVIS label in, then ask the model to confirm it. Design a check the bake-off can actually run. **Naming the false-rate is not enough — there is no ground truth telling us a `true` is really true.** State plainly if no sound check exists at this sample size | with W-2 |
+| **W-8** | E | **Stale `24 GB` comments** — `ulip_backbone.py:9`, `:101`, `resolve_stage1.py:31`, `:645`. This machine is 32,607 MiB. Comment-only; they are feasibility premises, so correct them, change no behaviour | low, any time |
+
+### Later milestones — not started, do not begin without USER scope approval
+
+| # | Item | Blocked on |
 |---|---|---|
-| 1 | **Annotator bake-off** — pick the best annotator for this hardware. §11 | awaiting USER go |
-| 2 | **n05 sample validation** — stratified 300–500 assets per candidate, then **HARD STOP** | blocked on 1 |
-| 3 | **n05 full run** — 45,952 assets, runs **once** | blocked on the USER's explicit go |
-| 4 | **`Q-CATEGORY`** — what role the LVIS ground-truth category plays in n05. No investigation has been done | OPEN |
-| 5 | **n06 encode** — 45,952 embeddings | blocked on a corpus existing |
-| 6 | **n09 splits** | blocked on `Q-TOWER` |
-| 7 | **Gates G1 / G2** — implement, define the gate-record schema the five later gates inherit, produce the project's first gate records | not started. Two USER decisions first: does running a gate now count as evaluation or as backfill, and is the self-retrieval criterion in the first run, sampled, or deferred |
-| 8 | **Stage 1 training** | blocked on 3, 5, 6 |
-| 9 | **Gallery index** — staging → freeze → promote | blocked on 8 |
-| 10 | **n15 — Table 1.** **Zero implementation code exists.** Can be designed and unit-tested against synthetic inputs today | not started |
+| M2 | **n05 full run** — **45,955** assets, runs **once** | the USER's explicit go, plus W-5 |
+| M3a | **n06 encode** — 45,955 embeddings | a corpus existing |
+| M3b | **n09 splits** | `Q-TOWER` — **Master holds it** while INTEGRATOR is on hold (`DL-009`) |
+| M3c | **Gates G1 / G2** — implement, and define the gate-record schema the five later gates inherit | two USER decisions first: does running a gate now count as evaluation or as backfill, and is the self-retrieval criterion in the first run, sampled, or deferred |
+| M4 | **Stage 1 training** | M2, M3a, M3b |
+| M5a | **Gallery index** — staging → freeze → promote | M4 |
+| M5b | **n15 — Table 1.** **Zero implementation code exists** — there is no `metafind/eval/` directory at all. Designable and unit-testable against synthetic inputs **today**, with no trained model | nothing technical; only sequencing |
 
 ## 7. Standing constraints
 
@@ -128,13 +153,20 @@ and how it is reported:
   criteria".
 - **The annotator is not GPT-4o whichever wins.** The deviation stands.
 
-### Candidates — all verified to fit 32.6 GB
+### Candidates — measured on disk by Master, 2026-08-22
 
-| Arm | Weights | Notes |
+**GPU: RTX 5090, 32,607 MiB.** Sizes below are the actual weight files, not estimates. **No arm
+has been loaded.** Fitting on paper is not evidence that it runs with 11 images in context.
+
+| Arm | Measured on disk | State |
 |---|---|---|
-| `Qwen/Qwen3.8-27B`, self-quantized w4a16 | ~15 GB | **bf16 source already on disk**, 18/18 shards, 56 GB. No official quantized release fits: the FP8 build is 30.9 GB, leaving 1.7 GB — it will not run with vision |
-| `google/gemma-4-31B-it-qat-w4a16-ct` | 23.3 GB | official quantization-aware-trained. Largest Gemma that fits |
-| `google/gemma-4-12B-it` | 24.0 GB | **bf16, no quantization loss at all**, and materially faster. The throughput candidate |
+| `google/gemma-4-31B-it-qat-w4a16` | **22,188 MiB**, single `model.safetensors`, `quant_method: compressed-tensors`, 0 `.incomplete` | ✅ **READY.** Official quantization-aware-trained. Largest Gemma that fits |
+| `google/gemma-4-12B-it` | **22,812 MiB**, bf16, **no quantization at all**, 0 `.incomplete` | ✅ **READY.** No quantization loss, and materially faster. The throughput candidate |
+| `Qwen/Qwen3.8-27B`, self-quantized w4a16 | **55.56 GB bf16 only** — 18/18 shards verified against `model.safetensors.index.json` `total_size` | ❌ **NOT READY. The w4a16 build does not exist and has never been produced** (work item W-4). bf16 does not fit. No official quantized release fits either: the FP8 build is 30.9 GB, leaving 1.7 GB — it will not run with vision |
+
+**Run the two ready arms first (W-2), quantize Qwen in parallel (W-4).** Do not drop the Qwen
+arm to save time — if quantization proves costly or lossy, that is a **finding to report**, and
+the USER decides whether the arm still runs.
 
 `google/gemma-4-26B-A4B-it` (MoE, 4B active) is held as a fourth candidate if throughput turns
 out to be the binding constraint.
@@ -153,12 +185,12 @@ category top-20 concentration          against the previous corpus's 22.3%
 the previous corpus's failure modes    how often each recurs
 dimension plausibility against the exact mesh proportions
 JSON parse failures and repair-budget exhaustions
-seconds per asset, and the projection to 45,952
+seconds per asset, and the projection to 45,955
 VRAM peak with 11 images
 model id · quantization method and bit-width · seed · git commit · hardware
 ```
 
 ### Standing rule
 
-**Only the winner runs the full corpus.** 45,952 assets is a multi-day job at 27B scale.
+**Only the winner runs the full corpus.** 45,955 assets is a multi-day job at 27B scale.
 Running every arm at full scale is the one thing this bake-off exists to prevent.
