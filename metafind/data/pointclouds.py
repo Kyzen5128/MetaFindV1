@@ -115,7 +115,13 @@ def load_parts(path: Path):
     """
     import trimesh
 
-    scene = trimesh.load(path, force="scene", process=False)
+    from metafind.data import meshload
+
+    # The frame correction and the COLOR_0 recovery both live in `meshload` so
+    # that n03 and n04 cannot drift apart -- see that module's docstring. A
+    # cloud and a render in different frames raise nothing anywhere.
+    scene = meshload.load_scene(path)
+    color0 = meshload.color0_by_geometry(path)
     parts, sources = [], []
     # Iterate the scene GRAPH, not scene.geometry. Two reasons, both measured:
     #
@@ -139,7 +145,10 @@ def load_parts(path: Path):
             continue
         geom = geom.copy()
         geom.apply_transform(transform)
-        sources.append(_colourise(geom))
+        # Keyed by geometry NAME, and the name is produced by the same trimesh
+        # loader in both passes. Instanced geometry shares one COLOR_0 array,
+        # which is correct: the colours belong to the mesh, not to the node.
+        sources.append(_colourise(geom, color0.get(geom_name)))
         parts.append(geom)
 
     if not parts:
@@ -151,8 +160,17 @@ def load_parts(path: Path):
     return parts, min(sources, key=order.index), sources
 
 
-def _colourise(geom) -> str:
+def _colourise(geom, color0: np.ndarray | None = None) -> str:
     """Force an explicit per-vertex colour array onto one geometry.
+
+    ``color0`` is this geometry's glTF ``COLOR_0`` attribute when it declares
+    one, recovered by ``meshload.color0_by_geometry`` because **trimesh 5.0.0
+    drops it whenever the primitive also carries a material**. It is consulted
+    only where the material path would otherwise produce ``flat`` or
+    ``gltf_default`` -- a real ``baseColorTexture`` still wins, which is what
+    the ordering below already says. Measured: `COLOR_0` accounts for the whole
+    of our colour disagreement with ULIP's released clouds, and for nothing else
+    (`HANDOFF.md`, `F-N03-1`).
 
     Four sources, in descending fidelity:
 
@@ -206,6 +224,16 @@ def _colourise(geom) -> str:
                 return _uniform(vc, "flat")
         except (IndexError, ValueError, TypeError, AttributeError):
             pass
+        # [F-N03-1] Below `texture`, above `flat` -- exactly where the source
+        # ordering above already places `vertex`. Reached only because trimesh
+        # withheld the attribute from the main load; the branch further down
+        # that reads `vis.vertex_colors` is the same decision for the assets
+        # trimesh does hand it over for.
+        if color0 is not None and len(color0) == n:
+            geom.visual = trimesh.visual.ColorVisuals(
+                mesh=geom, vertex_colors=np.asarray(color0, dtype=np.uint8)
+            )
+            return "vertex"
         mat = getattr(vis, "material", None)
         factor = getattr(mat, "baseColorFactor", None)
         if factor is not None:
