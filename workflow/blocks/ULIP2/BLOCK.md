@@ -51,7 +51,7 @@ Neither is evidence of paper fidelity.
 
 | # | Item | State |
 |---|---|---|
-| 1 | **Two-model annotation comparison** — Qwen3.8-27B vs Gemma 4. USER decision 2026-08-22 | model variants awaiting USER choice |
+| 1 | **Annotator bake-off** — pick the best annotator for this hardware. See §11 | awaiting USER go |
 | 2 | `D14` Phase 2 — stratified 300–500 asset sample, then **HARD HOLD** | blocked on 1 |
 | 3 | `D14` Phase 3 — full re-annotation | blocked on the USER's explicit go |
 | 4 | `D0-010` — how the LVIS category enters n05. §6–§11 empty, no research done | OPEN |
@@ -77,6 +77,63 @@ integrity · provenance · dataset consistency · upstream/downstream consistenc
 sanity · paper consistency · failure cases · resume and cache correctness · silent failure.
 
 **Having a reviewer never excuses skipping this.**
+
+## 11. Annotator bake-off — USER decision 2026-08-22
+
+> 「我沒有要比較兩個 LLM，我只是要挑出最好最適合的。比較不是重點，而是我想知道我挑誰對我比較好」
+
+**This is a selection procedure, not a research comparison.** That distinction decides how it is
+run and how it is reported:
+
+- The arms do **not** have to be matched in size or precision. Each arm is **the best that family
+  can actually do on this hardware**, because that is what would be deployed.
+- Google's official QAT checkpoints are therefore **admissible and preferred** for the Gemma arm.
+  An earlier Master note called that an unacceptable confound; that framing applied to a
+  controlled model comparison, which this is not.
+- The result is an **IMPLEMENTATION CHOICE backed by a measurement**, never a claim that one model
+  is better than another in general. Report it as "chosen on this hardware, on this sample, by
+  these criteria".
+- Whatever wins, the annotator is still not GPT-4o. **Deviation `D-2` stands** either way.
+
+### Candidates — all fit 32.6 GB
+
+| Arm | Weights | Notes |
+|---|---|---|
+| `Qwen/Qwen3.8-27B`, self-quantized w4a16 | ~15 GB | **bf16 source already on disk**, 18/18 shards. No official quantized release exists that fits (FP8 is 30.9 GB — only 1.7 GB headroom, will not run with vision) |
+| `google/gemma-4-31B-it-qat-w4a16-ct` | 23.3 GB | Official quantization-aware-trained. Largest Gemma that fits |
+| `google/gemma-4-12B-it` | 24.0 GB | **bf16, no quantization loss at all**, and materially faster. The throughput candidate |
+
+`google/gemma-4-26B-A4B-it` (MoE, 4B active) is a fourth candidate if throughput turns out to be
+the binding constraint. Not proposed for the first round.
+
+### Protocol
+
+**Same sample, same prompt, same seed, one arm at a time.** This *is* `D14` Phase 2 — the
+stratified 300–500 asset sample — run once per arm rather than once.
+
+Record per arm, per `.claude/rules/experiments.md`:
+
+```
+identity_confirmed == false            n and %
+category vs LVIS       exact / refined / divergent, counted separately
+category top-20 concentration          vs the 22.3% baseline
+toy / bookshelf / pillow frequency     vs 3.4% / 2.4% / 2.1%
+dimension plausibility against the exact mesh proportions
+JSON parse failures and repair-budget exhaustions   <- this is what stranded the 3 residuals
+seconds per asset, and the projection to 45,952
+VRAM peak with 11 images
+model id, quantization method and bit-width, seed, git commit, hardware
+```
+
+### Standing rule — the reason this exists
+
+**Only the winner runs the full corpus.** 45,952 assets is a multi-day job on a 27B-class model
+(the old 7B took 19.6 h). Running every arm at full scale is the one thing this bake-off exists to
+prevent. USER agreed 2026-08-22.
+
+The HOLD GATE (`D14` R-A) is unchanged and applies to the winner's full run.
+
+---
 
 ## 9. Milestone
 
