@@ -1,5 +1,9 @@
 # n03 / n04 upstream verification — findings
 
+> **Evidence document. Kept verbatim as produced.** Its measurements are current and
+> load-bearing; its cross-references name work packages that no longer route anywhere.
+> Read it for the measurements, not for project state.
+
 **Executed directly by Master 2026-08-21 at the user's instruction** ("先不要管角色了 先解決"),
 not through the contract in `TASK.md`. Read-only: no code, test, or data was modified.
 

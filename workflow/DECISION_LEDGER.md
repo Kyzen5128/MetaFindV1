@@ -1,12 +1,27 @@
-# MetaFindV1 Decision Ledger
+# Decision Ledger
 
-> **Material decisions only.**
+> **The decisions that are in force.** This is the project-level record: if any other document
+> disagrees with an entry here, this file wins and the other document is corrected.
 >
-> This is not a research log, not a conversation log, and not a finding dump. Findings live in decision files, HANDOFFs, and audit documents. Only decisions that change project state are recorded here.
+> Master maintains it. No one else writes an entry.
 >
-> Master maintains this file. D0 and D-tasks do **not** write their own recommendations here as FINAL.
+> **Findings do not belong here.** A finding is what is true; a decision is what to do about it.
+> Findings live in block evidence, handoffs and audit documents. Only decisions that change
+> project state are recorded here.
 >
-> Governing rules: `workflow/WORKFLOW.md` §13A (Finding vs Decision), §13B (User Review Gate), §13C (USER REVIEW BRIEF).
+> Rules on Finding vs Decision, materiality, and acceptance: `workflow/BLOCKS.md`.
+
+---
+
+## Reading older entries
+
+Entries are **never edited to match today's vocabulary** — an edited record is not a record.
+Older entries name the work packages and identifiers that were in use when the decision was
+taken. Those names no longer route anywhere; the surviving artefacts they refer to are under
+`workflow/archive/` and `workflow/blocks/<BLOCK>/evidence/`.
+
+**Read an entry for its decision, its evidence, and its authority classification.** Do not read
+it for project state, and do not follow its file paths — use `workflow/MASTER.md` for state.
 
 ---
 

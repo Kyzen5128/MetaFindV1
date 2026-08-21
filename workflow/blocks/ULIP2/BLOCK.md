@@ -1,142 +1,164 @@
 # BLOCK — ULIP2 (object chain)
 
 **State:** `ACTIVE` · **Engineer:** unassigned · **Reviewer:** unassigned
-**Opened:** 2026-08-22
+**Verified:** 2026-08-22
 
 ---
 
 ## 1. Objective
 
 Produce a trustworthy object corpus, train Stage 1, build the gallery index, and produce
-**Table 1**. Every research-significant behaviour classified with evidence.
+**Table 1** — with every research-significant behaviour classified and cited.
 
 ## 2. Scope
 
-n02 download · n03 pointclouds · n04 renders · n05 annotate · n05b encoding protocol ·
-n06 encode text+image · n09 splits · n10 Stage 1 training · n10b post-Stage-1 encode ·
-n11 / G4 / n12 gallery index · **n15 retrieval eval (Table 1)** · gates G1–G4.
+```
+n02 download → n03 pointclouds → n04 renders (11 views) → n05 annotate
+→ n05b encoding protocol → n06 encode text+image → n09 splits
+→ n10 Stage 1 training → n10b post-Stage-1 encode
+→ n11 staging → G4 freeze → n12 promote
+→ n15 retrieval evaluation (Table 1)
 
-Tasks: `D14`, `D15`, `D16`, `D1`, `D2`, `D3`, `D4`, `D7`.
-Decisions owned: `D0-003` (the 3 legacy-v1 residuals), `D0-010` (LVIS category source).
+gates G1 G2 G3 G4
+```
+
+Open questions this block owns: **`Q-CATEGORY`**.
 
 ## 3. Non-scope
 
-ESSGNN, scene graphs, semantic edges, Stage 2, scene composition, the n17 judge.
-`D0-002` and `D0-005` belong to the Integrator — they cross into Stage 2.
+Scene graphs, semantic edges, ESSGNN, Stage 2, scene composition, the scene judge.
+`Q-TOWER` and `Q-BUILDMODEL` belong to the Integrator — they cross into Stage 2.
 
 ## 4. Current state — measured 2026-08-22
 
 ```
-pointclouds     46,052   BEHAVIOR-VERIFIED vs upstream (D15 FINDINGS FIND-6/7)
-renders         46,045   BEHAVIOR-VERIFIED vs upstream (FIND-9)
-annotations          3   only the legacy-v1 residuals remain. The 45,952 v3 records
-                         were DELETED 2026-08-22 on the USER's order (old-model output)
-embeddings           0   deleted
+pointclouds     46,052   verified against official ULIP-2 artifacts
+renders         46,045   verified against official ULIP-2 artifacts
+annotations          0   the corpus was deleted; none has been produced since
+embeddings           0
 checkpoints          0   nothing has ever been trained
-splits.json / eval_protocols.json / stage1_protocol.json   ABSENT
+splits.json · eval_protocols.json · stage1_protocol.json      absent
 ```
 
 `pytest tests/ -q` → 582 passed. `tools/check_graph.py` → 2275 checks, all pass.
 Neither is evidence of paper fidelity.
 
-## 5. What is settled and must not be re-litigated
+## 5. Settled — do not re-litigate
 
-- `DL-001` Stage 1 text template (centimetres, ratified form)
-- `DL-002` Stage 1 encoding contract, cache validity, pre-flight
-- `DL-003` τ = 0.5, `learnable_temperature: false`, protocol refresh, AC-1
-- `D15 FINDINGS` — n03/n04 verified; **the point-cloud corpus does not need regenerating**
-- n05 v5 design decisions 1–4 (LVIS anchor, `identity_confirmed`, exact proportions, synset lookup)
+Decisions in force are recorded in `workflow/DECISION_LEDGER.md`:
 
-## 6. Open work items
+- **Stage 1 text serialization** — the ratified centimetre template
+- **Stage 1 encoding contract** — cache validity, protocol-mismatch rejection, the 77-token
+  hard gate, the text pre-flight
+- **τ = 0.5**, `learnable_temperature: false`
+- **n03 and n04 are verified against upstream. The point-cloud corpus does not need
+  regenerating.** Evidence: `evidence/n03_n04_upstream_verification.md`
+- **The n05 v5 design** — LVIS anchor, `identity_confirmed`, exact mesh proportions, synset
+  lookup. Evidence: `evidence/n05_v5_design.md`, `evidence/n05_annotation_defect.md`
+
+New *evidence* against any of these is a MASTER-IMPACTING FINDING. Preference is not.
+
+## 6. Open work
 
 | # | Item | State |
 |---|---|---|
-| 1 | **Annotator bake-off** — pick the best annotator for this hardware. See §11 | awaiting USER go |
-| 2 | `D14` Phase 2 — stratified 300–500 asset sample, then **HARD HOLD** | blocked on 1 |
-| 3 | `D14` Phase 3 — full re-annotation | blocked on the USER's explicit go |
-| 4 | `D0-010` — how the LVIS category enters n05. §6–§11 empty, no research done | OPEN |
-| 5 | `D0-003` — the 3 legacy-v1 residuals: admit, drop, or re-annotate | OPEN. **They are the only annotations left on disk** |
-| 6 | `D1` n06 re-encode | blocked on a corpus existing |
-| 7 | `D2` n09 splits | blocked on `D0-002`, `D0-003` |
-| 8 | `D15` — findings written, but `TASK.md` still says `PLANNED`. Reconcile | needs Master |
-| 9 | `D16` gates G1/G2 — `OQ-2`'s cost is now answerable from FIND-7 | blocked on `D15` acceptance |
-| 10 | `n15` Table 1 — **zero implementation code** | not started |
+| 1 | **Annotator bake-off** — pick the best annotator for this hardware. §11 | awaiting USER go |
+| 2 | **n05 sample validation** — stratified 300–500 assets per candidate, then **HARD STOP** | blocked on 1 |
+| 3 | **n05 full run** — 45,952 assets, runs **once** | blocked on the USER's explicit go |
+| 4 | **`Q-CATEGORY`** — what role the LVIS ground-truth category plays in n05. No investigation has been done | OPEN |
+| 5 | **n06 encode** — 45,952 embeddings | blocked on a corpus existing |
+| 6 | **n09 splits** | blocked on `Q-TOWER` |
+| 7 | **Gates G1 / G2** — implement, define the gate-record schema the five later gates inherit, produce the project's first gate records | not started. Two USER decisions first: does running a gate now count as evaluation or as backfill, and is the self-retrieval criterion in the first run, sampled, or deferred |
+| 8 | **Stage 1 training** | blocked on 3, 5, 6 |
+| 9 | **Gallery index** — staging → freeze → promote | blocked on 8 |
+| 10 | **n15 — Table 1.** **Zero implementation code exists.** Can be designed and unit-tested against synthetic inputs today | not started |
 
 ## 7. Standing constraints
 
-- The GPU belongs to this block. ESSGNN does not run GPU jobs.
-- `D14` Phase 3 costs ~19.6+ GPU-hours and **must not run twice**. Its HOLD GATE is absolute.
-- The 3 legacy-v1 residuals are **PROTECTED**. Do not touch them; `D0-003` is unresolved.
-- LVIS category anchoring is a **DEVIATION**. Never describe it as paper-faithful.
-- The annotation model is not GPT-4o (`D-2`). Never describe it as paper-faithful.
+- **The GPU belongs to this block.** ESSGNN runs no GPU jobs.
+- **The full annotation run must not happen twice.** It is a multi-day job. Its hold gate is
+  absolute: good sample numbers are not permission.
+- **LVIS category anchoring is a DEVIATION.** The paper has the VLM generate the category.
+  Never describe it as paper-faithful.
+- **The annotation model is not GPT-4o.** Also a DEVIATION, whichever candidate wins.
+- Point clouds and renders are read-only here. **No re-render** — framing was measured not to
+  drive annotation agreement.
 
 ## 8. Self-verification the engineer owns
 
-Implementation correctness · unit and integration tests · runtime verification · artifact
-integrity · provenance · dataset consistency · upstream/downstream consistency · semantic
+implementation correctness · unit and integration tests · runtime verification · artifact
+integrity · provenance · dataset consistency · upstream and downstream consistency · semantic
 sanity · paper consistency · failure cases · resume and cache correctness · silent failure.
 
 **Having a reviewer never excuses skipping this.**
 
-## 11. Annotator bake-off — USER decision 2026-08-22
+Every test whose expected value encodes a claim about the world must name where that value came
+from, and it must not be the implementation under test (`workflow/SKILLS.md` §7).
 
-> 「我沒有要比較兩個 LLM，我只是要挑出最好最適合的。比較不是重點，而是我想知道我挑誰對我比較好」
+## 9. Evidence held by this block
 
-**This is a selection procedure, not a research comparison.** That distinction decides how it is
-run and how it is reported:
+```
+evidence/n03_n04_upstream_verification.md   n03/n04 vs official ULIP-2 artifacts
+evidence/n05_annotation_defect.md           why the previous annotator failed, measured
+evidence/n05_category_vs_lvis.md            the divergence, full corpus
+evidence/n05_v5_design.md                   the ratified v5 design
+```
 
-- The arms do **not** have to be matched in size or precision. Each arm is **the best that family
-  can actually do on this hardware**, because that is what would be deployed.
-- Google's official QAT checkpoints are therefore **admissible and preferred** for the Gemma arm.
-  An earlier Master note called that an unacceptable confound; that framing applied to a
-  controlled model comparison, which this is not.
-- The result is an **IMPLEMENTATION CHOICE backed by a measurement**, never a claim that one model
-  is better than another in general. Report it as "chosen on this hardware, on this sample, by
-  these criteria".
-- Whatever wins, the annotator is still not GPT-4o. **Deviation `D-2` stands** either way.
+## 10. Milestone
 
-### Candidates — all fit 32.6 GB
+Not reachable until Stage 1 trains and Table 1 exists. Requires engineer self-verification +
+reviewer independent verification + 4-axis completion review + Codex adversarial review +
+Master integration + the USER's item-by-item acceptance.
+
+---
+
+## 11. Annotator bake-off
+
+> USER, 2026-08-22: 「我沒有要比較兩個 LLM，我只是要挑出最好最適合的。比較不是重點，
+> 而是我想知道我挑誰對我比較好」
+
+**This is a selection procedure, not a controlled model comparison.** That decides how it runs
+and how it is reported:
+
+- Arms need **not** be matched in size or precision. Each arm is the best that family can
+  actually do on this hardware, because that is what gets deployed.
+- Officially published quantization-aware-trained checkpoints are **admissible and preferred**.
+- The result is an **IMPLEMENTATION CHOICE backed by a measurement** — never a general claim
+  that one model beats another. Report it as "chosen on this hardware, on this sample, by these
+  criteria".
+- **The annotator is not GPT-4o whichever wins.** The deviation stands.
+
+### Candidates — all verified to fit 32.6 GB
 
 | Arm | Weights | Notes |
 |---|---|---|
-| `Qwen/Qwen3.8-27B`, self-quantized w4a16 | ~15 GB | **bf16 source already on disk**, 18/18 shards. No official quantized release exists that fits (FP8 is 30.9 GB — only 1.7 GB headroom, will not run with vision) |
-| `google/gemma-4-31B-it-qat-w4a16-ct` | 23.3 GB | Official quantization-aware-trained. Largest Gemma that fits |
+| `Qwen/Qwen3.8-27B`, self-quantized w4a16 | ~15 GB | **bf16 source already on disk**, 18/18 shards, 56 GB. No official quantized release fits: the FP8 build is 30.9 GB, leaving 1.7 GB — it will not run with vision |
+| `google/gemma-4-31B-it-qat-w4a16-ct` | 23.3 GB | official quantization-aware-trained. Largest Gemma that fits |
 | `google/gemma-4-12B-it` | 24.0 GB | **bf16, no quantization loss at all**, and materially faster. The throughput candidate |
 
-`google/gemma-4-26B-A4B-it` (MoE, 4B active) is a fourth candidate if throughput turns out to be
-the binding constraint. Not proposed for the first round.
+`google/gemma-4-26B-A4B-it` (MoE, 4B active) is held as a fourth candidate if throughput turns
+out to be the binding constraint.
+
+The Qwen3.8 line has only two members — the 27B vision model and a 2.4T text-only model — so
+there is no small Qwen arm and no bf16-vs-bf16 pairing.
 
 ### Protocol
 
-**Same sample, same prompt, same seed, one arm at a time.** This *is* `D14` Phase 2 — the
-stratified 300–500 asset sample — run once per arm rather than once.
-
-Record per arm, per `.claude/rules/experiments.md`:
+**Same sample, same prompt, same seed, one arm at a time.** Record per arm:
 
 ```
 identity_confirmed == false            n and %
 category vs LVIS       exact / refined / divergent, counted separately
-category top-20 concentration          vs the 22.3% baseline
-toy / bookshelf / pillow frequency     vs 3.4% / 2.4% / 2.1%
+category top-20 concentration          against the previous corpus's 22.3%
+the previous corpus's failure modes    how often each recurs
 dimension plausibility against the exact mesh proportions
-JSON parse failures and repair-budget exhaustions   <- this is what stranded the 3 residuals
+JSON parse failures and repair-budget exhaustions
 seconds per asset, and the projection to 45,952
 VRAM peak with 11 images
-model id, quantization method and bit-width, seed, git commit, hardware
+model id · quantization method and bit-width · seed · git commit · hardware
 ```
 
-### Standing rule — the reason this exists
+### Standing rule
 
-**Only the winner runs the full corpus.** 45,952 assets is a multi-day job on a 27B-class model
-(the old 7B took 19.6 h). Running every arm at full scale is the one thing this bake-off exists to
-prevent. USER agreed 2026-08-22.
-
-The HOLD GATE (`D14` R-A) is unchanged and applies to the winner's full run.
-
----
-
-## 9. Milestone
-
-Not reachable until Stage 1 trains and Table 1 exists. Requires engineer self-verification
-+ reviewer independent verification + Codex adversarial review + Master integration review
-+ the USER's `APPROVE`.
+**Only the winner runs the full corpus.** 45,952 assets is a multi-day job at 27B scale.
+Running every arm at full scale is the one thing this bake-off exists to prevent.

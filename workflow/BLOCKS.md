@@ -1,8 +1,10 @@
-# MetaFindV1 Block Registry
+# Blocks — structure, roles and rules
 
-> Ownership layer. **USER decision 2026-08-21/22: two technical blocks, one integrator.**
-> Task-level detail stays in `workflow/INDEX.md` and each `workflow/tasks/<id>/TASK.md`.
-> Master owns this file.
+> **The operating protocol.** Who owns what, how work moves, how it is reviewed, how it is
+> accepted. Master owns this file.
+>
+> Project state: `workflow/MASTER.md` · Method: `workflow/SKILLS.md` ·
+> Orientation: `workflow/CONTEXT.md` · Decisions in force: `workflow/DECISION_LEDGER.md`
 
 ---
 
@@ -27,8 +29,7 @@ n02 download → n03 pointclouds → n04 renders → n05 annotate → n05b proto
 n06 encode → n09 splits → n10 Stage 1 train → n11 / G4 / n12 gallery →
 **n15 retrieval eval (Table 1)**. Gates G1–G4.
 
-Owns tasks `D14`, `D15`, `D16`, `D1`, `D2`, `D3`, `D4`, `D7`.
-Owns decisions `D0-003`, `D0-010`.
+Owns the open question `Q-CATEGORY`.
 
 **Holds the GPU.** Everything downstream is blocked on its annotation corpus.
 
@@ -38,9 +39,10 @@ n07 scene graphs → n07b modalities → n08 semantic edges → n09b / n09c →
 n11b index → n13 Stage 2 train → n14 equivariance probe →
 **n15a/b/c → n16 compose → n17 judge (Table 2)**. Gates G6, G7.
 
-Owns tasks `D5`, `D6`, `D8`. Owns decisions `D0-004`, `D0-006`, `D0-007`.
+Owns the open questions `Q-ESSGNN-AXIS`, `Q-NODETEXT`, `Q-TABLE2`, `Q-JUDGE-MODEL`,
+`Q-N08-MODEL`, `Q-YAW-PLACEMENT`.
 
-**USER constraint 2026-08-21: code only, no GPU job of any kind** without a new
+**USER constraint: code only, no GPU job of any kind** without a new
 authorisation. Its input artifacts already exist, and n14 / n11b / n13 / n15a-c / n16 / n17
 are all unimplemented, so there is real work that needs no GPU.
 
@@ -52,8 +54,8 @@ Owns no node. Owns the seams:
 2. gallery index format + encoder fingerprint — ULIP2 → both tables
 3. `stage2_protocol.json`, `procthor_node_embeddings.npz` — ESSGNN → composition
 4. the deviation registry in `docs/graph/graph_spec.yaml`
-5. `D0-002` `tower_sharing` — affects Stage 1 and Stage 2 feasibility
-6. `D0-005` `build_model()` construction path
+5. `Q-TOWER` — tower sharing; affects Stage 1 and Stage 2 feasibility
+6. `Q-BUILDMODEL` — the Stage 1 model construction path
 
 ---
 
@@ -80,8 +82,7 @@ workflow/blocks/ESSGNN/{BLOCK.md, REVIEW.md, HANDOFF.md}
 workflow/blocks/INTEGRATOR/{BLOCK.md, HANDOFF.md}
 ```
 
-Existing `workflow/tasks/D*` directories are unchanged and become internal work items
-of their block. Nothing was renamed; no decision file moved.
+Each block keeps its own evidence under `workflow/blocks/<BLOCK>/evidence/`.
 
 ---
 
@@ -117,7 +118,7 @@ result could still be scientifically wrong.
 
 Internal work items inside an approved SPEC, comments, formatting, read-only investigation, and
 re-runs of accepted deterministic steps need **no** grill, spec, review, Codex or USER gate.
-We removed fine-grained D-tasks deliberately; do not rebuild them out of skills. `SKILLS.md` §5.
+Work is owned by whole blocks; do not rebuild a swarm of tiny tickets out of skills. `SKILLS.md` §5.
 
 ---
 
@@ -139,10 +140,79 @@ No step is skipped at a Block milestone. Every step is skipped for an internal w
 
 ---
 
+## Finding is not Decision
+
+Two different things. **Report them separately. Never merge them into one sentence.**
+
+```
+FINDING    what is true.  Carries evidence: file:line, paper section, a measurement and the
+           population it was measured over. Anyone may produce one.
+DECISION   what to do about it.  Material decisions belong to the USER.
+```
+
+"I found a bug" does **not** mean the finder gets to choose the fix. A finding can be correct
+and its proposed remedy rejected; the finding still stands.
+
+**Material — the USER decides:**
+
+paper interpretation · architecture · dataset, annotation or preprocessing semantics ·
+training protocol · evaluation protocol · deviations · admitting, dropping or regenerating a
+corpus · shared artifact semantics · any rerun that changes scientific output · any assumption
+that crosses blocks · model selection.
+
+**Not material — the block owner decides alone:** local refactors inside an approved SPEC, test
+scaffolding, logging, comments, and documentation that only makes a description accurate.
+
+**When in doubt, treat it as material.**
+
+## Escalation
+
+A block that hits something affecting shared architecture, a cross-block dependency, an accepted
+assumption, milestone feasibility, or a global runtime fact writes a **MASTER-IMPACTING FINDING**
+into its `HANDOFF.md`:
+
+```
+FINDING     what is true, with evidence
+IMPACT      which blocks, artifacts, stages
+ASK         exactly what is needed
+STATE       can this block safely continue meanwhile? yes / no, and why
+```
+
+**Report it. Do not act on it.** Do not rewrite global project state locally.
+
+**Stop-safe rule.** If continuing would require inventing, assuming, or silently choosing
+research-critical information, **stop** and report: what is known, what is unknown, the evidence,
+why it matters, and what decision is needed.
+
+**Engineering objection.** A block that believes an instruction is wrong says so once, with
+evidence, before executing. If the USER reaffirms it, execute the full instruction and record the
+objection. New *evidence* against an approved decision is a MASTER-IMPACTING FINDING; preference
+is not.
+
+## Status vocabulary
+
+Execution and acceptance are two different facts. **Never merge them.**
+
+```
+execution    PLANNED · READY · ACTIVE · BLOCKED · REVIEW · COMPLETE · REWORK
+acceptance   —  ·  AWAITING USER  ·  USER APPROVED  ·  USER REJECTED
+```
+
+> `execution COMPLETE` **≠** `accepted`.
+
+A block can legitimately be execution `COMPLETE` and acceptance `AWAITING USER` at the same time.
+**Done** requires both. `BLOCKED` must name its blocker.
+
+The USER's four responses at acceptance: `ACCEPT` · `REJECT` · `INVESTIGATE MORE` ·
+`SHOW MORE EVIDENCE`. A `MODIFY` is recorded as accepted **with the USER's wording as the
+decision**, not Master's.
+
+---
+
 ## Block state
 
 | Block | State | Engineer | Reviewer | Next |
 |---|---|---|---|---|
-| `ULIP2` | **ACTIVE** | unassigned | unassigned | the two-model annotation comparison, then D14 Phase 2 |
-| `ESSGNN` | **READY — code only** | unassigned | unassigned | `D0-006`, then rewrite n08 for the new LLM |
-| `INTEGRATOR` | **READY** | unassigned | n/a | deviation registry: LVIS anchoring and n08's LLM both have no entry |
+| `ULIP2` | **ACTIVE** | unassigned | unassigned | the annotator bake-off, then sample validation |
+| `ESSGNN` | **READY — code only** | unassigned | unassigned | `Q-NODETEXT`, then rewrite n08 for the new model |
+| `INTEGRATOR` | **READY** | unassigned | n/a | the deviation registry: LVIS anchoring and n08's model both have no entry |

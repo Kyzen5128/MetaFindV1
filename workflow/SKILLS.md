@@ -1,7 +1,9 @@
 # Skill Integration Policy
 
-> How the Matt Pocock engineering skills are used inside the Block-centric workflow.
-> **USER decision 2026-08-22.** Master owns this file.
+> How the engineering skills are used inside this workflow: which one, at which layer, by whom,
+> and when it is worth it. Master owns this file.
+>
+> Structure and rules: `workflow/BLOCKS.md` · Project state: `workflow/MASTER.md`
 
 ---
 
@@ -26,8 +28,8 @@ Reviewer PASS ≠ USER acceptance
 ```
 
 **The point of this document is to say which skill is used at which layer, by whom, and when it
-is worth it.** We removed fine-grained D-tasks on purpose. Do not rebuild the same problem out of
-skills. §5 is the list of things that need none of this.
+is worth it.** Work is owned by whole blocks, not by a swarm of tiny tickets. Do not rebuild a
+swarm of tiny tickets out of skills. §5 is the list of things that need none of this.
 
 ---
 
@@ -345,7 +347,7 @@ configuration A            vs   configuration B
 ```
 
 This is not theoretical. It is how the 180° yaw was found, and how it was then shown **not** to
-move the embedding (`workflow/tasks/D15_n03-n04-code-audit/FINDINGS.md` FIND-6, FIND-7).
+move the embedding (`workflow/blocks/ULIP2/evidence/n03_n04_upstream_verification.md`).
 
 ### Boundaries
 

@@ -24,8 +24,8 @@ writes `HANDOFF.md`; the Integrator picks it up or routes it to Master.
 
 | ID | Question | Why it is cross-block |
 |---|---|---|
-| `D0-002` | `tower_sharing`: `shared_backbone_separate_fusion` / `fully_shared` / `fully_separate` | Written into `stage1_protocol.json` by ULIP2's n09, but determines whether ESSGNN's Stage 2 can freeze the gallery at all. `fully_shared` cannot reach Stage 2 |
-| `D0-005` | `build_model()` bypasses `Stage1RuntimeConfig`; one backbone; one shared `FusionConfig` object | Makes `fully_separate` unimplementable as written. Conditional on `D0-002` |
+| `Q-TOWER` | `tower_sharing`: `shared_backbone_separate_fusion` / `fully_shared` / `fully_separate` | Written into `stage1_protocol.json` by ULIP2's n09, but determines whether ESSGNN's Stage 2 can freeze the gallery at all. `fully_shared` cannot reach Stage 2 |
+| `Q-BUILDMODEL` | `build_model()` bypasses `Stage1RuntimeConfig`; one backbone; one shared `FusionConfig` object | Makes `fully_separate` unimplementable as written. Conditional on `Q-TOWER` |
 
 ## 4. Deviation registry — **two known gaps, both open**
 
@@ -36,8 +36,8 @@ wrong until 2026-08-21.
 
 | Gap | State |
 |---|---|
-| **LVIS category anchoring** — n05 v5 feeds the dataset's ground-truth label into the prompt. The paper has the VLM *generate* the category | `D14/TASK.md` R-E records it as a DEVIATION. **No `graph_spec.yaml` entry exists** |
-| **n08's LLM** — `semantic_edges_run.py:77` was labelled `# D-2's stand-in`. After `DL-005` split `D-2` (annotation) from `D-8` (scene judging), n08 belongs to **neither id** | **No entry exists** |
+| **LVIS category anchoring** — n05 v5 feeds the dataset's ground-truth label into the prompt. The paper has the VLM *generate* the category | Recorded as a DEVIATION in the block's evidence. **No `graph_spec.yaml` entry exists** |
+| **n08's LLM** — `semantic_edges_run.py:77` was labelled `# D-2's stand-in`. After the deviation registry split `D-2` (annotation) from `D-8` (scene judging), n08 belongs to **neither id** | **No entry exists** |
 
 Also unresolved and must not be restated as settled: **`D-2`'s stated reason "GPT-4o is
 unavailable" was never verified.** OpenAI's deprecation page does not list base `gpt-4o`;
@@ -49,7 +49,7 @@ _None yet._
 
 ## 6. Rules
 
-- Reports `FINDING` and `DECISION` separately (`WORKFLOW.md` §13A).
+- Reports `FINDING` and `DECISION` separately (`workflow/BLOCKS.md`).
 - May recommend; may not decide a material question. Only the USER makes anything FINAL.
 - Read-only on both blocks' production files. Writes only its own directory and, on Master's
   instruction, `graph_spec.yaml` and the documents that mirror it.

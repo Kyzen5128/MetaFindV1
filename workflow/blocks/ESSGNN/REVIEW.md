@@ -54,7 +54,7 @@ Compare two things that should agree — official upstream artifact vs ours, sou
 generated annotation, before vs after, configuration A vs B. Build a red-capable loop, reproduce,
 minimise, form **falsifiable** hypotheses, instrument, then fix. **Do not read the code and guess
 the cause first.** This is how the 180 degree yaw was found, and how it was then shown not to move
-the embedding (`workflow/tasks/D15_n03-n04-code-audit/FINDINGS.md`).
+the embedding (`workflow/blocks/ULIP2/evidence/n03_n04_upstream_verification.md`).
 
 ### Review early, not at the end
 
