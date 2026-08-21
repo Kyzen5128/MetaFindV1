@@ -95,7 +95,7 @@ Accepted and reflected in on-disk artifacts. These are IMPLEMENTATION CHOICES un
 | All-masked queries allowed | `true` | `splits.py:86`, U-23 | IMPLEMENTATION CHOICE |
 | ESSGNN architecture | `appendix_shared_msg`, `coord_feat: current`, `hidden_dim 128`, `n_layers 4`, `distance: squared` | `essgnn_arch_protocol.json`, decided by Kyzen 2026-08-19 | IMPLEMENTATION CHOICE |
 | Semantic edges undirected | yes | U-19; `scene_graphs.py`, `semantic_edges_run.py` | IMPLEMENTATION CHOICE |
-| `f_x` output is scalar, not R³ | scalar | 2.5 literal text is wrong; scalar gives equivariance error 2.2e-16 vs 0.43 | DEVIATION, recorded |
+| `f_x` output: scalar coordinate multiplier | scalar retained | **`D0-009` `USER_APPROVED` 2026-08-21 (`DL-004`). Verdict `PAPER-AMBIGUOUS`** — MetaFind states `f_x → R³` (`2methdology.tex:54`) and **never defines the `·`** in the coordinate update. **Do not write "the paper is wrong", and do not cite upstream EGNN as settling it.** The `2.2e-16 vs 0.43` figures are **UNVERIFIED here and unreproducible** — no `R³` variant exists in code | **USER-RATIFIED IMPLEMENTATION CHOICE under a PAPER-AMBIGUOUS specification.** Not a PAPER FACT |
 | n04 unit-sphere normalisation | kept | Objaverse units span ~1.3e5×; absolute scale never usable | IMPLEMENTATION CHOICE |
 | Gallery scopes reported | both A_test_gallery and B_full_gallery, `gallery_size` derived not hardcoded | `splits.py:104-124`, U-09 | IMPLEMENTATION CHOICE |
 
@@ -124,7 +124,7 @@ Decision: `workflow/decisions/D0-008_stage1-text-template.md` §14. Brief: `D0-0
 
 Decision file: `workflow/decisions/D0-008_stage1-text-template.md`. **The ratified template is not yet implemented** — see §6.
 
-Rows sourced from the previous workflow rather than re-verified this session: the `f_x` scalar equivariance figures (2.2e-16 vs 0.43) and the Objaverse scale-span figure (~1.3e5×). The decisions are reflected in code; the supporting numbers are unverified.
+Rows sourced from the previous workflow rather than re-verified this session: the Objaverse scale-span figure (~1.3e5×). The decisions are reflected in code; the supporting numbers are unverified.
 
 **Corrections C-001 and C-002 — COMPLETED 2026-08-21 by `D2a_stage1-protocol-refresh` (`DL-003`):**
 

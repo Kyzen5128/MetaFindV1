@@ -6,7 +6,7 @@
 
 **Initialized:** 2026-08-20
 **Corrected:** 2026-08-20 (Master correction pass)
-**Active formal work:** `D0-009_essgnn-fx-codomain` (INVESTIGATING). **`D0-008` (`DL-001`), `D10` (`DL-002`) and `D2a` (`DL-003`) are all `USER_APPROVED` as of 2026-08-21.** The migration backlog is empty. **`D1_n06-reencode` is UNBLOCKED and READY** — TASK.md proposed, awaiting user review; not started.
+**Active formal work:** `D1_n06-reencode` — approved 2026-08-21, **starting now**. `D0-009` is **`USER_APPROVED`** (`DL-004`). Four decisions are FINAL ACCEPTED: `DL-001`, `DL-002`, `DL-003`, `DL-004`. **`D0-008` (`DL-001`), `D10` (`DL-002`) and `D2a` (`DL-003`) are all `USER_APPROVED` as of 2026-08-21.** The migration backlog is empty. **`D1_n06-reencode` is UNBLOCKED and READY** — TASK.md proposed, awaiting user review; not started.
 **Execution policy:** sequential — one ACTIVE task at a time.
 
 ---
@@ -57,7 +57,7 @@ Governing rules: `workflow/WORKFLOW.md` §13B. Project-level record: `workflow/D
 
 | ID | Task | Role | Execution | Integration | Depends On | Parallel Safe | Path |
 |---|---|---|---|---|---|---|---|
-| `D0-009_essgnn-fx-codomain` | MetaFind §2.5 `f_x → R³` — paper-level audit, read-only | `D0` | **`INVESTIGATING`** — user-approved 2026-08-21 | — | — | — (D2a has finished) | `workflow/decisions/D0-009_essgnn-fx-codomain.md` |
+| — | — | — | — | — | — | — | — |
 
 `D2a_stage1-protocol-refresh` — **execution `COMPLETE`, integration `USER_APPROVED` 2026-08-21** (`DL-003`), MIF-2 ratified. Only `D0-009` remains running.
 
@@ -87,7 +87,7 @@ Governing rules: `workflow/WORKFLOW.md` §13B. Project-level record: `workflow/D
 |---|---|---|---|---|---|---|---|
 | `D9_paper-figures-audit` | Read all 38 extracted paper figures; mark each U-register entry resolved / refuted / untouched; register new contradictions | D1+ | **READY** | — | evidence for D0-002, D0-004 | NEW CONVERSATION | **YES** (writes only `docs/`) |
 | `D10_stage1-encoding-contract` | Clear the cache-validity BLOCKER (B-1…B-4); implement the ratified U-15 template (E-1, E-2, S-1, S-2); apply R-1/R-2/R-3; re-annotate the one truncated record; update the golden test; add the pre-flight gate | D1+ | **READY** — approved 2026-08-21, contract written, conversation not yet started | D0-008 (accepted) | D1, D2 | NEW CONVERSATION | NO |
-| `D1_n06-reencode` | Full n06 re-encode of text + image embeddings over the admitted corpus | D1+ | **`READY` — UNBLOCKED 2026-08-21** (TASK.md proposed, awaiting user review) | D0-008 ✅ · D2a ✅ · D10 ✅ | D3 | NEW CONVERSATION | writes only `data/outputs/embeddings/` |
+| `D1_n06-reencode` | Full n06 re-encode of text + image embeddings over the admitted corpus | D1+ | **`READY` — user-approved 2026-08-21**; conversation sets `ACTIVE` | D0-008 ✅ · D2a ✅ · D10 ✅ | D3 | NEW CONVERSATION | `YES WITH WORKTREE ISOLATION` for D0-009 only | `workflow/tasks/D1_n06-reencode/TASK.md` |
 | `D2_stage1-prereq` | Apply C-001; re-run n05b (carries C-002); run n09_build_splits; produce `splits.json`, `eval_protocols.json`, `stage1_protocol.json`; verify G3 | D1+ | **BLOCKED** | D0-002, D0-003, D10 | D3 | NEW CONVERSATION | NO |
 | `D3_stage1-train` | Stage 1 smoke (limited assets, 1 epoch) then full training; checkpoint, curves, full provenance | D1+ | **BLOCKED** | D1, D2, D0-003 (hard) (+ D0-005 conditionally) | D4 | NEW CONVERSATION | NO |
 | `D4_gallery-index` | n11 staging → G4 freeze → n12 promote; encoder fingerprint cross-check | D1+ | **BLOCKED** | D3 | D5, D7 | NEW CONVERSATION | NO |
@@ -128,7 +128,7 @@ A candidate becomes a formal decision only when Master creates its file under `w
 | D0-003 | The 3 `prompt_version:1` annotations: admit, drop, or re-annotate. **Hard blocker for D3** — if admitted, `stage1.py:109` raises `FileNotFoundError` | `OPEN` | — | D2, D3 | **YES** |
 | D0-005 | `build_model()` bypasses `Stage1RuntimeConfig`; single backbone; shared `FusionConfig` object | `OPEN` | — | D3 | Conditional on D0-002 |
 | D0-004 | ESSGNN `coord_feat` / `architecture_family` coupling | `OPEN` | — | D5, ablation design | No |
-| **D0-009** | **MetaFind §2.5 `f_x → R³` — how to reproduce it faithfully.** Registered 2026-08-21 at the user's instruction. Master framing only; **no audit performed** | `OPEN` — awaiting user approval to open the D0 conversation | `workflow/decisions/D0-009_essgnn-fx-codomain.md` | D5 Stage 2, `essgnn.py`, equivariance tests, `docs/audit/` C3 | No — Stage 2 has never run |
+| D0-009 | MetaFind §2.5 `f_x → R³` | **`USER_APPROVED`** 2026-08-21 (`DL-004`) — verdict `PAPER-AMBIGUOUS`, Option A adopted as a USER-RATIFIED IMPLEMENTATION CHOICE | `workflow/decisions/D0-009_essgnn-fx-codomain.md` | resolved | done |
 | D0-006 | n08 node-text information collapse (`object_text()` is category-only) | `OPEN` | — | D5 | No |
 | D0-007 | Table 2 protocol: 200-scene construction, 1–5 vs 0–10 scale comparability | `OPEN` | — | D8 | No |
 

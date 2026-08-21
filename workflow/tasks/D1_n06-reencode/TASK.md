@@ -13,9 +13,13 @@
 
 ## Status
 
-`PROPOSED` — TASK.md written 2026-08-21. **Awaiting user review and approval.**
+`ACTIVE` — **APPROVED by the user 2026-08-21**, after two rounds of contract review (one `MODIFY` cycle covering the exact command, resume semantics, the complete write surface, the post-run NPZ audit, and D0-009 parallel safety).
 
 The D1 execution conversation sets this to `ACTIVE` at start. That is the only edit to this file the executor may make.
+
+**Baseline at approval:** `git rev-parse HEAD` = `cf234fb`, working tree clean apart from this file. `D0-008` (`DL-001`), `D10` (`DL-002`), `D2a` (`DL-003`) all `USER_APPROVED`.
+
+**On §4's D0-009 constraint:** `D0-009_essgnn-fx-codomain` reported `INVESTIGATION COMPLETE` on 2026-08-21 and is awaiting Master integration review. It is not writing. No separate git worktree exists, so §4's read-only condition applies for the duration of D1's run — and is satisfied by D0-009 having finished. **If D0-009 is re-opened for rework while D1 is running, §4's five conditions bind.**
 
 ---
 
@@ -76,7 +80,25 @@ Then only the files named in §5 and §9. Do not re-read the repository.
 
 `PARALLEL SAFE: NO` for anything touching `data/outputs/embeddings/`, `metafind/data/`, or `metafind/models/`.
 
-A **read-only** task that writes only `docs/` or `workflow/decisions/` may run concurrently — `D0-009_essgnn-fx-codomain` is the current example. Master confirms at approval time; do not assume it.
+### `D0-009_essgnn-fx-codomain` — **`PARALLEL SAFE: YES WITH WORKTREE ISOLATION`**
+
+User ruling, 2026-08-21. The two have **no scientific dependency**. But D1 is an **experiment** and records `git rev-parse HEAD` plus working-tree state, so a concurrent writer would pollute D1's provenance.
+
+D0-009 may continue researching during the ~4-hour GPU run **only if all five hold**:
+
+| | |
+|---|---|
+| 1 | It does **not** modify the same working tree D1 is using |
+| 2 | It does **not** touch `metafind/**` |
+| 3 | It does **not** touch `data/**` |
+| 4 | It does **not** touch D1's task files |
+| 5 | It does **not** `commit`, `checkout`, or `reset` the worktree D1 is running in |
+
+**Without a separate git worktree, D0-009 is read-only for the duration.** Any `workflow/decisions/` write waits until D1's GPU run has finished, then lands.
+
+This is deliberate: the ~4 hours are usable for research **without** contaminating D1's experiment provenance.
+
+**D1's obligation:** record the working-tree state at run start **and** at run end. If they differ, say so in the HANDOFF — do not silently report only one.
 
 ---
 
@@ -175,8 +197,15 @@ The 2026-08-17 partial run logged **~189/min**. Over 45,955 that projects to **~
 
 | Path | For |
 |---|---|
-| `data/outputs/embeddings/**` | The `.npz` and sidecars n06 produces. **This is the task's output** |
-| `data/outputs/logs/` — the n06 run log and its quarantine ledger | Run record |
+| `data/outputs/embeddings/**` | The `.npz`, the `.json` sidecars, and the `.part.npz` / `.json.part` temporaries n06 writes then renames. **This is the task's output** |
+| `data/outputs/logs/quarantine_n06_encode_text_image.jsonl` | `runlog.quarantine()` — `runlog.py:146`. The quarantine ledger |
+| `data/outputs/logs/run_progress.jsonl` | `runlog.run_progress(NODE)` — `runlog.py:74`, `:86`. **Shared append-only ledger used by every node** |
+| `data/outputs/logs/cost_ledger.jsonl` | `runlog.cost_ledger()` — `runlog.py:129`. **Shared append-only ledger used by every node** |
+| a run log file under `data/outputs/logs/` | Only if you redirect stdout. Name it in the HANDOFF |
+
+> **The last two are shared, append-only ledgers.** n06 may **append** to them through its normal run path and nothing else. **Do not truncate, rewrite, reorder, deduplicate, or clean them.** Other nodes' entries live there.
+>
+> This list is the **complete** verified write surface of `n06`, traced through `encode_text_image.py` and `runlog.py`. It replaces an earlier vaguer `data/outputs/logs/` entry that under-declared it — the same defect class as `MIF-2` in `DL-003`.
 | `workflow/tasks/D1_n06-reencode/HANDOFF.md`, `CODEX_REVIEW.md` | Required by §16 |
 | `workflow/tasks/D1_n06-reencode/TASK.md` | Status line only — `PROPOSED` → `ACTIVE` at start |
 
@@ -200,12 +229,50 @@ Anything not listed in 9.1 is protected by default.
 ## 10. Execution Requirements
 
 1. **Gate before GPU.** Run `load_protocol()` and the pre-flight first. If either refuses, stop.
-2. Capture the baseline: annotation checksum, embeddings count, checkpoints count, `git rev-parse HEAD`, environment versions, GPU.
-3. Record the **exact** command. Do not paraphrase it afterwards.
+2. Capture the baseline: annotation checksum, embeddings count, checkpoints count, `git rev-parse HEAD`, working-tree state, environment versions, GPU.
+3. Use the **production command in §12.2 verbatim**. Do not paraphrase it afterwards.
 4. Expect ~4 hours. Report the actual throughput, not the projection.
 5. Never mutate an annotation record.
 6. Report any Master-impacting discovery immediately.
 7. Stop if a required authority decision is missing.
+
+---
+
+### 10.1 Resume / interruption / restart semantics
+
+A four-hour GPU run will sometimes be interrupted. **SSH drop, terminal disconnect, process crash, machine reboot — the response is the same.**
+
+**Do NOT, under any circumstance:**
+
+- ❌ delete `data/outputs/embeddings/`
+- ❌ empty or clear the sidecars
+- ❌ `rm -rf` anything
+- ❌ force a full overwrite from scratch
+- ❌ add `--force` to "make sure it's clean"
+
+**Do:** re-issue the **exact same production command** from §12.2. Nothing else.
+
+**Expected resume behaviour** — this is the contract, and it follows from D10's B-1 text binding:
+
+| Asset state | Expected |
+|---|---|
+| No sidecar / no `.npz` | **encode** |
+| Sidecar exists but is **not** cache-valid under the ratified serializer | **encode** |
+| One of the original **5,276 stale** sidecars — text mismatch | **encode.** They are invalid by text, exactly as designed |
+| Already produced by this run and **cache-valid** | **skip** |
+
+**If the production resume path does not behave this way — STOP and report a `MASTER-IMPACTING FINDING`.** Do not work around it, do not force, do not hand-clean the directory. A resume that re-encodes work already done wastes GPU time; a resume that **skips** something invalid silently corrupts the cache. The second is the one that matters.
+
+**Record for the HANDOFF, per interruption:**
+
+- interruption time
+- restart time
+- completed count before the restart
+- **final total runtime** across all segments
+
+A run that was interrupted three times is still one experiment. Report it as one, with its segments.
+
+**Leftover temporaries.** `n06` writes `<uid>.part.npz` and `<uid>.json.part`, then renames. An interruption can leave one behind. Do not delete them blindly — **count them, report them**, and confirm the resume either overwrites or ignores them. A stray `.part` file is evidence of where the run stopped.
 
 ---
 
@@ -233,9 +300,24 @@ git rev-parse HEAD; git status --porcelain
 $PY -c "import torch;p=torch.cuda.get_device_properties(0);print(p.name, round(p.total_memory/1024**3,1),'GB')"
 ```
 
-### 12.2 The run
+### 12.2 The run — the production command
 
-Record the exact command and its full output, including the quarantine ledger.
+**This is the only entry point. Use it verbatim.**
+
+```bash
+/home/kyzen/miniconda3/envs/MetaFind/bin/python -m metafind.data.encode_text_image
+```
+
+**No flags.** Specifically **no** `--force`, **no** `--limit`, no debug flag, no alternative entry point, no direct call into `main()` or a helper.
+
+**If you run it under `tmux` or in the background, record both layers:**
+
+1. the outer command — the exact `tmux new-session …` / `nohup …` invocation, including any redirect;
+2. the command actually executed inside it — which must be the line above, unaltered.
+
+Record the full output including the quarantine ledger.
+
+> **The executor may not substitute another entry point.** If this command cannot be used, that is a `MASTER-IMPACTING FINDING`, not a reason to improvise.
 
 ### 12.3 After the run
 
@@ -263,7 +345,75 @@ print(f"NOT cache-valid       {len(uids)-len(valid):>7,}   <-- must be 0")
 EOF
 ```
 
-### 12.4 Research fidelity
+### 12.4 Post-run NPZ integrity audit — **once, after the run completes**
+
+`is_complete()` proves the **metadata contract** is valid. It never opens the `.npz`. This audit proves the **payload is not corrupt**. **Neither substitutes for the other.**
+
+Run it **once**, after the run, not on every cache check — D10 declined per-pass validation on cost (~1.3 GB) and that reasoning still holds for the hot path.
+
+**The contract below is derived from the current writer**, `encode_text_image.py:346-350` and the sidecar record at `:361-372`. It is not invented:
+
+| | Derived from |
+|---|---|
+| keys `text`, `views`, `image` | `np.savez_compressed(tmp, text=…, views=…, image=…)` |
+| dtype `float16` for all three | `.astype(np.float16)` on each |
+| `text.shape == (embedding_dim,)` | sidecar `embedding_dim = int(text_vec.shape[0])` |
+| `image.shape == (embedding_dim,)` | `pooled = aggregate(view_vecs, …)`, same width |
+| `views.shape == (n_views, embedding_dim)` | sidecar `n_views = int(view_vecs.shape[0])` |
+| `embedding_dim == 1280` | `EMBED_DIM = 1280`, `ulip_backbone.py:87` |
+
+**Cross-check the `.npz` against each sidecar's own recorded `embedding_dim` and `n_views`** — the writer derives both per asset. Do not hardcode `n_views`.
+
+```bash
+$PY - <<'EOF'
+import json, numpy as np
+from metafind import paths
+from metafind.models.ulip_backbone import EMBED_DIM
+RATIFIED = "metafind_v2_cm@8e4b1fcc66c7f48c"
+bad = []
+n = 0
+for sc in sorted(paths.EMBEDDINGS.glob("*.json")):
+    uid = sc.stem; n += 1
+    try:
+        rec = json.loads(sc.read_text())
+        npz = paths.EMBEDDINGS / f"{uid}.npz"
+        if not npz.is_file():
+            bad.append((uid, "npz missing")); continue
+        z = np.load(npz)
+        dim, nv = rec["embedding_dim"], rec["n_views"]
+        checks = [
+            (set(z.files) == {"text", "views", "image"},      "keys"),
+            (all(z[k].dtype == np.float16 for k in z.files),  "dtype"),
+            (z["text"].shape  == (dim,),                      "text shape"),
+            (z["image"].shape == (dim,),                      "image shape"),
+            (z["views"].shape == (nv, dim),                   "views shape"),
+            (dim == EMBED_DIM,                                "embedding_dim != EMBED_DIM"),
+            (all(np.isfinite(z[k]).all() for k in z.files),   "non-finite values"),
+            (all(z[k].size > 0 for k in z.files),             "empty array"),
+            (rec["text_serialization"] == RATIFIED,           "serializer"),
+            (rec["text_truncated"] is False,                  "text_truncated"),
+        ]
+        for ok, why in checks:
+            if not ok: bad.append((uid, why))
+    except Exception as e:
+        bad.append((uid, f"{type(e).__name__}: {e}"))
+print(f"sidecars audited      {n:>7,}")
+print(f"failures              {len(bad):>7,}   <-- must be 0")
+for uid, why in bad[:20]: print("   ", uid, why)
+EOF
+```
+
+Also report any leftover temporaries:
+
+```bash
+ls data/outputs/embeddings/*.part.npz data/outputs/embeddings/*.json.part 2>/dev/null | wc -l   # expect 0
+```
+
+**Any failure is escalated, not absorbed.** A corrupt payload that passes `is_complete()` is precisely the class of defect this project has been bitten by.
+
+---
+
+### 12.5 Research fidelity
 
 - Every sidecar records `text_serialization` = the ratified identity. **Zero** carry `metafind_v1_natural`.
 - Sample sidecars and confirm the text matches the ratified template — centimetres, no `"A "` article, capitalised category.
@@ -274,16 +424,19 @@ EOF
 ## 13. Definition of Done
 
 - [ ] **1.** `load_protocol()` and the pre-flight both PASSED **before** GPU time was spent.
-- [ ] **2.** n06 ran to completion over the full work list. Exact command recorded.
+- [ ] **2.** n06 ran to completion over the full work list using the **§12.2 production command verbatim** — no `--force`, no `--limit`, no substitute entry point. Command recorded, including the outer `tmux`/background layer if one was used.
+- [ ] **2a.** If the run was interrupted: every interruption recorded with interruption time, restart time, completed count before restart, and **final total runtime**. Resume used the identical command. Nothing was deleted or force-overwritten. Leftover `.part` files counted and reported.
 - [ ] **3.** `data/outputs/embeddings/` holds **45,952** `.npz`.
 - [ ] **4.** Exactly **3** assets quarantined — the known legacy-v1 residuals, by uid. Any other quarantine is escalated, not absorbed.
 - [ ] **5.** **0** sidecars are NOT cache-valid under the ratified serializer.
+- [ ] **5a.** **Post-run NPZ integrity audit (§12.4) reports 0 failures** over all 45,952 — keys, `float16` dtype, shapes cross-checked against each sidecar's own `embedding_dim` / `n_views`, `embedding_dim == EMBED_DIM`, all values finite, no empty array, correct serializer, `text_truncated` false. **0** leftover `.part` files. This is a separate claim from item 5 and does not substitute for it.
 - [ ] **6.** **0** sidecars carry `metafind_v1_natural`. **0** report `text_truncated`.
 - [ ] **7.** Pre-flight still PASSES after the run.
 - [ ] **8.** All 45,955 annotation records byte-identical to the baseline.
 - [ ] **9.** `checkpoints/` still empty; n09 and training never invoked.
 - [ ] **10.** `pytest tests/ -q` 547 passed; `check_graph.py` all pass.
-- [ ] **11.** `git diff` touches only §9.1 paths. **No code change.**
+- [ ] **11.** `git diff` touches only §9.1 paths. **No code change.** The two shared ledgers were **appended to only** — not truncated, rewritten, or cleaned.
+- [ ] **11a.** Working-tree state recorded at run start **and** run end. If they differ, the difference is reported and attributed.
 - [ ] **12.** Experiment provenance recorded per `.claude/rules/experiments.md` — command, git state, environment, GPU, duration, throughput, output path, quarantine ledger.
 - [ ] **13.** Nothing states or implies that `D0-003` is resolved.
 - [ ] **14.** Codex review completed; material findings independently verified by Claude.

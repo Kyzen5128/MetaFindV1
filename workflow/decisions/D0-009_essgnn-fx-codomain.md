@@ -14,13 +14,11 @@
 
 ## Status
 
-`INVESTIGATION COMPLETE` — 2026-08-21. Sections §6–§11 filled by the D0-009 conversation; Codex adversarial review completed (round 1 of 2) and its BLOCKER accepted, changing the verdict.
+`USER_APPROVED` — **FINAL ACCEPTED 2026-08-21.**
 
-**Verdict: `PAPER-AMBIGUOUS`. NOT ACCEPTED.** Awaiting Master integration review (§12) and the `WORKFLOW.md` §13B user gate (§13, §14). D0 has not marked its own recommendation accepted.
+Verdict **`PAPER-AMBIGUOUS`**. Implementation **Option A** adopted as a **USER-RATIFIED IMPLEMENTATION CHOICE under a PAPER-AMBIGUOUS specification**.
 
-**`PARALLEL SAFE: YES` with `D2a_stage1-protocol-refresh`** — verified by Master against `WORKFLOW.md` §7. D0-009 writes **only this file**; it touches no code, test, protocol, or graph contract. `D2a` touches nothing under `workflow/decisions/`.
-
-**Scope wall.** D0-009 must not touch anything in `D2a`'s scope — `resolve_stage1.py`, `annotate_run.py`, `annotate.py`, the protocol artifacts, or the Stage 1 encoding contract. If this investigation finds something bearing on `D2a`, report a `MASTER-IMPACTING FINDING`. Do not act on it.
+Ledger `DL-004`. Brief: `D0-009_USER_REVIEW.md`.
 
 ---
 
@@ -139,6 +137,7 @@ Master-verified 2026-08-21, read-only. **This is repository state, not evidence 
 
 | Document | Recorded as |
 |---|---|
+| **`docs/audit/C_PAPER_CONTRADICTIONS.md`** — the primary contradiction registry | **`### C3 — f_x outputs \mathbb{R}^3, but the proof needs a scalar — SEVERE`** (line 114). Summary row at line 348: `C3 \| severe \| no \| f_x → \mathbb{R}^1; guarded by an L ≥ 2 equivariance test`. Lines 59 and 356 group C3 with C2 and C4 as "three transcription errors" pointing the same way.<br><br>**Added by Master 2026-08-21 (MIF-2).** Master's original §5 framing omitted the primary registry — a bookkeeping defect in Master's own section, corrected here. The D0-009 paper result is untouched |
 | `docs/audit/D_IMPLEMENTATION_FORMULA_CONTRACT.md:124` | `f_x` codomain: paper `R³`, implementation `R¹` → **`[PAPER CONTRADICTION]` — C3** |
 | `docs/audit/E_GRAPH_REVALIDATION.md:175` | C3 **`VERIFIED`**, settled by `[UPSTREAM]` |
 | `docs/audit/F_CODE_GRAPH_CONSISTENCY.md:27` | `CONSISTENT`, "no flag, audit-only" |
@@ -820,6 +819,82 @@ The narrower claim that does survive: **under every product MetaFind's notation 
 ## 14. USER Final Decision
 
 *Only the user fills this.* `APPROVE` · `REJECT` · `MODIFY` · `INVESTIGATE MORE`
+
+---
+
+## 12. Master Integration Recommendation
+
+**Recommendation: `ACCEPT WITH FOLLOW-UP`** — accept the finding; adopt no option. 2026-08-21.
+
+Master re-verified the load-bearing evidence rather than accepting it on report:
+
+| Claim | Result |
+|---|---|
+| `f_x → R³` verbatim | `2methdology.tex:54`, confirmed |
+| The `·` is undefined | **Exhaustive**: `hadamard\|element-?wise\|inner product\|dot product\|contraction` across all five `.tex` files → **zero hits**. The only `\times` is `Q ∈ R^{3×3}` (`appendix.tex:23`), a matrix shape |
+| Equivariance claimed for **any orthogonal** `Q` | `appendix.tex:23`, `:53`, `:61` — broader than SO(3) |
+| `h` invariance | `appendix.tex:29` assumes `h^0` invariant; `:68` concludes the feature update invariant |
+| Nothing coordinate-dependent enters `h` | `essgnn.py:353` — `f_h(cat([h[row], h[col], radial, edge_attr]))` |
+
+**`MIF-1` (D0-004 as a blocker) — REJECTED.** Its premise is contradicted by the paper (`h` invariance is an explicit assumption, not an open question) and by the code. `D0-004` concerns which layer's `h` feeds `f_x`; both are invariant, so the equivariance analysis is unchanged either way. Option B's conflict is independent of `h` entirely.
+
+---
+
+## 13. USER REVIEW BRIEF
+
+`workflow/decisions/D0-009_USER_REVIEW.md`, 2026-08-21. Master split the question into (a) accept the finding and (b) rule on the option now or defer, and stated that the `D0-004` ground for deferring was rejected.
+
+---
+
+## 14. USER Final Decision
+
+**User action: `APPROVE` with implementation decision A. 2026-08-21.**
+
+### 14.1 Research verdict — ACCEPTED
+
+**`PAPER-AMBIGUOUS`.** MetaFind states `f_x: … → R³` but does not define the operator semantics of `·` in the coordinate-update equation, so **MetaFind alone does not uniquely determine how the `R³` output participates in the coordinate update.**
+
+**Binding wording constraints:**
+
+- This verdict must **not** be rewritten as "MetaFind explicitly got it wrong."
+- **"upstream EGNN settles it" may no longer be used** as paper-interpretation authority anywhere in this project.
+
+### 14.2 Implementation decision — Option A
+
+The current **scalar `f_x` coordinate multiplier is retained**.
+
+Its authority is **reclassified**:
+
+> **USER-RATIFIED IMPLEMENTATION CHOICE under a PAPER-AMBIGUOUS specification.**
+
+**It must not be described as a PAPER FACT.**
+
+### 14.3 Rationale — recorded so the reason is not later misremembered
+
+Scalar was **not** chosen because upstream EGNN is more sensible. It was chosen because:
+
+- MetaFind's `R³` operator semantics are undefined;
+- the literal Hadamard reading closes dimensionally but does **not** preserve the paper's own general-orthogonal / SE(3) equivariance claim;
+- `R³` + an explicit contraction requires inventing an operator MetaFind never defines;
+- the scalar multiplier preserves coordinate equivariance and invents nothing.
+
+If a linear contraction composes with `f_x`'s final linear layer, that may be recorded as **mathematical implementation analysis** — it may **not** be used to claim MetaFind's text says scalar.
+
+### 14.4 MIF handling, as decided
+
+| | Disposition |
+|---|---|
+| MIF-1 | **D0-004 dependency blocker REJECTED.** No longer gates D0-009 |
+| MIF-2 | Retained as a Master framing / bookkeeping correction — applied in §5 |
+| MIF-3 | `docs/audit/F_CODE_GRAPH_CONSISTENCY.md` terminology ambiguity — **registered follow-up** |
+| MIF-4 | `2.2e-16` vs `0.43` must **not** be described as a repo-verified measurement. The absence of an `R³`-variant test is retained as fact |
+| MIF-5 | `normalize_coord_diff` stays an **independent** reproduction-fidelity follow-up. Default `false`, zero current impact. **Not** for D0-009 to touch |
+
+### 14.5 Effect
+
+Status → `USER_APPROVED`. **FINAL ACCEPTED.**
+
+**`essgnn.py` behaviour is NOT modified.** What changes is the **authority, audit, and decision records** — not the ESSGNN design. This decision must not become a quiet redesign.
 
 ---
 

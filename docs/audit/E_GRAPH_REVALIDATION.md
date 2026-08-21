@@ -172,7 +172,7 @@ them; it did not discover them.
 |---|---|---|
 | C1 two ESSGNNs | suspected | `VERIFIED` — §2.5 has `f_h`/`f_x`, the appendix has `φ_e`/`φ_x`/`φ_h` |
 | C2 `h^(0)` contains `x` | suspected | `VERIFIED` — "We begin by assuming that $\rm h^0$ is invariant to SE(3)" |
-| C3 `f_x → R^3` | suspected | `VERIFIED`, and `[UPSTREAM]` settles it: EGNN's `φ_x` "outputs a scalar value" |
+| C3 `f_x → R^3` | suspected | **SUPERSEDED by `D0-009` (`DL-004`), 2026-08-21.** The prior reading — `VERIFIED`, `[UPSTREAM]` settles it — is **withdrawn**: upstream EGNN may not be used as paper-interpretation authority (user ruling). Current status: **`PAPER-AMBIGUOUS`**. MetaFind states `f_x → R^3` (`2methdology.tex:54`) and never defines the `·` in the coordinate update. The scalar implementation is retained as a **USER-RATIFIED IMPLEMENTATION CHOICE**, not as a paper fact |
 | C4 width mismatch | derived | `VERIFIED` — `h^(0) ∈ R^{d+3}`, `f_h: R^{2d+1+e} → R^d`, residual |
 | C5 `N(i)` vs `j ≠ i` | suspected | `VERIFIED` |
 | C6 distance vs squared | suspected | `VERIFIED` — `\|x_i^l - x_j^l\|_2` vs `\|x_i^l - x_j^l\|^2` |

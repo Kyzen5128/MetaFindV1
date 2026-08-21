@@ -81,6 +81,37 @@ Keep the Issue and the Decision in separate rows. Do not merge them.
 
 ---
 
+### `DL-004` — MetaFind §2.5 `f_x → R³`: verdict and implementation
+
+| | |
+|---|---|
+| **Source** | `D0-009_essgnn-fx-codomain` |
+| **Issue / Finding** | MetaFind states `f_x: R^(2d+1+e) → R³` (`2methdology.tex:54`) and claims equivariance for **any orthogonal** `Q ∈ R^{3×3}` (`appendix.tex:23`), but **never defines the `·`** in the coordinate update (`2methdology.tex:52`). Master confirmed the silence exhaustively: zero hits for `hadamard` / `element-wise` / `inner product` / `dot product` / `contraction` across all five `.tex` files |
+| **Evidence references** | `2methdology.tex:52`, `:54` · `appendix.tex:23`, `:29`, `:53`, `:61`, `:68` · `essgnn.py:311-312`, `:353`, `:358-359` · `C_PAPER_CONTRADICTIONS.md:114` (C3, **SEVERE**) · decision file §6–§11 · Codex round 1 (its BLOCKER changed the verdict) |
+| **Verdict** | **`PAPER-AMBIGUOUS`.** MetaFind alone does not uniquely determine how the `R³` output participates in the coordinate update. **This must never be rewritten as "MetaFind explicitly got it wrong."** |
+| **Decision / Resolution** | **Option A** — retain the scalar `f_x` coordinate multiplier. **`essgnn.py` behaviour is NOT modified**; what changed is the authority classification |
+| **Authority classification** | `f_x → R³` stated = **PAPER FACT** · the operator is undefined = **PAPER FACT (as to silence)** · `h` invariance = **PAPER FACT** (`appendix.tex:29`, `:68`) · **scalar `f_x` = USER-RATIFIED IMPLEMENTATION CHOICE under a PAPER-AMBIGUOUS specification.** Not a PAPER FACT |
+| **Rationale, recorded** | Not chosen because upstream EGNN is more sensible. Chosen because the operator semantics are undefined; Hadamard closes dimensionally but breaks the paper's own general-orthogonal equivariance claim; `R³` + contraction invents an operator MetaFind never defines; the scalar preserves equivariance and invents nothing |
+| **Binding prohibition** | **"upstream EGNN settles it" may no longer be used as paper-interpretation authority anywhere in this project.** `E_GRAPH_REVALIDATION.md:175` must be corrected |
+| **USER final decision** | **`APPROVE` with implementation decision A** |
+| **Affected components** | `essgnn.py` (classification only, no behaviour change) · `docs/audit/` C3 · `docs/graph/` U-26 · `CONTEXT.md` §5 · Stage 2 |
+| **Status** | **`USER_APPROVED`** — FINAL ACCEPTED |
+| **Date** | 2026-08-21 |
+
+**`MIF-1` REJECTED as a blocker.** D0-009 asked to be gated on `D0-004`'s "unresolved `h` semantics". Master rejected it: `appendix.tex:29` **assumes** `h^0` invariant and `:68` concludes the feature update invariant — `h` invariance is not an open question in MetaFind. `essgnn.py:353` feeds `f_h` only `h`, `radial`, and `edge_attr`, all invariant. `D0-004` concerns which layer's `h` reaches `f_x`; both are invariant. Option B's conflict is independent of `h`.
+
+**Follow-ups registered, none blocking:**
+
+| ID | Item |
+|---|---|
+| MIF-3 | `F_CODE_GRAPH_CONSISTENCY.md` — its `CONSISTENT` column is unlabelled and appears to mean "code matches the graph spec", not "code matches the paper". Terminology ambiguity |
+| MIF-4a | `2.2e-16` vs `0.43` — **must not be described as a repo-verified measurement.** Cannot be reproduced: the `R³` variant does not exist in code |
+| MIF-4b | No `R³`-variant equivariance test exists. **Narrower than reported:** `test_se3_equivariance` runs at `n_layers=3` (`test_essgnn.py:102`, `:112`) and `test_equivariance_negative_injection` (`:129`) proves it non-vacuous |
+| MIF-5 | `normalize_coord_diff` has no MetaFind authority. `essgnn.py:189` defaults `False`, zero current impact. **Independent candidate — not D0-009's to touch** |
+| — | Correct `E_GRAPH_REVALIDATION.md:175`'s `[UPSTREAM] settles it` |
+
+---
+
 ### `DL-003` — Stage 1 protocol refresh, τ = 0.5, and legacy-corpus rerun protection
 
 | | |

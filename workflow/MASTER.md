@@ -134,7 +134,7 @@ This expected-output figure is a **runtime property of n06 and holds regardless 
 
 | ID | Work package | Why ready |
 |---|---|---|
-| **`D1_n06-reencode`** | **UNBLOCKED 2026-08-21.** `D0-008` ✅ · `D2a` ✅ · `D10` ✅. `load_protocol()` passes, pre-flight passes, all 5,276 stale embeddings are cache-invalid, the corpus is protected. ~4 GPU-hours, expected output **45,952** `.npz` + **3** quarantine records. **TASK.md proposed, awaiting user review — not started** |
+| **`D1_n06-reencode`** | **`READY` — APPROVED 2026-08-21.** `D0-008` ✅ · `D2a` ✅ · `D10` ✅. `load_protocol()` passes, pre-flight passes, all 5,276 stale embeddings are cache-invalid, the corpus is protected. ~4 GPU-hours, expected output **45,952** `.npz` + **3** quarantine records. Baseline `cf234fb`. **Conversation not yet opened** |
 | `D9_paper-figures-audit` | Read all 38 extracted paper figures against the U-register | Zero cost, no GPU, read-only on `data/`, writes only `docs/`. No unresolved decision required |
 
 `D1_n06-reencode` was initially assessed READY. Re-verification moved it to BLOCKED — see D0-008 and blocker B5.
@@ -165,7 +165,7 @@ Eight registered candidates, one resolved. Full registry: `workflow/INDEX.md` §
 | D0-005 | `build_model()` bypasses `Stage1RuntimeConfig` | D3, conditional on D0-002 |
 | D0-006 | n08 node-text information collapse | D5 |
 | D0-007 | Table 2 evaluation protocol (200 scenes, 1–5 scale) | D8 |
-| **D0-009** | **MetaFind §2.5 `f_x → R³`** — the reproduction currently uses a scalar, justified partly by upstream EGNN. Registered 2026-08-21 | D5 Stage 2, `essgnn.py`, `docs/audit/` C3 |
+| ~~D0-009~~ | ~~MetaFind §2.5 `f_x → R³`~~ — **`USER_APPROVED` 2026-08-21 (`DL-004`).** Verdict `PAPER-AMBIGUOUS`; Option A adopted as a USER-RATIFIED IMPLEMENTATION CHOICE | resolved |
 | ~~D0-008~~ | ~~Ratify the Stage 1 text serialization template (U-15)~~ — **`USER_APPROVED` 2026-08-21** (`DL-001`) | resolved. Implementation is FU-2, owned by D10 |
 
 ### Implementation Corrections — not D0 decisions
