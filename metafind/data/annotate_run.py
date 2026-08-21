@@ -37,6 +37,7 @@ no fallback to ULIP-2's shipped captions; see annotate.py.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import time
@@ -56,7 +57,10 @@ from metafind.data.annotate import (
     MAX_ATTEMPTS,
     PROMPT_VERSION,
     REQUIRED_FIELDS,
+    SCHEMA_VERSION,
+    VALIDATOR_VERSION,
     AnnotationError,
+    annotation_contract_id,
     build_prompt,
     build_repair_prompt,
     parse_annotation,
@@ -72,25 +76,215 @@ def sidecar_path(uid: str) -> Path:
     return paths.ANNOTATIONS / f"{uid}.json"
 
 
+def _record(uid: str) -> tuple[dict, str] | None:
+    """``(record, sha256-of-the-bytes)``, or ``None`` when no file is there at all.
+
+    "No record" and "a record I could not read" lead to OPPOSITE decisions below,
+    so they are kept apart: absence is the only thing a bare run treats as work.
+    An unreadable file yields ``({}, digest)`` -- present, and therefore never
+    silent work.
+
+    The `isinstance` guard matters: `json.loads("null")` returns `None`, and
+    returning that would have made a corrupt-but-parseable sidecar look ABSENT
+    and put an existing file back in the queue. Anything that is not a JSON
+    object is an unreadable record, not a missing one.
+    """
+    sc = sidecar_path(uid)
+    if not sc.exists():
+        return None
+    try:
+        raw = sc.read_bytes()
+    except OSError:
+        return {}, ""
+    digest = hashlib.sha256(raw).hexdigest()
+    try:
+        rec = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return {}, digest
+    return (rec if isinstance(rec, dict) else {}), digest
+
+
+def _under_current_contract(rec: dict) -> bool:
+    # Keyed on the ANNOTATION CONTRACT, not on prompt_version alone. A v1 sidecar
+    # has every field name it shares with v2 but a different schema, and treating
+    # it as done would silently mix two annotation generations in one corpus --
+    # and prompt_version cannot express the other two axes: the same
+    # `prompt_version: 3` could have been admitted by a validator with or without
+    # the language rule. The contract id folds prompt, validator and schema
+    # semantics into one comparison.
+    return (all(k in rec for k in REQUIRED_FIELDS)
+            and rec.get("annotation_contract") == annotation_contract_id()
+            and "annotator_model" in rec)
+
+
 def is_complete(uid: str) -> bool:
     """Completion is a parseable sidecar carrying the fields the channel declares.
 
     Same contract as n03 and n04, and for the same reason: the record IS the
     artifact here, so a half-written one is the only failure worth guarding.
     """
-    sc = sidecar_path(uid)
-    if not sc.exists():
-        return False
+    found = _record(uid)
+    return found is not None and _under_current_contract(found[0])
+
+
+# --- AC-1: an existing record is never automatic work ----------------------
+#
+# [D2a, AC-1] `is_complete()` alone decides "done under the CURRENT contract",
+# which is the right question for resuming an interrupted run and the wrong one
+# for a corpus that already exists under an older contract. After D10 introduced
+# contract stamping, no stored record carried a contract id, so a bare run
+# queued all 45,955: the 45,952 the user accepted as legacy-v3, and the 3
+# legacy-v1 residuals D0-003 has not decided. Re-running would have rewritten
+# both -- and rewriting the residuals would have settled D0-003 by mutation,
+# ahead of any decision.
+#
+# The gate is NOT "skip records that look done". A missing field is what created
+# this hazard, so a missing field may not be what clears it: a record is passed
+# over only when a DECLARED registry names it, or when it carries the current
+# contract id. Any other existing record is UNACCOUNTED, and an unaccounted
+# record STOPS the run rather than joining the queue -- so deleting, truncating
+# or shortening the registry fails closed, never open.
+#
+# Nothing is removed: `--force` still re-annotates anything, and
+# `--uids-file <list> --force` is the named-migration form.
+
+PROVENANCE_REGISTRY = paths.OUTPUTS / "annotation_provenance.json"
+
+CURRENT_CONTRACT = "annotated_under_current_contract"
+ACCEPTED_LEGACY_V3 = "accepted_legacy_v3"
+LEGACY_V1_RESIDUAL = "legacy_v1_residual_unresolved"
+UNACCOUNTED = "unaccounted"
+
+# Only these two may be DECLARED. `CURRENT_CONTRACT` is self-evidencing -- it is
+# read off the record's own `annotation_contract` field, which is where AC-1.c's
+# "explicit in the record" half is satisfied -- and `UNACCOUNTED` is the ABSENCE
+# of a declaration, so neither is something a registry may assert.
+#
+# Each declarable state is bound to the schema generation its name refers to.
+# Without this, a registry could declare a legacy-v1 residual as
+# `accepted_legacy_v3` and the loader would take it, which is exactly the
+# conflation AC-1.e forbids.
+STATE_PROMPT_VERSION = {
+    ACCEPTED_LEGACY_V3: 3,
+    LEGACY_V1_RESIDUAL: 1,
+}
+DECLARABLE_STATES = tuple(STATE_PROMPT_VERSION)
+
+
+class ProvenanceRegistryError(ValueError):
+    """The registry cannot be trusted. Always fatal -- never a reason to proceed."""
+
+
+def load_provenance_registry(path: Path = PROVENANCE_REGISTRY
+                             ) -> dict[str, tuple[str, int, str]]:
+    """uid -> (declared state, prompt_version, sha256 of the declared record).
+
+    A missing file is an EMPTY registry, not a permissive one: with nothing
+    declared, every pre-existing record classifies UNACCOUNTED and the run
+    refuses. Every other problem -- unparseable, wrong shape, an undeclarable
+    state, a state bound to the wrong schema, a uid declared twice -- raises.
+    Both directions are closed; there is no reading of a damaged registry under
+    which work gets queued.
+    """
+    if not path.exists():
+        return {}
     try:
-        rec = json.loads(sc.read_text())
-    except (OSError, json.JSONDecodeError):
-        return False
-    # Includes prompt_version: a v1 sidecar has every v2 field name it shares
-    # but a different schema, and treating it as done would silently mix two
-    # annotation generations in one corpus.
-    return (all(k in rec for k in REQUIRED_FIELDS)
-            and rec.get("prompt_version") == PROMPT_VERSION
-            and "annotator_model" in rec)
+        doc = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ProvenanceRegistryError(f"{path} could not be read: {exc}") from exc
+    if not isinstance(doc, dict) or not isinstance(doc.get("populations"), list):
+        raise ProvenanceRegistryError(
+            f"{path} has no `populations` list; it is not a provenance registry")
+
+    out: dict[str, tuple[str, int, str]] = {}
+    for pop in doc["populations"]:
+        if not isinstance(pop, dict):
+            raise ProvenanceRegistryError(
+                f"{path} has a population entry that is not an object: {pop!r}")
+        state = pop.get("state")
+        if state not in STATE_PROMPT_VERSION:
+            raise ProvenanceRegistryError(
+                f"{path} declares provenance state {state!r}; declarable states are "
+                f"{DECLARABLE_STATES}")
+        pv = pop.get("prompt_version")
+        # `type(pv) is int` rather than `isinstance`: `True == 1` and `1.0 == 1`
+        # both hold in Python, and a schema generation named by a bool is not a
+        # schema generation.
+        if type(pv) is not int or pv != STATE_PROMPT_VERSION[state]:
+            raise ProvenanceRegistryError(
+                f"{path} declares {state!r} at prompt_version {pv!r}, but that state "
+                f"means prompt_version {STATE_PROMPT_VERSION[state]}. A declaration "
+                "may not move a record between schema generations.")
+        records = pop.get("records")
+        if not isinstance(records, dict):
+            raise ProvenanceRegistryError(
+                f"{path} population {state!r} has no `records` mapping of "
+                "uid -> sha256")
+        for uid, digest in records.items():
+            if uid in out:
+                raise ProvenanceRegistryError(
+                    f"{path} declares {uid!r} twice ({out[uid][0]!r} and {state!r}). "
+                    "A record belongs to exactly one population; a second "
+                    "declaration would silently overwrite the first.")
+            if not isinstance(uid, str) or not isinstance(digest, str) or not digest:
+                raise ProvenanceRegistryError(
+                    f"{path} population {state!r} has a malformed entry for {uid!r}")
+            out[uid] = (state, pv, digest)
+    return out
+
+
+def provenance_state(uid: str, registry: dict[str, tuple[str, int, str]]) -> str | None:
+    """Which declared population accounts for this uid, or ``None`` if no record.
+
+    ``None`` -- and only ``None`` -- is what a bare run treats as work.
+
+    A declaration is about ONE specific record: it says that record was seen,
+    classified and (for legacy-v3) re-validated. So it is honoured only while the
+    bytes still hash to what was declared. If the file changed, the declaration
+    no longer describes what is on disk and the uid becomes UNACCOUNTED -- which
+    stops the run rather than either re-annotating it or quietly skipping it.
+    """
+    found = _record(uid)
+    if found is None:
+        return None
+    rec, digest = found
+    if _under_current_contract(rec):
+        # Self-evidencing, and it must win: a residual that a NAMED MIGRATION
+        # legitimately re-annotated will carry the current contract while an
+        # older declaration still names it. The record is the newer fact.
+        return CURRENT_CONTRACT
+    declared = registry.get(uid)
+    if declared is None:
+        return UNACCOUNTED
+    state, pv, declared_digest = declared
+    if declared_digest != digest or rec.get("prompt_version") != pv:
+        return UNACCOUNTED
+    return state
+
+
+def classify_all(candidates, registry) -> dict[str, str | None]:
+    """The predicate a bare run builds its work list from. No model, no GPU."""
+    return {uid: provenance_state(uid, registry) for uid in candidates}
+
+
+def build_work_list(candidates, force: bool,
+                    registry=None) -> tuple[list[str], list[str], dict[str, str | None]]:
+    """The WHOLE work-list decision, both branches. Returns (todo, blocked, states).
+
+    `main()` calls exactly this and does nothing else to choose what gets
+    annotated, so a proof that exercises this function is a proof about the real
+    run -- not a re-statement of it. Nothing here loads a model or touches a GPU.
+    """
+    if force:
+        # [AC-1.b] The explicit path, unfiltered. `--force` re-annotates the whole
+        # corpus; `--uids-file <list> --force` is the same capability aimed at a
+        # named population. The gate removes the ACCIDENT, not this.
+        return list(candidates), [], {}
+    states = classify_all(candidates,
+                          load_provenance_registry() if registry is None else registry)
+    return ([uid for uid, st in states.items() if st is None],
+            [uid for uid, st in states.items() if st == UNACCOUNTED],
+            states)
 
 
 class Annotator:
@@ -233,14 +427,35 @@ def main() -> int:
             renders[r["uid"]] = r
 
     if args.uids_file:
-        wanted = [u for u in args.uids_file.read_text().split() if u]
-        missing = [u for u in wanted if u not in renders]
+        candidates = [u for u in args.uids_file.read_text().split() if u]
+        missing = [u for u in candidates if u not in renders]
         if missing:
             print(f"{len(missing)} uid(s) have no render, e.g. {missing[:3]}", flush=True)
             return 2
-        todo = [u for u in wanted if args.force or not is_complete(u)]
     else:
-        todo = [u for u in sorted(renders) if args.force or not is_complete(u)]
+        candidates = sorted(renders)
+
+    try:
+        todo, blocked, states = build_work_list(candidates, args.force)
+    except ProvenanceRegistryError as exc:
+        print(f"{exc}\nRefusing: the provenance registry is what accounts for the "
+              "existing corpus, so a registry that cannot be trusted is a reason to "
+              "stop, never a reason to proceed. Rebuild it with "
+              "tools/declare_annotation_provenance.py --declare.", flush=True)
+        return 3
+    if blocked:
+        print(f"{len(blocked):,} existing annotation record(s) carry neither the "
+              f"current contract {annotation_contract_id()} nor a declaration in "
+              f"{PROVENANCE_REGISTRY}, e.g. {blocked[:3]}.\n"
+              "Refusing: an unclassified record must be neither silently re-annotated "
+              "nor silently skipped. Declare it "
+              "(tools/declare_annotation_provenance.py --declare) or re-annotate it "
+              "explicitly with --force.", flush=True)
+        return 3
+    for state in (CURRENT_CONTRACT, ACCEPTED_LEGACY_V3, LEGACY_V1_RESIDUAL):
+        n = sum(1 for st in states.values() if st == state)
+        if n:
+            print(f"  {state:<34} {n:>7,}  (not queued)", flush=True)
     if args.limit:
         todo = todo[: args.limit]
     print(f"{len(renders):,} rendered assets, {len(todo):,} to annotate", flush=True)
@@ -276,7 +491,23 @@ def main() -> int:
                 json.dump(rec, fh, ensure_ascii=False)
                 fh.flush()
                 os.fsync(fh.fileno())
-            tmp.replace(sc)
+            if args.force:
+                tmp.replace(sc)          # explicit: overwrite whatever is there
+            else:
+                # Classification decided this uid had NO record. Between then and
+                # now another writer could have created one, and a bare run may
+                # not overwrite an existing record -- that is the whole of AC-1.
+                # `os.link` refuses to clobber, so the check and the create are one
+                # atomic step rather than a window; `sc.exists()` here would still
+                # leave a race.
+                try:
+                    os.link(tmp, sc)
+                except FileExistsError:
+                    tmp.unlink()
+                    print(f"  {uid} gained a record after classification; skipping "
+                          "(use --force to overwrite)", flush=True)
+                    continue
+                tmp.unlink()
             done += 1
             if done % 100 == 0:
                 rate = done / max(time.time() - started, 1e-9) * 60

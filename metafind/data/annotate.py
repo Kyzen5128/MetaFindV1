@@ -56,8 +56,10 @@ that way.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
@@ -65,14 +67,41 @@ __all__ = [
     "PLACEMENT_FLAGS",
     "MATERIAL_SYNONYMS",
     "PROMPT_VERSION",
+    "VALIDATOR_VERSION",
+    "SCHEMA_VERSION",
     "AnnotationError",
+    "annotation_contract_id",
     "build_prompt",
     "build_repair_prompt",
+    "non_english_characters",
     "parse_annotation",
     "validate_annotation",
 ]
 
-PROMPT_VERSION = 3  # v2 followed Figure 2 but left 41% with all four flags false
+# --- annotation contract versioning ---------------------------------------
+#
+# THREE versions, not one. `prompt_version` alone used to stand for the whole
+# annotation contract, and it cannot: the prompt, the validator and the record
+# schema change independently, and two records both stamped `prompt_version: 3`
+# could have been admitted under different acceptance rules with nothing on disk
+# to tell them apart. That is the same defect class as the retired
+# `"metafind_v1_natural"` serialization label, which named two different
+# transformations -- see D0-008 §11.2 B-3 and D10.
+#
+#   PROMPT_VERSION     what was ASKED of the model
+#   VALIDATOR_VERSION  what was ACCEPTED from it
+#   SCHEMA_VERSION     what the stored record can EXPRESS
+#
+# and `annotation_contract_id()` binds all three to the actual text of the
+# prompt and the actual admission bounds, so an edit that someone forgets to
+# version still moves the identity.
+PROMPT_VERSION = 4  # v4 states the output language; v3 did not, and 3 records
+                    # came back part-Chinese. v2 followed Figure 2 but left 41%
+                    # with all four flags false
+VALIDATOR_VERSION = 2  # v2 refuses non-Latin script in the text fields; v1 had
+                       # no language rule at all
+SCHEMA_VERSION = 2  # v2 records translation/repair provenance and the contract
+                    # identity; v1 had neither
 MAX_ATTEMPTS = 2  # C1's hard bound; the third outcome is quarantine
 
 # [PAPER FACT -- Figure 2, `data-preprocess.png`] The paper DOES show the
@@ -193,6 +222,77 @@ MATERIAL_SYNONYMS = {
 }
 
 
+# --- P-2: the English text contract ----------------------------------------
+#
+# [IMPLEMENTATION CHOICE, VALIDATOR_VERSION 2] The frozen CLIP text tower was
+# trained on English captions, and Stage 1 serializes `category`, `description`
+# and `materials` straight into the string it sees. A Chinese description is not
+# a schema error -- it is a correct answer to a prompt that never named a
+# language -- but it is text the encoder cannot place.
+#
+# The rule is an ALLOW-LIST on script, not `.isascii()`. The corpus contains
+# legitimate accented English, and an ASCII rule would reject all of it:
+# measured over all 45,952 v3 records, the complete non-ASCII vocabulary is
+#
+#     U+00E9 'é' x5   U+00ED 'í' x1   U+00EB 'ë' x1   U+00A2 '¢' x1
+#
+# from "Pokémon", "Carmín", "Raphaël" and a "5¢" price tag. All four must pass.
+# What must not pass is a different SCRIPT: CJK, Cyrillic, Arabic, Hebrew,
+# Devanagari, Hangul, Kana and the rest.
+#
+# Implemented on `unicodedata` rather than on hand-written codepoint ranges: a
+# letter is admitted when its Unicode NAME begins with "LATIN", which is exactly
+# the property wanted and stays correct as Unicode grows. Symbols and
+# punctuation are admitted below U+2100, which covers Latin-1, General
+# Punctuation and the currency block (so '¢', '€', an em dash and curly quotes
+# pass) while excluding ideographic punctuation, arrows and emoji.
+NON_LATIN_SYMBOL_CUTOFF = 0x2100
+
+
+def non_english_characters(text: str) -> list[str]:
+    """The characters in `text` that break the English text contract.
+
+    Returns them in order of first appearance, deduplicated, so the repair
+    prompt can name them. Empty list means the text conforms.
+    """
+    bad: list[str] = []
+    for ch in text:
+        if ch.isspace() or ord(ch) < 128:
+            continue
+        category = unicodedata.category(ch)
+        name = unicodedata.name(ch, "")
+        if category[0] in "LM":                       # letters and marks
+            ok = name.startswith("LATIN") or name.startswith("COMBINING")
+        elif category[0] == "N":                      # numbers
+            ok = name.startswith(("DIGIT", "LATIN", "SUPERSCRIPT", "VULGAR"))
+        elif category[0] in "PSZ":                    # punctuation, symbols
+            ok = ord(ch) < NON_LATIN_SYMBOL_CUTOFF
+        else:
+            ok = False
+        if not ok and ch not in bad:
+            bad.append(ch)
+    return bad
+
+
+def _refuse_non_english(field: str, value: str) -> None:
+    """[L1-ANNOT-LANGUAGE] Raise with a message the repair prompt can act on.
+
+    The message is fed back verbatim by `build_repair_prompt()`, so it names the
+    field, the offending characters and the rule -- "invalid schema" would give
+    the model nothing to fix.
+    """
+    bad = non_english_characters(value)
+    if bad:
+        raise AnnotationError(
+            f"`{field}` contains non-English text: {''.join(bad)!r}. "
+            "The annotation text must be written in English. Non-English "
+            "scripts are not allowed in category, description, or materials. "
+            "Accented Latin letters such as 'Pokémon' are fine; Chinese, "
+            "Japanese, Korean, Cyrillic and Arabic characters are not. "
+            "Rewrite the field in English and return the corrected JSON."
+        )
+
+
 class AnnotationError(Exception):
     """A schema violation, carrying the message that goes into the repair prompt."""
 
@@ -245,8 +345,21 @@ class Annotation:
             # or a later reader repeats the metres/centimetres mistake v1 made.
             "dimension_unit": DIMENSION_UNIT,
             "mass_unit": MASS_UNIT,
+            # [P-5] The annotation contract, in three independent axes plus a
+            # fingerprint that moves even when someone forgets to bump one.
             "prompt_version": PROMPT_VERSION,
+            "validator_version": VALIDATOR_VERSION,
+            "schema_version": SCHEMA_VERSION,
+            "annotation_contract": annotation_contract_id(),
             "annotator_model": annotator_model,
+            # [P-5] Description provenance, always present so that "this text is
+            # the model's" is a RECORDED fact rather than the absence of a note.
+            # A human repair overwrites these four; `annotator_model` stays,
+            # because every other field is still the model's output.
+            "description_source": "model",
+            "description_original": None,
+            "description_translation_authority": None,
+            "description_translated_by": None,
         }
 
 
@@ -260,6 +373,11 @@ def build_prompt(n_views: int) -> str:
     """
     return (
         f"You are looking at {n_views} rendered views of a single 3D asset.\n"
+        "\n"
+        "IMPORTANT: write every text field in ENGLISH. `category`, `description` "
+        "and every entry of `materials` must be English. Do not use Chinese, "
+        "Japanese, Korean, Cyrillic or Arabic characters. Accented Latin "
+        "spellings such as \"Pokemon\"/\"Pok\u00e9mon\" are fine.\n"
         "\n"
         "IMPORTANT: these renders are SCALE-NORMALISED. Every asset is fitted to "
         "the same size before rendering, so the images contain no information "
@@ -328,6 +446,44 @@ def build_repair_prompt(original: str, error: str, raw_response: str) -> str:
     )
 
 
+ANNOTATION_CONTRACT_FAMILY = "metafind_annot"
+CANONICAL_N_VIEWS = 11  # n04 renders 11; the prompt text depends on the count
+
+
+def annotation_contract() -> dict[str, Any]:
+    """Everything that decides whether an annotation is admitted, in one mapping.
+
+    Hashed rather than trusted to three hand-maintained integers: an edit to the
+    prompt text, to a dimension bound, to the material synonyms or to the
+    language rule changes what the corpus MEANS, and a version someone forgot to
+    bump would otherwise hide it. Same reasoning as D10's
+    `text_serialization_id()` on the encoder side.
+    """
+    return {
+        "prompt_version": PROMPT_VERSION,
+        "validator_version": VALIDATOR_VERSION,
+        "schema_version": SCHEMA_VERSION,
+        "prompt": build_prompt(CANONICAL_N_VIEWS),
+        "required_fields": list(REQUIRED_FIELDS),
+        "placement_flags": list(PLACEMENT_FLAGS),
+        "dimension_unit": DIMENSION_UNIT,
+        "mass_unit": MASS_UNIT,
+        "dim_bounds_cm": [MIN_DIM_CM, MAX_DIM_CM],
+        "mass_bounds_kg": [MIN_MASS_KG, MAX_MASS_KG],
+        "density_bounds_kg_cm3": [MIN_DENSITY_KG_CM3, MAX_DENSITY_KG_CM3],
+        "material_synonyms": dict(sorted(MATERIAL_SYNONYMS.items())),
+        "non_latin_symbol_cutoff": NON_LATIN_SYMBOL_CUTOFF,
+        "max_attempts": MAX_ATTEMPTS,
+    }
+
+
+def annotation_contract_id() -> str:
+    """`metafind_annot_v<prompt>@<hash16>` -- stamped on every record."""
+    payload = json.dumps(annotation_contract(), sort_keys=True, ensure_ascii=False)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"{ANNOTATION_CONTRACT_FAMILY}_v{PROMPT_VERSION}@{digest[:16]}"
+
+
 def parse_annotation(raw: str) -> dict[str, Any]:
     """Pull the JSON object out of a model response.
 
@@ -365,6 +521,14 @@ def validate_annotation(obj: dict[str, Any]) -> Annotation:
     for field in ("category", "description", "synset"):
         if not isinstance(obj[field], str) or not obj[field].strip():
             raise AnnotationError(f"`{field}` must be a non-empty string")
+
+    # [L1-ANNOT-LANGUAGE, VALIDATOR_VERSION 2] Before anything else about the
+    # content: is it English? Under v1 this check did not exist, a Chinese
+    # description passed on attempt 1, and the C1 repair loop -- the pipeline's
+    # only self-correction mechanism -- never fired. `synset` is excluded because
+    # the WordNet shape rule below already constrains it to ASCII.
+    for field in ("category", "description"):
+        _refuse_non_english(field, obj[field])
 
     # WordNet ids are `lemma.pos.NN`. Checked for SHAPE only -- verifying the
     # id exists needs a WordNet corpus this environment does not carry, so a
@@ -433,6 +597,8 @@ def validate_annotation(obj: dict[str, Any]) -> Annotation:
     # nothing is dropped, only `metallic`-style variants folded onto one token.
     normalised = [MATERIAL_SYNONYMS.get(m.strip().lower(), m.strip().lower())
                   for m in materials]
+    for material in normalised:
+        _refuse_non_english("materials", material)
 
     flags: dict[str, bool] = {}
     for f in PLACEMENT_FLAGS:

@@ -56,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -78,11 +79,18 @@ VARIANT_REGISTRY_PATH = paths.OUTPUTS / "variant_registry.json"
 
 # --- U-15 -----------------------------------------------------------------
 
-TEXT_SERIALIZATION = "metafind_v1_natural"
+# [U-15, B-3, D0-008 §11.2] The serialization FAMILY. On its own it is not a
+# cache identity and must never be used as one: the retired value
+# "metafind_v1_natural" labelled two different transformations -- the metre-based
+# v1 template and the centimetre one -- so a sidecar carrying it does not say
+# which serializer produced its embedding. The identity n06 stamps and validates
+# is text_serialization_id() below, which is content-addressed.
+TEXT_SERIALIZATION_FAMILY = "metafind_v2_cm"
 
-# [U-15] Paper 2.3 names the fields and gives no format. Pinned here and held by
-# a golden-string test (L1-TEXT-SERIALIZATION), because reordering two fields
-# silently changes every text embedding and therefore four of Table 1's columns.
+# [U-15] Paper 2.3 names the fields and gives no format. RATIFIED by D0-008
+# (2026-08-21) as an IMPLEMENTATION CHOICE, and held by a golden-string test
+# (L1-TEXT-SERIALIZATION), because reordering two fields silently changes every
+# text embedding and therefore four of Table 1's columns.
 #
 # Natural prose rather than "Category: chair. Material: wood." because the frozen
 # CLIP text tower was trained on captions, not on labelled records -- and the
@@ -90,27 +98,43 @@ TEXT_SERIALIZATION = "metafind_v1_natural"
 # limit is the other constraint: a labelled multi-line record spends its budget
 # on field names.
 #
-# Field order follows paper 2.3's own sentence: "object category, size
-# dimensions, materials, and placement constraints", with the free-text
-# description first because it is the part a caption-trained encoder reads best.
+# [R-1, D0-008 §11.3] Field order is description -> category -> materials ->
+# dimensions -> placement, and it is OURS. The earlier comment here claimed the
+# order follows paper 2.3's own sentence; it does not. 2methdology.tex:28 reads
+# "object category, size dimensions, materials, and placement constraints" --
+# category -> DIMENSIONS -> materials -- which is not what this template emits.
+# The paper does not constrain serialization order at all, so the order stays as
+# it is and the claim is withdrawn rather than the code changed. Any future claim
+# that 2.3 mandates an order must cite new evidence.
+#
+# The dimensions arrive already rendered by _dim(), so this string carries no
+# format spec for them: "one decimal, trailing .0 stripped" is not expressible as
+# one. {category} likewise receives the capitalised form (S-2). This constant
+# therefore does NOT fully describe the emitted string, which is exactly why the
+# cache identity hashes the emitted string instead of this template.
 TEXT_TEMPLATE = (
-    "{description} A {category} made of {materials}, "
-    "roughly {width:.0f} by {length:.0f} by {height:.0f} centimetres, "
+    "{description} {category} made of {materials}, "
+    "roughly {width} by {length} by {height} centimetres, "
     "{placement}."
 )
 
-# [U-15, IMPLEMENTATION CHOICE -- CONFIRM BEFORE THE FULL RUN]
-# Paper Figure 2 gives the annotation SCHEMA but nothing about how it becomes
-# the string CLIP sees, so this template is ours. Three fields the figure
-# prints are deliberately NOT serialised:
+# [U-15] RATIFIED by D0-008 §11.3 row 8 as an IMPLEMENTATION CHOICE whose
+# retrieval impact is UNKNOWN. Paper Figure 2 gives the annotation SCHEMA but
+# nothing about how it becomes the string CLIP sees, so this template is ours.
+# Three fields the figure prints are deliberately NOT serialised:
 #
 #   synset   an identifier, not language. "robot.n.01" is noise to a text tower
 #            trained on captions, and it costs tokens inside a 77-token budget.
-#   volume   redundant -- it is width * length * height, already in the string.
-#   mass     kept on disk, left out of the text. Unlike the size numbers, whose
-#            PROPORTIONS are visually grounded (MEASURED r = 0.52-0.62 against
-#            the mesh bounding box), mass has no visual support of any kind and
-#            no ground truth in Objaverse.
+#   volume   omitted. The justification this comment used to give -- "redundant,
+#            it is width * length * height, already in the string" -- is
+#            WITHDRAWN (D0-008 §12.4): a frozen text tower is not guaranteed to
+#            multiply three numerals, and the rendered numbers are rounded, so
+#            the equivalence does not hold even arithmetically.
+#   mass     kept on disk, left out of the text. The size numbers at least carry
+#            a claimed correlation with the mesh bounding box (r = 0.52-0.62),
+#            but that figure is UNVERIFIED in this repository and must not be
+#            reported as MEASURED (D0-008 §12.4). Mass has no visual support of
+#            any kind and no ground truth in Objaverse.
 #
 # All three stay in the annotation record; only the encoder input omits them.
 PLACEMENT_PHRASES = {
@@ -118,12 +142,20 @@ PLACEMENT_PHRASES = {
     # what the annotation says. v1 flattened an 8-label list into "typically
     # placed handheld", which is where "gaming chair ... typically placed
     # handheld" reached CLIP.
+    #
+    # [R-3, D0-008 §12.3] A ("onWall", "onCeiling") entry used to sit in this
+    # dict and was UNREACHABLE: placement_phrase() builds its key in the fixed
+    # order (onCeiling, onWall, onFloor, onObject) and retries tuple(sorted(...)),
+    # and both spellings are ("onCeiling", "onWall"). Master ruled DELETE rather
+    # than fix. The fallback join already emits grammatical prose for those
+    # records -- "typically mounted on a ceiling or on a wall" -- so deleting
+    # changes 0 serialized strings, while "fixing" it would change strings that
+    # the ratification measurement in D0-008 §11.4 never covered.
     ("onCeiling",): "typically mounted on a ceiling",
     ("onWall",): "typically mounted on a wall",
     ("onFloor",): "typically placed on the floor",
     ("onObject",): "typically placed on top of other objects",
     ("onFloor", "onObject"): "typically placed on the floor or on other objects",
-    ("onWall", "onCeiling"): "typically mounted on a wall or ceiling",
 }
 NO_PLACEMENT_PHRASE = "with no typical placement"
 
@@ -138,11 +170,14 @@ NO_PLACEMENT_PHRASE = "with no typical placement"
 # worst). Five tokens of headroom on a corpus where 44,000 assets have not been
 # annotated yet is not headroom.
 #
-# So EVERY variable-length part is bounded, not just the description: capping
-# the description alone still let a pathological annotation reach 82 tokens
-# (long category + four materials + three placement values). The annotation
-# keeps its full text on disk; only the string handed to the frozen encoder is
-# bounded, and L1-TEXT-SERIALIZATION pins the result.
+# [R-2, D0-008 §11.3] Correction. This comment used to claim that "EVERY
+# variable-length part is bounded, not just the description". That was false as
+# documentation. Three parts are bounded by a CAP: description, category, and
+# the materials list. The placement clause is bounded by CONSTRUCTION, not by a
+# cap -- it is built from four booleans over a closed vocabulary, so its longest
+# possible form is the four single-flag phrases joined. MAX_PLACEMENT was
+# defined here and never read by any code path, so it has been DELETED rather
+# than left standing as an unenforced bound that reads like an enforced one.
 #
 # Dropping the fourth material is the right thing to lose. The annotation prompt
 # asks for materials "most prominent first", so a prefix is principled -- and
@@ -150,16 +185,17 @@ NO_PLACEMENT_PHRASE = "with no typical placement"
 #
 # These are CHARACTER caps and CLIP counts TOKENS, so they bound the realistic
 # cases and not the adversarial ones: an artificial 40-character run of a single
-# letter still reaches 81 tokens. MEASURED on 1,406 real annotations after the
-# caps: 70 tokens worst case, none over 77, and real categories run 6 characters
-# median / 29 worst. The residual gap is n06's to close -- it owns the encoder,
-# so it must COUNT tokens and flag an overflow rather than let CLIP truncate in
-# silence. That is L1-TEXT-TOKEN-BUDGET, and it is the same principle as
+# letter still reaches 81 tokens. The old note here recorded "MEASURED on 1,406
+# real annotations after the caps: 70 tokens worst case, none over 77". That
+# sample figure is SUPERSEDED by the full-corpus measurement in D0-008 §11.4,
+# which found one record at 89 true BPE tokens -- so the caps do NOT guarantee
+# the budget and the residual gap is real. n06 owns the encoder, so it must
+# COUNT tokens and flag an overflow rather than let CLIP truncate in silence.
+# That is L1-TEXT-TOKEN-BUDGET, and it is the same principle as
 # L1-SEMEDGE-NO-ZEROFILL: a degraded input must be visible, not quiet.
 MAX_DESCRIPTION_CHARS = 160
 MAX_CATEGORY_CHARS = 40
 MAX_MATERIALS = 3
-MAX_PLACEMENT = 2
 
 # --- U-14 -----------------------------------------------------------------
 
@@ -202,10 +238,42 @@ DEFAULT_HYPERPARAMETERS = {
     "batch_size": 64,
     "epochs": 50,
     "p_mask": PAPER_P_MASK,
-    # CLIP's own convention: a learnable temperature initialised at 0.07 and
-    # clamped so the logit scale cannot run away.
-    "init_temperature": 0.07,
-    "learnable_temperature": True,
+    # [C-001] tau. The two halves of this pair do NOT have the same authority and
+    # must never be reported as though they did.
+    #
+    #   init_temperature = 0.5
+    #       PAPER FACT. 3experiments.tex:15, verbatim: "The temperature is 0.5
+    #       for all experiments." It is the only temperature value MetaFind
+    #       states, and nothing in the source contradicts it. `losses.PAPER_TAU`
+    #       carries the same number for the training side.
+    #
+    #   learnable_temperature = False
+    #       USER-RATIFIED IMPLEMENTATION CHOICE, resting on a strongly-supported
+    #       INFERENCE -- NOT a paper statement, and it must never be reported as
+    #       one. MetaFind nowhere states that tau is non-learnable.
+    #
+    #       What the inference rests on is the authors' OWN vocabulary. They do
+    #       use "learnable", and use it precisely: 2methdology.tex:54 types f_h
+    #       and f_x as "two learnable functions", and :87 calls lambda "a
+    #       learnable scalar". They never apply it to the contrastive
+    #       temperature. Both places tau is introduced -- :79 and :99 -- name it
+    #       "a temperature hyperparameter". So the paper distinguishes learnable
+    #       quantities from hyperparameters in its own words, and puts tau on the
+    #       hyperparameter side TWICE. Add 3experiments.tex:15's "The temperature
+    #       is 0.5 for all experiments" -- a value that is optimised does not stay
+    #       fixed across all experiments -- and the reading is strong.
+    #
+    #       Strong is not stated. This stays an INFERENCE, ratified by the user
+    #       2026-08-21 as the reproduction's implementation choice.
+    #
+    # The previous values -- 0.07, learnable -- were CLIP's convention, carried in
+    # from the wrong source. Under `losses.py:114` they now raise the deviation
+    # warning, which is the correct treatment for a value the paper contradicts.
+    "init_temperature": 0.5,
+    "learnable_temperature": False,
+    # Retained: the clamp only binds a LEARNABLE scale, so with the choice above
+    # it is inert. It stays because REQUIRED_HYPERPARAMETERS demands the field and
+    # because a later run that re-enables learning must not silently lose the clamp.
     "max_logit_scale": 100.0,
     "seed": 20260816,
 }
@@ -275,7 +343,34 @@ def _cap(text: str, limit: int) -> str:
     return cut + "."
 
 
-def serialize_annotation(annotation: dict, template: str = TEXT_TEMPLATE) -> str:
+def _dim(value: float) -> str:
+    """[U-15, D0-008 E-1 + S-1] One decimal, a trailing ``.0`` stripped.
+
+    The previous ``:.0f`` rendered 161 records' stored dimension as ``0``: the
+    string asserted something the annotation did not say. E-1 replaced it, and
+    S-1 settled that the rule applies at EVERY magnitude rather than only below
+    1 cm -- the corpus's single ``2.5`` would otherwise render ``2`` and drop a
+    fifth of that dimension.
+
+    Python's format rounds half to even, so a hypothetical ``0.25`` renders
+    ``0.2``. No such value exists in this corpus: the complete non-integer
+    vocabulary over all 45,952 v3 records is {0.5: 155, 0.2: 7, 2.5: 1}
+    (OBSERVED DATA). D0-008 ratified this formatter, not a rounding policy.
+    """
+    return f"{float(value):.1f}".removesuffix(".0")
+
+
+def _capitalise(text: str) -> str:
+    """[U-15, D0-008 S-2] Upper-case the first character and nothing else.
+
+    ``str.capitalize()`` would lower-case the remainder ("LED lamp" -> "Led
+    lamp"). This is not an a/an heuristic and not a vocabulary lookup -- E-2
+    forbids both. A leading character with no upper-case form is left as it is.
+    """
+    return text[:1].upper() + text[1:]
+
+
+def serialize_annotation(annotation: dict, template: str | None = None) -> str:
     """[U-15, L1-TEXT-SERIALIZATION] One annotation into the string CLIP sees.
 
     Byte-identical for a given annotation, which is what the golden-string test
@@ -297,13 +392,19 @@ def serialize_annotation(annotation: dict, template: str = TEXT_TEMPLATE) -> str
     description = _cap(annotation["description"].strip(), MAX_DESCRIPTION_CHARS)
     if description and not description.endswith("."):
         description += "."
-    return template.format(
+    # Resolved HERE, not in the signature. A default argument is bound once at
+    # definition time, so `template=TEXT_TEMPLATE` would keep serializing with
+    # the template this module had at import even after TEXT_TEMPLATE changed --
+    # and text_serialization_id(), which exists to detect exactly that drift,
+    # would have gone on reporting the old identity.
+    return (template or TEXT_TEMPLATE).format(
         description=description,
-        category=_cap(annotation["category"], MAX_CATEGORY_CHARS).rstrip("."),
+        category=_capitalise(
+            _cap(annotation["category"], MAX_CATEGORY_CHARS).rstrip(".")),
         materials=materials,
-        width=annotation["width"],
-        length=annotation["length"],
-        height=annotation["height"],
+        width=_dim(annotation["width"]),
+        length=_dim(annotation["length"]),
+        height=_dim(annotation["height"]),
         placement=placement_phrase(annotation),
     )
 
@@ -329,6 +430,114 @@ def placement_phrase(annotation: dict) -> str:
         return phrase
     parts = [PLACEMENT_PHRASES[(f,)] for f in on]
     return parts[0] + " or ".join([""] + [p.split(" ", 2)[-1] for p in parts[1:]])
+
+
+# [B-3, D0-008 §11.2] The probes the cache identity is computed from. They are
+# fixed synthetic annotations, not corpus records, so the identity does not move
+# when the data does.
+#
+# A SUITE rather than one probe, after adversarial review: a single probe left
+# most of the module invisible to the hash. Changing PLACEMENT_PHRASES[("onFloor",)]
+# moved every floor-standing record's string while text_serialization_id() sat
+# still, so the protocol would have kept certifying a serializer that no longer
+# existed. The suite covers, by construction:
+#
+#   * NO_PLACEMENT_PHRASE (all four flags false);
+#   * EVERY key in PLACEMENT_PHRASES -- so adding, editing or deleting one moves
+#     the identity, including R-3's deleted ("onWall","onCeiling") entry;
+#   * two UNMAPPED combinations, which take the fallback join;
+#   * a description past MAX_DESCRIPTION_CHARS and a category past
+#     MAX_CATEGORY_CHARS, so both caps are exercised;
+#   * four materials against MAX_MATERIALS;
+#   * an integer, a >1 fractional, a <1 fractional and a zero dimension, so the
+#     S-1 formatter is exercised at every magnitude it distinguishes;
+#   * a lower-case and an upper-case-run category, so S-2 is exercised.
+_PROBE_BASE = {
+    "category": "led wall lamp",
+    "description": ("a matte white fixture with a perforated shade and a short "
+                    "articulated arm, mounted flush against the surface it "
+                    "hangs from, finished in a fine powder coat that scatters "
+                    "the light evenly across the wall behind it"),
+    "width": 30.0, "length": 2.5, "height": 0.5,
+    "materials": ["metal", "plastic", "glass", "rubber"],
+    "onCeiling": False, "onWall": False, "onFloor": False, "onObject": False,
+}
+
+
+def serialization_probes() -> list[dict]:
+    """The fixed inputs whose emitted strings define the cache identity."""
+    flag_sets = [
+        (),                                                # NO_PLACEMENT_PHRASE
+        *sorted(PLACEMENT_PHRASES),                        # every mapped case
+        ("onCeiling", "onWall"),                           # fallback join (R-3)
+        ("onCeiling", "onWall", "onFloor", "onObject"),    # longest fallback
+    ]
+    probes = [dict(_PROBE_BASE, **{f: True for f in flags}) for flags in flag_sets]
+    probes.append(dict(_PROBE_BASE, onFloor=True,
+                       category="a very long category name " * 3))
+    probes.append(dict(_PROBE_BASE, onObject=True, category="LED",
+                       width=1000.0, length=1.0, height=0.0))
+    return probes
+
+
+def serialization_contract() -> dict:
+    """Every constant the emitted string depends on, in one canonical mapping.
+
+    The probe suite alone is a SAMPLE, and a sample cannot cover a continuous
+    parameter: adversarial review round 2 showed that moving
+    MAX_DESCRIPTION_CHARS from 160 to 161 changed a real corpus record
+    (020a2199c72a4f8eaea8f1212271a1b0 gained a word) while every probe still
+    truncated at the same word boundary, so the identity did not move and
+    load_protocol() went on accepting the old protocol.
+
+    Hashing the constants closes that: any edit to a declared constant moves the
+    identity whether or not a probe happens to notice. The probes remain, because
+    the constants cannot cover the CODE -- _dim(), _capitalise(), _cap() and
+    placement_phrase() are logic, not values.
+    """
+    return {
+        "family": TEXT_SERIALIZATION_FAMILY,
+        "template": TEXT_TEMPLATE,
+        "max_description_chars": MAX_DESCRIPTION_CHARS,
+        "max_category_chars": MAX_CATEGORY_CHARS,
+        "max_materials": MAX_MATERIALS,
+        "placement_phrases": {"+".join(k): v
+                              for k, v in sorted(PLACEMENT_PHRASES.items())},
+        "no_placement_phrase": NO_PLACEMENT_PHRASE,
+    }
+
+
+def serialization_id_for(serializer) -> str:
+    """[B-3] The cache identity: family name + hash of what `serializer` EMITS.
+
+    A hand-maintained version string is not a cache identity. The retired
+    ``"metafind_v1_natural"`` proved it -- it labelled both the metre-based v1
+    template and the centimetre one, so 5,276 sidecars carry a name that does
+    not identify the transformation that produced them.
+
+    Hashing emitted strings instead makes the identity content-addressed: it
+    moves when the template, the dimension formatter, the capitalisation, either
+    character cap, the materials cap, or any placement phrase moves, whether or
+    not anyone remembers to bump a number.
+
+    It takes the serializer as an argument so a CALLER can bind the identity to
+    the exact callable it will execute, rather than to whatever this module
+    happens to hold. n06 does that: it passes its own imported alias, so the
+    protocol certifies the function that will actually run.
+    """
+    payload = json.dumps(
+        {"contract": serialization_contract(),
+         "emitted": [serializer(probe) for probe in serialization_probes()]},
+        sort_keys=True, ensure_ascii=False,
+    )
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"{TEXT_SERIALIZATION_FAMILY}@{digest[:16]}"
+
+
+def text_serialization_id() -> str:
+    """The identity of THIS module's serializer. `load_protocol()` in n06 refuses
+    to run unless the protocol's recorded identity equals the caller's (B-2)."""
+    return serialization_id_for(serialize_annotation)
 
 
 # The reading travels with the decision, because the report has to state it in
@@ -376,8 +585,16 @@ def build_protocol(paper_clip_train_scope: str, actual_clip_train_scope: str,
         raise ValueError(f"unknown missing_modality {MISSING_MODALITY!r}")
     return {
         "status": "resolved",
-        "text_serialization": TEXT_SERIALIZATION,
+        # [B-2/B-3] The identity is content-addressed and n06 re-derives it from
+        # its own imported serializer before encoding anything; the template and
+        # the probe string travel with it so the artifact DESCRIBES the encoder
+        # instead of merely naming it.
+        "text_serialization": text_serialization_id(),
+        "text_serialization_family": TEXT_SERIALIZATION_FAMILY,
+        "text_serialization_contract": serialization_contract(),
         "text_template": TEXT_TEMPLATE,
+        "text_serialization_probes": [serialize_annotation(p)
+                                      for p in serialization_probes()],
         "image_aggregation": IMAGE_AGGREGATION,
         "paper_clip_train_scope": paper_clip_train_scope,
         "paper_clip_train_scope_basis": CLIP_SCOPE_BASIS[paper_clip_train_scope],
@@ -447,7 +664,7 @@ def main() -> int:
     deviating = (args.paper_clip_train_scope == "trainable"
                  and args.actual_clip_train_scope == "frozen")
     print(f"stage1_encoding_protocol resolved by {decided_by}")
-    print(f"  text_serialization  {TEXT_SERIALIZATION}")
+    print(f"  text_serialization  {text_serialization_id()}")
     print(f"  image_aggregation   {IMAGE_AGGREGATION}")
     print(f"  missing_modality    {MISSING_MODALITY}")
     print(f"  paper CLIP scope    {args.paper_clip_train_scope}")
