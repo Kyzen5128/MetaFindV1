@@ -81,6 +81,35 @@ Keep the Issue and the Decision in separate rows. Do not merge them.
 
 ---
 
+### `DL-006` — `D0-003` resolved: the 3 legacy-v1 residuals are deleted and re-annotated under v5
+
+| | |
+|---|---|
+| **Source** | USER, 2026-08-22, following the 「不准使用舊模型產出的東西」 directive |
+| **Issue / Finding** | Three uids carried `prompt_version 1` records long after the rest of the corpus moved to v3: `6c7db00cc164467ebac356a5ca67368b` (pole dancer), `8a0192eee6fb4140bb3e9696b3dbae5a` (pinecone), `a397b648d6eb48d7909d1ee11235e78f` (train). `D0-003` asked whether to admit, drop, or re-annotate them, and the question was **hard-blocking `D3`**: `splits.py:169-171` admitted all 45,955 while `stage1.py:109` loads the `.npz` with no existence guard, so Stage 1 would raise `FileNotFoundError` mid-epoch |
+| **Why they were stuck — established 2026-08-22, not previously recorded** | **They are not broken assets.** Renders and point clouds exist for all three. They failed the v3 re-annotation on a **validator rule**: `quarantine_n05_annotate.jsonl` records `terminated_by: repair_budget`, `failure_class: MODEL_RECOVERABLE`, and for `6c7db00c…` the exception is verbatim ``synset` = 'pom.pom.n.01' is not a WordNet id of the form "lemma.n.01"`. The model invented a malformed synset, exhausted the repair budget, and the old v1 record was never overwritten |
+| **Why the question dissolves under v5** | **v5 does not ask the model for `synset` at all.** Design Decision 4 replaced it with a deterministic lookup over the 1,156-term LVIS vocabulary (`metafind/data/lvis_synsets.json`, built and cross-checked against detectron2, 0 invented entries). The exact failure mode that produced these three residuals **no longer exists in the v5 pipeline** |
+| **Evidence references** | `data/outputs/logs/quarantine_n05_annotate.jsonl` (3 of its 5 records) · `metafind/data/annotate.py` `PROMPT_VERSION 5` / `VALIDATOR_VERSION 3` / `SCHEMA_VERSION 3` · `metafind/data/lvis_synsets.json` · `D14/ESCALATION.md` "synset table 1,156 / 1,156 … 0 invented entries" · the three records read verbatim before deletion |
+| **Decision / Resolution** | **Delete them.** They are re-annotated under v5 alongside the other 45,952, with no special handling. If v5 fails on any of them, they are quarantined by the ordinary path like any other failure — there is no longer a legacy schema to preserve |
+| **Authority classification** | **USER DECISION.** The supporting facts are OBSERVED DATA (the quarantine records) and OBSERVED IMPLEMENTATION (v5's synset lookup). **This is not resolution-by-mutation**: the deletion follows from the v5 design the user already ratified, and the reason the residuals existed was established from evidence *before* deleting them |
+| **USER final decision** | **`APPROVE`** — 2026-08-22 (「如果可以就刪」, conditional on the question being answerable in the new work; Master established that it is, and recorded the basis above) |
+| **Affected components** | `data/outputs/annotations/` (now **0 files**) · `D0-003` closed · `D3`'s hard blocker cleared · `D2`'s corpus denominator becomes 45,955 uniformly · `annotation_provenance.json` must be rebuilt · `MASTER.md` §8, `INDEX.md` Decision Queue, `CONTEXT.md` §5/§6/§7 all still describe `D0-003` as UNRESOLVED and must be corrected |
+| **Status** | **`USER_APPROVED`** — FINAL ACCEPTED |
+| **Date** | 2026-08-22 |
+
+**Supersedes** the "explicitly NOT resolved: `D0-003`" clauses in `DL-002` and `DL-003`, and the
+`legacy_v1_residual_unresolved` state in `data/outputs/annotation_provenance.json`. Those entries
+are **not deleted** — they were true when written.
+
+**`AC-1` no longer has a subject.** It protected an accepted legacy corpus from accidental
+re-annotation. That corpus was deliberately deleted on 2026-08-22, so AC-1.a ("a bare
+`annotate_run` queues 0 records") is now expected to be **false** — a bare run should queue the
+whole corpus, because that is the intent. `DL-003-A1` must be rewritten to say so rather than
+re-proving a guarantee whose purpose has ended. **Do not treat a bare run queuing 45,955 as a
+regression.**
+
+---
+
 ### `DL-007` — n05 v5 anchors object identity on the Objaverse-LVIS label. **This is a DEVIATION.**
 
 **Registered by Master 2026-08-21 during the re-initialization audit. It had no ledger entry, which was a gap: it is the most scientifically material change made to the pipeline this week.**
