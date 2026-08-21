@@ -84,9 +84,23 @@ Registry: `docs/graph/node_registry.yaml` — 38 nodes, 7 gates.
 
 | Block | State | Engineer | Reviewer |
 |---|---|---|---|
-| **ULIP2** | **ACTIVE** | unassigned | unassigned |
-| **ESSGNN** | **READY — code only, no GPU** | unassigned | unassigned |
-| **INTEGRATOR** | **READY** | unassigned | — |
+| **ULIP2** | **ACTIVE** — milestone 1, the annotator bake-off | unassigned | unassigned |
+| **ESSGNN** | **ON HOLD** — USER decision 2026-08-22, not staffed | — | — |
+| **INTEGRATOR** | **ON HOLD** — USER decision 2026-08-22, not staffed | — | — |
+
+**Only ULIP2 is open.** The USER opens the others; Master does not staff a block on its own.
+When ESSGNN opens, its first work is the Table 2 chain (n15a/b/c, n16, n17, n14) — no GPU, no
+pending decision, and the longest pole in the project.
+
+### ULIP2's milestones — each one accepted by the USER before the next begins
+
+```
+M1  annotator selection    three candidates, 300-500 sampled assets each
+M2  full annotation        45,952 assets, multi-day, runs once
+M3  encode + splits        needs Q-TOWER decided first
+M4  Stage 1 training       the project's first checkpoint
+M5  gallery index + Table 1
+```
 
 Scope, open items and evidence: `workflow/blocks/<BLOCK>/BLOCK.md`.
 

@@ -213,6 +213,6 @@ decision**, not Master's.
 
 | Block | State | Engineer | Reviewer | Next |
 |---|---|---|---|---|
-| `ULIP2` | **ACTIVE** | unassigned | unassigned | the annotator bake-off, then sample validation |
-| `ESSGNN` | **READY — code only** | unassigned | unassigned | `Q-NODETEXT`, then rewrite n08 for the new model |
-| `INTEGRATOR` | **READY** | unassigned | n/a | the deviation registry: LVIS anchoring and n08's model both have no entry |
+| `ULIP2` | **ACTIVE** | unassigned | unassigned | milestone 1 — the annotator bake-off |
+| `ESSGNN` | **ON HOLD — USER decision 2026-08-22.** Not staffed yet | — | — | when the USER opens it: the Table 2 chain (n15a/b/c, n16, n17, n14), which needs no GPU and no decision |
+| `INTEGRATOR` | **ON HOLD — USER decision 2026-08-22.** Not staffed yet | — | n/a | when the USER opens it: the deviation registry, where LVIS anchoring and n08's model both have no entry |
