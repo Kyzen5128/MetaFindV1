@@ -75,10 +75,74 @@ N_VIEWS = 11
 RESOLUTION = 224  # U-04
 PROJECTION = "orthographic"  # U-03a -- implementation choice, not an inference
 CAMERA_LAYOUT = "ulip2_azimuth_orbit_11"  # U-03 -- upstream-informed choice
-# Not derivable from any source. Fixed and versioned so the images are
-# reproducible, and labelled so nobody later reads it as the paper's value.
+
+# [CORRECTED 2026-08-22] The up axis. Objaverse GLBs are Y-up, and renderer
+# version 2 orbited +Z instead, so the camera swept OVER and UNDER every asset
+# rather than around it: a 7.2x-tall lamppost rendered 7x WIDER than tall.
+#
+# Y-up established from the corpus, not assumed. Using LVIS categories as an
+# external label, 1,195 unambiguously tall assets average normalised extents
+# [x .542, y .962, z .488] and are y-longest 1,060/1,195 times; 481 flat assets
+# average [x .944, y .304, z .824] and are y-longest 36/481.
+#
+# Confirmed independently against ULIP-2's released renders: their vase
+# 9f1335d8... holds image height/width = 1.94 across ALL TWELVE views, which is
+# what a rotationally symmetric object orbited about its own vertical axis does.
+# Ours read 0.59 and swung between 0.47 and 1.15.
+UP_AXIS = np.array([0.0, 1.0, 0.0])
+
+# [MEASURED against ULIP-2's released renders] Their background is pure black
+# (corner luminance 0 on every asset checked); version 2 used white. The image
+# tower consumes this directly.
+BACKGROUND_RGBA = [0, 0, 0, 255]
+
+# [FITTED to ULIP-2's released renders] Orthographic half-width. Measured over
+# 8 assets present in both corpora, longest silhouette side divided by 224:
+#
+#     ULIP           mean 0.574   (range 0.405 - 0.701)
+#     xmag 1.65      mean 0.418   -- ours, every asset smaller than ULIP's
+#     1.65 * (0.418 / 0.574) = 1.20
+#
+# The per-asset ratio is NOT constant (1.16 to 1.83), so upstream's framing rule
+# is not a pure rescale of ours and this matches the mean, not the rule. What it
+# does fix is that version 2 threw away more than half the frame: the object
+# occupied 0.418 of it, so most pixels the image tower sees were background.
+#
+# A unit-sphere-normalised asset cannot be clipped while xmag >= 1; 1.20 keeps
+# a 20% margin.
+#
+# IMPLEMENTATION CHOICE with upstream provenance (U-O). MetaFind says nothing
+# about framing, and this number is fitted, not stated. It must never be
+# reported as a paper value.
+ORTHO_HALF_WIDTH = 1.20
+
+# [FITTED to ULIP-2's released renders] Version 2 used ambient 0.4 with a
+# directional intensity of 3.0, which blew out light-coloured assets: a white
+# snowman came back with 59.9% of its foreground pixels at 255 and its hat,
+# eyes and buttons gone, against ULIP's 0.3% for the same asset.
+#
+# Measured over the same 8 assets (mean over 12 views each):
+#
+#                        clipped px   median luminance
+#     ULIP                    0.2%          119
+#     ambient .4 int 3.0      7.5%          118   version 2
+#     ambient .2 int 1.5      0.0%           87   too dark
+#     ambient .5 int 1.5      0.7%          111   chosen
+#
+# Tuning on the single worst asset picked a setting that was 33 luminance
+# points too dark across the other seven. The value below is chosen on all
+# eight, which is why it is not the one the single-asset sweep preferred.
+AMBIENT_LIGHT = 0.5
+DIRECTIONAL_INTENSITY = 1.5
+
+# Not derivable from MetaFind, and not stated by ULIP-2 either -- its paper
+# gives only "12 images, spaced equally by 360/12 degrees". SOLVED from ULIP's
+# released renders instead of chosen: see tools/solve_ulip_elevation.py.
 ORBIT_ELEVATION_DEG = 20.0
-RENDERER_VERSION = 2  # 1 = fibonacci; 2 = ULIP-2-style azimuth orbit
+# 1 = fibonacci; 2 = azimuth orbit about +Z (WRONG up axis, white background,
+# xmag 1.1); 3 = azimuth orbit about the mesh up axis, black background,
+# ULIP-matched framing, frame-corrected mesh.
+RENDERER_VERSION = 3
 
 
 def azimuth_orbit_directions(n: int = N_VIEWS,
@@ -91,15 +155,29 @@ def azimuth_orbit_directions(n: int = N_VIEWS,
     documented upstream method that satisfies MetaFind's stated count.
 
     This is provenance, not proof. The paper says only "11 orthogonal
-    viewpoints"; nothing in it names an orbit, an axis or an elevation. The
-    elevation below is ours and is versioned, not inferred.
+    viewpoints"; nothing in it names an orbit, an axis or an elevation.
+
+    [CORRECTED 2026-08-22] The elevation now rides on ``UP_AXIS``. Version 2
+    put it on the third component while the meshes are Y-up, so the "orbit"
+    tumbled every asset end-over-end. The bug was internal: the function's own
+    name, its variable names and its docstring all describe an azimuth orbit
+    about the up axis, and the arithmetic did something else.
     """
     az = np.arange(n, dtype=np.float64) * (2.0 * np.pi / n)
     el = np.deg2rad(elevation_deg)
-    return np.stack(
-        [np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.full(n, np.sin(el))],
-        axis=1,
-    )
+    # An orthonormal basis with `UP_AXIS` last, so azimuth sweeps the plane the
+    # object stands on and elevation lifts out of it. Written against UP_AXIS
+    # rather than hardcoding index 1: the whole defect was an index written by
+    # hand where a named axis was meant.
+    up = np.asarray(UP_AXIS, dtype=np.float64)
+    up = up / np.linalg.norm(up)
+    seed = np.array([1.0, 0.0, 0.0]) if abs(up[0]) < 0.9 else np.array([0.0, 0.0, 1.0])
+    e0 = np.cross(up, seed)
+    e0 /= np.linalg.norm(e0)
+    e1 = np.cross(up, e0)
+    return (np.cos(el) * np.cos(az))[:, None] * e0 \
+        + (np.cos(el) * np.sin(az))[:, None] * e1 \
+        + (np.sin(el) * np.ones(n))[:, None] * up
 
 
 def fibonacci_directions(n: int = N_VIEWS) -> np.ndarray:
@@ -117,7 +195,7 @@ def fibonacci_directions(n: int = N_VIEWS) -> np.ndarray:
     )
 
 
-def look_at(eye: np.ndarray, target=(0.0, 0.0, 0.0), up=(0.0, 0.0, 1.0)) -> np.ndarray:
+def look_at(eye: np.ndarray, target=(0.0, 0.0, 0.0), up=UP_AXIS) -> np.ndarray:
     """Camera-to-world pose looking from ``eye`` at ``target`` (OpenGL -Z forward)."""
     eye = np.asarray(eye, dtype=np.float64)
     fwd = np.asarray(target, dtype=np.float64) - eye
@@ -147,7 +225,12 @@ def normalised_scene(path: Path):
     """
     import trimesh
 
-    scene = trimesh.load(path, force="scene", process=False)
+    from metafind.data import meshload
+
+    # Same loader as n03, so the render and the cloud cannot end up in
+    # different frames -- see `meshload`'s docstring. The 180 degree yaw
+    # correction is applied here, once, for both nodes.
+    scene = meshload.load_scene(path)
 
     # Drop everything pyrender cannot turn into a mesh, BEFORE it tries.
     # Objaverse GLBs carry Path3D curves and PointCloud geometry that
@@ -254,18 +337,27 @@ def _renderer(resolution: int):
 
 
 def render_views(path: Path, n_views: int = N_VIEWS, resolution: int = RESOLUTION,
-                 projection: str = PROJECTION, layout: str = CAMERA_LAYOUT):
-    """``(images, raw_bbox_extents)`` -- ``n_views`` HxWx3 uint8 arrays."""
+                 projection: str = PROJECTION, layout: str = CAMERA_LAYOUT,
+                 elevation_deg: float = ORBIT_ELEVATION_DEG,
+                 ortho_half_width: float = ORTHO_HALF_WIDTH):
+    """``(images, raw_bbox_extents)`` -- ``n_views`` HxWx3 uint8 arrays.
+
+    ``elevation_deg`` and ``ortho_half_width`` are parameters rather than
+    constants read from module scope so that the sweep which SOLVES them against
+    ULIP's released renders exercises this exact function, not a copy of it.
+    Their defaults are the production values.
+    """
     import pyrender
 
     scene_tm, extents = normalised_scene(path)
-    scene = pyrender.Scene.from_trimesh_scene(scene_tm, bg_color=[255, 255, 255, 255],
-                                              ambient_light=[0.4, 0.4, 0.4])
+    scene = pyrender.Scene.from_trimesh_scene(
+        scene_tm, bg_color=BACKGROUND_RGBA, ambient_light=[AMBIENT_LIGHT] * 3)
     if projection == "orthographic":
-        # xmag/ymag 1.1 leaves a small margin around the unit sphere, and makes
-        # apparent size independent of camera distance -- the property
-        # L1-RENDER-PROJECTION-CONSISTENT asserts.
-        camera = pyrender.OrthographicCamera(xmag=1.1, ymag=1.1, znear=0.01, zfar=100.0)
+        # Apparent size stays independent of camera distance -- the property
+        # L1-RENDER-PROJECTION-CONSISTENT asserts. The half-width itself is
+        # fitted to ULIP's framing; see ORTHO_HALF_WIDTH.
+        camera = pyrender.OrthographicCamera(
+            xmag=ortho_half_width, ymag=ortho_half_width, znear=0.01, zfar=100.0)
     elif projection == "perspective":
         camera = pyrender.PerspectiveCamera(yfov=np.pi / 4.0, znear=0.01, zfar=100.0)
     else:
@@ -273,14 +365,20 @@ def render_views(path: Path, n_views: int = N_VIEWS, resolution: int = RESOLUTIO
 
     images = []
     renderer = _renderer(resolution)
-    for d in LAYOUTS[layout](n_views):
+    # The sphere lattice has no elevation to set; the orbit does. Passed by
+    # keyword so a layout that does not take it fails loudly here rather than
+    # silently ignoring the sweep's argument and returning the default.
+    directions = (azimuth_orbit_directions(n_views, elevation_deg)
+                  if layout == "ulip2_azimuth_orbit_11" else LAYOUTS[layout](n_views))
+    for d in directions:
         pose = look_at(d * 3.0)
         cam_node = scene.add(camera, pose=pose)
         # Light rides with the camera, so every view is lit the same way. A
         # fixed world light makes some views black, which is a valid image
         # and an invalid observation.
         light_node = scene.add(
-            pyrender.DirectionalLight(color=[1.0, 1.0, 1.0], intensity=3.0), pose=pose
+            pyrender.DirectionalLight(color=[1.0, 1.0, 1.0],
+                                      intensity=DIRECTIONAL_INTENSITY), pose=pose
         )
         colour, _ = renderer.render(scene)
         images.append(np.ascontiguousarray(colour[..., :3]))

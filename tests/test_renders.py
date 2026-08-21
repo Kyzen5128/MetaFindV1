@@ -53,21 +53,79 @@ def test_primary_layout_is_the_ulip2_style_orbit():
     is now the variant; this pins which one a default render uses, because the
     two are measurably different (inter-view similarity 0.507 vs 0.442 over 100
     assets, 53 of them differing by more than 0.05).
+
+    [CORRECTED 2026-08-22] This test used to assert that every direction shares
+    a **z** component, and its own comment said so. That is the renderer-v2 bug
+    written into the test: the meshes are Y-up, so an orbit about +Z tumbles the
+    asset end-over-end, and this assertion held while it did. The intent -- one
+    orbit, one elevation -- was always right; the hardcoded index was not.
+
+    Written against ``UP_AXIS`` now, so the assertion follows the axis rather
+    than restating a coordinate someone typed once.
     """
-    from metafind.data.renders import LAYOUTS, ORBIT_ELEVATION_DEG, azimuth_orbit_directions
+    from metafind.data.renders import (LAYOUTS, ORBIT_ELEVATION_DEG, UP_AXIS,
+                                       azimuth_orbit_directions)
 
     assert CAMERA_LAYOUT == "ulip2_azimuth_orbit_11"
     assert LAYOUTS[CAMERA_LAYOUT] is azimuth_orbit_directions
 
     d = azimuth_orbit_directions(N_VIEWS)
     assert np.allclose(np.linalg.norm(d, axis=1), 1.0)
-    # One orbit at one elevation: every direction shares a z component.
-    assert np.allclose(d[:, 2], d[0, 2])
-    assert abs(np.degrees(np.arcsin(d[0, 2])) - ORBIT_ELEVATION_DEG) < 1e-6
-    # Equal azimuth steps of 360/11.
-    az = np.degrees(np.arctan2(d[:, 1], d[:, 0])) % 360.0
+    up = np.asarray(UP_AXIS, dtype=float)
+    up = up / np.linalg.norm(up)
+    # One orbit at one elevation: every direction makes the same angle with UP.
+    lift = d @ up
+    assert np.allclose(lift, lift[0]), "the orbit is not at a single elevation"
+    assert abs(np.degrees(np.arcsin(lift[0])) - ORBIT_ELEVATION_DEG) < 1e-6
+    # Equal azimuth steps of 360/11, measured in the plane PERPENDICULAR to up.
+    e0 = np.array([1.0, 0.0, 0.0]) if abs(up[0]) < 0.9 else np.array([0.0, 0.0, 1.0])
+    e0 = np.cross(up, e0)
+    e0 /= np.linalg.norm(e0)
+    e1 = np.cross(up, e0)
+    az = np.degrees(np.arctan2(d @ e1, d @ e0)) % 360.0
     steps = np.diff(np.sort(az))
     assert np.allclose(steps, 360.0 / N_VIEWS, atol=1e-6)
+
+
+def test_a_tall_asset_renders_tall(tmp_path):
+    """The check that would have caught the v2 up-axis defect, and did not exist.
+
+    EXPECTED-TRUTH SOURCE: the mesh's own geometry. A box three times longer on
+    the up axis than on either horizontal axis must appear taller than it is
+    wide from every viewpoint on a horizontal orbit -- that is what "orbit about
+    the up axis" MEANS, and it needs no renderer, no paper and no upstream
+    artifact to be true.
+
+    Under renderer v2 the same box rendered WIDER than tall in most views: a
+    real 7.2x-tall lamppost measured 0.14 image height/width, which is 1/7.2.
+    """
+    import trimesh as _tm
+    from metafind.data.renders import UP_AXIS, render_views
+
+    up = np.asarray(UP_AXIS, dtype=float)
+    extents = np.where(up > 0.5, 3.0, 1.0)
+    scene = _tm.Scene()
+    scene.add_geometry(_tm.creation.box(extents=extents), node_name="tall")
+    path = tmp_path / "tall.glb"
+    path.write_bytes(scene.export(file_type="glb"))
+
+    images, _ = render_views(path, n_views=N_VIEWS)
+    ratios = []
+    for img in images:
+        # Foreground is whatever differs from the background CORNER, so this
+        # does not care whether the background is black or white. The previous
+        # black/white assumption is exactly what broke the projection test.
+        bg = img[0, 0].astype(int)
+        mask = np.abs(img.astype(int) - bg).max(axis=-1) > 12
+        ys, xs = np.nonzero(mask)
+        assert len(ys) > 50, "the tall box rendered as nothing"
+        ratios.append((ys.max() - ys.min() + 1) / (xs.max() - xs.min() + 1))
+
+    ratios = np.array(ratios)
+    assert (ratios > 1.5).all(), (
+        f"a 3:1 upright box rendered at height/width {np.round(ratios, 2).tolist()}; "
+        "anything at or below 1 means the camera is orbiting the wrong axis"
+    )
 
 
 def test_both_layouts_stay_executable():
@@ -138,7 +196,17 @@ def test_orthographic_size_does_not_change_with_distance(tmp_path):
     persp, _ = render_views(asset, n_views=3, projection="perspective")
 
     def silhouette(img):
-        return int((img.min(axis=-1) < 250).sum())
+        # [CORRECTED 2026-08-22] Was `img.min(axis=-1) < 250`, i.e. "foreground
+        # is anything darker than white". Renderer v3 matched ULIP's BLACK
+        # background, and that predicate then counted every pixel in the frame:
+        # both projections returned 50,176 = 224 x 224 and the test failed
+        # claiming the projection setting was not reaching the camera.
+        #
+        # Foreground is now whatever differs from the background CORNER, which
+        # holds under either background and cannot be broken by the next change
+        # to it.
+        bg = img[0, 0].astype(int)
+        return int((np.abs(img.astype(int) - bg).max(axis=-1) > 12).sum())
 
     # Same scene, same camera positions, different projection: the perspective
     # camera at distance 3 with a 45-degree fov frames far less of the unit
