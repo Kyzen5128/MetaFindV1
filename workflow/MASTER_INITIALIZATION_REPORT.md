@@ -3,6 +3,14 @@
 **Date:** 2026-08-21 · **git HEAD:** `468bbac` (+ uncommitted D14 Phase 1 work)
 **Author:** Master (this session) · **Status:** for USER review. **No scientific implementation was changed.**
 
+> **SUPERSEDED IN PART, same day.** A parallel Master session executed the n03/n04 upstream
+> verification directly and wrote `workflow/tasks/D15_n03-n04-code-audit/FINDINGS.md` at 22:47.
+> It **resolves risk R1** (§3.3, §10): the 180° yaw is **real** but was measured to have **no effect**
+> on the embeddings the pipeline consumes — matched cosine 0.4513 (0°) vs 0.4512 (180°), R@1 98.0% vs
+> 97.5% against ULIP-2's own 99.0%. **The point-cloud corpus does not need regenerating.** The yaw
+> still matters for `n16_compose_scenes`, where assets are placed with real geometry. Read
+> `FINDINGS.md` before acting on §3.3 or §10 of this report.
+
 > Everything below is either (a) re-measured by Master this session, or (b) quoted from a repository
 > document with its source named. Where a document and the disk disagree, the disk is reported and the
 > document is listed in §9 as needing correction.
