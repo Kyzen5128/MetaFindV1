@@ -127,11 +127,22 @@ AI agreement    ≠  evidence
 - **The gallery index is fingerprinted to the checkpoint.** An index built by a drifted encoder
   produces self-consistent wrong numbers with no error anywhere.
 - **`fully_shared` cannot reach Stage 2.**
-- **Point clouds and renders are verified** against official ULIP-2 artifacts and do **not**
-  need regenerating. Evidence: `workflow/blocks/ULIP2/evidence/n03_n04_upstream_verification.md`.
-- **Our assets sit 180° yawed about Y** relative to ULIP-2's released clouds. Measured: this does
-  **not** move the embedding. It **does** matter for scene composition, where assets are placed
-  with real geometry.
+- **Point clouds and renders are BEING REGENERATED.** Corrected 2026-08-22 — the previous text
+  here read *"verified … and do not need regenerating"*, and that is now false. `n04`'s camera
+  orbited **`+Z`** while the meshes are **`Y`-up**, so every asset tumbled instead of turning and
+  the sidecars described an orbit that was never performed. Confirmed three ways: code reading,
+  a falsifiable pixel prediction (H-A `+0.893` against H-B `−0.671`, 120 assets), and ULIP-2's own
+  released renders. Authorised by `U-B` / `U-G` (`DL-011`), which **supersede** `BLOCK.md` §7's
+  no-re-render rule. `S-5` for the corrected configuration is already measured: **R@1 97.2%**
+  against the v2 corpus's 83.2%, n=286, target ULIP-2's own `image_feat`.
+- **The 180° yaw is being corrected in the same pass**, at the mesh-load layer. The old
+  measurement — that the yaw does not move the embedding — still stands as a measurement, but it
+  describes a state that is ending. `Q-YAW-PLACEMENT` shrinks accordingly.
+- **`n07b` was always in the correct frame.** It orbits `+Y`, for a reason its docstring states
+  incorrectly (*"trimesh's z-up"* — `n04` was never z-up). So `n04` and `n07b` have been in
+  **different frames** since both were produced, and `test_the_orbit_uses_n04s_constants_not_copies`
+  is structurally blind to it: it compares two scalars and not the direction. The `n04` correction
+  repairs the mismatch as a side effect.
 
 ---
 

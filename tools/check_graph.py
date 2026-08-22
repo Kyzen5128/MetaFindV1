@@ -374,11 +374,14 @@ dev_ids = {d["id"] for d in spec["boundary"]["deviations"]}
 cond_ids = {d["id"] for d in spec["boundary"].get("conditional_deviations", [])}
 for name in ("README.md", "02_BUILD_STEPS.md"):
     body = (DOCS / name).read_text()
-    listed = set(re.findall(r"\|\s*\*\*(D-[0-9])\*\*", body))
+    listed = set(re.findall(r"\|\s*\*\*(D-[0-9]+)\*\*", body))
     check(f"{name} deviation ids", listed == dev_ids | cond_ids,
           f"lists {sorted(listed)}, graph_spec has {sorted(dev_ids | cond_ids)}")
 root = (DOCS.parents[1] / "README.md").read_text()
-listed = set(re.findall(r"\|\s*\*\*(D-[0-9])\*\*", root))
+# BUG FIX 2026-08-22: the pattern was `D-[0-9]`, single digit. It could not
+# match `D-10` and above at all, so the mirror tables would silently appear to
+# be missing every two-digit id. Latent until D-9..D-12 were registered.
+listed = set(re.findall(r"\|\s*\*\*(D-[0-9]+)\*\*", root))
 check("root README deviation ids", listed == dev_ids | cond_ids,
       f"lists {sorted(listed)}, graph_spec has {sorted(dev_ids | cond_ids)}")
 

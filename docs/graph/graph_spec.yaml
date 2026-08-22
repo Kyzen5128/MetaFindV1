@@ -226,6 +226,78 @@ boundary:
         Affects the same surface as D-5: all of Table 2 and Table 3's scene
         columns. Table 1 never runs the planner.
 
+    # REGISTERED 2026-08-22 by Master, on the Integrator's behalf, under USER
+    # decision U-Z. INTEGRATOR is ON HOLD (DL-009) and opening a block to write
+    # four registry lines was not warranted. All four already existed as facts;
+    # what was missing was the id. Debt D-2/FU-A -- check_graph compares ids and
+    # never reads `what:` -- is why they passed every gate while unregistered.
+    - id: D-9
+      what: "n05 supplies the Objaverse-LVIS ground-truth category to the annotator as an anchored identity; the model may refine downward but not replace laterally"
+      why: >
+        DL-007, design approved by the user 2026-08-21. The previous annotator
+        collapsed onto high-frequency priors: 3,036 categories against LVIS's
+        1,156, top-20 share 22.3% against the truth's 7.1%, and agreement with
+        LVIS at 29.0%. Re-rendering was measured NOT to be the cause --
+        correlation(best-view occupancy, LVIS agreement) = +0.054.
+      impact: >
+        The paper has the VLM GENERATE the category: 2methdology.tex:28 and
+        neurips_2025.tex:100 both say GPT-4o produces the structured annotations,
+        and Figure 2's caption says the VLM generates the attributes. Feeding the
+        dataset label in is a departure and must NEVER be described as
+        paper-faithful. Affects every annotation record, every Stage 1 text
+        embedding, and every text-conditioned column of Table 1.
+        UNRESOLVED: D0-010's evidence audit was never performed -- the choice was
+        made by design ratification. USER decision U-AB requires that audit
+        (ULIP2 W-6) to complete BEFORE the full annotation run.
+    - id: D-10
+      what: "Stage 1 contrastive negatives are one GPU's batch, against ULIP-2's 512 gathered across 8 GPUs"
+      why: >
+        F-N10-1. UPSTREAM FACT, /home/kyzen/upstream/ULIP models/losses.py:38-40 --
+        ULIP calls all_gather_batch([pc_embed, text_embed, image_embed]) before
+        forming the contrastive matrix, so 64 per GPU x 8 GPUs = 512 negatives per
+        step. This machine has one RTX 5090. Gradient accumulation does NOT close
+        the gap: each micro-batch still forms its own contrastive matrix.
+      impact: >
+        Negative count is a first-order term in a contrastive objective, not a
+        tuning detail. A candidate explanation for any shortfall against the
+        paper's Table 1. Its measured value is recorded once the batch size is
+        sized to the card -- it is measured, never chosen.
+    - id: D-11
+      what: "n04 renders on a WHITE background; ULIP-2's released renders are black"
+      why: >
+        USER decision U-W, 2026-08-22. Measured, not assumed: against ULIP-2's own
+        released image_feat over the full 286-asset overlap, white reaches R@1
+        97.2% / matched cosine 0.9141 / gap 0.3689 and black 95.8% / 0.8783 /
+        0.3406. Same sign and magnitude reproduced at n=100. S-5 is the criterion
+        this milestone staked the render correction on, and a criterion cannot be
+        authoritative when it agrees and ignored when it does not.
+      impact: >
+        The n04 corpus and every image embedding taken from it. NOT comparability
+        with the paper, which says nothing about background. This is a deliberate
+        divergence from upstream on upstream's own metric.
+    - id: D-12
+      what: "COLOR_0 is withdrawn from the `texture` base class, against glTF 2.0, which defines it as a linear multiplier on the full base colour"
+      why: >
+        R-12. glTF 2.0 Metallic-Roughness: COLOR_0 "acts as an additional linear
+        multiplier to base color", and base color is baseColorFactor x
+        baseColorTexture -- so the specification covers the texture class.
+        Measured over the FULL ULIP overlap for that class, n=37: modulating
+        darkens 37/37, mean -0.2076 luminance, and cosine to ULIP's own cloud
+        moves 0.9005 -> 0.8980.
+      impact: >
+        The rgb channel of ~995 texture-class assets, consumed by the ULIP-2 point
+        tower. SAMPLER_VERSION 6.
+        CAUTION, recorded rather than buried: 16/37 wins is INSIDE the noise for
+        37 coin flips (18.5 +/- 3) and no paired significance test was run. R-12's
+        own text says "the darkening is certain; therefore worse is not". The
+        carve-out rests on R-11's default-to-upstream-agreement rule, not on a
+        significant measurement -- and R-8 established that upstream publishes NO
+        cloud-colouring procedure at all, so there is no upstream BEHAVIOUR to
+        agree with, only its artifact. It may never be written up as
+        "what ULIP-2 did".
+        The wider COLOR_0 repair is NOT a deviation: it moves toward upstream.
+        P1 (discarding COLOR_0) was measurably worst at n=130 and is out.
+
   conditional_deviations:
     - id: D-1
       what: "ViT-bigG-14 stays frozen; only the 3D encoder and fusion train"

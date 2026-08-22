@@ -64,6 +64,10 @@ scratch/             參考用的雜項腳本
 | **D-5** | I-Design 中所有設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` |
 | **D-6** | 對 I-Design 的**行為性**修改（patch 02／03）：偏離的是**公開實作**，不是「論文所做的事」 |
 | **D-7** | I-Design 的 **JSON-constrained decoding 未重現**。補充材料 §7：*"All agents utilize GPT-4's JSON mode to restrict outputs exclusively to valid JSON"*，而我們的 vLLM 沒開任何 guided decoding。**與 D-5 不同**——D-5 是誰回答，D-7 是回答受不受結構約束。Qwen 因此**可能吐出結構上不合法的 JSON，GPT-4 在那個模式下不可能**，那會落進 Engineer 的 schema 驗證重試迴圈。分開編號是因為兩者可獨立修復：開了 guided JSON 就能退掉 D-7，D-5 原封不動 |
+| **D-9** | **n05 以 Objaverse-LVIS 真值類別錨定標註身分**（`DL-007`，2026-08-22 登記）。論文是讓 VLM **產生**類別（`2methdology.tex:28`、`neurips_2025.tex:100`），**餵標籤進去是 departure，不得寫成 paper-faithful**。`D0-010` 證據稽核從未執行；`U-AB` 要求全量標註前補完 |
+| **D-10** | **Stage 1 對比負樣本只有單卡 batch**，ULIP-2 是 8 卡 `all_gather_batch` 的 512（`F-N10-1`）。**梯度累積補不回來**。負樣本數是對比目標的一階項，是 Table 1 落差的候選解釋 |
+| **D-11** | **n04 渲染背景為白色**，ULIP-2 官方為黑色（`U-W`，USER 決定）。量測依據：對 ULIP-2 自有 `image_feat`，n=286，白 R@1 97.2% vs 黑 95.8%。不影響與論文的可比性 |
+| **D-12** | **`COLOR_0` 從 `texture` 類撤回**，牴觸 glTF 2.0 的線性乘子定義（`R-12`）。n=37 全數變暗（−0.2076），但**勝負 16/37 落在雜訊內、未做顯著性檢定**。依據是 `R-11` 的預設對齊規則；`R-8` 已確立上游**未發布任何點雲上色程序**，故**不得寫成「ULIP-2 就是這樣做的」** |
 
 > **兩次更正記在這裡。**
 > 早期這張表寫「D2＝frozen backbone 全部預先快取、訓練只在 1280-d 向量上」——

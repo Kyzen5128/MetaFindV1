@@ -131,6 +131,10 @@ Full record with evidence: `workflow/DECISION_LEDGER.md`.
 | `DL-007` | n05 v5 anchors object identity on the Objaverse-LVIS label. **A DEVIATION** — *awaiting USER* |
 | `DL-008` | The annotator is chosen by a lightweight bake-off. **Procedure approved; the winner is PENDING USER** |
 | `DL-009` | Execution order: `ULIP2` runs to completion before `ESSGNN` opens |
+| `DL-010` | MetaFind silent + component unmodified → **the official upstream implementation IS the reference** |
+| `DL-011` | The ULIP2 session's USER decisions `U-A` … `U-AC`, ratified as a block. Includes **`U-A` no post-processing repairs** (project-wide) and the **`n03`/`n04` re-run authorisation**, which supersedes `BLOCK.md` §7 |
+| `DL-012` | Deviations **`D-9` … `D-12`** registered under `U-Z`. Gate regex fixed — it could not see two-digit ids |
+| `DL-013` | The `texture` carve-out (`D-12`) reverses a USER-confirmed choice on an inconclusive measurement — **`AWAITING_USER_REVIEW`** |
 
 > **`DL-006` is used twice.** Two different decisions share the id. Always cite it by date.
 > Registered at the top of `DECISION_LEDGER.md`. `DL-003-A1` is `PREPARED, NOT IN FORCE`.
@@ -146,11 +150,14 @@ Full record with evidence: `workflow/DECISION_LEDGER.md`.
 
 ### Deviations
 
-Seven registered (`D-2`…`D-8`) plus one conditional (`D-1`, not activated), in
-`docs/graph/graph_spec.yaml`.
+**Eleven registered** (`D-2`…`D-12`) plus one conditional (`D-1`, not activated), in
+`docs/graph/graph_spec.yaml`. Four were added 2026-08-22 under `U-Z` (`DL-012`): `D-9` LVIS
+anchoring · `D-10` contrastive negatives · `D-11` white background · `D-12` the `COLOR_0`
+texture carve-out.
 
-**Two gaps, both open:** LVIS category anchoring has no registry entry, and n08's LLM belongs to
-no deviation id since `DL-005` split `D-2`. Integrator owns both.
+**Still open:** n08's LLM belongs to no deviation id since `DL-005` split `D-2`. ESSGNN's, and
+that block is on hold. **Debt `D-2`/`FU-A` is not discharged** — the gate still compares ids and
+never reads the `what:` text, so a deviation whose description goes false passes silently.
 
 ---
 
@@ -158,7 +165,7 @@ no deviation id since `DL-005` split `D-2`. Integrator owns both.
 
 | ID | Question | Owner |
 |---|---|---|
-| `Q-CATEGORY` | What role does the Objaverse-LVIS ground-truth category play in n05 — prompt input, cross-check, the value itself, or recorded but unused? | ULIP2 |
+| ~~`Q-CATEGORY`~~ | **DISCHARGED 2026-08-22 (`R-6`).** It and `DL-007`'s `D0-010` are the same question, listing the identical four options. The true state is **decided, implemented, unaudited** — not "uninvestigated". `U-AB` requires the missing evidence audit (ULIP2 `W-6`) before the full annotation run | — |
 | `Q-TOWER` | `tower_sharing`: `shared_backbone_separate_fusion` / `fully_shared` / `fully_separate`. Determines whether Stage 2 can freeze the gallery at all | INTEGRATOR |
 | `Q-BUILDMODEL` | The Stage 1 trainer builds its model from raw protocol dicts, not from the runtime config, and passes one fusion object to both towers. `fully_separate` is therefore unimplementable as written | INTEGRATOR |
 | `Q-ESSGNN-AXIS` | Whether the coupling between `coord_feat` and `architecture_family` prevents isolating `coord_feat` as an ablation axis | ESSGNN |
@@ -201,6 +208,35 @@ ULIP2 annotator bake-off  (sample only, 300-500 assets per candidate)
 
 **The longest pole is not on the GPU.** Table 1 and Table 2 together are roughly ten
 unimplemented nodes, and none of them needs a trained model to be designed and unit-tested.
+
+---
+
+## 7b. ULIP2 M1 — where it actually is, 2026-08-22 18:00
+
+**Master's earlier W-1…W-8 list was written from a stale picture and is superseded by
+`SPEC_M1_corpus_and_annotator.md`.** M1 is **corpus correction AND annotator selection**, not the
+bake-off alone.
+
+```
+DONE and independently verified   n04 up-axis defect found, confirmed 3 ways
+                                  render corrections implemented, S-5 97.2% (was 83.2%)
+                                  COLOR_0 root cause found; P1 measurably worst at n=130
+                                  two is_complete() blockers fixed, verified by execution
+                                  R-13's four release conditions PASS, new test non-vacuous
+
+NOT DONE                          nothing regenerated. data/outputs/ still holds v2
+                                  no model has ever been loaded
+                                  compressed-tensors absent -> the "READY" QAT arm cannot load
+
+PAUSED                            M1's bake-off, by USER decision, until the n04 finding
+                                  is adjudicated -- width_axis and identity_confirmed are
+                                  contaminated by tumbled renders, so all three arms
+                                  would return noise and a BUG would read as
+                                  "this criterion has no discriminating power"
+```
+
+**Next physical step is a 3.3-hour `n03` + `n04` regeneration.** The block reports everything
+cleared for it except `DL-013`.
 
 ---
 

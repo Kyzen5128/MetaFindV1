@@ -111,6 +111,103 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-013` — the `texture` carve-out reverses a USER-confirmed choice on an inconclusive measurement. **Needs the USER.**
+
+**Raised by Master at integration review, 2026-08-22. Reported as a FINDING; no remedy is proposed and nothing was reverted.**
+
+| | |
+|---|---|
+| **Issue / Finding** | The USER confirmed **`P3`** — full glTF 2.0 conformance, `COLOR_0 × texture × factor`, ~1,130 geometries — at `R-10`'s ASK, and `U-AA` chose the specification as the authority. **`R-12` then withdrew the `texture` class from `P3`**, which is ~995 of those assets. That narrowing is implemented, tested and shipping as deviation `D-12`. **Master can find no `U-` code approving it** |
+| **What the measurement actually says** | `R-12A`, texture class only, the **full** ULIP overlap n=37: `COLOR_0` off reaches cosine **0.9005**, `P3` reaches **0.8980**. `P3` wins on **16 of 37**. 37 fair coin flips give 18.5 ± 3, so **16/37 is inside one sigma**, and **no paired significance test was run.** The Reviewer states this itself: *"the darkening is certain; 'therefore worse' is not"* |
+| **What the narrowing actually rests on** | `R-11` — the USER's ruling that ULIP-2 is the reference architecture and agreement with it is the default. `R-12`'s own text: *"What decides it is `R-11`, not the cosine"* |
+| **Why Master does not think `R-11` reaches this** | **`R-8` established that upstream publishes no cloud-colouring procedure at all** — `/home/kyzen/upstream/ULIP` @ `95d480fe` swept for `COLOR_0`, `trimesh`, `.glb`, `sample_surface`: zero hits; `ulip2_source/appendix.tex:10` delegates to OpenShape; OpenShape publishes no converter either. So there is **no upstream *behaviour* to agree with** — only its *artifact*, and the artifact does not discriminate at n=37. `R-11` says to default to agreement where agreement is measurable. Here it is not |
+| **What is NOT in dispute** | The wide repair is right and well-evidenced. `P1` — discarding `COLOR_0` — was measurably worst at n=130 (0.8800 against 0.9043 / 0.9004, 27 wins against 103) and is correctly out. `R-13`'s four release conditions all PASS, the new test is verified non-vacuous, and the control group is bit-identical at n=60. **This entry is about one class and one ratification step, not about the `COLOR_0` work** |
+| **Why it matters enough to raise** | It buys a **registered deviation from a published specification** (`D-12`) in exchange for a difference its own author calls noise, and it silently narrows a decision the USER made. Under `U-A` — *fix it once, properly* — the cheapest moment to settle this is **before** the 3.3-hour regeneration freezes it into 46,052 clouds |
+| **Master's assessment** | The block's work is careful and its reasoning is on the record. This is not a rogue change; it is a material choice ratified one level below where `BLOCKS.md` puts it. **Dataset-preprocessing semantics reaching the whole corpus is USER-material** |
+| **Options, for the USER — Master recommends neither** | **A.** Keep `D-12`. The texture class stays unmodulated; the deviation from glTF 2.0 stands as registered. **B.** Restore full `P3` as originally confirmed; `D-12` is withdrawn from the registry and ~995 texture assets are modulated. Either way `R-8`'s prohibition binds: **it may never be written up as "what ULIP-2 did"** |
+| **Not verified, and worth knowing before choosing** | `pointclouds.py`'s `GLTF_DEFAULT_BASE_COLOR = 1.0` is marked `INFERENCE` — the glTF schema is not on disk and `material.pbrMetallicRoughness.schema.json` has not been read. **8,853 `gltf_default` assets rest on that value.** Measured support exists (ULIP 35.3% pure-white against ours 35.1%, all-white 19/50 both sides) but that is `OBSERVED DATA`, not the specification |
+| **Status** | **`AWAITING_USER_REVIEW`** — implemented and shipping; **not** ratified |
+| **Date** | 2026-08-22 |
+
+---
+
+### `DL-012` — four deviations registered: `D-9` … `D-12`
+
+| | |
+|---|---|
+| **Source** | USER decision **`U-Z`** — *"Master registers the four un-id'd deviations on the Integrator's behalf"* — `DL-009` holds `INTEGRATOR` closed and opening a block to write registry lines was not warranted |
+| **Issue / Finding** | Four real deviations had **no id in `docs/graph/graph_spec.yaml`**. `check_graph.py:373-383` compares deviation **ids only and never reads the `what:` text** (debt `D-2`/`FU-A`), so all four passed every gate silently. The ULIP2 Engineer escalated this three times and correctly refused to assign ids itself |
+| **Registered** | **`D-9`** LVIS category anchoring (`DL-007`) · **`D-10`** contrastive negatives, one GPU's batch against ULIP-2's gathered 512 (`F-N10-1`) · **`D-11`** white render background against upstream's black (`U-W`) · **`D-12`** `COLOR_0` withdrawn from the `texture` class, against glTF 2.0 (`R-12`) |
+| **Latent gate bug found and fixed while doing it** | `check_graph.py`'s pattern was `D-[0-9]` — **single digit**. It could not match `D-10` or above **at all**, so every two-digit id would have read as missing from the mirror tables. Never reachable with eight single-digit deviations; reachable the moment a ninth was added. Changed to `D-[0-9]+`. Classified **bug fix**: the checker now sees what it always claimed to check |
+| **Mirrors synchronised** | `docs/graph/README.md`, `docs/graph/02_BUILD_STEPS.md`, root `README.md` — the three the gate reads. Verified: all three list exactly the twelve ids `graph_spec.yaml` declares |
+| **`U-01` is deliberately NOT registered** | 46,052 against the paper's *"approximately 48,000"* is carried as a **stated Table 1 limitation**, per the engineer's recommendation `O-2`. It is a corpus-availability fact, not a chosen divergence |
+| **Caution carried into `D-12`'s own entry** | `R-12`'s texture carve-out rests on `R-11`'s default-to-upstream-agreement rule, **not** on a significant measurement: 16/37 wins is inside the noise for 37 coin flips and no paired test was run. `R-8` further established upstream publishes **no** cloud-colouring procedure, so there is no upstream *behaviour* to agree with — only its artifact. Recorded in the registry text so a later reader cannot mistake it for a settled result. **See `DL-013`** |
+| **Authority classification** | The four deviations are pre-existing facts; **registering them is bookkeeping that follows from `U-Z`**, not a new choice. The regex change is a bug fix |
+| **Verification** | `tools/check_graph.py` → 2275 checks, all pass · id sets compared programmatically across all four files |
+| **Status** | **`USER_APPROVED`** — executed under `U-Z` |
+| **Date** | 2026-08-22 |
+
+**Debt `D-2` / `FU-A` is NOT discharged.** The checker still compares ids and never reads `what:`,
+so a deviation whose *description* has gone false still passes silently. Unassigned.
+
+---
+
+### `DL-011` — the ULIP2 session's USER decisions, ratified as a block: `U-A` … `U-AC`
+
+| | |
+|---|---|
+| **Source** | USER, in conversation with the ULIP2 Engineer and Reviewer, 2026-08-22. Recorded verbatim in `workflow/blocks/ULIP2/HANDOFF.md`, which both roles asked Master three times to ledger |
+| **Why one entry and not thirty** | They are one continuous decision thread from one session on one milestone. Splitting them would imply they were weighed separately. **The HANDOFF entries are the record**; this entry ratifies them and pulls out the ones with project-wide reach |
+| **Status** | **`USER_APPROVED`** — the USER's own wording is in `HANDOFF.md` and governs |
+| **Date** | 2026-08-22 |
+
+**Project-wide, not ULIP2-local:**
+
+| | Decision |
+|---|---|
+| **`U-A`** | **No post-processing repairs.** A defect is fixed at its source, once, properly. The codebase is meant to be used by other people. 「要修就一次修好」. **A standing project rule, not an n04 decision** |
+| **`U-O`** | MetaFind states it → follow MetaFind. MetaFind is silent → follow ULIP-2. **This is the same rule the USER gave Master independently as `DL-010`**; the two converge and `DL-010`'s three-case discriminator is the operative form. A choice made under it is an `IMPLEMENTATION CHOICE` with upstream provenance, **never a `PAPER FACT`** |
+| **`U-Z`** | Master registers the un-id'd deviations while `INTEGRATOR` is held → executed as **`DL-012`** |
+| **`U-Y`** | The multi-day `n05` run carries a **circuit breaker** whose threshold is **measured by the bake-off**, never invented now. Asked three times before it was answered |
+
+**Corpus correction — `n03` / `n04` re-run AUTHORISED, overriding `BLOCK.md` §7:**
+
+| | Decision |
+|---|---|
+| **`U-B`** | **`n04` re-render authorised.** The `+Z`-up camera is fixed at source and the corpus regenerated. A 100-asset A/B ran first |
+| **`U-G`** | The 180° yaw is fixed **at the mesh-load layer**, so `n03` (46,052) re-runs too |
+| **`U-W`** | Background reverts to **white** → deviation `D-11` |
+| **`U-X`** | `ORTHO_HALF_WIDTH` reverts to **1.10** |
+| **`U-N`** | All three render differences fixed: orbit axis, background, framing |
+| **`U-AA`** | `COLOR_0` settled on the glTF 2.0 specification rather than by buying ~20 GB of further ULIP shards |
+| **`U-H`** | The white-point-cloud question `F-N03-1` is settled by differential against ULIP's clouds **before** the re-run, so any bug is fixed in the same pass |
+
+> **`BLOCK.md` §7's *"renders are read-only, no re-render"* is SUPERSEDED for `n03`/`n04`.**
+> The prohibition rested on `evidence/n05_annotation_defect.md` Evidence 2, which measured
+> **occupancy** (`correlation = +0.054`). **Orientation was never measured.** The prohibition was
+> not wrong when written — it answered a different question.
+
+**Annotation and training protocol:**
+
+| | Decision |
+|---|---|
+| **`U-E`** | **11 views stands.** The engineer objected once to a change to 12; MetaFind states 11 twice. Objection accepted |
+| **`U-I`** / **`U-P`** | Bake-off sample is **100 assets per arm**, 4 strata × 25: ordinary · rare LVIS class · low visibility · extreme aspect |
+| **`U-Q`** | **20 assets hand-adjudicated by the USER**, shared across all arms. **The only ground truth in the whole bake-off** |
+| **`U-L`** | **Two-turn identity check** — turn 1 blind, turn 2 with the LVIS anchor. `identity_confirmed` becomes **computed**, not asked. This is a direct answer to `IC-1`, the rubber-stamp risk Master raised |
+| **`U-M`** / **`E-10`** / **`E-11`** | Multiple description candidates re-ranked by an **independent** CLIP (`openai/clip-vit-large-patch14`), never `ViT-bigG-14`, which `n06` encodes with — ranking and encoding with one model is circular |
+| **`U-T`** | **Fusion default becomes `transformer`.** `fusion.py` recorded `U-13` as *"the paper never says which"* — **it does**: `3experiments.tex:143`, *"the final selected Transformer"*. A false `UNKNOWN` corrected back to a **PAPER FACT** |
+| **`U-U`** | **Do not invent `lr` / `epochs` / `batch_size`. Measure them.** 72/8/20, the paper's 20% test untouched. The paper has **no implementation-details paragraph at all** |
+| **`U-V`** | `n06` stores all 11 per-view vectors alongside the mean. GPU cost zero, ~2.6 GB storage |
+| **`U-S`** | Widen the validator's dimension floor. **103 of 45,955** currently have an empty feasible height band — posters and decals, real data |
+| **`U-AB`** | **`W-6` — the missing `D0-010` evidence audit — must complete before `M2`** |
+
+**`Q-CATEGORY` is discharged, not open.** `R-6` established it and `DL-007`'s `D0-010` are the
+same question, listing the identical four options. The true state is **decided, implemented,
+unaudited** — not *"no investigation has been done"*. `U-AB` supplies the missing audit.
+
+---
+
 ### `DL-010` — where MetaFind is silent on a component it did not modify, the official upstream implementation **is** the reference
 
 | | |

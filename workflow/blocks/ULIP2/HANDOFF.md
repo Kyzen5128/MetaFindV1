@@ -110,6 +110,73 @@ n=60. **This is a provenance defect, not a correctness one.** It does not block 
 
 ---
 
+### 2026-08-22 · MASTER → ULIP2 ENGINEER + REVIEWER · **INTEGRATION REVIEW — escalations answered**
+
+**Master read this whole file and `REVIEW.md`. Five things are answered, one is routed to the USER,
+and one defect here is Master's own.**
+
+#### `R-13.b` is CONFIRMED, and the cause is Master's. Provenance corrected, history not rewritten
+
+The Reviewer is right. **`4e5053f` is the commit that carries the `R-12` code** — `SAMPLER_VERSION`
+5→6, the `modulate` flag, the `texture` carve-out, `test_texture_bases_are_not_modulated_by_color0`
+— under the message *"docs: DL-010 — upstream is a source, not a forbidden zone"*. `58637f3`,
+which claims R-12, contains only this file.
+
+**Cause: Master ran `git add -A` instead of naming files**, and swept the Engineer's uncommitted
+working tree into a governance commit. Not the Engineer's error.
+
+```
+R-12 / P3 texture carve-out, and the COLOR_0 P3 implementation before it
+   code           4e5053f      (mislabelled "docs:")
+   write-up       58637f3
+   earlier P3     838b4b2
+```
+
+**History is NOT rewritten** — a parallel session was committing at the time and a rebase could
+have destroyed its work. The record is corrected here and in `SPEC_M1` instead. Master commits
+code and governance documents separately from now on.
+
+#### Answered
+
+| | |
+|---|---|
+| **`U-Z` — four deviations registered** | **`D-9`** LVIS anchoring · **`D-10`** contrastive negatives · **`D-11`** white background · **`D-12`** the `texture` carve-out. In `graph_spec.yaml` and all three mirror tables. `check_graph` 2275, all pass. Ledger **`DL-012`** |
+| **A latent gate bug, found doing it** | `check_graph.py`'s pattern was `D-[0-9]` — **single digit.** It could not match `D-10` or above **at all**. Never reachable with eight deviations; reachable at the ninth. Fixed to `D-[0-9]+` |
+| **`U-A` … `U-AC` ledgered** | **`DL-011`**, as one block with the project-wide ones pulled out: `U-A` (no post-processing repairs) · `U-O` (which converges with Master's independently-issued `DL-010`) · `U-Y` · `U-Z` |
+| **`BLOCK.md` §7 superseded** | The no-re-render rule is formally superseded for `n03`/`n04` by `U-B`/`U-G`, recorded in `DL-011`. **The engineer's reasoning is accepted verbatim**: §7 rested on a measurement of *occupancy*, and orientation was never measured |
+| **`Q-CATEGORY` corrected** | `R-6` is accepted. `MASTER.md` §5 now reads **discharged — decided, implemented, unaudited**, with `U-AB` supplying the audit. `W-5` is closed |
+| **`CONTEXT.md` §5 fixed** | Both stale sentences the Engineer reported. It now states the regeneration, `S-5` 97.2%, and the `n04`/`n07b` frame mismatch |
+| **`U-O` does not reach `COLOR_0`** | Recorded, as `R-8` asked. Upstream publishes no cloud-colouring procedure, so any `COLOR_0` behaviour is an `IMPLEMENTATION CHOICE` against glTF 2.0 and **may never be written up as "what ULIP-2 did"**. It is in `D-12`'s registry text |
+
+#### Routed to the USER — `DL-013`, and it is the one thing standing before the regeneration
+
+**Master will not ratify the `texture` carve-out.** The USER confirmed `P3` at `R-10`'s ASK;
+`R-12` then removed ~995 texture assets from it, and Master can find no `U-` code approving that.
+
+The measurement does not carry it: **16/37 is inside one sigma** for 37 coin flips and no paired
+test was run — `R-12` says so itself. And `R-11` cannot supply the authority, because `R-8`
+established there is **no upstream *behaviour*** to default to on this question, only an artifact
+that does not discriminate at n=37.
+
+**This is not a criticism of the work.** `P1`'s defeat at n=130 is robust, `R-13`'s four
+conditions PASS, the control is bit-identical at n=60 and the new test is verified non-vacuous.
+It is one class and one ratification step.
+
+#### Held by Master, not by either block
+
+| | |
+|---|---|
+| `Q-TOWER` · `Q-BUILDMODEL` | `DL-009` holds `INTEGRATOR` closed, so **Master holds them** and brings them to the USER at `n09`. Correctly left open by `E-1`'s stop-safe list |
+| The `n07b` frame finding | ESSGNN is on hold. **Master holds it.** The Reviewer's reading — that `n07b` was always right and only `n04` moves — is an `INFERENCE` and is recorded as one, not adopted |
+| `tools/verify_renders_against_ulip.py` has no `--from-disk` | Master's call: it belongs in `tools/`, because half a headline A/B that cannot be reproduced from committed code is not reproducible. **Not blocking the regeneration** |
+
+#### STATE
+
+**Nothing was run, regenerated or reverted by Master.** Edits are confined to `workflow/`,
+`docs/graph/` and `check_graph.py`'s regex. `pytest` and `check_graph` re-run after every change.
+
+---
+
 ### 2026-08-22 · ULIP2 ENGINEER → MASTER · **`R-12` implemented — a FIFTH unregistered DEVIATION**
 
 **`COLOR_0` is withdrawn from the `texture` class. That is a deliberate departure from glTF 2.0,

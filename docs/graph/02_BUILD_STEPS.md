@@ -26,6 +26,10 @@
 | **D-5** | I-Design 中**所有**設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` |
 | **D-6** | 對 I-Design 的**行為性**修改（patch 02／03） |
 | **D-7** | I-Design 的 **JSON-constrained decoding 未重現**。補充材料 §7：*"All agents utilize GPT-4's JSON mode to restrict outputs exclusively to valid JSON"*，而我們的 vLLM 沒開任何 guided decoding。**與 D-5 不同**——D-5 是誰回答，D-7 是回答受不受結構約束。Qwen 因此**可能吐出結構上不合法的 JSON，GPT-4 在那個模式下不可能**，那會落進 Engineer 的 schema 驗證重試迴圈。分開編號是因為兩者可獨立修復：開了 guided JSON 就能退掉 D-7，D-5 原封不動 |
+| **D-9** | **n05 以 Objaverse-LVIS 真值類別錨定標註身分**（`DL-007`）。論文是讓 VLM 產生類別，**不得寫成 paper-faithful**。`D0-010` 稽核未做，`U-AB` 要求先補完 |
+| **D-10** | **對比負樣本 = 單卡 batch**，上游 8 卡 all-gather 為 512（`F-N10-1`）。梯度累積補不回來 |
+| **D-11** | **渲染背景白色**，上游是黑色（`U-W`）。白在 `S-5` 上勝出 97.2% vs 95.8%，n=286 |
+| **D-12** | **`COLOR_0` 從 `texture` 類撤回**，牴觸 glTF 2.0（`R-12`）。n=37 全部變暗，但 16/37 在雜訊內；靠的是 `R-11` 規則而非顯著量測 |
 
 **D-6 改的是「產出什麼」，不是「誰產出」。** patch 02／03 會正規化佈局引用、
 丟棄懸空引用、合併重複 id、給修正迴圈上限、每次重試換 seed、耗盡時放棄場景 ——
