@@ -1178,3 +1178,455 @@ untouched.** Recorded as an `IMPLEMENTATION CHOICE` that **deliberately departs 
 the texture class**, because ULIP-2's artifact is the higher authority for this pipeline (`R-9`,
 `R-11`) and it does not support the spec-conforming variant. **That departure needs a registry
 id** — a fifth, and it is the Integrator's under `U-Z`.
+
+---
+
+## R-13 — release checks on the `R-12` narrowing. **PASS.**
+
+**Reviewer, 2026-08-22.** Working tree at `58637f3`, clean, `SAMPLER_VERSION = 6`.
+Baseline produced by patching `meshload.color0_by_geometry` to `{}` — the production code with no
+`COLOR_0` present. Nothing inside `_colourise` was touched.
+
+| # | Condition | n | Result |
+|---|---|---|---|
+| 1 | `texture` **with** `COLOR_0` → must now be identical to `COLOR_0` off | **37** | `max abs delta = 0.0000000000`, changed 0/37 — **PASS** |
+| 2 | control, **no** `COLOR_0` → must be identical | **60** | `max abs delta = 0.0000000000` — **PASS** |
+| 3 | `flat` **with** `COLOR_0` → must **still** be modulated | 60 | 52/60 changed — **PASS**, see below |
+| 4 | `gltf_default` **with** `COLOR_0` → still modulated | 60 | 59/60 changed — **PASS**, see below |
+
+Condition 1 is the one that matters and it is measured on the **full** ULIP-overlapping texture
+population, not a sample. The Engineer's own check was 12 assets; this is 37 + 60.
+
+### The Reviewer's checks 3 and 4 first reported FAIL. **The criterion was wrong, not the code.**
+
+The script required **every** asset to change. `52/60` and `59/60` therefore tripped it. Diagnosed
+rather than assumed:
+
+**a. The commit's code diff is confined to the texture branch.** `_commit()` gained
+`modulate: bool = True`; only `return _commit(vc, "texture", modulate=False)` passes it. The
+`flat` and `gltf_default` paths are unchanged.
+
+**b. The unchanged assets are explained, and the explanation is correct behaviour.** Three of the
+eight were traced per geometry:
+
+```
+04f51877ba25   graph geoms 31   names found in COLOR_0 31/31
+                 texture base, modulated=False   x26
+                 flat    base, modulated=True    x5
+258373b08ba7   7 geoms, 7/7 matched     texture x6 (not modulated) · flat x1 (modulated)
+c6968ff55e24   4 geoms, 4/4 matched     texture x2 (not modulated) · flat x2 (modulated)
+```
+
+The sidecar records the **worst** source across an asset's parts, so an asset labelled `flat`
+can be mostly `texture`-backed. Its `COLOR_0` lives on the texture parts, which `R-12` correctly
+declines to modulate; the few genuinely `flat` parts either carry neutral `COLOR_0` (measured
+`min = max = 255`) or receive too little area-weighted sampling to move the cloud.
+
+**c. Geometry-name matching between the two loads is perfect** — 31/31, 7/7, 4/4. The silent
+mis-keying risk raised in `R-2.b` is refuted a second time, now on `flat`-class assets.
+
+**Conditions 3 and 4 are satisfied.** The narrowing did not over-reach.
+
+### FINDING R-13.a — the new test is NOT vacuous
+
+```
+FINDING          test_texture_bases_are_not_modulated_by_color0 goes RED when the
+                 defect is injected back -- _colourise wrapped so a texture base is
+                 multiplied by COLOR_0 again.
+                 Injected result: FAIL, "COLOR_0 was applied to a texture base;
+                 R-12 withdrew it from that class after measuring 37/37 assets darker."
+                 Baseline: 1 passed.
+CLASSIFICATION   OBSERVED DATA
+SEVERITY         NOTE -- PASS
+```
+
+The failure message carries its own justification, so a future reader who "fixes" the carve-out
+back to spec conformance is told why it exists. That is the right shape for a test pinning a
+deliberate deviation.
+
+### FINDING R-13.b — the R-12 code is not in the commit that claims it. **Provenance defect.**
+
+```
+FINDING          58637f3 -- "WIP UNACCEPTED: R-12 -- COLOR_0 withdrawn from the
+                 texture class" -- changes ONE file: workflow/blocks/ULIP2/HANDOFF.md.
+                 It contains no code.
+                 The actual R-12 change -- SAMPLER_VERSION 5->6, the `modulate` flag,
+                 the texture carve-out, and the new test -- is in 4e5053f, whose
+                 message is "docs: DL-010 -- upstream is a source, not a forbidden
+                 zone", and which also carries CONTEXT.md, DECISION_LEDGER.md and
+                 docs/graph/README.md.
+EVIDENCE         git show 58637f3 --stat  -> 1 file, HANDOFF.md, +96
+                 git log -S"modulate=False" -- metafind/data/pointclouds.py -> 4e5053f
+                 git show 4e5053f --stat -> pointclouds.py +57, test_pointclouds.py +56,
+                 CONTEXT.md +27, DECISION_LEDGER.md +19, docs/graph/README.md
+CLASSIFICATION   OBSERVED IMPLEMENTATION
+IMPACT           experiment provenance -- .claude/rules/experiments.md §7 (code state)
+                 and §10; code-changes.md §13 (diff discipline)
+SEVERITY         MAJOR -- provenance only. No behavioural defect; the behaviour is
+                 verified correct above
+```
+
+**Why it matters even though nothing is broken.** A later reader looking for when the texture
+carve-out landed will open `58637f3`, find only documentation, and skip `4e5053f` because it is
+labelled `docs:`. A research-critical dataset-semantics change is filed under a documentation
+message, **bundled with three of Master's governance files.** `experiments.md` §7 requires results
+to be attributable to the code state that produced them, and `code-changes.md` §13 requires the
+diff to be inspectable.
+
+**Recommended remedy, and it is a recommendation only:** record the correct commit id in
+`HANDOFF.md` and in `SPEC_M1`, and keep code and governance-document changes in separate commits
+from here on. **The Reviewer does not rewrite history and does not decide this.**
+
+### VERDICT
+
+**The `COLOR_0` work is cleared for the regeneration.** All four release conditions met, the new
+test is non-vacuous, and the only open item is the provenance record in `R-13.b`, which does not
+affect the artifacts the run will produce.
+
+---
+
+## R-14 — the Engineer's diagnosis of `R-13.b` is correct, and it reaches the Reviewer's own file
+
+**Reviewer, 2026-08-22.** The Engineer reported that `R-13.b` is not a mislabelled commit but
+**cross-session contamination via `git add -A` on a shared tree**. Verified independently rather
+than accepted.
+
+```
+git show 4e5053f --stat
+
+  docs/graph/README.md                 +2      Master's
+  metafind/data/pointclouds.py        +57      the ENGINEER's R-12 code
+  tests/test_pointclouds.py           +56      the ENGINEER's new test
+  workflow/CONTEXT.md                 +27      MASTER's
+  workflow/DECISION_LEDGER.md         +19      MASTER's
+  workflow/blocks/ULIP2/REVIEW.md     +84      *** THE REVIEWER'S OWN FILE ***
+  workflow/roles/ESSGNN_ENGINEER.md    +8      MASTER's
+  workflow/roles/README.md            +90      MASTER's
+```
+
+**Three different roles' work is inside one commit whose message describes only one of them.**
+`git log --format="%an <%ae>"` over the last six commits returns
+`Kyzen5128 <legend2341528@gmail.com>` **six times** — git cannot attribute a role, so nothing in
+the history distinguishes who wrote what.
+
+### FINDING R-14.a — the Reviewer's own audit trail is not attributable either
+
+```
+FINDING          84 lines of REVIEW.md -- the Reviewer's findings, measurements and
+                 populations -- were committed by a session that did not write them,
+                 under a message about something else. The same mechanism that
+                 misfiled the Engineer's code misfiled the Reviewer's evidence.
+EVIDENCE         git show 4e5053f --stat, line 6
+CLASSIFICATION   OBSERVED IMPLEMENTATION
+IMPACT           experiments.md §7 code state · §10 artifact provenance ·
+                 BLOCKS.md role separation. It affects every role, not one
+SEVERITY         MAJOR -- process, not behaviour. No artifact is wrong
+```
+
+**The Engineer is right that "separate code from governance commits" does not fix this.** The
+mechanism is `git add -A` against a tree three roles share; the failure is bidirectional and
+silent in both directions.
+
+**The Reviewer adopts explicit-path commits from now on, without waiting for a ruling** — same
+position the Engineer took, same reason: it costs nothing and removes half the failure.
+**Option 2 (a distinct git identity per role) is the only one of the three that makes the history
+*attributable after the fact*;** the other two only prevent recurrence. That is Master's and the
+USER's to decide, not the Reviewer's.
+
+**The commit-to-content map the Engineer recorded at `c9ef702` was spot-checked and matches** what
+`git log -S` returns for `modulate=False` and `SAMPLER_VERSION`. History is not rewritten; the map
+is the remedy.
+
+---
+
+## R-15 — on archiving the v2 corpus before the regeneration
+
+**The Engineer asks the USER to decide. The Reviewer's input, with one thing the proposal misses.**
+
+### Measured
+
+```
+data/outputs/pointclouds   5.6 GB
+data/outputs/renders       7.3 GB          total 12.9 GB, against 3.0 TB free
+```
+
+**`data/outputs` and `data/outputs/renders` are on the same device (`st_dev 2049`).** An archive
+performed with `mv` is therefore a **rename**, not a copy: no bytes move, and **the SMR
+small-file penalty in `CONTEXT.md` §6 does not apply.** The cost is effectively zero, which
+removes the only argument against doing it.
+
+### What the proposal misses — the two index files must move with the corpus
+
+```
+data/outputs/logs/pointclouds_index.jsonl    29 MB
+data/outputs/logs/renders_index.jsonl       105 MB
+
+renders_index.jsonl stores ABSOLUTE paths:
+  "/home/kyzen/MetaFindV1/data/outputs/renders/000074a3.../view_00.png"
+```
+
+Move the corpus and leave the indexes, and every path in them dereferences into a directory that
+no longer holds those files. `n03`/`n04` rebuild them, so the end state is fine — **but the window
+between the move and the rebuild holds a v3 corpus described by a v2 index, and an interrupted run
+freezes that state.** `n05` and `n06` both read `renders_index.jsonl`, and `annotate_run.py`
+builds its entire work list from it.
+
+**Archive the two index files alongside the two directories, or not at all.**
+
+### Reviewer's recommendation
+
+**Archive.** Not because the v2 corpus is irreplaceable — it is reproducible from source, and
+`R-1` arm C did exactly that, landing on 83.2% to four decimals. Because:
+
+1. Reproducing it costs a GPU run and depends on the code history staying readable, and `R-14`
+   has just shown that history is **less trustworthy than assumed**.
+2. The cost is a rename. There is nothing on the other side of the trade.
+
+**Suggested, not performed — the Reviewer does not move the USER's data:**
+
+```
+data/outputs/_v2_archive/
+    pointclouds/                     (mv)
+    renders/                         (mv)
+    logs/pointclouds_index.jsonl     (mv)
+    logs/renders_index.jsonl         (mv)
+    PROVENANCE.md                    produced by 58637f3's PARENT tree; the
+                                     renderer-v2 / sampler-v3 corpus; R-1 arm C
+                                     scored it at R@1 83.2% vs ULIP image_feat
+```
+
+Making it read-only afterwards would stop anything writing into it. **That is a destructive-class
+operation on the USER's data and the Reviewer neither performs nor decides it.**
+
+**This is a `code-changes.md` §9 data-safety decision and it belongs to the USER.**
+
+---
+
+## R-16 — USER decision `U-AE`: **no archive. The v2 corpus is not kept.**
+
+**USER, 2026-08-22: 「若需要重作 舊的就全部刪掉 不要留」.** This overrides the Reviewer's `R-15`
+recommendation. Recorded, not re-argued.
+
+### The decision is defensible on this block's own evidence
+
+`code-changes.md` §9 requires that a destructive operation identify **whether the data is
+reproducible**. It is:
+
+```
+R-1 arm C rebuilt the renderer-v2 corpus from source -- old +Z orbit formula,
+look_at up (0,0,1), no frame correction, white, xmag 1.10, ambient 0.4 / int 3.0 --
+and scored it against ULIP's image_feat at
+
+    R@1 83.2%   matched 0.8371   mismatched 0.5565   n = 286
+
+against the Engineer's on-disk v2 measurement of
+
+    R@1 83.2%   matched 0.8371   mismatched 0.5565
+```
+
+**Four decimal places, from source, without the corpus.** The v2 artifacts are a cache of
+something the repository can regenerate, not a unique observation. **Keeping the corpus is not
+what preserves the ability to reproduce it — the code history is.** That places the weight on
+`R-14`'s attribution problem, which is being fixed separately.
+
+### Two things that must still be cleared, or "deleted" is not what happens
+
+**1. The two index files.** `R-15`'s hazard is unchanged by the decision not to archive: leave
+them and a v3 corpus is described by a v2 index for the whole run, and an interruption freezes
+that state. `n05`'s entire work list is built from `renders_index.jsonl`
+(`annotate_run.py:485-502`). **They must be removed or rebuilt as part of the regeneration, not
+left to be overwritten at the end.**
+
+**2. The 90 quarantined render directories — unmarked v2 residue.** `OBSERVED DATA`:
+
+```
+render directories            46,045
+with a sidecar / in the index 45,955
+without either                    90   -- 11 blank PNGs each,
+                                         quarantine reason "every view is blank"
+```
+
+**Those 90 carry no sidecar, so they carry no `renderer_version`.** `n04` will re-attempt them,
+fail the same way, and re-quarantine — and their **renderer-v2 PNG bytes stay on disk, inside the
+regenerated corpus, with nothing marking them as v2.** Every other stale artifact is now
+distinguishable by a version field; these are the one class that is not.
+
+The images are blank either way, so the scientific impact is nil. **But `U-AE` says nothing old is
+kept, and this is the only thing that would survive unmarked.** Flagged for the Engineer to
+remove; the Reviewer does not delete the USER's data.
+
+### Reviewer's position
+
+**No objection to `U-AE`.** The evidence supports it, and it was raised once and answered. The
+regeneration is cleared to proceed on the conditions above.
+
+---
+
+## R-17 — audit of the finished `n03` corpus. All 46,052 sidecars, no sampling.
+
+**Reviewer, 2026-08-22, while `n04` is still running.** Storage verified first: the five
+`data/outputs/*` entries are symlinks into `/home/kyzen/metafind_out`, which is
+`/dev/nvme0n1p2` — **`ROTA=0`, a genuine NVMe**, 953.9 GB with **816 GB free**. Capacity is not a
+risk for this run or for `n06`'s embeddings.
+
+| Field | Value | |
+|---|---|---|
+| `sampler_version` | `6` on all 46,052 | ✅ uniform |
+| `frame_correction` | `yaw180_about_y@ulip2_frame` on all 46,052 | ✅ **`meshload`'s docstring is finally true** |
+| `n_points` | `10000` on all | ✅ |
+| `rgb_scale` | `unit` on all | ✅ |
+| `coloured_point_fraction` | `1.000000` on all 46,052 | ✅ |
+| `max_radius` | min = max = `1.000000` | ✅ |
+| `centroid_offset` | max `9.869e-09` | ✅ tighter than the old `1.35e-05` |
+| `seed` | 46,052 distinct, 0 missing | ✅ individually reproducible |
+
+### `colour_source` did not shift, and the carve-out holds at corpus scale
+
+```
+texture       23,675      flat  13,524      gltf_default  8,853
+```
+
+**Identical to the pre-correction distribution**, so the base classification did not move.
+
+```
+color0_modulated = True
+    gltf_default   1,451
+    flat             806
+    texture            0        <-- R-12's carve-out, corpus-wide
+                   -------
+    total          2,257 assets modulated
+```
+
+**`texture` is zero on all 23,675.** The `R-13` release check, measured on 37 assets, holds across
+the whole corpus.
+
+### FINDING R-17.a — `S-7`'s zero-variance criterion FAILS as written, and the criterion is what is wrong
+
+```
+FINDING          S-7 requires "the 21 zero-variance assets stay exactly 21".
+                 Measured on the new corpus: 18.
+                 This is NOT a geometry change. The criterion pins a floating-point
+                 equality the corpus cannot hold stable.
+EVIDENCE         Distribution of the minimum per-axis variance over all 46,052:
+                     exactly 0.0            18
+                     0 < v < 1e-20          66
+                     0 < v < 1e-12          88
+                 The values immediately above zero cluster at 1e-36 to 1e-33
+                 (1.48e-36, 5.77e-35, 5.85e-35, 3.37e-33, 3.85e-33, ...).
+CLASSIFICATION   OBSERVED DATA
+IMPACT           SPEC_M1 success criterion S-7
+SEVERITY         MAJOR -- a milestone criterion that fails on a correct corpus
+```
+
+**Why it is numerical.** `FRAME_CORRECTION` is `(x, y, z) -> (-x, y, -z)`. **Negating an axis
+leaves that axis's variance unchanged in exact arithmetic**, so the transform cannot alter
+per-axis variance by any geometric mechanism. What it does alter is the *arithmetic path*: the
+correction is composed into the scene graph's node transforms, so vertex coordinates differ in
+their last bits, and three assets sitting at the 1e-33 boundary crossed from exactly `0.0` to
+approximately `0.0`.
+
+**84 assets are flat to within double precision.** Which of them lands on exactly `0.0` is not a
+stable property of the corpus, and a criterion written on `== 0` will keep failing.
+
+**Recommended rewording — `SPEC_M1`'s, not the Reviewer's:** count assets whose minimum per-axis
+variance is below a stated epsilon (`1e-20` gives 84) rather than exactly zero.
+
+**One honest cost of `U-AE`.** The `21` came from `validation_plan.yaml:113` and was reproduced by
+the Engineer on the old corpus. That corpus is now deleted, so **`21 -> 18` cannot be verified
+asset-by-asset any more** — the explanation above is inference from the value distribution plus the
+algebra, not a paired comparison. It is a small cost and it is stated rather than hidden.
+
+### Still outstanding for `n03`
+
+`S-6` — that the 180-degree yaw is gone, measured as Chamfer distance against ULIP's released
+clouds — has **not** been re-run on the new corpus. The Reviewer now holds **3,706** ULIP clouds
+for uids in this corpus rather than the 286 the original `FIND-6` used, so it can be measured at
+roughly 13x the original population once `n04` releases the GPU.
+
+---
+
+## R-18 — the `n04` / `n07b` camera-phase question, settled on the `n04` side
+
+**Reviewer, 2026-08-22.** `ESSGNN REVIEWER` raised a measurement the ULIP2 Reviewer had not made
+and asked the `ULIP2 ENGINEER` for two artifacts to close it. **Both are computable from `n04`'s
+own code, which is this Reviewer's node, so it is answered here rather than queued.**
+Pure numpy, read-only, no GPU — `n04` was still rendering.
+
+### Their claim, independently reproduced
+
+```
+d07[k] == R_y(180 deg) @ d04[k],  k = 0..10
+max |d07[k] - R @ d04[k]|  =  1.110e-16        CONFIRMED
+
+pre-fix set-to-set: every d07 sits 15.371 deg from the nearest d04
+azimuth spacing 360/11 = 32.727 deg      180 / 32.727 = 5.500 steps
+```
+
+**Confirmed to the last bit, including the half-step interleave.** `ESSGNN REVIEWER`'s numbers are
+correct.
+
+### FINDING R-18.a — the mesh yaw fix resolves the phase offset EXACTLY
+
+```
+FINDING          Rotating the mesh by FRAME_CORRECTION is equivalent, in the
+                 asset's own frame, to rotating the camera ring by R^T = R.
+                 n04's effective in-mesh view directions after the fix are
+                 therefore R @ d04, and R @ d04 == d07 to 1.11e-16.
+                 The two nodes' camera phases COINCIDE after the correction --
+                 not merely come close.
+EVIDENCE         max |R@d04[k] - d07[k]| = 1.110e-16 over all 11 views.
+                 Azimuth about UP = Y, sorted:
+                   d04  16.364  49.091  81.818 ... 343.636
+                   d07   0.000  32.727  65.455 ... 327.273
+                   eff   0.000  32.727  65.455 ... 327.273   <- identical to d07
+                 view_00:  d04[0] = [0, 0.342020143, -0.939692621]
+                           R@d04[0] = [0, 0.342020143, +0.939692621]
+                           d07[0]   = [0, 0.342020143, +0.939692621]
+                           difference = 0.0 exactly
+CLASSIFICATION   OBSERVED IMPLEMENTATION (both direction generators) + exact algebra
+IMPACT           stage2_protocol.json `image_protocol: "n04_compatible"` ·
+                 whether n07b must re-run · n11b / n13 / Stage 2 indexing
+SEVERITY         MAJOR -- it removes a cross-block blocker, and it is the ESSGNN
+                 side's call to accept, not this block's
+```
+
+**`R_y(180°)` is its own inverse, which is why the offset closes exactly rather than doubling.**
+The concern that the fix might "differ by two rotations instead of none" does not arise for a
+180-degree yaw.
+
+### The two artifacts `ESSGNN REVIEWER` asked the Engineer for
+
+```
+(1) implementation location and sign convention
+
+    metafind/data/meshload.py
+        FRAME_CORRECTION = np.diag([-1.0, 1.0, -1.0])     # (x,y,z) -> (-x, y, -z)
+        det = +1, orthonormal, Euler(xyz) = (180, 0, 180) == R_y(180 deg)
+        applied in load_scene() as scene.apply_transform(FRAME_CORRECTION),
+        i.e. to the SCENE, so every node transform is composed with it once.
+    metafind/data/renders.py  normalised_scene()  calls meshload.load_scene(),
+        so n03 and n04 inherit the same correction from one place.
+
+(2) view_00 camera direction for a corrected asset, world frame, unit, about centre
+
+    n04 camera direction        d04[0] = [0, 0.342020143, -0.939692621]
+    camera eye = d04[0] * 3.0          = [0, 1.02606043, -2.819077862]
+    effective in-mesh direction R@d04[0] = [0, 0.342020143, +0.939692621]
+    n07b's d07[0]                        = [0, 0.342020143, +0.939692621]
+
+    UP_AXIS = [0, 1, 0] ; ORBIT_ELEVATION_DEG = 20.0 ; N_VIEWS = 11
+```
+
+### What this does NOT establish — stated so it is not over-read
+
+**It settles camera geometry, not asset orientation.** The two nodes now sample **corresponding
+directions in each asset's own frame**. It does **not** follow that an Objaverse asset and a
+ProcTHOR asset are oriented alike in the world: the canonical facing of an Objaverse mesh is
+undetermined — recorded in `evidence/n03_n04_upstream_verification.md` and unchanged by this.
+
+So `image_protocol: "n04_compatible"` is restored **at the level the claim is written at**. Any
+stronger reading — that the two asset families share a canonical front — remains `UNKNOWN`.
+
+**Whether `n07b` re-runs is `ESSGNN`'s decision on `ESSGNN`'s evidence.** This block supplies the
+`n04` side and does not conclude for another block. **`ULIP2` must not write "n07b does not need
+re-running" into any document**; that sentence belongs to `ESSGNN REVIEWER` if they accept this.
