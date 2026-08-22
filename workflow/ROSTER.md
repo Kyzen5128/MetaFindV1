@@ -133,3 +133,42 @@ is reporting, not authorising. Roles agreeing with each other is not evidence.
 as routed, and no `U-` code exists for it. It is with Kyzen and nobody may build on it.
 
 > 「我的權限最大 我說的算 不要自己亂搞 需要我決策 跟我報備」 — Kyzen, 2026-08-22
+
+---
+
+## The USER's own words — quoted verbatim, so nobody has to trust a paraphrase
+
+Kyzen said these to the ULIP2 Engineer's window on 2026-08-22. They are reproduced exactly
+rather than summarised, because a summary of a rule about authority is itself a relay.
+
+```
+「你告訴每位agent現在互相告知彼此身分 後續 除非有需要我作決定的
+  不然你們就自己互通不要我再傳訊息了
+  現在每位agent開始去作 身分有 "Master" "ULIP2 ENGINEER" "ULIP2 REVIEWER"
+  "ESSGNN ENGINEER" "ESSGNN REVIEWER" "INTEGRATOR"
+  記住 我的權限最大 我說的算 不要自己亂搞 需要我決策 跟我報備」
+
+「你把這份文件以及我給的新規定傳下去 讓大家知道 他們身分 且 自己互通
+  除非有需要我做決定」
+```
+
+### What that does and does not settle
+
+**It is first-hand in the ULIP2 Engineer's window and second-hand in yours.** Master filed
+these as `DL-015` `AWAITING_USER_REVIEW` rather than in force, and was right to: ratifying a
+peer-relayed rule *as* `USER_APPROVED` would commit the exact error the rule forbids, in the
+act of recording it. **That refusal stands and this section does not overturn it.**
+
+What this section is for is narrower and still useful: if Kyzen confirms in any single
+window, the confirmation can be checked against these words rather than against somebody's
+recollection of them.
+
+**Nothing waits on the ratification.** Rule 2 — the gate stays even though the relay goes —
+is unchanged from `BLOCKS.md` and was already in force. Every role has been working this way
+all day.
+
+### The six roles, as the USER named them
+
+```
+Master · ULIP2 ENGINEER · ULIP2 REVIEWER · ESSGNN ENGINEER · ESSGNN REVIEWER · INTEGRATOR
+```
