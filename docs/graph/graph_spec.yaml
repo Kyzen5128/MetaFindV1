@@ -319,6 +319,38 @@ boundary:
         PAPER FACT). Carried as a stated Table 1 limitation per USER item O-2;
         registering it does not reopen that.
 
+    - id: D-14
+      what: "ESSGNN uses h^(0) = t_i; MetaFind 2.5 literally states h_i^(0) = Concat(x_i, t_i)"
+      why: >
+        h0_mode = "semantic", pinned in essgnn.py PRIMARY_INTERPRETATION. Adopted
+        under C2 on Appendix C's premise, Eq. 2's arity and the Introduction's
+        "separating spatial and semantic channels" -- and the code says so in its
+        own words: "h0_mode=semantic in particular CONTRADICTS 2.5's literal
+        Concat(x_i, t_i)". The literal reading is retained as Required Audit RA-1.
+        REGISTERED 2026-08-22 by Master. Found by the ESSGNN Reviewer, scope
+        corrected by Master: it had ZERO occurrences in this file and in
+        node_registry.yaml, so it passed every gate -- debt D-2/FU-A, sixth
+        instance that day.
+      impact: >
+        Every ESSGNN node's initial state, therefore e_layout, Stage 2 and
+        Table 2. It is also the switch the equivariance test uses as its negative
+        injection (test_essgnn.py:138 runs h0_mode="concat_xt" to prove the other
+        value breaks SE(3) equivariance), so the two readings are not
+        interchangeable at the level of the model's stated invariance.
+        NOT a silent risk: from_protocol forces the value regardless of what the
+        protocol carries -- verified by execution against a hostile protocol --
+        and two tests assert it. What was missing was the registry entry.
+      not_deviations: >
+        The other three values in PRIMARY_INTERPRETATION were checked at the same
+        time and are NOT deviations; they FOLLOW MetaFind and are recorded here so
+        the next sweep does not re-open them. coords_agg="sum" matches
+        2methdology.tex:51-52, which sums over the neighbourhood in both updates --
+        it diverges from the reference EGNN's mean default, and under U-O/DL-010
+        MetaFind governs where it speaks, so conforming is correct rather than a
+        departure. edge_proj_dim=None: "the paper has no such layer".
+        normalize_coord_diff=False: "nor any normalisation of (x_i - x_j)".
+        For all three, the DEVIATION would be turning them ON.
+
   conditional_deviations:
     - id: D-1
       what: "ViT-bigG-14 stays frozen; only the 3D encoder and fusion train"
