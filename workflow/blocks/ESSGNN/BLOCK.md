@@ -163,7 +163,12 @@ node_texts    :371  from procthor_object_text.json -- rule-based "a {category}",
 |---|---|---|
 | `LLM_MODEL` | **`Q-N08-MODEL`** | the **edge** sentences only. `t_i`'s content is untouched |
 | node text | **`Q-NODETEXT`** | `t_i`'s content. Today `"a {category}"`, which collapses distinct assets |
-| `TEXT_ENCODER` | **unregistered — no question id** | **both `t_i` and `e_ij`, and the width.** This is the real coupling |
+| `TEXT_ENCODER` | **`U-20` — and it is marked RESOLVED. See §7d** | **both `t_i` and `e_ij`, and the width.** This is the real coupling |
+
+> **CORRECTED 2026-08-22.** This row first read *"unregistered — no question id"*. **Wrong.**
+> `U-20` covers exactly this knob. The ESSGNN Engineer spotted it and the Reviewer verified it
+> before Master could act — **had Master registered a new id, one knob would carry two ids, one
+> `RESOLVED` and one open, which is worse than the gap it was meant to close.**
 
 `:98-101` is explicit: *"This also pins `t_i`'s encoder … Whatever encodes `t_i` must be THIS
 model"*, and `:366-370` gives the reason — the two vectors are **concatenated inside `f_h`**, so a

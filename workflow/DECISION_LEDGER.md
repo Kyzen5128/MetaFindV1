@@ -111,6 +111,31 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-016` — `U-20` is marked RESOLVED but was decided by Claude, and four files disagree. **BLOCKER for `n13`.**
+
+**Found by the ESSGNN Engineer, verified by the ESSGNN Reviewer, re-verified by Master. It arrived
+in time to stop Master registering a duplicate id for the same knob.**
+
+| | |
+|---|---|
+| **What `U-20` covers** | Which text encoder produces ESSGNN's node features `t_i`. Today: `laion/CLIP-ViT-B-32-laion2B-s34B-b79K`, 512-d, shared with the semantic-edge embeddings `e_ij` |
+| **The near-miss** | Master had written that `TEXT_ENCODER` *"has no question id"* and intended to register one. **It has one — `U-20`.** A new id would have left **one knob under two ids, one `RESOLVED` and one open** — worse than the gap. Caught before Master acted |
+| **Layer 1 — it is marked RESOLVED** | `graph_spec.yaml:1702`, `marked: RESOLVED`, `blocking: false` |
+| **Layer 2 — by whom** | `decided_by: 'Claude (recorded with n08 implementation)'`, `decided_at: '2026-08-16'`, `confidence: moderate`. **A research-critical UNKNOWN was closed by an AI in passing, during implementation.** This is `DL-013`'s shape, two weeks earlier, and it has been in force ever since — every `n08` artifact rests on it |
+| **Layer 2b — what the entry's OWN text says, and this is the sharpest part** | `U-20`'s `item:` field reads: *"Paper 2.5 says only 'a text-derived feature `t_i` in `R^d`'. It names a frozen text encoder ('e.g., CLIP or BERT') for the semantic **EDGE** embeddings, **not for `t_i`**, and does not say the two are the same encoder."* **The registry records that the paper does not support the choice, and marks the choice RESOLVED on the same line.** Meanwhile `semantic_edges_run.py:98-101` argues it as near-forced — *"Whatever encodes `t_i` must be THIS model"* — which is a **design argument, not paper evidence** |
+| **Layer 3 — four files, two states** | `graph_spec.yaml:1702` **RESOLVED** · `01_GRAPH_SPEC.md:611` **UNKNOWN** · `02_BUILD_STEPS.md:299` **「未定 U-20」** · `docs/graph/README.md:17` counts it among the ten resolved. **No gate catches this** — `check_graph` asserts `U-nn` numbering is unique across files, never that its *status* agrees |
+| **Layer 4 — the spec's own gate was crossed** | `01_GRAPH_SPEC.md:1123`: `U-12`/`U-20` *"**在 `n13` 實作前必須進 `n09b`／`G6`**"* — must land in the protocol **before `n13` is implemented**, *"otherwise it is the Stage 1 error we just fixed, replayed in Stage 2"*. Measured: `essgnn_arch_protocol.json` has **no `node_feat_dim` and no `edge_feat_dim`** — keys are `architecture_family, coord_feat, decided_at, decided_by, distance, hidden_dim, layer_sharing, mlp_structure, n_layers, pooling, status, use_io_projections`. Both widths are inferred at runtime instead (`stage2.py:315-327` checks `shape[1]` against values taken from the artifacts). **`n13` is 680 lines and complete. The gate was crossed and nothing reported it** |
+| **Why reopening is defensible on either ground alone** | **(a)** its decider is Claude, not the USER, at `confidence: moderate`, on a question the entry itself records the paper as not answering; **(b)** it was decided against `n08`'s artifacts, and **`n08` is about to re-run** under the no-old-model-output directive |
+| **What Master did NOT do** | **`marked: RESOLVED` is not changed here.** Reopening a resolved research question is a USER decision, not Master's, and editing the field would be resolution-by-mutation. A dispute note is added to the entry pointing at this record; the four-file contradiction is left standing **because picking a side would be the same offence** |
+| **Priority — Master accepts the Reviewer's merge** | The ESSGNN priority list's item 2 becomes *"the two things `n08` cannot re-run without: `Q-N08-MODEL` and reopening `U-20`"*. `U-20` is the more fundamental of the two: `Q-N08-MODEL` moves the edge sentences, `U-20` moves **both vectors and their width** |
+| **Authority classification** | **IMPLEMENTATION CHOICE recorded as RESOLVED.** Not a PAPER FACT — the entry's own text says the paper does not say it. Not a USER DECISION |
+| **Severity** | **BLOCKER for `n13`** · MAJOR for the `n08` re-run |
+| **What is needed** | The USER decides whether `U-20` reopens. Master then makes the four files agree with whatever that answer is, and registers the unpaid `n09b`/`G6` protocol debt either way |
+| **Status** | **`AWAITING_USER_REVIEW`** |
+| **Date** | 2026-08-22 |
+
+---
+
 ### `DL-015` — roles talk to each other directly. **REPORTED BY A PEER, NOT RATIFIED.**
 
 | | |
