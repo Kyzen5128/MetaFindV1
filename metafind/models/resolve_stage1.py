@@ -27,8 +27,12 @@ below. The fourth does not, and this module will not invent it:
 U-34 is refused a default because the two fields it splits into mean different
 things. ``actual_clip_train_scope`` is what this run does, and ``frozen`` is
 well supported: ULIP-2 §3.3 states "We adopt the largest version of encoders
-from OpenCLIP (ViT-G/14) ... and freeze it during pre-training", and ViT-bigG-14
-in the optimizer does not fit 24 GB regardless. ``paper_clip_train_scope`` is
+from OpenCLIP (ViT-G/14) ... and freeze it during pre-training", and putting
+ViT-bigG-14 in the optimizer is very unlikely to fit this card regardless.
+[CORRECTED 2026-08-22] That last clause used to read "does not fit 24 GB". The
+card is 32,607 MiB and the claim has not been re-measured against it, so it is
+now stated as the INFERENCE it always was. **The freeze decision does not rest
+on it** -- ULIP-2 §3.3 states it outright, and that is the load-bearing half. ``paper_clip_train_scope`` is
 our READING of what MetaFind requires, and the whole content of deviation D-1
 is the GAP between the two. Choosing it silently would either declare a
 deviation that is not one or, worse, suppress one that is -- and the evidence
@@ -642,7 +646,10 @@ def main() -> int:
     ap.add_argument("--actual-clip-train-scope", default="frozen",
                     choices=("frozen", "trainable"),
                     help="U-34: what this run does. Defaults to frozen, which "
-                         "ULIP-2 3.3 supports and 24 GB requires.")
+                         "ULIP-2 3.3 states outright. (A hardware argument used "
+                         "to be appended here citing 24 GB; this card is 32,607 "
+                         "MiB and the claim was never re-measured, so it is "
+                         "dropped rather than restated.)")
     ap.add_argument("--confidence", default="moderate",
                     choices=("low", "moderate", "high"),
                     help="how firm the U-34 reading is; the report quotes it")

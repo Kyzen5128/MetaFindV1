@@ -346,7 +346,10 @@ class Stage1RuntimeConfig:
             )
 
         # ACTUAL, not paper: the backbone runs the experiment, not the reading.
-        # `trainable` is what RA-3 measures; it is not known to fit on 24 GB.
+        # `trainable` is what RA-3 measures; it is not known to fit this card.
+        # [CORRECTED 2026-08-22] Said "24 GB"; the card is 32,607 MiB. The
+        # sentence already said "not known to fit", which stays true -- only
+        # the figure was wrong.
         train_scope = "full" if actual_scope == "trainable" else "point_encoder_and_fuser"
         backbone = BackboneConfig(checkpoint=checkpoint, device=device, train_scope=train_scope)
 

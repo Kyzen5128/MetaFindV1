@@ -6,7 +6,10 @@ decisions -- a one-hyphen difference that keyword search does not respect.
 
 checkpoint_initialization: the released ULIP-2 checkpoint is the starting point
 rather than pretraining it, because the official script assumes 8 GPUs and this
-machine has one 24 GB card (F5).
+machine has one (F5). [CORRECTED 2026-08-22] The card is an RTX 5090 with
+32,607 MiB, not the 24 GB this said. The reasoning is unaffected -- one card is
+not eight -- but a wrong hardware figure in a feasibility premise gets reused as
+a budget by whoever reads it next.
 
 split_freeze_policy: the CLIP half is frozen; the POINT ENCODER IS TRAINABLE in
 Stage 1. Freezing ViT-bigG-14 is what ULIP-2 specifies (its 3.3); whether that
@@ -98,7 +101,14 @@ class BackboneConfig:
     device: str = "cuda"
     dtype: torch.dtype = torch.float32
     # The main line. `fuser_only` is the Table 3 ablation; `full` also unfreezes
-    # ViT-bigG-14 and does not fit on 24 GB (D-1, audited by RA-3).
+    # ViT-bigG-14 (D-1, audited by RA-3).
+    #
+    # [CORRECTED 2026-08-22] This said "does not fit on 24 GB". The card is
+    # 32,607 MiB. **Whether `full` fits has NOT been re-measured against the
+    # real figure** -- ViT-bigG-14 has ~2.5B parameters and an AdamW state is
+    # roughly 12 bytes each before activations, so it is most likely still
+    # infeasible, but that is an INFERENCE and the old sentence stated it as
+    # measured. Do not quote either number as a measurement until one is taken.
     train_scope: TrainScope = "point_encoder_and_fuser"
 
 
