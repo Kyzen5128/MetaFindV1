@@ -2213,3 +2213,179 @@ same answer `U-AA`/`U-AC` already gave, now with upstream consulted first rather
 implements `P3`, the Reviewer runs the 5-minute safety check from `R-7` (texture class must not
 darken systematically; the 146 `gltf_default` geometries must not move at all), and the run is
 clear.
+
+---
+
+## 2026-08-22 evening — the `n04` v3 corpus, and why it was thrown away
+
+Two separate things happened between 20:35 and 20:45. They are recorded separately because
+conflating them would let the smaller one absorb the larger one.
+
+### 1. A real defect: pyrender renders geometry `normalised_scene` did not produce
+
+`pyrender.Scene.from_trimesh_scene` stores each node's pose as
+`translate . rotate(quaternion) . scale(vector)`. That form represents `M = R . diag(s)` exactly —
+**non-uniform scale included** — but has no representation for a sheared `M = R1 . diag(s) . R2`.
+Given one it **silently substitutes a different matrix**. It does not raise.
+
+Measured on `2f0ef6ad926b474189b6ef489d11954c`, node `Cube.025_0`, column norms
+`0.014 / 0.009 / 0.457`:
+
+```
+                              max|v|      y-range of Cube.025_0
+trimesh, after normalisation  1.0000      -0.9386 .. -0.0262
+pyrender, what is rendered    1.1693      -1.1477 .. -0.2571      ORTHO_HALF_WIDTH = 1.10
+```
+
+The translation column came through **exactly**; the 3x3 did not. The asset was clipped in 7 of
+its 11 views.
+
+**Clipping is the visible half and the smaller half.** The larger half is that this is no longer
+the geometry `n03` sampled. `meshload` exists so `n03` and `n04` cannot drift into different
+frames; the drift reappeared **one layer below it**, in the trimesh → pyrender handoff that
+`meshload` does not cover. `OBSERVED IMPLEMENTATION`.
+
+Scope, sampled by stable uid hash so the sample does not move as a corpus grows:
+
+```
+  7 / 600   assets carry a transform pyrender cannot represent
+            severity is bimodal: 2 genuinely sheared (off-diagonal 0.398, 0.380)
+                                 5 negligible (<= 2.3e-3, GLB float noise)
+ 10 / 1500  rendered assets have foreground on the frame edge
+```
+
+Clipping needs a mis-placement that happens to point outward, so the frame-edge count
+**under-reports** mis-placement. `~0.3%` badly placed is the figure to quote, not `0.67%`.
+
+Fixed at source in `138cda4`: bake each node transform into its own vertices after `fit`, leaving
+an identity graph and nothing for pyrender to decompose. Per node, not per geometry, because one
+geometry may be instanced under several transforms. Verified on the three worst assets —
+`max|v| 1.1693 -> 1.0000`, edge-touching views `7/11, 3/11, 8/11 -> 0/11`.
+
+The comment at `ORTHO_HALF_WIDTH` claiming *"a unit-sphere-normalised asset cannot be clipped
+while xmag >= 1"* was **false for as long as the transforms were unbaked**, and is corrected
+rather than deleted.
+
+### 2. An operator error: the module was edited while the job was running
+
+`n04` is `ProcessPoolExecutor` with `max_tasks_per_child=200`, so **workers respawn every ~200
+assets and re-import the module**. Editing `renders.py` mid-run changed the behaviour of a running
+job.
+
+```
+renderer_version   { 3: 43,412 ,  4: 2,546 }
+v3 mtime  19:35:49 .. 20:38:44        v4 mtime  20:38:45 .. 20:42:59
+renders.py written 20:38:07           -- the version bump; workers picked it up in 38s
+```
+
+The version split is clean, and **that is not the problem**. The bake landed ~2-3 minutes *before*
+the version bump, so roughly `686/min x 2.5min ~= 1,700` assets were **rendered with the fix and
+stamped `3`**. From a sidecar they are indistinguishable from the 41,700 genuinely unfixed ones.
+No subset could be salvaged by inspection, so the corpus was discarded.
+
+**The tool defect this exposes is worse than the incident, and outlived it.** Had the version been
+bumped *with* the bake, the corpus would have been uniformly stamped `4`, 43,412 of it rendered by
+the old code, **and every gate would have passed**. The mistake is the only reason this was
+visible. Registered by Master as `DL-018`.
+
+**Remedy, to implement after the re-run** — deliberately not before, because new abort behaviour in
+front of a 63-minute job is how a 63-minute job dies at minute two:
+
+```
+run start   record sha256 of the implementing modules into the runlog
+worker spawn  re-hash and compare; abort the run on mismatch
+```
+
+The point is not to forbid editing. It is that **a run's behaviour must not be able to change
+without the artifacts saying so.**
+
+### 3. `S-1` / `S-2` / `S-4`, measured on the discarded v3 corpus
+
+Superseded by the v4 re-render, kept because the conclusions do not depend on the defect and
+`S-4`'s failure is what found it. Population `n=1,500`, `tools/measure_render_criteria.py`.
+
+```
+S-1  image aspect vs mesh extents        pearson    spearman
+       y/x       (the right model)        +0.451     +0.838
+       z/y       (the wrong model)        -0.492     -0.857
+       y/sqrt(xz) (diagnostic only)       +0.482     +0.938
+     v2 recorded  y/x -0.671 , z/y +0.893  ->  both signs swapped.  PASS
+S-2  per-asset aspect cv < 0.02           142 / 1,500
+S-4  foreground on the frame edge          10 / 1,500   FAIL  -> section 1
+     longest foreground side / width      min 0.107  median 0.701  max 0.924
+```
+
+Two defects were found in the measurement tool while writing it, both of which would have
+produced numbers rather than errors:
+
+- the sample was drawn as `rng.choice(len(sidecars))`, so it **moved as `n04` wrote**: the same
+  seed and the same `n` gave `S-1` correlations of `+0.433` and `+0.842` on two runs minutes
+  apart. Now ordered by `sha256(seed:uid)`, which depends on neither corpus size nor order.
+- Pearson on log ratios is swung by a handful of near-flat assets — a decal's log ratio is around
+  `-18` while a typical asset sits near `0`. Spearman is reported beside it; `S-1` is a sign test
+  and both statistics answer it.
+
+### 4. `S-7` — the criterion was replaced, and not with a different threshold
+
+`S-7` demanded *"the 21 zero-variance assets stay exactly 21"*. The regenerated corpus has **18**,
+and the criterion is what is wrong: `FRAME_CORRECTION` negates two axes, and **negation cannot
+change a per-axis variance in exact arithmetic**. What changed is the last bits of the vertex
+coordinates, and three assets sitting at `1e-33` crossed from exactly `0.0` to approximately `0.0`.
+
+```
+min per-axis variance, cumulative   ==0 18 · <=1e-30 84 · <=1e-20 84 · <=1e-15 88 · <=1e-12 106
+```
+
+Both a different epsilon (Reviewer's `1e-20 -> 84`) and a compound property (Master's
+`<=1e-12 with the other two > 0.05 -> 102`) were proposed and **both declined**, for two reasons.
+`U-AE` deleted the old corpus, so `== 0` is the only statistic here with a *before* as well as an
+*after* — every replacement trades the one comparable number for an incomparable one. And choosing
+a cut after seeing the distribution is the move `S-3` records the USER forbidding.
+
+`docs/graph/validation_plan.yaml` `L1-PC-NONDEGENERATE` already defines the right check, predates
+the regeneration, and outranks this SPEC. Its own note says why: *an absolute variance floor cannot
+tell a flat ASSET from a flattening BUG … raising the floor until they pass would blind the check
+to the failure it exists for.* Measured on all 46,052 sidecars, no `.npz` read:
+
+```
+assets with >=1 axis variance <= 1e-12       106
+of those, mesh NOT correspondingly flat        0      <-- the failure condition
+flat-axis extent / largest extent    max 7.004e-04    median 2.220e-16
+```
+
+**Zero violations at every cut from `0` to `1e-12`** — the epsilon moves and the conclusion does
+not. `SPEC_M1` §11.1, commit `dff6255`. `21 -> 18` is `INFERENCE` (the old corpus is gone, so it
+cannot be checked asset-by-asset); `106 / 0` is `OBSERVED DATA` on the new corpus alone.
+
+### 5. `DL-013` decided by this block, under `DL-017`
+
+**Decision: `D-12` stands — the `texture` class is not modulated by `COLOR_0`. `n03` does not
+re-run.** `IMPLEMENTATION CHOICE`. Not a `USER DECISION` — the USER delegated the call, he did not
+make it — and per `R-8` never *"what ULIP-2 did"*.
+
+**None of the three measurements decides it, and no reason was invented to cover that.** `R-12A` is
+16/37 with no paired test and inside one sigma by its own admission; `R-10` at `n=130` is `P2`
+0.9043 against `P3` 0.9004; `R-8` establishes upstream publishes no colouring procedure, so there
+is no upstream *behaviour* to default to. What decides it is that **stopping costs nothing and
+moving costs a 51-minute `n03` re-run**, and that **the discriminating measurement has not been
+made**: a *paired* per-point RGB comparison against ULIP's released clouds, restricted to assets
+that are both `colour_source == texture` and carry `COLOR_0`. `U-O` says follow ULIP-2 where
+MetaFind is silent, and ULIP published no procedure but did publish the artifact — **the artifact
+is the authority here, not the glTF specification.** The Reviewer holds 3,706 such clouds against
+`R-12A`'s 37. Read-only, no GPU.
+
+**Blast radius, measured here for the first time.** 400 sampled per class, `COLOR_0` presence read
+from the glTF JSON chunk alone:
+
+```
+colour_source     population   with COLOR_0        affected by D-12
+texture              23,675      13/400  (3.25%)   ~= 770 assets
+flat                 13,524      22/400  (5.50%)   not affected -- already modulated
+gltf_default          8,853      70/400 (17.50%)   not affected -- already modulated
+```
+
+Cross-checked against a population the sampling did not touch:
+`13,524 x .055 + 8,853 x .175 = 2,293` against the **2,257** `color0_modulated` actually on disk.
+
+**`D-12` touches ~770 assets, 1.7% of the corpus — not 23,675.** That is an order of magnitude
+smaller than the decision had been carrying, and it should appear wherever `D-12` is written up.
