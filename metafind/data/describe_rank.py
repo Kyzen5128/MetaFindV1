@@ -1,6 +1,6 @@
 """Rank description candidates by CLIP image-text similarity. ULIP-2's method.
 
-# IMPLEMENTS-NODE: n05_annotate_assets
+# SUPPORTS-NODE: n05_annotate
 
 [UPSTREAM FACT -- `ulip2_source/main.tex:677`] ULIP-2 generates several
 descriptions per asset **independently**, ranks them with **CLIP-ViT-Large**
