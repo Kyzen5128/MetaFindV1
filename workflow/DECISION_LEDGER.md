@@ -111,6 +111,25 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-010` — where MetaFind is silent on a component it did not modify, the official upstream implementation **is** the reference
+
+| | |
+|---|---|
+| **Source** | USER, 2026-08-22: 「它是原架構如果有地方不詳細應該是要以他們兩個的原程式碼為主啊 如果 metafind 沒有改動的話」 |
+| **Issue / Finding** | Blocks were reading the project's upstream cautions as a blanket *"reproducing MetaFind means we may not consult ULIP-2 or EGNN"*. That is a misreading, and it is expensive: it turns answerable questions into `UNKNOWN`, and pushes engineers toward inventing a value when the authoritative one is sitting in `/home/kyzen/upstream/` |
+| **Decision / Resolution** | **Three cases. Decide which one you are in before you cite anything.** **(1) MetaFind SILENT + component inherited unmodified → the official upstream implementation IS the reference.** Use it. Classify **UPSTREAM FACT** and state the inheritance basis. Do **not** record `UNKNOWN`, and do **not** invent. **(2) MetaFind SPEAKS but is ambiguous or self-conflicting → upstream supplies the VARIANT LIST, never the answer.** Escalate to the USER. **(3) MetaFind MODIFIED the component → upstream says nothing about the modified part.** No inheritance |
+| **Precedent, already in force — this is not new policy, it is policy being applied consistently** | **Case 1 is `U-34`**: the CLIP freeze scope. MetaFind never states a per-module freeze policy; ULIP-2 §3.3 says *"freeze it during pre-training"*; MetaFind explicitly builds on ULIP-2 and never says it changed that. Resolved **frozen** on exactly this reasoning, `decided_by: Kyzen`, 2026-08-16. **Case 2 is `U-35`**: MetaFind says only *"approximated using MLPs"*; EGNN Appendix C gives **three different** MLP shapes and our `f_h` matches none of them. Left `UNKNOWN`, recorded as a protocol field — *"EGNN Appendix C supplies the VARIANT LIST, not the answer"* |
+| **This does NOT weaken `DL-004`** | `DL-004`'s prohibition — *"upstream EGNN settles it" may not be used as paper-interpretation authority* — is **case 2, and it stands unchanged**. MetaFind **does** speak there: `2methdology.tex:54` states `f_x → R³` and `appendix.tex:23` claims equivariance for any orthogonal `Q`. Citing EGNN's scalar to overrule what MetaFind actually wrote is still forbidden. **`DL-010` governs silence. `DL-004` governs ambiguity. They do not overlap** |
+| **Authority order is unchanged** | `CLAUDE.md` §3 already ranks *"original upstream papers and official upstream implementations"* **third — above** project audits, above the graph spec, above this repository's own code. `DL-010` does not promote upstream; it stops blocks from demoting it below reasoned guesswork |
+| **Sources** | `/home/kyzen/upstream/ULIP` @ `95d480f` · `/home/kyzen/upstream/egnn` @ `e9ca6c0` · `docs/paper/{ulip2,egnn,idesign}_source/`. All verified present 2026-08-22 |
+| **Still binding, unchanged** | Silence is never endorsement — judge whether the method works on its own evidence. An upstream detail is MetaFind-relevant only where MetaFind adopts, inherits, references or depends on it (`.claude/rules/paper-reproduction.md` §4). **An UPSTREAM FACT is never a PAPER FACT** |
+| **Authority classification** | **USER DECISION** — paper-interpretation policy |
+| **USER final decision** | **`APPROVE`** — 2026-08-22, the USER's own wording above |
+| **Status** | **`USER_APPROVED`** — FINAL ACCEPTED |
+| **Date** | 2026-08-22 |
+
+---
+
 ### `DL-009` — execution order: `ULIP2` runs to completion before `ESSGNN` opens
 
 | | |

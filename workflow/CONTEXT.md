@@ -63,6 +63,33 @@ PAPER FACT.**
 **Never use "the paper does not say" to justify a method.** Silence is not endorsement. Judge
 whether the method actually works, on its own evidence.
 
+### Upstream is a source, not a forbidden zone — `DL-010`, USER, 2026-08-22
+
+MetaFind **builds on** ULIP-2 and EGNN. Reproducing MetaFind does **not** mean you may not read
+them. Reading them is often the correct move. **Work out which of three cases you are in
+before you cite anything:**
+
+| | MetaFind | What upstream is worth |
+|---|---|---|
+| **1** | **SILENT**, component inherited unmodified | **The official upstream implementation IS the reference.** Use it. Classify **UPSTREAM FACT** and state the inheritance basis. Do **not** write `UNKNOWN`, and do **not** invent a value |
+| **2** | **SPEAKS**, but ambiguous or self-conflicting | Upstream gives you the **variant list, never the answer.** Escalate to the USER |
+| **3** | **MODIFIED** the component | Upstream says nothing about the modified part |
+
+Precedent, both already in force: **`U-34`** is case 1 — CLIP freeze scope resolved to ULIP-2
+§3.3 because MetaFind builds on ULIP-2 and never says it changed that. **`U-35`** is case 2 —
+EGNN Appendix C has three MLP shapes and our `f_h` matches none, so it stayed `UNKNOWN`.
+
+**`DL-004`'s prohibition still stands and is case 2**, not case 1: MetaFind *does* state
+`f_x → R³`, so upstream EGNN may not be cited to overrule it. `DL-010` governs **silence**;
+`DL-004` governs **ambiguity**.
+
+```
+/home/kyzen/upstream/ULIP  @ 95d480f      docs/paper/ulip2_source/
+/home/kyzen/upstream/egnn  @ e9ca6c0      docs/paper/egnn_source/  idesign_source/
+```
+
+**An UPSTREAM FACT is never a PAPER FACT.** Keep the labels apart.
+
 ```
 Tests PASS      ≠  reproduction fidelity
 Code exists     ≠  paper intent

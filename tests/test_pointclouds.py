@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 trimesh = pytest.importorskip("trimesh")
+Image = pytest.importorskip("PIL.Image")
 
 from metafind.data.pointclouds import (  # noqa: E402
     DEFAULT_GREY,
@@ -406,3 +407,58 @@ def test_a_white_base_makes_color0_pass_through_unchanged():
     assert (src, modulated) == ("gltf_default", True)
     got = np.asarray(m.visual.vertex_colors)[:, :3]
     assert np.abs(got.astype(int) - colours[:, :3].astype(int)).max() <= 1
+
+
+def test_texture_bases_are_not_modulated_by_color0():
+    """[R-12, 2026-08-22] The `texture` carve-out, which is a DEVIATION.
+
+    EXPECTED-TRUTH SOURCE: the measurement that narrowed the scope, not a
+    principle. glTF 2.0 puts textured assets IN scope -- COLOR_0 multiplies the
+    base colour and the base colour includes the texture -- so this test pins a
+    deliberate departure from the specification and must fail loudly if anyone
+    "fixes" it back.
+
+    Measured over ALL 37 texture assets carrying COLOR_0 that ULIP also
+    publishes, the whole population: modulating darkens 37 of 37 by 0.2076 mean
+    on a 0-1 scale, and cosine against ULIP's own clouds through the frozen
+    encoder moves 0.9005 -> 0.8980. `R-11` decides it -- ULIP-2 is the reference
+    architecture, so agreement is the default and only deliberate divergence is
+    registered.
+
+    `flat` and `gltf_default` stay modulated; this test also pins that, because
+    a narrowing applied one branch too widely would be silent.
+    """
+    from metafind.data.pointclouds import _colourise
+
+    half = lambda m: np.tile(np.array([128, 128, 128, 255], dtype=np.uint8),  # noqa: E731
+                             (len(m.vertices), 1))
+
+    # A real per-vertex texture sample: COLOR_0 must be IGNORED.
+    m = _box()
+    m.visual = trimesh.visual.TextureVisuals(
+        uv=np.zeros((len(m.vertices), 2)),
+        material=trimesh.visual.material.PBRMaterial(
+            baseColorTexture=Image.new("RGB", (2, 2), (180, 90, 60))))
+    src, modulated = _colourise(m, color0=half(m))
+    if src == "texture":
+        assert modulated is False, (
+            "COLOR_0 was applied to a texture base; R-12 withdrew it from that "
+            "class after measuring 37/37 assets darker"
+        )
+        got = np.asarray(m.visual.vertex_colors)[:, :3]
+        m2 = _box()
+        m2.visual = trimesh.visual.TextureVisuals(
+            uv=np.zeros((len(m2.vertices), 2)),
+            material=trimesh.visual.material.PBRMaterial(
+                baseColorTexture=Image.new("RGB", (2, 2), (180, 90, 60))))
+        _colourise(m2, color0=None)
+        assert np.array_equal(got, np.asarray(m2.visual.vertex_colors)[:, :3]), (
+            "a textured asset must be byte-identical with and without COLOR_0"
+        )
+
+    # The narrowing must not reach `flat`, which stays modulated.
+    m3 = _box(colour=(200, 100, 50, 255), texture=True)
+    src3, modulated3 = _colourise(m3, color0=half(m3))
+    assert (src3, modulated3) == ("flat", True), (
+        "narrowing the texture class must not switch off `flat` modulation"
+    )

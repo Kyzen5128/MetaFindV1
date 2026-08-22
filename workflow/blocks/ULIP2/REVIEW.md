@@ -1094,3 +1094,87 @@ BARRED       claiming a shared PROCEDURE where none is published.
 **`R-8.a` survives unchanged as a fact** — the procedure is unpublished, and no claim of shared
 *method* may be made. Everything `R-8` and `R-10` said about *forbidding claims of agreement* is
 withdrawn.
+
+---
+
+## R-12 — the two safety checks owed on `P3`, at commit `53f0b99`
+
+**Reviewer, 2026-08-22.** Baseline produced by patching `meshload.color0_by_geometry` to `{}`,
+so the control runs the **production** code with no `COLOR_0` present anywhere. Nothing inside
+`_colourise` was touched.
+
+### B — control: PASS
+
+Assets carrying **no** `COLOR_0` must be unchanged by the `P3` work.
+
+```
+n = 60 gltf_default assets without COLOR_0
+max |delta| over 10,000 points x 6 channels  =  0.0000000000
+```
+
+**Bit-identical.** Independently reproduces the Engineer's `n=9` result at `n=60`. **PASS.**
+
+### A — texture class: one clear signal, one ambiguous one
+
+Every `texture`-class uid carrying `COLOR_0` that ULIP also holds — the full overlap, not a
+sub-sample.
+
+```
+n = 37
+
+luminance (P3 - COLOR_0 off)   mean -0.2076   median -0.1821   DARKER on 37/37
+cosine to ULIP's own cloud     P3 0.8980   COLOR_0 off 0.9005   P3 better on 16/37
+```
+
+### FINDING R-12.a — `P3` darkens every texture-class asset it touches
+
+```
+FINDING          Modulating a texture-sampled colour by COLOR_0 lowers mean
+                 luminance on 37 of 37 assets, by 0.21 on a 0-1 scale.
+EVIDENCE         Table above, full ULIP overlap for the class.
+CLASSIFICATION   OBSERVED DATA
+IMPACT           ~995 texture-class assets corpus-wide
+SEVERITY         MAJOR
+```
+
+**Unanimous and large.** This is the signature the safety check existed to look for.
+
+### FINDING R-12.b — whether that darkening is *wrong* is NOT established
+
+```
+FINDING          P3 moves the texture class 0.0025 further from ULIP's own clouds
+                 and wins on 16 of 37. 37 fair coin flips give 18.5 +/- 3, so
+                 16/37 is inside the noise. The mean favours leaving COLOR_0 off;
+                 the win count does not separate them.
+CLASSIFICATION   OBSERVED DATA -- explicitly inconclusive
+SEVERITY         NOTE
+```
+
+**The darkening is certain. "Therefore worse" is not.**
+
+### What it does to `R-10`
+
+`R-10` measured all three classes **mixed** at `n=130` and found `P2 ≈ P3`. `R-12` isolates the
+texture class and finds `P3` behind there. **A tie across a mixture is consistent with two
+opposite effects cancelling**, and `P2` — which leaves the texture class alone by construction —
+is exactly the arm that avoids the negative half.
+
+### Which arm is closer to ULIP's artifact — the only answerable form of "what did ULIP do"
+
+`R-8.a` stands: the procedure is unpublished, so *"ULIP's official method"* has no answer.
+**"Which of ours lands closer to ULIP's clouds"** does, and it has now been asked twice:
+
+| measurement | population | closer to ULIP |
+|---|---|---|
+| `R-10`, all classes | n = 130 | **`P2` 0.9043** vs `P3` 0.9004 |
+| `R-12A`, texture only | n = 37 | **COLOR_0 off 0.9005** vs `P3` 0.8980 |
+
+**`P3` does not win either one.** Both margins are small and neither is significance-tested, but
+**there is no measurement in this block in which full glTF conformance is closer to ULIP-2's own
+clouds than leaving the texture class alone.**
+
+**Reviewer recommends `A` (= `P2`): modulate `flat` and `gltf_default`, leave `texture`
+untouched.** Recorded as an `IMPLEMENTATION CHOICE` that **deliberately departs from glTF 2.0 for
+the texture class**, because ULIP-2's artifact is the higher authority for this pipeline (`R-9`,
+`R-11`) and it does not support the spec-conforming variant. **That departure needs a registry
+id** — a fifth, and it is the Integrator's under `U-Z`.

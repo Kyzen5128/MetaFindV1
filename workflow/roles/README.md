@@ -20,6 +20,21 @@
 哪段是要我貼出去的。🤖 的內容永遠放 code block 裡，放外面就不能一鍵複製。
 ✋ 的內容永遠不要用 🤖 的語氣寫。
 
+【上游不是禁區 —— DL-010，2026-08-22】
+MetaFind 是建立在 ULIP-2 和 EGNN 上面的。復現 MetaFind 不代表你不能讀它們。
+很多時候讀它們才是對的做法。引用之前先分清楚你在哪一種情況：
+  1. 論文沒講 ＋ MetaFind 沒改這個元件
+     → 官方上游實作就是依據。用它。標成 UPSTREAM FACT，並說明繼承根據。
+       不准寫 UNKNOWN，也不准自己掰一個值。
+  2. 論文有講但含糊或自相矛盾
+     → 上游只能給你「有哪些可能」，不能給你答案。往上呈報，我來決定。
+  3. MetaFind 改過這個元件
+     → 上游對被改掉的部分沒有發言權。
+上游位置：/home/kyzen/upstream/ULIP @ 95d480f · /home/kyzen/upstream/egnn @ e9ca6c0
+         docs/paper/{ulip2,egnn,idesign}_source/
+UPSTREAM FACT 永遠不等於 PAPER FACT。標籤不要混。
+DL-004 那條「不准拿上游 EGNN 當定論」是第 2 種情況，只管 f_x 那一題，依然有效。
+
 第一步 —— 讀。
 完整讀 workflow/roles/MASTER.md，那是你的行為準則。
 連同它「開工先讀」列出的檔案一起讀完。
@@ -61,6 +76,21 @@ Python 用 /home/kyzen/miniconda3/envs/MetaFind/bin/python
 我是用手動複製貼上在對話之間傳話的。沒有標記我分不出哪段是報告、
 哪段是要我貼出去的。🤖 的內容永遠放 code block 裡，放外面就不能一鍵複製。
 ✋ 的內容永遠不要用 🤖 的語氣寫。
+
+【上游不是禁區 —— DL-010，2026-08-22】
+MetaFind 是建立在 ULIP-2 和 EGNN 上面的。復現 MetaFind 不代表你不能讀它們。
+很多時候讀它們才是對的做法。引用之前先分清楚你在哪一種情況：
+  1. 論文沒講 ＋ MetaFind 沒改這個元件
+     → 官方上游實作就是依據。用它。標成 UPSTREAM FACT，並說明繼承根據。
+       不准寫 UNKNOWN，也不准自己掰一個值。
+  2. 論文有講但含糊或自相矛盾
+     → 上游只能給你「有哪些可能」，不能給你答案。往上呈報，我來決定。
+  3. MetaFind 改過這個元件
+     → 上游對被改掉的部分沒有發言權。
+上游位置：/home/kyzen/upstream/ULIP @ 95d480f · /home/kyzen/upstream/egnn @ e9ca6c0
+         docs/paper/{ulip2,egnn,idesign}_source/
+UPSTREAM FACT 永遠不等於 PAPER FACT。標籤不要混。
+DL-004 那條「不准拿上游 EGNN 當定論」是第 2 種情況，只管 f_x 那一題，依然有效。
 
 第一步 —— 讀。
 完整讀 workflow/roles/ULIP2_ENGINEER.md，那是你的行為準則。
@@ -119,6 +149,21 @@ Python 用 /home/kyzen/miniconda3/envs/MetaFind/bin/python
 哪段是要我貼出去的。🤖 的內容永遠放 code block 裡，放外面就不能一鍵複製。
 ✋ 的內容永遠不要用 🤖 的語氣寫。
 
+【上游不是禁區 —— DL-010，2026-08-22】
+MetaFind 是建立在 ULIP-2 和 EGNN 上面的。復現 MetaFind 不代表你不能讀它們。
+很多時候讀它們才是對的做法。引用之前先分清楚你在哪一種情況：
+  1. 論文沒講 ＋ MetaFind 沒改這個元件
+     → 官方上游實作就是依據。用它。標成 UPSTREAM FACT，並說明繼承根據。
+       不准寫 UNKNOWN，也不准自己掰一個值。
+  2. 論文有講但含糊或自相矛盾
+     → 上游只能給你「有哪些可能」，不能給你答案。往上呈報，我來決定。
+  3. MetaFind 改過這個元件
+     → 上游對被改掉的部分沒有發言權。
+上游位置：/home/kyzen/upstream/ULIP @ 95d480f · /home/kyzen/upstream/egnn @ e9ca6c0
+         docs/paper/{ulip2,egnn,idesign}_source/
+UPSTREAM FACT 永遠不等於 PAPER FACT。標籤不要混。
+DL-004 那條「不准拿上游 EGNN 當定論」是第 2 種情況，只管 f_x 那一題，依然有效。
+
 第一步 —— 讀。
 完整讀 workflow/roles/ULIP2_REVIEWER.md，那是你的行為準則。
 連同它「開工先讀」列出的檔案一起讀完。
@@ -173,6 +218,21 @@ Python 用 /home/kyzen/miniconda3/envs/MetaFind/bin/python
 哪段是要我貼出去的。🤖 的內容永遠放 code block 裡，放外面就不能一鍵複製。
 ✋ 的內容永遠不要用 🤖 的語氣寫。
 
+【上游不是禁區 —— DL-010，2026-08-22】
+MetaFind 是建立在 ULIP-2 和 EGNN 上面的。復現 MetaFind 不代表你不能讀它們。
+很多時候讀它們才是對的做法。引用之前先分清楚你在哪一種情況：
+  1. 論文沒講 ＋ MetaFind 沒改這個元件
+     → 官方上游實作就是依據。用它。標成 UPSTREAM FACT，並說明繼承根據。
+       不准寫 UNKNOWN，也不准自己掰一個值。
+  2. 論文有講但含糊或自相矛盾
+     → 上游只能給你「有哪些可能」，不能給你答案。往上呈報，我來決定。
+  3. MetaFind 改過這個元件
+     → 上游對被改掉的部分沒有發言權。
+上游位置：/home/kyzen/upstream/ULIP @ 95d480f · /home/kyzen/upstream/egnn @ e9ca6c0
+         docs/paper/{ulip2,egnn,idesign}_source/
+UPSTREAM FACT 永遠不等於 PAPER FACT。標籤不要混。
+DL-004 那條「不准拿上游 EGNN 當定論」是第 2 種情況，只管 f_x 那一題，依然有效。
+
 第一步 —— 讀。
 完整讀 workflow/roles/ESSGNN_ENGINEER.md，那是你的行為準則。
 連同它「開工先讀」列出的檔案一起讀完。
@@ -217,6 +277,21 @@ Python 用 /home/kyzen/miniconda3/envs/MetaFind/bin/python
 哪段是要我貼出去的。🤖 的內容永遠放 code block 裡，放外面就不能一鍵複製。
 ✋ 的內容永遠不要用 🤖 的語氣寫。
 
+【上游不是禁區 —— DL-010，2026-08-22】
+MetaFind 是建立在 ULIP-2 和 EGNN 上面的。復現 MetaFind 不代表你不能讀它們。
+很多時候讀它們才是對的做法。引用之前先分清楚你在哪一種情況：
+  1. 論文沒講 ＋ MetaFind 沒改這個元件
+     → 官方上游實作就是依據。用它。標成 UPSTREAM FACT，並說明繼承根據。
+       不准寫 UNKNOWN，也不准自己掰一個值。
+  2. 論文有講但含糊或自相矛盾
+     → 上游只能給你「有哪些可能」，不能給你答案。往上呈報，我來決定。
+  3. MetaFind 改過這個元件
+     → 上游對被改掉的部分沒有發言權。
+上游位置：/home/kyzen/upstream/ULIP @ 95d480f · /home/kyzen/upstream/egnn @ e9ca6c0
+         docs/paper/{ulip2,egnn,idesign}_source/
+UPSTREAM FACT 永遠不等於 PAPER FACT。標籤不要混。
+DL-004 那條「不准拿上游 EGNN 當定論」是第 2 種情況，只管 f_x 那一題，依然有效。
+
 第一步 —— 讀。
 完整讀 workflow/roles/ESSGNN_REVIEWER.md，那是你的行為準則。
 連同它「開工先讀」列出的檔案一起讀完。
@@ -259,6 +334,21 @@ Python 用 /home/kyzen/miniconda3/envs/MetaFind/bin/python
 我是用手動複製貼上在對話之間傳話的。沒有標記我分不出哪段是報告、
 哪段是要我貼出去的。🤖 的內容永遠放 code block 裡，放外面就不能一鍵複製。
 ✋ 的內容永遠不要用 🤖 的語氣寫。
+
+【上游不是禁區 —— DL-010，2026-08-22】
+MetaFind 是建立在 ULIP-2 和 EGNN 上面的。復現 MetaFind 不代表你不能讀它們。
+很多時候讀它們才是對的做法。引用之前先分清楚你在哪一種情況：
+  1. 論文沒講 ＋ MetaFind 沒改這個元件
+     → 官方上游實作就是依據。用它。標成 UPSTREAM FACT，並說明繼承根據。
+       不准寫 UNKNOWN，也不准自己掰一個值。
+  2. 論文有講但含糊或自相矛盾
+     → 上游只能給你「有哪些可能」，不能給你答案。往上呈報，我來決定。
+  3. MetaFind 改過這個元件
+     → 上游對被改掉的部分沒有發言權。
+上游位置：/home/kyzen/upstream/ULIP @ 95d480f · /home/kyzen/upstream/egnn @ e9ca6c0
+         docs/paper/{ulip2,egnn,idesign}_source/
+UPSTREAM FACT 永遠不等於 PAPER FACT。標籤不要混。
+DL-004 那條「不准拿上游 EGNN 當定論」是第 2 種情況，只管 f_x 那一題，依然有效。
 
 第一步 —— 讀。
 完整讀 workflow/roles/INTEGRATOR.md，那是你的行為準則。

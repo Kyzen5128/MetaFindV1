@@ -82,7 +82,12 @@ N_POINTS = 10_000
 # than a competing source. Changes the rgb channel for roughly 1,130 assets
 # whose base is `flat` or `texture`; the ~146 whose base is glTF-default white
 # are unchanged by construction, since x * 1 = x.
-SAMPLER_VERSION = 5
+# 6: [R-12, 2026-08-22] the COLOR_0 multiplier is withdrawn from the `texture`
+# class. Measured over all 37 texture assets carrying COLOR_0 that ULIP also
+# publishes: modulating darkens 37 of 37 by 0.21 mean, and cosine against
+# ULIP's own clouds moves 0.9005 -> 0.8980. `flat` and `gltf_default` are
+# unchanged from version 5.
+SAMPLER_VERSION = 6
 RGB_SCALE = "unit"  # [0, 1]; see the module docstring
 DEFAULT_GREY = 0.4  # ULIP's stand-in for a dataset with no colour channel at all
 # The base colour of a PBR material carrying neither a texture nor an explicit
@@ -237,6 +242,12 @@ def _colourise(geom, color0: np.ndarray | None = None) -> tuple[str, bool]:
     base and silently shift the corpus-wide distribution. Modulation is carried
     separately as ``color0_modulated`` so it stays visible and countable.
 
+    Which classes are modulated -- narrowed by measurement, not by principle::
+
+        gltf_default   COLOR_0 x [1,1,1,1] = COLOR_0     modulated
+        flat           COLOR_0 x baseColorFactor         modulated
+        texture        COLOR_0 NOT applied               DEVIATION, see below
+
     Four base sources, in descending fidelity:
 
       texture        a baseColorTexture, sampled per vertex through the UVs
@@ -273,14 +284,18 @@ def _colourise(geom, color0: np.ndarray | None = None) -> tuple[str, bool]:
             a = np.concatenate([a, np.full((len(a), 1), 255)], axis=1)
         return a.astype(np.uint8, copy=False)
 
-    def _commit(base, source: str) -> tuple[str, bool]:
-        """Apply COLOR_0 as a multiplier on ``base`` and install the result.
+    def _commit(base, source: str, *, modulate: bool = True) -> tuple[str, bool]:
+        """Install ``base``, multiplying `COLOR_0` into it unless told not to.
 
         Multiplication happens in [0, 1] and rounds once at the end, so a
         modulated colour cannot drift by repeated integer truncation.
+
+        ``modulate=False`` is the `texture` carve-out -- see the class table in
+        the docstring. It is a measured exception, not a shortcut.
         """
         rgba = _rgba(base)
-        modulated = color0 is not None and len(np.asarray(color0)) == n
+        modulated = (modulate and color0 is not None
+                     and len(np.asarray(color0)) == n)
         if modulated:
             rgba = np.clip(
                 np.rint(rgba.astype(np.float64) / 255.0
@@ -294,11 +309,35 @@ def _colourise(geom, color0: np.ndarray | None = None) -> tuple[str, bool]:
             converted = vis.to_color()
             vc = getattr(converted, "vertex_colors", None)
             if vc is not None and len(vc) == n:
-                # A real per-vertex texture sample. Under P1/P2 this returned
-                # here and COLOR_0 never applied -- ~625 assets by the
-                # Reviewer's count. Under P3 the texture IS the base and
-                # COLOR_0 modulates it.
-                return _commit(vc, "texture")
+                # A real per-vertex texture sample.
+                #
+                # [SCOPE NARROWED 2026-08-22, `R-12`] glTF 2.0 says COLOR_0
+                # multiplies the base colour and the base colour includes the
+                # texture, so the specification puts this asset in scope. **We
+                # deliberately leave it out**, and that is a DEVIATION.
+                #
+                # Measured over ALL 37 texture assets that carry COLOR_0 and
+                # also exist in ULIP's released clouds -- the whole population,
+                # not a sample:
+                #
+                #     brightness, modulated minus not:  mean -0.2076,
+                #         median -0.1821, DARKER on 37 of 37
+                #     cosine against ULIP's own cloud through the frozen
+                #         encoder: 0.8980 modulated vs 0.9005 not
+                #
+                # The darkening is certain: 37/37 at 0.21 on a 0-1 scale.
+                # Whether it is *worse* is not -- 0.0025 and 16/37 sits inside
+                # the noise for 37 coin flips (18.5 +/- 3), and no paired test
+                # was run. What decides it is `R-11`: ULIP-2 is the reference
+                # architecture, so agreeing with it is the default and only a
+                # deliberate divergence is registered. Asked twice, the
+                # specification-correct rule never won -- R-10 over all three
+                # classes (n=130) 0.9043 unmodulated vs 0.9004, and R-12 over
+                # texture alone (n=37) 0.9005 vs 0.8980.
+                #
+                # R-10's "tie" across the mixed population is consistent with
+                # two opposite effects cancelling; splitting by class showed it.
+                return _commit(vc, "texture", modulate=False)
             # `len(vc) == 4` was the test here and it is ambiguous: a single
             # RGBA has length 4, and so does a four-vertex mesh's per-vertex
             # array. `ndim == 1` says what was meant. The check above
