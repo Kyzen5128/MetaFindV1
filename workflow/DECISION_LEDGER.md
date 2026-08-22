@@ -111,6 +111,21 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-020` — ESSGNN is FULLY paused, stricter than `DL-009`. ULIP2 finishes first.
+
+| | |
+|---|---|
+| **Source** | USER, 2026-08-22, verbatim: 「n04 它在重跑 ESSGNN的先全部暫停 我還沒有要做 先完成ulip2端的東西」 |
+| **What changes** | `DL-009` held ESSGNN closed but left both roles **reading, investigating and reporting** — which is how tonight's `U-20`, frame and `h0_mode` findings arrived. **That latitude is withdrawn.** Both roles stop entirely: no reading, no scanning, no new findings, no continuing work in progress |
+| **Why it is not a rebuke** | Everything they produced is captured and verified — `DL-016`, `DL-019`, `D-14`, and three of the methodology rules in `CONTEXT.md` §3. The pause is about **sequencing**, not quality: `n04` is re-running, ULIP2 owns the critical path, and a second block generating findings faster than Master can integrate them is a queue, not progress |
+| **Both roles notified** | Told explicitly that nothing is lost, where each finding landed, and to acknowledge without replying with new findings |
+| **Corrections sent with the stop, so nothing sits wrong while they are silent** | `h0_mode` **is** locked — proven by execution against a hostile protocol, both roles had it backwards. And of the four "unregistered deviations" only **one** is a deviation: `D-14`. The other three follow the paper, and registering four would have put three false entries in the registry |
+| **On resuming** | Read `DL-016`, `DL-017`, `DL-019`, `DL-020` before restarting. Do not re-derive |
+| **Status** | **`USER_APPROVED`** — FINAL ACCEPTED, the USER's own wording above |
+| **Date** | 2026-08-22 |
+
+---
+
 ### `DL-019` — `h0_mode` decides whether SE(3) equivariance holds, contradicts the paper's literal text, and lives in a **dataclass default** outside the protocol
 
 **Found by the ESSGNN Reviewer while attacking the Engineer's `U-20` answer. Every claim
