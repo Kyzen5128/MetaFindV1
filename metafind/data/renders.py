@@ -58,6 +58,7 @@ import multiprocessing as mp
 import hashlib
 import json
 import os
+import sys
 import time
 import traceback
 from pathlib import Path
@@ -192,6 +193,57 @@ ORBIT_ELEVATION_DEG = 20.0
 # and sometimes outside the frame. The version bump is what makes
 # `is_complete` reject a v3 sidecar; without it a re-run is a silent no-op.
 RENDERER_VERSION = 4
+
+# Set once per worker process. A worker imports its modules at spawn and cannot
+# change them afterwards, so one check covers every task it will ever run.
+_FINGERPRINT_VERIFIED = False
+
+
+def implementation_fingerprint() -> dict[str, str]:
+    """sha256 of every source file that decides what a render is.
+
+    `max_tasks_per_child=200` means workers respawn and **re-import** during a
+    run, so editing one of these files while a job is running silently changes
+    what that job produces. Measured 2026-08-22: roughly 1,700 assets were
+    rendered with a geometry fix and stamped with the `renderer_version` that
+    predated it, and **no field in any artifact revealed it** -- the corpus had
+    to be discarded because no subset could be identified by inspection.
+
+    The version field caught that by accident, not by design: had the bump
+    landed WITH the fix, the corpus would have been uniformly stamped and every
+    gate would have passed.
+
+    `meshload` is included because it owns `FRAME_CORRECTION` -- a change there
+    moves every asset while `renders.py` does not differ by a byte.
+    """
+    from metafind.data import meshload
+
+    out: dict[str, str] = {}
+    for mod in (sys.modules[__name__], meshload):
+        path = Path(mod.__file__)
+        out[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return out
+
+
+def verify_fingerprint(expected: dict[str, str] | None) -> None:
+    """Abort this worker if its source differs from what the run started on.
+
+    The point is not to forbid editing a module. It is that a run's behaviour
+    must not be able to change without the artifacts saying so.
+    """
+    global _FINGERPRINT_VERIFIED
+    if not expected or _FINGERPRINT_VERIFIED:
+        return
+    actual = implementation_fingerprint()
+    if actual != expected:
+        drift = sorted(k for k in expected if actual.get(k) != expected[k])
+        raise RuntimeError(
+            f"implementation changed while the run was in progress: {', '.join(drift)}. "
+            "This worker would write artifacts the rest of the corpus does not share, "
+            "and no sidecar field would show it. Restart the run."
+        )
+    _FINGERPRINT_VERIFIED = True
+
 
 
 def azimuth_orbit_directions(n: int = N_VIEWS,
@@ -469,6 +521,31 @@ def sidecar_path(out_dir: Path, uid: str) -> Path:
     return out_dir / f"{uid}.json"
 
 
+def retire_stale_sidecar(out_dir: Path, uid: str) -> bool:
+    """Move a failed asset's OLD sidecar aside so it stops reading as complete.
+
+    Resume is built on "an asset is complete only once its sidecar lands", which
+    is sound when the alternative is no sidecar at all. It is NOT sound after a
+    `RENDERER_VERSION` bump: the asset is selected for re-render because its
+    sidecar is stale, and if that re-render then fails, **the stale sidecar is
+    still sitting there**. `rebuild_index` globs `*.json` and counts it, so the
+    corpus reports the asset as complete while the record and the PNGs beside it
+    were produced by the renderer the bump exists to replace.
+
+    Measured on the v4 re-render: 23 assets failed and kept `renderer_version 3`
+    records, and `n_indexed` counted all 23 as complete. 18 of them were lost to
+    one `BrokenProcessPool` event, so they were not even bad assets.
+
+    Renamed, not deleted -- the record is evidence about a failure, and `.stale`
+    falls outside the `*.json` glob that defines the corpus.
+    """
+    sc = sidecar_path(out_dir, uid)
+    if not sc.exists():
+        return False
+    sc.replace(sc.with_suffix(".json.stale"))
+    return True
+
+
 def is_complete(out_dir: Path, uid: str) -> bool:
     """Completion is the sidecar plus matching digests, never the image files.
 
@@ -527,7 +604,12 @@ def is_complete(out_dir: Path, uid: str) -> bool:
     return True
 
 
-def process_one(uid: str, glb: Path, out_dir: Path) -> dict:
+def process_one(uid: str, glb: Path, out_dir: Path,
+                fingerprint: dict[str, str] | None = None) -> dict:
+    # Before any rendering: this worker may have re-imported a module that
+    # changed since the run started. See `verify_fingerprint`.
+    verify_fingerprint(fingerprint)
+
     from PIL import Image
 
     images, extents = render_views(glb)
@@ -638,6 +720,9 @@ def main() -> int:
     # does, the correct response is to lose that batch, not the corpus.
     # Rebuilding a pool costs about a second per 500 assets.
     BATCH = 500
+    fingerprint = implementation_fingerprint()
+    print("implementation: " + "  ".join(f"{k} {v[:12]}" for k, v in fingerprint.items()),
+          flush=True)
     quarantine, done, started = [], 0, time.time()
     with runlog.run_progress(NODE):
         for start in range(0, len(todo), BATCH):
@@ -645,12 +730,14 @@ def main() -> int:
             try:
                 with cf.ProcessPoolExecutor(max_workers=args.workers, mp_context=ctx,
                                             max_tasks_per_child=200) as pool:
-                    futures = {pool.submit(process_one, u, g, out_dir): u for u, g in batch}
+                    futures = {pool.submit(process_one, u, g, out_dir, fingerprint): u
+                               for u, g in batch}
                     for fut in cf.as_completed(futures):
                         uid = futures[fut]
                         try:
                             fut.result()
                         except Exception as exc:  # noqa: BLE001 -- one bad asset must not stop the run
+                            retire_stale_sidecar(out_dir, uid)
                             runlog.quarantine(NODE, [{
                                 "uid": uid,
                                 "failure_class": ("RESOURCE" if isinstance(exc, (MemoryError, OSError))
@@ -668,9 +755,12 @@ def main() -> int:
                                   f"剩餘約 {(len(todo)-done)/max(rate,1e-9):.0f} 分, "
                                   f"quarantine {len(quarantine)}", flush=True)
             except cf.process.BrokenProcessPool as exc:
-                # The batch is lost, not the run. Nothing is corrupted: an asset
-                # is complete only once its sidecar lands, so whatever this
-                # batch finished is kept and the rest is retried on resume.
+                # The batch is lost, not the run. Whatever this batch finished
+                # is kept and the rest is retried on resume, because an asset is
+                # complete only once its sidecar lands -- but see
+                # `retire_stale_sidecar`: that reasoning holds for a MISSING
+                # sidecar and not for a STALE one, and the difference cost 23
+                # assets on 2026-08-22.
                 print(f"  批次 {start//BATCH} 的 worker 崩潰，跳過該批繼續：{exc}",
                       flush=True)
                 runlog.quarantine(NODE, [{

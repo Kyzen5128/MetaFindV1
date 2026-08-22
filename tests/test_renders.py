@@ -392,3 +392,73 @@ def test_a_sheared_node_transform_renders_where_trimesh_puts_it(tmp_path):
     # the frame edge) is far below the mis-placement rate (7/600 assets carry a
     # transform pyrender cannot represent).
     assert np.linalg.norm(actual, axis=1).max() <= 1.0 + 1e-6 < ORTHO_HALF_WIDTH
+
+
+def test_a_worker_refuses_a_module_that_changed_mid_run():
+    """A run's behaviour must not change without the artifacts saying so.
+
+    Expected truth is the file's own bytes, read at call time -- not a constant
+    recorded here, which would only test that two literals match.
+
+    The mismatching call IS the negative injection: a fingerprint that disagrees
+    with the file on disk is exactly what a mid-run edit produces, and on
+    2026-08-22 it produced ~1,700 assets rendered with a geometry fix and stamped
+    with the version that predated it.
+    """
+    from metafind.data import renders
+
+    fingerprint = renders.implementation_fingerprint()
+    assert set(fingerprint) == {"renders.py", "meshload.py"}, fingerprint
+
+    renders._FINGERPRINT_VERIFIED = False
+    renders.verify_fingerprint(fingerprint)  # matches -> returns
+
+    renders._FINGERPRINT_VERIFIED = False
+    with pytest.raises(RuntimeError, match="changed while the run was in progress"):
+        renders.verify_fingerprint({**fingerprint, "renders.py": "0" * 64})
+
+    renders._FINGERPRINT_VERIFIED = False
+    renders.verify_fingerprint(None)  # no fingerprint -> no opinion
+
+
+def test_a_failed_asset_stops_reading_as_complete(tmp_path):
+    """A stale sidecar left by a failed re-render must not count as the corpus.
+
+    Resume rests on "an asset is complete only once its sidecar lands", which is
+    sound when the alternative is no sidecar. After a `RENDERER_VERSION` bump it
+    is not: the asset is selected *because* its sidecar is stale, and if the
+    re-render then fails the stale one is still there. Measured on the v4
+    re-render before this existed -- 23 assets kept `renderer_version 3` records
+    and `rebuild_index` counted every one of them as complete.
+    """
+    import json
+    from pathlib import Path
+
+    from metafind.data.renders import (RENDERER_VERSION, is_complete, rebuild_index,
+                                       retire_stale_sidecar, sidecar_path)
+
+    out = tmp_path / "out"
+    (out / "u").mkdir(parents=True)
+    views = []
+    for i in range(11):
+        p = out / "u" / f"view_{i:02d}.png"
+        p.write_bytes(f"not a real png {i}".encode())
+        views.append(str(p))
+    sidecar_path(out, "u").write_text(json.dumps({
+        "uid": "u", "view_paths": views,
+        "view_bytes": [len(Path(v).read_bytes()) for v in views],
+        "renderer_version": RENDERER_VERSION - 1,
+    }))
+
+    assert not is_complete(out, "u"), "a stale version must not read as complete"
+    assert rebuild_index(tmp_path / "idx.jsonl", out) == 1, (
+        "before retiring, the index counts the stale record -- this is the defect"
+    )
+
+    assert retire_stale_sidecar(out, "u") is True
+    assert not sidecar_path(out, "u").exists()
+    assert (out / "u.json.stale").exists(), "renamed, not deleted -- it is evidence"
+    assert rebuild_index(tmp_path / "idx.jsonl", out) == 0
+    assert not is_complete(out, "u")
+
+    assert retire_stale_sidecar(out, "never-existed") is False
