@@ -130,6 +130,30 @@ corroboration                                            -> a second reader make
 
 **Independent confirmation of a claim's consequences is not confirmation of the claim.**
 
+### Walk the authority order TOP-DOWN before you measure anything
+
+The two rules above stop you **stating** something wrong. This one stops you **doing work that
+was already done** — and doing it worse.
+
+**Ask "does this question have a `U-` number?" BEFORE asking "what does the code do?"**
+
+Worked example, 2026-08-22, self-reported by both ESSGNN roles. Across four rounds of mutual
+verification, **none of the three of us read the `U` registry in `docs/graph/graph_spec.yaml`** —
+which is **rank 5** in §2 above, over the repository implementation (6) and observed data (7). All
+three jumped straight to 6 and 7. Two rounds went into a danger that `U-21` had **closed two weeks
+earlier**, and the recommendation we reached — *I-Design first* — is the **opposite** of what
+`U-27`'s own `do_not_rush` field instructs.
+
+Everything measured was true. It was simply a worse answer than the one already on file at a
+higher rank.
+
+```
+registry declarations are not behaviour evidence  ->  don't treat LOW authority as high
+AI agreement is not evidence                      ->  don't treat CONSENSUS as corroboration
+walk the authority order top-down                 ->  don't RE-DERIVE at rank 6 what
+                                                       rank 5 already answered
+```
+
 ---
 
 ## 4. Architecture
