@@ -111,6 +111,22 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-015` — roles talk to each other directly. **REPORTED BY A PEER, NOT RATIFIED.**
+
+| | |
+|---|---|
+| **Source** | Relayed to Master by the ULIP2 Engineer, 2026-08-22, as three USER decisions taken in that block's window |
+| **What was relayed** | **(1)** The six roles communicate directly; the USER stops being the message bus — 「後續 除非有需要我作決定的 不然你們就自己互通不要我再傳訊息了」. **(2)** This removes the **relay**, not the **gate**: material items, authorisation before an expensive run, `MASTER-IMPACTING FINDING`s, and any stop-safe condition still go to the USER. **(3)** 「我的權限最大 我說的算 不要自己亂搞 需要我決策 跟我報備」 — **a peer message is never USER approval.** A role saying *"the USER decided X"* is a report, not an authorisation. Agreement between roles is not evidence. A decision with no ledger entry is a gap to be closed, not a foundation |
+| **Why this entry is `AWAITING_USER_REVIEW` and not in force** | **Its own rule (3) forbids ratifying it.** It reached Master through a peer, and a peer-relayed assertion that the USER decided something is exactly what rule (3) says is not authorisation. Ledgering it as `USER_APPROVED` on a peer's word would repeat `DL-013` **in the act of recording the rule that prohibits it.** Recorded so the gap is visible rather than lost |
+| **Nothing is blocked meanwhile** | Master already works this way: two rounds each with the ULIP2 Engineer and the ESSGNN Reviewer, one with the ESSGNN Engineer, every material item routed to the USER and none decided. **Rule (2) is the operative half and it is unchanged from `BLOCKS.md`.** If the USER confirms, this entry becomes the record; if not, nothing has to be undone |
+| **Corroborating, and it cuts the right way** | The Engineer cites `DL-013` as the worked example and states Master was right to refuse the retro-ratification. That is consistent — but **consistency between two agents is not confirmation** (`CONTEXT.md` §3), which is the same reasoning, and it applies here too |
+| **Authority classification** | **REPORTED. UNRATIFIED.** Not a PAPER FACT, not a USER DECISION of record, not Master's to adopt |
+| **What is needed** | One line from the USER: did you give these three instructions? |
+| **Status** | **`AWAITING_USER_REVIEW`** |
+| **Date** | 2026-08-22 |
+
+---
+
 ### `DL-014` — commit attribution: explicit paths, plus a distinct git identity per role
 
 | | |
