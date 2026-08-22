@@ -147,3 +147,56 @@ def quarantine(stage_name: str, records: list[dict[str, Any]]) -> Path | None:
     for r in records:
         _append(path, {"stage": stage_name, "code_revision": rev, "timestamp": now, **r})
     return path
+
+
+# Set once per process. A worker imports its modules at spawn and cannot change
+# them afterwards, so one check covers every task that worker will ever run.
+_FINGERPRINT_VERIFIED = False
+
+
+def implementation_fingerprint(*modules) -> dict[str, str]:
+    """sha256 of every source file that decides what a node produces.
+
+    A pool with `max_tasks_per_child` set respawns workers mid-run, and each new
+    worker **re-imports**. Editing one of these files while a job is running
+    therefore changes what that job produces, silently. Measured 2026-08-22 on
+    `n04`: roughly 1,700 assets were rendered with a geometry fix and stamped
+    with the version that predated it, **no field in any artifact revealed it**,
+    and the corpus was discarded because no subset could be identified by
+    inspection.
+
+    The version field caught that by accident, not by design -- had the bump
+    landed WITH the fix, the corpus would have been uniformly stamped and every
+    gate would have passed. That is the case this exists for.
+
+    Callers pass their own module list. `meshload` belongs in every one that
+    loads geometry: it owns `FRAME_CORRECTION`, so a change there moves every
+    asset while the calling module does not differ by a byte.
+    """
+    import hashlib
+
+    out: dict[str, str] = {}
+    for mod in modules:
+        path = Path(mod.__file__)
+        out[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return out
+
+
+def verify_fingerprint(expected: dict[str, str] | None, *modules) -> None:
+    """Abort this worker if its source differs from what the run started on.
+
+    The point is not to forbid editing a module. It is that a run's behaviour
+    must not be able to change without the artifacts saying so.
+    """
+    global _FINGERPRINT_VERIFIED
+    if not expected or _FINGERPRINT_VERIFIED:
+        return
+    actual = implementation_fingerprint(*modules)
+    if actual != expected:
+        drift = sorted(k for k in expected if actual.get(k) != expected[k])
+        raise RuntimeError(
+            f"implementation changed while the run was in progress: {', '.join(drift)}. "
+            "This worker would write artifacts the rest of the corpus does not share, "
+            "and no sidecar field would show it. Restart the run."
+        )
+    _FINGERPRINT_VERIFIED = True

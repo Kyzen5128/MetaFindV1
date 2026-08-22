@@ -405,19 +405,20 @@ def test_a_worker_refuses_a_module_that_changed_mid_run():
     2026-08-22 it produced ~1,700 assets rendered with a geometry fix and stamped
     with the version that predated it.
     """
+    from metafind import runlog
     from metafind.data import renders
 
     fingerprint = renders.implementation_fingerprint()
     assert set(fingerprint) == {"renders.py", "meshload.py"}, fingerprint
 
-    renders._FINGERPRINT_VERIFIED = False
+    runlog._FINGERPRINT_VERIFIED = False
     renders.verify_fingerprint(fingerprint)  # matches -> returns
 
-    renders._FINGERPRINT_VERIFIED = False
+    runlog._FINGERPRINT_VERIFIED = False
     with pytest.raises(RuntimeError, match="changed while the run was in progress"):
         renders.verify_fingerprint({**fingerprint, "renders.py": "0" * 64})
 
-    renders._FINGERPRINT_VERIFIED = False
+    runlog._FINGERPRINT_VERIFIED = False
     renders.verify_fingerprint(None)  # no fingerprint -> no opinion
 
 

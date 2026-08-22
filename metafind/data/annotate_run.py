@@ -78,8 +78,48 @@ MODEL_ID = "/mnt/data1/kyzen/models/Qwen3.8-27B"  # D-2: stands in for GPT-4o.
 MAX_NEW_TOKENS = 512
 
 
+# Set only by `use_arm`. `None` means "the corpus", and that is resolved at
+# CALL time rather than captured here: binding `paths.ANNOTATIONS` at import
+# would freeze whatever it pointed at then, which silently defeats every test
+# that redirects it and would make this module disagree with `paths` about
+# where the corpus is.
+_ARM_ROOT: Path | None = None
+
+
+def out_root() -> Path:
+    """Where n05 writes: the corpus, unless `--arm` redirected it."""
+    return paths.ANNOTATIONS if _ARM_ROOT is None else _ARM_ROOT
+
+
+def use_arm(arm: str) -> Path:
+    """Point every write at ``data/outputs/bakeoff/<arm>/`` instead of the corpus.
+
+    `SPEC_M1` §4: *"`data/outputs/annotations/` must hold 0 files at every point
+    in M1. It belongs to the full run alone."* The bake-off writes 100 records
+    per arm, and without this they land in the directory the full run owns,
+    where nothing afterwards can tell an experiment from the corpus.
+
+    The name is restricted to a plain directory, and the result is compared
+    against `paths.ANNOTATIONS` **after resolving symlinks** -- `data/outputs`
+    is itself a link on this machine, so comparing the unresolved paths would
+    let `--arm ../../annotations` through.
+    """
+    global _ARM_ROOT
+    if not arm or arm != Path(arm).name or arm in {".", ".."}:
+        raise ValueError(f"--arm must be a plain directory name, got {arm!r}")
+    root = paths.OUTPUTS / "bakeoff" / arm / "annotations"
+    if root.resolve() == paths.ANNOTATIONS.resolve():
+        raise ValueError(
+            f"--arm {arm!r} resolves onto the corpus annotations directory; "
+            "the bake-off may not write there"
+        )
+    root.mkdir(parents=True, exist_ok=True)
+    _ARM_ROOT = root
+    return root
+
+
 def sidecar_path(uid: str) -> Path:
-    return paths.ANNOTATIONS / f"{uid}.json"
+    return out_root() / f"{uid}.json"
 
 
 def _record(uid: str) -> tuple[dict, str] | None:
@@ -458,7 +498,7 @@ def rebuild_index(index_path: Path) -> int:
     tmp = index_path.with_suffix(".jsonl.part")
     n = 0
     with tmp.open("w") as f:
-        for sc in sorted(paths.ANNOTATIONS.glob("*.json")):
+        for sc in sorted(out_root().glob("*.json")):
             try:
                 f.write(json.dumps(json.loads(sc.read_text())) + "\n")
                 n += 1
@@ -479,9 +519,14 @@ def main() -> int:
                     help="annotate exactly these uids, one per line")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--model", default=MODEL_ID)
+    ap.add_argument("--arm", help="write to data/outputs/bakeoff/<arm>/ instead "
+                                  "of the corpus annotations directory")
     args = ap.parse_args()
 
-    paths.ANNOTATIONS.mkdir(parents=True, exist_ok=True)
+    if args.arm:
+        print(f"arm {args.arm!r} -> {use_arm(args.arm)}", flush=True)
+
+    out_root().mkdir(parents=True, exist_ok=True)
     renders = {}
     index = paths.LOGS / "renders_index.jsonl"
     if not index.exists():
@@ -602,14 +647,20 @@ def main() -> int:
                       f"剩餘約 {(len(todo)-done)/max(rate,1e-9):.0f} 分, "
                       f"quarantine {quarantined}", flush=True)
 
-    n_indexed = rebuild_index(paths.LOGS / "annotations_index.jsonl")
+    # The index follows the records. An arm writing its index into
+    # `logs/annotations_index.jsonl` would overwrite the corpus index with
+    # 100 experimental rows, which is the same contamination one directory up.
+    index_path = (paths.LOGS / "annotations_index.jsonl"
+                  if _ARM_ROOT is None
+                  else _ARM_ROOT.parent / "annotations_index.jsonl")
+    n_indexed = rebuild_index(index_path)
     runlog.cost_ledger(
         wallclock_s=round(time.time() - started, 1),
         assets_annotated=done,
         vlm_calls=done + quarantined * MAX_ATTEMPTS,
     )
     print(f"\n{done:,} annotated this run, {n_indexed:,} complete on disk, "
-          f"{quarantined:,} quarantined -> {paths.ANNOTATIONS}")
+          f"{quarantined:,} quarantined -> {out_root()}")
     return 0
 
 

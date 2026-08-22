@@ -1064,3 +1064,40 @@ def test_the_synset_table_covers_the_whole_lvis_vocabulary():
         (_Path("data/datasets/objaverse-lvis/objaverse_lvis_metadata.json")).read_text()
     )
     assert set(meta["all_keys"]) == set(LVIS_SYNSETS)
+
+
+def test_the_bakeoff_cannot_write_into_the_corpus(tmp_path, monkeypatch):
+    """`SPEC_M1` §4: `data/outputs/annotations/` holds 0 files at every point in M1.
+
+    The bake-off writes 100 records per arm. Without redirection they land in
+    the directory the full run owns, and afterwards **nothing distinguishes an
+    experiment from the corpus** -- the records carry no field saying which they
+    are, so the contamination is not recoverable by inspection.
+
+    Expected truth is `paths.ANNOTATIONS` itself, read through the same module
+    the runner uses, so the test cannot pass by agreeing with a stale copy.
+    """
+    from metafind import paths
+    from metafind.data import annotate_run as R
+
+    monkeypatch.setattr(R, "_ARM_ROOT", None)
+    monkeypatch.setattr(paths, "ANNOTATIONS", tmp_path / "corpus")
+    monkeypatch.setattr(paths, "OUTPUTS", tmp_path)
+
+    assert R.out_root() == tmp_path / "corpus"
+    assert R.sidecar_path("u") == tmp_path / "corpus" / "u.json"
+
+    arm = R.use_arm("qwen38_27b")
+    assert arm == tmp_path / "bakeoff" / "qwen38_27b" / "annotations"
+    assert R.sidecar_path("u") == arm / "u.json"
+    assert paths.ANNOTATIONS not in R.sidecar_path("u").parents
+
+    # Traversal, absolute paths and the two directory shorthands are refused by
+    # NAME, before any resolution -- a check that only compared resolved paths
+    # would depend on where `data/outputs` happens to be linked today.
+    monkeypatch.setattr(R, "_ARM_ROOT", None)
+    for bad in ["", ".", "..", "../annotations", "a/b", "/tmp"]:
+        with pytest.raises(ValueError, match="plain directory name"):
+            R.use_arm(bad)
+    assert R._ARM_ROOT is None, "a refused arm must not leave the writer redirected"
+    assert R.out_root() == tmp_path / "corpus"

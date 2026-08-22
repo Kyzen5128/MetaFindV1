@@ -194,55 +194,21 @@ ORBIT_ELEVATION_DEG = 20.0
 # `is_complete` reject a v3 sidecar; without it a re-run is a silent no-op.
 RENDERER_VERSION = 4
 
-# Set once per worker process. A worker imports its modules at spawn and cannot
-# change them afterwards, so one check covers every task it will ever run.
-_FINGERPRINT_VERIFIED = False
-
-
 def implementation_fingerprint() -> dict[str, str]:
-    """sha256 of every source file that decides what a render is.
+    """This node's own source files. See `runlog.implementation_fingerprint`.
 
-    `max_tasks_per_child=200` means workers respawn and **re-import** during a
-    run, so editing one of these files while a job is running silently changes
-    what that job produces. Measured 2026-08-22: roughly 1,700 assets were
-    rendered with a geometry fix and stamped with the `renderer_version` that
-    predated it, and **no field in any artifact revealed it** -- the corpus had
-    to be discarded because no subset could be identified by inspection.
-
-    The version field caught that by accident, not by design: had the bump
-    landed WITH the fix, the corpus would have been uniformly stamped and every
-    gate would have passed.
-
-    `meshload` is included because it owns `FRAME_CORRECTION` -- a change there
-    moves every asset while `renders.py` does not differ by a byte.
+    `meshload` is here because it owns `FRAME_CORRECTION`: a change there moves
+    every asset while `renders.py` does not differ by a byte.
     """
     from metafind.data import meshload
 
-    out: dict[str, str] = {}
-    for mod in (sys.modules[__name__], meshload):
-        path = Path(mod.__file__)
-        out[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
-    return out
+    return runlog.implementation_fingerprint(sys.modules[__name__], meshload)
 
 
 def verify_fingerprint(expected: dict[str, str] | None) -> None:
-    """Abort this worker if its source differs from what the run started on.
+    from metafind.data import meshload
 
-    The point is not to forbid editing a module. It is that a run's behaviour
-    must not be able to change without the artifacts saying so.
-    """
-    global _FINGERPRINT_VERIFIED
-    if not expected or _FINGERPRINT_VERIFIED:
-        return
-    actual = implementation_fingerprint()
-    if actual != expected:
-        drift = sorted(k for k in expected if actual.get(k) != expected[k])
-        raise RuntimeError(
-            f"implementation changed while the run was in progress: {', '.join(drift)}. "
-            "This worker would write artifacts the rest of the corpus does not share, "
-            "and no sidecar field would show it. Restart the run."
-        )
-    _FINGERPRINT_VERIFIED = True
+    runlog.verify_fingerprint(expected, sys.modules[__name__], meshload)
 
 
 

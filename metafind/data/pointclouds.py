@@ -627,6 +627,26 @@ def main() -> int:
     # DETERMINISTIC_INPUT -> quarantine, max_attempts 1: a non-manifold or empty
     # mesh fails identically forever, so retrying only spends time.
     quarantine, done, started = [], 0, time.time()
+
+    # Recorded, not enforced -- and the difference is the executor below.
+    #
+    # `n04` aborts a worker whose source no longer matches the run, because its
+    # ProcessPool respawns workers that RE-IMPORT: editing `renders.py` mid-run
+    # changed what a running job produced, silently, and cost a 46,052-asset
+    # corpus on 2026-08-22. `n03` uses a ThreadPool. Threads share one
+    # interpreter and the module is imported once, so an edit during a run
+    # cannot reach the run -- there is no drift here to catch.
+    #
+    # The fingerprint is still worth writing down: `runlog.code_revision()`
+    # records the git SHA, which says nothing about UNCOMMITTED edits, and an
+    # uncommitted edit is exactly what produced the `n04` incident.
+    #
+    # **Anyone converting this to a ProcessPool inherits the failure mode and
+    # must add `runlog.verify_fingerprint` the way `n04` does.**
+    fingerprint = runlog.implementation_fingerprint(sys.modules[__name__], meshload)
+    print("implementation: " + "  ".join(f"{k} {v[:12]}" for k, v in fingerprint.items()),
+          flush=True)
+
     with runlog.run_progress(NODE), \
             cf.ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {pool.submit(process_one, u, g, o): u for u, g, o in todo}
