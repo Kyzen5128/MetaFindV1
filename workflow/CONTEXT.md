@@ -152,7 +152,35 @@ registry declarations are not behaviour evidence  ->  don't treat LOW authority 
 AI agreement is not evidence                      ->  don't treat CONSENSUS as corroboration
 walk the authority order top-down                 ->  don't RE-DERIVE at rank 6 what
                                                        rank 5 already answered
+assert the PROPERTY, not a count of it            ->  don't tune the threshold to the data
 ```
+
+### Assert the property, not a count of it
+
+A count is a **proxy**. When it moves you cannot tell whether the world moved or your threshold
+did, and the temptation is to move the threshold until the number behaves — which blinds the
+check to the thing it exists for.
+
+Worked example, 2026-08-22. The `n03` regeneration moved *"assets with exactly zero variance on
+one axis"* from **21** to **18**. Master proposed re-cutting at `≤1e-12 & others >0.05` (102);
+the ESSGNN Reviewer proposed `≤1e-20` (84). **The ULIP2 Engineer rejected both, and was right on
+three counts:**
+
+1. **`validation_plan.yaml:101` had already defined the real check** — `L1-PC-NONDEGENERATE`:
+   *"for every axis where variance is at or near zero, the mesh's own `raw_bbox_extents` is
+   correspondingly flat."* Its own note says an absolute floor **cannot** tell a flat **asset**
+   from a flattening **bug**, and *"raising the floor until they pass would blind the check to the
+   failure it exists for."* Rank 5 had the answer; two of us re-derived it worse at rank 7.
+2. **The property is threshold-free.** Re-measured by Master: 106 assets at `≤1e-12`, **0**
+   whose mesh is not correspondingly flat, worst ratio `7.004e-04`. **Violations are 0 at every
+   cut from `0` to `1e-12`.** The epsilon moves; the conclusion does not.
+3. **Changing the metric would have destroyed the only comparison available.** `21` survived the
+   corpus deletion **only because it was written down** in `validation_plan.yaml`. The corpus it
+   described is gone. So `== 0` has a before and after, and every replacement statistic has
+   **none**.
+
+And picking a cut **after** looking at the distribution is precisely what `S-3` records the USER
+prohibiting. **Master proposed it anyway.**
 
 ---
 
@@ -254,7 +282,21 @@ doubled it.
 
 **`CLAUDE.md` §9 still names `/home/kyzen/data/MetaFind` as the data root. That path does not
 exist** — the real link is `data -> /mnt/data1/kyzen/MetaFind`. `CLAUDE.md` is guard-protected and
-is the USER's to correct.
+is the USER's to correct. §9 itself says *"Report stale machine-specific absolute paths before
+modifying them"*, so it is reported here and not touched.
+
+**It has a real consequence, not just a documentation one.** `n03`'s sidecars record
+`path: /home/kyzen/MetaFindV1/data/outputs/pointclouds/<uid>.npz` — an absolute path that resolves
+through **two** symlinks:
+
+```
+/home/kyzen/MetaFindV1/data/outputs/pointclouds/<uid>.npz
+  -> data       -> /mnt/data1/kyzen/MetaFind
+  -> pointclouds -> /home/kyzen/metafind_out/pointclouds     <- where the bytes actually are
+```
+
+Verified resolvable today. **But it depends on both links surviving**, and anyone following
+`CLAUDE.md` §9 to `/home/kyzen/data/MetaFind` finds nothing at all.
 
 **`/mnt/data1` is an SMR drive** (`ST4000DM004`). Sustained small-file writes collapse to
 single-digit MB/s once its cache fills — write latency above 5,000 ms has been measured under
