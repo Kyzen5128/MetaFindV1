@@ -30,6 +30,58 @@ INFERENCE · IMPLEMENTATION CHOICE · DEVIATION · UNKNOWN. Never promote an inf
 
 ---
 
+### 2026-08-22 · ULIP2 ENGINEER · `R-11` adopted; the COLOR_0 instruction was already executed
+
+#### `R-11` — conformance with ULIP-2 is reported, not apologised for
+
+USER ruling: 「他是你參考的架構那必須知道啊 除非你有特別做什麼設定」. ULIP-2 is this project's
+reference architecture — our point encoder **is** its frozen checkpoint — so agreement with it is
+the expected state, stated with its measurement and its `n`. Only a **deliberate** divergence is a
+`DEVIATION`. What stays unclaimable is procedural identity: **ULIP-2's rendering and sampling code
+was never published**, so "we ran the same code" cannot be asserted in either direction.
+
+Recorded in `SPEC_M1` §2 as the reporting rule for the milestone. It **supersedes** the earlier
+position that agreement with ULIP-2 may never be stated.
+
+**This block audited its own wording against it.** One line in `HANDOFF` reads *"95.8% is agreement
+with ULIP-2, not with MetaFind … a better score against ULIP is not evidence of paper fidelity"*.
+That stands: it distinguishes two different authorities rather than treating conformance as a
+fault, which is what `R-11` prohibits. No deviation in this block was found to be mislabelled
+conformance — the four registered are the annotator model, LVIS anchoring, the contrastive
+negative count, and the white background.
+
+#### The `COLOR_0` instruction arrived twice; the second copy was not re-executed
+
+Sections 2–5 of the instruction dated 2026-08-22 were already implemented and committed as
+`838b4b2` before the duplicate arrived. Verified rather than assumed:
+
+```
+SAMPLER_VERSION = 5                       colour semantics changed, v4 refused
+color0_modulated                          in _colourise, load_parts, sample_mesh, sidecar
+GLTF_DEFAULT_BASE_COLOR                   marked INFERENCE
+"black background, ULIP-matched framing"  absent -- R-4.a closed in 3973e0a
+pytest                                    587 passed
+```
+
+**Nothing was re-run and no file was touched a second time.** Re-executing a completed instruction
+is how a corpus acquires two generations of the same fix.
+
+#### One number in the instruction that this block cannot reproduce, and does not dispute
+
+The instruction states `pytest 585 passed`; this tree is at **587**, the two additional tests being
+the `P3` pair added with the implementation. Not a disagreement — the instruction was written
+against the tree before that commit.
+
+#### STATE
+
+**Unchanged: awaiting the Reviewer's 5-minute safety check.** This block has verified the
+`gltf_default` control group byte-identical at the full 10,000 points (9 assets, max absolute RGB
+difference 0.0000). **The texture-brightness check for double multiplication is the Reviewer's and
+has not been run here.** The 3.3-hour regeneration has not started.
+
+
+---
+
 ### 2026-08-22 · ULIP2 ENGINEER · **`R-2` IMPLEMENTED — P3, glTF base-colour semantics**
 
 **`COLOR_0` is now a multiplier on the base colour, not a competing source.** Implemented to the

@@ -45,6 +45,34 @@ Authority order for this milestone, highest first:
 MetaFind governs; where MetaFind is silent, ULIP-2 governs. A value chosen under `U-O` is an
 `IMPLEMENTATION CHOICE` with upstream provenance and **never** a `PAPER FACT`.
 
+### How conformance with ULIP-2 is reported — `R-11`, USER-ruled 2026-08-22
+
+> 「他是你參考的架構那必須知道啊 除非你有特別做什麼設定」
+
+**ULIP-2 is this project's reference architecture, not a third party.** Our point encoder *is* its
+frozen checkpoint. Three consequences bind every claim in this milestone:
+
+| | Rule |
+|---|---|
+| **Default** | Agreeing with ULIP-2 is the expected state. **State it with the measurement and its `n`** — not as something requiring justification, and not as a deviation |
+| **Divergence** | Only a place we **deliberately chose differently** is a `DEVIATION` and needs a registry id |
+| **Never claimable** | That we ran the same code. **ULIP-2's rendering and sampling code was never published**, so procedural identity cannot be asserted in either direction |
+
+**Supersedes** the earlier Reviewer position that agreement with ULIP-2 may never be stated.
+Procedural identity stays unclaimable; **artifact agreement is measurable and must be quantified.**
+
+Applied to this milestone:
+
+| | Claim | Status |
+|---|---|---|
+| Point-cloud geometry | `FIND-7`: R@1 **98.0%** against ULIP's official features | conformance, stated |
+| Renders | `S-5`: R@1 **97.2%** (arm E, n=286) against 83.2% for the v2 corpus | conformance, stated |
+| `COLOR_0` handling | `R-10`: cosine mean **0.9004**, median **0.9195**, n=130 through the frozen encoder | conformance, stated |
+| **White background** | Chosen **against** upstream's black, on upstream's own metric | **DEVIATION — needs a registry id (`U-Z`)** |
+
+**Only the last line is a deviation.** The first three are the reference architecture behaving as
+the reference architecture, and each carries its measurement and its population.
+
 **Unresolved conflict, carried:** `U-09` — whether the paper's retrieval gallery is the 20% test
 split or the full corpus. Both protocols are produced; neither is presented as the paper's.
 
