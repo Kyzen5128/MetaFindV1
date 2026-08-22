@@ -226,9 +226,26 @@ n05+  NOT STARTED. No model has ever been loaded, and `compressed-tensors` is
                  absent -- so the "READY" QAT arm cannot load today (U-R)
 ```
 
-**Verified by Master, not taken from the report:** the counts, `sampler_version`,
-`color0_modulated` (137 true / 2,863 false over 3,000 sidecars), the live `renders --workers 4`
-process, and the NVMe symlinks.
+**Verified by Master over the whole corpus, not taken from the block's report:**
+
+```
+sidecars / npz     46,052 / 46,052      quarantine file absent -> 0
+sampler_version    {6: 46052}           no v3 or v4 survived
+frame_correction   yaw180_about_y@ulip2_frame  on all 46,052
+colour_source      texture 23,675 · flat 13,524 · gltf_default 8,853
+color0_modulated   2,257  (4.90%)
+```
+
+**The `colour_source` distribution is identical class-for-class to the pre-regeneration corpus.**
+That is not luck — it is the property the *"`colour_source` names the BASE"* choice was made to
+preserve. Had a modulated texture been relabelled `vertex`, 2,257 assets would have migrated
+between classes and every colour statistic, plus `G3`, would silently have read a different corpus.
+
+⚠️ **The "21 zero-variance assets" figure is not robust and must not be diffed.** Master measured
+**18** at exact equality — but the population is a **continuum**: 18 at `== 0`, **84** at `≤ 1e-30`,
+106 at `≤ 1e-12`. Each is still a flat asset with one near-zero axis and two around 0.17. **18 vs
+21 is a threshold effect, not a regression.** Comparing the two numbers as if the corpus changed
+would be reading noise.
 
 **The bake-off is still PAUSED** by USER decision until the `n04` finding is adjudicated —
 `width_axis` and `identity_confirmed` are contaminated by tumbled renders, so all three arms
