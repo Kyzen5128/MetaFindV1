@@ -30,6 +30,102 @@ INFERENCE · IMPLEMENTATION CHOICE · DEVIATION · UNKNOWN. Never promote an inf
 
 ---
 
+### 2026-08-22 · ULIP2 ENGINEER → MASTER · **`R-12` implemented — a FIFTH unregistered DEVIATION**
+
+**`COLOR_0` is withdrawn from the `texture` class. That is a deliberate departure from glTF 2.0,
+it has no registry id, and this block does not assign one.**
+
+`U-Z` authorises Master to register on the Integrator's behalf. Routed, not decided.
+
+#### The deviation
+
+| | |
+|---|---|
+| **Expected** | glTF 2.0: `COLOR_0` multiplies the base colour, and the base colour **includes** the texture. Textured assets are in scope |
+| **Reproduced** | `texture` bases are left unmodulated |
+| **Reason** | Measured, over **all 37** texture assets carrying `COLOR_0` that ULIP also publishes — the whole population, not a sample: modulating darkens **37 of 37**, mean −0.2076 / median −0.1821 on a 0–1 scale, and cosine against ULIP's own clouds through the frozen encoder moves **0.9005 → 0.8980** |
+| **Impact** | the `rgb` channel of ~995 `texture` assets, consumed by the point tower |
+| **Registry id** | **none — must be created.** The fifth |
+
+**The darkening is certain; "therefore worse" is not.** 0.0025 with 16/37 sits inside the noise
+for 37 coin flips (18.5 ± 3), and no paired significance test was run. **What decides it is
+`R-11`**, not the cosine: ULIP-2 is the reference architecture, agreement is the default, and only
+a deliberate divergence is registered. Asked twice, the specification-correct rule never won —
+`R-10` across all three classes (n=130) gave 0.9043 unmodulated against 0.9004, and `R-12` on
+texture alone (n=37) gave 0.9005 against 0.8980.
+
+**`R-10`'s "tie" is now explained.** A tie across a mixed population is what two opposite effects
+cancelling looks like. Splitting by class showed it, and the rule that appeared tied was winning
+on two classes and losing on the third.
+
+#### Final scope
+
+```
+gltf_default   COLOR_0 x [1,1,1,1] = COLOR_0     modulated
+flat           COLOR_0 x baseColorFactor         modulated
+texture        COLOR_0 NOT applied               DEVIATION
+```
+
+`SAMPLER_VERSION` 5 → **6**.
+
+#### The three release conditions, verified on real assets at the full 10,000 points
+
+| class | carries `COLOR_0` | modulated | vs `COLOR_0` disabled | vs the on-disk cloud |
+|---|---|---|---|---|
+| `gltf_default` | yes ×3 | `True` | 1.000000 · 0.250980 · 0.600000 | same |
+| `gltf_default` | no ×2 | `False` | **0.000000** | **0.000000** |
+| `flat` | yes ×2 | `True` | 0.129412 · 0.478431 | same |
+| `flat` | no ×2 | `False` | **0.000000** | **0.000000** |
+| **`texture`** | **yes** | **`False`** | **0.000000** | **0.000000** |
+| `texture` | no ×2 | `False` | **0.000000** | **0.000000** |
+
+All three conditions hold: the control group is untouched, **`texture` returns exactly to its
+`COLOR_0`-disabled values**, and `flat` / `gltf_default` are unaffected by the narrowing.
+
+#### A test now guards the carve-out
+
+`test_texture_bases_are_not_modulated_by_color0` asserts a textured asset is **byte-identical with
+and without `COLOR_0`**, and in the same test asserts `flat` **is still modulated** — so a
+narrowing applied one branch too widely cannot pass silently. It pins a departure from the
+specification, which means it must fail loudly if someone later "fixes" it back.
+
+`pytest tests/ -q` → **588 passed**. `check_graph.py` → 2275 checks, all pass.
+
+#### Five deviations, none with a registry id
+
+| | Deviation |
+|---|---|
+| 1 | LVIS category anchoring (`DL-007`) |
+| 2 | Contrastive negatives, 512 upstream vs one GPU's batch (`F-N10-1`) |
+| 3 | Corpus 46,052 vs "approximately 48,000" (`U-01`) — carried as a Table 1 limitation |
+| 4 | White render background, against upstream's black (`U-W`) |
+| 5 | **`COLOR_0` withdrawn from `texture`, against glTF 2.0 (`R-12`)** |
+
+`check_graph.py:373-383` matches ids only and never reads the `what:` text, so all five pass every
+gate silently. Debt `D-2` / `FU-A`.
+
+#### `CONTEXT.md` is now stale in two places — Master's file, reported not edited
+
+`workflow/CONTEXT.md` §5 still reads:
+
+- *"Point clouds and renders are verified against official ULIP-2 artifacts and do **not** need
+  regenerating."* — **both are being regenerated**, for the up-axis defect, the frame correction
+  and `COLOR_0`.
+- *"Our assets sit 180° yawed about Y … this does **not** move the embedding."* — the measurement
+  stands, but the yaw is now **corrected**, so the sentence describes a state that is about to stop
+  being true.
+
+Neither was wrong when written. Both will mislead the next reader after the regeneration.
+
+#### STATE
+
+**Ready for the Reviewer's re-check.** Nothing regenerated. This block has verified the three
+conditions on 12 assets; the Reviewer's n=60 control and n=37 texture population are the ones that
+carry the claim.
+
+
+---
+
 ### 2026-08-22 · ULIP2 ENGINEER · `R-11` adopted; the COLOR_0 instruction was already executed
 
 #### `R-11` — conformance with ULIP-2 is reported, not apologised for
