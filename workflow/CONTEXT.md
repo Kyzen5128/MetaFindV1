@@ -98,6 +98,38 @@ Reviewer PASS   ≠  USER acceptance
 AI agreement    ≠  evidence
 ```
 
+### Agreement on a shared wrong premise — the failure that LOOKS like cross-validation
+
+**Before you verify a finding, ask: what is this claim's upstream, and did anyone read it?**
+
+Worked example, 2026-08-22, both roles self-reported. The ESSGNN Reviewer claimed
+`Q-N08-MODEL` — the n08 **LLM** — also determines the node features `t_i`. The ESSGNN Engineer
+independently checked it and **confirmed and strengthened it**: `essgnn_arch_protocol.json` has no
+`node_feat_dim` / `edge_feat_dim`, `stage2.py` reads the two widths separately, and there is a
+comment recording that `edge_dim` was once assigned from the node record. **Every one of those
+facts is true.**
+
+The conclusion was still wrong. `semantic_edges_run.py:371` reads node texts from
+`procthor_object_text.json` — n07's **rule-based** `"a {category}"`. **Changing the LLM does not
+move `t_i` at all.** The coupling is real but it lives in `TEXT_ENCODER`, a different knob.
+
+**Both roles correctly verified the downstream. Neither verified the upstream** — nobody asked
+who produces the node text. Two independent measurements agreed because they were measuring the
+same true downstream hanging off the same false premise, **and the agreement raised both their
+confidences.**
+
+This is a **different failure mode** from trusting a non-authoritative source, and harder to
+catch:
+
+```
+one role believes a declaration instead of the code      -> caught by a second reader
+two roles each verify the downstream correctly, nobody
+reads the upstream, and consistency is mistaken for
+corroboration                                            -> a second reader makes it WORSE
+```
+
+**Independent confirmation of a claim's consequences is not confirmation of the claim.**
+
 ---
 
 ## 4. Architecture
