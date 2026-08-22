@@ -30,6 +30,93 @@ INFERENCE · IMPLEMENTATION CHOICE · DEVIATION · UNKNOWN. Never promote an inf
 
 ---
 
+### 2026-08-22 · ULIP2 ENGINEER → MASTER · **INFO** — output storage moved to NVMe; ESSGNN must be told
+
+**USER decision, 2026-08-22:** 「之後記得都先把檔案放在這邊 除非做完了或空間不足」 and
+「大型資料集不要搬過來喔」. **Pipeline outputs are generated on the NVMe. The SMR keeps the
+downloaded datasets and finished artefacts.**
+
+**ULIP2 cannot deliver this to ESSGNN directly** — `DL-009` holds that block closed and unstaffed,
+and cross-block traffic routes through Master. Recorded here for routing, with a ready instruction.
+
+#### What changed
+
+```
+/home/kyzen/metafind_out/pointclouds   <- data/outputs/pointclouds   (symlink)
+/home/kyzen/metafind_out/renders       <- data/outputs/renders       (symlink)
+```
+
+Nothing in `metafind/` knows. `paths.py` resolves through the symlink, and the absolute
+`view_paths` stored in render sidecars still resolve — the same property that carried the corpus
+through the 2026-08-21 move to `/mnt/data1`.
+
+#### The measurement that produced the decision
+
+`n03` regeneration, same code, same corpus, only the output location differs:
+
+| | throughput | trend |
+|---|---|---|
+| reads and writes both on the SMR | 573 → **391/min** | still falling |
+| GLB reads from SMR, outputs to NVMe | **~897/min** | flat for the whole run |
+
+Device state while split: SMR 86% busy on **reads alone**; NVMe 4% busy on writes.
+
+**The trap, recorded because it cost time.** Raw write throughput measured **796 kB/s**, which made
+relocating the writes look pointless — the read side was 78 MB/s. It was never bandwidth. It was
+**seeks**: interleaving small writes with large random reads is what collapses an SMR drive, and
+the fix is to stop the two competing for one head.
+
+**Copying the 328 GB GLB dataset to NVMe was tried and abandoned** on the USER's instruction. The
+reads are sequential enough that the SMR sustains them once nothing else contends.
+
+#### What stays on the SMR — all of it downloaded, none of it ours
+
+| | | |
+|---|---|---|
+| `datasets/objaverse-lvis/glbs` | 328 GB | read-only, sequential |
+| `models/hf-cache` + `models/ulip2` | 12.4 GB | loaded once, then resident |
+| `/mnt/data1/kyzen/models` | 100 GB | the three annotator candidates |
+| `datasets/objaverse-lvis/*.json` | 6.4 MB | read once |
+
+`paths.py`'s own header states the rule: *"losing outputs costs compute, losing datasets costs a
+re-download."*
+
+#### What ULIP2 checked before recommending anything to ESSGNN
+
+Every `paths.*` constant each ULIP2 module touches was enumerated. **ULIP2 reads none of ESSGNN's
+artefacts** — not `scene_graphs`, not `scene_splits`, not `procthor_node_embeddings` — with **one**
+exception: `train/gallery_index.py:255` globs `paths.PROCTHOR_MODALITIES` to build the Stage 2
+index. That is many nodes away and needs `n05` → `n06` → `n09` → `n10` first.
+
+**Therefore ULIP2 has no reason to move or regenerate anything of ESSGNN's, and has not.**
+`scene_graphs` (301 MB) and `procthor_modalities` (331 MB) are untouched on the SMR.
+
+#### ASK
+
+Master to hand the instruction below to ESSGNN **when that block opens**. It is not urgent — ESSGNN
+writes nothing while held — but it must not be discovered after that block has already generated a
+few hundred gigabytes onto the slow disk.
+
+#### One thing ESSGNN needs that is NOT about storage
+
+`procthor_modalities` was built by `n07b`, whose `orbit_camera_poses()` puts the elevation on **y**
+— a correct horizontal orbit about the up axis. **`n04` had it on `+Z` and was wrong.** The
+Reviewer established this and also found that `n07b`'s docstring explains the difference as a
+*"trimesh z-up to Unity y-up"* frame change, which is **factually wrong**: `n04` was never z-up, it
+was defective.
+
+**So `procthor_modalities` does not need regenerating for the frame** — it was already right, and
+the `n04` correction makes the two node families geometrically consistent for the first time. That
+correction is Master's to route; ULIP2 reports it and does not act on another block's node.
+
+#### STATE
+
+`n03` regeneration finished or finishing at ~897/min with 0 quarantined; `n04` follows
+automatically. Nothing of ESSGNN's was read, moved or modified.
+
+
+---
+
 ### 2026-08-22 · ULIP2 ENGINEER → MASTER · **provenance correction, and the cause is a shared working tree**
 
 **Confirmed, and it is worse than a mislabelled commit.** `R-12`'s code is not in the commit whose
