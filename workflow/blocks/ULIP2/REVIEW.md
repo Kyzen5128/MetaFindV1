@@ -513,3 +513,60 @@ fails when the defect is present. That is the definition of a correction.
 **Not covered:** `test_orthographic_size_does_not_change_with_distance` was not injection-tested.
 Its change was to the foreground predicate, not to a geometric assertion, and the defect it would
 need to catch (a projection setting not reaching the camera) was not reintroduced here.
+
+---
+
+## R-4 — verification of the Engineer's corrections, 2026-08-22 12:25
+
+**The Reviewer's `R-2` / `R-3` measurements finished at `12:24:20`; the Engineer's edits to
+`pointclouds.py` and `renders.py` landed at `12:25:02`.** No race: `R-2` and `R-3` describe the
+clean tree at `9842d5e`. `R-2` was then **re-measured on the modified tree** — see below.
+
+Verified by execution, not by reading the diff.
+
+| | Item | Method | Result |
+|---|---|---|---|
+| ✅ | `n03 is_complete()` reads the version | called on **5 real on-disk `.npz`** | `False` ×5 — the stale corpus is now correctly rejected |
+| ✅ | `n04 is_complete()` reads the version | called on **5 real on-disk render dirs** | `False` ×5 |
+| ✅ | `SAMPLER_VERSION` bumped | `3 → 4`, `!=` not `<` | correct: a newer sampler is also not this one's output |
+| ✅ | `FRAME_CORRECTION_ID` reaches an artifact | `pointclouds.py` sidecar now writes `frame_correction` | the promise in `meshload`'s docstring is now true |
+| ✅ | `U-W` white background | `BACKGROUND_RGBA == [255,255,255,255]` | applied, and the comment records the decision and its measurement instead of justifying it by upstream |
+| ✅ | `U-X` framing | `ORTHO_HALF_WIDTH == 1.10` | applied |
+| ✅ | the "elevation SOLVED" claim | `renders.py` | removed; replaced with an explicit `U-03 remains UNKNOWN` and the failed attempt recorded |
+| ✅ | no ambiguity from redefining v3 mid-flight | 4,000 render sidecars sampled | **all `renderer_version: 2`**; nothing on disk carries the old meaning of `3` |
+| ✅ | test suite | `pytest tests/ -q` | **585 passed** (was 583; two tests added) |
+
+### FINDING R-4.a — `RENDERER_VERSION`'s own comment is now false
+
+```
+FINDING          renders.py's version legend still reads
+                   "3 = azimuth orbit about the mesh up axis, BLACK BACKGROUND,
+                    ULIP-matched framing, frame-corrected mesh"
+                 After U-W and U-X, v3's background is WHITE and its framing is
+                 xmag 1.10 -- both IDENTICAL to v2. The legend is wrong on two of
+                 its three clauses.
+EVIDENCE         renders.py version legend, immediately below ORBIT_ELEVATION_DEG,
+                 against BACKGROUND_RGBA == [255,255,255,255] and
+                 ORTHO_HALF_WIDTH == 1.10 in the same file.
+CLASSIFICATION   OBSERVED IMPLEMENTATION
+IMPACT           provenance only -- no artifact is wrong. But `renderer_version` is
+                 the field a later reader uses to know what a render IS
+SEVERITY         MINOR
+```
+
+**Same defect class the Engineer had just corrected two lines above.** What actually separates v2
+from v3 now is: **the orbit axis, the frame correction, and the exposure.** Background and framing
+are back to v2's values. The legend should say that.
+
+### FINDING R-4.b — `R-2` survives the Engineer's changes, unaddressed
+
+Re-measured on the modified tree, 50 assets carrying `COLOR_0`:
+
+```
+gltf_default -> vertex     146    applied
+flat         -> flat       505    COLOR_0 STILL IGNORED
+                                  -> 22% reached  (16% on the larger clean-tree sample)
+```
+
+`_colourise()` was not touched. **This is expected, not a criticism** — `R-2` was written after
+the Engineer's edits began. It remains the one open item before the regeneration.

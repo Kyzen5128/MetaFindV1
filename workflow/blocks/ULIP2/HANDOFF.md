@@ -30,6 +30,99 @@ INFERENCE · IMPLEMENTATION CHOICE · DEVIATION · UNKNOWN. Never promote an inf
 
 ---
 
+### 2026-08-22 · ULIP2 ENGINEER → MASTER · **MASTER-IMPACTING** — `R-2`: which colour wins, and it is not this block's to choose
+
+**When a glTF primitive carries BOTH `COLOR_0` and a flat material colour, something has to
+decide which one the point cloud gets. There are three defensible answers, they disagree on
+roughly a thousand assets, and the choice is annotation/preprocessing semantics.**
+
+**Reported, not acted on.** The `COLOR_0` code is left exactly as the Reviewer found it.
+
+#### FINDING — confirmed independently, magnitude disputed
+
+`OBSERVED IMPLEMENTATION`. In `pointclouds._colourise()`, the `TextureVisuals` branch tries
+`vis.to_color()` first. When that returns a single RGBA — which trimesh does for a
+uniformly-coloured mesh — it takes `return _uniform(vc, "flat")` **before execution reaches the
+`COLOR_0` branch**. So `COLOR_0` beats `flat` on the `baseColorFactor` path and **loses** to it on
+the `to_color()` path. Same class, two routes, opposite outcomes, and which route runs is
+trimesh's decision, not ours.
+
+The docstring this block wrote says `COLOR_0` sits *"below texture, above flat"*. **That is true of
+one path and false of the other**, which makes the docstring wrong as written.
+
+`OBSERVED DATA`, measured on the current working tree, 150 assets sampled per class with
+`default_rng(20260822)`, counting only assets that actually declare `COLOR_0`:
+
+| old class | new class | sampled | extrapolated | meaning |
+|---|---|---|---|---|
+| `gltf_default` | **`vertex`** | 21 / 150 | ≈ **1,239** | `COLOR_0` used ✅ |
+| `gltf_default` | `flat` | 5 / 150 | ≈ **295** | `COLOR_0` present and discarded |
+| `flat` | `flat` | 7 / 150 | ≈ **631** | `COLOR_0` present and discarded |
+| `texture` | `texture` | 3 / 150 | ≈ 473 | texture wins — by design, not a defect |
+
+**≈926 assets carry `COLOR_0` that is currently thrown away.**
+
+⚠️ **The two blocks disagree on the magnitude and neither is dismissed.** The Reviewer measured
+**146 captured against 505 discarded** (22% captured); this block measures **1,239 against 926**
+(57% captured). Same mechanism, same direction, different sampling. **The disagreement is itself
+unresolved**, and whichever remedy is chosen, the affected population must be counted over the
+whole corpus rather than extrapolated from either sample.
+
+#### Why this block will not decide it
+
+Three readings, all defensible:
+
+| | Rule | Who it favours | Consequence |
+|---|---|---|---|
+| **1** | Keep `baseColorFactor`, ignore `COLOR_0` when both exist | today's behaviour on ~926 assets | The material colour is the artist's top-level intent |
+| **2** | `COLOR_0` replaces the factor | this block's docstring, and today's behaviour on ~1,239 assets | Per-vertex detail beats a single colour |
+| **3** | `COLOR_0` **×** `baseColorFactor` | the glTF 2.0 specification, per the Reviewer | Neither is discarded |
+
+**This decides what colour ~926 assets present to the point tower**, and ULIP-2's Objaverse path
+consumes `rgb` (`use_color = True`, `dataset_3d.py:456-505`, `UPSTREAM FACT`). That is dataset
+preprocessing semantics — `BLOCKS.md` lists it as **material, USER decides**.
+
+**Not verified by this block:** that glTF 2.0 defines `COLOR_0` as a multiplier. It is the
+Reviewer's claim, the specification is not on disk here, and it is repeated as their finding
+rather than adopted as fact. **It should be checked against the specification text before it
+carries any weight**, because it is the only argument for option 3.
+
+Worth noting either way: **trimesh implements none of the three.** With materials it returns the
+material and drops `COLOR_0`; with `skip_materials=True` it returns `COLOR_0` and drops the
+material. Whichever option is chosen has to be built.
+
+#### DECISION — proposed, kept separate from the finding
+
+**Do not choose on principle. Measure it, exactly as `F-N03-1` was closed.**
+
+For the ~926 disputed assets, render all three rules and compare each against ULIP-2's official
+clouds — the same differential that split `COLOR_0`-present from `COLOR_0`-absent with **no
+residual** (present: ULIP 0.0% white vs ours 100.0%; absent: 35.3% vs 35.1%, all-white counts
+identical at 19/50). It has already discriminated once on this exact question.
+
+**Why measurement beats the specification here.** `U-O` makes ULIP-2 the authority where MetaFind
+is silent, and MetaFind says nothing about colour. The glTF specification is not this project's
+authority — **it is the authority over what a GLB file means, not over what MetaFind did.** If
+ULIP's clouds match the spec-correct rule, options 1 and 2 are excluded by evidence rather than by
+argument. If they match something else, that is worth far more than being right about the format.
+
+The Reviewer has offered to run it. Either block can; **the choice is the USER's.**
+
+#### ASK
+
+1. Master to route the three-way rule to the USER as a material preprocessing decision.
+2. Authorise the differential against ULIP's clouds on the ~926 assets — read-only, no GPU, no
+   corpus write.
+3. Resolve the 22%-vs-57% disagreement by counting over the whole corpus rather than a sample.
+
+#### STATE
+
+**BLOCKING the regeneration.** Colour is written into every `.npz` the run produces, so starting
+before this is settled means re-running `n03` a second time to change it. The `n04` render side is
+unaffected — renders take colour from the material through pyrender, not through this path.
+
+---
+
 ### 2026-08-22 · ULIP2 ENGINEER → MASTER · **MASTER-IMPACTING** — a fourth unregistered DEVIATION
 
 **The render background is now WHITE by USER decision `U-W`, deliberately diverging from ULIP-2's
@@ -1259,3 +1352,60 @@ in a fix that reaches 16% of its target, and completing it later is another 3.3 
 `R-2` above; item 7 is the two version blockers already routed to the Engineer.
 
 `STATE` — nothing modified outside `REVIEW.md` and this file.
+
+---
+
+### 2026-08-22 · ULIP2 REVIEWER → ENGINEER + MASTER · **VERIFICATION** — R-4
+
+**The two blockers are genuinely fixed. Verified by calling the predicates on real artifacts, not
+by reading the diff.**
+
+```
+n03 is_complete()  on 5 real on-disk .npz         -> False x5
+n04 is_complete()  on 5 real on-disk render dirs  -> False x5
+```
+
+The stale corpus is now correctly rejected, so a bare re-run regenerates rather than skips.
+`SAMPLER_VERSION 3 -> 4` with `!=` rather than `<` — correct, and for the right reason.
+`frame_correction: FRAME_CORRECTION_ID` now reaches the sidecar, so `meshload`'s docstring is
+true for the first time. `U-W` and `U-X` are applied and their comments record the decision and
+its measurement rather than justifying it by upstream. The "elevation SOLVED" claim is gone and
+`U-03` is stated as `UNKNOWN`. `pytest` **585 passed**, up from 583.
+
+**No mid-flight ambiguity from redefining `renderer_version 3`:** 4,000 sidecars sampled, all
+carry `2`. Nothing on disk holds the old meaning of `3`.
+
+**Timing, recorded so the evidence is attributable:** the Reviewer's `R-2`/`R-3` run finished
+`12:24:20`; the Engineer's edits landed `12:25:02`. Those findings describe `9842d5e`. `R-2` was
+re-measured afterwards on the modified tree and is unchanged.
+
+#### Two items remain before the 3.3-hour run
+
+**1. `R-4.a`, MINOR** — `renders.py`'s `renderer_version` legend still describes v3 as *"black
+background, ULIP-matched framing"*. After `U-W`/`U-X` both are back to v2's values. What separates
+v2 from v3 now is **the orbit axis, the frame correction and the exposure**. Same defect class the
+Engineer corrected two lines above, in the same edit.
+
+**2. `R-2`, MAJOR and USER-material** — the `COLOR_0` fix still reaches 22% of its population
+(146 applied, 505 ignored, re-measured on the current tree). `_colourise()` untouched, which is
+expected: `R-2` was written after those edits began.
+
+**The remaining question is not an engineering one.** glTF 2.0 defines `COLOR_0` as a multiplier
+on `baseColorFactor`, so *"COLOR_0 above flat"* may itself be the wrong contract:
+
+```
+1  keep baseColorFactor        what the code does today for the 505
+2  COLOR_0 replaces it         what the docstring claims, done for the 146
+3  COLOR_0 x baseColorFactor   what the glTF specification says
+```
+
+This is dataset-preprocessing semantics reaching the rgb channel the ULIP-2 point tower consumes.
+**USER-material under `BLOCKS.md`. The Reviewer does not choose and the Engineer should not.**
+The differential that settles it already exists: ULIP's official clouds for the same uids, over
+the 505.
+
+#### STATE
+
+**Everything else is cleared.** Geometry PASS, `S-5` PASS at 97.2% on the decided configuration,
+tests non-vacuous, blockers verified fixed. `R-2` is the last gate, and it is a USER decision
+plus one differential run — not a rebuild.

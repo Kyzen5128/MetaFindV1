@@ -169,9 +169,18 @@ DIRECTIONAL_INTENSITY = 1.5
 # `U-03` remains UNKNOWN. 20.0 is an IMPLEMENTATION CHOICE, versioned so the
 # images stay reproducible, and it must never be written up as a solved value.
 ORBIT_ELEVATION_DEG = 20.0
-# 1 = fibonacci; 2 = azimuth orbit about +Z (WRONG up axis, white background,
-# xmag 1.1); 3 = azimuth orbit about the mesh up axis, black background,
-# ULIP-matched framing, frame-corrected mesh.
+# 1 = fibonacci sphere lattice.
+# 2 = azimuth orbit about +Z -- the WRONG up axis, so every asset tumbled
+#     end-over-end instead of turning. White background, xmag 1.1,
+#     ambient 0.4 / intensity 3.0, uncorrected mesh frame.
+# 3 = azimuth orbit about the mesh up axis (UP_AXIS), 180 degree frame
+#     correction applied at load, ambient 0.5 / intensity 1.5.
+#
+# [CORRECTED 2026-08-22] This note previously said v3 meant "black background,
+# ULIP-matched framing". `U-W` and `U-X` returned both of those to v2's values,
+# so two of the three clauses had gone false while the note still read as a
+# description. What actually separates v2 from v3 is the orbit axis, the frame
+# correction and the exposure -- nothing else.
 RENDERER_VERSION = 3
 
 
