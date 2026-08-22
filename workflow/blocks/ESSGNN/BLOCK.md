@@ -31,8 +31,25 @@ Everything in the object chain. `Q-TOWER` and `Q-BUILDMODEL` belong to the Integ
 **Write code. Run no GPU job of any kind** without a fresh authorisation. The GPU belongs to
 ULIP2 for the foreseeable future.
 
-There is plenty that needs no GPU: n14, n11b, n13, n15a/b/c, n16 and n17 are **all
-unimplemented**, and six open questions belong to this block.
+**CORRECTED 2026-08-22 — this sentence was wrong and an engineer acting on it would have
+rewritten a trainer that already exists.** Found by the ESSGNN Reviewer, verified by Master:
+
+```
+IMPLEMENTED, NEVER EXECUTED   n11b   gallery_index.py:5 carries IMPLEMENTS-NODE
+                              n13    stage2.py, 680 lines, the loop is complete.
+                                     Its marker is deliberately OFF -- stage2.py:3-11
+                                     says the marker is a claim and goes on when a
+                                     smoke run passes, not when the code looks done.
+                                     It cannot run: needs stage1_ckpt (n10) and
+                                     sem_edge_cache (n08), neither of which exists.
+
+NO IMPLEMENTATION AT ALL      n14 · n15a · n15b · n15c · n16 · n17
+```
+
+**"Never executed" and "unimplemented" imply opposite next actions.** Use the right one.
+
+There is still plenty that needs no GPU: the six nodes above have no code, and six open
+questions belong to this block.
 
 ## 5. Current state — measured 2026-08-22
 
@@ -77,6 +94,47 @@ Four things this drags in — none may be decided locally:
 - Semantic edges are undirected.
 - Stage 2 loss is symmetric (Eq. 7a/7b) — PAPER FACT.
 - `fully_shared` cannot reach Stage 2 (`dual_tower.py:315-321` raises on `freeze_gallery()`).
+
+## 7b. The `n04` / `n07b` frame question — SETTLED by Master, 2026-08-22
+
+The ESSGNN Reviewer found that `n04` and `n07b` orbit in different frames and said it could
+**not** determine from outside whether ULIP2's mesh-load yaw would align them or double the
+offset. **Master measured it. It aligns them exactly.**
+
+```
+d07[k] == Ry(180) . d04[k]        pairwise, every k        max err 2.22e-16
+as SETS, d07 vs Ry180(d04)                                 0.000000 deg
+as SETS, d07 vs d04  (before the fix)                      15.3706 deg
+d04 vs Ry180(d04)    -- the ring is NOT 180-symmetric      15.3706 deg
+```
+
+**Why the ring is not self-symmetric, and why that mattered:** 11 views at `360/11 = 32.7273`
+apart puts 180° at **5.5 slots** — exactly half a step, because 11 is odd. So before the fix the
+two nodes were not merely relabelled, they pointed at genuinely different directions.
+
+**After the fix they agree exactly, pairwise and as sets.** The Objaverse mesh is yawed at load
+(`frame_correction: yaw180_about_y@ulip2_frame`, verified on all 46,052 `n03` sidecars); ProcTHOR
+assets come through AI2-THOR and are not. Net: an Objaverse asset under `n04` and a ProcTHOR asset
+under `n07b` end up in the same relative viewing frame.
+
+**Consequences:**
+
+- **`procthor_node_embeddings.npz` does NOT need re-deriving for frame reasons.** ULIP2's
+  "saves ~3 GPU hours" holds, and the Reviewer's hold on it is lifted. It may still be
+  regenerated for the `n08` model rerun — a different reason.
+- **`image_protocol: "n04_compatible"` in `stage2_protocol.json` was FALSE for everything
+  produced before the fix**, and becomes true only once `n04` finishes. Do not read it as a
+  historical guarantee.
+- **View index `k` now means the same view in both nodes.** Before the fix it did not — they were
+  5.5 slots apart. Any code that paired them by index was wrong and is now right, by accident.
+- **`test_the_orbit_uses_n04s_constants_not_copies` is still structurally blind and this does not
+  fix it.** It asserts `m.N_VIEWS is r.N_VIEWS` and `m.ORBIT_ELEVATION_DEG is r.ORBIT_ELEVATION_DEG`
+  — two scalars that always agreed — while `n07b` builds its own poses instead of importing a
+  direction function. **The one quantity that differed is the one it cannot see.** It must compare
+  the direction, not the constants. **ESSGNN's to fix.**
+- **`procthor_modalities.py:151-156` is factually wrong.** It calls the difference *"trimesh's
+  z-up to Unity's y-up"*. `n04` was never z-up — its `+Z` orbit was a defect. The docstring records
+  a bug as a convention. **ESSGNN's to fix, in the same pass as the test.**
 
 ## 8. Carried finding — do not lose
 
