@@ -111,6 +111,32 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-018` — `n04`'s corpus is mixed-generation and must be re-run. **A pipeline can change behaviour mid-run and no artifact reveals it.**
+
+**Found independently by Master at integration and by the ULIP2 Engineer, within minutes of each
+other. The Engineer's account is more complete and it self-reports the cause.**
+
+| | |
+|---|---|
+| **What is on disk** | `n04` finished 20:43:03 — 45,958 sidecars + 94 quarantined = 46,052. **`renderer_version` is `{3: 43,412, 4: 2,546}`.** Verified by Master over the whole index |
+| **Cause — the Engineer's, self-reported** | `n04` runs under `multiprocessing`; a newly spawned worker **re-imports the module**. `renders.py` was edited **while the run was in flight** (`mtime` 20:38:07; the version boundary in the sidecars is 20:38:45 — a 38-second lag, i.e. workers picked it up almost immediately). **The run changed program mid-flight** |
+| **The part that makes a partial salvage unsafe** | The **bake fix landed 2–3 minutes before the version bump**. At ~686 assets/min that is roughly **1,700 assets carrying the corrected geometry while stamped `3`** — and from the sidecar they are **indistinguishable** from the ~41,700 genuinely uncorrected `3`s |
+| **Master's correction to the scope — smaller than "re-run all 46,052"** | Verified by **calling the predicate**, not by reading it: with `RENDERER_VERSION = 4`, `is_complete()` returns **`False`** on a `v3` asset and **`True`** on a `v4` one. **So a bare `python -m metafind.data.renders` regenerates exactly the 43,412 and skips the 2,546 — no flag, no hand-picked list.** The ~1,700 mislabelled ones are inside the 43,412 and simply get re-rendered to the same geometry: **wasted work, not a correctness risk.** ≈ 43,412 / 691 per min ≈ **63 minutes** |
+| **Why the `2,546` are safe to keep** | They were written after **both** the bake and the bump, by the code now committed at `138cda4`. `renders.py` is committed and stable — Master checked `git status` is clean on it before relying on this |
+| **The underlying defect, and it outlives this incident** | **This pipeline's behaviour can change during a single run and nothing in the output says so.** Only the version bump made it visible at all, and only because it happened to be *late* — had the Engineer bumped the version **with** the bake, the corpus would have been uniformly stamped `4` with 43,412 assets rendered by the old code, **and every gate would have passed.** The version field caught this by accident, not by design |
+| **Proposed remedy — the Engineer's, and Master endorses it** | Record the sha256 of the implementation modules into the runlog at run start; each worker verifies on spawn and aborts on mismatch. Cheap, and it converts a silent corruption into a loud stop. **Not implemented** — it is new gate behaviour and belongs after the re-run, not in front of it |
+| **Classification** | The mixed corpus is `OBSERVED DATA`. The cause is **operator error, self-reported** — not a tool defect. The reproducibility hole it exposed **is** a tool defect and is registered here separately so it is not written off with the incident |
+| **What is needed** | **USER authorisation for the ~63-minute re-run.** No research question is open; nothing is ambiguous; it is an expensive execution and `BLOCKS.md` reserves that |
+| **Status** | **`AWAITING_USER_REVIEW`** — authorisation only |
+| **Date** | 2026-08-22 |
+
+**Also recorded, because it paid off today:** the `--from-disk` decision to read each sidecar's own
+`view_paths` rather than glob the directory means the **88 orphan render directories** — PNGs
+written before a quarantine failure — are invisible to every sidecar-driven consumer. A globbing
+tool would have scored them.
+
+---
+
 ### `DL-017` — the USER delegates these calls to the blocks. **Master stops escalating them.**
 
 | | |
