@@ -30,6 +30,99 @@ INFERENCE · IMPLEMENTATION CHOICE · DEVIATION · UNKNOWN. Never promote an inf
 
 ---
 
+### 2026-08-22 · ULIP2 ENGINEER · **`R-2` IMPLEMENTED — P3, glTF base-colour semantics**
+
+**`COLOR_0` is now a multiplier on the base colour, not a competing source.** Implemented to the
+USER's `P3` ruling; the rule was not chosen by this block.
+
+#### What changed
+
+```
+base colour  =  baseColorFactor  x  baseColorTexture
+final        =  base colour      x  COLOR_0
+```
+
+`_colourise()` returns `(base_source, color0_modulated)`. Every path that produces a base colour
+now routes through one `_commit()` which applies the multiplier once, in [0,1], rounding a single
+time so a modulated colour cannot drift by repeated integer truncation.
+
+**The bug this removes:** `to_color()`'s per-vertex return and its `ndim == 1` return both exited
+*before* the `COLOR_0` branch, so `texture` and `flat` bases never saw it. Only the
+`gltf_default` path did — which is why the corpus captured `COLOR_0` on the assets whose base was
+white and dropped it everywhere else.
+
+#### `colour_source` semantics — an IMPLEMENTATION CHOICE, with its reason
+
+`colour_source` keeps naming the **base**: `texture` / `flat` / `gltf_default`. Under P3
+`COLOR_0` modulates a source rather than being one, so labelling a modulated texture `vertex`
+would discard which base was modulated **and** silently reshape the corpus-wide source
+distribution that `G3` and every colour statistic read. Modulation is carried as a separate
+sidecar boolean, `color0_modulated`, so the affected population stays countable.
+
+`SAMPLER_VERSION` 4 → **5**. The colour semantics changed, so version-4 clouds are not this
+sampler's output and `is_complete()` refuses them.
+
+#### Verification — both halves, on real assets at the full 10,000 points
+
+The control half is the one that matters: P3 must not touch the ~44,800 assets that carry no
+`COLOR_0`.
+
+| base class | carries `COLOR_0` | `color0_modulated` | max abs RGB difference vs the on-disk cloud |
+|---|---|---|---|
+| `gltf_default` | yes ×2 | `True` | 1.0000, 0.2510 — changed, as required |
+| `gltf_default` | no ×3 | `False` | **0.0000 · 0.0000 · 0.0000** |
+| `flat` | yes ×2 | `True` | 0.1294, 0.4784 |
+| `flat` | no ×3 | `False` | **0.0000 · 0.0000 · 0.0000** |
+| `texture` | yes ×1 | `True` | 0.1765 |
+| `texture` | no ×3 | `False` | **0.0000 · 0.0000 · 0.0000** |
+
+**Nine controls, point-for-point identical.** An earlier pass appeared to show small control
+drift; that was an artifact of sampling 512 points against an on-disk cloud of 10,000 and is not
+a defect — recorded because it looked like one.
+
+#### Tests added
+
+- `test_color0_multiplies_the_base_colour_and_leaves_others_untouched` — a half-brightness
+  `COLOR_0` over a known factor must yield **half that factor**, and asserts explicitly that the
+  result equals **neither** the base (P1) **nor** the `COLOR_0` (P2). It cannot pass under either
+  rejected rule.
+- `test_a_white_base_makes_color0_pass_through_unchanged` — `x * 1 = x`, the property that makes
+  the `gltf_default` group a valid control for the whole switch.
+
+`pytest tests/ -q` → **587 passed**. `check_graph.py` → 2275 checks, all pass.
+
+#### `GLTF_DEFAULT_BASE_COLOR` — downgraded to `INFERENCE`, per the Reviewer
+
+The comment asserted *"glTF 2.0 specifies baseColorFactor default = [1,1,1,1]"*. **The
+specification has not been read here** — the schema is not on disk — and 8,853 `gltf_default`
+assets rest on that sentence. It is now marked `INFERENCE`, naming
+`material.pbrMetallicRoughness.schema.json` as what would settle it.
+
+**What is measured, and points the same way:** over the 50 `gltf_default` assets overlapping
+ULIP's clouds with no `COLOR_0`, ULIP is **35.3%** pure-white points against our **35.1%**, with
+the all-white count identical at **19/50**. Under the alternative — trimesh's 0.4 grey, which is
+numerically identical to `DEFAULT_GREY` and is exactly why it once looked like a legitimate
+fallback — ours would read 0%. **Upstream agrees with white on the population where the two can
+be compared.** That is `OBSERVED DATA`, not a reading of the specification, and it does not
+discharge the citation.
+
+#### Corrections to this block's own record
+
+- **"286 overlapping assets" is not a general figure.** It is shard `000-009` alone; the Reviewer
+  reached 3,706 from eleven shards, and `000-000` by itself holds 1,228. Every ratio this block
+  quoted against 286 is a ratio against one shard.
+- **`R-4.a` was already closed** in `3973e0a`, before this instruction arrived. The
+  `renderer_version` note now describes what actually separates v2 from v3 — orbit axis, frame
+  correction, exposure — after `U-W` and `U-X` returned the background and framing to v2's values.
+
+#### STATE
+
+**Ready for the Reviewer's 5-minute safety check.** The `gltf_default` control group is verified
+byte-identical here; the texture-brightness check for double multiplication is the Reviewer's and
+has not been run by this block. **The 3.3-hour regeneration has not started.**
+
+---
+
 ### 2026-08-22 · ULIP2 ENGINEER → MASTER · **MASTER-IMPACTING** — `R-2`: which colour wins, and it is not this block's to choose
 
 **When a glTF primitive carries BOTH `COLOR_0` and a flat material colour, something has to
@@ -1409,3 +1502,332 @@ the 505.
 **Everything else is cleared.** Geometry PASS, `S-5` PASS at 97.2% on the decided configuration,
 tests non-vacuous, blockers verified fixed. `R-2` is the last gate, and it is a USER decision
 plus one differential run — not a rebuild.
+
+---
+
+### 2026-08-22 · USER DECISIONS + REVIEWER · **FINDING** — R-5 / R-6
+
+> Appended at the bottom; Reviewer permission is append-only. **Conversation is not storage.**
+
+#### USER DECISIONS taken in conversation, 2026-08-22 — Master to ledger
+
+| # | Decision | USER wording |
+|---|---|---|
+| `U-Y` | **`O-1` circuit breaker: YES.** The multi-day `n05` run stops automatically when the cumulative failure rate crosses a threshold **measured by the bake-off**, never a number invented now. Asked three times before this; now answered | `A` |
+| `U-Z` | **Master registers the four un-id'd deviations on the Integrator's behalf.** `DL-009` holds `INTEGRATOR` closed and opening a block to write four registry lines is not warranted. The four: `D-2` annotation model · LVIS anchoring (`DL-007`) · `F-N10-1` negative count · **white background (`U-W`)** | `A` |
+| — | `COLOR_0`: measure before deciding | `A` — see `R-5` |
+
+#### R-5 — the `COLOR_0` differential is **INCONCLUSIVE**, and that is the finding
+
+```
+ULIP clouds with rgb            4,999
+overlap with our GLBs             286
+carrying COLOR_0                   17
+where the policies DIFFER           3   <-- usable n
+```
+
+All **3** favour `P2` (COLOR_0 replaces the material factor), one by a wide margin
+(histogram L1 0.818 → 0.144). **Three assets is not a basis for a corpus-wide preprocessing
+decision and is not offered as one.** The Reviewer's own `P3` implementation is additionally
+unverified — it tracked `P1` to three decimals where the algebra does not predict it — and its
+numbers should be discarded.
+
+**Two routes, both the USER's:**
+
+1. **Buy the sample.** ULIP ships `objaverse_lvis` in shards; we hold one. Reaching n≈50
+   discriminating assets needs roughly **15–20 more shards, ~20 GB** of download.
+2. **Decide on specification grounds.** glTF 2.0 defines `COLOR_0` as a **multiplier on**
+   `baseColorFactor` (`P3`). A published specification is an authority in its own right and does
+   not need an empirical match to ratify it.
+
+**Scale of what is at stake:** ~505 of 1,643 non-texture geometries carrying `COLOR_0`. Nothing
+is worse than v2 under any option — this is an incomplete improvement, not a regression.
+
+#### R-6 — `W-5` answered: `Q-CATEGORY` and `DL-007`'s `D0-010` **are the same question**
+
+Both list the identical four options — *prompt hint / hard value / cross-check / record-only*.
+
+**It is decided, not open.** `DL-007` chose the prompt anchor with downward refinement, the USER
+approved the design 2026-08-21, and it is implemented as `PROMPT_VERSION 5`.
+
+**What was never done is the evidence audit, and `DL-007` says so in its own words:** *"`D0-010`
+has not been researched — its §6–§11 are empty. The choice … was made by design ratification, not
+by a completed evidence audit."*
+
+`BLOCK.md`'s *"no investigation has been done"* therefore reads as **undecided**, when the true
+state is **decided, implemented, unaudited** — and those imply opposite next actions.
+
+#### ASK
+
+1. Master to correct `Q-CATEGORY`'s status line in `MASTER.md` §5 and `BLOCK.md` §6. Suggested
+   wording in `REVIEW.md` `R-6`. **`W-5` is discharged; `Q-CATEGORY` should not stay listed as
+   uninvestigated.**
+2. **USER: does `W-6` — the missing `D0-010` audit — have to complete before `M2`?** `BLOCK.md`
+   makes `W-5` gate `M2`, and `W-5`'s answer is that the gate's real content is `W-6`.
+3. **USER: `COLOR_0` — buy the sample, decide on the glTF specification, or ship `P1` as-is with
+   the shortfall recorded?**
+
+#### STATE
+
+**`R-2` is no longer blocking on evidence — it is blocking on a decision.** Everything else
+before the 3.3-hour regeneration is cleared: geometry PASS, `S-5` 97.2% on the decided
+configuration, tests non-vacuous, both version blockers verified fixed by execution.
+
+---
+
+### 2026-08-22 · USER DECISIONS `U-AA` / `U-AB` + REVIEWER `R-7` · **BLOCKING**
+
+> Appended at the bottom; append-only permission. **Conversation is not storage.**
+
+| # | Decision | USER wording |
+|---|---|---|
+| `U-AA` | **`COLOR_0` is settled on the glTF 2.0 specification, not by buying a larger ULIP sample.** The ~20 GB of further shards is not spent | `B` |
+| `U-AB` | **`W-6` — the missing `D0-010` evidence audit — must complete before `M2`.** LVIS anchoring is the most scientifically material change in the pipeline and it passed by design ratification with an empty audit behind it | `A` |
+
+#### `R-7` — the primary source was checked, and it is broader than the Reviewer's own framing
+
+**Khronos glTF 2.0 Specification, *Metallic-Roughness Material*:**
+
+> *"if a primitive specifies a vertex color using the attribute semantic property `COLOR_0`, then
+> this value acts as an additional **linear multiplier** to base color."*
+
+`UPSTREAM FACT`. The Reviewer had paraphrased this as *"multiplies `baseColorFactor`"*. **That was
+too narrow.** Base color is `baseColorFactor × baseColorTexture`, so `COLOR_0` multiplies **both**.
+
+| old source | under the specification | changes today's behaviour? |
+|---|---|---|
+| `gltf_default` | `COLOR_0 × [1,1,1,1]` | **no** — the 146 already get it |
+| `flat` | `COLOR_0 × factor` | **yes** — the 505 |
+| **`texture`** | `COLOR_0 × texture × factor` | **yes — the 625, newly in scope** |
+
+**`U-AA` therefore reaches ~1,130 geometries, not the ~505 the Reviewer described when the
+decision was put to the USER.**
+
+#### ASK — one confirmation, then this block is clear to run
+
+**Does `U-AA` include the `texture` class?**
+
+- **It is what the specification says**, and `U-AA` chose the specification as the authority.
+- **But `F-N03-1` was opened because assets came back WHITE.** Texture-backed assets were never
+  white, nothing has complained about them, and the ULIP differential cannot validate the change
+  either — same `n=3` limit as `R-5`. It would be **correct by specification and unvalidated
+  against any artifact**, on ~995 assets corpus-wide.
+
+```
+option 1   full specification conformance -- factor AND texture, ~1,130 geometries
+option 2   factor only for now -- the 505 -- and record the texture shortfall as a
+           stated, measured deviation from glTF 2.0
+```
+
+**The Reviewer recommends neither.** `U-AA`'s own logic points to option 1; the evidence position
+points to option 2. This is dataset-preprocessing semantics reaching the whole corpus and it is
+`BLOCKS.md`-material.
+
+#### Not verified — stated so it is not assumed
+
+The fetched specification excerpt did **not** explicitly state `baseColorFactor`'s default when
+undefined. `pointclouds.py`'s `GLTF_DEFAULT_BASE_COLOR = 1.0` matches the widely-known
+`[1,1,1,1]`, but that value is **not quoted from the primary source here**. It should be confirmed
+against `material.pbrMetallicRoughness.schema.json` before being cited as an `UPSTREAM FACT` —
+`gltf_default`'s entire behaviour rests on it.
+
+#### STATE
+
+**This is the last open item before the 3.3-hour regeneration.** Everything else is cleared:
+geometry PASS, `S-5` 97.2% on the decided configuration, tests non-vacuous, both version blockers
+verified fixed by execution, `W-5` discharged.
+
+---
+
+### 2026-08-22 · ULIP2 REVIEWER → MASTER · **FINDING** — R-8, at the USER's question
+
+**"What does ULIP's official code do about point colour?" — It has none. The whole chain ends in
+a published artifact and never in a published procedure.**
+
+Chased before `U-AA` is implemented, because under `U-O` an upstream behaviour would outrank the
+glTF specification.
+
+1. **`/home/kyzen/upstream/ULIP` @ `95d480fe` contains no mesh→cloud code.** Swept for `COLOR_0`,
+   `vertex_color`, `trimesh`, `pyrender`, `sample_surface`, `.glb`, `gltf` — zero hits outside
+   vendored PointNeXt comments. `utils/io.py` only *reads* existing clouds.
+2. **`ulip2_source/appendix.tex:10`, `PAPER FACT`:** *"we adopt the same 3D input preprocessing as
+   in OpenShape."* **ULIP-2 delegates the question.**
+3. **OpenShape publishes no converter either.** `download_data.py` + a **Blender** render script
+   emitting colour/normal/depth **images**; users download the finished clouds.
+
+#### Consequence — binding on how `U-AA` is written up
+
+`U-O` **cannot** resolve `COLOR_0`. The glTF 2.0 specification is the best available authority
+**because upstream has none**, not merely because it is a specification.
+
+**Whatever is implemented must be recorded as an `IMPLEMENTATION CHOICE` conforming to glTF 2.0.
+It may never be described as "what ULIP-2 did", "upstream-faithful", or an `UPSTREAM FACT`.
+Nobody knows what ULIP-2 did.** This is `FIND-8` one layer down: there, *upstream ships pixels,
+not code*; here, **upstream ships clouds, not the sampler**.
+
+#### And upstream's own ablation bounds the stakes
+
+`PAPER FACT`, same appendix, Point-BERT + ULIP-2 zero-shot on Objaverse-LVIS:
+
+```
+ 8k xyz      48.9 / 77.1
+10k xyzrgb   50.6 / 79.1     -- "maintains strong performance even without using color"
+```
+
+**Removing colour entirely costs ~1.7 top-1 points.** `COLOR_0` touches ~1,130 geometries in a
+46,052-asset corpus, so the effect at stake here is a fraction of that. The rows also differ in
+point count (8k vs 10k), so 1.7 is not a clean colour-only contrast — upstream's own sentence is
+what carries the claim, not the arithmetic.
+
+The defect is still real — `F-N03-1` began with assets that came back pure white — but this is
+the strongest available argument against spending further review cycles or 20 GB on it.
+
+#### ASK
+
+1. **Master: record that `U-O` does not reach `COLOR_0`**, and that any `COLOR_0` behaviour is an
+   `IMPLEMENTATION CHOICE` against glTF 2.0. The deviation registry entry `U-Z` covers should say
+   this, not "matches upstream".
+2. **USER: the `texture`-class question from `R-7` is still open** — full specification
+   conformance (~1,130 geometries) or factor-only (~505) with the shortfall recorded. `R-8.b`
+   says the stakes are small either way; it does not answer which.
+
+#### STATE
+
+No change to the run gate. `R-7`'s texture question remains the last open item.
+
+---
+
+### 2026-08-22 · ULIP2 REVIEWER → MASTER · **CORRECTION OF THE REVIEWER'S OWN ADVICE** — R-9
+
+**The USER objected — 「你架構就是 ulip 你就參考啊」 — and the USER is right. `R-7`/`R-8` put the
+authority in the wrong order and the Reviewer's recommendation is withdrawn.**
+
+#### What was wrong
+
+`R-8` correctly established that no source publishes the cloud-colouring procedure. It then
+concluded the **glTF 2.0 specification** is the best available authority. **That inverted the
+criterion.**
+
+**The point encoder is a FROZEN ULIP-2 checkpoint** (`stage1_encoding_protocol.json`, scope
+`frozen`; the checkpoint carries only `point_encoder` / `pc_projection` / `logit_scale`). It was
+trained on clouds from OpenShape's process. **For a frozen encoder, matching a specification while
+diverging from the training distribution is worse, not better.** Specification conformance is a
+renderer's virtue. This is an input pipeline for somebody else's weights.
+
+```
+wrong question   which colouring is correct by specification?
+right question   which colouring feeds the frozen encoder what it was trained on?
+```
+
+#### What that does to the evidence
+
+`R-5`'s 3 discriminating assets were dismissed as too weak against a specification. Under the
+corrected criterion **they are the only evidence of the right kind, and 3/3 favour `P2` — COLOR_0
+replaces the material factor, exactly what the Engineer's docstring claimed.** `P3`, the
+specification answer `U-AA` selects, wins nothing.
+
+`R-8.a` stands as a fact — the procedure is unpublished. **The conclusion drawn from it does
+not.** The answer to "upstream publishes no procedure" is **"match upstream's artifact, which we
+hold"**, not "substitute a specification".
+
+#### ASK — `U-AA` and `U-AC` should be reconsidered by the USER
+
+Measured from the shard we already hold: one 1.16 GB shard = 4,999 clouds → 286 overlap → 17 with
+`COLOR_0` → **3 discriminating**.
+
+```
++10 shards   ~12 GB   ->  ~2,900 overlap   ~170 with COLOR_0   ~30 discriminating
+```
+
+**~12 GB buys n≈30**, not the ~20 GB the Reviewer estimated before measuring. Disk is not a
+constraint (3.0 TB free).
+
+**And the metric should change:** `R-5` used RGB histograms, a statistic the Reviewer chose. The
+block already owns a better instrument and has trusted it twice (`FIND-7`, `S-5`) — push the cloud
+through the **frozen ULIP-2 point encoder** and score against ULIP's released features. That
+measures what the encoder actually sees.
+
+**Recommendation, withdrawn and replaced:** fetch ~10 shards, run the three policies through the
+frozen encoder at n≈30, and let ULIP-2's own artifact decide. Not the specification.
+
+#### STATE
+
+**The 3.3-hour regeneration should not start on `U-AA` as currently written.** Everything else
+remains cleared. This is the Reviewer's error, caught by the USER, and it is recorded here rather
+than silently corrected in place.
+
+---
+
+### 2026-08-22 · ULIP2 REVIEWER → MASTER · **FINDING** — R-10, `COLOR_0` settled at n=130
+
+**Asked upstream properly this time. The current behaviour is measurably the worst of the three.
+`P2` and `P3` are tied and cannot be separated.**
+
+#### Sample raised from 3 to 130
+
+`SFXX/ulip` ships **161** cloud shards at ~1.16 GB; we held one. Ten more fetched and filtered to
+`lvis.json` on the fly — 1.1 GB kept instead of 14 GB.
+
+```
+ULIP clouds for uids in our corpus   3,706
+carrying COLOR_0                       229
+DISCRIMINATING                         130     (was 3)
+```
+
+Per-shard overlap varies far more than assumed: `000-000` gave **1,228**, the rest ~250–310.
+**The `286` inherited from `FIND-6` was one shard's number, not a general rate.**
+
+#### The instrument
+
+Frozen **ULIP-2 point encoder**; target is **ULIP's own released cloud for the same uid**, encoded
+by the same weights. Same pattern as `FIND-7` and `S-5`. Not a colour statistic.
+
+```
+  P1_current  (COLOR_0 discarded)   mean 0.8800   median 0.8845   wins  27
+  P2_color0_replaces                mean 0.9043   median 0.9204   wins  54
+  P3_gltf_product                   mean 0.9004   median 0.9195   wins  49
+```
+
+#### `R-10.a` — the current behaviour is definitively wrong
+
+`OBSERVED DATA`. Both repairs beat it: +0.024 / +0.020 mean cosine, 27 wins against 103.
+**`R-2` stops being a docstring dispute — the incomplete fix feeds the frozen encoder a
+measurably worse input.** It must be completed before regeneration.
+
+#### `R-10.b` — `P2` vs `P3` is a TIE, and is reported as one
+
+0.004 mean cosine and 5 wins out of 130. 130 fair coin flips have sd ≈ 5.7 wins, so 54/49 is
+under one sigma. **No paired significance test was computed. `P2` is NOT the winner.**
+
+#### Consequence for `U-AA` — it stands, on a corrected basis
+
+`R-9` withdrew "follow the specification" because a specification must not **override** upstream
+evidence. **It may still break a tie.** Upstream was asked at n=130 and does not discriminate.
+
+```
+upstream discriminates  ->  upstream wins.  It did: P1 is out.
+upstream is silent      ->  glTF 2.0 breaks the tie.
+```
+
+**Reviewer recommends `P3`** — `COLOR_0 x texture x factor` — recorded as an `IMPLEMENTATION
+CHOICE` conforming to glTF 2.0, chosen **after** consulting upstream's artifact. Per `R-8` it may
+never be written up as *"what ULIP-2 did"*. `P3` also covers the `texture` class without a
+special case, which answers `R-7`'s open question in the same stroke.
+
+#### Limits, stated rather than buried
+
+130 assets from 11 of 161 shards — not a random sample of the corpus. No significance test. The
+`texture` class is inside `P3` by construction but was not separately validated. **`P1`'s defeat
+is robust to all three; the `P2`/`P3` tie is the thin part.**
+
+#### ASK
+
+**USER: confirm `P3` (full glTF product, ~1,130 geometries) as the implementation.** This is the
+same answer `U-AA`/`U-AC` already gave, now with upstream consulted first rather than skipped.
+
+#### STATE
+
+**This was the last open item before the 3.3-hour regeneration.** On confirmation, the Engineer
+implements `P3`, the Reviewer runs the 5-minute safety check from `R-7` (texture class must not
+darken systematically; the 146 `gltf_default` geometries must not move at all), and the run is
+clear.

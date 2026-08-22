@@ -78,15 +78,30 @@ N_POINTS = 10_000
 # number at 3 meant every one of the 46,052 uncorrected clouds classified as
 # finished: the re-run would have skipped the entire corpus and reported
 # success. Found by the Reviewer, 2026-08-22, before the run.
-SAMPLER_VERSION = 4
+# 5: [P3, 2026-08-22] COLOR_0 becomes a MULTIPLIER on the base colour rather
+# than a competing source. Changes the rgb channel for roughly 1,130 assets
+# whose base is `flat` or `texture`; the ~146 whose base is glTF-default white
+# are unchanged by construction, since x * 1 = x.
+SAMPLER_VERSION = 5
 RGB_SCALE = "unit"  # [0, 1]; see the module docstring
 DEFAULT_GREY = 0.4  # ULIP's stand-in for a dataset with no colour channel at all
-# glTF 2.0 specifies pbrMetallicRoughness.baseColorFactor default = [1,1,1,1].
-# A PBR material with neither a texture nor an explicit factor is therefore
-# WHITE, not unknown. trimesh reports 102/255 = 0.4 grey as ITS default in that
-# case, which is numerically identical to DEFAULT_GREY and so looked like a
-# legitimate fallback. Measured against ULIP's released cloud for
-# 1dc0fe17c77e...: theirs is 1.000, ours was 0.400.
+# The base colour of a PBR material carrying neither a texture nor an explicit
+# `baseColorFactor`.
+#
+# [INFERENCE, corrected 2026-08-22] The claim "glTF 2.0 specifies
+# baseColorFactor default = [1,1,1,1]" is common knowledge and it is what this
+# value assumes, but **the specification text has not been read here** -- the
+# glTF schema is not on disk in this project. Flagged rather than restated as a
+# fact, because 8,853 `gltf_default` assets rest on it. Resolving it needs
+# `material.pbrMetallicRoughness.schema.json` from the Khronos glTF repository.
+#
+# [OBSERVED DATA] What IS measured, and it points the same way: over the 50
+# `gltf_default` assets that overlap ULIP's released clouds and carry no
+# COLOR_0, ULIP's own clouds are 35.3% pure-white points against our 35.1%,
+# with the all-white asset count identical at 19/50. Under the alternative --
+# trimesh's 0.4 grey, numerically identical to DEFAULT_GREY, which is exactly
+# why it once looked like a legitimate fallback -- our figure would be 0%.
+# Upstream agrees with white on the population where the two can be compared.
 GLTF_DEFAULT_BASE_COLOR = 1.0
 
 
@@ -132,7 +147,7 @@ def load_parts(path: Path):
     # cloud and a render in different frames raise nothing anywhere.
     scene = meshload.load_scene(path)
     color0 = meshload.color0_by_geometry(path)
-    parts, sources = [], []
+    parts, sources, modulations = [], [], []
     # Iterate the scene GRAPH, not scene.geometry. Two reasons, both measured:
     #
     #   * 65.8% of 400 sampled Objaverse GLBs place their geometry with a
@@ -158,7 +173,9 @@ def load_parts(path: Path):
         # Keyed by geometry NAME, and the name is produced by the same trimesh
         # loader in both passes. Instanced geometry shares one COLOR_0 array,
         # which is correct: the colours belong to the mesh, not to the node.
-        sources.append(_colourise(geom, color0.get(geom_name)))
+        source, modulated = _colourise(geom, color0.get(geom_name))
+        sources.append(source)
+        modulations.append(modulated)
         parts.append(geom)
 
     if not parts:
@@ -167,27 +184,64 @@ def load_parts(path: Path):
     # The WORST source across parts, so an asset that is nine-tenths textured
     # and one-tenth grey is not labelled "texture". coloured_point_fraction
     # carries the degree, which the label alone cannot.
-    return parts, min(sources, key=order.index), sources
+    return parts, min(sources, key=order.index), sources, any(modulations)
 
 
-def _colourise(geom, color0: np.ndarray | None = None) -> str:
+def _colourise(geom, color0: np.ndarray | None = None) -> tuple[str, bool]:
     """Force an explicit per-vertex colour array onto one geometry.
 
-    ``color0`` is this geometry's glTF ``COLOR_0`` attribute when it declares
-    one, recovered by ``meshload.color0_by_geometry`` because **trimesh 5.0.0
-    drops it whenever the primitive also carries a material**. It is consulted
-    only where the material path would otherwise produce ``flat`` or
-    ``gltf_default`` -- a real ``baseColorTexture`` still wins, which is what
-    the ordering below already says. Measured: `COLOR_0` accounts for the whole
-    of our colour disagreement with ULIP's released clouds, and for nothing else
-    (`HANDOFF.md`, `F-N03-1`).
+    Returns ``(base_colour_source, color0_modulated)``.
 
-    Four sources, in descending fidelity:
+    glTF 2.0 base-colour semantics, adopted 2026-08-22 as decision **P3**::
+
+        base colour  =  baseColorFactor  x  baseColorTexture
+        final        =  base colour      x  COLOR_0
+
+    ``COLOR_0`` is a **linear multiplier on the base colour, not a replacement
+    for it.** That distinction is the whole of `R-2`: the earlier code treated
+    it as a competing source ranked "above flat", so whichever of the two the
+    material path happened to reach first won and the other was discarded.
+
+    Why P3 and not the alternatives
+    -------------------------------
+
+    Three readings were on the table -- keep the factor and ignore ``COLOR_0``
+    (P1, what the code did for ~926 assets), let ``COLOR_0`` replace it (P2,
+    what the docstring claimed), or multiply them (P3, the specification).
+
+    The Reviewer measured all three the way `FIND-7` and `S-5` measure things:
+    each candidate cloud through the **frozen ULIP-2 point encoder**, scored by
+    cosine against **ULIP's own released cloud for the same object**. 130 assets
+    where the three rules actually differ, drawn from 3,706 overlapping uids::
+
+        P1  discard COLOR_0     mean 0.8800   median 0.8845   best on  27
+        P2  COLOR_0 replaces    mean 0.9043   median 0.9204   best on  54
+        P3  COLOR_0 multiplies  mean 0.9004   median 0.9195   best on  49
+
+    **P1 is decisively worst -- 27 against 103.** `R-2` was never a
+    documentation argument; the old behaviour fed the frozen encoder measurably
+    worse input.
+
+    **P2 and P3 are not separable at this n.** They differ by 0.004 mean and 5
+    of 130 head-to-head, and a fair coin over 130 has sd ~5.7, so that sits
+    inside one sigma. No paired significance test was run. **P2 is not the
+    winner.** Where upstream can discriminate it decides (P1 is out); where it
+    cannot, the glTF 2.0 specification breaks the tie, and it says multiply.
+
+    Source naming
+    -------------
+
+    ``colour_source`` keeps naming the BASE colour -- ``texture`` / ``flat`` /
+    ``gltf_default`` -- because under P3 ``COLOR_0`` modulates a source rather
+    than being one. Calling a modulated texture ``vertex`` would both lose the
+    base and silently shift the corpus-wide distribution. Modulation is carried
+    separately as ``color0_modulated`` so it stays visible and countable.
+
+    Four base sources, in descending fidelity:
 
       texture        a baseColorTexture, sampled per vertex through the UVs
       flat           no texture, but the PBR material carries a baseColorFactor
-      gltf_default   a material with neither: glTF 2.0 defines baseColorFactor
-                     as [1,1,1,1], so the object is white
+      gltf_default   a material with neither: see GLTF_DEFAULT_BASE_COLOR
       vertex / face  colours stored on the geometry itself
       fallback_grey  nothing readable; ULIP's own 0.4 stand-in
 
@@ -210,60 +264,71 @@ def _colourise(geom, color0: np.ndarray | None = None) -> str:
     vis = geom.visual
     n = len(geom.vertices)
 
-    def _uniform(rgba, source: str) -> str:
-        geom.visual = trimesh.visual.ColorVisuals(
-            mesh=geom,
-            vertex_colors=np.tile(np.asarray(rgba, dtype=np.uint8)[:4], (n, 1)),
-        )
-        return source
+    def _rgba(colours) -> np.ndarray:
+        """``(n, 4)`` uint8, expanding trimesh's collapsed single-RGBA form."""
+        a = np.asarray(colours)
+        if a.ndim == 1:
+            a = np.tile(a[:4], (n, 1))
+        if a.shape[1] == 3:
+            a = np.concatenate([a, np.full((len(a), 1), 255)], axis=1)
+        return a.astype(np.uint8, copy=False)
+
+    def _commit(base, source: str) -> tuple[str, bool]:
+        """Apply COLOR_0 as a multiplier on ``base`` and install the result.
+
+        Multiplication happens in [0, 1] and rounds once at the end, so a
+        modulated colour cannot drift by repeated integer truncation.
+        """
+        rgba = _rgba(base)
+        modulated = color0 is not None and len(np.asarray(color0)) == n
+        if modulated:
+            rgba = np.clip(
+                np.rint(rgba.astype(np.float64) / 255.0
+                        * _rgba(color0).astype(np.float64) / 255.0 * 255.0),
+                0, 255).astype(np.uint8)
+        geom.visual = trimesh.visual.ColorVisuals(mesh=geom, vertex_colors=rgba)
+        return source, modulated
 
     if isinstance(vis, trimesh.visual.TextureVisuals):
         try:
             converted = vis.to_color()
             vc = getattr(converted, "vertex_colors", None)
             if vc is not None and len(vc) == n:
-                geom.visual = converted
-                return "texture"
+                # A real per-vertex texture sample. Under P1/P2 this returned
+                # here and COLOR_0 never applied -- ~625 assets by the
+                # Reviewer's count. Under P3 the texture IS the base and
+                # COLOR_0 modulates it.
+                return _commit(vc, "texture")
             # `len(vc) == 4` was the test here and it is ambiguous: a single
             # RGBA has length 4, and so does a four-vertex mesh's per-vertex
             # array. `ndim == 1` says what was meant. The check above
-            # (`len(vc) == n`) already catches the four-vertex case first, so
-            # this is tightening a latent ambiguity rather than the fix for the
-            # 8.1% failure -- that fix is _vertex_rgb.
+            # (`len(vc) == n`) already catches the four-vertex case first.
             if vc is not None and np.asarray(vc).ndim == 1:
-                return _uniform(vc, "flat")
+                return _commit(vc, "flat")
         except (IndexError, ValueError, TypeError, AttributeError):
             pass
-        # [F-N03-1] Below `texture`, above `flat` -- exactly where the source
-        # ordering above already places `vertex`. Reached only because trimesh
-        # withheld the attribute from the main load; the branch further down
-        # that reads `vis.vertex_colors` is the same decision for the assets
-        # trimesh does hand it over for.
-        if color0 is not None and len(color0) == n:
-            geom.visual = trimesh.visual.ColorVisuals(
-                mesh=geom, vertex_colors=np.asarray(color0, dtype=np.uint8)
-            )
-            return "vertex"
         mat = getattr(vis, "material", None)
         factor = getattr(mat, "baseColorFactor", None)
         if factor is not None:
-            return _uniform(np.asarray(factor).ravel(), "flat")
+            return _commit(np.asarray(factor).ravel(), "flat")
         if mat is not None:
-            # Material present, no texture, no explicit factor -> glTF's default
-            # white. NOT trimesh's main_color, which is its own grey stand-in and
-            # happens to equal DEFAULT_GREY, so trusting it silently replaced a
-            # white object with a grey one.
-            return _uniform([int(GLTF_DEFAULT_BASE_COLOR * 255)] * 3 + [255],
-                            "gltf_default")
+            return _commit([int(GLTF_DEFAULT_BASE_COLOR * 255)] * 3 + [255],
+                           "gltf_default")
+        # A TextureVisuals with no material at all still has to reach COLOR_0.
+        if color0 is not None and len(np.asarray(color0)) == n:
+            return _commit([255, 255, 255, 255], "gltf_default")
     else:
         vc = getattr(vis, "vertex_colors", None)
         if vc is not None and len(vc) == n:
-            return "vertex"
+            # trimesh surfaced COLOR_0 itself, so it is already the base here
+            # and must NOT be multiplied in again -- that is the "squared"
+            # failure the Reviewer's safety check looks for.
+            return "vertex", False
         fc = getattr(vis, "face_colors", None)
         if fc is not None and len(fc) == len(geom.faces):
-            return "face"
+            return "face", False
 
-    return _uniform([int(DEFAULT_GREY * 255)] * 3 + [255], "fallback_grey")
+    return _commit([int(DEFAULT_GREY * 255)] * 3 + [255], "fallback_grey")
 
 
 def _vertex_rgb(geom) -> np.ndarray:
@@ -313,7 +378,7 @@ def sample_mesh(path: Path, seed: int, n_points: int = N_POINTS):
     """
     import trimesh
 
-    parts, colour_source, sources_per_part = load_parts(path)
+    parts, colour_source, sources_per_part, color0_modulated = load_parts(path)
     areas = np.array([p.area for p in parts], dtype=np.float64)
     counts = _allocate(areas, n_points)
 
@@ -339,7 +404,7 @@ def sample_mesh(path: Path, seed: int, n_points: int = N_POINTS):
     lo = np.min([p.vertices.min(axis=0) for p in parts], axis=0)
     hi = np.max([p.vertices.max(axis=0) for p in parts], axis=0)
     return (xyz, rgb, np.asarray(hi - lo, dtype=np.float64),
-            colour_source, coloured / max(n_points, 1))
+            colour_source, coloured / max(n_points, 1), color0_modulated)
 
 
 def sidecar_path(out: Path) -> Path:
@@ -388,7 +453,8 @@ def is_complete(out: Path) -> bool:
 
 def process_one(uid: str, glb: Path, out: Path) -> dict:
     seed = uid_seed(uid)
-    xyz, rgb, extents, colour_source, coloured_fraction = sample_mesh(glb, seed)
+    (xyz, rgb, extents, colour_source, coloured_fraction,
+     color0_modulated) = sample_mesh(glb, seed)
     normed = pc_norm(xyz.astype(np.float64)).astype(np.float32)
 
     if not np.isfinite(normed).all() or not np.isfinite(rgb).all():
@@ -423,6 +489,11 @@ def process_one(uid: str, glb: Path, out: Path) -> dict:
         # its own module. A comment describing behaviour that does not happen is
         # worse than no comment, because it is believed.
         "frame_correction": meshload.FRAME_CORRECTION_ID,
+        # [P3, 2026-08-22] `colour_source` names the BASE colour; COLOR_0 is a
+        # multiplier on it, not a source. Recorded separately so the corpus-wide
+        # source distribution is not silently reshaped by modulation, and so the
+        # ~1,130 modulated assets stay countable.
+        "color0_modulated": bool(color0_modulated),
         "rgb_scale": RGB_SCALE,
         "colour_source": colour_source,
         "coloured_point_fraction": round(coloured_fraction, 4),

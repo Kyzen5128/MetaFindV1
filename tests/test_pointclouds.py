@@ -89,7 +89,7 @@ def test_rgb_is_written_at_unit_scale():
     U-02's job and is not asserted here.
     """
     assert 0.0 < DEFAULT_GREY < 1.0
-    xyz, rgb, _, _, _ = sample_mesh_from(_box(colour=(200, 100, 50, 255)))
+    xyz, rgb, _, _, _, _ = sample_mesh_from(_box(colour=(200, 100, 50, 255)))
     assert rgb.min() >= 0.0 and rgb.max() <= 1.0
     assert np.allclose(rgb[0], np.array([200, 100, 50]) / 255.0, atol=1e-3)
 
@@ -103,7 +103,7 @@ def test_flat_pbr_material_is_a_colour_not_a_failure():
     ULIP's grey.
     """
     m = _box(colour=(204, 200, 176, 255), texture=True)
-    assert _colourise(m) == "flat"
+    assert _colourise(m)[0] == "flat"
     assert np.allclose(m.visual.vertex_colors[:, :3], [204, 200, 176])
 
 
@@ -121,7 +121,7 @@ def test_material_without_texture_or_factor_is_gltf_white():
         uv=np.zeros((len(m.vertices), 2)),
         material=trimesh.visual.material.PBRMaterial(),
     )
-    assert _colourise(m) == "gltf_default"
+    assert _colourise(m)[0] == "gltf_default"
     assert np.allclose(m.visual.vertex_colors[:, :3], 255)
 
 
@@ -144,8 +144,10 @@ def test_colourise_always_yields_a_usable_array_and_a_named_source():
         trimesh.creation.box(),                              # bare default
     ]
     for m in cases:
-        src = _colourise(m)
+        src, modulated = _colourise(m)
         assert src in ("texture", "flat", "gltf_default", "vertex", "face", "fallback_grey")
+        # No COLOR_0 was passed, so nothing may claim to have been modulated.
+        assert modulated is False
         vc = m.visual.vertex_colors
         assert len(vc) == len(m.vertices), f"{src}: {len(vc)} colours for {len(m.vertices)} vertices"
         assert vc[:, :3].max() <= 255 and vc[:, :3].min() >= 0
@@ -236,7 +238,7 @@ def test_scene_graph_transform_is_applied(tmp_path):
     p = tmp_path / "two.glb"
     p.write_bytes(scene.export(file_type="glb"))
 
-    _, _, extents, _, _ = sample_mesh(p, seed=0, n_points=256)
+    _, _, extents, _, _, _ = sample_mesh(p, seed=0, n_points=256)
     assert max(extents) > 10.0, (
         f"extent {max(extents):.2f} -- the 10-unit offset was dropped, so the "
         "two boxes were sampled on top of each other"
@@ -338,3 +340,69 @@ def test_a_stale_sidecar_is_not_complete(tmp_path):
         "a sidecar from an older sampler was accepted as complete; a re-run "
         "would skip all 46,052 clouds and report success"
     )
+
+
+def test_color0_multiplies_the_base_colour_and_leaves_others_untouched():
+    """[P3, 2026-08-22] glTF base-colour semantics: COLOR_0 is a MULTIPLIER.
+
+    EXPECTED-TRUTH SOURCE: arithmetic, plus the upstream measurement that chose
+    P3. A half-brightness COLOR_0 over a known flat factor must yield half that
+    factor -- not the factor (P1), and not the COLOR_0 (P2). The rule itself was
+    decided by scoring all three against ULIP's own clouds through the frozen
+    ULIP-2 point encoder over 130 assets where they differ: P1 best on 27,
+    P2 on 54, P3 on 49. P1 is decisively worst; P2 and P3 sit inside one sigma,
+    and the glTF specification breaks that tie.
+
+    The control half matters as much as the modulated half: an asset with no
+    COLOR_0 must come back BYTE-IDENTICAL, which is what stops P3 from quietly
+    reshading the ~44,800 assets it has no business touching. Verified on real
+    assets at full 10,000 points -- max absolute RGB difference 0.0000 across
+    nine controls.
+    """
+    from metafind.data.pointclouds import _colourise
+
+    factor = (200, 100, 50, 255)
+
+    m = _box(colour=factor, texture=True)
+    src, modulated = _colourise(m, color0=None)
+    assert (src, modulated) == ("flat", False)
+    base = np.asarray(m.visual.vertex_colors)[:, :3].copy()
+
+    m2 = _box(colour=factor, texture=True)
+    half = np.tile(np.array([128, 128, 128, 255], dtype=np.uint8),
+                   (len(m2.vertices), 1))
+    src2, modulated2 = _colourise(m2, color0=half)
+    assert (src2, modulated2) == ("flat", True), (
+        "the base colour must still be named `flat`; COLOR_0 modulates a source, "
+        "it does not become one"
+    )
+    got = np.asarray(m2.visual.vertex_colors)[:, :3]
+
+    expected = np.rint(base.astype(float) * (128.0 / 255.0)).astype(int)
+    assert np.abs(got.astype(int) - expected).max() <= 1, (
+        f"expected {expected[0].tolist()} from {base[0].tolist()} x 128/255, "
+        f"got {got[0].tolist()}"
+    )
+    # P1 would have returned the factor unchanged; P2 would have returned grey.
+    assert not np.array_equal(got, base), "COLOR_0 was ignored (P1)"
+    assert not np.array_equal(got, half[:, :3]), "COLOR_0 replaced the base (P2)"
+
+
+def test_a_white_base_makes_color0_pass_through_unchanged():
+    """[P3] `gltf_default` x COLOR_0 == COLOR_0, because the base is white.
+
+    EXPECTED-TRUTH SOURCE: x * 1 = x. This is why the ~146 assets whose base is
+    glTF-default white are unaffected by the P1 -> P3 change, and it is the
+    property that makes them a usable control group for the whole switch.
+    """
+    from metafind.data.pointclouds import _colourise
+
+    m = trimesh.creation.box()
+    m.visual = trimesh.visual.TextureVisuals(
+        material=trimesh.visual.material.PBRMaterial())
+    colours = np.tile(np.array([10, 200, 90, 255], dtype=np.uint8),
+                      (len(m.vertices), 1))
+    src, modulated = _colourise(m, color0=colours)
+    assert (src, modulated) == ("gltf_default", True)
+    got = np.asarray(m.visual.vertex_colors)[:, :3]
+    assert np.abs(got.astype(int) - colours[:, :3].astype(int)).max() <= 1
