@@ -111,6 +111,26 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-021` — the `n04` re-run left **23 stale v3 assets in the index**. A failed re-render does not retract the old artifact.
+
+**Found by Master at integration, after the re-run reported success. This is a tool defect, not
+operator error.**
+
+| | |
+|---|---|
+| **The re-run's own summary** | *"43,403 rendered this run, 45,972 complete on disk, 103 quarantined"*. It read as clean |
+| **What is actually on disk** | `renderer_version` is **`{4: 45,949, 3: 23}`**. **The mixed corpus the whole 66-minute re-run existed to eliminate is still mixed** — by 23 assets |
+| **Diagnosed, not guessed** | All **23 of 23** are in `quarantine_n04_render_views.jsonl`. Their sidecar mtimes are **19:46–19:48**, before the 20:57 re-run started. So: `is_complete()` correctly rejected them → the run retried them → **they failed again** → and **nothing removed the old sidecar or its index row.** The stale artifact simply stayed |
+| **Why it is not harmless** | `rebuild_index` derives the index from the sidecars on disk and **does not exclude quarantined uids or check the version**. So 23 assets rendered by the code we deliberately replaced are still **advertised as valid**. Verified: all 23 are also in `pointclouds_index.jsonl`, and `splits.admitted_uids()` intersects the three index files — **once annotations exist, these 23 are admitted into the corpus carrying pre-fix geometry** |
+| **The general defect** | **A failed regeneration does not retract the artifact it failed to replace.** Quarantine records the failure in a log nothing downstream reads, while the index — which everything reads — keeps the old row. `is_complete()` guards against *skipping*; nothing guards against *failing and leaving the previous generation in place* |
+| **Failure reasons this run, 340 records / 135 unique uids** | 249 *"every view is blank"* · 19 *"Eigenvalues did not converge"* · 19 *"only 6 distinct views of 11; the camera is not moving"* · 19 *"A process in the process pool was terminated abruptly"* — **the last is a worker crash and is new**; it is a plausible cause for assets that previously rendered and now do not |
+| **Not done by Master** | **Nothing deleted, nothing edited.** Removing 23 stale sidecars or 23 index rows is corpus mutation, and which of the three remedies applies — drop them from the index, delete the stale sidecars, or investigate the 19 crashes first — is the ULIP2 Engineer's call under `DL-017`, with the crash question possibly changing the answer |
+| **Scale, stated honestly** | 23 of 46,052, **0.05%**. Small. It is registered because *"the corpus is uniformly v4"* is currently **false**, and every downstream claim that relies on it would inherit the error silently |
+| **Status** | **routed to the ULIP2 Engineer under `DL-017`** |
+| **Date** | 2026-08-22 |
+
+---
+
 ### `DL-020` — ESSGNN is FULLY paused, stricter than `DL-009`. ULIP2 finishes first.
 
 | | |
