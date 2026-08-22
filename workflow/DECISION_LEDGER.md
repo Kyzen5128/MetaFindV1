@@ -111,6 +111,25 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-017` — the USER delegates these calls to the blocks. **Master stops escalating them.**
+
+| | |
+|---|---|
+| **Source** | USER, 2026-08-22, verbatim: 「這些是誰的任務 給他決定啊 幹 問他們工程師啊 他們怎麼判斷的」 |
+| **Decision** | **The block that owns the node decides.** `DL-013` → ULIP2 Engineer. `DL-016` / `U-20` → ESSGNN Engineer. The USER wants **to be told how they judged it**, not to judge it |
+| **Master's error this caused** | Master escalated `DL-013` **four times** and `DL-016` once, correctly by `BLOCKS.md`'s materiality list, and **wrongly in practice** — the USER had no way to adjudicate a `16/37` measurement or a two-week-old registry field, and had already delegated once (the `E-1`…`E-11` series). **Escalating a decision the USER cannot make is not caution; it is handing back work.** Recorded because the rule that produced it is still in `BLOCKS.md` |
+| **What this does NOT change** | Delegation of **these adjudications**, not of the gate. Still the USER's: authorisation **before** an expensive run · `MASTER-IMPACTING FINDING`s · anything where continuing would require inventing research-critical information · `DL-009`'s hold on ESSGNN, which is **not** lifted by a decision being delegated into it |
+| **Classification consequence** | Whatever the blocks decide is an **IMPLEMENTATION CHOICE**, never a `USER DECISION` — he delegated the call, he did not make it — and never a `PAPER FACT` |
+| **Master's job on these** | Re-verify the reasoning rather than rubber-stamp it, then rewrite `DL-013` and `DL-016` from `AWAITING_USER_REVIEW` to the block's decision with its evidence and Master's verification attached |
+| **Status** | **`USER_APPROVED`** — FINAL ACCEPTED, the USER's own wording above |
+| **Date** | 2026-08-22 |
+
+**`DL-013` and `DL-016` below are superseded in their `Status` line only.** Both now read
+*"delegated to the block under `DL-017`"*. Their findings, evidence and open questions stand
+unchanged — the delegation moved **who answers**, not **what was found**.
+
+---
+
 ### `DL-016` — `U-20` is marked RESOLVED but was decided by Claude, and four files disagree. **BLOCKER for `n13`.**
 
 **Found by the ESSGNN Engineer, verified by the ESSGNN Reviewer, re-verified by Master. It arrived
@@ -135,7 +154,7 @@ in time to stop Master registering a duplicate id for the same knob.**
 | **Authority classification** | **IMPLEMENTATION CHOICE recorded as RESOLVED.** Not a PAPER FACT — the entry's own text says the paper does not say it. Not a USER DECISION |
 | **Severity** | **BLOCKER for `n13`** · MAJOR for the `n08` re-run |
 | **What is needed** | The USER decides whether `U-20` reopens. Master then makes the four files agree with whatever that answer is, and registers the unpaid `n09b`/`G6` protocol debt either way |
-| **Status** | **`AWAITING_USER_REVIEW`** |
+| **Status** | **DELEGATED to the ESSGNN Engineer under `DL-017`.** No longer awaiting the USER |
 | **Date** | 2026-08-22 |
 
 ---
@@ -193,7 +212,7 @@ in time to stop Master registering a duplicate id for the same knob.**
 | **Master's assessment** | The block's work is careful and its reasoning is on the record. This is not a rogue change; it is a material choice ratified one level below where `BLOCKS.md` puts it. **Dataset-preprocessing semantics reaching the whole corpus is USER-material** |
 | **Options, for the USER — Master recommends neither** | **A.** Keep `D-12`. The texture class stays unmodulated; the deviation from glTF 2.0 stands as registered. **B.** Restore full `P3` as originally confirmed; `D-12` is withdrawn from the registry and ~995 texture assets are modulated. Either way `R-8`'s prohibition binds: **it may never be written up as "what ULIP-2 did"** |
 | **Not verified, and worth knowing before choosing** | `pointclouds.py`'s `GLTF_DEFAULT_BASE_COLOR = 1.0` is marked `INFERENCE` — the glTF schema is not on disk and `material.pbrMetallicRoughness.schema.json` has not been read. **8,853 `gltf_default` assets rest on that value.** Measured support exists (ULIP 35.3% pure-white against ours 35.1%, all-white 19/50 both sides) but that is `OBSERVED DATA`, not the specification |
-| **Status** | **`AWAITING_USER_REVIEW`** — implemented and shipping; **not** ratified |
+| **Status** | **DELEGATED to the ULIP2 Engineer under `DL-017`.** No longer awaiting the USER |
 | **Date** | 2026-08-22 |
 
 ---
