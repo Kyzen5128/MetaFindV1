@@ -160,10 +160,49 @@ models           /mnt/data1/kyzen/models/
 graph            graphify-out/graph.json — navigation only; conclusions return to source
 ```
 
+## 6b. Storage is SPLIT — USER decision 2026-08-22
+
+> 「之後記得都先把檔案放在這邊 除非做完了或空間不足」 · 「大型資料集不要搬過來喔」
+
+**Everything the pipeline produces goes to NVMe. Everything it downloaded stays on the SMR drive.**
+Implemented purely as symlinks under `data/outputs/`, so `metafind/` and `paths.py` are unchanged
+and still see one tree. **Do not hardcode either root — keep using `paths.py`.**
+
+```
+NVMe  /home/kyzen/metafind_out/{pointclouds,renders,annotations,embeddings,checkpoints}
+      816 GB free.  n03 n04 n05 n06 n10 all land here.
+
+SMR   data/datasets/objaverse-lvis/glbs   328 GB   sequential reads, fine where it is
+      data/models/{hf-cache,ulip2}         12.4 GB
+      /mnt/data1/kyzen/models             100 GB   the three annotator candidates
+      data/outputs/{logs,scene_graphs,procthor_modalities}
+```
+
+**Do not copy the 328 GB of GLBs to NVMe.** It was attempted and the USER stopped it. Reading them
+is sequential and SMR handles that, as long as nothing else competes for the head.
+
+### Why it was worth doing — measured, n03 run twice, same code, same corpus
+
+```
+read and write both on SMR    573 -> 391 assets/min, still falling
+split, output on NVMe         ~897 assets/min, flat for the whole run
+                              SMR 86% busy but READING only; NVMe 4% busy
+```
+
+⚠️ **The trap, recorded so nobody re-derives it wrong.** Measured write bandwidth was only
+**796 kB/s**, which makes *"moving the output somewhere faster cannot help — we are not
+bandwidth-bound"* look like sound reasoning. **It is wrong.** The constraint is **head seek**, not
+bandwidth: small writes interleaved with heavy random reads collapse an SMR drive. Splitting the
+two workloads across two physical devices is what recovered the throughput, and it more than
+doubled it.
+
+**`CLAUDE.md` §9 still names `/home/kyzen/data/MetaFind` as the data root. That path does not
+exist** — the real link is `data -> /mnt/data1/kyzen/MetaFind`. `CLAUDE.md` is guard-protected and
+is the USER's to correct.
+
 **`/mnt/data1` is an SMR drive** (`ST4000DM004`). Sustained small-file writes collapse to
 single-digit MB/s once its cache fills — write latency above 5,000 ms has been measured under
-mixed load. Large sequential writes are fine. **It now holds the whole dataset**, and both n05
-and n06 write ~46,000 small files each. Treat every inherited runtime estimate as unmeasured.
+mixed load. Large sequential writes are fine.
 
 ---
 

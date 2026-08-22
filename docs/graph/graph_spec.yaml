@@ -298,6 +298,27 @@ boundary:
         The wider COLOR_0 repair is NOT a deviation: it moves toward upstream.
         P1 (discarding COLOR_0) was measurably worst at n=130 and is out.
 
+    - id: D-13
+      what: "The corpus is 46,052 assets; MetaFind reports approximately 48,000"
+      why: >
+        U-01. The Objaverse-LVIS manifest this project can obtain holds 46,052
+        uids and every one of them parsed -- GLB coverage 100.00%, manifest\GLB
+        and GLB\manifest both empty. The paper's exact 48,000 set is unobtainable;
+        no larger manifest is published. This is UNAVOIDABLE, not chosen, and
+        paper-reproduction.md 9 requires unavoidable differences to be registered
+        as deviations too.
+        Manifest sha256, recorded here because U-01's own stated resolution
+        ("use len(manifest); record its sha256") had never been honoured:
+          lvis.json                    ba1bb191e1d98252e19e59aa18185ea46b83d9955b28ba895133536974e8bf9f
+          objaverse_lvis_metadata.json 38e66d5b6cf38f19b1bd174943caa14c2f8952006d943e2f99ba0826b82d095e
+      impact: >
+        Every denominator. Under the paper's 80/20 split this is ~1,558 fewer
+        training assets and ~390 fewer test assets, so it is NOT merely a
+        different evaluation set -- ULIP-2 evaluates on Objaverse-LVIS while
+        MetaFind TRAINS on it (2methdology.tex:75, 3experiments.tex:24, both
+        PAPER FACT). Carried as a stated Table 1 limitation per USER item O-2;
+        registering it does not reopen that.
+
   conditional_deviations:
     - id: D-1
       what: "ViT-bigG-14 stays frozen; only the 3D encoder and fusion train"

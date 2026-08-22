@@ -49,7 +49,7 @@ scratch/             參考用的雜項腳本
 
 ## 已知偏離論文之處
 
-**正式偏離七項（D-2…D-8）＋條件式一項（D-1，已判定 `resolved_inactive`）**，編號以
+**正式偏離十二項（D-2…D-13）＋條件式一項（D-1，已判定 `resolved_inactive`）** —— D-9…D-13 於 2026-08-22 依 `U-Z` 補登記（`DL-012`），編號以
 [`docs/graph/graph_spec.yaml`](docs/graph/graph_spec.yaml) 為準：D-2…D-8 在
 `boundary.deviations`，D-1 在 `boundary.conditional_deviations`，
 `active_if: paper_clip_train_scope == 'trainable' AND actual_clip_train_scope == 'frozen'`。
@@ -68,6 +68,7 @@ scratch/             參考用的雜項腳本
 | **D-10** | **Stage 1 對比負樣本只有單卡 batch**，ULIP-2 是 8 卡 `all_gather_batch` 的 512（`F-N10-1`）。**梯度累積補不回來**。負樣本數是對比目標的一階項，是 Table 1 落差的候選解釋 |
 | **D-11** | **n04 渲染背景為白色**，ULIP-2 官方為黑色（`U-W`，USER 決定）。量測依據：對 ULIP-2 自有 `image_feat`，n=286，白 R@1 97.2% vs 黑 95.8%。不影響與論文的可比性 |
 | **D-12** | **`COLOR_0` 從 `texture` 類撤回**，牴觸 glTF 2.0 的線性乘子定義（`R-12`）。n=37 全數變暗（−0.2076），但**勝負 16/37 落在雜訊內、未做顯著性檢定**。依據是 `R-11` 的預設對齊規則；`R-8` 已確立上游**未發布任何點雲上色程序**，故**不得寫成「ULIP-2 就是這樣做的」** |
+| **D-13** | **語料 46,052，論文稱「約 48,000」**（`U-01`）。**不可避免** —— 可取得的 manifest 就是 46,052，且全數解析成功。ULIP-2 在此集**評估**，MetaFind 在此集**訓練**，故依 80/20 切分少約 1,558 訓練／390 測試資產。依 `O-2` 當成 Table 1 的明述限制帶著 |
 
 > **兩次更正記在這裡。**
 > 早期這張表寫「D2＝frozen backbone 全部預先快取、訓練只在 1280-d 向量上」——

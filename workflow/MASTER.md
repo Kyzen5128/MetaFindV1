@@ -218,25 +218,28 @@ unimplemented nodes, and none of them needs a trained model to be designed and u
 bake-off alone.
 
 ```
-DONE and independently verified   n04 up-axis defect found, confirmed 3 ways
-                                  render corrections implemented, S-5 97.2% (was 83.2%)
-                                  COLOR_0 root cause found; P1 measurably worst at n=130
-                                  two is_complete() blockers fixed, verified by execution
-                                  R-13's four release conditions PASS, new test non-vacuous
-
-NOT DONE                          nothing regenerated. data/outputs/ still holds v2
-                                  no model has ever been loaded
-                                  compressed-tensors absent -> the "READY" QAT arm cannot load
-
-PAUSED                            M1's bake-off, by USER decision, until the n04 finding
-                                  is adjudicated -- width_axis and identity_confirmed are
-                                  contaminated by tumbled renders, so all three arms
-                                  would return noise and a BUG would read as
-                                  "this criterion has no discriminating power"
+n03   COMPLETE   46,052 .npz + 46,052 .json, quarantine 0, ~897 assets/min flat
+                 sampler_version 6 uniform -- so DEVIATION D-12 is BAKED IN
+n04   RUNNING    6,280 / 46,052 at 18:44, ~730/min, quarantine 0.2% (the same
+                 "blank in every view" assets as before). ETA ~54 min
+n05+  NOT STARTED. No model has ever been loaded, and `compressed-tensors` is
+                 absent -- so the "READY" QAT arm cannot load today (U-R)
 ```
 
-**Next physical step is a 3.3-hour `n03` + `n04` regeneration.** The block reports everything
-cleared for it except `DL-013`.
+**Verified by Master, not taken from the report:** the counts, `sampler_version`,
+`color0_modulated` (137 true / 2,863 false over 3,000 sidecars), the live `renders --workers 4`
+process, and the NVMe symlinks.
+
+**The bake-off is still PAUSED** by USER decision until the `n04` finding is adjudicated —
+`width_axis` and `identity_confirmed` are contaminated by tumbled renders, so all three arms
+would return noise and **a bug would read as "this criterion has no discriminating power"**.
+`n04` finishing is what lifts that.
+
+**Earlier estimates in this file were wrong and are corrected:** the run is **not** 3.3 hours.
+Splitting output onto NVMe took `n03` from 391 assets/min and falling to ~897 flat, so `n03` is
+~51 min and `n04` ~63 min. See `CONTEXT.md` §6b — and note the trap: write bandwidth measured
+only 796 kB/s, which made *"moving the output cannot help"* look correct. It is **seek**
+contention, not bandwidth.
 
 ---
 
