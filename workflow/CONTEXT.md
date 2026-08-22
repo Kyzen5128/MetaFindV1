@@ -208,6 +208,15 @@ mixed load. Large sequential writes are fine.
 
 ## 7. Global constraints
 
+- **`node_registry.yaml`'s `reads` / `writes` declarations are NOT evidence of what the code does.**
+  Established 2026-08-22 by **two independent cases**, both self-caught: the registry declares
+  `n08` `read_before_write` for `procthor_node_embeddings.npz`, but `semantic_edges_run.py` writes
+  it **unconditionally** — encode → `.part.npz` → replace, no `exists()` check anywhere; and the
+  registry lists `sem_edge_cache` in `n09c`'s `reads`, while `scene_splits.py` computes coverage
+  *after* the split and never uses it to choose houses. **Both mismatches happen to be safe. The
+  next one will not be.** `CLAUDE.md` §5 already forbids inferring runtime behaviour from a
+  schema; this is the concrete form it takes in this repository, and **six roles read that
+  registry**. Trace the code.
 - Do not silently replace missing evidence with an assumption. Mark uncertainty explicitly.
 - Do not infer a paper requirement from the current implementation.
 - Do not change scientific behaviour to make a test pass, an import succeed, or a shape align.

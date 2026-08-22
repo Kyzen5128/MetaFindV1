@@ -112,10 +112,20 @@ d04 vs Ry180(d04)    -- the ring is NOT 180-symmetric      15.3706 deg
 apart puts 180° at **5.5 slots** — exactly half a step, because 11 is odd. So before the fix the
 two nodes were not merely relabelled, they pointed at genuinely different directions.
 
-**After the fix they agree exactly, pairwise and as sets.** The Objaverse mesh is yawed at load
-(`frame_correction: yaw180_about_y@ulip2_frame`, verified on all 46,052 `n03` sidecars); ProcTHOR
-assets come through AI2-THOR and are not. Net: an Objaverse asset under `n04` and a ProcTHOR asset
-under `n07b` end up in the same relative viewing frame.
+**After the fix they agree exactly, pairwise and as sets.**
+
+> **Evidence correction, 2026-08-22 — Master's first version of this paragraph had a gap and the
+> ESSGNN Reviewer caught it.** Master cited *"`frame_correction` verified on all 46,052 `n03`
+> sidecars"*. **`n03` is point clouds. It cannot prove `n04`'s camera is in the corrected frame.**
+> The missing link, supplied by the Reviewer and re-verified here: **both nodes call the same
+> loader** — `renders.py:272` and `pointclouds.py:153` each call `meshload.load_scene(path)`, and
+> those are the only two `meshload` consumers in the repository. `meshload.py:177` applies
+> `FRAME_CORRECTION = diag([-1, 1, -1, 1])`, `det = +1`, self-inverse. `renders.py:269-271` says so
+> in its own comment. **Same loader, therefore same frame** — and only now is the conclusion
+> evidence rather than inference.
+
+ProcTHOR assets come through AI2-THOR and are not yawed. Net: an Objaverse asset under `n04` and a
+ProcTHOR asset under `n07b` end up in the same relative viewing frame.
 
 **Consequences:**
 
@@ -135,6 +145,36 @@ under `n07b` end up in the same relative viewing frame.
 - **`procthor_modalities.py:151-156` is factually wrong.** It calls the difference *"trimesh's
   z-up to Unity's y-up"*. `n04` was never z-up — its `+Z` orbit was a defect. The docstring records
   a bug as a convention. **ESSGNN's to fix, in the same pass as the test.**
+
+## 7c. Three knobs in `n08`, not one — Master, 2026-08-22
+
+The ESSGNN Reviewer reported that `Q-N08-MODEL` *"also decides the node features `t_i`"*.
+**The shared-encoder fact is real; the attribution is not.** Verified in
+`semantic_edges_run.py`:
+
+```
+LLM_MODEL     :77   Qwen2.5-7B-Instruct     GENERATES the edge sentences
+TEXT_ENCODER  :102  CLIP ViT-B/32, 512-d    ENCODES both the edge sentences and t_i
+node_texts    :371  from procthor_object_text.json -- rule-based "a {category}",
+                    source: procthor_category.  NOT LLM output.
+```
+
+| Knob | Question | What it moves |
+|---|---|---|
+| `LLM_MODEL` | **`Q-N08-MODEL`** | the **edge** sentences only. `t_i`'s content is untouched |
+| node text | **`Q-NODETEXT`** | `t_i`'s content. Today `"a {category}"`, which collapses distinct assets |
+| `TEXT_ENCODER` | **unregistered — no question id** | **both `t_i` and `e_ij`, and the width.** This is the real coupling |
+
+`:98-101` is explicit: *"This also pins `t_i`'s encoder … Whatever encodes `t_i` must be THIS
+model"*, and `:366-370` gives the reason — the two vectors are **concatenated inside `f_h`**, so a
+mismatch puts node and edge features in unrelated spaces with nothing to signal it.
+
+**So the Reviewer's warning lands on the encoder, not on the LLM.** Changing `TEXT_ENCODER` moves
+`t_i` and `e_ij` together and changes `EDGE_DIM = 512`; `essgnn_arch_protocol.json`'s
+`hidden_dim: 128` does **not** follow automatically. Changing `LLM_MODEL` does none of that.
+
+**The gap this exposes: `TEXT_ENCODER` has no question id at all**, while the two knobs that
+matter less both have one. Master's, to register.
 
 ## 8. Carried finding — do not lose
 
