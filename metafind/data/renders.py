@@ -127,8 +127,12 @@ BACKGROUND_RGBA = [255, 255, 255, 255]
 # does fix is that version 2 threw away more than half the frame: the object
 # occupied 0.418 of it, so most pixels the image tower sees were background.
 #
-# A unit-sphere-normalised asset cannot be clipped while xmag >= 1; 1.20 keeps
-# a 20% margin.
+# A unit-sphere-normalised asset cannot be clipped while xmag >= 1, and 1.10
+# keeps a 10% margin -- but only once `normalised_scene` bakes node transforms
+# into vertices. It did not until renderer v4, and until then the claim in this
+# comment was false: pyrender re-derived the node poses it could not represent,
+# and 10 of 1,500 sampled assets had foreground on the frame edge. See the
+# baking note in `normalised_scene`.
 #
 # IMPLEMENTATION CHOICE with upstream provenance (U-O). MetaFind says nothing
 # about framing, and this number is fitted, not stated. It must never be
@@ -181,7 +185,13 @@ ORBIT_ELEVATION_DEG = 20.0
 # so two of the three clauses had gone false while the note still read as a
 # description. What actually separates v2 from v3 is the orbit axis, the frame
 # correction and the exposure -- nothing else.
-RENDERER_VERSION = 3
+#
+# v4 bakes node transforms into vertices before pyrender sees them. Any asset
+# with a non-uniform-scale or sheared node transform was placed differently
+# from what `normalised_scene` computed -- differently from what `n03` sampled,
+# and sometimes outside the frame. The version bump is what makes
+# `is_complete` reject a v3 sidecar; without it a re-run is a silent no-op.
+RENDERER_VERSION = 4
 
 
 def azimuth_orbit_directions(n: int = N_VIEWS,
@@ -304,7 +314,36 @@ def normalised_scene(path: Path):
     fit[:3, :3] /= radius
     fit[:3, 3] = -centroid / radius
     scene.apply_transform(fit)
-    return scene, extents
+
+    # Bake every node transform into its own vertices, leaving an identity
+    # scene graph.
+    #
+    # pyrender stores a node's pose as translation + rotation quaternion +
+    # scale, so a node transform carrying non-uniform scale or shear has no
+    # representation there and `Scene.from_trimesh_scene` silently substitutes
+    # a different matrix. Measured on 2f0ef6ad926b474189b6ef489d11954c, whose
+    # node `Cube.025_0` has column norms 0.014 / 0.009 / 0.457 -- a 50x
+    # non-uniform scale: the translation column came through exactly and the
+    # 3x3 did not, moving that geometry from y >= -0.939 to y >= -1.148. That
+    # is outside `ORTHO_HALF_WIDTH`, so it was clipped in 7 of 11 views, and it
+    # is no longer the geometry `n03` sampled -- the drift `meshload` exists to
+    # prevent, reappearing one layer further down.
+    #
+    # Baking leaves pyrender nothing to decompose. It is done after `fit` so
+    # the normalisation is inside what gets baked, and per node rather than per
+    # geometry because one geometry may be instanced under several transforms.
+    baked = trimesh.Scene()
+    for node in scene.graph.nodes_geometry:
+        transform, name = scene.graph[node]
+        geom = scene.geometry.get(name)
+        if not isinstance(geom, trimesh.Trimesh) or len(geom.vertices) == 0:
+            continue
+        placed = geom.copy()
+        placed.apply_transform(transform)
+        baked.add_geometry(placed, node_name=node, geom_name=node)
+    if not baked.geometry:
+        raise ValueError("no triangulated geometry survived baking")
+    return baked, extents
 
 
 def _flatten_texture(geom) -> None:

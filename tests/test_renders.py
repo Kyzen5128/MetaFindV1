@@ -329,3 +329,66 @@ def test_a_stale_sidecar_is_not_complete(tmp_path):
     rec["renderer_version"] = RENDERER_VERSION + 1
     sc.write_text(json.dumps(rec))
     assert not is_complete(out, "deadbeef")
+
+
+def test_a_sheared_node_transform_renders_where_trimesh_puts_it(tmp_path):
+    """The geometry pyrender draws must be the geometry trimesh placed.
+
+    `pyrender.Scene.from_trimesh_scene` stores each node's pose as
+    translate . rotate(quaternion) . scale(vector), which represents
+    `M = R . diag(s)` exactly -- non-uniform scale included -- but has no form
+    for a sheared `M = R1 . diag(s) . R2`. Given one it silently substitutes a
+    different matrix instead of raising, so the asset renders somewhere else.
+
+    Expected truth is `trimesh.transform_points` with the scene graph's own
+    transform: the library's placement, not the renderer's, and the same
+    operation `n03` uses to sample point clouds. That is what makes this a test
+    of agreement between the two nodes rather than of the renderer against
+    itself.
+
+    Measured before `normalised_scene` baked transforms into vertices, on this
+    synthetic scene: bounds differed by 0.294 on a unit-ish object. On the real
+    corpus, asset 2f0ef6ad926b474189b6ef489d11954c has a node with column norms
+    0.014 / 0.009 / 0.457, whose translation came through exactly while its 3x3
+    did not -- placing that geometry at y = -1.148 where the normalisation had
+    put it at -0.939, outside `ORTHO_HALF_WIDTH` 1.10 and clipped in 7 of 11
+    views.
+    """
+    pyrender = pytest.importorskip("pyrender")
+    from metafind.data.renders import ORTHO_HALF_WIDTH, normalised_scene
+
+    r1 = trimesh.transformations.rotation_matrix(0.7, [1.0, 2.0, 0.5])
+    r2 = trimesh.transformations.rotation_matrix(1.1, [0.0, 1.0, 1.0])
+    sheared = r1 @ np.diag([0.02, 0.9, 0.02, 1.0]) @ r2
+
+    scene = trimesh.Scene()
+    scene.add_geometry(trimesh.creation.box(extents=(1.0, 1.0, 1.0)),
+                       node_name="sheared", transform=sheared)
+    scene.add_geometry(trimesh.creation.box(extents=(0.3, 0.3, 0.3)), node_name="plain")
+    path = tmp_path / "sheared.glb"
+    path.write_bytes(scene.export(file_type="glb"))
+
+    normalised, _ = normalised_scene(path)
+    expected = np.concatenate([
+        trimesh.transform_points(normalised.geometry[name].vertices, matrix)
+        for node in normalised.graph.nodes_geometry
+        for matrix, name in [normalised.graph[node]]
+    ])
+
+    rendered = pyrender.Scene.from_trimesh_scene(normalised)
+    actual = np.concatenate([
+        (rendered.get_pose(node)[:3, :3] @ prim.positions.T).T + rendered.get_pose(node)[:3, 3]
+        for node in rendered.mesh_nodes for prim in node.mesh.primitives
+    ])
+
+    assert np.allclose(np.sort(expected.min(axis=0)), np.sort(actual.min(axis=0)), atol=1e-4)
+    assert np.allclose(np.sort(expected.max(axis=0)), np.sort(actual.max(axis=0)), atol=1e-4)
+    # Records the property the bounds assertions above protect: normalisation
+    # bounds the asset by 1.0 and the frame is wider, but only if what pyrender
+    # holds IS the normalised geometry. Not the detector -- injected against the
+    # pre-fix code this synthetic scene still measures 0.6137, well inside the
+    # frame, while the bounds assertions fail. Clipping needs a mis-placement
+    # that happens to point outward, which is why the corpus rate (10/1,500 at
+    # the frame edge) is far below the mis-placement rate (7/600 assets carry a
+    # transform pyrender cannot represent).
+    assert np.linalg.norm(actual, axis=1).max() <= 1.0 + 1e-6 < ORTHO_HALF_WIDTH
