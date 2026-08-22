@@ -227,7 +227,7 @@ silently.** Registry ownership sits with the Integrator, which `DL-009` holds cl
 | **S-4** | **Framing stays at `xmag 1.10`, and what it produces is recorded rather than targeted** | `USER DECISION U-X`. **Rewritten 2026-08-22.** The original `0.60 ± 0.03` was fitted to `xmag 1.20` on 8 assets and **would now fail** under 1.10. ULIP's own longest-side ÷ 224 ranges 0.405–0.701 across 8 assets and the per-asset ratio to ours spans 1.16–1.83, so upstream has no single framing constant to match — 1.20 reproduced its *mean*, not its rule, and bought nothing on `S-5`. The criterion is now: measure it, record it, and assert only that **no asset is clipped** (foreground must not touch the frame edge), which is the property that would actually corrupt data | ≥200 assets |
 | **S-5** | **The correction is confirmed against an official upstream artifact** | `FIND-9`'s harness re-run: R@1 vs ULIP's `image_feat` rises from the v2 corpus's **83.2%** toward the point tower's 98.0%. **Already measured on the decided configuration (`U-W` + `U-X`) by the Reviewer: R@1 97.2%, R@5 99.3%, matched 0.9160, gap 0.3734, n=286** — a **14.0**-point rise. Both parties' independent measurements of v2 and v3 agree to four decimals | 286 assets, mismatched pairs as control, chance R@1 0.35% |
 | **S-6** | The yaw is gone | median Chamfer distance vs ULIP's clouds **drops from 0.0903 to ≈0.0230**, and the ">0.1" count from 137/286 to ≈7/286 | the 286 uids overlapping shard 000-009 |
-| **S-7** | Nothing else moved | point count, `rgb_scale`, `coloured_point_fraction`, `max_radius`, `centroid_offset` unchanged; **the 21 zero-variance assets stay exactly 21** | all 46,052 |
+| **S-7** | Nothing else moved | point count, `rgb_scale`, `coloured_point_fraction`, `max_radius`, `centroid_offset` unchanged; **flat clouds are explained by flat meshes** — `L1-PC-NONDEGENERATE`. **Rewritten 2026-08-22; the original demanded "the 21 zero-variance assets stay exactly 21" and FAILS on a correct corpus (18).** See §11.1 | all 46,052 |
 | **S-8** | `G1` produces the project's first gate record | verdict, criteria, measurements, `is_terminal`, and a schema the five later gates inherit | — |
 | **S-9** | No model can defeat the dimension floor | the "empty feasible band" count falls **from 103 to 0** | all 45,955 |
 | **S-10** | Every arm produces 100 valid records | parse failures, repair exhaustions, quarantines all recorded per arm | 3 × 100 |
@@ -240,6 +240,59 @@ silently.** Registry ownership sits with the Integrator, which `DL-009` holds cl
 continues without asking **only** if `S-1` … `S-6` all pass on the 100-asset trial. **Any single
 failure stops and reports.** Good numbers are permission to continue; they are never permission to
 skip a later gate.
+
+### 11.1 Why `S-7`'s zero-variance line was replaced rather than re-fitted
+
+**The criterion as written fails, and the failure is real: `21 → 18`.** That is recorded here and
+not deleted. What follows is why 18 is the correct number and 21 was never a measurement of the
+property `S-7` exists to protect.
+
+**`FRAME_CORRECTION` is `(x, y, z) → (−x, y, −z)`. Negating an axis leaves that axis's variance
+unchanged in exact arithmetic**, so the correction cannot alter per-axis variance by any geometric
+mechanism. It alters the *arithmetic path* — the correction composes into the scene graph's node
+transforms, so vertex coordinates differ in their last bits. Three assets sitting at the `1e-33`
+boundary crossed from exactly `0.0` to approximately `0.0`. **`== 0` on a float variance is a
+threshold on a continuum**, measured over all 46,052:
+
+```
+min per-axis variance, cumulative        == 0       18
+                                         <= 1e-30   84
+                                         <= 1e-20   84
+                                         <= 1e-15   88
+                                         <= 1e-12  106
+```
+
+**The trap in picking a different epsilon.** `U-AE` deleted the old corpus, so no *new* statistic
+has a baseline — swapping `== 0` for `<= 1e-20` trades the one before/after that exists for a
+number comparable to nothing. Choosing an epsilon after seeing the distribution is also the exact
+move `S-3` records the USER forbidding: a criterion cannot be used when it wins and set aside when
+it loses.
+
+**The replacement is not a new criterion.** `docs/graph/validation_plan.yaml`
+`L1-PC-NONDEGENERATE` already defines this check, it predates the regeneration, and
+`docs/graph/` outranks this SPEC in the project authority order. Its own note says why:
+
+> *An absolute variance floor cannot tell a flat ASSET from a flattening BUG. … Quarantining them
+> would discard valid data, and raising the floor until they pass would blind the check to the
+> failure it exists for. Comparing against the mesh separates the two.*
+
+**`S-7` was restating that check badly.** A count of flat clouds is a proxy; the property is
+*whether a flat cloud is explained by a flat mesh*. Measured on all 46,052 sidecars — both
+`per_axis_variance` and `raw_bbox_extents` are recorded, so no `.npz` is read:
+
+```
+assets with >=1 axis variance <= 1e-12       106
+of those, mesh NOT correspondingly flat        0      <-- the failure condition
+flat-axis extent / largest extent    max 7.004e-04    median 2.220e-16
+```
+
+**0 violations at every threshold from `0` to `1e-12`**, which is the property that makes this
+criterion usable where the count is not: it does not move when the epsilon moves.
+
+**What is lost and is not hidden.** `21 → 18` cannot be verified asset-by-asset, because the old
+corpus is deleted under `U-AE`. The explanation above is the algebra plus the value distribution,
+**not a paired comparison**. `INFERENCE`, not `OBSERVED DATA`. The `106 / 0` measurement above is
+`OBSERVED DATA` on the new corpus alone.
 
 ## 12. FAILURE CONDITIONS
 
