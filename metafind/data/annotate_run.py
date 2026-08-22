@@ -61,7 +61,10 @@ from metafind.data.annotate import (
     VALIDATOR_VERSION,
     AnnotationError,
     annotation_contract_id,
+    blind_agrees,
+    build_blind_prompt,
     build_prompt,
+    parse_blind_guess,
     build_repair_prompt,
     parse_annotation,
     validate_annotation,
@@ -511,7 +514,27 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
                  proportions: tuple[float, float, float]) -> tuple[dict | None, dict | None]:
     """SG1 for one asset. Returns ``(record, quarantine_entry)`` -- exactly one is None."""
     views = render_rec["view_paths"]
-    prompt = build_prompt(len(views), lvis_category, proportions)
+
+    # [PROMPT_VERSION 6] Turn 1: ask before the anchor exists.
+    #
+    # Not free -- it doubles the generations per asset. What it buys is the only
+    # automatic accuracy signal the bake-off has: `identity_confirmed` on its
+    # own cannot be checked (`W-7`: nothing tells us a `true` is really true),
+    # while a guess made with nothing supplied either matches the Objaverse-LVIS
+    # catalogue or does not, and the catalogue is a source we did not write.
+    #
+    # A blind turn that fails is not fatal. The anchored turn still runs, the
+    # guess is recorded empty, and that asset drops out of the agreement rate
+    # rather than out of the corpus.
+    blind_raw = ""
+    try:
+        blind_raw = ann.generate(views, build_blind_prompt(len(views)))
+    except Exception as exc:  # noqa: BLE001 -- turn 1 is a measurement, not a gate
+        blind_raw = f"<<generation failed: {type(exc).__name__}>>"
+    blind_guess = parse_blind_guess(blind_raw)
+
+    prompt = build_prompt(len(views), lvis_category, proportions,
+                          blind_guess=blind_guess)
     current = prompt
     last_error = ""
     last_raw = ""
@@ -538,6 +561,15 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
             "uid": uid,
             "prompt_version": PROMPT_VERSION,
             "attempts": attempt,
+            # [PROMPT_VERSION 6] `S-11` requires the blind answer VERBATIM. Both
+            # the raw turn and the extracted line are kept: the extraction can be
+            # wrong, and only the raw text lets a reader see that it was.
+            "blind_raw": blind_raw,
+            "blind_guess": blind_guess,
+            # A LOWER BOUND on blind identification accuracy, not an estimate --
+            # a shared content word, so "seat" against "chair" counts as
+            # disagreement. See `annotate.blind_agrees`.
+            "blind_agrees_with_anchor": blind_agrees(blind_guess, lvis_category),
             # F13: the annotator saw scale-normalised renders, so its size
             # estimate is a category prior. The mesh's own bounding box travels
             # with it so the estimate can be audited -- and it is a WEAK ground

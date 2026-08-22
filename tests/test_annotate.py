@@ -144,7 +144,14 @@ def test_volume_is_derived_not_asked():
     a = _validate(_valid(height=40), proportions=(1.0, 0.75, 0.75))
     assert (a.width, a.length, a.height) == (30.0, 30.0, 40.0)
     assert a.volume == 36000
-    assert "volume" not in build_prompt(11, ANCHOR, PROPS)
+    # v6 SHOWS the paper's Figure 2 example, which prints `volume: 36000`, so
+    # the word is now in the prompt as an illustration. What must stay true is
+    # that the model is not ASKED for it -- checked on the instruction, which is
+    # the thing that decides what comes back.
+    p = build_prompt(11, ANCHOR, PROPS)
+    ask = p.split("Return one JSON object")[1]
+    assert '"volume"' not in ask
+    assert "do not include `width`, `length` or `volume`" in p
 
 
 @pytest.mark.parametrize("field", ["category", "identity_confirmed", "description",
@@ -331,7 +338,7 @@ def test_the_prompt_still_permits_accented_latin():
 def test_the_prompt_version_moved_because_the_prompt_changed():
     """[P-1] v4 asks for something v3 did not. Pretending they are one contract
     is what makes a corpus unfalsifiable later."""
-    assert PROMPT_VERSION == 5
+    assert PROMPT_VERSION == 6
 
 
 def test_editing_the_prompt_moves_the_contract_id():
@@ -488,16 +495,32 @@ ENGLISH_RESPONSE = CJK_RESPONSE.replace(
 
 
 class FakeAnnotator:
-    """Records the prompt it was given on each attempt. No model, no GPU."""
+    """Records the prompt it was given on each attempt. No model, no GPU.
+
+    v6 makes TWO kinds of call per asset: one blind turn, then one or more
+    anchored attempts. `responses` stays the list of ANNOTATION replies, so
+    every test still reads as "attempt 1 returns this, attempt 2 returns that";
+    the blind turn is served separately from `blind`. Prepending a dummy to
+    every call site instead would have made each list mean something different
+    from what it says.
+    """
 
     model_id = "fake-vlm"
 
-    def __init__(self, *responses: str) -> None:
+    def __init__(self, *responses: str, blind: str = "OBJECT: syringe") -> None:
         self.responses = list(responses)
-        self.prompts: list[str] = []
+        self.blind = blind
+        self.prompts: list[str] = []            # every call, in order
+        self.annotation_prompts: list[str] = []  # the anchored ones only
 
     def generate(self, image_paths, prompt):  # noqa: D102 -- matches Annotator
         self.prompts.append(prompt)
+        # The blind turn is the one that asks for an `OBJECT:` line and does not
+        # ask for JSON -- identified by what it asks rather than by call order,
+        # so a test that changes the number of attempts still works.
+        if "Return one JSON object" not in prompt:
+            return self.blind
+        self.annotation_prompts.append(prompt)
         return self.responses.pop(0)
 
 
@@ -521,7 +544,7 @@ def test_a_chinese_annotation_goes_to_the_repair_path_not_straight_into_the_corp
                           lvis_category="syringe", proportions=PROPS)
 
     assert bad is None and rec is not None
-    assert len(ann.prompts) == 2, "the repair attempt was never invoked"
+    assert len(ann.annotation_prompts) == 2, "the repair attempt was never invoked"
     assert rec["attempts"] == 2
     assert non_english_characters(rec["description"]) == []
     assert "drawing fluids" in rec["description"]
@@ -537,7 +560,7 @@ def test_the_repair_prompt_carries_the_language_failure_verbatim():
                           "uid0", _render_rec(),
                           lvis_category="syringe", proportions=PROPS)
 
-    original, repair = ann.prompts
+    original, repair = ann.annotation_prompts
     assert repair != original
     assert "REJECTED" in repair
     assert "must be written in English" in repair
@@ -569,7 +592,13 @@ def test_a_clean_english_annotation_still_costs_one_attempt():
                           "uid0", _render_rec(),
                           lvis_category="syringe", proportions=PROPS)
     assert bad is None and rec["attempts"] == 1
-    assert len(ann.prompts) == 1
+    # One ANNOTATION call. v6 also makes a blind turn, which is a measurement
+    # rather than an attempt -- it is not retried and it cannot quarantine the
+    # asset, so counting it here would report a tax that the corpus does not pay.
+    assert len(ann.annotation_prompts) == 1
+    assert len(ann.prompts) == 2, "one blind turn plus one annotation attempt"
+    assert rec["blind_guess"] == "syringe"
+    assert rec["blind_agrees_with_anchor"] is True
 
 
 def test_the_repaired_record_is_marked_model_generated_not_human_repaired():
@@ -923,9 +952,13 @@ def test_the_prompt_asks_for_refinement_and_forbids_replacement():
 
 def test_the_prompt_asks_only_one_absolute_measurement():
     """v5 must not reinstate the three-guess habit through the back door."""
+    # Asserted on the field list, not on the whole prompt: v6 shows Figure 2's
+    # worked example, which necessarily prints all three dimensions. The example
+    # is what the answer should LOOK like; the field list is what is asked for.
     p = build_prompt(11, ANCHOR, PROPS)
-    assert '"height"' in p
-    assert '"width":' not in p and '"length":' not in p
+    ask = p.split("Return one JSON object")[1]
+    assert '"height"' in ask
+    assert '"width":' not in ask and '"length":' not in ask
 
 
 def test_identity_confirmed_false_is_ADMITTED_not_quarantined():
@@ -1034,9 +1067,9 @@ def test_the_record_carries_the_anchor_so_disagreement_stays_measurable():
     assert rec["synset"] == "chair.n.01"
 
 
-def test_all_three_contract_axes_moved_for_v5():
-    assert (PROMPT_VERSION, VALIDATOR_VERSION, SCHEMA_VERSION) == (5, 3, 3)
-    assert annotation_contract_id().startswith("metafind_annot_v5@")
+def test_all_three_contract_axes_moved_for_v6():
+    assert (PROMPT_VERSION, VALIDATOR_VERSION, SCHEMA_VERSION) == (6, 3, 4)
+    assert annotation_contract_id().startswith("metafind_annot_v6@")
 
 
 def test_swapping_the_synset_table_moves_the_contract_id():
@@ -1101,3 +1134,69 @@ def test_the_bakeoff_cannot_write_into_the_corpus(tmp_path, monkeypatch):
             R.use_arm(bad)
     assert R._ARM_ROOT is None, "a refused arm must not leave the writer redirected"
     assert R.out_root() == tmp_path / "corpus"
+
+
+def test_the_blind_turn_never_leaks_the_answer_it_is_meant_to_test():
+    """[PROMPT_VERSION 6] Turn 1 exists to make `identity_confirmed` falsifiable.
+
+    `W-7`: we feed the LVIS label in and ask the model to confirm it, and
+    **there is no ground truth telling us a `true` is really true**. A guess made
+    before the label exists either matches the Objaverse-LVIS catalogue or does
+    not, and the catalogue is a source this project did not write -- so it is the
+    one automatic accuracy signal the bake-off has.
+
+    All of which collapses if the anchor appears in turn 1. What must not appear
+    is the IDENTITY -- the category, the catalogue it came from -- and the
+    schema's *structure*, because a turn 1 that knows it is filling a form
+    becomes a form-filling task rather than a look-and-say one.
+
+    `materials` is deliberately NOT on that list even though it is a schema
+    field. Turn 1 asks what the object appears to be made of because that is
+    part of looking at an object, and the word carries no information about
+    WHICH object it is. This test was written with `materials` included, caught
+    the blind prompt, and the assertion was the thing that was wrong -- recorded
+    here so the next reader does not re-add it.
+    """
+    from metafind.data.annotate import build_blind_prompt, build_prompt
+
+    blind = build_blind_prompt(11)
+    anchored = build_prompt(11, "syringe", PROPS, blind_guess="a hypodermic needle")
+
+    for leak in ["syringe", "Objaverse-LVIS", "catalogued", "correct unless",
+                 "JSON", "onCeiling", "onFloor", "synset", "proportions",
+                 "centimetres", "mass"]:
+        assert leak not in blind, f"turn 1 leaks {leak!r}, which is what it must not know"
+    assert "OBJECT:" in blind
+
+    # And the anchored turn must actually carry the blind answer back, or the
+    # model is simply being asked twice rather than being asked to reconsider.
+    assert "a hypodermic needle" in anchored
+    assert "syringe" in anchored
+
+
+def test_a_failed_blind_turn_costs_the_measurement_and_not_the_asset():
+    """Turn 1 is a measurement, not a gate.
+
+    If the blind generation throws, the asset must still be annotated: dropping
+    it would remove assets from the corpus for a reason that has nothing to do
+    with the corpus, and would do it selectively -- exactly the assets the model
+    struggles with most.
+    """
+    from metafind.data.annotate_run import annotate_one
+
+    class BlindExplodes(FakeAnnotator):
+        def generate(self, image_paths, prompt):
+            if "Return one JSON object" not in prompt:
+                raise RuntimeError("CUDA hiccup")
+            return super().generate(image_paths, prompt)
+
+    ann = BlindExplodes(ENGLISH_RESPONSE)
+    rec, bad = annotate_one(ann, "uid0", _render_rec(),
+                            lvis_category="syringe", proportions=PROPS)
+
+    assert bad is None and rec is not None, "a failed turn 1 must not lose the asset"
+    assert rec["blind_guess"] == ""
+    assert rec["blind_agrees_with_anchor"] is False
+    assert "generation failed: RuntimeError" in rec["blind_raw"], (
+        "the failure must be visible in the record, not silently an empty string"
+    )

@@ -68,6 +68,9 @@ __all__ = [
     "PLACEMENT_FLAGS",
     "MATERIAL_SYNONYMS",
     "PROMPT_VERSION",
+    "blind_agrees",
+    "build_blind_prompt",
+    "parse_blind_guess",
     "VALIDATOR_VERSION",
     "SCHEMA_VERSION",
     "AnnotationError",
@@ -101,7 +104,9 @@ __all__ = [
 # and `annotation_contract_id()` binds all three to the actual text of the
 # prompt and the actual admission bounds, so an edit that someone forgets to
 # version still moves the identity.
-PROMPT_VERSION = 5  # v5 anchors the identity on the Objaverse-LVIS label and
+PROMPT_VERSION = 6  # v6 asks BLIND first, then anchors; shows the paper's
+                    # Figure 2 example instead of describing it; and asks the
+                    # model to look again before describing. v5 anchors the identity on the Objaverse-LVIS label and
                     # supplies the exact mesh proportions, so the model answers
                     # ONE scale question instead of guessing three dimensions
                     # from scale-normalised renders. v4 stated the output
@@ -112,7 +117,11 @@ VALIDATOR_VERSION = 3  # v3 admits `identity_confirmed`, derives width/length
                        # from the mesh instead of accepting them, and looks
                        # `synset` up rather than reading it from the model.
                        # v2 refused non-Latin script; v1 had no language rule
-SCHEMA_VERSION = 3  # v3 stores the LVIS anchor, `identity_confirmed`, the
+SCHEMA_VERSION = 4  # v4 stores the turn-1 blind guess, its raw text and
+                    # whether it agrees with the anchor -- the only
+                    # automatic accuracy signal in the bake-off, and the
+                    # answer to W-7's "is identity_confirmed a rubber
+                    # stamp?". v3 stores the LVIS anchor, `identity_confirmed`, the
                     # derived category relation and the horizontal axis
                     # assignment. v2 recorded translation/repair provenance and
                     # the contract identity; v1 had neither
@@ -479,10 +488,120 @@ class Annotation:
         }
 
 
+# [PROMPT_VERSION 6] Turn 1. No anchor, no schema, no JSON.
+#
+# v5 hands the model the Objaverse-LVIS label and asks it to confirm. `W-7`
+# named the problem that creates: **there is no ground truth telling us a
+# `true` is really true**, so `identity_confirmed` could be a rubber stamp and
+# nothing on disk would show it. Asking BEFORE the label exists is what makes
+# the confirmation falsifiable -- the blind answer either agrees with the
+# catalogue or it does not, and the catalogue is a source we did not write.
+#
+# It is also the only automatic accuracy signal in the bake-off. Description
+# quality, mass and materials have no answer key; `U-Q`'s 20 hand-adjudicated
+# assets are the only ground truth for those and they are the USER's to judge.
+BLIND_PROMPT = (
+    "You are looking at {n_views} rendered views of a single 3D asset, from "
+    "different angles around it.\n"
+    "\n"
+    "First, LOOK. Write two or three short lines describing only what is "
+    "actually visible: overall shape, distinct parts, colours, apparent "
+    "materials, any text or markings.\n"
+    "\n"
+    "Then, on a final line by itself, write:\n"
+    "OBJECT: <what this object is, in one to three words>\n"
+    "\n"
+    "Name the object, not the scene. If you are unsure, give your single best "
+    "guess -- an honest wrong guess is more useful here than a refusal."
+)
+
+
+def build_blind_prompt(n_views: int) -> str:
+    """[PROMPT_VERSION 6] Turn 1: identify with nothing supplied."""
+    return BLIND_PROMPT.format(n_views=n_views)
+
+
+def parse_blind_guess(raw: str) -> str:
+    """The `OBJECT:` line, verbatim. Empty string when the model did not give one.
+
+    `S-11` requires the blind guess be recorded VERBATIM, so this extracts and
+    does not normalise: no lowercasing, no article stripping, no lemmatising.
+    Whatever cleaning a later analysis wants, it can do on a value that still
+    says what the model said.
+    """
+    for line in reversed(raw.strip().splitlines()):
+        stripped = line.strip()
+        if stripped.upper().startswith("OBJECT:"):
+            return stripped[len("OBJECT:"):].strip()
+    return ""
+
+
+def blind_agrees(blind_guess: str, lvis_category: str) -> bool:
+    """Does the unprompted answer share a content word with the catalogue label?
+
+    Deliberately generous, and the direction of its error matters. "wooden
+    chair" against "chair" counts; "seat" against "chair" does not, because
+    nothing here knows they are synonyms. So the measured agreement rate is a
+    LOWER BOUND on blind identification accuracy, not an estimate of it -- a
+    model penalised for using a different word for the right object.
+
+    Tightening it would need a synonym judgement over free text that no
+    authoritative source in this project supplies, which is the same reason
+    `category_relation` refuses to split `divergent`.
+    """
+    if not blind_guess or not lvis_category:
+        return False
+    return bool(_tokens(blind_guess) & _tokens(lvis_category))
+
+
+# [PAPER FACT -- Figure 2] The paper's own worked example, shown to the model
+# rather than paraphrased. It is the one example of this schema that carries any
+# authority, and every earlier prompt described the fields in prose while the
+# figure sat unused. `volume` is omitted from what the model is asked for -- see
+# `Annotation.volume`, it is a product of the other three -- but it is left in
+# the example because removing it would misrepresent the figure.
+FIGURE_2_EXAMPLE = (
+    '{"category": "robot", "synset": "robot.n.01",\n'
+    '  "width": 30, "length": 30, "height": 40, "volume": 36000, "mass": 2.5,\n'
+    '  "description": "A small cubic-shaped robot with a smiling screen face, '
+    'two antennae on top, and rounded side arms and feet with spring-like '
+    'connectors.",\n'
+    '  "materials": ["metal", "glass", "plastic"],\n'
+    '  "onCeiling": false, "onWall": false, "onFloor": true, "onObject": true}'
+)
+
+
 def build_prompt(n_views: int, lvis_category: str,
-                 proportions: tuple[float, float, float]) -> str:
-    """The v5 annotation prompt: identity anchored, proportions given, one
-    estimate asked for.
+                 proportions: tuple[float, float, float],
+                 blind_guess: str = "") -> str:
+    """[PROMPT_VERSION 6] Turn 2: anchored, exemplified, observe-before-answer.
+
+    What v6 changes and why each change exists:
+
+    * **The model has already answered blind** (`build_blind_prompt`). Its own
+      words are quoted back, so the anchor arrives as a second opinion rather
+      than as the first thing it ever hears about the object. v5 stated the
+      answer and then asked for agreement, which is what `W-7` calls a rubber
+      stamp.
+    * **The paper's Figure 2 example is shown**, not described. It is the only
+      authoritative instance of this schema and every prompt before v6 left it
+      on the page.
+    * **Observe before answering.** The fields are asked for after an explicit
+      look, in the order a reader would need them, instead of as a bare list.
+
+    What v6 does NOT change: the FIELD SET. `SPEC_M1` and the USER both hold
+    that the stored record must carry the paper's fields, so prompt engineering
+    moves what is ASKED and never what is KEPT.
+
+    Constrained JSON decoding was specified for v6 and is NOT implemented:
+    `outlines`, `lm-format-enforcer`, `jsonformer` and `xgrammar` are all absent
+    and transformers has no built-in grammar. It is also not obviously wanted --
+    `S-10` measures parse failures per arm, and a model that cannot emit valid
+    JSON unaided is telling the USER something about itself that constrained
+    decoding would hide. Recorded as an IMPLEMENTATION CHOICE, revisit if parse
+    failures dominate the result.
+
+    Inherited from v5 and unchanged:
 
     [DEVIATION -- see TASK.md R-E] The paper has the VLM generate the
     annotations with GPT-4o (`2methdology.tex:28`, `neurips_2025.tex:100`).
@@ -500,9 +619,13 @@ def build_prompt(n_views: int, lvis_category: str,
     become one.
     """
     py, px, pz = proportions
+    recall = (f'A moment ago, looking at these same views with nothing supplied, '
+              f'you said this was: "{blind_guess}"\n\n'
+              if blind_guess else "")
     return (
         f"You are looking at {n_views} rendered views of a single 3D asset.\n"
         "\n"
+        + recall +
         f'This asset is catalogued in Objaverse-LVIS as: "{lvis_category}"\n'
         "Treat that identity as CORRECT unless the images clearly contradict it.\n"
         "\n"
@@ -522,7 +645,17 @@ def build_prompt(n_views: int, lvis_category: str,
         "absolute measurement, and you should answer it from what the object IS, "
         "not from the picture.\n"
         "\n"
-        "Return one JSON object and nothing else, with exactly these fields:\n"
+        "Before you answer, LOOK at the views once more and note to yourself: "
+        "what parts does it have, what colours, what does the surface look like, "
+        "is there any text or marking. The description below should come from "
+        "that, not from what the category name suggests.\n"
+        "\n"
+        "This is the exact format, shown with a worked example:\n"
+        f"{FIGURE_2_EXAMPLE}\n"
+        "\n"
+        "Return one JSON object and nothing else, with exactly these fields "
+        "(do not include `width`, `length` or `volume` -- they are computed "
+        "from the proportions above):\n"
         f'  "category": the catalogued identity "{lvis_category}", OR a STRICTLY '
         "MORE SPECIFIC term for the same object. Refine it when the images "
         'support that: "toy" -> "toy dinosaur", "motor vehicle" -> "pickup '
