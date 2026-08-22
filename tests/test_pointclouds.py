@@ -305,3 +305,36 @@ def sample_mesh_from(mesh):
         p = Path(d) / "m.glb"
         mesh.export(p)
         return sample_mesh(p, seed=0, n_points=256)
+
+
+def test_a_stale_sidecar_is_not_complete(tmp_path):
+    """[ADDED 2026-08-22] A cloud from an older sampler must not count as done.
+
+    EXPECTED-TRUTH SOURCE: the question a resumable run asks -- "did THIS code
+    produce this", not "is this file intact". n03 was worse than n04 here: it
+    did not even bump its version, so the 2026-08-22 frame and COLOR_0
+    corrections left all 46,052 stale clouds passing both the digest check and
+    the version check. Found by the Reviewer before the regeneration.
+    """
+    import json
+
+    from metafind.data.pointclouds import SAMPLER_VERSION, is_complete, process_one
+
+    scene = trimesh.Scene()
+    scene.add_geometry(_box(colour=[200, 40, 40, 255]), node_name="box")
+    asset = tmp_path / "a.glb"
+    asset.write_bytes(scene.export(file_type="glb"))
+    npz = tmp_path / "out" / "deadbeef.npz"
+    process_one("deadbeef", asset, npz)
+    assert is_complete(npz), "a freshly written cloud must be complete"
+
+    sc = npz.with_suffix(".json")
+    rec = json.loads(sc.read_text())
+    assert rec["sampler_version"] == SAMPLER_VERSION
+    assert rec["frame_correction"], "the frame correction id must reach the sidecar"
+    rec["sampler_version"] = SAMPLER_VERSION - 1
+    sc.write_text(json.dumps(rec))
+    assert not is_complete(npz), (
+        "a sidecar from an older sampler was accepted as complete; a re-run "
+        "would skip all 46,052 clouds and report success"
+    )

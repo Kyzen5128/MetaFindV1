@@ -30,6 +30,114 @@ INFERENCE · IMPLEMENTATION CHOICE · DEVIATION · UNKNOWN. Never promote an inf
 
 ---
 
+### 2026-08-22 · ULIP2 ENGINEER → MASTER · **MASTER-IMPACTING** — a fourth unregistered DEVIATION
+
+**The render background is now WHITE by USER decision `U-W`, deliberately diverging from ULIP-2's
+black. It has no entry in `docs/graph/graph_spec.yaml`, and the gate cannot see that.**
+
+**Reported, not acted on.** The deviation registry belongs to the Integrator, which `DL-009` holds
+closed. This block does not assign ids.
+
+`OBSERVED DATA`. ULIP-2's released renders measure **corner luminance 0** — pure black — on every
+asset checked. `renders.py:110` now writes `[255, 255, 255, 255]`. This is not an oversight and
+not a default carried forward: it is a decision taken **against** upstream on upstream's own
+metric, after the Reviewer measured both over 286 shared assets.
+
+```
+white + xmag 1.10   R@1 97.2%   matched 0.9160   gap 0.3734    <- decided
+black + xmag 1.20   R@1 95.8%   matched 0.8782   gap 0.3404
+v2 corpus           R@1 83.2%   matched 0.8371   gap 0.2806
+```
+
+**Black costs 1.4 points on `S-5`, the criterion this milestone chose for itself.** The USER's
+reasoning is on record: a criterion cannot be used when it wins and set aside when it loses.
+
+#### IMPACT
+
+Four deviations now carry **no registry id**, and `check_graph.py:373-383` matches deviation
+**ids only** and never reads the `what:` text, so a missing entry passes every gate silently.
+Registered debt `D-2` / `FU-A`, now load-bearing rather than theoretical:
+
+| | Deviation | Status |
+|---|---|---|
+| 1 | LVIS category anchoring (`DL-007`) | no id |
+| 2 | Contrastive negatives, 512 upstream vs one GPU's batch (`F-N10-1`) | no id |
+| 3 | Corpus 46,052 vs "approximately 48,000" (`U-01`) | carried as a Table 1 limitation |
+| 4 | **White render background, against upstream's black** | **no id — new** |
+
+#### ASK
+
+Master to route all four to the Integrator, or to assign ids directly while that block is held.
+
+#### STATE
+
+**ULIP2 continues.** This blocks nothing; it must simply not be discovered after the fact.
+
+---
+
+### 2026-08-22 · ULIP2 ENGINEER · REVIEW ROUND 1 — the eight items, closed
+
+Reviewer's `R-1` findings actioned. **Both BLOCKERs reproduced by this block before fixing**, per
+the standing rule not to take another agent's finding at face value.
+
+```
+before:  n03 is_complete(stale asset) -> True     n04 -> True
+after:   n03 is_complete(stale asset) -> False    n04 -> False
+```
+
+A bare re-run would have classified all 46,052 clouds and 45,955 renders as finished, skipped the
+entire corpus, and **exited reporting success**. The 3.3-hour job would have changed nothing and
+looked like it worked. Both were this block's own errors.
+
+| # | Change | File |
+|---|---|---|
+| 1 | `is_complete()` reads the version — `!=`, not `<`, so a sidecar from a NEWER version is refused too | `pointclouds.py`, `renders.py` |
+| 2 | `SAMPLER_VERSION` 3 → **4**. n04 had bumped 2 → 3; n03 had not, so corrected and uncorrected clouds were indistinguishable from their sidecars | `pointclouds.py:80` |
+| 3 | `meshload.FRAME_CORRECTION_ID` now actually reaches the sidecar as `frame_correction`. Its own docstring claimed it did; it had **zero references** outside its own module | `pointclouds.py` |
+| 4 | `BACKGROUND_RGBA` → white (`U-W`) | `renders.py:110` |
+| 5 | `ORTHO_HALF_WIDTH` → `1.10` (`U-X`) | `renders.py:136` |
+| 6 | The background comment no longer cites upstream to justify a value that diverges from it | `renders.py:95-109` |
+| 7 | Deleted *"SOLVED … see `tools/solve_ulip_elevation.py`"*. **That tool was never written, and this block's own HANDOFF said the elevation was not solved.** `U-03` stays `UNKNOWN`; 20.0 is an IMPLEMENTATION CHOICE | `renders.py:138` |
+| 8 | White background routed to Master as an unregistered DEVIATION — the entry above | this file |
+
+`SPEC_M1` `S-3` and `S-4` rewritten: **both would have failed on correct artifacts.** `S-3`
+demanded corner luminance 0 and the background is now 255; `S-4`'s `0.60 ± 0.03` was fitted to
+`xmag 1.20`. Neither was deleted. `S-3` records the divergence and its measured cost; `S-4`
+asserts the property that would actually corrupt data — **no asset clipped** — instead of a
+constant upstream does not have (ULIP's own longest-side ÷ 224 ranges 0.405–0.701 across 8
+assets). `S-5`'s target is updated to the Reviewer's measured **97.2%**.
+
+#### Two tests added, non-vacuous by construction
+
+`test_a_stale_sidecar_is_not_complete` in `test_renders.py` and in `test_pointclouds.py`. Each
+writes a real artifact, asserts it is complete, then decrements the version in its sidecar and
+asserts it is **not**. The render one also refuses a version ahead. Neither can pass with the
+version gate removed. The n03 one additionally asserts `frame_correction` is present, so item 3
+cannot silently regress.
+
+`pytest tests/ -q` → **585 passed** (583 before this round, 582 at session start).
+`tools/check_graph.py` → 2275 checks, all pass, after updating the recorded test count (debt `D-3`).
+
+#### Accepted from the Reviewer without re-deriving
+
+The five-arm ablation and its pre-registered decision rule. The two blocks' measurements agree to
+four decimals on both arms this block had run — v3 95.8 / 0.8782 / 0.5378 against 95.8 / 0.8783 /
+0.5377, v2 83.2 / 0.8371 / 0.5565 against 83.2 / 0.8371 / 0.5565 — so arm E's 97.2% is taken as
+measured rather than re-run.
+
+**The Reviewer's criticism of `tools/verify_renders_against_ulip.py` is accepted.** The v2 arm of
+this block's own A/B came from an uncommitted inline script, so **half the headline measurement
+was not reproducible from the repository** and the Reviewer had to rebuild v2 from source to check
+it. A `--from-disk` path belongs in that tool and is not yet written.
+
+#### STATE
+
+**Still not run.** Awaiting the Reviewer's remaining items: the `COLOR_0` ordering audit over the
+~1,488 `flat` and `texture` assets never compared against ULIP, and the non-vacuity check on
+`test_a_tall_asset_renders_tall`.
+
+---
+
 ### 2026-08-22 · ULIP2 ENGINEER → MASTER · **MASTER-IMPACTING FINDING**
 
 **`n04`'s camera orbit uses `+Z` as the up axis. The meshes are `Y`-up. Every render is
@@ -787,3 +895,367 @@ consistent, and `FIND-9` measured the transform difference as immaterial (83.5% 
 
 `STATE` — the corpus has **not** been regenerated. 286 assets were re-rendered in memory for this
 measurement and their PNGs deleted; `data/outputs/renders/` still holds v2.
+
+---
+
+### 2026-08-22 · ULIP2 REVIEWER → MASTER · **FINDING** — R-1, the n03/n04 pre-run review
+
+> **Appended at the BOTTOM, not the top.** The Reviewer's write permission this session is
+> append-only, granted so that no line of the Engineer's record could be touched. Master should
+> move this entry to the top when it next edits the file.
+
+**REVIEW REQUEST 1 item 3 is answered: the 12.6-point rise is the geometry, not the background.
+Two of the four render corrections — background and framing — are separately shown to buy
+nothing, and the black background costs about a point.**
+
+Reviewer harness, Reviewer scratchpad, module constants patched in memory. **No file under
+`metafind/`, `tools/` or `data/outputs/` was modified. No corpus was regenerated.**
+Full method, pre-registration and result table: `REVIEW.md`, sections `R-1`.
+
+#### FINDING
+
+`OBSERVED DATA`, n = 286 — the **entire** overlap pool, the Engineer's exact population.
+Target is ULIP-2's released `image_feat`; chance R@1 = 0.35%.
+
+| Arm | | R@1 | matched | gap |
+|---|---|---|---|---|
+| A | v3 as committed (black, `xmag 1.20`) | 95.8% | 0.8783 | 0.3406 |
+| B | A, background reverted to **white** only | **97.2%** | 0.9141 | **0.3689** |
+| C | full v2 rebuild | 83.2% | 0.8371 | 0.2806 |
+| D | A, framing reverted to `xmag 1.10` only | 96.2% | 0.8800 | 0.3451 |
+
+1. **`S-5` PASSES on an independently pre-registered test.** `survival = (B−C)/(A−C) = 1.111`
+   against a threshold of `0.70` fixed and committed **before** the run. The background
+   hypothesis is refuted, not argued down.
+2. **Both harnesses agree to four decimals.** Arm A reproduces 95.8% / 0.8783 / 0.5377 against
+   the Engineer's 95.8% / 0.8782 / 0.5378. Arm C reproduces 83.2% / 0.8371 / 0.5565 exactly —
+   and arm C was **rebuilt from the v2 source**, because no committed tool can produce that
+   number (see the ASK below).
+3. **The black background is a small regression.** White beats black on R@1 (+1.4), matched
+   cosine (+0.036) and gap (+0.028), reproduced at n=100 with the same sign and size.
+4. **`ORTHO_HALF_WIDTH = 1.20` buys nothing measurable** — one asset, cosines tied — while
+   having been fitted on 8 assets whose per-asset ratio to ULIP spans 1.16–1.83.
+
+#### DECISION — proposed, kept separate from the finding
+
+**None. The Reviewer does not decide a material remedy.**
+
+There is a real tension the Reviewer will not resolve: under `U-O`, ULIP-2's renders are black
+and that gives the change upstream provenance; but `S-5` is the criterion the milestone stakes
+the correction on, and `S-5` prefers white. **Matching upstream's pixels and maximising agreement
+with upstream's features point opposite ways here.** Which governs is the USER's.
+
+#### EVIDENCE — and what remains unverified
+
+Verified: the frame correction is a rotation (`det = +1`, orthonormal, Euler `180°` about Y),
+and the axis-aligned extents are invariant — reproduced by the Reviewer over 20,000 random
+points, independently of `meshload.demo()`. The v3 orbit holds `d·UP = sin(20°)` constant across
+all 11 views; the v2 formula's ranges from 0 to ±0.93, so v2 did tumble.
+COLOR_0 prevalence independently sampled at n=120 per class: `gltf_default` 18.3%, `flat` 5.8%,
+`texture` 4.2%, against the Engineer's 17.0 / 7.5 / 2.0. **The Engineer's estimates hold.**
+
+**Not established:** exposure is not isolated from arm C; the orbit axis and the frame correction
+are not separated from each other; the 8 fitting assets were not held out; and 95.8% remains
+agreement with **ULIP-2**, never with MetaFind.
+
+#### IMPACT
+
+`renders.py:97` (background) · `renders.py:118` (framing) · the whole n04 corpus about to be
+regenerated · `S-3`, `S-4`, `S-5` · nothing downstream has been produced yet.
+
+#### ASK
+
+1. **A ruling on the black background** before the 3.3-hour regeneration freezes it — `U-O`
+   provenance versus the `S-5` measurement. This is the only R-1 item that is time-critical.
+2. **`tools/verify_renders_against_ulip.py` cannot produce the v2 arm.** It only renders from
+   GLBs; nothing in `tools/` reads the on-disk v2 renders. The `83.2%` half of the headline A/B
+   is therefore not reproducible from committed code. The Reviewer's arm C now covers it; Master
+   should decide whether that belongs in `tools/`.
+3. **`renders.py:138-140` states the elevation was "SOLVED … see tools/solve_ulip_elevation.py".**
+   That file does not exist, and `HANDOFF.md` and `REVIEW.md` both record the elevation as **not**
+   solved and `U-03` as `UNKNOWN`. A future reader will believe the code. `code-changes.md` §14.
+4. **`meshload.FRAME_CORRECTION_ID` is written to no artifact** — zero references outside
+   `meshload.py`, though its own comment says it "travels into every sidecar".
+
+#### STATE
+
+**Can this block safely continue? — Yes for everything except freezing the background.**
+
+The geometry correction is verified and the regeneration is scientifically justified. Items 3
+and 4 above are documentation-integrity defects that should land in the same pass rather than
+after it. Item 1 should be answered first, because it is cheap now and costs 3.3 hours later.
+
+`STATE` — nothing regenerated, no GPU job beyond the 286×4 in-memory render probe, whose PNGs
+were written to the Reviewer's scratchpad and deleted. `data/outputs/` is untouched.
+
+---
+
+### 2026-08-22 · USER DECISION + ULIP2 REVIEWER → MASTER · **BLOCKING**
+
+> Appended at the bottom; the Reviewer's permission this session is append-only.
+> **Recorded because conversation is not storage.**
+
+#### USER DECISION — `U-W` · the render background reverts to WHITE
+
+**USER, 2026-08-22, answering the Reviewer's R-1.b finding: 「換回白」.**
+
+`renders.py:97` `BACKGROUND_RGBA` returns to `[255, 255, 255, 255]`. **The Reviewer has not made
+this change** — implementation is the Engineer's, and the Reviewer does not touch `metafind/`.
+
+**Basis.** `S-5` is the criterion this milestone chose to stake the render correction on, and
+`S-5` prefers white: 97.2% against black's 95.8% over the full 286-asset pool, with matched
+cosine 0.9141 against 0.8783 and the matched/mismatched gap 0.3689 against 0.3406. The same sign
+and magnitude reproduced at n=100. A criterion cannot be authoritative when it agrees and
+ignored when it does not.
+
+#### This creates a DEVIATION that must be registered
+
+```
+Expected     ULIP-2 renders on black -- corner luminance 0, OBSERVED DATA, measured on
+             every ULIP asset checked
+Reproduced   we render on white
+Reason       measured: black costs 1.4 points of R@1 and 0.028 of matched/mismatched gap
+             against ULIP's own image_feat, n=286
+Impact       the n04 corpus and every image embedding taken from it; NOT comparability
+             with the paper, which says nothing about background
+Registry id  NONE -- must be created
+```
+
+This is the **fourth** deviation with no registry entry (`SPEC_M1` §9 already lists three), and
+`check_graph.py:373-383` compares deviation ids only and never reads the `what:` text. Registry
+ownership sits with the Integrator, which `DL-009` holds closed. **Master routes this.**
+
+#### Three things that must land in the same change — not after it
+
+1. **`SPEC_M1` `S-3` is now false as written.** It reads *"Background matches upstream · mean
+   corner luminance `= 0` · all regenerated renders"*. Under `U-W` every regenerated render will
+   have corner luminance **255** and `S-3` fails its own gate. The criterion has to be rewritten
+   to state the deviation, not deleted.
+2. **`renders.py:95-96`'s comment** justifies black by upstream. It must record `U-W` and the
+   measurement instead, or the code will contradict the decision.
+3. **`renders.py:138-140`** still says the elevation was *"SOLVED … see
+   `tools/solve_ulip_elevation.py`"*. That file does not exist and the elevation is **not**
+   solved. Same pass. (`code-changes.md` §14.)
+
+#### The verification for `U-W` already exists — no re-run is needed
+
+Arm **B** of `R-1` **is** the post-change configuration: v3 as committed with
+`BACKGROUND_RGBA` white and nothing else altered. Its `S-5` value is therefore already measured
+on the full pool:
+
+```
+R@1 97.2%   R@5 99.0%   median rank 1   matched 0.9141   mismatched 0.5452   n = 286
+```
+
+`BACKGROUND_RGBA` has exactly **one** consumer, `renders.py:354`. No test asserts a background
+colour: both tests changed in `2a8ded4` segment foreground against the image's own corner and are
+background-agnostic by construction. **The change is one line and nothing else in the repository
+reads it.** Verified by the Reviewer, read-only.
+
+**Still open and NOT decided by `U-W`:** `ORTHO_HALF_WIDTH`. `R-1.c` measured `1.20` against
+`1.10` at 96.2% vs 95.8% — `1.20` buys nothing measurable while having been fitted on 8 assets
+whose ratio to ULIP spans 1.16–1.83. The USER has not ruled on it and the Reviewer does not.
+
+---
+
+### 2026-08-22 · ULIP2 REVIEWER → MASTER · **MASTER-IMPACTING FINDING** — cross-block
+
+**`n07b` has been orbiting the correct axis all along, for a reason it states incorrectly. So
+`n04` and `n07b` have been in DIFFERENT frames since both were produced, and the test that exists
+to stop exactly that is structurally blind to it.**
+
+Found while checking whether `U-W` reaches another node. Read-only.
+
+#### FINDING
+
+`OBSERVED IMPLEMENTATION` — `metafind/data/procthor_modalities.py:148-169`
+
+`orbit_camera_poses()` puts the elevation on **`y`**: `"y": centre["y"] + radius * sin(el)`,
+with azimuth sweeping `x`/`z`. That is a correct horizontal orbit about the up axis.
+
+Its own docstring, `:151-156`, explains why: *"n04's azimuth orbit, expressed in AI2-THOR's
+left-handed y-up frame … What is expressed here is only the frame change — **trimesh's z-up to
+Unity's y-up**."*
+
+**`n04` was never z-up.** The meshes are Y-up — established this session by the Engineer over
+1,195 tall and 481 flat assets, and confirmed against ULIP's released renders. `n04`'s `+Z` orbit
+was a defect, not a convention. `n07b` converted *away from* that defect and happened to land on
+the right answer.
+
+#### Consequence
+
+```
+n04 (Objaverse objects)   orbited +Z    -> every asset tumbled
+n07b (ProcTHOR assets)    orbited +Y    -> every asset upright
+```
+
+`procthor_node_embeddings.npz`, already produced for 1,467 assets, was built from **upright**
+renders. The object gallery `n06` will encode was built from **tumbled** ones. Stage 2 scores
+scene nodes against gallery objects, so those two embedding populations have never been
+geometrically consistent with each other.
+
+**The `n04` correction repairs this as a side effect.** After it, the two nodes agree for the
+first time. That is good news that must still be recorded, because it changes what ESSGNN's
+existing artifacts are comparable to.
+
+#### Why nothing caught it
+
+`tests/test_procthor_modalities.py:84` — `test_the_orbit_uses_n04s_constants_not_copies` —
+asserts `m.N_VIEWS is r.N_VIEWS` and `m.ORBIT_ELEVATION_DEG is r.ORBIT_ELEVATION_DEG`, with the
+stated intent *"n04-compatible has to be enforced by import, not by matching numbers"*.
+
+**It enforces the two constants that agreed and cannot see the axis that did not.** `n07b` builds
+its own poses rather than importing a direction function, so the one quantity that differed is
+the one quantity the coupling test does not compare. It passed on every run.
+
+#### DECISION — proposed, kept separate
+
+**None.** Cross-block, and `DL-009` holds ESSGNN closed.
+
+#### ASK
+
+1. Master to route whether `procthor_node_embeddings.npz` and the 1,467 `procthor_modalities`
+   artifacts need re-deriving now that `n04`'s frame changes — **or whether they were always the
+   correct ones and it is only `n04` that moves.** The Reviewer's reading is the latter, and that
+   is an `INFERENCE`, not a verified fact.
+2. `procthor_modalities.py:155-156`'s "trimesh's z-up" is factually wrong and should be corrected
+   with the rest — but it belongs to ESSGNN's node, not to this block.
+3. The coupling test needs to compare the **direction**, not two scalars. Also ESSGNN's.
+
+#### STATE
+
+**ULIP2 can continue.** Nothing here blocks the `n03`/`n04` regeneration; it makes the case for
+it stronger. Everything actionable sits in a block that is `ON HOLD`, so it is Master's to hold.
+
+`STATE` — nothing modified outside this file and `REVIEW.md`.
+
+---
+
+### 2026-08-22 · USER DECISION `U-X` + REVIEWER VERIFICATION · **INFO**
+
+> Appended at the bottom; Reviewer permission is append-only. **Conversation is not storage.**
+
+#### USER DECISION — `U-X` · `ORTHO_HALF_WIDTH` reverts to `1.10`
+
+**USER, 2026-08-22, answering `R-1.c`: option `A`.** `renders.py:118` returns to `1.10`.
+**The Reviewer has not made this change.** Implementation is the Engineer's.
+
+**Basis, stated by the USER's own reasoning on `U-W`:** `S-5` is this milestone's chosen
+criterion, and `1.20` does not improve it. Applying `S-5` to the background but not to the
+framing would be two standards. `1.20` was fitted on 8 assets whose per-asset ratio to ULIP
+spans 1.16–1.83, so it reproduces upstream's *mean* framing and not upstream's rule.
+
+#### REVIEWER VERIFICATION — the decided configuration was measured, not inferred
+
+`U-W` and `U-X` together produce a configuration **no existing arm covered**: arm B was
+white + `1.20`, arm D was black + `1.10`. Framing and background can interact, so the Reviewer
+ran the actual configuration rather than reading across two neighbours.
+
+```
+arm E   white background + xmag 1.10 + corrected orbit + corrected frame + ambient 0.5 / int 1.5
+        R@1 97.2%   R@5 99.3%   median rank 1   matched 0.9160   mismatched 0.5426   n = 286
+```
+
+**Best of the five arms on R@5, matched cosine and gap; tied best on R@1.** No interaction
+penalty appeared. `S-5` for the corpus that is about to be regenerated is therefore
+**already measured at 97.2%**, against the v2 corpus's 83.2% — a **14.0**-point rise, where the
+Engineer originally reported 12.6.
+
+`S-4` as written (*"longest side ÷ 224 = 0.60 ± 0.03"*) is fitted to `1.20` and **will now fail**
+under `1.10`. Like `S-3`, it must be rewritten to record the decision rather than deleted.
+**That is `SPEC_M1`'s to change, not the Reviewer's.**
+
+#### The Engineer's change list for this pass, consolidated
+
+| | File | Change | Authority |
+|---|---|---|---|
+| 1 | `renders.py:97` | `BACKGROUND_RGBA` → `[255, 255, 255, 255]` | `U-W` |
+| 2 | `renders.py:118` | `ORTHO_HALF_WIDTH` → `1.10` | `U-X` |
+| 3 | `renders.py:95-96` | comment must record `U-W` and its measurement, not justify black by upstream | `code-changes.md` §14 |
+| 4 | `renders.py:138-140` | delete the "SOLVED … see `tools/solve_ulip_elevation.py`" claim; that file does not exist and `U-03` is `UNKNOWN` | `code-changes.md` §14 |
+| 5 | `pointclouds.py:71` | `SAMPLER_VERSION` bump, and a frame/COLOR_0 marker in the sidecar | USER, already routed |
+| 6 | `pointclouds.py:339` · `renders.py:394` | `is_complete()` must read the version | USER, already routed |
+| 7 | `SPEC_M1` `S-3`, `S-4` | rewritten to record the deviations; both currently fail as written | Master |
+| 8 | deviation registry | white background — a **fourth** entry with no id | Integrator, held by Master |
+
+**Nothing in `metafind/` or `tools/` was modified by the Reviewer.** Only `REVIEW.md` and this
+file, append-only.
+
+#### STATE
+
+**The geometry case for the regeneration is closed and passes.** `S-5` is verified at 97.2% on
+the exact configuration decided. What remains before the 3.3-hour run is items 5 and 6 — the two
+blockers already routed to the Engineer — and the `SPEC_M1` criteria in item 7, which will
+otherwise fail their own gate on artifacts that are correct.
+
+---
+
+### 2026-08-22 · ULIP2 REVIEWER → MASTER · **FINDING** — R-2 / R-3, the last two pre-run items
+
+Read-only, CPU only. Full method and tables: `REVIEW.md`, sections `R-2` and `R-3`.
+
+#### R-3 — REVIEW REQUEST 1 items 5 and 6: **both PASS**
+
+The v2 defect was injected back in memory and both tests went red:
+`test_a_tall_asset_renders_tall` FAIL (*"a 3:1 upright box rendered at height/width
+[0.42, 0.57, 0.93, 1.42, …]"* — it reproduces the tumble signature on its own), and
+`test_primary_layout_is_the_ulip2_style_orbit` FAIL (*"the orbit is not at a single elevation"*).
+
+**The changed test is a correction, not a rationalisation, and there is now evidence for that
+rather than an argument.** The version it replaced asserted the defect; the replacement fails in
+its presence. `code-changes.md` §5 is satisfied.
+
+#### R-2 — the `COLOR_0` fix reaches **16%** of the population it was written for
+
+`OBSERVED IMPLEMENTATION` + `OBSERVED DATA`. 97 assets that declare `COLOR_0`, per-geometry:
+
+```
+gltf_default -> vertex      262     the fix works
+flat         -> flat      1,381     COLOR_0 DISCARDED   (215 + 1,166)
+texture      -> texture     625     correct, texture outranks it
+```
+
+**1,381 of the 1,643 non-texture geometries carrying `COLOR_0` never receive it.**
+
+Cause, `pointclouds.py`: inside the `TextureVisuals` branch, `to_color()` returning a single
+RGBA (`ndim == 1`) hits `return _uniform(vc, "flat")` **before** the `COLOR_0` branch. Only the
+later `baseColorFactor` path loses to `COLOR_0`. The docstring's *"below texture, above flat"* is
+true for one of the two flat paths and false for the other.
+
+**Not a regression** — v2 also produced `flat` here. It is an incomplete fix whose docstring
+claims completeness, and the Engineer's validation (n=12 / n=50, `gltf_default` only) lies
+entirely inside the 262 that work.
+
+**REFUTED, and recorded as such:** the Reviewer's hypothesis that the second `skip_materials`
+load could misalign geometry names was tested over 2,268 name/vertex-count comparisons —
+`0` name mismatches, `0` count mismatches. **The Engineer's keying design is sound.**
+
+Prevalence independently reproduced at n=120/class: 18.3 / 5.8 / 4.2 against the Engineer's
+17.0 / 7.5 / 2.0. **The Engineer's estimates hold.**
+
+#### ASK — a research question, not an engineering one
+
+**glTF 2.0 defines `COLOR_0` as a MULTIPLIER on `baseColorFactor`, not a replacement.** So
+*"COLOR_0 above flat"* may itself be the wrong contract. Three candidate behaviours:
+
+```
+1  keep baseColorFactor          -- what the code does today for 1,381 geometries
+2  COLOR_0 replaces it           -- what the docstring claims, done for 262
+3  COLOR_0 x baseColorFactor     -- what the glTF specification says
+```
+
+**The Reviewer does not choose.** This is dataset-preprocessing semantics and it reaches the rgb
+channel the ULIP-2 point tower consumes for the whole corpus. `BLOCKS.md` makes it USER-material.
+The differential that settles it already exists: ULIP's official clouds for the same uids, the
+same comparison the Engineer used to close `F-N03-1`, run separately over the 1,381.
+
+#### IMPACT / STATE
+
+Run-blocking **by cost, not by correctness**: nothing is worse than v2, but regenerating now bakes
+in a fix that reaches 16% of its target, and completing it later is another 3.3 hours.
+`n04` is unaffected — this is `n03`'s colour channel only.
+
+**All of REVIEW REQUEST 1's seven items are now answered.** Items 1, 3, 4, 5, 6 PASS; item 2 is
+`R-2` above; item 7 is the two version blockers already routed to the Engineer.
+
+`STATE` — nothing modified outside `REVIEW.md` and this file.

@@ -60,6 +60,7 @@ from pathlib import Path
 import numpy as np
 
 from metafind import paths, runlog
+from metafind.data import meshload
 
 NODE = "n03_sample_pointclouds"
 N_POINTS = 10_000
@@ -68,7 +69,16 @@ N_POINTS = 10_000
 # changed extent by more than 1% -- ratios from 0.008x to 77x. Versions 1-2
 # produced geometrically wrong clouds for a large fraction of the corpus while
 # passing every G2 check.
-SAMPLER_VERSION = 3
+# 4: [CORRECTED 2026-08-22] the mesh is loaded through `meshload`, which applies
+# the 180 degree yaw that puts our clouds in ULIP-2's frame, and recovers the
+# glTF COLOR_0 vertex colours trimesh discards when a material is present.
+#
+# The bump is not cosmetic. `is_complete()` reads it, so a version-3 cloud is
+# NOT complete under version 4 and a bare re-run regenerates it. Leaving the
+# number at 3 meant every one of the 46,052 uncorrected clouds classified as
+# finished: the re-run would have skipped the entire corpus and reported
+# success. Found by the Reviewer, 2026-08-22, before the run.
+SAMPLER_VERSION = 4
 RGB_SCALE = "unit"  # [0, 1]; see the module docstring
 DEFAULT_GREY = 0.4  # ULIP's stand-in for a dataset with no colour channel at all
 # glTF 2.0 specifies pbrMetallicRoughness.baseColorFactor default = [1,1,1,1].
@@ -359,6 +369,19 @@ def is_complete(out: Path) -> bool:
         rec = json.loads(sc.read_text())
     except (OSError, json.JSONDecodeError):
         return False
+    # [ADDED 2026-08-22] Completion is relative to the CURRENT sampler. Without
+    # this the check answered "is there an intact cloud here", which is not the
+    # question a re-run asks -- it asks "is there an intact cloud produced by
+    # the code I am running now". The 2026-08-22 frame and COLOR_0 corrections
+    # changed the geometry and the colours while the digest of each OLD file
+    # stayed self-consistent, so every stale cloud passed. A bare re-run would
+    # have skipped all 46,052 and exited reporting success.
+    #
+    # Deliberately `!=` rather than `<`: a sidecar from a NEWER sampler is also
+    # not this sampler's output, and silently accepting it would let a
+    # downgraded run inherit artifacts it cannot reproduce.
+    if rec.get("sampler_version") != SAMPLER_VERSION:
+        return False
     # Also catches a truncated npz: a half-written file has a different digest.
     return rec.get("sha256") == hashlib.sha256(out.read_bytes()).hexdigest()
 
@@ -394,6 +417,12 @@ def process_one(uid: str, glb: Path, out: Path) -> dict:
         "n_points": int(len(normed)),
         "seed": seed,
         "sampler_version": SAMPLER_VERSION,
+        # [ADDED 2026-08-22] `meshload`'s docstring promised this travels into
+        # every sidecar so a later reader can tell a corrected cloud from an
+        # uncorrected one. It did not: the constant had zero references outside
+        # its own module. A comment describing behaviour that does not happen is
+        # worse than no comment, because it is believed.
+        "frame_correction": meshload.FRAME_CORRECTION_ID,
         "rgb_scale": RGB_SCALE,
         "colour_source": colour_source,
         "coloured_point_fraction": round(coloured_fraction, 4),

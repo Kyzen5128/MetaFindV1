@@ -291,3 +291,41 @@ def test_non_mesh_geometry_does_not_lose_the_asset(tmp_path):
     images, extents = render_views(p)
     assert len(images) == N_VIEWS
     assert np.isfinite(extents).all()
+
+
+def test_a_stale_sidecar_is_not_complete(tmp_path):
+    """[ADDED 2026-08-22] A render from an older renderer must not count as done.
+
+    EXPECTED-TRUTH SOURCE: the question a resumable run actually asks. It is not
+    "is there an intact render here" -- it is "is there an intact render that
+    THIS code produced". Those differ the moment the renderer changes, and the
+    difference is silent: every stale sidecar stays internally consistent.
+
+    Found by the Reviewer before the 3.3-hour regeneration. Without the version
+    gate, all 45,955 v2 sidecars classified as complete, so a bare re-run would
+    have skipped the entire corpus and exited reporting success.
+    """
+    import json
+
+    from metafind.data.renders import RENDERER_VERSION, is_complete, process_one
+
+    asset = _asset(tmp_path)
+    out = tmp_path / "out"
+    process_one("deadbeef", asset, out)
+    assert is_complete(out, "deadbeef"), "a freshly written render must be complete"
+
+    sc = out / "deadbeef.json"
+    rec = json.loads(sc.read_text())
+    assert rec["renderer_version"] == RENDERER_VERSION
+    rec["renderer_version"] = RENDERER_VERSION - 1
+    sc.write_text(json.dumps(rec))
+    assert not is_complete(out, "deadbeef"), (
+        "a sidecar from an older renderer was accepted as complete; a re-run "
+        "would skip it and report success"
+    )
+
+    # A NEWER sidecar is not this renderer's output either. Accepting it would
+    # let a downgraded run inherit artifacts it cannot reproduce.
+    rec["renderer_version"] = RENDERER_VERSION + 1
+    sc.write_text(json.dumps(rec))
+    assert not is_complete(out, "deadbeef")

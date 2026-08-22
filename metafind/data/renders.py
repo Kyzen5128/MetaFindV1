@@ -91,10 +91,23 @@ CAMERA_LAYOUT = "ulip2_azimuth_orbit_11"  # U-03 -- upstream-informed choice
 # Ours read 0.59 and swung between 0.47 and 1.15.
 UP_AXIS = np.array([0.0, 1.0, 0.0])
 
-# [MEASURED against ULIP-2's released renders] Their background is pure black
-# (corner luminance 0 on every asset checked); version 2 used white. The image
-# tower consumes this directly.
-BACKGROUND_RGBA = [0, 0, 0, 255]
+# [USER DECISION `U-W`, 2026-08-22] WHITE. Not because upstream is white -- it
+# is not; ULIP-2's released renders measure corner luminance 0, pure black.
+#
+# The engineer changed this to black to match upstream and the Reviewer measured
+# the result on the criterion this milestone had already chosen for itself,
+# `S-5`, retrieval against ULIP's own `image_feat` over 286 shared assets:
+#
+#     white background + xmag 1.10   R@1 97.2%   matched 0.9160   gap 0.3734
+#     black background + xmag 1.20   R@1 95.8%   matched 0.8782   gap 0.3404
+#
+# Black COSTS 1.4 points. The USER's reasoning is recorded verbatim in HANDOFF:
+# a criterion cannot be used when it wins and set aside when it loses.
+#
+# So this is an IMPLEMENTATION CHOICE that deliberately DIVERGES from upstream,
+# on upstream's own metric. It is a DEVIATION and needs a registry id, which is
+# the Integrator's to assign -- routed to Master, not decided here.
+BACKGROUND_RGBA = [255, 255, 255, 255]
 
 # [FITTED to ULIP-2's released renders] Orthographic half-width. Measured over
 # 8 assets present in both corpora, longest silhouette side divided by 224:
@@ -102,6 +115,12 @@ BACKGROUND_RGBA = [0, 0, 0, 255]
 #     ULIP           mean 0.574   (range 0.405 - 0.701)
 #     xmag 1.65      mean 0.418   -- ours, every asset smaller than ULIP's
 #     1.65 * (0.418 / 0.574) = 1.20
+#
+# [USER DECISION `U-X`, 2026-08-22] REVERTED to 1.10, the value before this
+# session. Measured on `S-5` over 286 assets, 1.20 buys nothing that 1.10 does
+# not: white + 1.10 scores R@1 97.2% against black + 1.20's 95.8%. Matching
+# upstream's MEAN framing on 8 assets is not a reason to move a number when the
+# milestone's own criterion does not improve.
 #
 # The per-asset ratio is NOT constant (1.16 to 1.83), so upstream's framing rule
 # is not a pure rescale of ours and this matches the mean, not the rule. What it
@@ -114,7 +133,7 @@ BACKGROUND_RGBA = [0, 0, 0, 255]
 # IMPLEMENTATION CHOICE with upstream provenance (U-O). MetaFind says nothing
 # about framing, and this number is fitted, not stated. It must never be
 # reported as a paper value.
-ORTHO_HALF_WIDTH = 1.20
+ORTHO_HALF_WIDTH = 1.10
 
 # [FITTED to ULIP-2's released renders] Version 2 used ambient 0.4 with a
 # directional intensity of 3.0, which blew out light-coloured assets: a white
@@ -135,9 +154,20 @@ ORTHO_HALF_WIDTH = 1.20
 AMBIENT_LIGHT = 0.5
 DIRECTIONAL_INTENSITY = 1.5
 
-# Not derivable from MetaFind, and not stated by ULIP-2 either -- its paper
-# gives only "12 images, spaced equally by 360/12 degrees". SOLVED from ULIP's
-# released renders instead of chosen: see tools/solve_ulip_elevation.py.
+# NOT SOLVED, and not derivable. MetaFind states no elevation; ULIP-2's paper
+# gives only "12 images, spaced equally by 360/12 degrees", which fixes the
+# spacing and says nothing about the height of the orbit.
+#
+# [CORRECTED 2026-08-22] This comment previously read "SOLVED from ULIP's
+# released renders instead of chosen: see tools/solve_ulip_elevation.py". That
+# tool was never written, and the engineer's own HANDOFF entry said the
+# elevation was NOT solved. An attempt was made: silhouette IoU against ULIP's
+# renders peaks at 15 degrees on one rotationally symmetric asset but is flat
+# from 10 to 20, and R@1 over 60 assets read 100.0 / 98.3 / 98.3 at 5 / 15 / 25
+# -- a one-asset spread that separates nothing.
+#
+# `U-03` remains UNKNOWN. 20.0 is an IMPLEMENTATION CHOICE, versioned so the
+# images stay reproducible, and it must never be written up as a solved value.
 ORBIT_ELEVATION_DEG = 20.0
 # 1 = fibonacci; 2 = azimuth orbit about +Z (WRONG up axis, white background,
 # xmag 1.1); 3 = azimuth orbit about the mesh up axis, black background,
@@ -404,6 +434,18 @@ def is_complete(out_dir: Path, uid: str) -> bool:
     try:
         rec = json.loads(sc.read_text())
     except (OSError, json.JSONDecodeError):
+        return False
+    # [ADDED 2026-08-22] Completion is relative to the CURRENT renderer. The
+    # v2 -> v3 correction moved the orbit axis, the framing and the exposure
+    # while every stale sidecar stayed internally consistent, so all 45,955 of
+    # them passed this check and a bare re-run would have skipped the corpus and
+    # reported success. n04 at least stamps its version; n03 did not even do
+    # that. Found by the Reviewer, 2026-08-22, before the run.
+    #
+    # `!=` not `<`: a sidecar from a newer renderer is not this renderer's
+    # output either, and accepting it would let a downgraded run inherit
+    # artifacts it cannot reproduce.
+    if rec.get("renderer_version") != RENDERER_VERSION:
         return False
     if len(rec.get("view_paths", [])) != N_VIEWS:
         return False
