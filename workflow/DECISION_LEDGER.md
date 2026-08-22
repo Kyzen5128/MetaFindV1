@@ -111,6 +111,31 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-019` — `h0_mode` decides whether SE(3) equivariance holds, contradicts the paper's literal text, and lives in a **dataclass default** outside the protocol
+
+**Found by the ESSGNN Reviewer while attacking the Engineer's `U-20` answer. Every claim
+re-verified by Master, including by execution.**
+
+| | |
+|---|---|
+| **The switch** | `essgnn.py:170` — `h0_mode: H0Mode = "semantic"`, a **dataclass default**. `:262` repeats it in the defaults dict. `:569` — `h0 = cat([pos, node_feat]) if h0_mode == "concat_xt" else node_feat` |
+| **It contradicts the paper's literal text, and the code says so itself** | `2methdology.tex:44`, **PAPER FACT**: `h_i^{(0)} = Concat(x_i, t_i)`. `essgnn.py:254`, the code's own comment: *"`h0_mode=semantic` in particular **CONTRADICTS** 2.5's literal"*. The Appendix-C premise was adopted by `C2`; **the divergence is deliberate and it is a DEVIATION** |
+| **It is what makes equivariance hold or fail** | `test_essgnn.py:138` uses `h0_mode="concat_xt"` as the **negative injection** for the equivariance test — the other value exists in the suite precisely to break it. Master re-ran: `pytest -k equivarian` → 3 passed |
+| **And it is NOT in the protocol** | `essgnn_arch_protocol.json` holds twelve keys — `architecture_family, coord_feat, decided_at, decided_by, distance, hidden_dim, layer_sharing, mlp_structure, n_layers, pooling, status, use_io_projections`. **No `h0_mode`.** Confirmed by JSON parse, not by eye |
+| **Why that placement is the defect** | That file is a `decided_by: Kyzen (2026-08-19)` resolved artifact, and `CONTEXT.md` §4 states its purpose: *"write the JSON artifacts trainers are not allowed to decide for themselves."* **A setting that determines equivariance and departs from the paper sits exactly outside it, decided by a Python default** |
+| **The fourth item of the same debt, and the worst-behaved** | `DL-016` already recorded `node_feat_dim` and `edge_feat_dim` as absent and inferred at runtime; `edge_proj_dim` is the third. **`h0_mode` is the fourth and it is the dangerous one: the other three raise a shape error when wrong. This one raises nothing** — equivariance simply stops holding, silently. `01_GRAPH_SPEC.md:1123` warned about exactly this class: *"otherwise it is the Stage 1 error we just fixed, replayed in Stage 2"* |
+| ⚠️ **BOTH ESSGNN ROLES SAID "NOTHING LOCKS IT". THEY ARE WRONG — Master checked, and the design is deliberate** | `essgnn.py:250-258`, the declaration comment, verbatim: *"**Unlike the fields in `essgnn_arch_protocol` these are NOT open questions a person has to answer** — they are our primary interpretation, and a run that departs from them is a variant that must say so. `L1-ESSGNN-PAPER-LOCKED-CONFIG` asserts them."* The lock is real and it is at a **higher** level than the protocol: `from_protocol` ends with `**PRIMARY_INTERPRETATION` (`:248`), which **overrides whatever the protocol says**. `validation_plan.yaml:755` specifies exactly that. And **two tests bite**: `test_paper_locked_values_are_the_defaults` fails if any default drifts, `test_from_protocol_is_the_supported_construction_path` feeds a protocol and asserts the four survive it. Master ran them — pass. **Editing the default does not silently change equivariance; it turns the suite red.** Being absent from the protocol is the *design*, not the omission |
+| **Scope is wider than either role reported** | `PRIMARY_INTERPRETATION` pins **four** settings, not three. The ESSGNN Engineer named `h0_mode`, `edge_proj_dim`, `normalize_coord_diff` and **missed `coords_agg: "sum"`** — *"Eq. 3 sums; the reference EGNN defaults to mean"*, a divergence from upstream in its own right |
+| **So what is the ACTUAL defect? The registry, and it is the sixth of the same class today** | `h0_mode = "semantic"` **contradicts `2methdology.tex:44`'s literal `h_i^(0) = Concat(x_i, t_i)`** — the code says so itself — which makes it a **DEVIATION**. Master measured: `h0_mode` appears **0 times** in `docs/graph/graph_spec.yaml`. **It has no deviation id.** Same class as `D-9`…`D-13`, found six hours later, in a fifth place nobody had swept. `coords_agg`, `edge_proj_dim` and `normalize_coord_diff` need the same audit |
+| **Severity — revised down on the safety axis, held on the bookkeeping axis** | **Not a silent-equivariance risk**: it is locked, tested, and forced through the only supported construction path. **It is an unregistered DEVIATION**, which is exactly the failure `check_graph`'s id-only comparison (debt `D-2`/`FU-A`) cannot see |
+| **Keep it separate from `U-20`** | Different knobs. `U-20` is *which encoder produces `t_i`*; this is *which formula produces `h⁰`*. **`h0_mode` has no `U-` id at all.** Do not merge them |
+| **Master's note on the Reviewer's `U-20` attack** | It kept the Engineer's conclusion on pillar 1 and **replaced the reason** — grounding the separate widths of `t_i` and `e_ij` in `2methdology.tex:54`'s `f_h: R^(2d+1+e) → R^d`, where the paper itself names `d` and `e` separately. **That is a PAPER FACT and does not move when our implementation moves**, which the projection argument did. Stronger. It also broke pillar 2 (the 93-distinct-values argument) and declined to rule on `U-20` itself. Correct on both counts |
+| **What is needed** | Whether `h0_mode` — and the other three widths — enter `essgnn_arch_protocol.json` is **material**: the protocol hash changes, and `CONTEXT.md` §5 makes that force a split rebuild. Not Master's, not the block's |
+| **Status** | **`AWAITING_USER_REVIEW`** |
+| **Date** | 2026-08-22 |
+
+---
+
 ### `DL-018` — `n04`'s corpus is mixed-generation and must be re-run. **A pipeline can change behaviour mid-run and no artifact reveals it.**
 
 **Found independently by Master at integration and by the ULIP2 Engineer, within minutes of each
