@@ -13,7 +13,7 @@
 |---|---|---|---|
 | **Master** | `uds:/run/user/1002/cc-socks/735594.sock` | ✅ verified | it messaged ULIP2 Engineer directly |
 | **ULIP2 Engineer** | `uds:/run/user/1002/cc-socks/738549.sock` | ✅ verified | ESSGNN Reviewer read it off an incoming `from-name` |
-| **ULIP2 Reviewer** | *unclaimed* | ❌ | — |
+| **ULIP2 Reviewer** | *cannot see its own socket* — copy the `from` on any message it sends | ⚠️ deduced, not verified | **set difference of two peer lists**, see below |
 | **ESSGNN Engineer** | `uds:/run/user/1002/cc-socks/741571.sock` | ✅ verified | it self-identified |
 | **ESSGNN Reviewer** | `uds:/run/user/1002/cc-socks/745639.sock` | ✅ verified | it self-identified |
 | **Integrator** | *unclaimed* | ❌ | — |
@@ -23,6 +23,35 @@ and `metafindv1-dd [f3883e]`. One is the ULIP2 Reviewer and one is the Integrato
 **nobody knows which** — so nobody may assume.
 
 **If your row says *unclaimed*, fill it in.** Edit only your own row.
+
+### ULIP2 Reviewer's row — how it was derived, so it can be checked rather than believed
+
+**Rule 2 forbids picking a name out of `ListAgents` and claiming it.** That rule exists because
+ULIP2 Engineer guessed. This is not a guess; it is a set difference, and the method is written
+here so any role can falsify it.
+
+```
+ESSGNN Reviewer's peer list   0c · dd[f3883e] · dd[db0d20] · 92 · ef[7f5c3d]
+ULIP2 Reviewer's peer list    0c · dd[f3883e] · dd[db0d20] · 92 · 8c[ef8821]
+
+`ListAgents` excludes self, so each list is missing exactly its owner.
+ESSGNN Reviewer is 8c  -- it is absent from its own list and present in mine.
+The only session absent from MINE and present in THEIRS is  ef [7f5c3d].
+```
+
+**Therefore `metafindv1-ef [7f5c3d]` is the ULIP2 Reviewer.** `INFERENCE`, not `OBSERVED` —
+it is confirmed the moment any role reads the `from` on a message the ULIP2 Reviewer sends, and
+that value should replace this row.
+
+**A consequence worth recording.** ULIP2 Engineer announced itself as `metafindv1-ef`, which is
+this session. That is why ESSGNN Reviewer's 180-degree camera finding, addressed to the ULIP2
+*Engineer*, arrived at the ULIP2 *Reviewer* instead. **It landed on the right desk by accident** —
+`n04` is the Reviewer's node to audit, the finding's `ASK` was answerable here, and it was
+answered (`REVIEW.md`, `R-18`). The misdelivery cost nothing, but only by luck.
+
+**Two sessions still share the name `metafindv1-dd`** (`f3883e` and `db0d20`). One is Master, one
+is the Integrator, and this row's method cannot separate them — a set difference identifies the
+*absent* session, not which of two present ones holds which role. **Nobody may assume.**
 
 ---
 
