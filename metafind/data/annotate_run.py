@@ -384,18 +384,84 @@ def load_proportions() -> dict[str, tuple[float, float, float]]:
 class Annotator:
     """Holds the model. One instance per process."""
 
-    def __init__(self, model_id: str = MODEL_ID, device: str = "cuda") -> None:
+    def __init__(self, model_id: str = MODEL_ID, device: str = "cuda",
+                 quant: str = "none") -> None:
+        """`quant` is recorded, not inferred, because it is not free.
+
+        The card is 32 GB. `gemma-4-12B-it` (23 GB bf16) and
+        `gemma-4-31B-it-qat-w4a16` (22 GB, already w4a16 in the checkpoint) fit
+        as published; `Qwen3.8-27B` is 56 GB of bf16 and does not fit at all.
+        Loading it 4-bit is what makes that arm exist, and it means the bake-off
+        compares **what fits on this card**, not the models at equal precision.
+        A result from it may never be written up as "model A beats model B".
+        """
         import torch
         from transformers import AutoProcessor, AutoModelForImageTextToText
 
         self.model_id = model_id
+        self.quant = quant
         self.processor = AutoProcessor.from_pretrained(model_id)
+
+        kwargs: dict = {"dtype": torch.bfloat16, "device_map": device}
+        if quant == "native-compressed-tensors":
+            # MEASURED, twice. Forcing bf16 on a w4a16 checkpoint OOMed at 27.56
+            # GB of a 31.36 GB card. "auto" -- the checkpoint's own dtype --
+            # loaded at 23.02 GB and then OOMed anyway on the FIRST image.
+            #
+            # The reason is in the checkpoint: its `ignore` list holds the whole
+            # vision tower, so 4-bit covers the language layers and the image
+            # encoder stays bf16. 22 GB on disk becomes 23 GB resident with ~8
+            # GB left, and encoding eleven 224px views does not fit in 8 GB.
+            #
+            # `max_memory` caps the card and spills the remainder to host RAM.
+            # It is SLOWER -- every offloaded layer crosses PCIe once per
+            # forward pass -- and that cost is this arm's, not the other two's,
+            # which is one more reason the bake-off compares what fits on this
+            # card rather than the models.
+            # The load log says what is actually happening: "Decompressing
+            # model: 410 items". transformers UNPACKS the 4-bit weights to bf16
+            # by default, which is why a 22 GB checkpoint arrives as 23 GB
+            # resident and then cannot encode a single image. `run_compressed`
+            # keeps them packed and uses the compressed kernels instead.
+            #
+            # Built from the checkpoint's OWN quantization_config rather than
+            # from scratch: `config_groups` and `ignore` describe which tensors
+            # are quantised and which are not, and a config assembled here would
+            # lose both and quantise the vision tower the checkpoint exempts.
+            import json as _json
+
+            from transformers import CompressedTensorsConfig
+
+            qc = _json.loads((Path(model_id) / "config.json").read_text())["quantization_config"]
+            qc["run_compressed"] = True
+            kwargs["dtype"] = "auto"
+            kwargs["quantization_config"] = CompressedTensorsConfig(**qc)
+        if quant == "bnb-nf4":
+            from transformers import BitsAndBytesConfig
+
+            # nf4 + double quantisation, compute in bf16: the configuration
+            # bitsandbytes documents as the accuracy-preserving one. Recorded in
+            # the arm's metrics so a reader knows which 4-bit this was -- "4-bit"
+            # alone names several quite different things.
+            kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_compute_dtype=torch.bfloat16,
+            )
+        elif quant not in {"none", "native-compressed-tensors"}:
+            raise ValueError(f"unknown quant {quant!r}")
+        # `native-compressed-tensors` needs no kwargs: the checkpoint carries its
+        # own `quantization_config`. It DOES need the `compressed_tensors`
+        # package, whose absence is what U-R recorded -- imported here so the
+        # failure names itself instead of surfacing as a config parse error.
+        if quant == "native-compressed-tensors":
+            import compressed_tensors  # noqa: F401
+
         # Resolved from the checkpoint's own `architectures`, not pinned to one
         # class: D-2 has now named two different model families, and a hardcoded
         # class turns "swap the annotator" into an edit of the loader.
-        self.model = AutoModelForImageTextToText.from_pretrained(
-            model_id, dtype=torch.bfloat16, device_map=device,
-        )
+        self.model = AutoModelForImageTextToText.from_pretrained(model_id, **kwargs)
         self.model.eval()
 
     def generate(self, image_paths: list[str], prompt: str) -> str:
@@ -408,18 +474,20 @@ class Annotator:
         """
         import torch
 
-        content = [{"type": "image", "image": f"file://{p}"} for p in image_paths]
+        content = [{"type": "image", "url": str(p)} for p in image_paths]
         content.append({"type": "text", "text": prompt})
         messages = [{"role": "user", "content": content}]
 
-        text = self.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        from qwen_vl_utils import process_vision_info
-
-        images, videos = process_vision_info(messages)
-        inputs = self.processor(
-            text=[text], images=images, videos=videos, padding=True, return_tensors="pt"
+        # The processor's own chat template, for every arm.
+        #
+        # This used to go through `qwen_vl_utils.process_vision_info`, which is
+        # Qwen's helper and does not know the other two checkpoints. Keeping it
+        # for one arm and a different path for the others would have made the
+        # arms differ in how they are FED as well as in which model they are --
+        # a confound sitting underneath the measurement the bake-off exists for.
+        inputs = self.processor.apply_chat_template(
+            messages, add_generation_prompt=True, tokenize=True,
+            return_dict=True, return_tensors="pt",
         ).to(self.model.device)
 
         with torch.no_grad():
@@ -432,7 +500,7 @@ class Annotator:
                 # failure that repeats look like one that was fixed.
                 do_sample=False,
             )
-        trimmed = out[:, inputs.input_ids.shape[1]:]
+        trimmed = out[:, inputs["input_ids"].shape[1]:]
         return self.processor.batch_decode(
             trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )[0]
