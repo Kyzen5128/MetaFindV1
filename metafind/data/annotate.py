@@ -104,7 +104,12 @@ __all__ = [
 # and `annotation_contract_id()` binds all three to the actual text of the
 # prompt and the actual admission bounds, so an edit that someone forgets to
 # version still moves the identity.
-PROMPT_VERSION = 6  # v6 asks BLIND first, then anchors; shows the paper's
+PROMPT_VERSION = 7  # v7 supplies NO identity at all -- neither ULIP-2 nor
+                    # MetaFind does, and the anchor was this project's own
+                    # deviation D-9. synset is asked of the model, and the
+                    # description comes from 5 independently sampled
+                    # candidates ranked by CLIP-ViT-Large (main.tex:677).
+                    # v6 asks BLIND first, then anchors; shows the paper's
                     # Figure 2 example instead of describing it; and asks the
                     # model to look again before describing. v5 anchors the identity on the Objaverse-LVIS label and
                     # supplies the exact mesh proportions, so the model answers
@@ -113,7 +118,11 @@ PROMPT_VERSION = 6  # v6 asks BLIND first, then anchors; shows the paper's
                     # language; v3 did not, and 3 records came back
                     # part-Chinese. v2 followed Figure 2 but left 41% with all
                     # four flags false
-VALIDATOR_VERSION = 3  # v3 admits `identity_confirmed`, derives width/length
+VALIDATOR_VERSION = 4  # v4 admits an UNANCHORED response: `synset` comes from
+                       # the model and is checked for shape only, there is no
+                       # `identity_confirmed` to require, and `description` is
+                       # injected from the CLIP ranking rather than read from
+                       # the response. v3 admits `identity_confirmed`, derives width/length
                        # from the mesh instead of accepting them, and looks
                        # `synset` up rather than reading it from the model.
                        # v2 refused non-Latin script; v1 had no language rule
@@ -214,6 +223,21 @@ UPSTREAM_FIELD_NOT_IMPLEMENTED = "front view"
 # scale for `height` alone and names which horizontal axis reads as width.
 REQUIRED_FIELDS = ("category", "identity_confirmed", "height", "width_axis",
                    "mass", "description", "materials", *PLACEMENT_FLAGS)
+
+# [PROMPT_VERSION 7] Without an anchor there is nothing to confirm, and the
+# description arrives from `describe_rank` rather than from this response --
+# see `build_unanchored_prompt`. `synset` moves from a lookup to the model's
+# own answer, so it becomes a required RESPONSE field for the first time.
+REQUIRED_FIELDS_UNANCHORED = ("category", "synset", "height", "width_axis",
+                              "mass", "materials", *PLACEMENT_FLAGS)
+
+# A WordNet id: lemma, part of speech, two-digit sense. Checked for SHAPE only.
+# The anchored path looks the id up in LVIS's own table and can therefore
+# reject an invented one; without an anchor there is no table to check against,
+# so a well-formed id that names the wrong sense will pass. That is a REAL
+# weakening and it is the price of asking the model, which is what Figure 2
+# shows the paper doing.
+SYNSET_PATTERN = re.compile(r"^[a-z][a-z0-9_'\-\.]*\.[nvasr]\.\d{2}$")
 DIMENSION_KEYS = ("width", "length", "height")
 HORIZONTAL_AXES = ("x", "z")
 
@@ -704,6 +728,125 @@ def build_prompt(n_views: int, lvis_category: str,
     )
 
 
+def build_unanchored_prompt(n_views: int,
+                            proportions: tuple[float, float, float]) -> str:
+    """[PROMPT_VERSION 7] The structured record, with NO identity supplied.
+
+    `USER DECISION 2026-08-23`: the LVIS anchor is removed. Neither ULIP-2 nor
+    MetaFind supplies the model with the catalogue label -- supplying it was
+    `D-9`, this project's own deviation, adopted because a small model asked to
+    identify a 224px scale-normalised render collapses onto priors. The USER
+    chose to measure the faithful version first and decide afterwards whether
+    the deviation is needed.
+
+    Consequences, each deliberate:
+
+    * **`synset` is asked of the model.** It was looked up from the anchor,
+      which cannot work without one. Figure 2 prints `synset` inside the model's
+      own output block, so asking for it is what the paper shows; the lookup was
+      the deviation. `USER: "欄位不是照metafind的嗎? 你要讓他回答啊"`.
+    * **`identity_confirmed` and the category relation are gone.** There is no
+      anchor to confirm or to stand in relation to.
+    * **`description` is NOT asked here.** It comes from `describe_rank` over
+      five independently generated candidates, which is ULIP-2's method
+      (`main.tex:677`). Asking for it here as well would produce a sixth
+      description with no score and no way to choose between it and the winner.
+
+    Proportions are still supplied: they are MEASURED from the mesh, not an
+    answer. The renders are scale-normalised, so nothing in the images carries
+    them.
+    """
+    py, px, pz = proportions
+    return (
+        f"You are looking at {n_views} rendered views of a single 3D asset, "
+        "from different angles around it.\n"
+        "\n"
+        "Before you answer, LOOK. Note to yourself what parts it has, what "
+        "colours, what the surface looks like, whether there is any text or "
+        "marking. Every answer below should come from the images.\n"
+        "\n"
+        "Its proportions, measured from the mesh itself, are\n"
+        f"    height : x-axis : z-axis  =  {py:.3f} : {px:.3f} : {pz:.3f}\n"
+        "(largest = 1.000). These are EXACT. Do not re-estimate them.\n"
+        "\n"
+        "IMPORTANT: write every text field in ENGLISH. Do not use Chinese, "
+        "Japanese, Korean, Cyrillic or Arabic characters. Accented Latin "
+        "spellings such as \"Pokemon\"/\"Pok\u00e9mon\" are fine.\n"
+        "\n"
+        "IMPORTANT: these renders are SCALE-NORMALISED. Every asset is fitted "
+        "to the same size before rendering, so the images contain no "
+        "information about how large the object really is. You are asked for "
+        "exactly ONE absolute measurement, and you should answer it from what "
+        "the object IS, not from the picture.\n"
+        "\n"
+        "This is the exact format, shown with a worked example:\n"
+        f"{FIGURE_2_EXAMPLE}\n"
+        "\n"
+        "Return one JSON object and nothing else, with exactly these fields "
+        "(no `description`, no `width`, no `length`, no `volume`):\n"
+        '  "category": what this object is, in one to three words. Be as '
+        "specific as the images support.\n"
+        '  "synset": the WordNet synset id for that category, in the form '
+        '"word.n.01". Give the sense that matches this object.\n'
+        '  "height": number, CENTIMETRES. How tall is a real one of these? '
+        "This one number sets the scale; the other two dimensions follow from "
+        "the proportions above.\n"
+        '  "width_axis": "x" or "z" -- which of the two horizontal axes reads '
+        "as left-to-right WIDTH in these views. The other becomes front-to-back "
+        "length.\n"
+        '  "mass": number, KILOGRAMS\n'
+        '  "materials": a list of material names, most prominent first\n'
+        '  "onCeiling": true if this object is typically mounted on a ceiling\n'
+        '  "onWall": true if it is typically mounted on a wall\n'
+        '  "onFloor": true if it typically rests directly on the floor or '
+        "ground\n"
+        '  "onObject": true if it could sit on top of a table, desk, shelf, '
+        "counter, cabinet or any other supporting surface\n"
+        "\n"
+        "The four placement fields are INDEPENDENT booleans, not a choice. "
+        "Answer each one separately, and ask yourself where this object would "
+        "be found in a real room.\n"
+        "\n"
+        "ALMOST EVERY OBJECT HAS AT LEAST ONE OF THE FOUR SET TO TRUE. All four "
+        "false means the object belongs nowhere at all, which is true only of "
+        "abstract shapes with no real-world counterpart. If you are unsure, ask "
+        "the simpler question: is it small enough to put on a table? Then "
+        "onObject is true. Is it large enough to stand on the ground? Then "
+        "onFloor is true.\n"
+        "\n"
+        "Worked examples:\n"
+        "  chair          onFloor true, everything else false\n"
+        "  mug            onObject true, onFloor false -- it lives on surfaces\n"
+        "  book           onFloor AND onObject both true\n"
+        "  ceiling lamp   onCeiling true, everything else false\n"
+        "  framed picture onWall true, everything else false\n"
+        "  car            onFloor true (the ground counts as floor)\n"
+        "Do not omit any of the four."
+    )
+
+
+# [UPSTREAM FACT -- `main.tex:677`] ULIP-2 generates its descriptions
+# INDEPENDENTLY and ranks them. This prompt is issued once per candidate with
+# sampling on, so the candidates differ because the sampler differs -- not
+# because the model was told to vary them, which is a different thing and would
+# make the spread an artefact of the instruction.
+DESCRIPTION_PROMPT = (
+    "You are looking at {n_views} rendered views of a single 3D asset.\n"
+    "\n"
+    "Describe it in one or two sentences: what it is, and what makes THIS "
+    "instance distinctive -- colour, style, finish, condition, ornament, "
+    "distinguishing detail. Describe what you can see from these views, not "
+    "what the category name suggests.\n"
+    "\n"
+    "English only. Reply with the description alone, no preamble, no JSON."
+)
+
+
+def build_description_prompt(n_views: int) -> str:
+    """[PROMPT_VERSION 7] One description candidate. Issued N times, sampled."""
+    return DESCRIPTION_PROMPT.format(n_views=n_views)
+
+
 def build_repair_prompt(original: str, error: str, raw_response: str) -> str:
     """The retry prompt for C1.
 
@@ -798,8 +941,9 @@ def parse_annotation(raw: str) -> dict[str, Any]:
     return obj
 
 
-def validate_annotation(obj: dict[str, Any], *, lvis_category: str,
-                        proportions: tuple[float, float, float]) -> Annotation:
+def validate_annotation(obj: dict[str, Any], *, lvis_category: str | None,
+                        proportions: tuple[float, float, float],
+                        description: str | None = None) -> Annotation:
     """[L1-ANNOT-SCHEMA, VALIDATOR_VERSION 3] Every rule, with the message the
     repair prompt needs.
 
@@ -818,9 +962,23 @@ def validate_annotation(obj: dict[str, Any], *, lvis_category: str,
       * `identity_confirmed` is required and recorded. It is NOT a gate --
         `false` is admitted exactly like `true` (TASK.md R-B).
     """
-    missing = [f for f in REQUIRED_FIELDS if f not in obj]
+    anchored = lvis_category is not None
+    required = REQUIRED_FIELDS if anchored else REQUIRED_FIELDS_UNANCHORED
+    missing = [f for f in required if f not in obj]
     if missing:
         raise AnnotationError(f"required field(s) missing: {', '.join(missing)}")
+
+    if not anchored:
+        # The winner from `describe_rank`, not something the model returned
+        # here -- so it is injected before the shared checks below, and the
+        # language rule applies to it exactly as it would to a response field.
+        if not isinstance(description, str) or not description.strip():
+            raise AnnotationError("no ranked description was supplied")
+        obj = {**obj, "description": description, "identity_confirmed": True}
+        if not SYNSET_PATTERN.match(str(obj["synset"]).strip()):
+            raise AnnotationError(
+                f"`synset` must look like \"word.n.01\", got {obj['synset']!r}"
+            )
 
     for field in ("category", "description"):
         if not isinstance(obj[field], str) or not obj[field].strip():
@@ -932,7 +1090,11 @@ def validate_annotation(obj: dict[str, Any], *, lvis_category: str,
     # Recording the rate is what makes the enforcement question answerable.
     return Annotation(
         category=category,
-        synset=lvis_synset(lvis_category),
+        # Looked up from the anchor when there is one -- LVIS's table is
+        # authoritative and an invented id cannot survive it. Without an
+        # anchor the model's own answer stands, checked for shape only.
+        synset=lvis_synset(lvis_category) if anchored
+               else str(obj["synset"]).strip(),
         width=width,
         length=length,
         height=height,
@@ -943,8 +1105,13 @@ def validate_annotation(obj: dict[str, Any], *, lvis_category: str,
         on_wall=flags["onWall"],
         on_floor=flags["onFloor"],
         on_object=flags["onObject"],
-        lvis_category=lvis_category,
+        # Anchor provenance. Empty strings rather than None when unanchored:
+        # the dataclass is frozen and typed `str`, and "" reads unambiguously as
+        # "there was no anchor" while None would have to be special-cased at
+        # every consumer.
+        lvis_category=lvis_category or "",
         identity_confirmed=identity_confirmed,
-        category_relation=category_relation(lvis_category, category),
+        category_relation=(category_relation(lvis_category, category)
+                           if anchored else "unanchored"),
         width_axis=width_axis,
     )

@@ -53,6 +53,11 @@ from metafind import paths, runlog
 # on the data volume. It looked like a slow load for six minutes.
 paths.setup_env()
 
+# n03's seed function, reused rather than reinvented: the two nodes must not
+# disagree about what "this asset's seed" means.
+from metafind.data.pointclouds import uid_seed
+from metafind.data.describe_rank import N_CANDIDATES, RANKER_MODEL, RANKER_VERSION
+from metafind.data.describe_rank import rank as rank_descriptions
 from metafind.data.annotate import (
     MAX_ATTEMPTS,
     PROMPT_VERSION,
@@ -63,7 +68,9 @@ from metafind.data.annotate import (
     annotation_contract_id,
     blind_agrees,
     build_blind_prompt,
+    build_description_prompt,
     build_prompt,
+    build_unanchored_prompt,
     parse_blind_guess,
     build_repair_prompt,
     parse_annotation,
@@ -79,6 +86,20 @@ MODEL_ID = "/mnt/data1/kyzen/models/Qwen3.8-27B"  # D-2: stands in for GPT-4o.
 # the deviation is RE-POINTED, not discharged, and must never be written up
 # as paper-faithful.
 MAX_NEW_TOKENS = 512
+
+# [PROMPT_VERSION 7] Sampling for the description candidates only. ULIP-2 does
+# not publish BLIP-2's decoding settings, so these are an IMPLEMENTATION CHOICE
+# and must never be reported as upstream values. They are chosen to give the
+# five candidates room to differ without drifting into nonsense; the spread of
+# their CLIP scores is recorded, which is what says afterwards whether the
+# setting was reasonable.
+SAMPLING_TEMPERATURE = 0.9
+SAMPLING_TOP_P = 0.95
+
+# Stamped on every record: which model chose the description, and which
+# version of the ranking rule. Two corpora ranked by different CLIPs are
+# not comparable and nothing else on the record would say so.
+DESCRIPTION_RANKER = {"model": RANKER_MODEL, "version": RANKER_VERSION}
 
 
 # Set only by `use_arm`. `None` means "the corpus", and that is resolved at
@@ -467,7 +488,8 @@ class Annotator:
         self.model = AutoModelForImageTextToText.from_pretrained(model_id, **kwargs)
         self.model.eval()
 
-    def generate(self, image_paths: list[str], prompt: str) -> str:
+    def generate(self, image_paths: list[str], prompt: str, *,
+                 sample: bool = False, seed: int | None = None) -> str:
         """One forward pass over all 11 views at once.
 
         All views in a single conversation turn, not eleven separate calls: the
@@ -493,16 +515,23 @@ class Annotator:
             return_dict=True, return_tensors="pt",
         ).to(self.model.device)
 
+        # Greedy by default. The repair loop feeds the specific error back, so
+        # a retry must differ because the PROMPT differs -- not because the
+        # sampler rolled differently. Temperature there would make a failure
+        # that repeats look like one that was fixed.
+        #
+        # `sample=True` is for the description candidates alone. ULIP-2
+        # generates its candidates "independently" (main.tex:677), and greedy
+        # decoding would return the SAME sentence five times -- a ranking over
+        # five identical strings is not a ranking. The seed is per candidate and
+        # recorded, so independent still means reproducible.
+        gen_kwargs: dict = {"max_new_tokens": MAX_NEW_TOKENS, "do_sample": sample}
+        if sample:
+            gen_kwargs |= {"temperature": SAMPLING_TEMPERATURE, "top_p": SAMPLING_TOP_P}
+            if seed is not None:
+                torch.manual_seed(seed)
         with torch.no_grad():
-            out = self.model.generate(
-                **inputs,
-                max_new_tokens=MAX_NEW_TOKENS,
-                # Greedy. The repair loop feeds the specific error back, so a
-                # retry must differ because the PROMPT differs -- not because
-                # the sampler rolled differently. Temperature here would make a
-                # failure that repeats look like one that was fixed.
-                do_sample=False,
-            )
+            out = self.model.generate(**inputs, **gen_kwargs)
         trimmed = out[:, inputs["input_ids"].shape[1]:]
         return self.processor.batch_decode(
             trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -510,31 +539,47 @@ class Annotator:
 
 
 def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
-                 lvis_category: str,
+                 lvis_category: str | None,
                  proportions: tuple[float, float, float]) -> tuple[dict | None, dict | None]:
-    """SG1 for one asset. Returns ``(record, quarantine_entry)`` -- exactly one is None."""
+    """SG1 for one asset. Returns ``(record, quarantine_entry)`` -- exactly one is None.
+
+    `lvis_category=None` is the UNANCHORED path (`PROMPT_VERSION 7`): no
+    identity is supplied, the model answers `synset` itself, and the
+    description comes from ULIP-2's generate-many-and-rank rather than from the
+    structured response.
+    """
     views = render_rec["view_paths"]
+    anchored = lvis_category is not None
 
-    # [PROMPT_VERSION 6] Turn 1: ask before the anchor exists.
-    #
-    # Not free -- it doubles the generations per asset. What it buys is the only
-    # automatic accuracy signal the bake-off has: `identity_confirmed` on its
-    # own cannot be checked (`W-7`: nothing tells us a `true` is really true),
-    # while a guess made with nothing supplied either matches the Objaverse-LVIS
-    # catalogue or does not, and the catalogue is a source we did not write.
-    #
-    # A blind turn that fails is not fatal. The anchored turn still runs, the
-    # guess is recorded empty, and that asset drops out of the agreement rate
-    # rather than out of the corpus.
-    blind_raw = ""
-    try:
-        blind_raw = ann.generate(views, build_blind_prompt(len(views)))
-    except Exception as exc:  # noqa: BLE001 -- turn 1 is a measurement, not a gate
-        blind_raw = f"<<generation failed: {type(exc).__name__}>>"
-    blind_guess = parse_blind_guess(blind_raw)
+    # --- description candidates, ULIP-2's method (main.tex:677) --------------
+    candidates: list[str] = []
+    ranked: list[dict] = []
+    winner: str | None = None
+    if not anchored:
+        # Seeded from the uid, so the same asset draws the same five candidates
+        # on a re-run while different assets do not share a draw. `uid_seed`
+        # is n03's, reused rather than reinvented so the two nodes cannot
+        # disagree about what "this asset's seed" means.
+        base = uid_seed(uid)
+        for k in range(N_CANDIDATES):
+            try:
+                text = ann.generate(views, build_description_prompt(len(views)),
+                                    sample=True, seed=base + k).strip()
+            except Exception as exc:  # noqa: BLE001 -- one bad draw is not the asset
+                text = ""
+            if text:
+                candidates.append(text)
+        if not candidates:
+            return None, {
+                "uid": uid, "failure_class": "DETERMINISTIC_INPUT",
+                "exception_type": "NoDescriptionCandidates",
+                "exception_msg": f"all {N_CANDIDATES} description draws came back empty",
+                "traceback": "",
+            }
+        winner, ranked = rank_descriptions(views, candidates)
 
-    prompt = build_prompt(len(views), lvis_category, proportions,
-                          blind_guess=blind_guess)
+    prompt = (build_prompt(len(views), lvis_category, proportions) if anchored
+              else build_unanchored_prompt(len(views), proportions))
     current = prompt
     last_error = ""
     last_raw = ""
@@ -547,6 +592,7 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
                 parse_annotation(raw),
                 lvis_category=lvis_category,
                 proportions=proportions,
+                description=winner,
             )
         except AnnotationError as exc:
             last_error = str(exc)
@@ -561,15 +607,17 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
             "uid": uid,
             "prompt_version": PROMPT_VERSION,
             "attempts": attempt,
-            # [PROMPT_VERSION 6] `S-11` requires the blind answer VERBATIM. Both
-            # the raw turn and the extracted line are kept: the extraction can be
-            # wrong, and only the raw text lets a reader see that it was.
-            "blind_raw": blind_raw,
-            "blind_guess": blind_guess,
-            # A LOWER BOUND on blind identification accuracy, not an estimate --
-            # a shared content word, so "seat" against "chair" counts as
-            # disagreement. See `annotate.blind_agrees`.
-            "blind_agrees_with_anchor": blind_agrees(blind_guess, lvis_category),
+            # [PROMPT_VERSION 7] Every candidate and its score, not just the
+            # winner. `E-10` promises the spread is recorded so "would ten have
+            # been better than five" is answerable from the data; keeping only
+            # the winner throws that away and it cannot be recomputed without
+            # re-running the model.
+            "description_candidates": ranked,
+            "description_ranker": DESCRIPTION_RANKER,
+            "description_sampling": {"temperature": SAMPLING_TEMPERATURE,
+                                     "top_p": SAMPLING_TOP_P,
+                                     "seed_base": uid_seed(uid),
+                                     "n": N_CANDIDATES},
             # F13: the annotator saw scale-normalised renders, so its size
             # estimate is a category prior. The mesh's own bounding box travels
             # with it so the estimate can be audited -- and it is a WEAK ground
@@ -619,6 +667,10 @@ def main() -> int:
                     help="annotate exactly these uids, one per line")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--model", default=MODEL_ID)
+    ap.add_argument("--quant", default="none",
+                    choices=["none", "bnb-nf4", "native-compressed-tensors"],
+                    help="how to load the weights; recorded per arm because it "
+                         "is not free -- see Annotator.__init__")
     ap.add_argument("--arm", help="write to data/outputs/bakeoff/<arm>/ instead "
                                   "of the corpus annotations directory")
     args = ap.parse_args()
@@ -674,13 +726,17 @@ def main() -> int:
     # asset with no LVIS category or no mesh proportions cannot be annotated
     # under v5 at all, and discovering that 19 hours into a run -- or silently
     # falling back to a v4-style guess -- are both worse than stopping here.
+    # [PROMPT_VERSION 7] The LVIS category is no longer supplied to the model.
+    # It is still LOADED, because the mesh-proportion guard below shares this
+    # pass and because an asset outside the LVIS subset is outside the corpus
+    # this milestone is defined on -- but it is not passed to `annotate_one`.
     lvis_categories = load_lvis_categories()
     proportions = load_proportions()
     no_anchor = [u for u in todo if u not in lvis_categories or u not in proportions]
     if no_anchor:
         print(f"{len(no_anchor):,} queued uid(s) have no LVIS category or no mesh "
               f"proportions, e.g. {no_anchor[:3]}.\n"
-              "Refusing: v5 is category-anchored, and an asset without an anchor "
+              "Refusing: an asset outside the Objaverse-LVIS subset is outside "
               "would have to be annotated under a different contract than the rest "
               "of the corpus. Exclude them explicitly or resolve the gap.",
               flush=True)
@@ -690,14 +746,17 @@ def main() -> int:
     if not todo:
         return 0
 
-    ann = Annotator(args.model)
+    ann = Annotator(args.model, quant=args.quant)
     done, quarantined, started = 0, 0, time.time()
     with runlog.run_progress(NODE):
         for uid in todo:
             try:
                 rec, bad = annotate_one(
                     ann, uid, renders[uid],
-                    lvis_category=lvis_categories[uid],
+                    # None = the unanchored path. USER decision 2026-08-23:
+                    # neither ULIP-2 nor MetaFind supplies the label, and the
+                    # faithful version is measured first.
+                    lvis_category=None,
                     proportions=proportions[uid],
                 )
             except Exception as exc:  # noqa: BLE001 -- one asset must not stop the run

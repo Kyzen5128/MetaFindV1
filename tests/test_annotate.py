@@ -11,6 +11,8 @@ the GPU is free.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from metafind.data.annotate import (
@@ -338,7 +340,7 @@ def test_the_prompt_still_permits_accented_latin():
 def test_the_prompt_version_moved_because_the_prompt_changed():
     """[P-1] v4 asks for something v3 did not. Pretending they are one contract
     is what makes a corpus unfalsifiable later."""
-    assert PROMPT_VERSION == 6
+    assert PROMPT_VERSION == 7
 
 
 def test_editing_the_prompt_moves_the_contract_id():
@@ -493,6 +495,16 @@ CJK_RESPONSE = ('{"category": "syringe", "identity_confirmed": true, '
 ENGLISH_RESPONSE = CJK_RESPONSE.replace(
     "injecting or抽吸液体", "injecting or drawing fluids")
 
+UNANCHORED_RESPONSE = json.dumps({
+    # [PROMPT_VERSION 7] No `identity_confirmed` and no `description`: there is
+    # no anchor to confirm, and the description arrives from the CLIP ranking.
+    "category": "syringe", "synset": "syringe.n.01",
+    "height": 15.0, "width_axis": "x", "mass": 0.02,
+    "materials": ["plastic"],
+    "onCeiling": False, "onWall": False, "onFloor": False, "onObject": True,
+})
+
+
 
 class FakeAnnotator:
     """Records the prompt it was given on each attempt. No model, no GPU.
@@ -592,13 +604,7 @@ def test_a_clean_english_annotation_still_costs_one_attempt():
                           "uid0", _render_rec(),
                           lvis_category="syringe", proportions=PROPS)
     assert bad is None and rec["attempts"] == 1
-    # One ANNOTATION call. v6 also makes a blind turn, which is a measurement
-    # rather than an attempt -- it is not retried and it cannot quarantine the
-    # asset, so counting it here would report a tax that the corpus does not pay.
     assert len(ann.annotation_prompts) == 1
-    assert len(ann.prompts) == 2, "one blind turn plus one annotation attempt"
-    assert rec["blind_guess"] == "syringe"
-    assert rec["blind_agrees_with_anchor"] is True
 
 
 def test_the_repaired_record_is_marked_model_generated_not_human_repaired():
@@ -1067,9 +1073,9 @@ def test_the_record_carries_the_anchor_so_disagreement_stays_measurable():
     assert rec["synset"] == "chair.n.01"
 
 
-def test_all_three_contract_axes_moved_for_v6():
-    assert (PROMPT_VERSION, VALIDATOR_VERSION, SCHEMA_VERSION) == (6, 3, 4)
-    assert annotation_contract_id().startswith("metafind_annot_v6@")
+def test_all_three_contract_axes_moved_for_v7():
+    assert (PROMPT_VERSION, VALIDATOR_VERSION, SCHEMA_VERSION) == (7, 4, 4)
+    assert annotation_contract_id().startswith("metafind_annot_v7@")
 
 
 def test_swapping_the_synset_table_moves_the_contract_id():
@@ -1174,29 +1180,63 @@ def test_the_blind_turn_never_leaks_the_answer_it_is_meant_to_test():
     assert "syringe" in anchored
 
 
-def test_a_failed_blind_turn_costs_the_measurement_and_not_the_asset():
-    """Turn 1 is a measurement, not a gate.
+def test_one_failed_description_draw_does_not_cost_the_asset():
+    """[PROMPT_VERSION 7] A candidate that does not come back is one fewer
+    candidate, not one fewer asset.
 
-    If the blind generation throws, the asset must still be annotated: dropping
-    it would remove assets from the corpus for a reason that has nothing to do
-    with the corpus, and would do it selectively -- exactly the assets the model
-    struggles with most.
+    v6's blind turn is gone -- v7 supplies no identity at all, so the whole run
+    is blind and there is nothing to be blind about separately. What that test
+    protected still applies here: dropping an asset because a MEASUREMENT threw
+    would remove it for a reason that has nothing to do with the corpus, and
+    would do it selectively -- the assets the model struggles with most.
+
+    Only when EVERY draw fails is the asset quarantined, because then there is
+    no description to rank and the record cannot be completed.
     """
-    from metafind.data.annotate_run import annotate_one
+    from metafind.data import annotate_run as R
 
-    class BlindExplodes(FakeAnnotator):
-        def generate(self, image_paths, prompt):
-            if "Return one JSON object" not in prompt:
+    calls = {"n": 0}
+
+    class FlakyDraws(FakeAnnotator):
+        def generate(self, image_paths, prompt, *, sample=False, seed=None):
+            if sample:
+                calls["n"] += 1
+                if calls["n"] in (2, 4):
+                    raise RuntimeError("CUDA hiccup")
+                return f"A syringe, draw {calls['n']}."
+            return super().generate(image_paths, prompt)
+
+    ann = FlakyDraws(UNANCHORED_RESPONSE)
+    ranked = []
+
+    def fake_rank(views, candidates):
+        ranked.append(list(candidates))
+        return candidates[0], [{"text": c, "clip_score": 0.3 - i * 0.01, "rank": i}
+                               for i, c in enumerate(candidates)]
+
+    R.rank_descriptions = fake_rank
+    rec, bad = R.annotate_one(ann, "uid0", _render_rec(),
+                              lvis_category=None, proportions=PROPS)
+
+    assert bad is None and rec is not None, "two failed draws must not lose the asset"
+    assert len(ranked[0]) == 3, f"3 of 5 draws survived, got {ranked[0]}"
+    assert len(rec["description_candidates"]) == 3
+    assert rec["description"] == "A syringe, draw 1."
+
+
+def test_every_failed_draw_quarantines_rather_than_inventing_a_description():
+    """The other side of the same rule: with no candidate there is nothing to
+    rank, and writing a record with an empty description would put a blank
+    field into the corpus under the same schema as a real one."""
+    from metafind.data import annotate_run as R
+
+    class AllDrawsFail(FakeAnnotator):
+        def generate(self, image_paths, prompt, *, sample=False, seed=None):
+            if sample:
                 raise RuntimeError("CUDA hiccup")
             return super().generate(image_paths, prompt)
 
-    ann = BlindExplodes(ENGLISH_RESPONSE)
-    rec, bad = annotate_one(ann, "uid0", _render_rec(),
-                            lvis_category="syringe", proportions=PROPS)
-
-    assert bad is None and rec is not None, "a failed turn 1 must not lose the asset"
-    assert rec["blind_guess"] == ""
-    assert rec["blind_agrees_with_anchor"] is False
-    assert "generation failed: RuntimeError" in rec["blind_raw"], (
-        "the failure must be visible in the record, not silently an empty string"
-    )
+    rec, bad = R.annotate_one(AllDrawsFail(UNANCHORED_RESPONSE), "uid0", _render_rec(),
+                              lvis_category=None, proportions=PROPS)
+    assert rec is None and bad is not None
+    assert bad["exception_type"] == "NoDescriptionCandidates"
