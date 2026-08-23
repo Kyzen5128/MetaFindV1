@@ -497,6 +497,13 @@ and neither does a verdict summary — he asked what was actually DONE.
 does not mean long or technical. Cover everything; say it plainly. **A report he cannot read has
 not reported.**
 
+**What counts as "a stage" — the USER answered this directly.** Asked whether it means (A) a
+pipeline node completing or (B) every batch of code written before it runs, he answered **B**.
+
+> **The trigger is the CODE, not the node.** Finished writing a batch and about to run it? That is
+> a stage. One node may be gated many times. A batch that crosses no node boundary is still gated.
+> **There is no "small enough to skip."**
+
 Read-only inspection stays ungated, unchanged from §12.0. The gate is on RUNS, not on looking.
 
 **Master reports and asks like every other role.** Master does not approve a run — not his own,
