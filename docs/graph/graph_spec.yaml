@@ -326,9 +326,19 @@ boundary:
         (b) v8 fixed it (USER "A", 2026-08-23) and re-ran the whole corpus, so
             the colour of every texture asset changed under the very rule this
             deviation carves out.
-        (c) the n=37 population itself is disputed: PIPELINE_FINAL.md:159 claims
-            11 ULIP shards on disk; the Engineer searched both volumes and found
-            ONE. Conflict flagged, NOT resolved.
+        (c) the n=37 population was ALSO limited by what reference data was on
+            disk. [CORRECTED 2026-08-23 -- Master had recorded this as a
+            documented conflict, "PIPELINE_FINAL.md:159 claims 11 shards, the
+            Engineer found one". THAT WAS WRONG and is withdrawn. It was a
+            vocabulary mismatch, not a false document: the Reviewer fetched 10
+            shards on 2026-08-22 and filtered each to the lvis.json uid list AS
+            IT DOWNLOADED, deleting the tarballs -- 3,706 .npy at 1.1 GB rather
+            than 14 GB of complete shards. A deliberate space trade, not loss.
+            "Shards on disk" meant their usable part. If PIPELINE_FINAL.md:159
+            is touched at all it is for wording precision, NOT for being untrue.]
+            Verified by Master 2026-08-23: 40 COMPLETE shards, 199,974 reference
+            clouds, 55 GB, now on NVMe at outputs/reference/ulip_npy/, unfiltered.
+            That is the population the replacement measurement uses.
         A replacement measurement (V1.0, n=138 from 40 newly fetched shards) is
         running on CPU against the v8 corpus. If it overturns the carve-out that
         is a USER decision, not the block'"'"'s and not Master'"'"'s.

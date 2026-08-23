@@ -244,6 +244,32 @@ models           /mnt/data1/kyzen/models/
 graph            graphify-out/graph.json — navigation only; conclusions return to source
 ```
 
+## 6a. ⚠️ THE STORAGE PICTURE CHANGED AGAIN, 2026-08-23. Read this before §6b.
+
+**Measured by Master 2026-08-23. §6b below describes 2026-08-22 and is now partly historical.**
+
+```
+data -> /home/kyzen/metafind_data        NVMe.  Was /mnt/data1/kyzen/MetaFind.
+NVMe   /  937 G   515 G used   375 G free   (was 816 G free)
+SMR    /mnt/data1  3.6 T  455 G used  3.0 T free
+```
+
+**The 328 GB of Objaverse GLBs now exist on BOTH disks, in full, as separate copies.**
+Verified: 46,052 `.glb` on each, `links=1` on both, different devices — **not hardlinks, not
+symlinks. 328 GB of NVMe is a duplicate of 328 GB of SMR.**
+
+**That is what the USER stopped on 2026-08-22.** His words then: 「大型資料集不要搬過來喔」, given
+after halting exactly this copy. It may have been re-authorised under 2026-08-23's
+「你先幫我測試我硬體極限 幫我把流程盡可能加速」 — Blender reads every GLB, so NVMe would speed it —
+**but Master holds no wording that authorises the copy, and it is reported rather than assumed
+either way. Nobody should delete either copy without the USER saying which.**
+
+**Operationally it is not yet a problem:** `n04` has ~34 h left and 12 views × 46,052 at 512 px
+projects to well under 375 GB. It is recorded because a 328 GB duplicate is not something anyone
+should discover by running out of space at hour 30.
+
+---
+
 ## 6b. Storage is SPLIT — USER decision 2026-08-22
 
 > 「之後記得都先把檔案放在這邊 除非做完了或空間不足」 · 「大型資料集不要搬過來喔」
