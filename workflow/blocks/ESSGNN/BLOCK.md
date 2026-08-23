@@ -80,8 +80,67 @@ key absent entirely                  0
 
 All 28 carry one reason, verbatim and identical: *"every view was empty; the asset never entered
 frame. AI2-THOR returned no depth for this asset at any distance; its material is not in the depth
-prepass."* Transparent materials are absent from Unity's depth prepass. They have text and images
-and no point cloud, and `2.6`'s modality-complete gallery has no way to admit them.
+prepass."* They have text and images and no point cloud, and `2.6`'s modality-complete gallery has
+no way to admit them.
+
+> **Master wrote "transparent materials" here first. That word is not in the record.** The reason
+> string says *the material is not in the depth prepass*; **why** it is not is unverified.
+> "Transparent" is a plausible explanation for glassware and it is still an INFERENCE — the exact
+> `CONTEXT.md` §3 notch, committed by Master one hour after writing the rule. Caught by the ESSGNN
+> Engineer. Withdrawn.
+
+### It is not a scattered 1.9%. **Five families are 100% gone, and 70.6% of houses are affected.**
+
+Measured by the ESSGNN Engineer 2026-08-24, reproduced exactly by Master:
+
+```
+family              excluded / corpus
+  Vase_Open              3 /   3     100%   <- every one
+  Bottle                 1 /   1     100%   <- every one
+  CD                     1 /   1     100%   <- every one
+  RoboTHOR_cup_ai2       1 /   1     100%
+  Tabletop_Decor_1       1 /   1     100%
+  Bowl                  11 /  30      37%
+  Cup                   10 /  29      34%
+```
+
+Across all 12,000 scene graphs, 827,730 node instances:
+
+```
+instances referencing the 28   20,411   (2.47%)
+houses with at least one        8,471 / 12,000   (70.6%)
+most frequent   CD_1 6,074 · Bottle_1 3,573 · Vase_Open_1 840 · Vase_Open_3 836
+```
+
+**"1.9% of assets" and "no open vase, no bottle and no CD exists in the gallery" are the same fact,
+and only the second predicts a failure.** `3experiments.tex:55` scores Table 2 partly on
+*"Color Scheme and Material Choices … consistency in textures, colors, and materials"* — a gallery
+that structurally cannot return glassware, judged on material consistency. It runs, it scores, and
+nothing reports an error.
+
+### Are they still CONTEXT nodes? **YES — traced by Master, 2026-08-24.**
+
+The Engineer raised this and could not answer it while stopped, correctly refusing to guess. It is
+the question that decides the severity, so Master traced it read-only:
+
+```
+stage2.py:131   if asset_id in eligible          -> TARGET selection only; the 28 are excluded here
+stage2.py:194   keep = [n for n in graph["nodes"] if n["index"] != target_index]
+                                                 -> no point-cloud filter. Every other node stays.
+stage2.py:270   data.node_vectors[str(n["asset_id"])] for n in keep
+                                                 -> needs a node vector for every kept node
+procthor_node_embeddings  1,467 asset_ids, and all 28 are present (0 missing)
+```
+
+**So the layout ESSGNN reads is intact.** The 28 remain as context nodes with position, node text
+and vector; only the point cloud is absent, and the context path never asks for one. **This is a
+candidate-pool composition question, NOT the MASTER-IMPACTING case** the Engineer flagged as the
+alternative.
+
+**Still open, and NOT closed by the above:** the effect on `n16` / Table 2. `n16` retrieves and
+then PLACES, and bottles, open vases and CDs are not in the pool at all. Whether that is a defect
+depends on Table 2's gallery scope, which `U-21` leaves open — it fixed the scene source
+(I-Design) and not the gallery. **Do not call it a defect before that is settled.**
 
 **`gallery_index.py:244` and `:253` say "24 of 1,467, 1.6%". That comment is stale — it is 28, and
 1.9%.** Found by the ESSGNN Engineer running the `CONTEXT.md` §3 notch check on his own earlier
