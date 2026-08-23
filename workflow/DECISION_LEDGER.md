@@ -131,6 +131,27 @@ id; nothing reuses `DL-006`.
 
 **Relayed to:** all live role sessions on 2026-08-24. Relay is recorded here so a session that starts later inherits the rule from the ledger rather than from a message it never received.
 
+**CORRECTION, same day, before this entry was pushed.** The `Evidence of state at the order` row
+above is wrong in three places, and the row is left standing so the error is on the record rather
+than quietly repaired. Corrected by the ULIP2 Engineer, accepted by Master:
+
+- **`n04` did not die.** The USER stopped it directly, twice — 「停掉」 at ~03:30 and 「耖你媽停掉
+  我沒有說你可以跑了」 at ~03:58. Master saw a `RUNNING` row with no live process and reported that
+  **inference as an observation**. This is the `CONTEXT.md` §3 rule Master wrote and then broke.
+- **1,184, not 982.** 982 was the first stop; the second run resumed and reached 1,184 before the
+  USER stopped it again. Master read the log's last *start* line instead of counting sidecars.
+- **`SAMPLER_VERSION 8` is `n03`, not `n04`.** `n04` is at `RENDERER_VERSION 6`, bumped for the
+  OptiX denoiser swap. Two counters on two different axes, collapsed into one by Master.
+
+**None of it changes the decision.** The order is the USER's and stands on his words, not on
+Master's state report. What the error does show is that the run was stopped *by the USER for the
+same reason he then issued this order* — which is stronger support for `DL-028`, not weaker.
+
+**Gate already exercised.** The USER gave the ULIP2 Engineer the same order directly at 03:58,
+before this relay reached him. His 8 uncommitted files (+282/−49) went to Codex as job
+`task-mt68ebq8-ryol7t` and he is waiting on it. First run of `DL-028`, and it was running before
+the entry existed.
+
 **Master's own obligation:** Master runs code too — gates, `check_graph.py`, inventory scripts. Read-only inspection is not execution of project code. Anything that writes, renders, trains, annotates or mutates the corpus is, and Master is bound by the same gate.
 
 ---
