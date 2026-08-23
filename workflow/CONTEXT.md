@@ -184,6 +184,39 @@ prohibiting. **Master proposed it anyway.**
 
 ---
 
+### The notch — a claim stated one step stronger than its mechanism supports
+
+**Five instances on 2026-08-24, from the two most active roles.** Not carelessness about facts.
+Every one was *true-adjacent* and stated **one notch stronger than the mechanism behind it**.
+That notch is what turns an observation into a defect, and it reads identically in a code comment,
+a research note, a registry entry and a message to a peer.
+
+| what was written | what the mechanism supported |
+|---|---|
+| `failure_class` *"decides whether an asset is ever tried again"* | it is written to a log and **read by nothing** |
+| `splits.py:72-74` *"the paper never says which fusion the full model uses"* | `3experiments.tex:143` says **"the final selected Transformer"** |
+| *"the two-verdicts case **cannot** arise"* — a prose exclusion in a Codex prompt | a prompt line is an instruction, not enforcement; the file is still in the diff |
+| Master: *"n04 **died**"* | a stale `RUNNING` row and no process — the USER had stopped it, twice |
+| Master: *"**zero** pipeline processes"* | a `ps` pattern that could not match `envs/MetaFind/bin/python`; 45 were alive |
+
+**The tell is the strong word.** `decides` · `never` · `cannot` · `died` · `zero`. Each is a claim
+about a MECHANISM, and in every case the mechanism was one step weaker than the word.
+
+**The check is one question, asked before the sentence is written:**
+
+> *What would have to be true for this word to hold — and did I verify that, or the thing next to it?*
+
+Two of the five were caught by the author, two by a peer, one by Codex. **None was caught by a
+test, a gate, or a review of the code alone** — they are claims *about* code, and only reading the
+mechanism catches them.
+
+**Enforcement beats instruction, and it is usually available.** `--sandbox read-only` is
+enforcement; "please don't read that file" is not. `find -L` is enforcement; a comment saying the
+path is a symlink is not. When both are available at similar cost, the instruction is the wrong
+one — and describing an instruction as a guarantee is the notch itself.
+
+---
+
 ## 4. Architecture
 
 | Component | Where | Notes |
