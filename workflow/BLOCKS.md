@@ -100,6 +100,7 @@ reproduction fidelity. Codex PASS ≠ Block PASS. Reviewer PASS ≠ USER accepta
 | Build | `tdd` at agreed seams · `research` · `diagnosing-bugs` | Owner |
 | Completion claim | `code-review`, **extended to 4 axes** | Owner |
 | Independent, synchronous | `research` · `diagnosing-bugs` · `code-review` · `improve-codebase-architecture` | Reviewer |
+| **Before ANY run** | **Codex pre-execution gate — `DL-028`** | **whoever is about to run it** |
 | Milestone adversarial | Codex | Master requests |
 | Acceptance | `grilling`, **one item at a time** | Master → USER |
 
@@ -117,8 +118,14 @@ result could still be scientifically wrong.
 ### When none of this applies
 
 Internal work items inside an approved SPEC, comments, formatting, read-only investigation, and
-re-runs of accepted deterministic steps need **no** grill, spec, review, Codex or USER gate.
+re-runs of accepted deterministic steps need **no** grill, spec, review or USER gate.
 Work is owned by whole blocks; do not rebuild a swarm of tiny tickets out of skills. `SKILLS.md` §5.
+
+> **Codex is no longer on that exemption list.** `DL-028` (USER, 2026-08-24) makes Codex review a
+> **pre-execution gate**: no code runs until Codex has reviewed it, at every stage, including a
+> re-run of accepted deterministic code. State the stage, state what is being written, pass the
+> files. `CODEX REVIEW UNAVAILABLE` is a STOP. Read-only investigation still runs no code and is
+> still exempt. `SKILLS.md` §12.0.
 
 ---
 

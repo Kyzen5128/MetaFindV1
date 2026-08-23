@@ -406,10 +406,50 @@ YOUR DECISION
 
 ## 12. Codex
 
+### 12.0 The pre-execution gate — `DL-028`, USER order 2026-08-24
+
+> **No code runs until Codex has reviewed the code that will run.** Every stage. No exceptions.
+
+Ordered by the USER on 2026-08-24 after a 29-file, +3,843-line change reached the corpus ungated
+and the n03→n04→n05 chain was rebuilt and restarted repeatedly. The reason given is the defect
+rate, not a process preference.
+
+```
+about to run anything
+        ↓
+   CODEX REVIEW      ← state the stage · state what is being written · pass the files
+        ↓
+   findings verified and classified by the role that asked
+        ↓
+      RUN
+```
+
+Binding form of the request. All three are required:
+
+1. **which stage** is being run (`n03`, `n04`, `n05`, a tool, a re-run — name it);
+2. **what is being written** at that stage — the artefacts, the versions, the paths;
+3. **the actual files**, passed to Codex, not described to it.
+
+`codex` is installed: `/usr/bin/codex`, `codex-cli 0.148.0`. Non-interactive forms —
+`codex exec review --uncommitted` · `--base <branch>` · `--commit <sha>` · `codex exec "<prompt>"`.
+No single invocation is mandated; **record the exact command and its result** with the run.
+
+**Scope.** Anything that writes, renders, trains, annotates, or mutates the corpus is execution.
+Read-only inspection is not. The `SKILLS.md` §5 / `BLOCKS.md` exemption for internal work items
+and *re-runs of accepted deterministic steps* **is revoked for execution** — a re-run of accepted
+code still runs code, and `2fa28d4` is the case that proves a "re-run" can be a rebuild.
+
+**`CODEX REVIEW UNAVAILABLE` is now a STOP, not a caveat.** It was already never a PASS. Under a
+pre-execution gate it blocks the run: report it to the USER and wait.
+
+### 12.1 Codex is still not authority
+
 Codex stays the **third** layer. It does not replace the Block Reviewer.
 
 ```
 BLOCK OWNER  ↕  BLOCK REVIEWER
+                     ↓
+              pre-execution Codex   (mandatory, before ANY run — 12.0)
                      ↓
               targeted Codex        (high-risk question, any time)
                      ↓
@@ -421,11 +461,11 @@ BLOCK OWNER  ↕  BLOCK REVIEWER
 ```
 
 **Wrong:** `Owner → Codex` used as the review. Codex is adversarial, not authoritative, and it has
-no standing project context.
+no standing project context. A Codex PASS clears the gate to *run*; it does not clear the Block,
+and it is not USER acceptance.
 
 Every Codex finding is independently verified and classified `CONFIRMED` · `PLAUSIBLE` ·
-`REJECTED` · `UNVERIFIED`. **Codex unavailable is `CODEX REVIEW UNAVAILABLE`, never a PASS**, and
-it must reach the USER brief.
+`REJECTED` · `UNVERIFIED`, and it must reach the USER brief.
 
 ---
 

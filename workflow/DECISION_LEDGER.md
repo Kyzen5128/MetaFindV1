@@ -111,6 +111,30 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-028` — **CODEX REVIEW IS A PRE-EXECUTION GATE.** No code runs until Codex has reviewed it.
+
+| | |
+|---|---|
+| **Source** | USER, 2026-08-24, direct order to Master for relay to every role session |
+| **Verbatim** | 「下令給所有對話框 任何程式碼在沒有codex審核過 不准跑 從現在開始 它媽的程式碼一堆問題是怎樣 任何階段 在做什麼請codex審查 說明在什麼階段要寫什麼 給它檔案 不准略過這條步驟」 |
+| **Issue / Finding** | Codex was defined as the **third layer, at milestones only** (`SKILLS.md` §12, `BLOCKS.md` "Milestone adversarial"), and `BLOCKS.md` explicitly exempted internal work items and re-runs from it. Under that policy a 29-file / +3,843-line change (`2fa28d4`) reached the corpus with no Codex pass, and the n03→n04→n05 chain has been rebuilt and restarted repeatedly. The USER's stated reason is the defect rate, not a process preference |
+| **Decision / Resolution** | Codex review moves **from milestone gate to pre-execution gate**. Binding, effective immediately: **(1)** No code is executed — no pipeline node, no tool script, no re-run, no long job — until Codex has reviewed the code that will run. **(2)** This applies at **every stage**, not only at Block milestones. **(3)** The request to Codex must state *which stage* is being run and *what is being written* at that stage, and must **pass the actual files**. **(4)** The step may not be skipped for any reason |
+| **What this REVOKES** | `BLOCKS.md` "When none of this applies" and `SKILLS.md` §5 previously exempted internal work items and *re-runs of accepted deterministic steps* from Codex. **That exemption is revoked for execution.** It survives only for read-only investigation, comments and formatting — none of which run code |
+| **What this does NOT change** | Codex remains **adversarial, not authority** (`BLOCKS.md`:20, `CONTEXT.md`:384). Codex PASS is still not Block PASS and still not USER acceptance. Every finding is still independently verified and classified `CONFIRMED` · `PLAUSIBLE` · `REJECTED` · `UNVERIFIED`. **`CODEX REVIEW UNAVAILABLE` is never a PASS** — under this entry it is now a **STOP**, because the gate is a precondition to running |
+| **Authority classification** | **USER DECISION** — process authority. Not a research finding and not a claim about any code |
+| **Mechanism** | `codex` is installed and reachable: `/usr/bin/codex`, `codex-cli 0.148.0`. Non-interactive forms: `codex exec review --uncommitted`, `--base <branch>`, `--commit <sha>`, or a prompt to `codex exec`. Master imposes no single invocation — each role records the exact command it ran with the result |
+| **Evidence of state at the order** | `codex --version` → `codex-cli 0.148.0` · `2fa28d4` = 29 files, +3,843/−285, single commit, ULIP2 Engineer · n04 dead at `982/46052` with a stale `RUNNING` row in `run_progress.jsonl` and no live process |
+| **USER final decision** | **`APPROVE`** — issued as an order, not proposed |
+| **Affected components** | every role session · `workflow/SKILLS.md` §5, §12, §15 · `workflow/BLOCKS.md` skills table + "When none of this applies" + acceptance flow · every future pipeline run |
+| **Status** | **`USER_APPROVED`** — IN FORCE |
+| **Date** | ordered and in force 2026-08-24 |
+
+**Relayed to:** all live role sessions on 2026-08-24. Relay is recorded here so a session that starts later inherits the rule from the ledger rather than from a message it never received.
+
+**Master's own obligation:** Master runs code too — gates, `check_graph.py`, inventory scripts. Read-only inspection is not execution of project code. Anything that writes, renders, trains, annotates or mutates the corpus is, and Master is bound by the same gate.
+
+---
+
 ### `DL-027` — the USER's two rulings: `baseColorFactor` kept, `D-12` retained **over** the evidence
 
 | | |
