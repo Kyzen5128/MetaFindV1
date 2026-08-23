@@ -36,13 +36,28 @@ so it is a genuine architectural choice. sec. 2.5 is the normative method
 description, so ``"updated"`` is the default; ``"current"`` reproduces Appendix C
 and matches stock EGNN.
 
-**F10 has no flag: it is simply an error in the paper.** Eq. 3 types f_x as
-``R^(2d+1+e) -> R^3``, but Eq. 13's proof factors the rotation out as
-``sum (Q x_i - Q x_j) phi_x = Q sum (x_i - x_j) phi_x``, which only holds when
-phi_x is scalar-valued -- elementwise scaling of a 3-vector does not commute with
-rotation. The reference EGNN agrees (``coord_mlp`` ends in ``Linear(hidden, 1)``).
-Implementing the literal R^3 would break the paper's central claim, so the scalar
-form is used unconditionally and the discrepancy is reported instead.
+**F10 has no flag. Verdict PAPER-AMBIGUOUS (DL-004, USER_APPROVED).**
+
+[REWORDED 2026-08-22 for DL-004 compliance. This paragraph previously read "it is
+simply an error in the paper" and cited the reference EGNN as agreement. DL-004
+carries two binding prohibitions -- never write that the paper is wrong, and never
+cite upstream EGNN as settling a MetaFind interpretation -- and both sentences
+broke them. The mathematics below is unchanged; only the standing of the claim is.]
+
+Eq. 3 types f_x as ``R^(2d+1+e) -> R^3``, and sec. 2.5 **never defines the ``.``**
+in the coordinate update. That silence is the finding: MetaFind alone does not
+determine how an R^3 output enters Eq. 3. Under the elementwise reading, Eq. 13's
+proof does not go through -- it factors the rotation out as
+``sum (Q x_i - Q x_j) phi_x = Q sum (x_i - x_j) phi_x``, which holds only for a
+scalar phi_x, because elementwise scaling of a 3-vector does not commute with
+rotation. So that reading contradicts the paper's own central equivariance claim.
+
+The scalar form is used unconditionally because it preserves the equivariance the
+paper asserts and invents no operator the paper does not state. **That is a
+USER-RATIFIED IMPLEMENTATION CHOICE under a PAPER-AMBIGUOUS specification -- not a
+PAPER FACT, and not a correction of the paper.** The reference EGNN's
+``coord_mlp`` also ends in ``Linear(hidden, 1)``, which is consistent with the
+choice but is **not** evidence for what MetaFind intended.
 
 **The fourth is U-17: d_ij or d_ij^2, and it now has a flag.** Sec. 2.5 defines
 ``d_ij^l = ||x_i^l - x_j^l||_2``; Appendix C Eq. 10-12 uses ``||x_i - x_j||^2``,
