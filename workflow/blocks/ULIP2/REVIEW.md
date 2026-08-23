@@ -2378,3 +2378,92 @@ The Engineer has already committed to stopping rather than admitting them in tha
 `V1.0` launched at 17:41 — nine minutes before `S-6`. **Neither of us can attribute the 17h burst
 to the other**, and the 16h hour, with `n03` running throughout and zero resource failures, rules
 out `n03` alone as the cause.
+
+---
+
+## R-30 — `S-6` on the v8 corpus: **PASS**, and the Reviewer's own caveat was wrong
+
+**Reviewer, 2026-08-23.** `n=3,706`, CPU only (`n04` held the GPU and had already lost 41 assets
+to OOM), 2,048-point subsample.
+
+```
+                    as-is    +180 yaw
+median             0.0250      0.0526
+95th pct           0.0421      0.1810
+> 0.1 count            69         794
+as-is better on 3,392 / 3,706  =  91.5%
+```
+
+**The yaw is gone.** The arms have swapped against `FIND-6`, which had `+180` winning on 269/286.
+
+### FINDING R-30.a — the subsample bias is NOT equal across arms. The Reviewer pre-declared that it was.
+
+When launching `S-6` the Reviewer wrote: *"biased upward, but IDENTICALLY for both arms, and S-6
+is a comparison between the arms."* **That was an assumption, stated as a justification, and it is
+false.** Measured on the same 200 assets at both point counts:
+
+```
+                  full 10k    sub 2048     ratio
+as-is median        0.0114      0.0253     2.21x
++180 median         0.0482      0.0566     1.17x
+as-is win rate       94.5%       92.5%
+```
+
+**2.21x against 1.17x.** Thinning a cloud hurts the *close* arm far more than the far arm —
+when two clouds nearly coincide, nearest-neighbour distance is dominated by point spacing; when
+they do not, it is dominated by the real mismatch. **So the subsample compresses the very gap
+`S-6` exists to measure**, and the reported 91.5% understates the result rather than flattering it.
+
+**The direction is favourable, which is exactly why it needed checking.** An assumption that
+happens to be conservative is still an assumption, and it was offered to the Engineer as a reason
+the measurement could be trusted.
+
+### What the calibration then settles
+
+```
+v8 corpus, full 10k, n=200      as-is 0.0114   +180 0.0482   as-is wins 94.5%
+v4 corpus, full 10k, n=3,706    as-is 0.0117   +180 0.0423   as-is wins 93.8%
+```
+
+**0.0114 against 0.0117.** The v8 corpus sits at the same distance from ULIP-2's clouds as v4 did
+— which is the expected answer, because `SAMPLER_VERSION` 7→8 changed **colour**, not geometry,
+and Chamfer reads geometry alone. **A measurement that had come out differently would have meant
+something was wrong.** The `93.8% -> 91.5%` drop is fully explained by the subsample: 94.5% -> 92.5%
+on the calibration set, the same ~2 points.
+
+`S-6` PASSES on v8, and the absolute value is now comparable rather than uninterpretable.
+
+### FINDING R-30.b — `n03` computes a fingerprint and writes it nowhere
+
+```
+FINDING          pointclouds.py:844 computes
+                     fingerprint = runlog.implementation_fingerprint(...)
+                 and :843's own comment says "must add `runlog.verify_fingerprint`
+                 the way `n04` does". It does not verify -- and it also does not
+                 RECORD: all 46,052 v8 sidecars carry no fingerprint field.
+                 So the corpus cannot be checked for homogeneity even after the
+                 fact. Whether a mid-run edit reached the workers is now
+                 unanswerable, not merely unguarded.
+EVIDENCE         46,052 sidecars swept: sampler_version {8: 46052} uniform,
+                 distinct fingerprints = 1, and that one value is `None`.
+                 pointclouds.py mtime 2026-08-23 18:33, after the 15:32-17:41 run.
+CLASSIFICATION   OBSERVED IMPLEMENTATION + OBSERVED DATA
+IMPACT           the v8 n03 corpus's provenance; the same failure that destroyed
+                 the v3 render corpus is unguarded AND unrecorded here
+SEVERITY         MAJOR
+```
+
+**This is instance #2 of `R-26` repeating exactly.** There, `FRAME_CORRECTION_ID` was defined,
+documented as *"travels into every sidecar"*, and referenced nowhere. Here the fingerprint is
+computed, the comment says a guard is missing, and **the value is discarded** — so a reader who
+sees line 844 concludes provenance exists.
+
+**Recording costs nothing and would have made this answerable.** Verifying is the larger change
+and would have to wait for a run boundary. `SPEC_M1`'s and the Engineer's; the Reviewer registers
+it only.
+
+### The guard gap the Engineer raised, confirmed
+
+`implementation_fingerprint()` covers `renders.py` and `meshload.py`. `renders.py:599-600`
+imports `render_blender.py` and `view_io.py` — **both decide pixels, neither is covered.** The
+guard would not fire on an edit to either.
