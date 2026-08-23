@@ -258,11 +258,23 @@ SMR    /mnt/data1  3.6 T  455 G used  3.0 T free
 Verified: 46,052 `.glb` on each, `links=1` on both, different devices — **not hardlinks, not
 symlinks. 328 GB of NVMe is a duplicate of 328 GB of SMR.**
 
-**That is what the USER stopped on 2026-08-22.** His words then: 「大型資料集不要搬過來喔」, given
-after halting exactly this copy. It may have been re-authorised under 2026-08-23's
-「你先幫我測試我硬體極限 幫我把流程盡可能加速」 — Blender reads every GLB, so NVMe would speed it —
-**but Master holds no wording that authorises the copy, and it is reported rather than assumed
-either way. Nobody should delete either copy without the USER saying which.**
+**[CORRECTED within the hour — Master's first version of this paragraph was wrong and is
+withdrawn.]** It said this duplicate was created today and was *"what the USER stopped on
+2026-08-22"*. **It is not.** File timestamps, both volumes:
+
+```
+NVMe  first .glb   2026-08-15 14:11      glbs dir  2026-08-15 11:37
+SMR   first .glb   2026-08-15 13:53      glbs dir  2026-08-15 11:37
+either volume, .glb written after 2026-08-20:   0
+```
+
+**Both copies are eight days old, made ~18 minutes apart, and nothing has been written to
+either since.** The only thing that changed on 2026-08-23 is the **`data` symlink**, repointed
+from SMR to NVMe at 08:13. **No 328 GB copy happened today and no instruction was violated.**
+Master inferred a fresh copy from the free-space drop without checking a single mtime.
+
+What remains true: the duplicate is real, it costs 328 GB of NVMe, and **nobody should delete
+either side without the USER saying which** — the SMR copy is now the unused one.
 
 **Operationally it is not yet a problem:** `n04` has ~34 h left and 12 views × 46,052 at 512 px
 projects to well under 375 GB. It is recorded because a 328 GB duplicate is not something anyone
