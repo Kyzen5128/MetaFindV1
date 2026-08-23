@@ -79,16 +79,25 @@ class ContrastiveConfig:
             True reproduces Eq. 7a/7b/8 (Stage 2, symmetric).
         learnable_temperature: use a learnable logit scale rather than a fixed
             tau. ULIP-2's paper states this for its own objective (Eq. 1/2).
-            See U-22.
-        init_temperature: tau at initialisation. 0.07 is CLIP's value; the
-            ULIP-2 paper does not give one.
+            See U-22. **Defaults to False**: MetaFind fixes tau, and a
+            dependency's design does not override the paper being reproduced.
+        init_temperature: tau at initialisation. **Defaults to PAPER_TAU
+            (0.5)**, which `3experiments.tex:15` states for all experiments.
+            0.07 is CLIP's and ULIP-2's value and is still selectable, but it is
+            a DEVIATION and the constructor says so.
         max_logit_scale: clamp on the learnable scale. Without it the scale can
-            run away early in training and saturate the softmax.
+            run away early in training and saturate the softmax. Inert when
+            `learnable_temperature=False`, because a fixed scale cannot move.
     """
 
     bidirectional: bool = False
-    learnable_temperature: bool = True
-    init_temperature: float = 0.07
+    # [CORRECTED 2026-08-23] These two defaulted to ULIP-2's convention
+    # (learnable, 0.07) while the paper being reproduced states a fixed 0.5.
+    # Every run that did not pass explicit values was therefore a DEVIATION by
+    # default, and the warning below fired on the faithful path instead of the
+    # unfaithful one. The defaults now reproduce the paper.
+    learnable_temperature: bool = False
+    init_temperature: float = PAPER_TAU
     max_logit_scale: float = 100.0
 
 

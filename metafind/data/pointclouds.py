@@ -87,7 +87,16 @@ N_POINTS = 10_000
 # publishes: modulating darkens 37 of 37 by 0.21 mean, and cosine against
 # ULIP's own clouds moves 0.9005 -> 0.8980. `flat` and `gltf_default` are
 # unchanged from version 5.
-SAMPLER_VERSION = 6
+# 7: [2026-08-23] colour is interpolated AT the sampled point instead of being
+# the mean of the triangle's three baked vertex colours, and `baseColorFactor`
+# is multiplied into the texture. OpenShape §3.2 -- the source ULIP-2's appendix
+# defers its 3D input preprocessing to -- says "we sample 10,000 points from the
+# mesh surface and interpolate the point colors according to the mesh textures".
+# Version 6 gave every point on a face one colour, which is a per-face constant.
+# Changes the rgb channel of the `texture` class, 23,675 of 46,052 assets;
+# `flat`, `gltf_default` and `fallback_grey` are uniform per part and are
+# therefore arithmetically unchanged.
+SAMPLER_VERSION = 8
 RGB_SCALE = "unit"  # [0, 1]; see the module docstring
 DEFAULT_GREY = 0.4  # ULIP's stand-in for a dataset with no colour channel at all
 # The base colour of a PBR material carrying neither a texture nor an explicit
@@ -305,6 +314,28 @@ def _colourise(geom, color0: np.ndarray | None = None) -> tuple[str, bool]:
         return source, modulated
 
     if isinstance(vis, trimesh.visual.TextureVisuals):
+        # [SAMPLER_VERSION 8] A texture that can be read PER POINT is left
+        # alone, so `sample_mesh` can interpolate it at the sampled position
+        # instead of averaging the triangle's three baked vertex colours.
+        #
+        # This is what the named upstream source actually specifies. OpenShape
+        # §3.2 -- and ULIP-2's appendix defers its 3D input preprocessing to
+        # OpenShape -- says: "we sample 10,000 points from the mesh surface and
+        # **interpolate the point colors according to the mesh textures**."
+        # Baking to vertices first and then averaging gives every point on a
+        # triangle the SAME colour, which is a per-face constant, not an
+        # interpolation. On a coarse mesh with a detailed texture that is the
+        # whole texture gone.
+        #
+        # Scope: the `texture` class, 23,675 of 46,052 assets.
+        #
+        # `_commit` is deliberately NOT called here -- it would overwrite
+        # `geom.visual` with ColorVisuals and destroy the UVs the interpolation
+        # needs. COLOR_0 stays excluded from this class exactly as `D-12` has
+        # it; that decision was measured under the old per-face rule and is
+        # re-measured by `V1.0` before the full run.
+        if _texture_is_samplable(geom):
+            return "texture", False
         try:
             converted = vis.to_color()
             vc = getattr(converted, "vertex_colors", None)
@@ -370,6 +401,87 @@ def _colourise(geom, color0: np.ndarray | None = None) -> tuple[str, bool]:
     return _commit([int(DEFAULT_GREY * 255)] * 3 + [255], "fallback_grey")
 
 
+def _material_image(vis):
+    """The base-colour texture image, whichever material class holds it.
+
+    [SAMPLER_VERSION 8, ROOT CAUSE OF A SILENT NO-OP] ``PBRMaterial`` -- what
+    trimesh 5.0 builds for every glTF PBR material, which is what these assets
+    use -- keeps the texture on ``baseColorTexture`` and has **no ``.image``
+    attribute at all**. ``SimpleMaterial`` keeps it on ``.image``. Version 7
+    checked only ``.image``, so `_texture_is_samplable` answered False for every
+    PBR asset and the per-point branch never executed.
+
+    Measured before the fix, over 200 assets drawn from the `texture` class:
+    ``_texture_is_samplable`` returned True on **0 of 1,248 parts (0.00%)**.
+    Reading the glTF JSON of 60 of them directly, bypassing trimesh: 60 of 60
+    carry ``images`` and 54 of 60 carry a ``baseColorTexture``. The textures
+    were there; the attribute name was wrong.
+    """
+    mat = getattr(vis, "material", None)
+    if mat is None:
+        return None
+    img = getattr(mat, "baseColorTexture", None)
+    if img is None:
+        img = getattr(mat, "image", None)
+    return img
+
+
+def _texture_is_samplable(geom) -> bool:
+    """Can this geometry's texture be read at an arbitrary surface point?
+
+    Needs three things, all checked here so that `_colourise` and `_sample_part`
+    can never disagree about which branch an asset takes: UV coordinates, one
+    per vertex so the barycentric interpolation indexes them by the same face
+    array, and an actual image to sample.
+
+    A material carrying UVs but no image -- a baseColorFactor-only PBR material
+    still typed as TextureVisuals -- stays on the ``to_color()`` path rather
+    than being quarantined.
+    """
+    vis = getattr(geom, "visual", None)
+    uv = getattr(vis, "uv", None)
+    if uv is None:
+        return False
+    uv = np.asarray(uv)
+    if len(uv) == 0 or len(uv) != len(geom.vertices):
+        return False
+    return _material_image(vis) is not None
+
+
+def _base_colour_factor(vis) -> np.ndarray | None:
+    """``baseColorFactor`` as ``(3,)`` in [0, 1], or None if the material has none.
+
+    [IMPLEMENTATION CHOICE -- ATTRIBUTION PENDING, corrected 2026-08-23] This
+    docstring previously asserted ``[USER DECISION, 2026-08-23]``. Master
+    searched the history (``git log -S"_base_colour_factor"`` returns 0
+    commits: the helper exists only in the uncommitted tree) and the Engineer
+    searched this session's transcript; **neither can produce the USER's words
+    for it**. The label is therefore withdrawn until he confirms it. He may
+    well have decided it in an earlier session -- "pending" says unverified,
+    not denied.
+
+    The argument stands on its own either way, and is why the behaviour is
+    kept while the attribution is not: glTF 2.0 defines the base colour as
+    ``baseColorFactor * baseColorTexture``. ``trimesh``'s ``sample_color`` reads
+    ``material.image`` only -- the raw texture, unmultiplied -- so the factor is
+    applied by us or it is silently dropped.
+
+    Most PBR materials carrying a texture leave the factor at [1,1,1,1], where
+    this is a no-op; the ones that tint a greyscale texture are exactly the ones
+    it matters for.
+    """
+    factor = getattr(getattr(vis, "material", None), "baseColorFactor", None)
+    if factor is None:
+        return None
+    f = np.asarray(factor, dtype=np.float64).ravel()[:3]
+    if f.size != 3:
+        return None
+    # glTF stores it in [0, 1]; trimesh sometimes surfaces it as uint8 [0, 255].
+    if f.max() > 1.0:
+        f = f / 255.0
+    return np.clip(f, 0.0, 1.0)
+
+
 def _vertex_rgb(geom) -> np.ndarray:
     """``(n_vertices, 3)`` uint8 colours, whatever shape trimesh handed back.
 
@@ -408,6 +520,75 @@ def _allocate(areas: np.ndarray, n_points: int) -> np.ndarray:
     return counts
 
 
+def _sample_part(part, k: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
+    """``(points (k,3), colours (k,3) uint8-scale float)`` for one geometry.
+
+    [SAMPLER_VERSION 8] Both branches interpolate the colour AT the sampled
+    point, which is what OpenShape §3.2 specifies. Version 6 averaged the
+    triangle's three vertex colours, giving every point on a face one colour.
+
+      * **textured part** -- the sample's UV is interpolated from the same
+        barycentric weights that placed the point, then read out of the texture
+        bilinearly. ``baseColorFactor`` is multiplied in afterwards, because the
+        lookup returns the raw texel and glTF defines the base colour as
+        factor x texture.
+      * **everything else** -- the colour is per-vertex, so the barycentric
+        weights are recovered and applied to the face's three vertex colours.
+        For a uniformly coloured part (``flat``, ``gltf_default``,
+        ``fallback_grey``, and any per-face colour) this is arithmetically
+        identical to the old mean, so those classes are unchanged by
+        construction.
+
+    [SAMPLER_VERSION 8] Version 7 delegated the textured branch to
+    ``sample_surface(sample_color=True)``. That call reaches
+    ``material.image``, which **``PBRMaterial`` does not have** -- it raises
+    ``AttributeError`` on every glTF PBR asset in this corpus. The branch was
+    never taken (the predicate excluded it first), so nothing crashed and
+    nothing was interpolated either. The UV lookup is done here now, against
+    ``_material_image``, so the branch both fires and works.
+    """
+    import trimesh
+
+    vis = part.visual
+    if isinstance(vis, trimesh.visual.TextureVisuals) and _texture_is_samplable(part):
+        pts, face_idx = trimesh.sample.sample_surface(part, k, seed=seed)
+        pts = np.asarray(pts)
+        bary = _barycentric(part, face_idx, pts)                   # (k, 3)
+        corners_uv = np.asarray(vis.uv, dtype=np.float64)[part.faces[face_idx]]
+        point_uv = (bary[:, :, None] * corners_uv).sum(axis=1)     # (k, 2)
+        cols = trimesh.visual.color.uv_to_interpolated_color(
+            point_uv, _material_image(vis))[:, :3].astype(np.float64)
+        factor = _base_colour_factor(vis)
+        if factor is not None:
+            cols = cols * factor[None, :]
+        return pts, cols
+
+    pts, face_idx = trimesh.sample.sample_surface(part, k, seed=seed)
+    pts = np.asarray(pts)
+    corners = _vertex_rgb(part)[part.faces[face_idx]].astype(np.float64)  # (k,3,3)
+    bary = _barycentric(part, face_idx, pts)                              # (k, 3)
+    return pts, (bary[:, :, None] * corners).sum(axis=1)
+
+
+def _barycentric(part, face_idx: np.ndarray, pts: np.ndarray) -> np.ndarray:
+    """``(k, 3)`` weights of each point inside its own face.
+
+    ``points_to_barycentric`` can emit a NaN on a degenerate (zero-area)
+    triangle. Those faces carry no area weight so they are rarely sampled, but
+    "rarely" is not "never" over 46,052 assets, and one NaN propagates into the
+    stored cloud -- as a colour on one branch and as a UV on the other. Fall
+    back to the face centroid for exactly those rows.
+    """
+    import trimesh
+
+    bary = trimesh.triangles.points_to_barycentric(part.triangles[face_idx], pts)
+    bad = ~np.isfinite(bary).all(axis=1)
+    if bad.any():
+        bary = bary.copy()
+        bary[bad] = 1.0 / 3.0
+    return bary
+
+
 def sample_mesh(path: Path, seed: int, n_points: int = N_POINTS):
     """Area-weighted surface sample with per-point colour.
 
@@ -427,9 +608,7 @@ def sample_mesh(path: Path, seed: int, n_points: int = N_POINTS):
             continue
         # Per-part seed, so a part's points do not depend on how many points
         # the parts before it happened to receive.
-        pts, face_idx = trimesh.sample.sample_surface(part, int(k), seed=int(seed) + i)
-        tri = part.faces[face_idx]
-        cols = _vertex_rgb(part)[tri].mean(axis=1)
+        pts, cols = _sample_part(part, int(k), int(seed) + i)
         if sources_per_part[i] != "fallback_grey":
             coloured += int(k)
         xyz_chunks.append(np.asarray(pts, dtype=np.float32))
@@ -595,6 +774,17 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--limit", type=int, help="process at most N assets (smoke runs)")
+    # [2026-08-23] `--limit N` selects the first N by MANIFEST order, and
+    # `--limit N` in a different node selects the first N of ITS remaining work
+    # -- which is a different set. A three-node smoke run driven by --limit
+    # therefore samples one set of assets, renders another, and then fails to
+    # annotate because the renders it needs are for the third. Observed exactly
+    # that today. `--uids-file` is how a cross-node smoke run is pinned; every
+    # runner in this pipeline takes the same flag with the same meaning.
+    ap.add_argument("--uids-file",
+                    help="newline-separated uids; processes exactly these. Use "
+                         "this, not --limit, whenever another node must run on "
+                         "the same assets.")
     ap.add_argument("--force", action="store_true", help="re-sample even if the file exists")
     args = ap.parse_args()
 
@@ -603,6 +793,14 @@ def main() -> int:
     # Objaverse publishes. Resolve by uid once rather than guessing the shard
     # from the manifest's .npy path, which is ULIP's naming and need not agree.
     glb_by_uid = {p.stem: p for p in paths.OBJAVERSE_GLB.rglob("*.glb")}
+
+    if args.uids_file:
+        want = [ln.strip() for ln in Path(args.uids_file).read_text().splitlines()
+                if ln.strip()]
+        missing = [u for u in want if u not in glb_by_uid]
+        if missing:
+            raise SystemExit(f"{len(missing)} uid(s) have no GLB, e.g. {missing[:3]}")
+        uids = want
 
     todo = []
     for uid in uids:

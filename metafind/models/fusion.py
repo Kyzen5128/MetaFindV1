@@ -20,13 +20,21 @@ with 0", whose whole point is that it is worse.
 What the paper does not pin down
 --------------------------------
 
-U-13  Which of the five strategies is the default. Table 3 ablates ``Mean``
-      (9.4) and ``MLPs`` (9.9) as *degradations* from the full model (11.4), so
-      the default is one of masked-MLP / gated / transformer -- the paper never
-      says which. ``FusionConfig.kind`` therefore has no paper-blessed value;
-      ``masked_mlp`` is used as the default because it is the one whose name
-      matches sec. 3.4's takeaway ("Masked modality fusion outperformed
-      zero-padding"), and the choice is recorded rather than hidden.
+U-13  **RESOLVED 2026-08-23 -- this entry said "the paper never says which" and
+      the paper does say.** `3experiments.tex:143`, last paragraph of the
+      Ablation Studies section:
+
+          "while simple mean pooling offers computational efficiency, MLP and
+          **the final selected Transformer** outperform others under partial
+          modality conditions by dynamically reweighting available inputs"
+
+      So the default is ``transformer``, a PAPER FACT, and the Table 3 numbers
+      are consistent with it: Mean 9.4 and MLPs 9.9 are both below the full
+      model's 11.4, and the full model is the Transformer.
+
+      The other four kinds stay implemented -- Mean and MLPs are Table 3 rows
+      that have to be reproducible, and masked_mlp / gated remain selectable for
+      ablation -- but none of them is the default any more.
 
 U-23  What happens when all three modalities are masked. "Independently" at 30%
       each means this occurs for 2.7% of queries, leaving a query built purely
@@ -56,7 +64,8 @@ class FusionConfig:
     """Configuration for the query-side fusion module.
 
     Attributes:
-        kind: fusion strategy. See U-13 -- the paper does not name its default.
+        kind: fusion strategy. `transformer` is the paper's own selection
+            (`3experiments.tex:143`); see U-13 above.
         dim: modality embedding width. ULIP-2 embeds at 1280.
         hidden: hidden width for the MLP/gated variants.
         n_heads: attention heads for the transformer variant.
@@ -75,7 +84,9 @@ class FusionConfig:
     # is a measured fact about ULIP-2 rather than a value the paper states --
     # the paper contains no dimension anywhere.
     dim: int
-    kind: FusionKind = "masked_mlp"
+    # [PAPER FACT 3experiments.tex:143] "the final selected Transformer".
+    # Was `masked_mlp` on a false UNKNOWN; see U-13 in the module docstring.
+    kind: FusionKind = "transformer"
     hidden: int = 2048
     n_heads: int = 8
     n_layers: int = 2

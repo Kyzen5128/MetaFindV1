@@ -59,9 +59,16 @@ def _valid(**over):
     return obj
 
 
-def _validate(obj, lvis_category=ANCHOR, proportions=PROPS):
+def _validate(obj, lvis_category=ANCHOR, proportions=PROPS, description=None):
+    # [PROMPT_VERSION 8] `description` no longer comes back in the response --
+    # it is generated five times separately and chosen by CLIP. Tests that were
+    # written about the OTHER fields pass the response's own description
+    # through, so they keep asserting what they were written to assert; a test
+    # about the description itself passes its own.
+    if description is None:
+        description = obj.get("description") or "A syringe with a clear barrel."
     return validate_annotation(obj, lvis_category=lvis_category,
-                               proportions=proportions)
+                               proportions=proportions, description=description)
 
 
 # ----------------------------------------------------------------- the prompt
@@ -153,10 +160,13 @@ def test_volume_is_derived_not_asked():
     p = build_prompt(11, ANCHOR, PROPS)
     ask = p.split("Return one JSON object")[1]
     assert '"volume"' not in ask
-    assert "do not include `width`, `length` or `volume`" in p
+    assert "do not include `description`, `width`, `length` or `volume`" in p
 
 
-@pytest.mark.parametrize("field", ["category", "identity_confirmed", "description",
+# [PROMPT_VERSION 8] `description` is not in this list any more: it does not
+# come back in the response, it is injected from the CLIP ranking. Its absence
+# is covered by `test_no_ranked_description_is_refused` below.
+@pytest.mark.parametrize("field", ["category", "identity_confirmed",
                                    "height", "width_axis", "mass", "materials",
                                    "onCeiling", "onWall", "onFloor", "onObject"])
 def test_each_required_field_missing_is_rejected(field):
@@ -222,13 +232,36 @@ def test_the_model_cannot_supply_a_synset_at_all():
     assert a.synset == lvis_synset(ANCHOR) == "chair.n.01"
 
 
-def test_the_synset_follows_the_anchor_not_the_refined_category():
-    """"toy" -> "toy dinosaur" is a better retrieval string, but no
-    authoritative synset exists for it. Minting one is the error class the
-    lookup removes."""
-    a = _validate(_valid(category="toy dinosaur"), lvis_category="toy")
-    assert a.category == "toy dinosaur"
-    assert a.synset == LVIS_SYNSETS["toy"] == "toy.n.03"
+def test_the_synset_follows_the_model_and_records_where_it_came_from():
+    """[USER DECISION `U-SY`, 2026-08-23] Reversed. This test used to assert the
+    opposite -- that the synset follows the ANCHOR -- and that rule produced
+    `category: "centipede"` beside `synset: "snake.n.01"` on an asset whose LVIS
+    label was simply wrong. Two fields of one schema contradicting each other.
+
+    Nothing is minted: WordNet answers, or a recorded fallback does. Which rung
+    answered is stored, because an id alone cannot distinguish "LVIS's own
+    table" from "we gave up and kept the anchor".
+    """
+    from metafind.data.annotate import resolve_synset
+
+    # An LVIS term: the table wins, it is the most authoritative source here.
+    assert resolve_synset("toy", "toy") == ("toy.n.03", "lvis_table")
+
+    # Not an LVIS term, but WordNet knows the phrase.
+    syn, src = resolve_synset("centipede", "snake")
+    assert (syn, src) == ("centipede.n.01", "wordnet_phrase")
+
+    # A compound: English is head-final, so the LAST word resolves it. This is
+    # deliberately conservative -- "toy dinosaur" lands on the dinosaur, not on
+    # the toy, and never on an invented `toy_dinosaur.n.01`.
+    syn, src = resolve_synset("toy dinosaur", "toy")
+    assert src == "wordnet_head" and syn.startswith("dinosaur.n.")
+
+    # End to end through the validator, on the case that forced the change.
+    a = _validate(_valid(category="centipede"), lvis_category="snake")
+    assert a.category == "centipede"
+    assert a.synset == "centipede.n.01"
+    assert a.synset_source == "wordnet_phrase"
 
 
 def test_every_synset_comes_from_the_lvis_table():
@@ -244,6 +277,17 @@ def test_an_invented_synset_can_no_longer_reach_the_corpus():
     here". `notathing.n.07` was admissible. Under v5 the field is not read."""
     a = _validate(_valid(synset="notathing.n.07"))
     assert a.synset == "chair.n.01"
+    # Still true under `U-SY`: the model's `synset` field is never read on the
+    # anchored path. What changed is that the id is now resolved from the
+    # model's CATEGORY, which is evidence about the object, rather than from its
+    # `synset` field, which is a free-text guess at a database key.
+    #
+    # The fixture's category is "dining chair", which is not an LVIS term, so
+    # the head noun answers -- and WordNet independently lands on the same
+    # `chair.n.01` LVIS's own table holds for the anchor. That agreement is
+    # worth asserting: the two authorities are not being played off each other.
+    assert a.synset_source == "wordnet_head"
+    assert LVIS_SYNSETS["chair"] == "chair.n.01"
 
 
 def test_a_single_string_is_accepted_where_a_list_is_expected():
@@ -340,7 +384,7 @@ def test_the_prompt_still_permits_accented_latin():
 def test_the_prompt_version_moved_because_the_prompt_changed():
     """[P-1] v4 asks for something v3 did not. Pretending they are one contract
     is what makes a corpus unfalsifiable later."""
-    assert PROMPT_VERSION == 7
+    assert PROMPT_VERSION == 8
 
 
 def test_editing_the_prompt_moves_the_contract_id():
@@ -519,19 +563,22 @@ class FakeAnnotator:
 
     model_id = "fake-vlm"
 
-    def __init__(self, *responses: str, blind: str = "OBJECT: syringe") -> None:
+    def __init__(self, *responses: str,
+                 description: str = "A syringe with a clear barrel.") -> None:
         self.responses = list(responses)
-        self.blind = blind
-        self.prompts: list[str] = []            # every call, in order
-        self.annotation_prompts: list[str] = []  # the anchored ones only
+        self.description = description
+        self.prompts: list[str] = []             # every call, in order
+        self.annotation_prompts: list[str] = []  # the structured ones only
+        self.description_prompts: list[str] = []  # the sampled draws
 
-    def generate(self, image_paths, prompt):  # noqa: D102 -- matches Annotator
+    def generate(self, image_paths, prompt, *, sample=False, seed=None):  # noqa: D102
         self.prompts.append(prompt)
-        # The blind turn is the one that asks for an `OBJECT:` line and does not
-        # ask for JSON -- identified by what it asks rather than by call order,
-        # so a test that changes the number of attempts still works.
-        if "Return one JSON object" not in prompt:
-            return self.blind
+        # [PROMPT_VERSION 8] Description draws are the sampled calls. Identified
+        # by what they ask rather than by call order, so a test that changes the
+        # number of attempts still works.
+        if sample or "Return one JSON object" not in prompt:
+            self.description_prompts.append(prompt)
+            return self.description
         self.annotation_prompts.append(prompt)
         return self.responses.pop(0)
 
@@ -541,70 +588,198 @@ def _render_rec():
             "raw_bbox_extents": [1.0, 1.0, 1.0]}
 
 
-def test_a_chinese_annotation_goes_to_the_repair_path_not_straight_into_the_corpus():
-    """[P-3] THE regression this whole extension exists for.
+def test_no_ranked_description_is_refused():
+    """[PROMPT_VERSION 8] The description is injected, so its absence is a
+    caller bug rather than a model failure -- and must still not pass."""
+    for bad in (None, "", "   "):
+        with pytest.raises(AnnotationError, match="no ranked description"):
+            validate_annotation(_valid(), lvis_category=ANCHOR,
+                                proportions=PROPS, description=bad)
 
-    Under VALIDATOR_VERSION 1 the CJK response passed on attempt 1 and was
-    admitted: one generate call, `attempts: 1`, Chinese text in the corpus. The
-    repair loop could not help, because nothing had failed.
+
+def test_a_chinese_description_candidate_is_dropped_before_it_can_be_ranked():
+    """[P-3] THE regression this whole extension exists for, moved to where the
+    description now lives.
+
+    Under `VALIDATOR_VERSION 1` a CJK response passed on attempt 1 and was
+    admitted: Chinese text in the corpus. v2 made it a validation failure that
+    the repair loop could fix, because the description came back in the
+    structured response.
+
+    In v8 it does not. Re-prompting the structured call cannot change a
+    description that came from a different call, so the repair loop would spend
+    both attempts on a field it cannot reach and quarantine a usable asset. The
+    rule therefore moved to the candidate stage: a non-English draw is dropped,
+    and four of five candidates are still four candidates.
     """
-    from metafind.data.annotate_run import annotate_one
+    from metafind.data import annotate_run as R
 
-    ann = FakeAnnotator(CJK_RESPONSE, ENGLISH_RESPONSE)
-    rec, bad = annotate_one(ann,
-                          "uid0", _render_rec(),
-                          lvis_category="syringe", proportions=PROPS)
+    draws = {"n": 0}
+
+    class MixedLanguageDraws(FakeAnnotator):
+        def generate(self, image_paths, prompt, *, sample=False, seed=None):
+            if sample:
+                draws["n"] += 1
+                if draws["n"] in (2, 5):
+                    return "\u91cd\u5316\u5b78\u88dd\u7f6e\uff0c\u900f\u660e\u7ba1\u8eab"
+                return f"A syringe with a clear barrel, draw {draws['n']}."
+            return super().generate(image_paths, prompt)
+
+    seen = []
+
+    def fake_rank(views, candidates):
+        seen.append(list(candidates))
+        return candidates[0], [{"text": c, "clip_score": 0.3 - i * 0.01, "rank": i}
+                               for i, c in enumerate(candidates)]
+
+    R.rank_descriptions = fake_rank
+    ann = MixedLanguageDraws(ENGLISH_RESPONSE)
+    rec, bad = R.annotate_one(ann, "uid0", _render_rec(),
+                              lvis_category="syringe", proportions=PROPS)
 
     assert bad is None and rec is not None
-    assert len(ann.annotation_prompts) == 2, "the repair attempt was never invoked"
-    assert rec["attempts"] == 2
+    assert len(seen[0]) == 3, f"the two CJK draws should not reach the ranker: {seen[0]}"
     assert non_english_characters(rec["description"]) == []
-    assert "drawing fluids" in rec["description"]
+    assert rec["description_candidates_rejected_non_english"] == 2, (
+        "the rejection must be COUNTED -- a model that keeps answering in "
+        "Chinese is telling the USER something, and a silent drop hides it"
+    )
 
 
-def test_the_repair_prompt_carries_the_language_failure_verbatim():
-    """[P-3] The loop is only as good as what it feeds back. A repair prompt
-    that does not name the language problem spends the attempt on nothing."""
-    from metafind.data.annotate_run import annotate_one
+def test_every_candidate_non_english_quarantines_rather_than_admitting_one():
+    """The other side: with nothing English left there is no description to
+    rank, and admitting a CJK one is the exact defect `P-3` exists for."""
+    from metafind.data import annotate_run as R
 
-    ann = FakeAnnotator(CJK_RESPONSE, ENGLISH_RESPONSE)
-    annotate_one(ann,
-                          "uid0", _render_rec(),
-                          lvis_category="syringe", proportions=PROPS)
+    class AllChinese(FakeAnnotator):
+        def generate(self, image_paths, prompt, *, sample=False, seed=None):
+            if sample:
+                return "\u91cd\u5316\u5b78\u88dd\u7f6e"
+            return super().generate(image_paths, prompt)
 
-    original, repair = ann.annotation_prompts
-    assert repair != original
-    assert "REJECTED" in repair
-    assert "must be written in English" in repair
-    assert "`description`" in repair
-
-
-def test_an_unrepaired_language_failure_is_quarantined_never_admitted():
-    """[L1-ANNOT-EXHAUST] Two attempts, both Chinese. The exhausted item must not
-    reach the corpus -- a bound treated as success is a bound that does nothing."""
-    from metafind.data.annotate_run import annotate_one
-
-    ann = FakeAnnotator(CJK_RESPONSE, CJK_RESPONSE)
-    rec, bad = annotate_one(ann,
-                          "uid0", _render_rec(),
-                          lvis_category="syringe", proportions=PROPS)
-
+    rec, bad = R.annotate_one(AllChinese(ENGLISH_RESPONSE), "uid0", _render_rec(),
+                              lvis_category="syringe", proportions=PROPS)
     assert rec is None and bad is not None
-    assert bad["terminated_by"] == "repair_budget"
-    assert bad["attempts"] == MAX_ATTEMPTS
-    assert "English" in bad["exception_msg"]
+    assert bad["exception_type"] == "NoDescriptionCandidates"
+    assert "non-English" in bad["exception_msg"]
 
 
-def test_a_clean_english_annotation_still_costs_one_attempt():
-    """The language rule must not tax the 45,942 records that were already fine."""
-    from metafind.data.annotate_run import annotate_one
+def test_a_clean_english_annotation_still_costs_one_structured_attempt():
+    """The language rule must not tax the records that were already fine."""
+    from metafind.data import annotate_run as R
 
+    R.rank_descriptions = lambda views, c: (c[0], [{"text": t, "clip_score": 0.3,
+                                                    "rank": i} for i, t in enumerate(c)])
     ann = FakeAnnotator(ENGLISH_RESPONSE)
-    rec, bad = annotate_one(ann,
-                          "uid0", _render_rec(),
-                          lvis_category="syringe", proportions=PROPS)
+    rec, bad = R.annotate_one(ann, "uid0", _render_rec(),
+                              lvis_category="syringe", proportions=PROPS)
     assert bad is None and rec["attempts"] == 1
     assert len(ann.annotation_prompts) == 1
+    assert len(ann.description_prompts) == 5, "five independent draws, per main.tex:677"
+    assert rec["description_source"] == "model"
+    assert rec["description_translated_by"] is None
+
+
+def test_a_record_carries_all_three_contract_axes_and_a_fingerprint():
+    """[P-5] prompt_version alone cannot express "which validator admitted
+    this"."""
+    rec = _validate(_valid()).as_record("m")
+    assert rec["prompt_version"] == PROMPT_VERSION
+    assert rec["validator_version"] == VALIDATOR_VERSION
+    assert rec["schema_version"] == SCHEMA_VERSION
+    assert rec["annotation_contract"] == annotation_contract_id()
+    assert rec["annotation_contract"].startswith(f"metafind_annot_v{PROMPT_VERSION}@")
+
+
+@pytest.mark.parametrize("knob", [
+    "MIN_DIM_CM", "MAX_MASS_KG", "NON_LATIN_SYMBOL_CUTOFF", "MAX_ATTEMPTS",
+    "VALIDATOR_VERSION", "SCHEMA_VERSION",
+])
+def test_moving_any_admission_rule_moves_the_contract_id(knob):
+    """Three integers can be forgotten; a fingerprint over the actual rules
+    cannot. Same argument as D10's text_serialization_id()."""
+    import metafind.data.annotate as a
+
+    before = annotation_contract_id()
+    original = getattr(a, knob)
+    try:
+        setattr(a, knob, original + 1)
+        assert annotation_contract_id() != before
+    finally:
+        setattr(a, knob, original)
+    assert annotation_contract_id() == before
+
+
+def test_changing_a_material_synonym_moves_the_contract_id():
+    import metafind.data.annotate as a
+
+    before = annotation_contract_id()
+    try:
+        a.MATERIAL_SYNONYMS["tin"] = "metal"
+        assert annotation_contract_id() != before
+    finally:
+        del a.MATERIAL_SYNONYMS["tin"]
+    assert annotation_contract_id() == before
+
+
+# ====================================================================== P-3
+# A language failure must reach the repair loop, not be accepted as-is.
+
+CJK_RESPONSE = ('{"category": "syringe", "identity_confirmed": true, '
+                '"height": 2, "width_axis": "x", "mass": 0.1, "description": '
+                '"a medical device used for injecting or抽吸液体", '
+                '"materials": ["plastic"], "onCeiling": false, "onWall": false, '
+                '"onFloor": false, "onObject": true}')
+ENGLISH_RESPONSE = CJK_RESPONSE.replace(
+    "injecting or抽吸液体", "injecting or drawing fluids")
+
+UNANCHORED_RESPONSE = json.dumps({
+    # [PROMPT_VERSION 7] No `identity_confirmed` and no `description`: there is
+    # no anchor to confirm, and the description arrives from the CLIP ranking.
+    "category": "syringe", "synset": "syringe.n.01",
+    "height": 15.0, "width_axis": "x", "mass": 0.02,
+    "materials": ["plastic"],
+    "onCeiling": False, "onWall": False, "onFloor": False, "onObject": True,
+})
+
+
+
+class FakeAnnotator:
+    """Records the prompt it was given on each attempt. No model, no GPU.
+
+    v6 makes TWO kinds of call per asset: one blind turn, then one or more
+    anchored attempts. `responses` stays the list of ANNOTATION replies, so
+    every test still reads as "attempt 1 returns this, attempt 2 returns that";
+    the blind turn is served separately from `blind`. Prepending a dummy to
+    every call site instead would have made each list mean something different
+    from what it says.
+    """
+
+    model_id = "fake-vlm"
+
+    def __init__(self, *responses: str,
+                 description: str = "A syringe with a clear barrel.") -> None:
+        self.responses = list(responses)
+        self.description = description
+        self.prompts: list[str] = []             # every call, in order
+        self.annotation_prompts: list[str] = []  # the structured ones only
+        self.description_prompts: list[str] = []  # the sampled draws
+
+    def generate(self, image_paths, prompt, *, sample=False, seed=None):  # noqa: D102
+        self.prompts.append(prompt)
+        # [PROMPT_VERSION 8] Description draws are the sampled calls. Identified
+        # by what they ask rather than by call order, so a test that changes the
+        # number of attempts still works.
+        if sample or "Return one JSON object" not in prompt:
+            self.description_prompts.append(prompt)
+            return self.description
+        self.annotation_prompts.append(prompt)
+        return self.responses.pop(0)
+
+
+def _render_rec():
+    return {"view_paths": [f"view_{i:02d}.png" for i in range(11)],
+            "raw_bbox_extents": [1.0, 1.0, 1.0]}
 
 
 def test_the_repaired_record_is_marked_model_generated_not_human_repaired():
@@ -1073,9 +1248,10 @@ def test_the_record_carries_the_anchor_so_disagreement_stays_measurable():
     assert rec["synset"] == "chair.n.01"
 
 
-def test_all_three_contract_axes_moved_for_v7():
-    assert (PROMPT_VERSION, VALIDATOR_VERSION, SCHEMA_VERSION) == (7, 4, 4)
-    assert annotation_contract_id().startswith("metafind_annot_v7@")
+def test_all_three_contract_axes_moved_for_v8():
+    # SCHEMA_VERSION 4 -> 5 with `synset_source` (`U-SY`, 2026-08-23).
+    assert (PROMPT_VERSION, VALIDATOR_VERSION, SCHEMA_VERSION) == (8, 4, 5)
+    assert annotation_contract_id().startswith("metafind_annot_v8@")
 
 
 def test_swapping_the_synset_table_moves_the_contract_id():

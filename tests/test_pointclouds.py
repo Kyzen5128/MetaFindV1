@@ -428,7 +428,7 @@ def test_texture_bases_are_not_modulated_by_color0():
     `flat` and `gltf_default` stay modulated; this test also pins that, because
     a narrowing applied one branch too widely would be silent.
     """
-    from metafind.data.pointclouds import _colourise
+    from metafind.data.pointclouds import _colourise, _sample_part
 
     half = lambda m: np.tile(np.array([128, 128, 128, 255], dtype=np.uint8),  # noqa: E731
                              (len(m.vertices), 1))
@@ -445,14 +445,20 @@ def test_texture_bases_are_not_modulated_by_color0():
             "COLOR_0 was applied to a texture base; R-12 withdrew it from that "
             "class after measuring 37/37 assets darker"
         )
-        got = np.asarray(m.visual.vertex_colors)[:, :3]
+        # [SAMPLER_VERSION 8] A samplable texture keeps its UVs -- `_colourise`
+        # deliberately does NOT convert it to ColorVisuals, so there are no
+        # `vertex_colors` to read here any more. Compare what the asset actually
+        # ships instead: the sampled point colours. That is the stronger check,
+        # because it is the array that reaches the encoder.
         m2 = _box()
         m2.visual = trimesh.visual.TextureVisuals(
             uv=np.zeros((len(m2.vertices), 2)),
             material=trimesh.visual.material.PBRMaterial(
                 baseColorTexture=Image.new("RGB", (2, 2), (180, 90, 60))))
         _colourise(m2, color0=None)
-        assert np.array_equal(got, np.asarray(m2.visual.vertex_colors)[:, :3]), (
+        _, with_c0 = _sample_part(m, 64, seed=0)
+        _, without = _sample_part(m2, 64, seed=0)
+        assert np.array_equal(with_c0, without), (
             "a textured asset must be byte-identical with and without COLOR_0"
         )
 

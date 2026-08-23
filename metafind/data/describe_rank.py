@@ -55,11 +55,30 @@ RANKER_VERSION = 1
 
 @functools.lru_cache(maxsize=1)
 def _ranker(device: str = "cuda"):
-    """Load once per process. Held for the life of the run, like the annotator."""
+    """Load once per process, and PARK IT ON THE CPU between uses.
+
+    Ranking happens after all candidates exist, so the ranker does not need to
+    be resident while the VLM generates -- and on a 32 GB card that residency is
+    what decides whether the whole candidate set can be drawn in one pass.
+
+    Measured 2026-08-23, gemma-4-12B-it (22.3 GB) + 12 views:
+
+        ranker resident fp32   num_return_sequences=5   OOM
+        ranker resident fp16   num_return_sequences=5   OOM
+        ranker parked on CPU   num_return_sequences=5   5.50 s, peak 30.02 GB
+
+    and the round trip costs 0.170 s per asset (fp16, .to("cuda") + score 12
+    views x 5 candidates + .to("cpu")), against the 5.4 s that drawing the five
+    candidates one at a time costs instead.
+
+    fp16 rather than fp32: half the transfer, and the scores agree to four
+    decimals (0.2544 vs 0.2545 on the same asset) because this model is only
+    ever used to ORDER candidates, never for an absolute threshold.
+    """
     import torch
     from transformers import CLIPModel, CLIPProcessor
 
-    model = CLIPModel.from_pretrained(RANKER_MODEL, dtype=torch.float32).to(device)
+    model = CLIPModel.from_pretrained(RANKER_MODEL, dtype=torch.float16)
     model.eval()
     return model, CLIPProcessor.from_pretrained(RANKER_MODEL), device
 
@@ -72,32 +91,57 @@ def score_candidates(view_paths: list[str], candidates: list[str],
     score `i` without a second pass.
     """
     import torch
-    from PIL import Image
+
+    from metafind.data.view_io import load_views_rgb
 
     if not candidates:
         return []
     model, processor, dev = _ranker(device)
-    images = [Image.open(p).convert("RGB") for p in view_paths]
+    # [2026-08-23] `Image.open(p).convert("RGB")` was here. n04 now writes RGBA
+    # with a transparent background, and `convert("RGB")` DROPS alpha rather
+    # than compositing it -- correct-looking on a fully transparent pixel, wrong
+    # on every anti-aliased silhouette edge. `view_io` is the one place that
+    # decides what transparency becomes, so the ranker and the annotator cannot
+    # score and describe two different images.
+    images = load_views_rgb(view_paths)
 
-    with torch.no_grad():
-        # `truncation=True` because CLIP's text encoder stops at 77 tokens and a
-        # two-sentence description can exceed it. Silently dropping the tail is
-        # the documented behaviour and it applies equally to every candidate, so
-        # it cannot favour one -- but it does mean a long description is scored
-        # on its opening, which is worth knowing when reading the numbers.
-        text_inputs = processor(text=candidates, return_tensors="pt",
-                                padding=True, truncation=True).to(dev)
-        image_inputs = processor(images=images, return_tensors="pt").to(dev)
-        # transformers 5 returns a ModelOutput here, not a bare tensor. Taking
-        # `.pooler_output` off whatever comes back keeps this working on both.
-        t = model.get_text_features(**text_inputs)
-        v = model.get_image_features(**image_inputs)
-        t = getattr(t, "pooler_output", t)
-        v = getattr(v, "pooler_output", v)
-        t = t / t.norm(dim=-1, keepdim=True)
-        v = v / v.norm(dim=-1, keepdim=True)
-        sim = (t @ v.T).mean(dim=1)          # (candidates, views) -> per candidate
-    return [float(x) for x in sim.cpu().numpy()]
+    # Up for the scoring, down again straight afterwards -- see `_ranker`. The
+    # `finally` matters: if scoring raises, a ranker left on the GPU would
+    # shrink every subsequent asset's generation budget and the run would start
+    # OOMing on assets that are not themselves the problem.
+    model.to(dev)
+    try:
+        with torch.no_grad():
+            # `truncation=True` because CLIP's text encoder stops at 77 tokens and a
+            # two-sentence description can exceed it. Silently dropping the tail is
+            # the documented behaviour and it applies equally to every candidate, so
+            # it cannot favour one -- but it does mean a long description is scored
+            # on its opening, which is worth knowing when reading the numbers.
+            text_inputs = processor(text=candidates, return_tensors="pt",
+                                    padding=True, truncation=True).to(dev)
+            image_inputs = processor(images=images, return_tensors="pt").to(dev)
+            # The processor emits float32 pixels; the model is fp16.
+            image_inputs = {
+                k: (v.half() if getattr(v, "dtype", None) is torch.float32 else v)
+                for k, v in image_inputs.items()
+            }
+            # transformers 5 returns a ModelOutput here, not a bare tensor. Taking
+            # `.pooler_output` off whatever comes back keeps this working on both.
+            t = model.get_text_features(**text_inputs)
+            v = model.get_image_features(**image_inputs)
+            t = getattr(t, "pooler_output", t)
+            v = getattr(v, "pooler_output", v)
+            t = t.float()
+            v = v.float()
+            t = t / t.norm(dim=-1, keepdim=True)
+            v = v / v.norm(dim=-1, keepdim=True)
+            sim = (t @ v.T).mean(dim=1)      # (candidates, views) -> per candidate
+        scores = [float(x) for x in sim.cpu().numpy()]
+    finally:
+        model.to("cpu")
+        if dev.startswith("cuda"):
+            torch.cuda.empty_cache()
+    return scores
 
 
 def rank(view_paths: list[str], candidates: list[str],

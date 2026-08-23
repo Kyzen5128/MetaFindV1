@@ -221,14 +221,32 @@ def test_bidirectional_loss_is_symmetric_under_swap():
 
 
 def test_perfect_alignment_drives_loss_down():
-    """A loss that ignored its inputs would pass every structural test above."""
+    """A loss that ignored its inputs would pass every structural test above.
+
+    The ORDERING (aligned beats random) holds at any temperature and is the
+    property being tested. The absolute floor does not: at the paper's tau=0.5
+    the logits are only 2x cosine, so even identical embeddings leave a soft
+    distribution and the loss bottoms out near log(16)/2 rather than at zero.
+    That is what a fixed 0.5 means, not a defect -- so the "nearly free" claim
+    is asserted where it is true, at CLIP's sharper 0.07, and the paper setting
+    is checked for the property it actually has.
+    """
     torch.manual_seed(0)
     g = torch.randn(16, D)
-    loss = MetaFindContrastiveLoss(ContrastiveConfig(bidirectional=True))
-    aligned = loss(g.clone(), g)["loss"]
-    random = loss(torch.randn(16, D), g)["loss"]
-    assert aligned < random, f"aligned {aligned:.4f} not better than random {random:.4f}"
-    assert aligned < 0.1, f"identical embeddings should be nearly free: {aligned:.4f}"
+
+    paper = MetaFindContrastiveLoss(ContrastiveConfig(bidirectional=True))
+    aligned = paper(g.clone(), g)["loss"]
+    random_ = paper(torch.randn(16, D), g)["loss"]
+    assert aligned < random_, f"aligned {aligned:.4f} not better than random {random_:.4f}"
+
+    sharp = MetaFindContrastiveLoss(ContrastiveConfig(
+        bidirectional=True, learnable_temperature=False, init_temperature=0.07))
+    sharp_aligned = sharp(g.clone(), g)["loss"]
+    assert sharp_aligned < 0.1, (
+        f"at tau=0.07 identical embeddings should be nearly free: {sharp_aligned:.4f}")
+    assert sharp_aligned < aligned, (
+        "a sharper temperature must separate the positive further, "
+        f"got {sharp_aligned:.4f} against {aligned:.4f}")
 
 
 def test_accuracy_is_perfect_when_query_equals_gallery():
@@ -246,15 +264,30 @@ def test_cosine_similarity_ignores_magnitude():
     assert torch.allclose(loss(q, g)["loss"], loss(q * 17.0, g)["loss"], atol=1e-5)
 
 
-def test_temperature_is_learnable_by_default_and_fixed_when_asked():
+def test_temperature_defaults_to_the_paper_and_is_learnable_when_asked():
+    """[CORRECTED 2026-08-23] The default used to be CLIP's learnable 0.07.
+
+    `3experiments.tex:15` states "The temperature is 0.5 for all experiments",
+    and `stage1_hyperparameters.json` has carried `0.5 / false` since
+    2026-08-21 -- so the dataclass default was the last place still describing
+    a DEVIATION as the norm. A test asserting the old default was keeping it
+    there.
+    """
+    from metafind.models.losses import PAPER_TAU
+
+    default = MetaFindContrastiveLoss()
+    assert not isinstance(default.logit_scale, torch.nn.Parameter)
+    assert abs(default.temperature.item() - PAPER_TAU) < 1e-6
+
     learn = MetaFindContrastiveLoss(ContrastiveConfig(learnable_temperature=True))
     assert isinstance(learn.logit_scale, torch.nn.Parameter)
     learn(torch.randn(4, D), torch.randn(4, D))["loss"].backward()
     assert learn.logit_scale.grad is not None
 
-    fixed = MetaFindContrastiveLoss(ContrastiveConfig(learnable_temperature=False))
-    assert not isinstance(fixed.logit_scale, torch.nn.Parameter)
-    assert abs(fixed.temperature.item() - 0.07) < 1e-6
+    clip_like = MetaFindContrastiveLoss(ContrastiveConfig(
+        learnable_temperature=False, init_temperature=0.07))
+    assert not isinstance(clip_like.logit_scale, torch.nn.Parameter)
+    assert abs(clip_like.temperature.item() - 0.07) < 1e-6
 
 
 def test_loss_shape_contract():
@@ -305,13 +338,19 @@ def test_the_paper_setting_is_silent_and_any_other_warns():
     from metafind.models.losses import (
         PAPER_TAU, ContrastiveConfig, MetaFindContrastiveLoss)
 
-    with warnings.catch_warnings(record=True) as clean:
-        warnings.simplefilter("always")
-        MetaFindContrastiveLoss(ContrastiveConfig(
-            learnable_temperature=False, init_temperature=PAPER_TAU))
-    assert not clean, "the paper's own setting must not warn"
+    # Both spellings of the paper setting: explicit, and the bare default --
+    # which IS the paper setting as of 2026-08-23. A default that warned would
+    # mean every faithful run started with a DEVIATION notice, training the
+    # reader to ignore it.
+    for cfg in (ContrastiveConfig(learnable_temperature=False,
+                                  init_temperature=PAPER_TAU),
+                ContrastiveConfig()):
+        with warnings.catch_warnings(record=True) as clean:
+            warnings.simplefilter("always")
+            MetaFindContrastiveLoss(cfg)
+        assert not clean, f"the paper's own setting must not warn: {cfg}"
 
-    for cfg in (ContrastiveConfig(),                                    # CLIP's default
+    for cfg in (ContrastiveConfig(learnable_temperature=True),          # CLIP's, learnable
                 ContrastiveConfig(learnable_temperature=False,
                                   init_temperature=0.07)):              # fixed, wrong value
         with warnings.catch_warnings(record=True) as w:

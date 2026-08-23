@@ -1,53 +1,67 @@
-"""Render 11 views per Objaverse asset.
+"""Render 12 views per Objaverse asset, with Blender.
 
 # IMPLEMENTS-NODE: n04_render_views
 
-Paper 2.3 gives one number and nothing else: assets are "rendered from 11
-orthogonal viewpoints". Everything below that is a recorded choice.
+[RENDERER_VERSION 5, 2026-08-23] **This node no longer renders anything itself.**
+It orchestrates; `metafind.data.render_blender` invokes OpenShape's own
+`render_single_glb.py`, vendored byte-identical at
+`metafind/vendor/openshape/`. Read that module's docstring for why Blender, and
+what the two-line patch is.
 
-  U-03a  projection.   UNRESOLVED. Eleven mutually orthogonal directions do
-         not exist in R^3, so "orthogonal" cannot be literal -- but that does
-         NOT make it evidence for orthographic projection. "Viewpoint"
-         describes a camera pose; "orthographic" describes a projection model,
-         and an author meaning the latter would more naturally have written
-         "orthographic views". Orthographic is our CURRENT IMPLEMENTATION
-         CHOICE, recorded as such. It is not the most likely reading of
-         "orthogonal", because there is no evidence for one.
-  U-03   camera placement. UNRESOLVED. The primary is an equal-azimuth orbit
-         of 11 views, Δazimuth = 360/11, because MetaFind states it builds on
-         ULIP-2 and ULIP-2's Objaverse pipeline is "12 images per shape,
-         spaced equally by 30 degrees" -- a single-axis orbit. Swapping 12 for
-         the 11 MetaFind requires is the smallest step from a documented
-         upstream method. Labelled UPSTREAM-INFORMED CHOICE, not paper truth.
-         Fibonacci-11 was the previous primary and stays as a variant.
-         The orbit's ELEVATION is not derivable from anything and is a
-         versioned implementation choice; no top view is added, because
-         nothing supports one.
-  U-04   resolution. 224px, matching what the image tower consumes.
+What this file still owns: which assets are due, the per-asset sidecar, the
+derived index, quarantine, resume, and the checks that a produced asset is
+usable. What it no longer owns: cameras, lighting, projection, framing.
+
+Why the change
+--------------
+
+**No rendering code exists anywhere in the ULIP lineage.** ULIP's repository has
+none. ULIP-2's paper gives one sentence (`main.tex:677`). MetaFind's gives one
+clause (`2methdology.tex:28`, "rendered from 11 orthogonal viewpoints"). The
+only executable renderer in the chain is OpenShape's, which ULIP-2's appendix
+defers to for 3D input preprocessing and whose released `.npy` schema the ULIP-2
+Objaverse triplets reproduce key for key.
+
+Three consequences, all recorded rather than smoothed over:
+
+* **12 views, not 11.** MetaFind states eleven; OpenShape's layout is three
+  polar rings of four and eleven does not divide into three rings. USER decision
+  2026-08-23, a registered DEVIATION from a PAPER FACT.
+* **The rings see the underside.** phi = 120 deg looks UP at the asset. The
+  retired single 20 deg ring never did, and MetaFind's own Figure 2 shows views
+  from below.
+* **Transparent RGBA on disk.** `film_transparent = True` is upstream's. What
+  transparency BECOMES is a consumer's decision and lives in
+  `metafind.data.view_io`, once, so the annotator and the encoder cannot
+  disagree about what the model saw.
+
+Retired, but not deleted
+------------------------
+
+Everything from `N_VIEWS` down to `normalised_scene` describes the pyrender path
+and is dead as far as `process_one` is concerned. It stays because
+`tools/verify_renders_against_ulip.py` and the S-1/S-4 measurement scripts still
+import `azimuth_orbit_directions` and `normalised_scene`, and because deleting
+the fitted constants would delete the record of how they were arrived at. **No
+value below is read by a v5 render.** The sidecar records Blender's parameters,
+read back off the vendored script, not these.
 
 Scale is destroyed on purpose, and recorded on the way past
 --------------------------------------------------------
 
-Each asset is normalised to a unit sphere before rendering, which is what makes
-L1-RENDER-SCALE-INVARIANT hold: a millimetre-scaled and a metre-scaled copy of
-the same mesh must produce identical images, or the image tower would be
-learning the modelling units of whoever uploaded the asset. The cost is that
-absolute size is gone from the render, so the annotator's "size dimensions"
-(paper 2.3) can only ever be a category prior. ``raw_bbox_extents`` is written
-alongside so that estimate is auditable -- see F13, and note it is the
-axis-aligned bounding box in the file's own units, not a verified physical size.
+Blender normalises each asset (longest bbox side to 0.8, bbox centre to the
+origin), which is what makes L1-RENDER-SCALE-INVARIANT hold: a millimetre- and a
+metre-scaled copy of one mesh must render identically or the image tower learns
+the modelling units of whoever uploaded the asset. The cost is that absolute
+size is gone, so the annotator's "size dimensions" can only be a category prior.
+`raw_bbox_extents` is written alongside so that estimate stays auditable -- it
+is the axis-aligned bounding box in the file's own units, not a verified
+physical size.
 
-Two things inherited from n03 rather than rediscovered
-------------------------------------------------------
-
-*Scene-graph transforms are applied.* 65.8% of sampled Objaverse GLBs place
-geometry with a non-identity node transform. Ignoring them renders the object
-collapsed on itself, and the image still looks like a plausible render of
-something.
-
-*Completion means the sidecar, not the pixels.* Files are written first and the
-per-asset record last, so a crash costs one re-render rather than leaving an
-asset that is skipped forever with no metadata.
+*Completion means the sidecar, not the pixels.* Blender stages into a temp
+directory and its output is moved in only once all twelve views exist, then the
+record is written last. A crash costs one re-render rather than leaving an asset
+that is skipped forever with no metadata.
 """
 
 from __future__ import annotations
@@ -72,6 +86,11 @@ from metafind import paths, runlog
 os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
 
 NODE = "n04_render_views"
+# [RETIRED with the pyrender path] The live view count is
+# `render_blender.N_VIEWS` (12) and is imported as `LIVE_N_VIEWS` below. This 11
+# is MetaFind's stated number and stays as the reference the DEVIATION is
+# measured against; `azimuth_orbit_directions` and `fibonacci_directions` still
+# default to it because the verification tools reproduce the retired layout.
 N_VIEWS = 11
 RESOLUTION = 224  # U-04
 PROJECTION = "orthographic"  # U-03a -- implementation choice, not an inference
@@ -192,7 +211,14 @@ ORBIT_ELEVATION_DEG = 20.0
 # from what `normalised_scene` computed -- differently from what `n03` sampled,
 # and sometimes outside the frame. The version bump is what makes
 # `is_complete` reject a v3 sidecar; without it a re-run is a silent no-op.
-RENDERER_VERSION = 4
+# 5: [2026-08-23] pyrender -> Blender/BlenderProc CYCLES via OpenShape's own
+# renderer, 11 -> 12 views (three polar rings of four, USER decision), 224 ->
+# 512 px, orthographic -> perspective 35 mm, opaque white -> transparent RGBA.
+# The constants below from N_VIEWS down describe the RETIRED pyrender path and
+# are kept only because `azimuth_orbit_directions` and `normalised_scene` are
+# still imported by the verification tools; nothing in `process_one` reads them
+# any more.
+RENDERER_VERSION = 5
 
 def implementation_fingerprint() -> dict[str, str]:
     """This node's own source files. See `runlog.implementation_fingerprint`.
@@ -538,10 +564,10 @@ def is_complete(out_dir: Path, uid: str) -> bool:
     # artifacts it cannot reproduce.
     if rec.get("renderer_version") != RENDERER_VERSION:
         return False
-    if len(rec.get("view_paths", [])) != N_VIEWS:
+    if len(rec.get("view_paths", [])) != LIVE_N_VIEWS:
         return False
     sizes = rec.get("view_bytes")
-    if sizes is None or len(sizes) != N_VIEWS:
+    if sizes is None or len(sizes) != LIVE_N_VIEWS:
         # Sidecars written before view_bytes existed. Upgrade in place with a
         # stat per file rather than requiring a separate migration step: the
         # check that needs the field is the one that can cheapest supply it,
@@ -570,40 +596,55 @@ def is_complete(out_dir: Path, uid: str) -> bool:
     return True
 
 
+from metafind.data.render_blender import N_VIEWS as LIVE_N_VIEWS  # noqa: E402
+from metafind.data.view_io import load_view_rgb  # noqa: E402
+
+
 def process_one(uid: str, glb: Path, out_dir: Path,
                 fingerprint: dict[str, str] | None = None) -> dict:
     # Before any rendering: this worker may have re-imported a module that
     # changed since the run started. See `verify_fingerprint`.
     verify_fingerprint(fingerprint)
 
+    import numpy as np
     from PIL import Image
 
-    images, extents = render_views(glb)
-    if len(images) != N_VIEWS:
-        raise ValueError(f"rendered {len(images)} views, expected {N_VIEWS}")
+    from metafind.data import render_blender
 
+    # [RENDERER_VERSION 5, 2026-08-23] Blender writes the PNGs itself, so this
+    # no longer receives images and saves them -- it receives paths. The
+    # subprocess stages into a temp directory and moves the files in only once
+    # all twelve exist, so a killed Blender leaves `asset_dir` untouched and the
+    # sidecar-is-the-completion-marker rule still holds.
+    extents = render_blender.raw_extents(glb)
     asset_dir = out_dir / uid
-    asset_dir.mkdir(parents=True, exist_ok=True)
+    paths_out = render_blender.render_asset(glb, asset_dir)
+    if len(paths_out) != LIVE_N_VIEWS:
+        raise ValueError(f"rendered {len(paths_out)} views, expected {LIVE_N_VIEWS}")
+
     view_paths, view_sha, view_bytes, blank = [], [], [], 0
-    for i, img in enumerate(images):
+    for p in paths_out:
         # A camera pointed at nothing returns a uniform frame. It is a valid
         # PNG of the right shape, so only the content says anything is wrong.
-        if float(img.std()) < 1.0:
+        #
+        # The test is on the COMPOSITED image, not on the raw RGBA: an asset
+        # rendered on a transparent background has a near-constant RGB plane
+        # wherever alpha is 0, so `std()` over the raw array reports "blank" for
+        # perfectly good renders. `view_io` is what every consumer sees, so it
+        # is what this must judge.
+        arr = np.asarray(load_view_rgb(p), dtype=np.float32)
+        if float(arr.std()) < 1.0:
             blank += 1
-        p = asset_dir / f"view_{i:02d}.png"
-        tmp = p.with_suffix(".png.part")
-        Image.fromarray(img).save(tmp, format="PNG", optimize=False)
-        tmp.replace(p)
         view_paths.append(str(p))
         blob = p.read_bytes()
         view_sha.append(hashlib.sha256(blob).hexdigest())
         view_bytes.append(len(blob))
 
-    if blank == N_VIEWS:
+    if blank == LIVE_N_VIEWS:
         raise ValueError("every view is blank -- the asset never entered frame")
-    if len(set(view_sha)) != N_VIEWS:
+    if len(set(view_sha)) != LIVE_N_VIEWS:
         raise ValueError(
-            f"only {len(set(view_sha))} distinct views of {N_VIEWS}; the camera "
+            f"only {len(set(view_sha))} distinct views of {LIVE_N_VIEWS}; the camera "
             "is not moving between renders"
         )
 
@@ -613,16 +654,28 @@ def process_one(uid: str, glb: Path, out_dir: Path,
         "view_sha256": view_sha,
         "view_bytes": view_bytes,
         "raw_bbox_extents": [float(v) for v in extents],
-        "projection": PROJECTION,
-        "camera_layout": CAMERA_LAYOUT,
-        "orbit_elevation_deg": ORBIT_ELEVATION_DEG,
-        "resolution": RESOLUTION,
+        # [RENDERER_VERSION 5] These describe BLENDER now. The previous values
+        # (orthographic, ulip2_azimuth_orbit_11, 20 deg, 224 px) described
+        # pyrender and would be a lie in a v5 record.
+        "projection": "perspective",
+        "camera_layout": "openshape_three_rings_of_four",
+        "orbit_elevation_deg": None,          # three rings, not one elevation
+        "view_directions": [
+            {"ring": name, "polar_deg": polar, "azimuths_deg": list(az)}
+            for (name, az), polar in zip(render_blender.VIEW_DIRECTIONS, (60, 90, 120))],
+        "resolution": render_blender.RESOLUTION,
+        "background": "transparent_rgba",
         "renderer_version": RENDERER_VERSION,
+        # Read off the artifact, not restated from constants here: the vendored
+        # script's own hash and blenderproc's own version. A constant in this
+        # file cannot notice that the thing it describes changed.
+        "renderer": render_blender.renderer_versions(),
         # How each choice was arrived at, so a reader never has to guess which
-        # of these the paper actually specifies. Only n_views does.
-        "camera_layout_source": "upstream_informed_choice",
-        "projection_source": "implementation_choice",
-        "n_views_source": "paper",
+        # of these the paper actually specifies.
+        "camera_layout_source": "openshape_render_single_glb.py",
+        "projection_source": "openshape_render_single_glb.py",
+        "n_views_source": "USER decision 2026-08-23; DEVIATION from MetaFind's stated 11",
+        "background_source": "openshape film_transparent=True",
         "blank_views": blank,
     }
     sc_tmp = sidecar_path(out_dir, uid).with_suffix(".json.part")
@@ -655,11 +708,33 @@ def rebuild_index(index_path: Path, out_dir: Path) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--workers", type=int, default=4,
-                    help="Separate PROCESSES: EGL contexts are not shareable across "
-                         "threads, and 4 threads produced a 34% eglDestroyContext "
-                         "failure rate that looked like bad assets.")
-    ap.add_argument("--limit", type=int)
+    # [RENDERER_VERSION 5] Default 4 -> 8, measured on this card. 16 assets,
+    # 192 images per configuration, all 192 produced at P<=9:
+    #
+    #     P=1  8.12 s/asset      P=6  3.42 s/asset      P=9  3.28 s/asset
+    #     P=2  4.54 s/asset      P=8  3.36 s/asset      P=10 FAILS  48/192
+    #     P=4  3.56 s/asset                             P=12 FAILS  96/192
+    #
+    # The ceiling is GPU memory, not CPU: each Blender process holds its own
+    # CUDA context (~3 GB) and P=10 dies with "Failed to retain CUDA context
+    # (Out of memory)". The 2.4x plateau is one GPU serialising eight ray
+    # tracers; more processes only overlap the CPU-side load.
+    #
+    # NOTE the help text below carries no literal "%" -- argparse formats help
+    # strings with %-substitution, and the previous text ("34% eglDestroy...")
+    # made `--help` itself raise TypeError. A CLI whose help crashes is a CLI
+    # nobody reads.
+    ap.add_argument("--workers", type=int, default=8,
+                    help="Concurrent Blender processes. Above 9 the GPU runs out "
+                         "of CUDA contexts and assets fail silently-ish.")
+    ap.add_argument("--limit", type=int,
+                    help="process at most N assets, in manifest order (smoke runs)")
+    ap.add_argument("--uids-file",
+                    help="newline-separated uids; renders exactly these. Use this "
+                         "rather than --limit when a later node must run on the "
+                         "SAME assets -- --limit takes the first N in manifest "
+                         "order, which is not the same set another node's --limit "
+                         "or --uids-file selects.")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
 
@@ -668,6 +743,13 @@ def main() -> int:
     out_dir = paths.RENDERS
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    if args.uids_file:
+        want = [ln.strip() for ln in Path(args.uids_file).read_text().splitlines()
+                if ln.strip()]
+        missing = [u for u in want if u not in glb_by_uid]
+        if missing:
+            raise SystemExit(f"{len(missing)} uid(s) have no GLB, e.g. {missing[:3]}")
+        uids = want
     todo = [(u, glb_by_uid[u]) for u in uids
             if u in glb_by_uid and (args.force or not is_complete(out_dir, u))]
     if args.limit:
@@ -739,7 +821,7 @@ def main() -> int:
     runlog.cost_ledger(
         cpu_seconds=round(time.time() - started, 1),
         assets_rendered=done,
-        views_written=done * N_VIEWS,
+        views_written=done * LIVE_N_VIEWS,
     )
     print(f"\n{done:,} rendered this run, {n_indexed:,} complete on disk, "
           f"{len(quarantine):,} quarantined -> {out_dir}")

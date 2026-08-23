@@ -71,6 +71,7 @@ from metafind.data.annotate import (
     build_description_prompt,
     build_prompt,
     build_unanchored_prompt,
+    non_english_characters,
     parse_blind_guess,
     build_repair_prompt,
     parse_annotation,
@@ -488,18 +489,87 @@ class Annotator:
         self.model = AutoModelForImageTextToText.from_pretrained(model_id, **kwargs)
         self.model.eval()
 
-    def generate(self, image_paths: list[str], prompt: str, *,
-                 sample: bool = False, seed: int | None = None) -> str:
-        """One forward pass over all 11 views at once.
+        # [ULIP2 Reviewer, 2026-08-23] **"we did not set it" is not "there is no
+        # value".** `generation/utils.py:1780-1782` merges user kwargs OVER
+        # `model.generation_config` over library defaults, so every sampling
+        # parameter this code does not name is silently supplied by the
+        # checkpoint -- and the checkpoints DISAGREE:
+        #
+        #     gemma-4-12B-it             temperature 1.0  top_p 0.95  top_k 64
+        #     gemma-4-31B-it-qat-w4a16   temperature 1.0  top_p 0.95  top_k 64
+        #     Qwen3.8-27B                temperature 1.0  top_p 0.95  top_k 20
+        #
+        # `gen_kwargs` overrides temperature and top_p but never top_k, so the
+        # 2026-08-22 bake-off compared three models under two different sampling
+        # distributions while every record said the settings matched. That
+        # experiment cannot be attributed, and `experiments.md` §6 forbids
+        # treating a library default as a specified parameter.
+        #
+        # This captures the EFFECTIVE merged values, read back off the loaded
+        # model rather than restated from constants in this file -- restating
+        # them would reproduce exactly the blind spot that caused this, because
+        # the parameters at issue are the ones the code never mentions.
+        #
+        # [USER DECISION `U-TK`, 2026-08-23] **top_k keeps the checkpoint's own
+        # value and is not overridden.** Options put to the USER were (A) leave
+        # it, now that it is recorded, or (B) set it explicitly. A was chosen.
+        #
+        # This is a decision, not the absence of one, and the distinction is the
+        # whole point: the value is identical either way, but until today
+        # nothing in the record said which. Production runs ONE model, so the
+        # cross-arm disagreement (gemma 64 / Qwen 20) is a retrospective defect
+        # in the 2026-08-22 bake-off -- already void for an unrelated reason,
+        # the renderer changed -- and not a forward one. Overriding it now would
+        # make the new corpus incomparable with that bake-off a SECOND time and
+        # buy nothing.
+        #
+        # An `n05` run that compares models again MUST set top_k explicitly for
+        # every arm. That is the condition this decision is scoped to.
+        self.effective_generation_config = {
+            k: getattr(self.model.generation_config, k, None)
+            for k in ("do_sample", "temperature", "top_p", "top_k", "num_beams",
+                      "repetition_penalty", "max_new_tokens")
+        }
+        print(f"[annotator] effective generation_config: "
+              f"{self.effective_generation_config}", flush=True)
 
-        All views in a single conversation turn, not eleven separate calls: the
-        annotation is about ONE object, and asking eleven times would produce
-        eleven opinions to reconcile rather than one description informed by
-        every angle.
+    def generate(self, image_paths: list[str], prompt: str, *,
+                 sample: bool = False, seed: int | None = None,
+                 n: int = 1) -> str | list[str]:
+        """One forward pass over all views at once. ``str`` if ``n == 1``, else a list.
+
+        `n > 1` draws `n` sampled continuations from a SINGLE prefill instead of
+        re-encoding the views once per draw. The draws are still independent --
+        multinomial sampling per sequence at the same temperature and top_p --
+        so this is an implementation change, not a method change. `V3.1` is the
+        gate that has to demonstrate that on real assets before the full run.
+
+        Measured 2026-08-23, gemma-4-12B-it, 12 views, 3193 prompt tokens:
+
+            5 x generate(n=1)   10.94 s      <- five prefills of the same images
+            1 x generate(n=5)    5.50 s      5/5 distinct, peak 30.02 GB
+
+        The peak is why `describe_rank` parks its ranker on the CPU: with the
+        ranker resident, n=5 does not fit on a 32 GB card in either precision.
+
+        All views go in a single conversation turn, not one call per view: the
+        annotation is about ONE object, and asking per view produces per-view
+        opinions to reconcile rather than one description informed by every
+        angle. Measured on five assets, per-view captioning called one shovel a
+        shovel, a hand trowel, a chisel and an axe.
         """
         import torch
 
-        content = [{"type": "image", "url": str(p)} for p in image_paths]
+        # [2026-08-23] `{"url": p}` was here, which lets the processor open the
+        # file itself and call `.convert("RGB")` -- alpha DROPPED, not
+        # composited. n04 now writes transparent RGBA, so every anti-aliased
+        # silhouette edge would reach the model as its unblended foreground
+        # colour. `view_io` composites onto the recorded background and is the
+        # single place that decision lives, shared with the CLIP ranker and n06.
+        from metafind.data.view_io import load_views_rgb
+
+        content = [{"type": "image", "image": im}
+                   for im in load_views_rgb(image_paths)]
         content.append({"type": "text", "text": prompt})
         messages = [{"role": "user", "content": content}]
 
@@ -510,9 +580,31 @@ class Annotator:
         # for one arm and a different path for the others would have made the
         # arms differ in how they are FED as well as in which model they are --
         # a confound sitting underneath the measurement the bake-off exists for.
+        # `enable_thinking=False` on every arm that understands it.
+        #
+        # MEASURED 2026-08-23, Qwen3.8-27B, same 11 views and same prompt:
+        #
+        #     thinking on    11.8 s   264 tokens   22.4 tok/s
+        #     thinking off    2.9 s    62 tokens   21.8 tok/s
+        #
+        # The tokens-per-second are the same, so 4-bit decoding is NOT the cost
+        # -- an earlier note in this file blaming it was wrong. The whole
+        # difference is that a thinking model narrates the task before answering
+        # and then hits `max_new_tokens`. It also changes WHAT comes back: with
+        # thinking on the reply was the model reasoning about the instruction,
+        # not a description, so this is a correctness fix and not only a speed
+        # one.
+        #
+        # Passed through `**` because a processor whose template has no such
+        # variable raises on an unexpected keyword, and gemma and Qwen do not
+        # have to agree about it for the arms to stay comparable -- what has to
+        # match is that neither narrates.
+        template_kwargs: dict = {}
+        if "enable_thinking" in (getattr(self.processor, "chat_template", "") or ""):
+            template_kwargs["enable_thinking"] = False
         inputs = self.processor.apply_chat_template(
             messages, add_generation_prompt=True, tokenize=True,
-            return_dict=True, return_tensors="pt",
+            return_dict=True, return_tensors="pt", **template_kwargs,
         ).to(self.model.device)
 
         # Greedy by default. The repair loop feeds the specific error back, so
@@ -530,12 +622,43 @@ class Annotator:
             gen_kwargs |= {"temperature": SAMPLING_TEMPERATURE, "top_p": SAMPLING_TOP_P}
             if seed is not None:
                 torch.manual_seed(seed)
+        if n > 1:
+            # [ULIP2 Reviewer, 2026-08-23 -- read against transformers 5.15.0]
+            # The independence claim in this docstring holds ONLY for
+            # `do_sample=True, num_beams=1`. `_expand_inputs_for_generation`
+            # (generation/utils.py:929) repeat_interleaves the prompt into `n`
+            # rows and `_sample` (2921-2923) draws with `torch.multinomial` over
+            # `(n, vocab)`, which samples each ROW independently -- that is the
+            # mechanism, and it is why this is an implementation change.
+            #
+            # Beam search takes a different path where the rows are beam
+            # hypotheses and are NOT independent. Nothing here sets num_beams,
+            # so the premise holds today; the assert is so that adding it later
+            # fails loudly instead of silently turning five independent draws
+            # into five beams while every record still says "sampled".
+            # [CORRECTED by ULIP2 Reviewer, 2026-08-23] This checked
+            # `gen_kwargs`, which is built two lines above and into which
+            # nothing ever puts `num_beams` -- so the check was constant-true
+            # and could not fire. What actually decides beam search is the
+            # MERGED config, and a checkpoint whose `generation_config.json`
+            # carries `num_beams: 4` was precisely the scenario the guard's own
+            # comment claimed to cover. Reading the effective value is the
+            # difference between a guard and a comment.
+            effective_beams = gen_kwargs.get(
+                "num_beams",
+                getattr(self.model.generation_config, "num_beams", 1) or 1)
+            if effective_beams != 1 or not sample:
+                raise ValueError(
+                    "n > 1 draws independent samples and requires "
+                    "do_sample=True with num_beams=1; got "
+                    f"sample={sample} effective num_beams={effective_beams}")
+            gen_kwargs["num_return_sequences"] = n
         with torch.no_grad():
             out = self.model.generate(**inputs, **gen_kwargs)
         trimmed = out[:, inputs["input_ids"].shape[1]:]
-        return self.processor.batch_decode(
-            trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )[0]
+        replies = self.processor.batch_decode(
+            trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+        return replies if n > 1 else replies[0]
 
 
 def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
@@ -554,29 +677,69 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
     # --- description candidates, ULIP-2's method (main.tex:677) --------------
     candidates: list[str] = []
     ranked: list[dict] = []
-    winner: str | None = None
-    if not anchored:
-        # Seeded from the uid, so the same asset draws the same five candidates
-        # on a re-run while different assets do not share a draw. `uid_seed`
-        # is n03's, reused rather than reinvented so the two nodes cannot
-        # disagree about what "this asset's seed" means.
-        base = uid_seed(uid)
+    # [PROMPT_VERSION 8] Both modes now go through the ranking. Seeded from the
+    # uid, so the same asset draws the same five candidates on a re-run while
+    # different assets do not share a draw. `uid_seed` is n03's, reused rather
+    # than reinvented so the two nodes cannot disagree about what "this asset's
+    # seed" means.
+    rejected_non_english: list[str] = []
+    base = uid_seed(uid)
+    # [2026-08-23] All N candidates come from ONE prefill of the views instead
+    # of N. Sampling is unchanged -- N independent multinomial draws at the same
+    # temperature and top_p -- so the candidate set has the same distribution;
+    # what changes is that the vision tower runs once instead of N times.
+    # Measured 10.94 s -> 5.50 s at N=5 on 12 views. `V3.1` verifies the
+    # equivalence on real assets before the full run.
+    #
+    # ONE seed for the batch, not one per candidate: `torch.manual_seed` is set
+    # once and the N sequences then diverge from the shared generator, so a
+    # per-candidate seed no longer describes anything. `description_sampling`
+    # records the batch seed, which is what actually reproduces the draw.
+    draw_mode = "batched"
+    try:
+        drawn = ann.generate(
+            views, build_description_prompt(len(views), lvis_category),
+            sample=True, seed=base, n=N_CANDIDATES)
+    except Exception:  # noqa: BLE001 -- see below; a failed batch is not the asset
+        draw_mode = "sequential_fallback"
+        # Falling back to one-at-a-time rather than quarantining: the batch can
+        # fail for a reason that is about THIS asset's memory footprint (a very
+        # detailed mesh, an unusually long prompt) while the same asset renders
+        # fine drawn singly, and losing it would be a data loss caused by an
+        # optimisation.
+        drawn = []
         for k in range(N_CANDIDATES):
             try:
-                text = ann.generate(views, build_description_prompt(len(views)),
-                                    sample=True, seed=base + k).strip()
-            except Exception as exc:  # noqa: BLE001 -- one bad draw is not the asset
-                text = ""
-            if text:
-                candidates.append(text)
-        if not candidates:
-            return None, {
-                "uid": uid, "failure_class": "DETERMINISTIC_INPUT",
-                "exception_type": "NoDescriptionCandidates",
-                "exception_msg": f"all {N_CANDIDATES} description draws came back empty",
-                "traceback": "",
-            }
-        winner, ranked = rank_descriptions(views, candidates)
+                drawn.append(ann.generate(
+                    views, build_description_prompt(len(views), lvis_category),
+                    sample=True, seed=base + k))
+            except Exception:  # noqa: BLE001 -- one bad draw is not the asset
+                drawn.append("")
+    if isinstance(drawn, str):
+        drawn = [drawn]
+    for text in drawn:
+        text = (text or "").strip()
+        # [PROMPT_VERSION 8] The language rule has to be applied HERE, not in
+        # the validator. The description no longer comes back in the structured
+        # response, so a non-English one cannot be repaired by re-prompting the
+        # structured call -- the repair loop would spend both attempts on a
+        # field it cannot reach and quarantine a perfectly good asset. Dropping
+        # the candidate costs one of five draws instead.
+        if text and not non_english_characters(text):
+            candidates.append(text)
+        elif text:
+            rejected_non_english.append(text)
+    if not candidates:
+        return None, {
+            "uid": uid, "failure_class": "DETERMINISTIC_INPUT",
+            "exception_type": "NoDescriptionCandidates",
+            "exception_msg": (
+                f"no usable description from {N_CANDIDATES} draws"
+                + (f"; {len(rejected_non_english)} were rejected as non-English, "
+                   f"e.g. {rejected_non_english[0][:80]!r}" if rejected_non_english else "")),
+            "traceback": "",
+        }
+    winner, ranked = rank_descriptions(views, candidates)
 
     prompt = (build_prompt(len(views), lvis_category, proportions) if anchored
               else build_unanchored_prompt(len(views), proportions))
@@ -614,10 +777,43 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
             # re-running the model.
             "description_candidates": ranked,
             "description_ranker": DESCRIPTION_RANKER,
+            # Recorded, not silently dropped: a model that keeps producing
+            # Chinese is telling the USER something about itself, and a run
+            # where this is nonzero everywhere means the language instruction
+            # is not landing.
+            "description_candidates_rejected_non_english": len(rejected_non_english),
+            # `seed_base` is now the seed for the WHOLE batch, not the first of
+            # N per-candidate seeds: one `manual_seed(base)` precedes a single
+            # generate that returns N sequences. `draw` records which of the two
+            # paths ran, because the fallback still seeds per candidate and a
+            # record that did not say so would not reproduce.
+            #
+            # [ULIP2 Reviewer, 2026-08-23] `batch_shape` is the real cost of the
+            # batched draw and it needs its own field. Reproducing candidate 3
+            # now requires re-running the WHOLE batch at the SAME shape: a batch
+            # of 5 and a batch of 3 do not share a candidate 3, because the
+            # sampler consumes the generator differently and bf16 matmul
+            # reduction order changes with the batch (measured: 1.25e-1 max
+            # logit difference between batch=1 and batch=5, large enough to flip
+            # a token). Without this field, "same base seed" means different
+            # things in two records that look identical.
+            #
+            # `effective` is the MERGED config read back off the loaded model,
+            # not this file's constants. It is what catches the parameters the
+            # code never names -- `top_k` is supplied by the checkpoint (64 for
+            # gemma, 20 for Qwen) and went unrecorded through an entire
+            # model comparison. A record listing only what the code set cannot
+            # detect that class of confound, which is why the two fields are
+            # kept side by side rather than merged.
             "description_sampling": {"temperature": SAMPLING_TEMPERATURE,
                                      "top_p": SAMPLING_TOP_P,
                                      "seed_base": uid_seed(uid),
-                                     "n": N_CANDIDATES},
+                                     "n": N_CANDIDATES,
+                                     "draw": draw_mode,
+                                     "batch_shape": (N_CANDIDATES
+                                                     if draw_mode == "batched" else 1),
+                                     "effective": getattr(
+                                         ann, "effective_generation_config", None)},
             # F13: the annotator saw scale-normalised renders, so its size
             # estimate is a category prior. The mesh's own bounding box travels
             # with it so the estimate can be audited -- and it is a WEAK ground
@@ -753,10 +949,18 @@ def main() -> int:
             try:
                 rec, bad = annotate_one(
                     ann, uid, renders[uid],
-                    # None = the unanchored path. USER decision 2026-08-23:
-                    # neither ULIP-2 nor MetaFind supplies the label, and the
-                    # faithful version is measured first.
-                    lvis_category=None,
+                    # [PROMPT_VERSION 8] The LVIS label IS supplied, and
+                    # `annotate.anchored` is therefore True for every asset --
+                    # 46,207 entries in this table, 0 of them empty. The
+                    # `resolve_synset` ladder is the only path a synset takes.
+                    #
+                    # This comment previously read "None = the unanchored
+                    # path", left over from v7, while the line below it passed
+                    # the real category. A reader who trusted it would conclude
+                    # the ladder was dead code -- one did (ULIP2 Reviewer,
+                    # 2026-08-23). `code-changes.md` §14: a comment that
+                    # contradicts the line under it is worse than no comment.
+                    lvis_category=lvis_categories[uid],
                     proportions=proportions[uid],
                 )
             except Exception as exc:  # noqa: BLE001 -- one asset must not stop the run

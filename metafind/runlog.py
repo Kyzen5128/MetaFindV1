@@ -32,15 +32,37 @@ from metafind import paths
 __all__ = ["code_revision", "cost_ledger", "quarantine", "run_progress"]
 
 
+_REVISION: str | None = None
+
+
 def code_revision() -> str:
-    """The commit the artifact was produced by. Required in quarantine records."""
-    try:
-        return subprocess.run(
-            ["git", "-C", str(paths.REPO), "rev-parse", "HEAD"],
-            capture_output=True, text=True, timeout=5,
-        ).stdout.strip() or "unknown"
-    except Exception:  # noqa: BLE001 -- provenance is best-effort, never fatal
-        return "unknown"
+    """The commit this RUN was produced by. Required in quarantine records.
+
+    [R-19, corrected 2026-08-23 -- ULIP2 Reviewer] This shelled out on every
+    call. Six roles and Codex commit into this repository while a node is
+    running, so a single n04 pass recorded **13 different revisions**, none of
+    which was "the commit that produced these artifacts" -- they were whatever
+    HEAD happened to be at each write, mostly other people's documentation.
+
+    The field claims to describe THE RUN, so it is resolved once, at first use,
+    and reused. That is the same rule `renders.implementation_fingerprint`
+    already follows: capture in the parent, hand the value down, never re-derive
+    it per record.
+
+    A cached wrong-looking value is still better than the alternative here: if
+    HEAD moves mid-run, one revision that was true at the start beats thirteen
+    that were each true for a few seconds and jointly describe nothing.
+    """
+    global _REVISION
+    if _REVISION is None:
+        try:
+            _REVISION = subprocess.run(
+                ["git", "-C", str(paths.REPO), "rev-parse", "HEAD"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout.strip() or "unknown"
+        except Exception:  # noqa: BLE001 -- provenance is best-effort, never fatal
+            _REVISION = "unknown"
+    return _REVISION
 
 
 def _append(path: Path, record: dict[str, Any]) -> None:

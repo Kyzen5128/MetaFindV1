@@ -261,14 +261,42 @@ def test_pre_normalisation_extents_are_recorded(tmp_path):
 def test_record_carries_the_channel_contract(tmp_path):
     """The renders channel type names these; producing images without them
     defers G2/G3's checks to something that cannot perform them."""
+    from metafind.data import render_blender
+    from metafind.data.renders import LIVE_N_VIEWS
+
     rec = process_one("u", _asset(tmp_path), tmp_path / "out")
     for field in ("view_paths", "view_sha256", "raw_bbox_extents", "projection",
-                  "camera_layout", "resolution", "renderer_version", "blank_views"):
+                  "camera_layout", "resolution", "renderer_version", "blank_views",
+                  # [RENDERER_VERSION 5] Added with Blender. `renderer` is read
+                  # off the vendored script and blenderproc rather than restated
+                  # from constants here, so a record cannot claim provenance a
+                  # constant in this repo would happily supply while the actual
+                  # renderer had changed underneath it.
+                  "renderer", "view_directions", "background"):
         assert field in rec, field
-    assert len(rec["view_paths"]) == N_VIEWS
-    assert len(set(rec["view_sha256"])) == N_VIEWS
-    assert rec["projection"] == PROJECTION and rec["camera_layout"] == CAMERA_LAYOUT
-    assert rec["resolution"] == RESOLUTION
+
+    # [UPDATED 2026-08-23] Was 11 / orthographic / ulip2_azimuth_orbit_11 / 224.
+    # Those described pyrender. This test correctly failed on the swap rather
+    # than passing quietly, which is the whole reason it names the values.
+    assert len(rec["view_paths"]) == LIVE_N_VIEWS == 12
+    assert len(set(rec["view_sha256"])) == LIVE_N_VIEWS
+    assert rec["projection"] == "perspective"
+    assert rec["camera_layout"] == "openshape_three_rings_of_four"
+    assert rec["resolution"] == render_blender.RESOLUTION == 512
+    assert rec["background"] == "transparent_rgba"
+    assert rec["renderer_version"] == 5
+
+    # Three rings of four, and the below-ring really is below the equator --
+    # a layout that silently collapsed to one elevation would still produce 12
+    # files and pass every count above.
+    polars = [r["polar_deg"] for r in rec["view_directions"]]
+    assert polars == [60, 90, 120], polars
+    assert sum(len(r["azimuths_deg"]) for r in rec["view_directions"]) == 12
+
+    # Provenance must identify the thing that drew the pixels, not this repo.
+    assert rec["renderer"]["engine"] == "CYCLES"
+    assert len(rec["renderer"]["vendor_script_sha256"]) == 16
+    assert rec["renderer"]["aux_passes"] == "disabled"
 
 
 # ------------------------------------------------------------- robustness

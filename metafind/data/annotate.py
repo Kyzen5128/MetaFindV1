@@ -56,6 +56,7 @@ that way.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import re
@@ -81,6 +82,7 @@ __all__ = [
     "category_relation",
     "derive_dimensions",
     "lvis_synset",
+    "resolve_synset",
     "build_repair_prompt",
     "non_english_characters",
     "parse_annotation",
@@ -104,7 +106,12 @@ __all__ = [
 # and `annotation_contract_id()` binds all three to the actual text of the
 # prompt and the actual admission bounds, so an edit that someone forgets to
 # version still moves the identity.
-PROMPT_VERSION = 7  # v7 supplies NO identity at all -- neither ULIP-2 nor
+PROMPT_VERSION = 8  # v8 supplies the Objaverse-LVIS identity, lets the model
+                    # REFINE it but never replace it, and conditions the five
+                    # description candidates on it. v7 measured the blind
+                    # baseline that decided this: ~28% of 97 assets outright
+                    # misidentified, and 11% correct on untextured white ones.
+                    # v7 supplies NO identity at all -- neither ULIP-2 nor
                     # MetaFind does, and the anchor was this project's own
                     # deviation D-9. synset is asked of the model, and the
                     # description comes from 5 independently sampled
@@ -126,7 +133,10 @@ VALIDATOR_VERSION = 4  # v4 admits an UNANCHORED response: `synset` comes from
                        # from the mesh instead of accepting them, and looks
                        # `synset` up rather than reading it from the model.
                        # v2 refused non-Latin script; v1 had no language rule
-SCHEMA_VERSION = 4  # v4 stores the turn-1 blind guess, its raw text and
+SCHEMA_VERSION = 5  # v5 stores `synset_source`: the synset now follows the
+                    # MODEL's category (`U-SY`) rather than the LVIS anchor, so
+                    # the record has to say which rung of that lookup answered.
+                    # v4 stores the turn-1 blind guess, its raw text and
                     # whether it agrees with the anchor -- the only
                     # automatic accuracy signal in the bake-off, and the
                     # answer to W-7's "is identity_confirmed a rubber
@@ -221,8 +231,11 @@ UPSTREAM_FIELD_NOT_IMPLEMENTED = "front view"
 # up (Design Decision 4). `width` and `length` are no longer asked either: the
 # mesh already carries the exact proportions, so the model supplies absolute
 # scale for `height` alone and names which horizontal axis reads as width.
+# [PROMPT_VERSION 8] `description` left the response: it is generated five
+# times separately and chosen by CLIP, so requiring it here would demand a
+# sixth one that nothing ranks.
 REQUIRED_FIELDS = ("category", "identity_confirmed", "height", "width_axis",
-                   "mass", "description", "materials", *PLACEMENT_FLAGS)
+                   "mass", "materials", *PLACEMENT_FLAGS)
 
 # [PROMPT_VERSION 7] Without an anchor there is nothing to confirm, and the
 # description arrives from `describe_rank` rather than from this response --
@@ -266,6 +279,91 @@ def lvis_synset(lvis_category: str) -> str:
             f"{lvis_category!r} is not one of the {len(LVIS_SYNSETS)} "
             "Objaverse-LVIS categories, so no authoritative synset exists for it"
         ) from None
+
+
+# [USER DECISION `U-SY`, 2026-08-23] **The synset follows the model's category,
+# not the LVIS anchor** -- the opposite of the note above, which is superseded.
+#
+# What forced it: on a centipede whose LVIS label reads `snake`, the record came
+# out `category: "centipede"` beside `synset: "snake.n.01"`. Two fields of one
+# schema contradicting each other. The USER confirmed by eye that the model was
+# right and the dataset label was wrong, so anchoring the synset to the label
+# anchors it to the error.
+#
+# Scale, from the 100-asset bake-off: exact 64%, refined 16%, divergent 20%.
+# **36% of the corpus -- about 16,500 assets -- has a category the LVIS table
+# cannot resolve.** Not an edge case.
+#
+# The old note's objection was right and is answered rather than ignored:
+# "minting a synset re-introduces the invented-synset error class". So nothing
+# is minted. WordNet is queried, and WordNet is the authority the whole field
+# refers to -- `lvis_synsets.json` is itself WordNet ids, and MetaFind's own
+# Figure 2 prints `robot.n.01`. A term WordNet does not know produces a
+# recorded fallback, never a guess.
+_WORDNET_UNAVAILABLE = "wordnet-unavailable"
+
+
+@functools.lru_cache(maxsize=1)
+def _wordnet():
+    """WordNet, or None. Never fatal: an environment without it must degrade to
+    the LVIS anchor with `synset_source` saying so, not lose the asset."""
+    try:
+        from nltk.corpus import wordnet as wn
+
+        wn.synsets("dog")  # force the corpus to load here, not mid-run
+        return wn
+    except Exception:  # noqa: BLE001 -- absence is a recorded condition
+        return None
+
+
+def resolve_synset(category: str, lvis_category: str | None) -> tuple[str, str]:
+    """``(synset, source)`` for the model's category. `U-SY`.
+
+    Ladder, most authoritative first. Every rung is recorded in `synset_source`
+    so a reader can tell a looked-up id from a fallen-back one without
+    re-deriving anything:
+
+    ``lvis_table``     the category IS an LVIS term. Highest authority: that
+                       table was built from LVIS's own release and
+                       cross-checked against detectron2 with 0 disagreements.
+    ``wordnet_phrase`` WordNet knows the whole phrase (`centipede`).
+    ``wordnet_head``   WordNet knows the HEAD noun. English compounds are
+                       head-final, so "cobra snake" resolves through "snake" --
+                       deliberately the conservative reading, which for a
+                       refinement lands back on the anchor's own sense rather
+                       than promoting the modifier.
+    ``lvis_anchor``    WordNet knows none of it. Keep the anchor's synset and
+                       say so.
+    ``wordnet-unavailable`` nltk/WordNet is not installed in this environment.
+
+    **Sense selection is a RULE, not a fact.** `synsets(...)[0]` is WordNet's
+    most-frequent sense; "elk" has 3 noun senses and this takes one of them
+    without evidence. It is recorded as a rule so that a later reader can
+    disagree with it, which they cannot do with a bare id.
+    """
+    cat = (category or "").strip().lower()
+    if cat in LVIS_SYNSETS:
+        return LVIS_SYNSETS[cat], "lvis_table"
+
+    wn = _wordnet()
+    if wn is None:
+        if lvis_category:
+            return lvis_synset(lvis_category), _WORDNET_UNAVAILABLE
+        raise AnnotationError("no synset: WordNet unavailable and no LVIS anchor")
+
+    for probe, source in ((cat.replace(" ", "_"), "wordnet_phrase"),
+                          (cat.split()[-1] if cat.split() else "", "wordnet_head")):
+        if not probe:
+            continue
+        senses = wn.synsets(probe, pos=wn.NOUN)
+        if senses:
+            return senses[0].name(), source
+
+    if lvis_category:
+        return lvis_synset(lvis_category), "lvis_anchor"
+    raise AnnotationError(
+        f"no synset for {category!r}: not an LVIS term, unknown to WordNet, "
+        "and no anchor to fall back to")
 
 
 _PAREN = re.compile(r"\s*\([^)]*\)")
@@ -435,6 +533,11 @@ class Annotation:
 
     category: str
     synset: str
+    # [SCHEMA_VERSION 5, `U-SY`] Which rung of `resolve_synset`'s ladder
+    # answered. A synset id alone cannot say whether it came from LVIS's own
+    # table, from WordNet, or from a fallback -- and those are not the same
+    # claim.
+    synset_source: str
     width: float
     length: float
     height: float
@@ -469,6 +572,7 @@ class Annotation:
         return {
             "category": self.category,
             "synset": self.synset,
+            "synset_source": self.synset_source,
             # [SCHEMA_VERSION 3] The LVIS anchor and what the model did with it.
             # `identity_confirmed` is RECORDED ONLY on this run -- nothing is
             # quarantined, dropped or repaired on it. See TASK.md R-B: LVIS's
@@ -671,15 +775,16 @@ def build_prompt(n_views: int, lvis_category: str,
         "\n"
         "Before you answer, LOOK at the views once more and note to yourself: "
         "what parts does it have, what colours, what does the surface look like, "
-        "is there any text or marking. The description below should come from "
-        "that, not from what the category name suggests.\n"
+        "is there any text or marking. Every answer below should come from that, "
+        "not from what the category name suggests.\n"
         "\n"
         "This is the exact format, shown with a worked example:\n"
         f"{FIGURE_2_EXAMPLE}\n"
         "\n"
         "Return one JSON object and nothing else, with exactly these fields "
-        "(do not include `width`, `length` or `volume` -- they are computed "
-        "from the proportions above):\n"
+        "(do not include `description`, `width`, `length` or `volume` -- "
+        "the description is asked for separately, five times, and chosen "
+        "by an independent model; XXX):\n"
         f'  "category": the catalogued identity "{lvis_category}", OR a STRICTLY '
         "MORE SPECIFIC term for the same object. Refine it when the images "
         'support that: "toy" -> "toy dinosaur", "motor vehicle" -> "pickup '
@@ -694,10 +799,6 @@ def build_prompt(n_views: int, lvis_category: str,
         "left-to-right WIDTH in these views. The other becomes front-to-back "
         "length.\n"
         '  "mass": number, KILOGRAMS\n'
-        '  "description": the identity is already given, so do not spend the '
-        "sentence restating it. Describe what makes THIS instance distinctive: "
-        "colour, style, finish, condition, ornament, distinguishing detail. One "
-        "or two sentences.\n"
         '  "materials": a list of material names, most prominent first\n'
         '  "onCeiling": true if this object is typically mounted on a ceiling\n'
         '  "onWall": true if it is typically mounted on a wall\n'
@@ -833,18 +934,45 @@ def build_unanchored_prompt(n_views: int,
 DESCRIPTION_PROMPT = (
     "You are looking at {n_views} rendered views of a single 3D asset.\n"
     "\n"
-    "Describe it in one or two sentences: what it is, and what makes THIS "
-    "instance distinctive -- colour, style, finish, condition, ornament, "
-    "distinguishing detail. Describe what you can see from these views, not "
-    "what the category name suggests.\n"
+    "{identity}"
+    "Describe it in one or two sentences: what makes THIS instance distinctive "
+    "-- colour, style, finish, condition, ornament, distinguishing detail. "
+    "Describe what you can actually see in these views.\n"
     "\n"
     "English only. Reply with the description alone, no preamble, no JSON."
 )
 
 
-def build_description_prompt(n_views: int) -> str:
-    """[PROMPT_VERSION 7] One description candidate. Issued N times, sampled."""
-    return DESCRIPTION_PROMPT.format(n_views=n_views)
+def build_description_prompt(n_views: int, category: str | None = None) -> str:
+    """[PROMPT_VERSION 8] One description candidate. Issued N times, sampled.
+
+    `category` is supplied as a FACT, not as a hypothesis to check. Both
+    precedents that can actually be READ do exactly that:
+
+    * **ULIP's released code** builds its text from the catalogue name and not
+      from a generated caption. `Objaverse_Lvis_Colored.__getitem__` returns
+      `lvis_metadata["value_to_key_mapping"][sample]`; `ShapeNet` uses
+      `synset_id_map[taxonomy_id]["name"]`; both are wrapped in
+      `templates.json` ("a point cloud model of {}."). **The BLIP-2 captioning
+      code was never released** -- the repo has no caption-loading dataset
+      class at all, so the only ULIP text pipeline anyone can inspect uses the
+      label.
+    * **`跨模態增強模型嵌入與檢索架構` 3.1.3** conditions LLaMA-3.2-3B on
+      `category + attributes`, with a must-include set, a banned set, and a
+      category-part consistency check before a sentence is kept.
+
+    Measured on 97 assets with nothing supplied (`PROMPT_VERSION 7`): the model
+    was outright wrong about the identity on ~28% -- `camera` -> `robot`,
+    `waffle` -> `rock`, `vest` -> `man` -- and untextured white assets were
+    worst, 11% correct against 29-30% for textured ones. **A description built
+    on `rock` describes a rock**, and the retrieval text is the one thing in
+    this record that training actually consumes.
+
+    `None` reproduces that blind baseline, which is why it stays reachable.
+    """
+    identity = (f'This asset is a "{category}". Take that as given.\n\n'
+                if category else "")
+    return DESCRIPTION_PROMPT.format(n_views=n_views, identity=identity)
 
 
 def build_repair_prompt(original: str, error: str, raw_response: str) -> str:
@@ -968,13 +1096,14 @@ def validate_annotation(obj: dict[str, Any], *, lvis_category: str | None,
     if missing:
         raise AnnotationError(f"required field(s) missing: {', '.join(missing)}")
 
+    # The winner from `describe_rank` in BOTH modes -- injected before the shared
+    # checks below, so the language rule applies to it exactly as it would to a
+    # response field. It is never something the model returned in this call.
+    if not isinstance(description, str) or not description.strip():
+        raise AnnotationError("no ranked description was supplied")
+    obj = {**obj, "description": description}
     if not anchored:
-        # The winner from `describe_rank`, not something the model returned
-        # here -- so it is injected before the shared checks below, and the
-        # language rule applies to it exactly as it would to a response field.
-        if not isinstance(description, str) or not description.strip():
-            raise AnnotationError("no ranked description was supplied")
-        obj = {**obj, "description": description, "identity_confirmed": True}
+        obj = {**obj, "identity_confirmed": True}
         if not SYNSET_PATTERN.match(str(obj["synset"]).strip()):
             raise AnnotationError(
                 f"`synset` must look like \"word.n.01\", got {obj['synset']!r}"
@@ -1090,11 +1219,19 @@ def validate_annotation(obj: dict[str, Any], *, lvis_category: str | None,
     # Recording the rate is what makes the enforcement question answerable.
     return Annotation(
         category=category,
-        # Looked up from the anchor when there is one -- LVIS's table is
-        # authoritative and an invented id cannot survive it. Without an
-        # anchor the model's own answer stands, checked for shape only.
-        synset=lvis_synset(lvis_category) if anchored
-               else str(obj["synset"]).strip(),
+        # [USER DECISION `U-SY`, 2026-08-23] Resolved from the MODEL's category,
+        # not the anchor's. Anchoring it produced `category: "centipede"` beside
+        # `synset: "snake.n.01"` -- one schema, two fields, contradicting each
+        # other, because the LVIS label was simply wrong. `resolve_synset`
+        # records which rung of the ladder answered, so a looked-up id and a
+        # fallen-back one are distinguishable on disk.
+        #
+        # Unanchored keeps the model's own answer: there is no anchor to fall
+        # back to and the shape check below is the only guard available.
+        synset=(resolve_synset(category, lvis_category)[0] if anchored
+                else str(obj["synset"]).strip()),
+        synset_source=(resolve_synset(category, lvis_category)[1] if anchored
+                       else "model_unanchored"),
         width=width,
         length=length,
         height=height,

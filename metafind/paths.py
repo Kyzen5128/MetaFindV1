@@ -80,6 +80,14 @@ def setup_env() -> None:
     os.environ.setdefault("HF_HOME", str(HF_CACHE))
     os.environ.setdefault("TORCH_HOME", str(HF_CACHE / "torch"))
     os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+    # [MEASURED 2026-08-23] Not a tuning knob -- without it n05 fails outright.
+    # Drawing five description candidates from one prefill of 12 views peaks at
+    # 30.0 GB on a 31.36 GB card, and the default caching allocator strands
+    # ~2 GB in reserved-but-unallocated blocks: the run OOM'd 468 MiB short with
+    # 2.08 GiB sitting idle. `expandable_segments` reclaims it and the same call
+    # completes. Set here, before torch is imported, because torch reads this
+    # once at import and a shell export is not reliably present.
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 
 def ensure_dirs() -> None:
