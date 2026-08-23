@@ -464,6 +464,44 @@ whose only review is one pre-execution pass by its own Reviewer has had **one** 
 reviews it (§14); where Master is the one about to run and Codex is unavailable, the substitute is
 a Block Reviewer other than the code's author.
 
+### 12.0b The USER's gate — `DL-030`, same day
+
+> **A review PASS clears the code. Only the USER clears the RUN.**
+
+> 「補充 若階段性程式碼寫完要準備跑了先跟我確認 我要知道你們到底做了什麼」
+> 「必須詳細報告」
+
+Three things, in order, before anything runs:
+
+```
+   1  code written for the stage
+   2  Codex review  (or the Block Reviewer, DL-029)
+   3  DETAILED REPORT TO THE USER  ->  his explicit go
+```
+
+**No role starts a run on a review PASS alone.** A one-line "ready to run" does not satisfy this,
+and neither does a verdict summary — he asked what was actually DONE.
+
+**The eight required contents. All of them, every time:**
+
+1. which stage, and the exact command
+2. every file changed, and what changed in each, **in plain words**
+3. why each change — bug fix / paper requirement / USER order / implementation choice, named
+4. the review verdict, WHO reviewed, and what it found — **including what it found and was not fixed**
+5. what the run writes, where, how much, how long
+6. what it overwrites or deletes, if anything
+7. what is still unverified
+8. what happens if it is wrong — re-runnable, or does it cost the corpus
+
+**Format: `✋ 報告 Kyzen` — Chinese, ELI5, short lines, no tables, no nested headings.** Detailed
+does not mean long or technical. Cover everything; say it plainly. **A report he cannot read has
+not reported.**
+
+Read-only inspection stays ungated, unchanged from §12.0. The gate is on RUNS, not on looking.
+
+**Master reports and asks like every other role.** Master does not approve a run — not his own,
+and not anyone else's.
+
 ### 12.1 Codex is still not authority
 
 Codex stays the **third** layer. It does not replace the Block Reviewer.

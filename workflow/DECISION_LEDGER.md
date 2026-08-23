@@ -111,6 +111,32 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-030` — **THE USER APPROVES EVERY RUN, AFTER A DETAILED REPORT.** Third gate. **Extends `DL-028`/`DL-029`.**
+
+| | |
+|---|---|
+| **Source** | USER, 2026-08-24, direct to Master, two consecutive messages |
+| **Verbatim** | 「補充 若階段性程式碼寫完要準備跑了先跟我確認 我要知道你們到底做了什麼」 · 「必須詳細報告」 |
+| **Issue / Finding** | `DL-028` + `DL-029` gate the code on a REVIEWER. Neither gates it on the USER. Today a stage was rebuilt, restarted, and stopped by the USER twice — 「耖你媽停掉 我沒有說你可以跑了」 — because a review passing is not the same as the USER knowing what is about to run. His stated reason is not process: 「我要知道你們到底做了什麼」 |
+| **Decision / Resolution** | A run now needs **three** things, in order: **(1)** code written for the stage · **(2)** Codex review, or the Block Reviewer under `DL-029` · **(3)** **a detailed report to the USER, and his explicit go.** No role starts a run on a review PASS alone. A PASS clears the code; **only the USER clears the run** |
+| **The report is MANDATORY and it is DETAILED** | 「必須詳細報告」. A one-line "ready to run" does not satisfy this and neither does a verdict summary. The USER asked what was actually DONE, so the report says what was actually done — every changed file and what changed in it, in plain words |
+| **Required contents — all eight** | **1.** which stage, and the exact command · **2.** every file changed, and what changed in each, in plain words · **3.** why each change — bug fix / paper requirement / USER order / implementation choice, named as such · **4.** the review verdict, WHO reviewed (Codex or the Reviewer), and what it found — **including what it found and was not fixed** · **5.** what the run writes, where, how much, how long · **6.** what it overwrites or deletes, if anything · **7.** what is still unverified · **8.** what happens if it is wrong — is it re-runnable, or does it cost the corpus |
+| **Format** | `✋ 報告 Kyzen` — Chinese, ELI5, short lines, no tables, no nested headings. **Detailed does not mean long or technical.** Cover everything; say it plainly. A report he cannot read has not reported |
+| **What this does NOT change** | `DL-028`'s review requirement, `DL-029`'s Codex→Reviewer fallback, and 「不准略過這條步驟」 all stand. This adds a gate; it removes none. The Block Reviewer's four-axis completion review is still separate and still owed |
+| **What is NOT gated** | Read-only inspection — unchanged from `DL-028`. Reading, measuring, `ps`, `git status`, opening a file. The USER's gate is on RUNS, not on looking |
+| **Master's own obligation** | Master reports and asks like every other role. Master does not approve a run — **not his own, and not anyone else's.** Only the USER does |
+| **Authority classification** | **USER DECISION** — process authority |
+| **Status** | **`USER_APPROVED`** — IN FORCE |
+| **Date** | ordered and in force 2026-08-24 |
+
+**Why this exists, in the USER's own history.** `DL-028` was issued after a 29-file, +3,843-line
+change reached the corpus ungated. This entry is issued after the reason that change reached the
+corpus at all: a role fixed things and restarted without asking. The role has already named it as
+his own error — 「that was my error, not a crash」. **The gate is not distrust; it is the absence
+of a step that was never written down.**
+
+---
+
 ### `DL-029` — `CODEX REVIEW UNAVAILABLE` is **not** a stop. The Block Reviewer covers. **Amends `DL-028`.**
 
 | | |

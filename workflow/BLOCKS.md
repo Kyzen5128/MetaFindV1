@@ -100,7 +100,8 @@ reproduction fidelity. Codex PASS ≠ Block PASS. Reviewer PASS ≠ USER accepta
 | Build | `tdd` at agreed seams · `research` · `diagnosing-bugs` | Owner |
 | Completion claim | `code-review`, **extended to 4 axes** | Owner |
 | Independent, synchronous | `research` · `diagnosing-bugs` · `code-review` · `improve-codebase-architecture` | Reviewer |
-| **Before ANY run** | **Codex pre-execution gate — `DL-028`** | **whoever is about to run it** |
+| **Before ANY run** | **Codex pre-execution gate — `DL-028`** (Reviewer covers if Codex is out of quota — `DL-029`) | **whoever is about to run it** |
+| **Before ANY run, after the review** | **Detailed report + USER's explicit go — `DL-030`** | **whoever is about to run it → the USER** |
 | Milestone adversarial | Codex | Master requests |
 | Acceptance | `grilling`, **one item at a time** | Master → USER |
 
