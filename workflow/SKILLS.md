@@ -506,6 +506,23 @@ pipeline node completing or (B) every batch of code written before it runs, he a
 
 Read-only inspection stays ungated, unchanged from §12.0. The gate is on RUNS, not on looking.
 
+**Master's authority is asymmetric — the USER settled this directly.**
+
+> 「你是權力第二大的」 · 「決策還是由我來定 若哪個階段有問題叫他停下等我決定」
+
+```
+   Master CAN STOP     any role, any run, immediately, no appeal.
+                       A role told to stop, stops, and waits for the USER.
+
+   Master CANNOT START anything. No run, no stage, not his own,
+                       not anyone else's.
+```
+
+**Second in authority means the power to halt, not the power to launch.** When a stage has a
+problem, Master stops the role and **hands the decision to the USER** — Master's job at that
+moment is to make the problem legible (what is wrong, what the options are, what each costs), not
+to choose between them.
+
 **Master reports and asks like every other role.** Master does not approve a run — not his own,
 and not anyone else's.
 
