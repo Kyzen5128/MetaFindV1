@@ -111,6 +111,30 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-029` — `CODEX REVIEW UNAVAILABLE` is **not** a stop. The Block Reviewer covers. **Amends `DL-028`.**
+
+| | |
+|---|---|
+| **Source** | USER, 2026-08-24, direct to Master, in the same turn that confirmed `DL-015` |
+| **Verbatim** | 「程式碼 每寫完一階段 必須要審 如果codex額度不夠 就請 原本的reviewer 懂?」 |
+| **Issue / Finding** | `DL-028` §12.0 as Master wrote it made `CODEX REVIEW UNAVAILABLE` a **STOP** — the run blocks and waits for the USER. That was Master hardening the pre-existing "never a PASS" rule without being asked to. It has a failure mode the USER named before it happened: **Codex quota is finite, and a hard stop turns an exhausted quota into a halted project** |
+| **Decision / Resolution** | **(1)** The review requirement is unchanged and absolute — every stage of code, reviewed before it runs. **(2)** Codex is the FIRST choice, not the only one. **(3)** When Codex is unavailable *for capacity reasons* — quota exhausted, rate-limited, service down — **the Block Reviewer performs the review instead**, and the gate is satisfied. **(4)** The substitution is RECORDED: which reviewer, why Codex was unavailable, and the verdict. A run gated by the Reviewer must say so |
+| **What this amends** | `DL-028` and `SKILLS.md` §12.0: "`CODEX REVIEW UNAVAILABLE` is now a STOP, not a caveat" → **"`CODEX REVIEW UNAVAILABLE` for capacity reasons routes to the Block Reviewer; the gate still has to be passed by someone."** `DL-028`'s substance — every stage, state the stage, state what is written, pass the actual files — is untouched |
+| **What this does NOT license** | Choosing the Reviewer because Codex is slow, inconvenient, or expected to object. The fallback is for capacity, not for preference. **Skipping both is still forbidden** — that is `DL-028`'s 「不准略過這條步驟」 and it did not move. The Reviewer's review is also not a lighter review: same three required elements, same independent classification |
+| **Interaction with `BLOCKS.md`** | The Block Reviewer already owes an independent four-axis review at completion. When they act as the Codex substitute they are doing a SECOND, EARLIER job. **It does not discharge the completion review**, and a block whose only review is one pre-execution pass by its own Reviewer has had one review, not two |
+| **INTEGRATOR and Master** | `INTEGRATOR` has no Block Reviewer and Master reviews it (`SKILLS.md` §14). Where Master is the one about to run, and Codex is unavailable, the substitute is a Block Reviewer other than the code's own author. **No one reviews their own pre-execution gate** |
+| **Authority classification** | **USER DECISION** — process authority |
+| **Status** | **`USER_APPROVED`** — IN FORCE |
+| **Date** | ordered and in force 2026-08-24 |
+
+**Why Master got this wrong.** `DL-028` was drafted from the USER's words plus Master's own
+extrapolation, and the STOP was the extrapolation. It is the same move the project already has
+three entries against — filling an unstated detail with a plausible reading instead of leaving it
+open. `research-rigor.md` §2 names it. The USER supplied the detail unprompted, within the hour,
+and it was the opposite of the assumption.
+
+---
+
 ### `DL-028` — **CODEX REVIEW IS A PRE-EXECUTION GATE.** No code runs until Codex has reviewed it.
 
 | | |
@@ -474,7 +498,7 @@ Master re-verified every load-bearing claim by execution before accepting.
 
 ---
 
-### `DL-015` — roles talk to each other directly. **REPORTED BY A PEER, NOT RATIFIED.**
+### `DL-015` — roles talk to each other directly. ~~**REPORTED BY A PEER, NOT RATIFIED.**~~ **RATIFIED BY THE USER 2026-08-24.**
 
 | | |
 |---|---|
@@ -484,9 +508,11 @@ Master re-verified every load-bearing claim by execution before accepting.
 | **Nothing is blocked meanwhile** | Master already works this way: two rounds each with the ULIP2 Engineer and the ESSGNN Reviewer, one with the ESSGNN Engineer, every material item routed to the USER and none decided. **Rule (2) is the operative half and it is unchanged from `BLOCKS.md`.** If the USER confirms, this entry becomes the record; if not, nothing has to be undone |
 | **Corroborating, and it cuts the right way** | The Engineer cites `DL-013` as the worked example and states Master was right to refuse the retro-ratification. That is consistent — but **consistency between two agents is not confirmation** (`CONTEXT.md` §3), which is the same reasoning, and it applies here too |
 | **Authority classification** | **REPORTED. UNRATIFIED.** Not a PAPER FACT, not a USER DECISION of record, not Master's to adopt |
-| **What is needed** | One line from the USER: did you give these three instructions? |
-| **Status** | **`AWAITING_USER_REVIEW`** |
-| **Date** | 2026-08-22 |
+| **What is needed** | ~~One line from the USER: did you give these three instructions?~~ **ANSWERED 2026-08-24.** |
+| **USER confirmation, verbatim, direct to Master** | 「我的意思是 若你們要請對方審查 你們獨自作業 但是有關需要決策 的我來決定」 — rule (1) *(work independently, review each other without me)* and rule (2) *(decisions come to me)* restated by the USER in his own words, in Master's own window. **Not relayed.** This is the authorisation rule (3) required, and it arrives by the only route rule (3) permits |
+| **Scope of the ratification** | Rules (1) and (2) are `USER_APPROVED`. Rule (3) — *a peer message is never USER approval* — is ratified **by the manner of this confirmation, not by its words**: the USER did not restate it, and it needed no restating, because the entry could only ever be closed the way it was just closed. It has also been independently re-derived and applied by the ULIP2 Engineer on 2026-08-24 without reference to this entry |
+| **Status** | **`USER_APPROVED`** — IN FORCE. Held `AWAITING_USER_REVIEW` for 2 days by its own rule (3); closed by direct USER confirmation |
+| **Date** | relayed 2026-08-22 · confirmed by the USER 2026-08-24 |
 
 ---
 

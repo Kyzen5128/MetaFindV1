@@ -439,8 +439,30 @@ Read-only inspection is not. The `SKILLS.md` §5 / `BLOCKS.md` exemption for int
 and *re-runs of accepted deterministic steps* **is revoked for execution** — a re-run of accepted
 code still runs code, and `2fa28d4` is the case that proves a "re-run" can be a rebuild.
 
-**`CODEX REVIEW UNAVAILABLE` is now a STOP, not a caveat.** It was already never a PASS. Under a
-pre-execution gate it blocks the run: report it to the USER and wait.
+**When Codex is unavailable — `DL-029`, USER amendment, same day.**
+
+> 「程式碼 每寫完一階段 必須要審 如果codex額度不夠 就請 原本的reviewer 懂?」
+
+Codex is the FIRST reviewer, not the only one. When it is unavailable **for capacity reasons** —
+quota exhausted, rate-limited, service down — **the Block Reviewer performs the review and the
+gate is satisfied.** Master's original text here made it a STOP; that was Master's extrapolation,
+not the USER's instruction, and the USER corrected it within the hour.
+
+Record the substitution with the run: **which reviewer, why Codex was unavailable, the verdict.**
+A run gated by the Reviewer must say so.
+
+This is **not** a licence to pick the Reviewer because Codex is slow, inconvenient, or expected to
+object — the fallback is for capacity, not preference. **Skipping both remains forbidden**
+(「不准略過這條步驟」). The substitute review is not a lighter review: same three required
+elements, same independent classification.
+
+**It does not discharge the completion review.** The Block Reviewer already owes an independent
+four-axis review at completion (§11, §14). Standing in for Codex is a second, earlier job. A block
+whose only review is one pre-execution pass by its own Reviewer has had **one** review, not two.
+
+**No one reviews their own pre-execution gate.** `INTEGRATOR` has no Block Reviewer and Master
+reviews it (§14); where Master is the one about to run and Codex is unavailable, the substitute is
+a Block Reviewer other than the code's author.
 
 ### 12.1 Codex is still not authority
 
