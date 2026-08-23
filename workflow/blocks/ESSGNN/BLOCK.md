@@ -55,13 +55,46 @@ questions belong to this block.
 
 ```
 scene_graphs                12,000   valid
-procthor_modalities          1,467   valid
+procthor_modalities          1,467   valid  -- but the Stage 2 gallery is 1,439, see below
 procthor_node_embeddings     present  valid
 procthor_object_text.json    present  rule-based f"a {category}" - NOT LLM output (Q-NODETEXT)
 scene_splits.json            present  9,600 / 2,400
 stage2_protocol.json / essgnn_arch_protocol.json / essgnn_edge_protocol.json / stage2_positive_map.json   present
 sem_edge_cache.json / sem_edge_sentences.jsonl / sem_edge_embeddings.npz   DELETED 2026-08-22
 ```
+
+### ⚠️ `1,467` is NOT the Stage 2 denominator. It is **1,439**. Measured 2026-08-24.
+
+`train/gallery_index.py:261` excludes every asset whose `pointcloud_uri` is `None`, so the
+Stage 2 gallery — **and therefore Table 2's denominator** — is smaller than the modality count.
+
+Measured by Master 2026-08-24, reading all 1,467 sidecars directly:
+
+```
+sidecars                        1,467
+pointcloud_uri is None             28     <- excluded
+pointcloud_uri set, file present 1,439    <- the gallery
+pointcloud_uri set, file MISSING     0
+key absent entirely                  0
+```
+
+All 28 carry one reason, verbatim and identical: *"every view was empty; the asset never entered
+frame. AI2-THOR returned no depth for this asset at any distance; its material is not in the depth
+prepass."* Transparent materials are absent from Unity's depth prepass. They have text and images
+and no point cloud, and `2.6`'s modality-complete gallery has no way to admit them.
+
+**`gallery_index.py:244` and `:253` say "24 of 1,467, 1.6%". That comment is stale — it is 28, and
+1.9%.** Found by the ESSGNN Engineer running the `CONTEXT.md` §3 notch check on his own earlier
+statement; he had quoted the comment rather than counting. Reproduced exactly by Master. **The
+comment is the ESSGNN Engineer's file and the block is paused — not corrected here, routed to him.**
+
+**What is measured and what is not.** The 1,439 figure is the count of sidecars that pass the only
+filter in the build loop, with their `.npz` present on disk. It is **not** an executed index —
+`n11b` has never run, and `np.load` plus `prepare_depth_shell` at `:270-271` could still fail on
+an individual file. `1,439` is therefore the **input-side ceiling**, exact as to the filter and
+unverified as to execution. Do not restate it as the built index size until `n11b` has run.
+
+---
 
 ## 6. **n08 must be rebuilt — USER directive 2026-08-22**
 
