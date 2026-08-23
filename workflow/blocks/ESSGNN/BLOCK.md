@@ -137,6 +137,27 @@ and vector; only the point cloud is absent, and the context path never asks for 
 candidate-pool composition question, NOT the MASTER-IMPACTING case** the Engineer flagged as the
 alternative.
 
+### Before `n13` first runs — one read-only assertion, already measured green
+
+`stage2.py:270` is a **bare dict index** — `data.node_vectors[str(n["asset_id"])]`, no `.get`, no
+presence guard. Raised by the ESSGNN Engineer as a fragility, correctly **not** reported as a
+defect. Its failure mode is a `KeyError` **mid-epoch**, which is the shape of the
+`FileNotFoundError` that `DL-006` caught in Stage 1 (`splits.py` admitted everything, `stage1.py`
+loaded it unguarded).
+
+Measured by Master 2026-08-24 — a set comparison, no training needed:
+
+```
+distinct asset_ids across all 12,000 scene graphs   1,467
+node vectors available                              1,467
+in the graphs with NO vector                            0
+vectors never used by any graph                         0
+```
+
+**Exact 1:1 coverage in both directions, so the bare index is safe on the current corpus.** It is
+safe by coincidence of the data, not by construction — keep the assertion as a pre-`n13` guard,
+because the coverage is what makes it safe and nothing checks the coverage.
+
 **Still open, and NOT closed by the above:** the effect on `n16` / Table 2. `n16` retrieves and
 then PLACES, and bottles, open vases and CDs are not in the pool at all. Whether that is a defect
 depends on Table 2's gallery scope, which `U-21` leaves open — it fixed the scene source
