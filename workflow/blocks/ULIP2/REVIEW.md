@@ -1630,3 +1630,751 @@ stronger reading — that the two asset families share a canonical front — rem
 **Whether `n07b` re-runs is `ESSGNN`'s decision on `ESSGNN`'s evidence.** This block supplies the
 `n04` side and does not conclude for another block. **`ULIP2` must not write "n07b does not need
 re-running" into any document**; that sentence belongs to `ESSGNN REVIEWER` if they accept this.
+
+---
+
+## R-19 — `code_revision` is stamped per record, so a running experiment records commits that are not its own
+
+**Reviewer, 2026-08-22, while `n04` is still running.** Found while checking whether the old
+quarantine log survived the `U-AE` deletion so the old and new quarantine sets could be compared.
+
+**It did survive** — `quarantine_n04_render_views.jsonl` appends and never truncates: 204 records,
+143 from the 2026-08-15/16 run and 61 from this one, 110 unique uids. The set comparison the
+`n04` audit needs is therefore still possible.
+
+### The defect
+
+`metafind/runlog.py:35` defines `code_revision()`, and it is called **at every record write** —
+`:77` and `:96`, which are the `run_progress` and `quarantine` writers. It is **not** captured once
+at process start.
+
+This single `n04` run has so far stamped **13 different code revisions**:
+
+```
+19:35:54  99e44869      20:07:12  e19c4303
+19:41:18  8fccf83c      20:08:03  f0eb75b1   ULIP2 Engineer  docs: ROSTER.md
+19:48:56  77ac4cb2      20:08:31  ed8a9939   MASTER          docs: DL-015
+19:52:37  7d7892d0      20:09:26  75b5fe63   ULIP2 REVIEWER  docs(roster)      <-- mine
+19:57:53  38226f38      20:09:44  88034208   ULIP2 REVIEWER  review R-13..R-18 <-- mine
+20:05:01  3f3bd980      20:15:05  8c840df3   ULIP2 Engineer  docs(ROSTER)
+                        20:15:38  3a7b8bb4   MASTER          docs: DL-016
+```
+
+### FINDING R-19.a
+
+```
+FINDING          n04 is running under ONE renderer. Its own log records THIRTEEN
+                 code states, and not one of them changed the renderer -- they are
+                 documentation commits made by three roles in parallel sessions.
+                 Two of them are the Reviewer's own.
+EVIDENCE         runlog.py:35 called at :77 and :96, i.e. per record, not per run.
+                 quarantine_n04_render_views.jsonl, the 61 records from this run.
+                 git log on each hash: ULIP2 Engineer x3, MASTER x2, Reviewer x2,
+                 all documentation.
+CLASSIFICATION   OBSERVED IMPLEMENTATION + OBSERVED DATA
+IMPACT           experiments.md §7 (code state) and §10 (artifact provenance).
+                 It reaches run_progress and cost_ledger too -- same two writers.
+                 The corpus this run produces cannot be attributed to a single
+                 commit from its own logs
+SEVERITY         MAJOR -- provenance. No artifact is wrong
+```
+
+**This is the same class of failure as `R-14`, one layer deeper.** `R-14` was git attributing
+three roles' *files* to one commit. This is a running experiment attributing *other roles'
+commits* to itself. Both come from several roles sharing one working tree, and `DL-014`'s
+explicit-path rule does not touch this one.
+
+**A reader reconstructing "which code produced this corpus" gets thirteen answers**, all of them
+plausible, eleven-plus of them documentation-only.
+
+### Remedy — recommended, not decided, and NOT to be applied now
+
+Capture `code_revision()` **once at process start** and reuse the value for every record. It is a
+small change, and it **must not be made while `n04` is running** — the running process already
+holds the module, so an edit would not affect this run, but it would put a fresh commit into the
+very log the finding is about.
+
+### What the Reviewer is doing about it immediately
+
+**Holding all commits until `n04` finishes.** This entry is written to `REVIEW.md` and left
+**uncommitted** on purpose. Committing it would add a fourteenth revision to the run's record,
+for a document about the record being polluted.
+
+Recommended for the other roles too, and it costs nothing: **no commits until the run ends.**
+The sweep risk that made prompt committing attractive in `R-14` is now much lower, because every
+role has adopted explicit-path commits.
+
+---
+
+## R-20 — **CORRECTION.** The Reviewer's `S-7` recommendation was wrong. Withdrawn.
+
+**Reviewer, 2026-08-22.** The Engineer rejected `R-17.a`'s proposed remedy. **They are right on
+both of their arguments, and both were verified here rather than accepted.**
+
+### What the Reviewer got wrong
+
+`R-17.a` correctly found that `S-7`'s `== 0` criterion fails on a correct corpus. It then
+recommended **replacing it with an epsilon threshold** (`1e-20`, giving 84). That recommendation
+is wrong twice over:
+
+**1. It picks a threshold after looking at the distribution.** That is the same failure the
+Reviewer named on the background question and quoted approvingly ever since: *a criterion cannot
+be used when it wins and set aside when it loses.* `S-7` failed, and the Reviewer proposed
+changing the criterion until it passed. **The Reviewer did the thing it had been auditing others
+for.**
+
+**2. A higher-authority source already answers it, and the Reviewer missed it.**
+`docs/graph/validation_plan.yaml:101-119`, `L1-PC-NONDEGENERATE`, verbatim:
+
+> *"For every axis where `per_axis_variance` is at or near zero, the mesh's own
+> `raw_bbox_extents` is correspondingly flat. A cloud that is planar while its mesh is not
+> indicates a sampler that collapsed the geometry."*
+>
+> *"[MEASURED] An absolute variance floor cannot tell a flat ASSET from a flattening BUG… raising
+> the floor until they pass would **blind the check to the failure it exists for**. Comparing
+> against the mesh separates the two."*
+
+**The document warns, in its own words, against exactly what the Reviewer recommended.**
+`docs/graph/` sits at rank 5 in `CONTEXT.md`'s authority order — above the repository
+implementation and above `SPEC_M1`. Missing an upstream source-of-truth is **attack item 2 on the
+Reviewer's own role card**, and the Reviewer is the one who missed it.
+
+### The Engineer's measurement, independently reproduced
+
+All 46,052 sidecars, `per_axis_variance` against `raw_bbox_extents`, no `.npz` opened:
+
+```
+eps        flat clouds   violations   extent_ratio max   median
+0                  18            0        7.004e-04    2.003e-16
+1e-30              84            0        7.004e-04    2.220e-16
+1e-20              84            0        7.004e-04    2.220e-16
+1e-15              88            0        7.004e-04    2.220e-16
+1e-12             106            0        7.004e-04    2.220e-16
+```
+
+**Zero violations at every threshold from 0 to 1e-12.** That is the property that makes the check
+usable and the count useless: **move epsilon and the count moves; move epsilon and the verdict
+does not.** The Reviewer's 84 and Master's 102 are two points on one curve whose answer is
+constant across the whole curve.
+
+`R-17.a`'s *finding* stands — `S-7` as written fails on a correct corpus. **Its recommended
+remedy is withdrawn.** The Engineer's `SPEC_M1` §11.1 is the correct resolution.
+
+### FINDING R-20.a — `L1-PC-NONDEGENERATE` has never been executed, and it names its own falsification test
+
+```
+FINDING          The rule is a PLAN, not a check. grep over the repository for
+                 "L1-PC-NONDEGENERATE" / "NONDEGENERATE" in *.py returns NOTHING --
+                 no code implements it, and validation_plan.yaml marks it
+                 `verified_blocks: false`. It has 0 violations on 46,052 assets
+                 because it has never run, not because it ran and passed.
+                 The file specifies its own negative injection and nobody has
+                 used it: "project every sampled point onto the xy plane",
+                 expecting "variance along z is zero while raw_bbox_extents[z]
+                 is not".
+EVIDENCE         grep -rn "NONDEGENERATE" --include=*.py  -> no hits
+                 validation_plan.yaml:101-119
+CLASSIFICATION   OBSERVED IMPLEMENTATION
+IMPACT           G2 gate content; SPEC_M1 §11.1 now rests on this rule
+SEVERITY         MAJOR -- a rule relied upon that has no executable form
+```
+
+**So the Reviewer ran the injection the spec asks for.** 12 real assets, real `.npz` clouds,
+`z` projected to zero exactly as specified:
+
+```
+uid            baseline    after injection
+fdc6b2fd4097   PASS        FAIL  ratio 5.934e-01
+7bdf6e4f9f9f   PASS        FAIL  ratio 1.000e+00
+8c3ca09b4391   PASS        FAIL  ratio 3.234e-01
+...                        ...
+                           12 / 12 turn red
+```
+
+**`L1-PC-NONDEGENERATE` is NOT vacuous.** It passes on the real corpus and fails on a deliberately
+flattened one, on every asset tried. The rule the Engineer routed `S-7` to is sound, and it now
+has the non-vacuity evidence it never had.
+
+**What remains:** it is still unimplemented. A rule with 0 violations and no code is indistinguishable
+from a rule that was never checked — **until someone runs it.** This pass is the first time it has
+been evaluated against the corpus at all. `G2`'s owner should turn it into a check rather than
+inherit the number.
+
+### The Reviewer's own pattern, recorded
+
+**This is the second time this session the Reviewer put a general standard above a
+project-specific authority.** `R-9` was the glTF 2.0 specification over ULIP-2's own artifact.
+This is an invented statistic over `docs/graph/`. Both were caught by someone else. The correction
+in both cases has the same shape: **ask the project's own higher-authority source before
+proposing a rule.**
+
+---
+
+## R-21 — `DL-013` ratified by the USER, 2026-08-22, in the USER's own words
+
+**USER, asked to approve or reject the `R-12` texture carve-out, replied:**
+
+> 「對那我不是已經說了 既然你查證了 沒問題就好」
+
+**That is the approval `DL-013` was missing.** Recorded **verbatim, not paraphrased** — `R-21`
+exists because the last attempt paraphrased a decision into existence before it was taken.
+
+### What is approved — the exact scope, as it was put to the USER
+
+> *"COLOR_0 is not applied to the 23,675 texture-class assets. This deliberately departs from the
+> glTF 2.0 specification, because ULIP-2's own point clouds do not support applying it."*
+
+**Nothing wider.** The `flat` and `gltf_default` classes remain modulated; that was never in
+question.
+
+```
+CLASSIFICATION   USER DECISION, ratifying an IMPLEMENTATION CHOICE that
+                 deliberately diverges from glTF 2.0
+BASIS PUT TO THE USER
+   all three classes mixed   n=130   carve-out 0.9043   full spec 0.9004
+   texture class only        n=37    carve-out 0.9005   full spec 0.8980
+                                     and 37/37 darker under the full spec
+   the specification-conforming variant won neither measurement
+INSTRUMENT       frozen ULIP-2 point encoder, cosine against ULIP-2's own
+                 released cloud for the same uid
+DEVIATION ID     D-12, registered by Master
+AFFECTS          the rgb channel of 23,675 assets; nothing else
+```
+
+### The condition attached to the approval, and it is met
+
+The USER approved **on the basis that the Reviewer had verified it** —「既然你查證了」. The
+verification that clause refers to is on record and was performed by this Reviewer, not read from
+the Engineer's report:
+
+- `R-10` — n=130, the frozen encoder, ULIP's own clouds as target
+- `R-12` — n=37 texture-only isolation, plus the 37/37 darkening
+- `R-13` — the release checks, n=37 + n=60, both at `max abs delta = 0.0`
+- `R-17` — corpus-wide confirmation: `color0_modulated` is `False` on **all 23,675** texture assets
+
+### Limits that survive the approval and must not be dropped from the write-up
+
+- The `P2` / `P3` margins are small and **no paired significance test was computed**. `R-10.b`
+  reported them as tied and that stands.
+- The 130 discriminating assets come from **11 of 161 shards** — not a random sample of the corpus.
+- The `texture` class is inside the decision but was **never separately validated against ULIP** at
+  a large sample; `R-12`'s n=37 is the whole of it.
+- `R-8.a` still governs the language: the procedure ULIP-2 used is unpublished, so this may be
+  written as *agreeing with ULIP-2's artifact* — with its metric and n — and **never** as
+  *"what ULIP-2 did"*.
+
+`DL-013` may now proceed. `D-12` has its authority.
+
+---
+
+## R-22 — `n04` quarantine: old run against new run, and one real defect
+
+**Reviewer, 2026-08-22, `n04` still finishing.** This is the comparison `U-AE` nearly destroyed:
+`quarantine_n04_render_views.jsonl` **appends and never truncates**, so both runs survive in one
+file — 143 records from 2026-08-15/16 and 175 from this run.
+
+### Every failure class already existed. The Reviewer's first reading was wrong.
+
+On seeing `"the camera is not moving between views"` and `"Eigenvalues did not converge"` in the
+new log, the Reviewer's first reaction was that the corrected camera had introduced new failure
+modes. **It had not.** Recorded because the alarm was raised before the comparison was run.
+
+```
+failure class                                          old    new
+every view is blank                                    104    125
+"only N distinct views of 11"  (all N, summed)          23     26
+Eigenvalues did not converge                            14      5
+A process in the process pool was terminated abruptly     1     18
+too many indices for array: array is 0-dimensional        1      1
+                                                      ----   ----
+records                                                143    175
+unique uids                                             99    115
+```
+
+**No class is new.** The distribution shifted; the taxonomy did not.
+
+### The uid sets moved, and that is expected but must be characterised
+
+```
+in both runs   80        only in the old run   19        only in the new run   35
+```
+
+**19 assets that failed before now render, and 35 that rendered before now fail.** A different
+camera axis and a tighter frame change which assets fall outside it, so movement in both
+directions is the expected signature — it is **not** evidence of a defect. It is also not
+something to wave through: the net is `+16` quarantined assets against the old corpus, and the
+corpus this produces is that much smaller.
+
+### FINDING R-22.a — every failure in the log is classified `DETERMINISTIC_INPUT`, including failures that are not
+
+```
+FINDING          `failure_class` has exactly ONE value across all 318 records in
+                 both runs: DETERMINISTIC_INPUT.
+                 18 of this run's records are "A process in the process pool was
+                 terminated abruptly" and 5 are "Eigenvalues did not converge".
+                 ALL 23 of those uids subsequently produced a valid sidecar on
+                 retry -- so they were transient, and a transient worker crash is
+                 by definition not a deterministic property of the input.
+EVIDENCE         quarantine_n04_render_views.jsonl, failure_class value domain
+                 = {DETERMINISTIC_INPUT}.
+                 process-pool crashes  18 uids -> 18 later have sidecars, 0 without
+                 Eigenvalues           5  uids -> 5  later have sidecars, 0 without
+                 every view is blank   73 uids -> 1  later has a sidecar, 72 without
+CLASSIFICATION   OBSERVED IMPLEMENTATION + OBSERVED DATA
+IMPACT           experiments.md §14 requires environment / data / implementation
+                 failures to be distinguished. This log cannot support that
+                 distinction, and anyone counting "assets with defective geometry"
+                 from it overcounts by 23
+SEVERITY         MAJOR -- observability and provenance. The corpus is NOT affected:
+                 the retry recovered all 23
+```
+
+**The retry behaviour is sound and should be said so plainly.** `is_complete()` is version-gated
+and those assets had no sidecar, so the run re-attempted them and they succeeded. The pipeline
+recovered from 23 transient failures without human intervention. **What is wrong is only the
+label**, and the label is what a later reader will count.
+
+**Suggested, not decided:** `runlog.quarantine()` should take the class from the caller rather than
+constant-fold it — a `ProcessTerminated` / `LinAlgError` is `ENVIRONMENT`, a blank frame is
+`DETERMINISTIC_INPUT`. `SPEC_M1`'s and the Engineer's.
+
+### Status at the time of writing
+
+```
+render dirs 46,051 · sidecars 45,968 · index 45,958 · n04 still running
+83 dirs without a sidecar, and all 83 are in this run's quarantine set -- 0 unaccounted
+every one of those 83 holds exactly 11 PNGs
+```
+
+**The three-way count is not yet consistent and is not expected to be until the run ends** — the
+index is rebuilt from sidecars at the end. The `dirs > sidecars` gap is the blank-render residue
+described in `R-16`: PNGs on disk carrying no version field, the one artifact class that cannot be
+dated from itself. `U-AE` removed the previous 90; this run has produced 83 more of the same kind.
+
+---
+
+## R-23 — `W-6` in progress: the two pillars established so far
+
+**Reviewer, 2026-08-22, started while `n04` finishes because `W-6` needs no GPU.**
+`W-6` is the evidence audit `DL-007` admits was never performed — its `D0-010` §6–§11 are empty,
+so LVIS anchoring passed by **design ratification, not evidence**. `Q-CATEGORY` and `D0-010` are
+the same question (`R-6`), and the USER has ruled the audit must complete before `M2`.
+
+**This entry is partial. It is not the audit.**
+
+### Pillar 1 — what MetaFind actually says, quoted rather than summarised
+
+```
+2methdology.tex:28   "Each asset is rendered from 11 orthogonal viewpoints and
+                      annotated using GPT-4o. These annotations provide rich
+                      textual descriptions detailing attributes such as object
+                      category, size dimensions, materials, and placement
+                      constraints."
+
+2methdology.tex:24   Figure 2 caption -- "...passed through a VLM to GENERATE
+                      structured, detailed annotations, capturing attributes
+                      such as category, dimensions, materials, and spatial
+                      placement constraints."
+```
+
+**`PAPER FACT`: the VLM generates the category.** The figure caption's verb is *generate*, and it
+names `category` in the generated set.
+
+**Searched for any mention of supplying the dataset's own label** —
+`lvis label`, `ground.truth categ`, `given categ`, `provided categ`, `known categ`,
+`value_to_key` across all of `docs/paper/metafind_source/*.tex`: **zero hits.**
+
+So the paper is **not silent** on the mechanism — it states one — and it never contemplates the
+alternative. Anchoring is therefore a `DEVIATION` (registered `D-9`), not an implementation choice
+filling a gap. `annotate.py:487-493` already says exactly this in its own docstring, correctly.
+
+### Pillar 2 — the mitigation `U-L` promised is NOT implemented, so `IC-1` stands unmitigated
+
+`U-L` recorded a **two-turn** design: turn 1 shows the views with **no** anchor and takes a blind
+identification; turn 2 reveals the LVIS label. Its stated purpose was to make `identity_confirmed`
+**computed** rather than asked — the direct answer to `IC-1`, the rubber-stamp risk.
+
+**Measured against the code at `53f0b99`:**
+
+```
+prompt builders in annotate.py     ONE -- build_prompt(n_views, lvis_category, proportions)
+                                   there is no blind turn-1 builder
+the anchor is inside that prompt   annotate.py:506-507
+   'This asset is catalogued in Objaverse-LVIS as: "{lvis_category}"'
+   'Treat that identity as CORRECT unless the images clearly contradict it.'
+identity_confirmed                 ASKED, annotate.py:530
+   '"identity_confirmed": true if the images are consistent with the ...'
+PROMPT_VERSION                     5
+```
+
+```
+FINDING          The model is told to treat the identity as correct, and then in
+                 the same prompt asked whether the identity is correct.
+                 identity_confirmed is a self-report by a model that has just been
+                 instructed which way to answer. IC-1 is not mitigated; the
+                 mitigation is scheduled for v6 and v6 does not exist.
+EVIDENCE         annotate.py:482-530, PROMPT_VERSION 5, a single prompt builder.
+                 SPEC_M1 §5 item 9 lists the v6 two-turn prompt as scope, unbuilt.
+CLASSIFICATION   OBSERVED IMPLEMENTATION
+IMPACT           SPEC_M1 S-11 -- "identity_confirmed is not a rubber stamp; the
+                 blind turn-1 guess is recorded verbatim" -- CANNOT BE EVALUATED
+                 under v5. The bake-off is specified to measure it
+SEVERITY         MAJOR -- a milestone criterion with no implementable form yet
+```
+
+**This is not a defect in what was built.** `v6` is openly in `SPEC_M1`'s scope and openly
+unbuilt. The finding is that **`S-11` and the bake-off's `identity_confirmed` reporting both
+depend on it**, so the bake-off cannot produce that number until `v6` lands — and the first
+report of the old corpus's problems leaned on `identity_confirmed` as the instrument that would
+tell an LVIS error from a Qwen error.
+
+### What `W-6` still owes, and the one measurement that would move it
+
+The audit's four options are `prompt hint` / `hard value` / `cross-check` / `record-only`.
+**Every one of them rests on a quantity nobody has measured: LVIS's own error rate.**
+`DL-007` says so; `n05_v5_design.md` says so — *"we have no measurement of LVIS's own error rate"*.
+
+**A measurement is available that needs no VLM and no annotation run.** The frozen CLIP image
+tower already encodes our renders. Scoring each asset's renders against
+`"a 3d model of a {lvis_category}"` versus a candidate set gives an **independent** signal on
+whether the LVIS label matches the pixels — independent of Qwen, of Gemma, and of the annotator
+under test. It is the same instrument `FIND-9`, `S-5` and `R-10` already rely on.
+
+**It needs the GPU, which `n04` holds.** Queued behind `S-6`.
+
+---
+
+## R-24 — `S-6` measured on the v4 corpus. **PASS**, at n = 3,706.
+
+**Reviewer, 2026-08-22, the moment `n04` released the GPU.** `FIND-6` used **286** assets — one
+ULIP shard. This uses **3,706**, the eleven shards fetched for `R-10`, filtered to our manifest.
+**13x the population.**
+
+Two-sided by construction: our cloud **as-is**, and our cloud **rotated 180 degrees about Y**.
+If the yaw is genuinely fixed, the arms must have swapped which one is better.
+
+```
+                        as-is      +180 yaw
+median                 0.0117        0.0423
+95th percentile        0.0211        0.1737
+worst                  0.3742        0.4314
+> 0.1 count                59           687
+
+as-is better on 3,476 / 3,706  =  93.8%
+```
+
+### The sign flip, against `FIND-6`'s record
+
+```
+                      FIND-6, old corpus, n=286     R-24, v4 corpus, n=3,706
+median, as-is                    0.0903                      0.0117
+median, +180                     0.0230                      0.0423
+which orientation wins           +180, on 269/286  94.1%     as-is, on 3476/3706  93.8%
+> 0.1                            137 as-is -> 7 rotated      59 as-is -> 687 rotated
+```
+
+**Both the ordering and the proportion reversed, and the proportion reversed to almost the same
+value — 94.1% became 93.8%.** That is the signature of a systematic rotation being removed, not
+of a corpus that merely got noisier.
+
+### FINDING R-24.a — the yaw is gone, and the corpus is closer than undoing the yaw alone explains
+
+```
+FINDING          S-6 PASSES. The 180-degree yaw against ULIP-2's released clouds
+                 is removed. Beyond that, the corrected corpus reaches median
+                 Chamfer 0.0117, which is TWICE AS CLOSE as the old corpus's best
+                 achievable 0.0230 -- the value it reached only when artificially
+                 rotated. Chamfer is geometry alone, so this is not a colour
+                 effect; the most likely cause is the node-transform bake
+                 (commit 138cda4), which the Engineer added after finding that
+                 pyrender silently dropped shear from the node pose.
+EVIDENCE         Table above. n = 3,706. Both arms computed with the same
+                 symmetric Chamfer and the same pc_norm, on the same clouds.
+CLASSIFICATION   OBSERVED DATA
+IMPACT           SPEC_M1 S-6; the n03 corpus's geometric agreement with upstream
+SEVERITY         NOTE -- this is a PASS, and a larger one than S-6 asked for
+```
+
+### Limits, stated
+
+- **The two studies' absolute values are not directly comparable.** `FIND-6` used a different
+  Chamfer definition and a different sample; the Engineer already recorded that when the
+  `bc863b7` numbers came out at `0.0338 -> 0.0120` rather than `0.0903 -> 0.0230`. **The valid
+  comparison is within this study** — as-is against rotated, 0.0117 against 0.0423 — and the
+  *pattern* against `FIND-6`, not the digits.
+- The 3,706 assets come from **11 of 161 shards**; whichever assets those shards hold is the
+  sample. Not random over the corpus.
+- 59 assets remain above 0.1 as-is. Not investigated. They may be rotationally ambiguous, or
+  genuinely different meshes; `S-6` does not distinguish those.
+
+---
+
+## R-25 — the mid-run fingerprint guard: **my first test was invalid.** It works.
+
+**Reviewer, 2026-08-22.** The guard added at `2ab1166` exists to stop what destroyed the v3
+corpus: a source file edited while `ProcessPoolExecutor` workers respawn and re-import.
+
+**First test reported it as vacuous. That was wrong and the error was mine.**
+
+```
+verify_fingerprint(true_fp)      -> passed, and LATCHED _FINGERPRINT_VERIFIED = True
+verify_fingerprint(tampered_fp)  -> returned immediately, because of the latch
+```
+
+I verified the good case first, in the same process, which set the module-level latch — so both
+tampered calls short-circuited at `renders.py:233`. **The instrument was mine, and I broke it.**
+
+**Re-tested correctly — a fresh process per case, tampering first:**
+
+```
+tamper renders.py   -> RuntimeError "implementation changed while the run was in progress:
+                       renders.py..."                                          BLOCKED
+tamper meshload.py  -> RuntimeError "... meshload.py ..."                      BLOCKED
+```
+
+**The guard fires on both files it covers.** `meshload.py` is correctly included — it owns
+`FRAME_CORRECTION`, so an edit there moves every asset while `renders.py` does not change a byte.
+
+### The latch is by design and is sound — reasoned through rather than assumed
+
+Each worker checks **once, on its first task**, then latches. A mid-run edit inside a worker's
+lifetime is therefore not re-checked. **That is not a hole**, because the danger is the
+**re-import**: `max_tasks_per_child=200` kills the worker, a new process starts with a fresh
+latch and freshly-imported source, and its first task fails the check. The guard fires exactly
+where the corpus could actually change.
+
+```
+FINDING          The fingerprint guard is NOT vacuous. It blocks on both covered
+                 files, and its once-per-worker latch coincides with the only
+                 point at which a running job's behaviour can change.
+CLASSIFICATION   OBSERVED IMPLEMENTATION
+SEVERITY         NOTE -- PASS
+```
+
+**Not covered, stated rather than assumed:** the fingerprint spans `renders.py` and `meshload.py`
+only. `pointclouds.py` is not in it, and `n03` has no equivalent guard — the same accident on
+`n03` would be as silent as it was on `n04`. That is the Engineer's and `SPEC_M1`'s to weigh.
+
+### Count reconciliation, independently verified
+
+```
+manifest 46,052 · sidecars 45,973 (renderer_version {4: 45973}, uniform) · index 45,973
+dirs 46,051 · dirs without a sidecar 78 · manifest uids with no dir at all 1
+78 + 1 = 79 = 46,052 - 45,973        fully reconciled, nothing unaccounted
+.json.stale 3
+n03 untouched: 46,052 sidecars, sampler_version {6: 46052}
+```
+
+**Every figure the Engineer reported is confirmed.** `renderer_version` is uniform at `4` — no
+mixed generation survived the v3 discard.
+
+---
+
+## R-26 — SYNTHESIS: this block's recurring defect is **a signal that does not carry what its name claims**
+
+**Reviewer, 2026-08-23.** Six instances have now been found in this block, by four different
+people, over two days. They were each treated as a separate bug. **They are one defect class**,
+and naming it is worth more than any of them individually.
+
+| # | The signal | What it claimed | What it actually was | Found by |
+|---|---|---|---|---|
+| 1 | `renderer_version` | which renderer made this asset | the fix landed 2–3 min before the bump, so ~1,700 assets were corrected and stamped with the old number | Engineer |
+| 2 | `FRAME_CORRECTION_ID` | *"travels into every sidecar"* (its own docstring) | zero references outside its own module; written nowhere | Reviewer, `R-13.b` |
+| 3 | `failure_class` | environment vs data vs implementation failure | **one constant value** — `DETERMINISTIC_INPUT` — on all 318 records, including 23 transient crashes that succeeded on retry | Reviewer, `R-22.a` |
+| 4 | `MIGRATE_DONE` | the migration completed | `rsync … \| tail -2` under `set -u` with no `pipefail`; printed unconditionally, and a waiter was blocked on it | Reviewer |
+| 5 | `num_beams` guard | blocks beam search turning 5 independent draws into 5 beams | read `gen_kwargs`, which **never** contains `num_beams`; the effective value comes from the merged `generation_config` | Reviewer |
+| 6 | `code_revision` | the commit that produced this artifact | `git rev-parse HEAD` **per record**; one `n04` run recorded **13** revisions, all documentation commits by three roles, two of them the Reviewer's | Reviewer, `R-19` |
+
+### The shape
+
+```
+a field or check EXISTS
+    -> downstream trusts it
+        -> it is derived at the wrong time, from the wrong object,
+           or from a constant
+            -> and every gate passes
+```
+
+**Not one of these produced an error.** Every one produced a *value*. That is why they survived:
+a missing field fails loudly; a field that is present and wrong does not.
+
+### The two that are still open
+
+**`code_revision` — `R-19`, unfixed as of `3b8aeb9`.** `runlog.py:35` still shells out per call
+site (`:77`, `:96`, `:145`). The next `n03` run will again stamp whichever commit exists at that
+instant, and **there are now five roles plus Codex committing concurrently.** The fix is to
+capture it once per process and reuse it.
+
+**`failure_class` — `R-22.a`, unfixed.** Still one constant.
+
+### What would actually stop the class, rather than the instances
+
+Each fix so far has been local. A general check exists and is cheap: **for every provenance field
+an artifact carries, the field must be derived from the thing it describes, at the time that thing
+is produced.**
+
+- `code_revision` describes *the run* → capture at run start, not at record write
+- `renderer_version` describes *the code* → derive from the implementation fingerprint that
+  already exists (`renders.py:202`), not from a hand-maintained integer
+- `failure_class` describes *this failure* → take it from the exception type at the raise site
+- `MIGRATE_DONE` describes *a completed copy* → assert the counts, which the Engineer has now done
+
+**Item 2 is the one worth arguing for.** `renderer_version` is a hand-maintained integer that must
+be bumped in the same commit as every behaviour change, forever, by memory. It has already failed
+once and cost the whole v3 corpus. `implementation_fingerprint()` is derived and cannot be
+forgotten. **Recorded as a Reviewer recommendation only** — it changes a shared artifact schema,
+which is not the Reviewer's to decide.
+
+---
+
+## R-27 — the `top_k` A/B choice: the Engineer's stated reason for `A` does not hold
+
+**Reviewer, 2026-08-23.** The Engineer escalated *"what should `top_k` be"* to the USER rather
+than deciding it. **That escalation is correct** — recording the parameter is a bug fix, changing
+it is a research parameter.
+
+Their argument for `A` (keep the model's 64, now recorded) was: *`B` would make the new corpus
+incomparable with the bake-off a second time.*
+
+**That cost is zero, by their own finding.** The bake-off is already void — the render pipeline
+was replaced, and `top_k` differed across arms (64/64/20) while every record claimed identical
+settings. **There is no surviving comparability for `B` to damage.** Both halves of that sentence
+cannot carry weight at once.
+
+### A better argument for the same conclusion
+
+**`A` is the no-op.** Neither value has any source behind it: MetaFind says GPT-4o and states no
+sampling parameters; ULIP-2's `main.tex:677` gives the generate-and-rank method and no decoding
+settings. So this is a free `IMPLEMENTATION CHOICE` either way, and **changing a sampling
+parameter for no evidenced reason, immediately before a multi-day run, is a change without a
+cause.** Default to not changing, and record it — which is now done.
+
+**The real fix was "record it", and that has landed.** Whether the recorded value is 64 or off is
+a much smaller question than it looked.
+
+### What would settle it, if the USER wants it settled rather than defaulted
+
+`top_k = 64` binds **only when the `top_p = 0.95` nucleus contains more than 64 tokens.** If the
+nucleus is almost always narrower, `A` and `B` are near-identical in effect and the choice is
+cosmetic. That is measurable — per-step nucleus width over a real description generation.
+
+**Not measured, and stated rather than assumed.** It needs the model plus real 11-view inputs, and
+**the render corpus was deleted at 06:27**, so no faithful prompt exists to run it on right now. A
+text-only proxy would answer a different question. Offered as available once renders exist; not
+worth blocking the decision on.
+
+---
+
+## R-28 — `R-26`'s table, extended to eleven, including two the Reviewer committed
+
+**Reviewer, 2026-08-23.** Three more instances of the class named in `R-26`, and the last two
+are the Reviewer's own. Recorded together because the pattern is the finding.
+
+| # | The signal | What it claimed | What it actually was | Found by |
+|---|---|---|---|---|
+| 7 | `_texture_is_samplable` | this texture can be sampled per point | probed `material.image`; trimesh 5.0 builds `PBRMaterial`, whose texture is `baseColorTexture` and which **has no `.image` attribute**. Returned `False` on **0 of 1,248** parts → the entire OpenShape §3.2 interpolation branch never executed, while `SAMPLER_VERSION` 6→7 announced it had | Engineer |
+| 8 | `find <symlinked dir>` | the file count | GNU `find` returns an **empty set with no error** on a symlink start point. Every counter read 0, the stall detector declared `n03` finished, and a 90% gate would have killed a run that was succeeding. `find` 0 vs `find -L` 7,942 | Engineer |
+| 9 | an A/B measurement's two arms | a comparison | under the v7 defect both arms took the same code path, so the outputs were **byte-identical** and the tool printed a well-formed null result — *"modulated wins on 0 of 1, brightness delta +0.0000"*. A switch that switched nothing produced a report with numbers, an n, and a conclusion | Engineer |
+| 10 | a `1σ` threshold | whether `D-12` survives | `1σ` is a legal statistic that **cannot know** how large a decision was placed on it. Measured false-positive rate under pure noise: **34.9%** at n=138, 32.4% at n=37 (400,000 Binomial draws each) | Reviewer |
+| 11 | **`ionice -c3`** | this job yields disk to the running node | `/sys/block/nvme0n1/queue/scheduler` is **`[none]`** — no I/O scheduler, so `ionice` does nothing on this device. **Used by the Reviewer to argue "this will not disturb you", and independently by the Engineer twice the same day** (`fetch_ulip_shards.sh`, both V1.0 launches) in a report to the USER | **both** |
+
+### Instance 11 is the most instructive, and it is ours
+
+Two people, the same day, reached for the same guard, and **both used it as a premise in an
+argument to someone else** — the Reviewer to the Engineer, the Engineer to the USER. Neither
+checked that it does anything on this hardware. It does not.
+
+**A guard that looks like it is working is more persuasive than no guard at all**, which is why
+this class keeps recruiting new instances. The real protection in both cases was something else:
+`nice -n19` for CPU, and for the Reviewer, being genuinely GPU-free — verified against
+`nvidia-smi --query-compute-apps`, where the Reviewer's pid does not appear.
+
+### Instances 9 and 10 differ in a way that decides where the defence goes — the Engineer's point
+
+```
+9   the tool's defect     MACHINE-DETECTABLE   two arms byte-identical -> raise, do not print 0.0000
+10  the reader's defect   NOT DETECTABLE       1σ is valid; the program cannot know what
+                                               weight was placed on it
+```
+
+**So instance 10's only possible defence is text: a measurement must state what it cannot
+license.** The Engineer's form, which the Reviewer endorses:
+
+```
+VERDICT: CHALLENGED 81/138 (1-sigma)
+THIS DOES NOT DECIDE D-12. False-positive rate at this threshold is 34.9%.
+It triggers a confirmation on a different population.
+```
+
+---
+
+## R-29 — the `n04` failure taxonomy: two populations, separated by time signature
+
+**Reviewer, 2026-08-23.** The Engineer noticed `n04` quarantines climbing just as the Reviewer's
+`S-6` started, and **recorded the correlation without claiming cause**. That was the right move
+and it is what made the following possible.
+
+### The Reviewer's own first test was worthless, and is recorded as such
+
+`S-6` was `SIGSTOP`ed for 2m43s. Zero `produced 0/12` occurred against an expectation of ~4.
+**That experiment has no statistical power** — at an expected count of 4, observing 0 and
+observing 4 are not distinguishable — and it could not separate *"the Reviewer stopped"* from
+*"n04 walked past a bad range"*. The Engineer's judgement is adopted: **a test with no power is
+not weak evidence, it is zero evidence**, and leaving it on the record would tell a later reader
+that the direction had been tried. It is recorded here **only** as a method note, not as a result.
+
+### What actually settled it: timestamps, then the hourly signature
+
+```
+'blender produced 0/12 views'   65 records, 15:00:00 - 17:53:16, uids 21678613 - 33a33291
+the Reviewer's S-6 started      17:50:04
+```
+
+**The class predates `S-6` by 2h50m.** And resource contention does not select a contiguous uid
+range; walking a sorted corpus does.
+
+### The hourly table, recomputed independently by the Reviewer
+
+```
+hour              10  11  12  13  14  15  16  17  18   total
+gpu_oom            0   0   0   0   0  42   0   9   0      51
+no_output          0   0   0   0   0   9   0   5   0      14
+blank_views        3   3   6   6   3   0   3   2   1      27
+duplicate_views    2   4   5   4   3   3   3   3   0      27
+```
+
+```
+corr(gpu_oom, no_output)      +0.949
+corr(gpu_oom, blank_views)    -0.605
+corr(blank, duplicate)        +0.663
+```
+
+### FINDING R-29.a — 119 failures are two populations, not one list
+
+```
+FINDING          RESOURCE, 65: gpu_oom + no_output. Correlation +0.949 across
+                 nine hourly buckets -- five hours at zero, a burst at 15h, zero
+                 at 16h, a smaller burst at 17h. Two independent causes do not
+                 do that. `no_output` is the same GPU failure one step more
+                 severe: Blender dies before it writes a file.
+                 ASSET, 54: blank_views + duplicate_views. 2-6 every hour for
+                 nine hours, no burst and no zero, and ANTI-correlated with the
+                 resource class at -0.605. Resource pressure does not distribute
+                 itself evenly across nine hours.
+EVIDENCE         Table above, recomputed by the Reviewer from
+                 quarantine_n04_render_views.jsonl, independently of the
+                 Engineer's classifier.
+CLASSIFICATION   OBSERVED DATA
+IMPACT           what a re-run can and cannot recover
+SEVERITY         NOTE -- and it changes what n04's tail is worth watching
+```
+
+**Consequence.** The 65 resource failures will re-run under near-exclusive GPU once `n03`, `V1.0`
+and `S-6` are finished, and should mostly pass. **The 54 asset failures are the ones to watch: if
+they persist under exclusive GPU, they are a render-settings problem and not an asset property.**
+The Engineer has already committed to stopping rather than admitting them in that case.
+
+**Both bursts land at the moments of highest concurrency**, and the Engineer notes their own
+`V1.0` launched at 17:41 — nine minutes before `S-6`. **Neither of us can attribute the 17h burst
+to the other**, and the 16h hour, with `n03` running throughout and zero resource failures, rules
+out `n03` alone as the cause.
