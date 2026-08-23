@@ -339,9 +339,27 @@ boundary:
             Verified by Master 2026-08-23: 40 COMPLETE shards, 199,974 reference
             clouds, 55 GB, now on NVMe at outputs/reference/ulip_npy/, unfiltered.
             That is the population the replacement measurement uses.
-        A replacement measurement (V1.0, n=138 from 40 newly fetched shards) is
-        running on CPU against the v8 corpus. If it overturns the carve-out that
-        is a USER decision, not the block'"'"'s and not Master'"'"'s.
+        RESOLVED 2026-08-23, and this must be read exactly as written.
+        The replacement measurement (V1.0, n=138, v8 corpus) came back AGAINST
+        this deviation: modulating wins 94, ties 10, loses 34; excluding ties
+        n=128, z=+5.30, exact two-tailed p=1.09e-07; cosine to ULIP's own cloud
+        0.9247 modulated against 0.9219 unmodulated. Recomputed by Master from
+        the raw rows rather than taken from a summary.
+        The v6 brightness claim is not merely superseded, it is REVERSED: v6
+        recorded "37 of 37 darker, -0.2076"; v8 measures +0.0054 BRIGHTER with
+        only 53 of 138 darker.
+        *** THE USER CHOSE TO RETAIN THIS DEVIATION AFTER BEING SHOWN THAT
+        EVIDENCE. *** 2026-08-23, given A (follow the measurement, modulate,
+        re-run n03) and B (retain and register the result), he answered
+        「好啦 沒關係我不想重跑了 同意好了」 -- B, on cost.
+        *** DO NOT WRITE THAT THE MEASUREMENT SUPPORTS THIS CARVE-OUT. IT DOES
+        NOT. *** The honest statement is that a USER decision retains it over a
+        5.3-sigma contrary result.
+        Limits registered with the result, not only the verdict: the effect size
+        is +0.0028 cosine -- statistically overwhelming, practically small -- and
+        the 138 were selected for overlap with ULIP, not for texture detail, so
+        they are not a random sample of the class the rule governs.
+        Result file: outputs/v1_0_color0_texture_v8.json
         CAUTION, recorded rather than buried: 16/37 wins is INSIDE the noise for
         37 coin flips (18.5 +/- 3) and no paired significance test was run. R-12's
         own text says "the darkening is certain; therefore worse is not". The

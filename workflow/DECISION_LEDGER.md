@@ -111,6 +111,30 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-027` — the USER's two rulings: `baseColorFactor` kept, `D-12` retained **over** the evidence
+
+| | |
+|---|---|
+| **Source** | USER, 2026-08-23, verbatim: 「好啦 沒關係我不想重跑了 同意好了 你跟Master解釋」 |
+| **`U-BCF` — `baseColorFactor` multiplied into the texture: KEPT** | 「同意好了」, given **after** the Engineer told him the `[USER DECISION]` tag had been invented and the choice was its own (`DL-026`). **No re-run needed** — it has been part of the v8 sampler since the corpus was built, not an opt-in. It is now a genuine `IMPLEMENTATION CHOICE` **approved with full knowledge of how it had been mislabelled** |
+| **Scale, measured — 150 assets, per geometry** | 93 at `factor = 1` (no-op) · 54 with no samplable texture (n/a) · **3 where it changes the colour**: `[0.976]` invisible, `[0.922]` slightly darker, and **`[0.0, 0.0, 0.0]`** — a part the specification says is **black**. **That is the whole case: without the multiply we store the texture's colour into a region that should be black. Not "worse" — wrong** |
+| **`U-D12` — `D-12` retained. This is the part that must not be softened** | 「我不想重跑了」 → option **B**, on cost. He was given **A** (follow the measurement, modulate `texture`, re-run `n03`) and **B** (retain, register the result) |
+| ⚠️ **How it must be recorded — the Engineer asked for this and Master is enforcing it** | **The USER chose to keep `D-12` AFTER being shown 5.30σ against it.** He did **not** choose it because the measurement supported it. **Writing "the measurement supports the carve-out" would be false.** The prohibition is now inside `graph_spec.yaml`'s own entry so a later reader cannot make that mistake |
+| **The contrary evidence, kept rather than dropped** | `V1.0`, n=138, v8 corpus: modulating **wins 94, ties 10, loses 34**; excluding ties **z = +5.30, p = 1.09e-07**; cosine **0.9247 vs 0.9219**. **The v6 brightness claim is reversed, not weakened** — v6 said 37/37 darker at −0.2076, v8 measures **+0.0054 brighter**, 53/138 darker. Limits alongside: **+0.0028** is small, and the 138 were selected for ULIP overlap, not texture detail |
+| **Corpus verified by Master over all 46,052 sidecars** | `sampler_version` **{8: 46052}**, no exceptions · `texture` unmodulated **23,675** — the carve-out in force · `flat` 12,718 / 806 · `gltf_default` 7,402 / 1,451. **Every figure the Engineer reported matches** |
+| **One thing the USER may want to correct** | 「同意好了」 sits in a compound sentence with 「我不想重跑了」. Master reads the first as `baseColorFactor` (needs no re-run) and the second as `D-12` (does). The Engineer stated that reading to him and invited a one-word reversal. **Recorded as an interpretation, not as his words** |
+| **Code follows the ledger, deliberately** | `pointclouds.py`'s docstring becomes `[IMPLEMENTATION CHOICE — ULIP2 Engineer, 2026-08-23; APPROVED BY USER 2026-08-23 after being told the attribution was invented]`. **Not applied while `n04` runs** — the Engineer paid 36,542 false failures once for a mid-run edit |
+| **Status** | **`USER_APPROVED`** — both rulings FINAL ACCEPTED |
+| **Date** | 2026-08-23 |
+
+**Also confirmed, and it retires a worry:** after `n04`'s restart **all 55 quarantines are
+previously-known failures and there are zero new ones.** All **41** earlier GPU-OOM retries
+**passed** — that batch was concurrency contention, not bad assets. What survives retry is 28
+*"every view blank"* and 26 *"duplicate views"*, which makes them **a render-configuration
+question, not an asset-quality one.** The Engineer investigates after `n04`.
+
+---
+
 ### `DL-026` — a false `USER DECISION` label. Self-reported by the ULIP2 Engineer, confirmed by Master.
 
 | | |
