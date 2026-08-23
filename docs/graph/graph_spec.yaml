@@ -263,7 +263,29 @@ boundary:
         paper's Table 1. Its measured value is recorded once the batch size is
         sized to the card -- it is measured, never chosen.
     - id: D-11
-      what: "n04 renders on a WHITE background; ULIP-2's released renders are black"
+      what: "REWRITTEN 2026-08-23 -- n04 now renders TRANSPARENT (openshape film_transparent=True) and composites to BLACK at load. This is AGREEMENT with upstream, not a divergence."
+      rewrite_note: >
+        REWRITTEN by Master 2026-08-23. The entry below described the pyrender
+        pipeline and is INVERTED as of RENDERER_VERSION 5.
+        Measured: 500 sidecars sampled from the live n04 corpus, unanimous --
+        background "transparent_rgba", background_source
+        "openshape film_transparent=True". Blender writes RGBA with alpha;
+        nothing is rendered onto white. Compositing happens at READ time in
+        exactly one place, view_io.py:47 BACKGROUND_RGB = (0, 0, 0).
+        So the reproduction now composites to BLACK -- which is what this entry
+        said upstream does and we did not.
+        The white decision it recorded rested on S-5 (retrieval against ULIP's
+        image_feat, white 97.2% vs black 95.8%, n=286) on the PYRENDER pipeline.
+        That measurement does not transfer to BlenderProc/CYCLES.
+        FURTHER, flagged by the ULIP2 Reviewer and NOT resolved: S-5's target is
+        itself uncalibrated -- encoding ULIP's OWN released PNGs with our
+        transform gives a diagonal (0.68, 0.76) BELOW the off-diagonal
+        (0.70, 0.78). image_feat does not match upstream's own pixels. Any
+        deviation resting on an S-5 absolute needs the target calibrated first,
+        not merely re-measured.
+        The id is KEPT rather than deleted: it is the only record of the period
+        in which we rendered on white, and n06 has not yet consumed either corpus.
+      what_before_rewrite: "n04 renders on a WHITE background; ULIP-2's released renders are black"
       why: >
         USER decision U-W, 2026-08-22. Measured, not assumed: against ULIP-2's own
         released image_feat over the full 286-asset overlap, white reaches R@1
@@ -286,7 +308,30 @@ boundary:
         moves 0.9005 -> 0.8980.
       impact: >
         The rgb channel of ~995 texture-class assets, consumed by the ULIP-2 point
-        tower. SAMPLER_VERSION 6.
+        tower.
+        EVIDENCE VOIDED 2026-08-23, BEHAVIOUR RETAINED -- Master, on the ULIP2
+        Engineer's report, verified over all 46,052 sidecars:
+        texture color0_modulated=False 23,675 (all of them);
+        flat False 12,718 / True 806; gltf_default False 7,402 / True 1,451.
+        So the carve-out is REAL and still in force at SAMPLER_VERSION 8.
+        BUT the numbers this entry originally quoted -- "37 of 37 darker,
+        0.9005 -> 0.8980, n=37" -- were taken under SAMPLER_VERSION 6 and MUST
+        NOT be read as current. Three reasons, none of them recoverable:
+        (a) SAMPLER_VERSION 7's per-point texture branch NEVER EXECUTED --
+            _texture_is_samplable tested material.image, which trimesh 5.0's
+            PBRMaterial does not have, returning True on 0 of 1,248 parts. For
+            the 23,675 texture assets v7 was behaviourally identical to v6, and
+            trimesh's sample_surface(sample_color=True) would have RAISED had
+            the branch ever been taken.
+        (b) v8 fixed it (USER "A", 2026-08-23) and re-ran the whole corpus, so
+            the colour of every texture asset changed under the very rule this
+            deviation carves out.
+        (c) the n=37 population itself is disputed: PIPELINE_FINAL.md:159 claims
+            11 ULIP shards on disk; the Engineer searched both volumes and found
+            ONE. Conflict flagged, NOT resolved.
+        A replacement measurement (V1.0, n=138 from 40 newly fetched shards) is
+        running on CPU against the v8 corpus. If it overturns the carve-out that
+        is a USER decision, not the block'"'"'s and not Master'"'"'s.
         CAUTION, recorded rather than buried: 16/37 wins is INSIDE the noise for
         37 coin flips (18.5 +/- 3) and no paired significance test was run. R-12's
         own text says "the darkening is certain; therefore worse is not". The

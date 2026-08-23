@@ -111,6 +111,33 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-022` — the word `SUPERSEDED` anywhere in a spec file silently deletes 38 gate checks
+
+**Found by Master 2026-08-23, by causing it. The best-evidenced instance yet of the pattern the
+ULIP2 Reviewer catalogued as `R-26`: a check that returns PASS because it stopped looking.**
+
+| | |
+|---|---|
+| **How it surfaced** | Master rewrote `D-11` and `check_graph` went **2276 → 2238**. The structural header was unchanged — `channels 56 nodes 38 edges 69 gates 7`. **`all pass` both times.** Nothing failed; the gate simply checked 38 fewer things and said so nowhere |
+| **Isolated, not guessed** | `git stash` on the one edited file: HEAD **2276**, with the edit **2238**. Then the check names were dumped from an instrumented copy and diffed. The 38 lost are exactly `graph_spec.yaml U-01` … `U-nn` — **one per entry in the UNKNOWN registry** |
+| **Root cause, `check_graph.py:833-835`** | ```body = f.read_text()``` / ```if "SUPERSEDED" in body:``` / ```body = body.split("SUPERSEDED")[0]``` — **the file is truncated at the first occurrence of that word, anywhere, and every U-id after it goes unchecked.** `D-11` sits around line 140 of `graph_spec.yaml`; the `U` registry begins around line 1655. **One word near the top erased the whole registry from the gate's view** |
+| **Why the heuristic exists, and why it is still wrong** | Presumably so a *"SUPERSEDED"* history section at the end of a **Markdown** document is not gate-checked — history is supposed to disagree with the present, the same reason `_HISTORY_HEADING` exists. But it is applied to **`.yaml` as well**, where there is no heading convention, and it splits on the **first** hit rather than a section boundary. A word that is ordinary vocabulary in a decision registry is being used as a control character |
+| **Fixed for now, NOT properly** | Master reworded `D-11` to `REWRITTEN`, `rewrite_note`, `what_before_rewrite`. `grep -c SUPERSEDED docs/graph/graph_spec.yaml` → **0**, and the count is back to **2276, all pass**. **This is avoidance, not a fix.** The trap is still armed for the next person who writes the obvious word in the obvious place, and `DECISION_LEDGER.md`'s own status vocabulary contains `SUPERSEDED` — so the term is actively encouraged elsewhere in the project |
+| **The real fix, registered not done** | Restrict the truncation to Markdown, anchor it to a heading rather than a bare substring, and **report how many checks each rule contributed** so a silent drop of 38 cannot look like `all pass`. Changing gate behaviour while `n04` is mid-run is the wrong moment — same reasoning as `DL-016`'s two-step |
+| **What it says about every earlier green run** | `check_graph` has reported `all pass` all week. **A pass has never carried a coverage number**, so no earlier run can be distinguished from one that silently checked less. Master cannot bound how long this was live — the trigger only needed the word to appear once in a `docs/graph/*.yaml` |
+| **Classification** | `OBSERVED IMPLEMENTATION`, reproduced by execution and isolated by stash-and-diff. Severity **MAJOR** — it is a gate-coverage defect, not a data defect |
+| **Status** | reworded and restored; **the checker defect is open and unassigned** |
+| **Date** | 2026-08-23 |
+
+**Related, same shape, three found in one day:** `check_graph`'s deviation match reads ids and
+never `what:` (`D-2`/`FU-A`) · its id match had no word boundary so `U-08` hit `U-08a`'s row
+(`DL-016`) · and the ULIP2 Engineer's own chain script counted with `find`, which returns **empty
+with no error** across a symlink, so every counter read 0 and a successful `n03` would have been
+declared stalled. **All four return a value. None of them return the right one, and none of them
+complain.**
+
+---
+
 ### `DL-021` — the `n04` re-run left **23 stale v3 assets in the index**. A failed re-render does not retract the old artifact.
 
 **Found by Master at integration, after the re-run reported success. This is a tool defect, not

@@ -20,6 +20,11 @@ __pycache__/
 *.parquet
 runs/
 outputs/
+# BlenderProc's default HDF5 dump lands in `output/` -- SINGULAR. The line above
+# is `outputs/` and does not match it, so 0.hdf5 sat untracked-but-not-ignored
+# and any `git add -A` would have swept it in. Added 2026-08-23 by Master after
+# exactly that mechanism mixed three roles' work into one commit (R-13.b).
+output/
 
 # Env / secrets
 .env
