@@ -111,6 +111,24 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-023` — `n04`'s mid-run guard covers two of the four files that decide a pixel
+
+**Reported by the ULIP2 Engineer after tripping the guard itself. Verified by Master, with one
+correction that goes in the Engineer's favour.**
+
+| | |
+|---|---|
+| **The guard, and it worked** | 18:11:56 the Engineer edited `renders.py` while `n04` was running. `n04` rebuilds its `ProcessPool` every 500 assets; each spawned worker re-imports and calls `verify_fingerprint`; every worker after that point **refused to write**. Measured by Master: **37,248 quarantine lines, of which 36,542 are `implementation changed while the run was in progress`.** `n04` stalled at 9,387 and 56 assets were produced under the wrong fingerprint. `renders.py` was reverted (fingerprint back to `656b35c7c7a1`), the 56 deleted with the USER's authorisation, run restarted 18:31. **`DL-018`'s guard did exactly what it was built for, three hours after it was built** |
+| **The 36,542 are NOT deleted, and that is right** | The Engineer left them and wrote `quarantine_n04_render_views.README.md` explaining how to tell them from real failures. *"Rewriting a run log so my own mistake disappears is worse than the mistake."* **Anyone computing an `n04` failure rate must read that README first** — the raw line count is 50× the real one |
+| **THE GAP — and it is wider than the guard's name suggests** | `renders.py:231` fingerprints **`renders.py` and `meshload.py`, and nothing else.** But `renders.py:599-600` imports **`render_blender.py`** (the module that actually drives Blender) and **`view_io.py`** (the single place alpha becomes colour). **Both decide pixels. Neither is covered.** Editing either mid-run produces a mixed corpus and, in the guard's own words, *"no sidecar field would show it."* **The Engineer was caught only because it happened to edit a covered file** |
+| ✅ **Master's correction, in the Engineer's favour: `n03` is NOT exposed** | The Engineer reported *"`n03` only records the fingerprint and never verifies it, so editing mid-run is not blocked — I edited it twice today and got away with it, that was luck not judgement."* **The code disagrees, and the code is right.** `pointclouds.py:831-836`: *"`n03` uses a **ThreadPool**. Threads share one interpreter and the module is imported once, so an edit during a run cannot reach the run — there is no drift here to catch."* **A `.py` edit cannot alter an already-imported module in a single-interpreter run.** `n03` is safe **by architecture**, not by luck, and the missing verification is a deliberate, reasoned omission. **Do not add a guard there on the strength of the Engineer's self-criticism** |
+| **Same family as everything else this week** | `check_graph` reads deviation ids and never `what:` · its id match had no word boundary · the word `SUPERSEDED` silently deleted 38 checks (`DL-022`) · `find` returns empty with no error across a symlink · and now **a fingerprint that guards half the surface it implies.** All of them run, all of them return a value, none of them says how much it looked at |
+| **Fix, registered NOT done** | Extend `n04`'s fingerprint to `render_blender.py` and `view_io.py`. **Not while `n04` is running** — editing a covered file is precisely what cost three hours today, and the fix would trip the guard it is fixing. **After `n04` and `n05`** |
+| **Status** | **open, ULIP2's to implement after the run** |
+| **Date** | 2026-08-23 |
+
+---
+
 ### `DL-022` — the word `SUPERSEDED` anywhere in a spec file silently deletes 38 gate checks
 
 **Found by Master 2026-08-23, by causing it. The best-evidenced instance yet of the pattern the

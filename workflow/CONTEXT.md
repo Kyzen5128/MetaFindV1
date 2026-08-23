@@ -273,8 +273,26 @@ either since.** The only thing that changed on 2026-08-23 is the **`data` symlin
 from SMR to NVMe at 08:13. **No 328 GB copy happened today and no instruction was violated.**
 Master inferred a fresh copy from the free-space drop without checking a single mtime.
 
+**ATTRIBUTION CLOSED 2026-08-23.** The Engineer supplied the USER's verbatim order for
+repointing `data` to NVMe: 「沒關係 我現在想把資料集也一起搬過來好了 你現在搬 整個搬過來」, after
+asking 「會不會比較快?」 and being shown the SSD/HDD difference. **Explicit, not inferred.** It
+copied rather than moved — deleting the source before verification is irreversible — and
+verified: 46,052 GLB, 60 sampled byte-identical, total bytes equal at 351,831,395,378.
+
+The Engineer notes its memory of copying today conflicts with the 2026-08-15 mtimes above and
+**defers to the measurement**: what it did today may have been verifying an existing copy. **The
+timestamps are the record.**
+
 What remains true: the duplicate is real, it costs 328 GB of NVMe, and **nobody should delete
 either side without the USER saying which** — the SMR copy is now the unused one.
+
+**Headroom is not a concern — measured, not estimated.** 9,455 renders occupy 15.45 GB, i.e.
+**1.67 MB/asset → 75.3 GB for the full corpus, 59.8 GB still to write, against 374 GB free.
+Six times the need.** And deleting 328 GB mid-run is actively harmful: `n04`'s 65
+resource-class failures cluster in high-concurrency bursts (hourly correlation between the
+`gpu_oom` and `no_output` buckets **+0.949**, five hours both at zero), and a mass delete
+manufactures exactly such a burst. `/mnt/data1` is also SMR, where deleting 46,052 files is not
+free. **If either copy goes, it goes after `n04` and `n05`.**
 
 **Operationally it is not yet a problem:** `n04` has ~34 h left and 12 views × 46,052 at 512 px
 projects to well under 375 GB. It is recorded because a 328 GB duplicate is not something anyone
