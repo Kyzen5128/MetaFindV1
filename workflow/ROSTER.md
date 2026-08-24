@@ -16,12 +16,20 @@ the previous roster was dead within the hour.
 1. **Prefer the `from=` of a live message** over anything written here. If a role has messaged you
    this session, reply on that thread and ignore this table.
 2. **Never guess a name.** Guessing already mis-sent one MAJOR finding to the wrong role today.
-3. Any role can read its own address authoritatively — it is the one thing `ListAgents` cannot
-   tell you about yourself:
+3. **Read your own address from the environment. Do not decline to state it.**
 
    ```
    echo $CLAUDE_CODE_MESSAGING_SOCKET
    ```
+
+   Credit: INTEGRATOR. Verified by the ESSGNN ENGINEER (`1092585`) and the ESSGNN REVIEWER
+   (`1092737`), each matching this table.
+
+   **This replaces the old rule "you cannot see your own name, so do not declare it."** That rule
+   was true about `ListAgents` and false about the world — it took `ListAgents` as the only source
+   and turned *"I cannot see it"* into *"it cannot be known."* The ESSGNN Reviewer withdrew the
+   position himself once shown the env var. Absence of evidence, converted to evidence of absence,
+   in the roster's own rules.
 
 4. **VS Code tab names are NOT addresses.** Master tested `SendMessage to: "ULIP2 ENGINEER"` —
    *"No agent named 'ULIP2 ENGINEER' is reachable."* The tab name is for the human only.
@@ -72,6 +80,37 @@ exactly what Rule 0.3 exists for.
 
 Superseded, all dead: `metafindv1-10 / 14 / 93 / 72 / f6 / dd / 0d`, sockets
 `735594 · 738549 · 741571 · 748636 · 1066863 · 1067707 · 1068859 · 1070256 · 1740924 · 4017483`.
+
+---
+
+## Known lying counters — `find` without `-L`
+
+`data/outputs/{renders,pointclouds,annotations,embeddings,checkpoints}` are **symlinks**. GNU
+`find` returns **empty with no error** for a symlinked start point.
+
+```
+find    data/outputs/renders -name '*.json' | wc -l  ->      0     WRONG, and silent
+find -L data/outputs/renders -name '*.json' | wc -l  -> 45,782     right
+```
+
+**Live, unfixed, found 2026-08-24 by scanning for it:**
+
+```
+tools/chain_to_stage1.sh:50   ANN=$(find "$OUT/annotations" -maxdepth 1 -name '*.json' | wc -l)
+tools/chain_to_stage1.sh:69   EMB=$(find "$OUT/embeddings"  -maxdepth 1 -name '*.npz'  | wc -l)
+```
+
+Both start points are symlinks. **Both counters read 0 regardless of the corpus**, and whatever
+gate reads them sees an empty stage. `tools/run_ulip_full.sh` already carries `find -L` for this
+exact reason; `chain_to_stage1.sh` never got the fix. **Routed, not fixed — changing it is a code
+change and goes through the three gates.** Archived `TASK.md` files carry the same pattern in
+copy-pasteable baseline commands; harmless as history, wrong if anyone runs them.
+
+This is `CONTEXT.md` §3's notch sourced from a **tool** rather than from us, which is why no code
+review would catch it: the command is correct, the flag is absent, and the output is a plausible
+number. Only re-measuring a different way catches it. Named by the ESSGNN Reviewer as the fourth
+"wrong and returns success" of the day, after `renders.py:899`, `annotate_run.py:371` and
+`semantic_edges_run.py:355`.
 
 ---
 
