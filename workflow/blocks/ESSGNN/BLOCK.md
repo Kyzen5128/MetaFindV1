@@ -137,6 +137,41 @@ and vector; only the point cloud is absent, and the context path never asks for 
 candidate-pool composition question, NOT the MASTER-IMPACTING case** the Engineer flagged as the
 alternative.
 
+### Before ANY ESSGNN run — `find -L` when counting your own outputs
+
+Raised by the ESSGNN Engineer 2026-08-24 and **written here at his explicit request**, because a
+stopped role cannot persist a finding: *「你今天已經證明過『進我的 SPEC 自我驗證欄』對停工的角色
+等於沒做」* — `stage2.py:270` below would have died with his session. ESSGNN has no SPEC and he
+cannot create one.
+
+> **Hard constraint: every command that counts `data/outputs/{checkpoints,embeddings}` uses
+> `find -L`.** Both are symlinks. A bare `find` returns **0 with no error** on a symlinked start
+> point.
+
+```
+reads TODAY, all safe -- real directories
+  data/outputs/scene_graphs          real
+  data/outputs/procthor_modalities   real
+  data/outputs/logs                  real
+
+WRITES LATER, both symlinks
+  data/outputs/checkpoints    <- n13's variant_ckpts
+  data/outputs/embeddings     <- ESSGNN embedding artefacts
+```
+
+**Loaded, not fired.** ESSGNN reads nothing symlinked today, so nothing is wrong now. It fires the
+first time anyone verifies "did training actually write anything" — a bare `find` answers `0` and
+the honest conclusion from that answer is *"training wrote nothing"*.
+
+It belongs to **`DL-030` item 5** (what the run writes) and **item 8** (what happens if it is
+wrong): a counter returning `0` would fill item 5 with *"wrote 0 files"* **with no way to know the
+report is lying.**
+
+Verified live 2026-08-24: `tools/status.sh` reports `n03 點雲 0` and `n04 渲染 0` against 46,052
+and 45,782 on disk, from this exact mechanism.
+
+---
+
 ### Before `n13` first runs — one read-only assertion, already measured green
 
 `stage2.py:270` is a **bare dict index** — `data.node_vectors[str(n["asset_id"])]`, no `.get`, no
