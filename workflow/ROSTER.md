@@ -33,8 +33,8 @@ the previous roster was dead within the hour.
 | Role | Name | Socket | State |
 |---|---|---|---|
 | **MASTER** | `metafindv1-69 [349be2]` | — | active |
-| **ULIP2 ENGINEER** | `metafindv1-62` | `1091579` | active — n04 halted 45,782/46,052, batch awaiting the USER |
-| **ULIP2 REVIEWER** | `metafindv1-b3 [5eb15e]` | `1091520` | active — `DL-029` review of the batch returned PASS on the CODE |
+| **ULIP2 ENGINEER** | `metafindv1-62` | `1091579` | active — n04 halted 45,782/46,052. **Stopped by Kyzen.** |
+| **ULIP2 REVIEWER** | `metafindv1-b3 [5eb15e]` | `1091520` | active — see the review-state note below |
 | **ESSGNN ENGINEER** | `metafindv1-7c [59f98b]` | `1092585` | **FULLY STOPPED** |
 | **ESSGNN REVIEWER** | `metafindv1-fa` | `1092737` | **FULLY STOPPED** |
 | **INTEGRATOR** | `metafindv1-f3` | `1092870` | **ON HOLD** (`DL-009`) |
@@ -42,6 +42,33 @@ the previous roster was dead within the hour.
 The ULIP2 Engineer's own message says its session is `metafindv1-0d`; the delivered `from-name`
 was `metafindv1-62`. **The `from` wins** — a session cannot see its own listed name, which is
 exactly what Rule 0.3 exists for.
+
+> ### ⚠️ **A verdict without its subject.** Corrected 2026-08-24, at the ULIP2 Engineer's request.
+>
+> This row first read *"`DL-029` review of the batch returned PASS on the CODE"*. **Beside the
+> Engineer's `n04 halted 45,782` it reads as "reviewed and ready to run". It is not.**
+>
+> ```
+> REVIEWED, round 2 PASS   the 10-file batch: n06's view_io bypass, the cache-generation
+>                          binding, rebuild_index, the fingerprint width, the failure
+>                          classifier, the 3 blockers introduced with the circuit break.
+>                          -> this is the code that produced the 45,782 on disk.
+>
+> NOT REVIEWED BY ANYONE   the guard rewrite now in the working tree:
+>                          blankness  std(black-composite) -> alpha, MIN_COVERAGE 0.001
+>                          distinct   all-12-byte-distinct -> only all-12-identical refused
+>                          breaker    DETERMINISTIC_INPUT no longer counts toward SYSTEMIC_RUN
+>                          new fields view_coverage / distinct_views / dark_views
+>                          effect     201 of 270 recovered, 99.41% -> 99.85%
+>                          -> no request sent, no round 1, no verdict.
+> ```
+>
+> **Reviewed on the code that produced the corpus; unreviewed on the code that would change which
+> assets count.** A verdict detached from its subject is the same defect as a count detached from
+> its denominator — `CONTEXT.md` §3. Caught by the ULIP2 Engineer against a row that favoured him.
+>
+> And it would clear no run either way: `DL-030` puts Kyzen last, and a peer relaying a verdict is
+> a report, not an authorisation (`DL-015` rule 3).
 
 Superseded, all dead: `metafindv1-10 / 14 / 93 / 72 / f6 / dd / 0d`, sockets
 `735594 · 738549 · 741571 · 748636 · 1066863 · 1067707 · 1068859 · 1070256 · 1740924 · 4017483`.
