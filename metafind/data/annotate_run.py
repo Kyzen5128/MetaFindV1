@@ -45,6 +45,7 @@ import traceback
 from pathlib import Path
 
 from metafind import paths, runlog
+from metafind.data.view_io import image_identity
 
 # BEFORE any transformers/torch import anywhere in this process. HF_HOME is read
 # at IMPORT time, not at from_pretrained time, so setting it inside Annotator
@@ -80,12 +81,28 @@ from metafind.data.annotate import (
 )
 
 NODE = "n05_annotate"
-MODEL_ID = "/mnt/data1/kyzen/models/Qwen3.8-27B"  # D-2: stands in for GPT-4o.
-# [DEVIATION D-2, re-pointed 2026-08-21 on the user's decision] The paper
-# annotates with GPT-4o (`2methdology.tex:28`, `neurips_2025.tex:100`).
-# It did so with Qwen2.5-VL-7B-Instruct before this task. Neither is GPT-4o;
-# the deviation is RE-POINTED, not discharged, and must never be written up
-# as paper-faithful.
+MODEL_ID = "/home/kyzen/metafind_out/gemma-4-12B-it"  # D-2: stands in for GPT-4o.
+# [DEVIATION D-2, re-pointed 2026-08-24 on the USER's decision -- his words,
+# verbatim: "D-2 改成 gemma"] The paper annotates with GPT-4o
+# (`2methdology.tex:28`, `neurips_2025.tex:100`). The stand-in was
+# Qwen2.5-VL-7B-Instruct, then Qwen3.8-27B, and is now gemma-4-12B-it.
+# None of them is GPT-4o; the deviation is RE-POINTED, not discharged, and
+# must never be written up as paper-faithful.
+#
+# [C1, 2026-08-24] This default was `/mnt/data1/kyzen/models/Qwen3.8-27B`:
+# 56 GB of bf16 against a 32,607 MiB card, on the SMR drive. It was safe only
+# because `tools/run_ulip_full.sh` overrode it with `--model`, and a default
+# that is safe only when one caller overrides it is not a default. Any direct
+# invocation -- a resume, a debug, a validation batch, the timing arm -- loaded
+# 56 GB onto a 32 GB card and OOMed slowly, off SMR. The record and the default
+# now name the same model, so `--model` no longer has to be remembered for the
+# run to be BOTH runnable and correctly described.
+#
+# The bake-off arms recorded `/mnt/data1/kyzen/models/gemma-4-12B-it`. MEASURED
+# 2026-08-24: that copy and this one are the same weights -- identical byte
+# size (23,951,779,497), identical `config.json` sha256, and identical sha256
+# over 400 MB of head+tail of `model.safetensors`. Same model, different path
+# string; `annotator_model` will differ textually between the arms and the run.
 MAX_NEW_TOKENS = 512
 
 # [PROMPT_VERSION 7] Sampling for the description candidates only. ULIP-2 does
@@ -175,7 +192,7 @@ def _record(uid: str) -> tuple[dict, str] | None:
     return (rec if isinstance(rec, dict) else {}), digest
 
 
-def _under_current_contract(rec: dict) -> bool:
+def _under_current_contract(rec: dict, image_id: str | None = None) -> bool:
     # Keyed on the ANNOTATION CONTRACT, not on prompt_version alone. A v1 sidecar
     # has every field name it shares with v2 but a different schema, and treating
     # it as done would silently mix two annotation generations in one corpus --
@@ -183,6 +200,16 @@ def _under_current_contract(rec: dict) -> bool:
     # `prompt_version: 3` could have been admitted by a validator with or without
     # the language rule. The contract id folds prompt, validator and schema
     # semantics into one comparison.
+    # [ADDED 2026-08-24] The renders are half of what produced this record and
+    # were not compared at all. A record that cannot say which images it saw is
+    # not current -- absence fails CLOSED, into UNACCOUNTED, which stops the run
+    # rather than either re-annotating or skipping it silently. `image_id` is
+    # supplied by `main`, which has n04's index; the presence rule holds even
+    # when a caller cannot supply it.
+    if not rec.get("image_identity"):
+        return False
+    if image_id is not None and rec.get("image_identity") != image_id:
+        return False
     return (all(k in rec for k in REQUIRED_FIELDS)
             and rec.get("annotation_contract") == annotation_contract_id()
             and "annotator_model" in rec)
@@ -304,7 +331,8 @@ def load_provenance_registry(path: Path = PROVENANCE_REGISTRY
     return out
 
 
-def provenance_state(uid: str, registry: dict[str, tuple[str, int, str]]) -> str | None:
+def provenance_state(uid: str, registry: dict[str, tuple[str, int, str]],
+                     image_id: str | None = None) -> str | None:
     """Which declared population accounts for this uid, or ``None`` if no record.
 
     ``None`` -- and only ``None`` -- is what a bare run treats as work.
@@ -319,7 +347,7 @@ def provenance_state(uid: str, registry: dict[str, tuple[str, int, str]]) -> str
     if found is None:
         return None
     rec, digest = found
-    if _under_current_contract(rec):
+    if _under_current_contract(rec, image_id):
         # Self-evidencing, and it must win: a residual that a NAMED MIGRATION
         # legitimately re-annotated will carry the current contract while an
         # older declaration still names it. The record is the newer fact.
@@ -330,16 +358,29 @@ def provenance_state(uid: str, registry: dict[str, tuple[str, int, str]]) -> str
     state, pv, declared_digest = declared
     if declared_digest != digest or rec.get("prompt_version") != pv:
         return UNACCOUNTED
+    # [ADDED 2026-08-24, Codex CHANGES REQUIRED] A declaration says a record was
+    # seen and classified. It cannot say that about images rendered afterwards.
+    # Without this, a byte-matching legacy record survives a re-render and
+    # `build_work_list` puts its state in NEITHER list -- `todo` is
+    # `state is None` and `blocked` is `state is UNACCOUNTED` -- so it is not
+    # annotated, not blocked, not counted, and `blocked == 0` reads as "nothing
+    # is stuck". A silent skip is the one outcome AC-1 exists to prevent, and
+    # the ENGINEER reported to MASTER that a missing identity routes to
+    # UNACCOUNTED unconditionally. It did not. It does now.
+    if image_id is not None and rec.get("image_identity") != image_id:
+        return UNACCOUNTED
     return state
 
 
-def classify_all(candidates, registry) -> dict[str, str | None]:
+def classify_all(candidates, registry, image_ids=None) -> dict[str, str | None]:
     """The predicate a bare run builds its work list from. No model, no GPU."""
-    return {uid: provenance_state(uid, registry) for uid in candidates}
+    image_ids = image_ids or {}
+    return {uid: provenance_state(uid, registry, image_ids.get(uid))
+            for uid in candidates}
 
 
-def build_work_list(candidates, force: bool,
-                    registry=None) -> tuple[list[str], list[str], dict[str, str | None]]:
+def build_work_list(candidates, force: bool, registry=None,
+                    image_ids=None) -> tuple[list[str], list[str], dict[str, str | None]]:
     """The WHOLE work-list decision, both branches. Returns (todo, blocked, states).
 
     `main()` calls exactly this and does nothing else to choose what gets
@@ -352,7 +393,8 @@ def build_work_list(candidates, force: bool,
         # named population. The gate removes the ACCIDENT, not this.
         return list(candidates), [], {}
     states = classify_all(candidates,
-                          load_provenance_registry() if registry is None else registry)
+                          load_provenance_registry() if registry is None else registry,
+                          image_ids)
     return ([uid for uid, st in states.items() if st is None],
             [uid for uid, st in states.items() if st == UNACCOUNTED],
             states)
@@ -404,6 +446,52 @@ def load_proportions() -> dict[str, tuple[float, float, float]]:
             x, y, z = (v / longest for v in ext)
             out[rec["uid"]] = (y, x, z)
     return out
+
+
+def _is_cuda_oom(exc: BaseException) -> bool:
+    """[C4, 2026-08-24] Is this exception the card running out of memory?
+
+    MEASURED during the 2026-08-24 timing arm: the batched n=5 draw peaks at
+    31,932 MiB of 32,607 -- **675 MiB of headroom**, worse than the 30.02 GB
+    this file's own docstring records. At that margin CUDA OOM is not one of the
+    things the fallback's `except Exception` might catch; over 46,024 assets and
+    5.4 days it is the LIKELIEST thing it will ever catch.
+
+    That matters because the fallback's response is to issue five more prefills.
+    On a genuinely per-asset failure (a very detailed mesh, an unusually long
+    prompt) that is right and it is why the fallback exists. On an OOM it is the
+    least survivable possible response: five sequential prefills on a card that
+    has just fragmented, each of which can OOM again. Freeing the cache first is
+    what makes the retry meaningful instead of five more failures.
+
+    Both branches, because neither alone is reliable: torch raises
+    `torch.cuda.OutOfMemoryError` for the allocator's own failures, but an OOM
+    surfacing from inside a kernel, a cuBLAS call, or a lower-level RuntimeError
+    reaches here as a plain exception whose message is the only evidence. A
+    string match alone would miss the typed case on a torch that renames it; the
+    typed check alone misses everything that is not raised by the allocator.
+    """
+    import torch
+
+    typed = getattr(torch.cuda, "OutOfMemoryError", None)
+    if typed is not None and isinstance(exc, typed):
+        return True
+    return "out of memory" in str(exc).lower()
+
+
+def _release_cuda() -> None:
+    """Return the allocator's cached blocks to the driver. Best-effort.
+
+    `empty_cache()` does not free memory held by live tensors -- it releases
+    what the caching allocator is holding unused, which after a failed
+    generation is the transient prefill workspace. It is the only thing that can
+    be done from here without unloading the model, and it is what makes the
+    sequential retry a different attempt rather than a repeat of the same one.
+    """
+    import torch
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 class Annotator:
@@ -661,9 +749,225 @@ class Annotator:
         return replies if n > 1 else replies[0]
 
 
+class SharedViewPrefix:
+    """[SPEEDUP 2026-08-24, USER: 方案一] Encode this asset's views ONCE and let
+    every call for the asset continue from that encoding.
+
+    MEASURED before writing this: the draw prompt and the structured prompt
+    tokenize to 3,195 and 4,106 tokens, of which the first **3,121 are
+    identical** -- 97.7% of the draw call and 76.0% of the structured call. The
+    shared part is exactly the twelve images plus the common instruction
+    opening, and the images are what a prefill spends its time on. n05's
+    9.5 s/asset was paying that vision cost twice per asset (and the batched
+    n=5 draw expands its inputs BEFORE the prefill, so the draw was paying it
+    five times over rows).
+
+    Mechanism: prefill the common prefix once into a `DynamicCache` built with
+    the model's own text config -- **the same construction `generate()` uses
+    internally** (`_prepare_cache_for_generation`:
+    `DynamicCache(config=self.config.get_text_config(decoder=True))`), so the
+    40-of-48 sliding-window layers this checkpoint declares (window 1024) get
+    sliding layers here exactly as they do on the plain path. A config-less
+    cache would silently give all 48 layers full history: ~3x the memory, and
+    a cache structure the normal path never produces. [ULIP2 Reviewer,
+    2026-08-24 -- the BLOCKER on this class's first version.]
+
+    Every call then generates on a COPY of the primed cache (`deepcopy`, plus
+    `batch_repeat_interleave` for the n=5 draw), and the copy is discarded.
+    The base itself is never generated on, so it needs no restoring -- the
+    first version crop()ed the base back after each call, which cannot work on
+    sliding layers (evicted states are gone; `DynamicSlidingWindowLayer.crop`
+    raises at window overflow) and had already tripped the 4.x/5.x crop-sign
+    shim. Copies cost ~0.5 GB transient at this window size, against the
+    ~1.2 GB per asset the config-less full cache held for the asset's whole
+    lifetime.
+
+    **Numerical status: IMPLEMENTATION CHOICE, recorded per record.** A cached
+    prefix changes reduction order the same way batch shape does -- this file
+    already records `batch_shape` because batch=1 and batch=5 disagree by up to
+    1.25e-1 in logits. The same honesty applies here: every record written
+    through this path carries `vision_prefix_reuse: true`, so a reproduction
+    knows which numerics produced it. The distribution is unchanged by design:
+    same model, same tokens, same sampler, same seed handling.
+
+    MEASURED 2026-08-24, 2 assets, both paths: the GREEDY structured call is
+    **identical character for character** (~500 argmax tokens, zero
+    divergence), so the logits agree wherever a deterministic decode looks.
+    The SAMPLED draws at the same seed differ (0/5 identical strings) -- the
+    two paths consume randomness against microscopically different logits, a
+    reseed-like effect, not a distribution change. A draw is therefore
+    reproducible given its recorded configuration (seed, batch_shape,
+    prefix_reuse), the same standard batch_shape was accepted under.
+    [ULIP2 Reviewer ruling, 2026-08-24: no version bump -- PROMPT_VERSION
+    gates the prompt/validator/schema contract and none of those changed.]
+
+    **Fallback is structural, not exceptional.** `ok` is False when the
+    annotator is a test fake, the tokenizations disagree with the primed
+    prefix, or the cache APIs are missing -- those fall back to the plain path
+    silently and the record says so. Runtime exceptions (OOM included) are NOT
+    swallowed here: they propagate to `annotate_one`, whose C4 handling is the
+    place that decides what an OOM means.
+    """
+
+    def __init__(self, ann, image_paths: list[str], prompts: list[str],
+                 preloaded_images=None) -> None:
+        self.ann = ann
+        self.ok = False
+        self.base = None
+        self.base_len = 0
+        self._image_paths = list(image_paths)
+        self._full = {}          # prompt -> tokenized inputs (on device)
+        model = getattr(ann, "model", None)
+        processor = getattr(ann, "processor", None)
+        if model is None or processor is None or not hasattr(model, "device"):
+            return               # a test fake; plain path
+        try:
+            import torch
+            from transformers import DynamicCache
+        except Exception:  # noqa: BLE001 -- no torch, no cache path
+            return
+        self._torch = torch
+        self._DynamicCache = DynamicCache
+        if not (hasattr(DynamicCache, "batch_repeat_interleave")
+                and hasattr(DynamicCache, "crop")):
+            return               # cache API moved; plain path is always correct
+
+        from metafind.data.view_io import load_views_rgb
+
+        images = (preloaded_images if preloaded_images is not None
+                  else load_views_rgb(image_paths))
+
+        def tokenize(prompt):
+            content = [{"type": "image", "image": im} for im in images]
+            content.append({"type": "text", "text": prompt})
+            kw = {}
+            if "enable_thinking" in (getattr(processor, "chat_template", "") or ""):
+                kw["enable_thinking"] = False
+            return processor.apply_chat_template(
+                [{"role": "user", "content": content}], add_generation_prompt=True,
+                tokenize=True, return_dict=True, return_tensors="pt", **kw,
+            ).to(model.device)
+
+        try:
+            toks = [tokenize(pr) for pr in prompts]
+        except Exception:  # noqa: BLE001 -- tokenizer quirk: plain path
+            return
+        ids = [t["input_ids"][0] for t in toks]
+        n = 0
+        limit = min(len(i) for i in ids)
+        while n < limit and all(bool(i[n] == ids[0][n]) for i in ids[1:]):
+            n += 1
+        if n < 16:
+            return               # no meaningful shared prefix; nothing to reuse
+        first = toks[0]
+        seq = first["input_ids"].shape[1]
+        # Every image must live INSIDE the prefix -- a continuation never gets
+        # pixel_values, so an image token past the cut would be a token with no
+        # features. `image_position_ids` marks image positions with >= 0.
+        # `mm_token_type_ids` is (1, seq) aligned with input_ids, image tokens
+        # marked 1 -- the per-TOKEN channel. `image_position_ids` is (12, 280, 2),
+        # PER-IMAGE grid coordinates: indexing [0] takes one image, its max is
+        # bounded by the grid, and a guard built on it could never fail.
+        # [ULIP2 Reviewer, 2026-08-24 -- named as a could-not-fail candidate;
+        # confirmed, replaced.] No per-token channel -> structural fallback.
+        mm = first.get("mm_token_type_ids")
+        if mm is None or mm.shape[1] != seq:
+            return
+        img_pos = (mm[0] == 1).nonzero()
+        if len(img_pos) == 0 or int(img_pos.max()) >= n:
+            return
+        # Slice every per-token tensor to the prefix; whole-image tensors
+        # (pixel_values) pass through untouched.
+        prefix = {}
+        for k, v in first.items():
+            if hasattr(v, "ndim") and v.ndim >= 2 and v.shape[1] == seq:
+                prefix[k] = v[:, :n]
+            else:
+                prefix[k] = v
+        try:
+            cfg = model.config.get_text_config(decoder=True)
+            with torch.no_grad():
+                out = model(**prefix, use_cache=True,
+                            past_key_values=DynamicCache(config=cfg))
+            self.base = out.past_key_values
+        except Exception:  # noqa: BLE001 -- prefill refused; plain path
+            return
+        self.base_len = n
+        self._prefix_ids = ids[0][:n]
+        self._full = {pr: t for pr, t in zip(prompts, toks)}
+        self._tokenize = tokenize
+        self.ok = True
+
+    def _inputs_for(self, prompt):
+        t = self._full.get(prompt)
+        if t is None:
+            t = self._tokenize(prompt)
+            self._full[prompt] = t
+        ids = t["input_ids"]
+        if (ids.shape[1] < self.base_len
+                or not bool((ids[0, :self.base_len] == self._prefix_ids).all())):
+            return None          # this prompt does not share the prefix
+        return t
+
+    def _copy(self, repeats: int = 1):
+        # transformers 5 removed the legacy tuple API; the supported route is a
+        # deep copy (clones the KV tensors, base untouched), expanded in place
+        # for n > 1. The copy is the whole isolation story: the base is never
+        # generated on, so sliding-layer eviction during a call can never
+        # corrupt the prefix the next call starts from.
+        import copy
+
+        grown = copy.deepcopy(self.base)
+        if repeats > 1:
+            grown.batch_repeat_interleave(repeats)
+        return grown
+
+    def generate(self, prompt: str, *, sample: bool = False,
+                 seed: int | None = None, n: int = 1):
+        """Same contract as `Annotator.generate`, minus re-encoding the views."""
+        if not self.ok:
+            raise RuntimeError("SharedViewPrefix used while not ok")
+        torch = self._torch
+        t = self._inputs_for(prompt)
+        if t is None:            # unshared prompt: pay the full price, stay correct
+            return self.ann.generate(self._image_paths, prompt,
+                                     sample=sample, seed=seed, n=n)
+        ids = t["input_ids"]
+        mask = t.get("attention_mask")
+        gen_kwargs: dict = {"max_new_tokens": MAX_NEW_TOKENS, "do_sample": sample}
+        if sample:
+            gen_kwargs |= {"temperature": SAMPLING_TEMPERATURE,
+                           "top_p": SAMPLING_TOP_P}
+            if seed is not None:
+                torch.manual_seed(seed)
+        if n > 1:
+            effective_beams = getattr(
+                self.ann.model.generation_config, "num_beams", 1) or 1
+            if effective_beams != 1 or not sample:
+                raise ValueError(
+                    "n > 1 draws independent samples and requires do_sample=True "
+                    f"with num_beams=1; got sample={sample} "
+                    f"effective num_beams={effective_beams}")
+            cache = self._copy(n)
+            ids = ids.repeat(n, 1)
+            mask = mask.repeat(n, 1) if mask is not None else None
+        else:
+            cache = self._copy()
+        with torch.no_grad():
+            out = self.ann.model.generate(
+                input_ids=ids, attention_mask=mask,
+                past_key_values=cache, **gen_kwargs)
+        del cache
+        trimmed = out[:, t["input_ids"].shape[1]:]
+        replies = self.ann.processor.batch_decode(
+            trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+        return replies if n > 1 else replies[0]
+
+
 def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
                  lvis_category: str | None,
-                 proportions: tuple[float, float, float]) -> tuple[dict | None, dict | None]:
+                 proportions: tuple[float, float, float],
+                 preloaded_images=None) -> tuple[dict | None, dict | None]:
     """SG1 for one asset. Returns ``(record, quarantine_entry)`` -- exactly one is None.
 
     `lvis_category=None` is the UNANCHORED path (`PROMPT_VERSION 7`): no
@@ -673,6 +977,21 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
     """
     views = render_rec["view_paths"]
     anchored = lvis_category is not None
+
+    # [SPEEDUP 2026-08-24] Both prompts are known before any call, so the
+    # shared image prefix can be primed once and every call for this asset --
+    # draw, structured, and any repair -- continues from it. `sv.ok` False
+    # (a test fake, a moved cache API, a tokenizer that disagrees) falls back
+    # to the plain per-call path, and the record says which path ran.
+    draw_prompt = build_description_prompt(len(views), lvis_category)
+    struct_prompt = (build_prompt(len(views), lvis_category, proportions)
+                     if anchored else build_unanchored_prompt(len(views), proportions))
+    sv = SharedViewPrefix(ann, views, [draw_prompt, struct_prompt],
+                          preloaded_images=preloaded_images)
+    prefix_reuse = sv.ok
+
+    def gen(prompt, **kw):
+        return sv.generate(prompt, **kw) if sv.ok else ann.generate(views, prompt, **kw)
 
     # --- description candidates, ULIP-2's method (main.tex:677) --------------
     candidates: list[str] = []
@@ -697,11 +1016,20 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
     # records the batch seed, which is what actually reproduces the draw.
     draw_mode = "batched"
     try:
-        drawn = ann.generate(
-            views, build_description_prompt(len(views), lvis_category),
-            sample=True, seed=base, n=N_CANDIDATES)
-    except Exception:  # noqa: BLE001 -- see below; a failed batch is not the asset
-        draw_mode = "sequential_fallback"
+        drawn = gen(draw_prompt, sample=True, seed=base, n=N_CANDIDATES)
+    except Exception as exc:  # noqa: BLE001 -- see below; a failed batch is not the asset
+        # [C4, 2026-08-24] OOM is handled BEFORE the fallback, not folded into
+        # it. See `_is_cuda_oom`: at 675 MiB of headroom this is the likeliest
+        # exception here, and issuing five more prefills on a fragmented card
+        # without freeing the workspace first is the one response that cannot
+        # work. The distinction is also RECORDED -- `draw_mode` reaches the
+        # sidecar, so an OOM-driven fallback is no longer indistinguishable from
+        # a per-asset one, and the run's OOM rate becomes countable afterwards
+        # instead of invisible.
+        oom = _is_cuda_oom(exc)
+        draw_mode = "oom_sequential_fallback" if oom else "sequential_fallback"
+        if oom:
+            _release_cuda()
         # Falling back to one-at-a-time rather than quarantining: the batch can
         # fail for a reason that is about THIS asset's memory footprint (a very
         # detailed mesh, an unusually long prompt) while the same asset renders
@@ -710,10 +1038,13 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
         drawn = []
         for k in range(N_CANDIDATES):
             try:
-                drawn.append(ann.generate(
-                    views, build_description_prompt(len(views), lvis_category),
-                    sample=True, seed=base + k))
-            except Exception:  # noqa: BLE001 -- one bad draw is not the asset
+                drawn.append(gen(draw_prompt, sample=True, seed=base + k))
+            except Exception as inner:  # noqa: BLE001 -- one bad draw is not the asset
+                # Free again per draw: without this the FIRST single draw to OOM
+                # leaves its workspace cached and the remaining draws inherit a
+                # card that is still full, so one OOM would reliably become five.
+                if _is_cuda_oom(inner):
+                    _release_cuda()
                 drawn.append("")
     if isinstance(drawn, str):
         drawn = [drawn]
@@ -741,14 +1072,13 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
         }
     winner, ranked = rank_descriptions(views, candidates)
 
-    prompt = (build_prompt(len(views), lvis_category, proportions) if anchored
-              else build_unanchored_prompt(len(views), proportions))
+    prompt = struct_prompt
     current = prompt
     last_error = ""
     last_raw = ""
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        raw = ann.generate(views, current)
+        raw = gen(current)
         last_raw = raw
         try:
             annotation = validate_annotation(
@@ -813,12 +1143,24 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
                                      "batch_shape": (N_CANDIDATES
                                                      if draw_mode == "batched" else 1),
                                      "effective": getattr(
-                                         ann, "effective_generation_config", None)},
+                                         ann, "effective_generation_config", None),
+                                     # Which numerics produced this record --
+                                     # a cached prefix shifts logits the way
+                                     # batch shape does (see SharedViewPrefix).
+                                     "prefix_reuse": prefix_reuse},
+        "vision_prefix_reuse": prefix_reuse,
             # F13: the annotator saw scale-normalised renders, so its size
             # estimate is a category prior. The mesh's own bounding box travels
             # with it so the estimate can be audited -- and it is a WEAK ground
             # truth, since Objaverse authors choose their own units.
             "raw_bbox_extents": render_rec.get("raw_bbox_extents"),
+            # [ADDED 2026-08-24] WHICH images the model was shown. Completion
+            # compared the annotation contract and nothing about the renders, so
+            # a re-rendered corpus (the OptiX swap, `RENDERER_VERSION` 5 -> 6)
+            # left every record "current" while describing images that had been
+            # deleted. See `view_io.image_identity`.
+            "image_identity": image_identity(render_rec),
+            "renderer_version": render_rec.get("renderer_version"),
             # The exact triple the prompt showed the model, so the derived
             # width/length can be recomputed from the record alone.
             "mesh_proportions_yxz": list(proportions),
@@ -895,7 +1237,9 @@ def main() -> int:
         candidates = sorted(renders)
 
     try:
-        todo, blocked, states = build_work_list(candidates, args.force)
+        todo, blocked, states = build_work_list(
+            candidates, args.force,
+            image_ids={u: image_identity(r) for u, r in renders.items()})
     except ProvenanceRegistryError as exc:
         print(f"{exc}\nRefusing: the provenance registry is what accounts for the "
               "existing corpus, so a registry that cannot be trusted is a reason to "
@@ -944,11 +1288,32 @@ def main() -> int:
 
     ann = Annotator(args.model, quant=args.quant)
     done, quarantined, started = 0, 0, time.time()
+    # [SPEEDUP 2026-08-24, USER: 方案三] Decode the NEXT asset's twelve PNGs on
+    # a CPU thread while the GPU is busy with THIS one. Pure pipelining: the
+    # images that reach the model are byte-identical to a synchronous load, and
+    # a preload failure degrades to the synchronous path inside annotate_one
+    # (preloaded_images=None), never to a skipped asset.
+    from concurrent.futures import ThreadPoolExecutor
+
+    from metafind.data.view_io import load_views_rgb
+
+    def _preload(u):
+        try:
+            return load_views_rgb(renders[u]["view_paths"])
+        except Exception:  # noqa: BLE001 -- the real load will report it properly
+            return None
+
+    pool = ThreadPoolExecutor(max_workers=1)
+    pending = pool.submit(_preload, todo[0]) if todo else None
     with runlog.run_progress(NODE):
-        for uid in todo:
+        for i, uid in enumerate(todo):
+            images = pending.result() if pending is not None else None
+            pending = (pool.submit(_preload, todo[i + 1])
+                       if i + 1 < len(todo) else None)
             try:
                 rec, bad = annotate_one(
                     ann, uid, renders[uid],
+                    preloaded_images=images,
                     # [PROMPT_VERSION 8] The LVIS label IS supplied, and
                     # `annotate.anchored` is therefore True for every asset --
                     # 46,207 entries in this table, 0 of them empty. The

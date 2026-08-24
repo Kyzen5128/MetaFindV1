@@ -153,11 +153,35 @@ def test_aggregation_preserves_the_embedding_width():
 
 # --- completion -----------------------------------------------------------
 
+# [ADDED 2026-08-24] The image half of the cache key. Any fixed string works
+# here -- the production value is a digest of the render generation and the 12
+# view hashes, and what these tests check is that completion COMPARES it.
+IMAGE_ID = "0123456789abcdef"
+# [ADDED 2026-08-24, Codex CHANGES REQUIRED] These tests used to write
+# `np.savez_compressed(..., text=np.zeros(4))` -- an NPZ with no `image` and no
+# `views` -- and assert it was COMPLETE. That is not a fixture shortcut, it is
+# the test suite certifying the defect: n06 would skip the asset and n10 would
+# fail mid-epoch, or train on whatever it found. A "complete" artifact in these
+# tests now looks like a complete artifact on disk.
+DIM = 4
+N_VIEWS = 12
+
+
+def complete_npz(tmp_path, **over):
+    arrays = {"text": np.zeros(DIM), "image": np.zeros(DIM),
+              "views": np.zeros((N_VIEWS, DIM))}
+    arrays.update(over)
+    np.savez_compressed(tmp_path / "abc.npz", **arrays)
+
+
 def sidecar(tmp_path, **over) -> str:
     """A complete sidecar for `abc`, minus whatever the caller overrides."""
     rec = {"uid": "abc",
            "encoder_version": 1,
            "embedding_uri": str(tmp_path / "abc.npz"),
+           "image_identity": IMAGE_ID,
+           "embedding_dim": DIM,
+           "n_views": N_VIEWS,
            "text": serialize_annotation(ANNOTATION)}
     rec.update(over)
     (tmp_path / "abc.json").write_text(json.dumps(rec, ensure_ascii=False))
@@ -171,19 +195,53 @@ def test_an_asset_with_a_sidecar_but_no_npz_is_not_complete(monkeypatch, tmp_pat
 
     monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path)
     text = sidecar(tmp_path, encoder_version=m.ENCODER_VERSION)
-    assert is_complete("abc", text) is False
+    assert is_complete("abc", text, IMAGE_ID) is False
 
-    np.savez_compressed(tmp_path / "abc.npz", text=np.zeros(4))
-    assert is_complete("abc", text) is True
+    complete_npz(tmp_path)
+    assert is_complete("abc", text, IMAGE_ID) is True
+
+
+def test_a_re_render_forces_a_re_encode(monkeypatch, tmp_path):
+    """[ADDED 2026-08-24] The images are half of this artifact and were not in
+    the cache key at all.
+
+    On 2026-08-24 the corpus was re-rendered with a different denoiser
+    (`RENDERER_VERSION` 5 -> 6, different pixels). Completion compared the text
+    exactly and the images not at all, so every existing embedding stayed
+    "complete" while its view vectors came from images that had been deleted.
+
+    The negative injection is the real one: the sidecar is untouched and only
+    the render it claims to describe has moved.
+    """
+    import metafind.data.encode_text_image as m
+
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path)
+    complete_npz(tmp_path)
+    text = sidecar(tmp_path, encoder_version=m.ENCODER_VERSION)
+    assert is_complete("abc", text, IMAGE_ID) is True
+    assert is_complete("abc", text, "a different render") is False
+    # An n04 record that cannot say what it rendered is a reason to re-encode.
+    assert m.image_identity({"renderer_version": 6}) == ""
+    assert is_complete("abc", text, "") is False
+
+
+def test_the_image_identity_moves_with_the_renderer_and_the_pixels():
+    """It has to catch BOTH a version bump and a silent re-render."""
+    import metafind.data.encode_text_image as m
+
+    base = {"renderer_version": 6, "view_sha256": ["a", "b", "c"]}
+    assert m.image_identity(base) == m.image_identity(dict(base))
+    assert m.image_identity({**base, "renderer_version": 5}) != m.image_identity(base)
+    assert m.image_identity({**base, "view_sha256": ["a", "b", "d"]}) != m.image_identity(base)
 
 
 def test_a_stale_encoder_version_forces_a_re_encode(monkeypatch, tmp_path):
     import metafind.data.encode_text_image as m
 
     monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path)
-    np.savez_compressed(tmp_path / "abc.npz", text=np.zeros(4))
+    complete_npz(tmp_path)
     text = sidecar(tmp_path, encoder_version=m.ENCODER_VERSION + 1)
-    assert is_complete("abc", text) is False
+    assert is_complete("abc", text, IMAGE_ID) is False
 
 
 # --- the token budget -----------------------------------------------------
@@ -209,13 +267,13 @@ def test_a_sidecar_whose_text_came_from_another_serializer_is_not_complete(
     import metafind.data.encode_text_image as m
 
     monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path)
-    np.savez_compressed(tmp_path / "abc.npz", text=np.zeros(4))
+    complete_npz(tmp_path)
     stale = ("A wooden dining chair with a slatted back and four tapered legs. "
              "A dining chair made of wood, fabric, "
              "roughly 0.45 by 0.50 by 0.90 metres, typically placed floor.")
     sidecar(tmp_path, encoder_version=m.ENCODER_VERSION, text=stale)
 
-    assert is_complete("abc", serialize_annotation(ANNOTATION)) is False
+    assert is_complete("abc", serialize_annotation(ANNOTATION), IMAGE_ID) is False
 
 
 def test_a_sidecar_with_no_text_field_at_all_is_not_complete(monkeypatch, tmp_path):
@@ -224,13 +282,13 @@ def test_a_sidecar_with_no_text_field_at_all_is_not_complete(monkeypatch, tmp_pa
     import metafind.data.encode_text_image as m
 
     monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path)
-    np.savez_compressed(tmp_path / "abc.npz", text=np.zeros(4))
+    complete_npz(tmp_path)
     text = sidecar(tmp_path, encoder_version=m.ENCODER_VERSION)
     rec = json.loads((tmp_path / "abc.json").read_text())
     del rec["text"]
     (tmp_path / "abc.json").write_text(json.dumps(rec))
 
-    assert is_complete("abc", text) is False
+    assert is_complete("abc", text, IMAGE_ID) is False
 
 
 def test_a_record_this_serializer_cannot_serialize_is_never_complete(
@@ -243,9 +301,9 @@ def test_a_record_this_serializer_cannot_serialize_is_never_complete(
     import metafind.data.encode_text_image as m
 
     monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path)
-    np.savez_compressed(tmp_path / "abc.npz", text=np.zeros(4))
+    complete_npz(tmp_path)
     sidecar(tmp_path, encoder_version=m.ENCODER_VERSION)
-    assert is_complete("abc", "") is False
+    assert is_complete("abc", "", IMAGE_ID) is False
 
 
 def test_expected_text_for_returns_empty_on_an_unserialisable_record(tmp_path):
@@ -340,20 +398,20 @@ def test_a_sidecar_pointing_at_some_other_file_is_not_complete(monkeypatch, tmp_
     import metafind.data.encode_text_image as m
 
     monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path)
-    np.savez_compressed(tmp_path / "abc.npz", text=np.zeros(4))
+    complete_npz(tmp_path)
     other = tmp_path / "something_else.txt"
     other.write_text("not vectors")
 
     text = sidecar(tmp_path, encoder_version=m.ENCODER_VERSION,
                    embedding_uri=str(other))
-    assert is_complete("abc", text) is False
+    assert is_complete("abc", text, IMAGE_ID) is False
 
     text = sidecar(tmp_path, encoder_version=m.ENCODER_VERSION,
                    embedding_uri=str(tmp_path / "a_different_uid.npz"))
-    assert is_complete("abc", text) is False
+    assert is_complete("abc", text, IMAGE_ID) is False
 
     text = sidecar(tmp_path, encoder_version=m.ENCODER_VERSION)
-    assert is_complete("abc", text) is True
+    assert is_complete("abc", text, IMAGE_ID) is True
 
 
 # --- P-4: the 77-token budget is enforced, not merely recorded ---------------
@@ -395,3 +453,208 @@ def test_exactly_the_context_length_is_allowed():
     while true_token_count(text) > TEXT_CONTEXT_LENGTH:
         text = text[:-7]
     assert refuse_if_overlong(text) <= TEXT_CONTEXT_LENGTH
+
+
+# --- 2026-08-24, Codex CHANGES REQUIRED: the gaps it named ------------------
+
+def test_encode_views_composites_alpha_instead_of_dropping_it(monkeypatch, tmp_path):
+    """[Codex coverage gap] Nothing reached `Encoder.encode_views()`, so reverting
+    the alpha fix would have left the whole selection green.
+
+    Expected truth is the source-over formula, not any model output: a 50%-alpha
+    white pixel over black is 128. `Image.open(p).convert("RGB")` returns 255 --
+    that is the bug, and the assertion below fails if it comes back.
+    """
+    from PIL import Image
+
+    import metafind.data.encode_text_image as m
+
+    a = np.zeros((2, 2, 4), dtype=np.uint8)
+    a[..., :3] = 255
+    a[0, 0, 3] = 128          # half transparent white
+    p = tmp_path / "view_00.png"
+    Image.fromarray(a, mode="RGBA").save(p)
+
+    seen = []
+
+    class _NoGrad:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    class _Torch:
+        @staticmethod
+        def stack(xs): return xs
+        @staticmethod
+        def no_grad(): return _NoGrad()
+
+    class _Backbone:
+        @staticmethod
+        def encode_image(batch):
+            seen.extend(batch)
+            class _Out:
+                def float(self): return self
+                def cpu(self): return self
+                def numpy(self): return np.zeros((len(batch), 4))
+            return _Out()
+
+    enc = m.Encoder.__new__(m.Encoder)
+    enc.torch = _Torch()
+    enc.backbone = _Backbone()
+    enc.preprocess = lambda im: np.asarray(im)
+
+    enc.encode_views([str(p)])
+    assert tuple(seen[0][0, 0]) == (128, 128, 128), (
+        f"got {tuple(seen[0][0, 0])}; 255 means alpha was dropped, not composited")
+
+
+def test_an_npz_missing_its_image_vectors_is_not_complete(monkeypatch, tmp_path):
+    """[Codex] `return npz.is_file()` accepted a file with only `text` in it."""
+    import metafind.data.encode_text_image as m
+
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path)
+    text = sidecar(tmp_path, encoder_version=m.ENCODER_VERSION)
+    complete_npz(tmp_path)
+    assert is_complete("abc", text, IMAGE_ID) is True
+
+    np.savez_compressed(tmp_path / "abc.npz", text=np.zeros(DIM))
+    assert is_complete("abc", text, IMAGE_ID) is False, "missing image/views"
+
+    complete_npz(tmp_path, image=np.zeros(DIM + 1))
+    assert is_complete("abc", text, IMAGE_ID) is False, "wrong width"
+
+    complete_npz(tmp_path, views=np.zeros((N_VIEWS - 1, DIM)))
+    assert is_complete("abc", text, IMAGE_ID) is False, "wrong view count"
+
+
+def test_changing_the_aggregation_forces_a_re_encode(monkeypatch, tmp_path):
+    """[Codex] `image` IS the aggregate. Switching mean -> max scheduled no work
+    at all, and Stage 1 then trained on the old pooled vector under the new
+    label."""
+    import metafind.data.encode_text_image as m
+
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path)
+    complete_npz(tmp_path)
+    text = sidecar(tmp_path, encoder_version=m.ENCODER_VERSION, aggregation="mean")
+    assert is_complete("abc", text, IMAGE_ID, "mean") is True
+    assert is_complete("abc", text, IMAGE_ID, "max") is False
+
+
+def test_an_annotation_from_another_render_is_not_encodable(tmp_path):
+    """[Codex] n06 joined stale TEXT to new PIXELS and cached the pair forever."""
+    import metafind.data.encode_text_image as m
+
+    a = tmp_path / "abc.json"
+    a.write_text(json.dumps({**ANNOTATION, "image_identity": "old-render"}))
+    assert m._annotation_image_identity(a) == "old-render"
+
+    b = tmp_path / "def.json"
+    b.write_text(json.dumps(ANNOTATION))
+    assert m._annotation_image_identity(b) == "", "a record with no identity is not current"
+
+
+def _render_rec(uid: str, tag: str) -> dict:
+    """An n04 record whose `image_identity` is stable and distinguishable by `tag`."""
+    return {"uid": uid, "renderer_version": 6,
+            "view_sha256": [f"{tag}{i:02d}" for i in range(12)]}
+
+
+def test_one_stale_annotation_halts_even_when_there_is_fresh_work(monkeypatch, tmp_path):
+    """[N-1] `partial_failure_semantics: halt` means halt, not "halt if nothing is left".
+
+    The bug this pins was a rank-5 registry violation that could only be seen
+    with a MIXED corpus. `return 3 if stale_text else 0` sat under `if not todo`,
+    so rc 3 was reachable only when the stale set was EVERY asset. One stale
+    annotation among 45,500 fresh ones excluded the stale asset, retired its
+    artifacts, encoded the rest, and returned **0** -- the chain read success
+    while the corpus had silently shrunk. `chain_to_stage1.sh:71` admits that.
+
+    So the assertion has to be made with `todo` NON-EMPTY, which is exactly the
+    case the old guard skipped. `Encoder` is replaced by a tripwire rather than
+    mocked out: on the old code `todo` is non-empty and the encoder IS
+    constructed, so the tripwire is what distinguishes "halted" from "returned a
+    3 it happened to reach anyway".
+    """
+    import metafind.data.encode_text_image as m
+    from metafind.data import view_io
+
+    monkeypatch.setattr(m.paths, "LOGS", tmp_path)
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path / "emb")
+    monkeypatch.setattr(m.paths, "ANNOTATIONS", tmp_path / "ann")
+    (tmp_path / "ann").mkdir()
+    monkeypatch.setattr("sys.argv", ["encode_text_image"])
+
+    def _tripwire(*a, **k):
+        raise AssertionError(
+            "n06 built its Encoder with a stale annotation present -- the "
+            "registry declares partial_failure_semantics: halt")
+
+    monkeypatch.setattr(m, "Encoder", _tripwire)
+
+    fresh, stale = _render_rec("fresh", "aa"), _render_rec("stale", "bb")
+    (tmp_path / "renders_index.jsonl").write_text(
+        json.dumps(fresh) + "\n" + json.dumps(stale) + "\n")
+
+    # `fresh` agrees with what is on disk; `stale` names a render that is gone.
+    (tmp_path / "ann" / "fresh.json").write_text(json.dumps(
+        {**ANNOTATION, "uid": "fresh", "image_identity": view_io.image_identity(fresh)}))
+    (tmp_path / "ann" / "stale.json").write_text(json.dumps(
+        {**ANNOTATION, "uid": "stale", "image_identity": "an identity from a dead render"}))
+
+    assert m.main() == 3, "one stale annotation among fresh work must halt the node"
+
+
+def test_the_stale_artifacts_are_retired_before_the_halt(monkeypatch, tmp_path):
+    """[N-1] Order matters: retire, THEN halt.
+
+    A halt that returns before retiring would leave the old `<uid>.npz` in place,
+    and n09 admits a uid on the FILE, not on this node's exit code -- so the
+    stale embedding would survive a run that had already refused it. The halt is
+    the reason retirement cannot be deferred to the next pass.
+    """
+    import metafind.data.encode_text_image as m
+    from metafind.data import view_io
+
+    monkeypatch.setattr(m.paths, "LOGS", tmp_path)
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path / "emb")
+    monkeypatch.setattr(m.paths, "ANNOTATIONS", tmp_path / "ann")
+    (tmp_path / "ann").mkdir()
+    (tmp_path / "emb").mkdir()
+    monkeypatch.setattr("sys.argv", ["encode_text_image"])
+    monkeypatch.setattr(m, "Encoder", lambda *a, **k: pytest.fail("must not encode"))
+
+    rec = _render_rec("stale", "bb")
+    (tmp_path / "renders_index.jsonl").write_text(json.dumps(rec) + "\n")
+    (tmp_path / "ann" / "stale.json").write_text(json.dumps(
+        {**ANNOTATION, "uid": "stale", "image_identity": "an identity from a dead render"}))
+    npz = tmp_path / "emb" / "stale.npz"
+    npz.write_bytes(b"the embedding of images that no longer exist")
+
+    assert m.main() == 3
+    assert not npz.exists(), "the stale .npz was left where n09 would still admit it"
+    assert (tmp_path / "emb" / "stale.npz.stale").exists(), "retired, not deleted"
+
+
+def test_a_clean_corpus_with_nothing_to_do_still_returns_zero(monkeypatch, tmp_path):
+    """[N-1] The halt must not swallow the ordinary "already complete" exit.
+
+    Guards against fixing the silent-0 by making rc 3 unconditional: with no
+    stale annotations and nothing left to encode, n06 is complete and must say
+    so. Without this the fix would halt every resumed run of a finished corpus.
+    """
+    import metafind.data.encode_text_image as m
+    from metafind.data import view_io
+
+    monkeypatch.setattr(m.paths, "LOGS", tmp_path)
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path / "emb")
+    monkeypatch.setattr(m.paths, "ANNOTATIONS", tmp_path / "ann")
+    (tmp_path / "ann").mkdir()
+    monkeypatch.setattr("sys.argv", ["encode_text_image"])
+    monkeypatch.setattr(m, "Encoder", lambda *a, **k: pytest.fail("nothing to encode"))
+    monkeypatch.setattr(m, "is_complete", lambda *a, **k: True)
+
+    rec = _render_rec("fresh", "aa")
+    (tmp_path / "renders_index.jsonl").write_text(json.dumps(rec) + "\n")
+    (tmp_path / "ann" / "fresh.json").write_text(json.dumps(
+        {**ANNOTATION, "uid": "fresh", "image_identity": view_io.image_identity(rec)}))
+
+    assert m.main() == 0

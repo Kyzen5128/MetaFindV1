@@ -39,7 +39,8 @@ from pathlib import Path
 
 import numpy as np
 
-__all__ = ["BACKGROUND_RGB", "VIEW_IO_VERSION", "load_view_rgb", "load_views_rgb"]
+__all__ = ["BACKGROUND_RGB", "VIEW_IO_VERSION", "image_identity",
+           "load_view_rgb", "load_views_rgb"]
 
 # [USER DECISION `U-BG`, 2026-08-23] The colour a transparent render pixel
 # becomes. Recorded as a constant rather than spelled `(0, 0, 0)` at three call
@@ -49,6 +50,36 @@ BACKGROUND_RGB: tuple[int, int, int] = (0, 0, 0)
 # Bumped whenever the composite rule changes, so a cached embedding can be told
 # apart from one taken under a different background.
 VIEW_IO_VERSION = 1
+
+
+def image_identity(render_rec: dict) -> str:
+    """What a downstream artifact's IMAGES were actually taken from.
+
+    [ADDED 2026-08-24] n05 and n06 both decided "already done" without looking
+    at the renders at all. The OptiX swap (`RENDERER_VERSION` 5 -> 6) re-rendered
+    the corpus with different pixels, and every existing annotation and embedding
+    would have stayed "complete" while describing images that had been deleted --
+    no error, no warning, and the same labels on both halves.
+
+    The digest binds the renderer generation, the composite rule in THIS module,
+    and n04's twelve per-view content hashes, so it also catches a re-render that
+    kept the version number. It lives here because this module is already the one
+    place that decides what a consumer sees.
+
+    An n04 record with no `view_sha256` cannot say what it rendered, and returns
+    "" -- which every caller must treat as a reason to redo the work, never as a
+    reason to accept it.
+    """
+    import hashlib
+
+    digests = render_rec.get("view_sha256")
+    if not digests:
+        return ""
+    h = hashlib.sha256()
+    h.update(f"r{render_rec.get('renderer_version')}|v{VIEW_IO_VERSION}|".encode())
+    for d in digests:
+        h.update(f"{d}|".encode())
+    return h.hexdigest()[:16]
 
 
 def load_view_rgb(path: str | Path):

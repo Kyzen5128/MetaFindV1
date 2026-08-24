@@ -176,7 +176,7 @@ def quarantine(stage_name: str, records: list[dict[str, Any]]) -> Path | None:
 _FINGERPRINT_VERIFIED = False
 
 
-def implementation_fingerprint(*modules) -> dict[str, str]:
+def implementation_fingerprint(*modules, extra_files=()) -> dict[str, str]:
     """sha256 of every source file that decides what a node produces.
 
     A pool with `max_tasks_per_child` set respawns workers mid-run, and each new
@@ -201,10 +201,17 @@ def implementation_fingerprint(*modules) -> dict[str, str]:
     for mod in modules:
         path = Path(mod.__file__)
         out[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    # `extra_files` is for source that decides the output but cannot be imported
+    # here -- n04's vendored Blender script runs inside Blender's own Python and
+    # importing it in this process would execute it. Its bytes still choose every
+    # pixel, so they belong in the fingerprint.
+    for path in extra_files:
+        path = Path(path)
+        out[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
     return out
 
 
-def verify_fingerprint(expected: dict[str, str] | None, *modules) -> None:
+def verify_fingerprint(expected: dict[str, str] | None, *modules, extra_files=()) -> None:
     """Abort this worker if its source differs from what the run started on.
 
     The point is not to forbid editing a module. It is that a run's behaviour
@@ -213,7 +220,7 @@ def verify_fingerprint(expected: dict[str, str] | None, *modules) -> None:
     global _FINGERPRINT_VERIFIED
     if not expected or _FINGERPRINT_VERIFIED:
         return
-    actual = implementation_fingerprint(*modules)
+    actual = implementation_fingerprint(*modules, extra_files=extra_files)
     if actual != expected:
         drift = sorted(k for k in expected if actual.get(k) != expected[k])
         raise RuntimeError(

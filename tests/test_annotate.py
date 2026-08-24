@@ -1416,3 +1416,209 @@ def test_every_failed_draw_quarantines_rather_than_inventing_a_description():
                               lvis_category=None, proportions=PROPS)
     assert rec is None and bad is not None
     assert bad["exception_type"] == "NoDescriptionCandidates"
+
+
+# --- C4: CUDA OOM is not just another exception ----------------------------
+# The batch fallback answers a failed draw by issuing five more prefills. That
+# is right for a per-asset failure and catastrophic for an OOM, and MEASURED
+# 2026-08-24 the batched draw peaks at 31,932 MiB of 32,607 -- 675 MiB of
+# headroom -- so OOM is the likeliest thing that `except` will ever catch.
+
+def _oom() -> RuntimeError:
+    """The shape torch raises when the allocator fails from inside a kernel."""
+    return RuntimeError(
+        "CUDA out of memory. Tried to allocate 2.00 GiB. GPU 0 has a total "
+        "capacity of 31.36 GiB of which 512.00 MiB is free.")
+
+
+def test_an_out_of_memory_error_is_recognised_by_message_and_by_type():
+    """Both branches, because neither alone is reliable.
+
+    torch raises `torch.cuda.OutOfMemoryError` for the allocator's own
+    failures, but an OOM surfacing from a kernel or a cuBLAS call arrives as a
+    plain `RuntimeError` whose message is the only evidence. Matching on type
+    alone misses the second; matching on the string alone breaks the moment the
+    typed error stops carrying that wording.
+    """
+    from metafind.data.annotate_run import _is_cuda_oom
+
+    assert _is_cuda_oom(_oom()) is True
+    assert _is_cuda_oom(RuntimeError("OUT OF MEMORY")) is True, "match is case-insensitive"
+
+    import torch
+    typed = getattr(torch.cuda, "OutOfMemoryError", None)
+    if typed is not None:
+        assert _is_cuda_oom(typed("no message that mentions the words")) is True
+
+
+def test_an_ordinary_failure_is_not_treated_as_an_out_of_memory():
+    """The guard must stay narrow.
+
+    If everything counted as an OOM the cache would be flushed on every
+    malformed prompt and the distinction recorded in `draw_mode` would be
+    worthless -- which is the whole reason the OOM branch exists separately.
+    """
+    from metafind.data.annotate_run import _is_cuda_oom
+
+    assert _is_cuda_oom(RuntimeError("CUDA hiccup")) is False
+    assert _is_cuda_oom(ValueError("the prompt was malformed")) is False
+
+
+class _BatchOOMs(FakeAnnotator):
+    """Accepts `n`, OOMs on the batched draw, succeeds one at a time."""
+
+    def __init__(self, *responses: str, single_fails: int = 0, **kw) -> None:
+        super().__init__(*responses, **kw)
+        self.singles = 0
+        self.single_fails = single_fails
+
+    def generate(self, image_paths, prompt, *, sample=False, seed=None, n=1):
+        if sample and n > 1:
+            raise _oom()
+        if sample:
+            self.singles += 1
+            if self.singles <= self.single_fails:
+                raise _oom()
+            return f"A syringe, draw {self.singles}."
+        return super().generate(image_paths, prompt)
+
+
+def _rank_first(monkeypatch):
+    from metafind.data import annotate_run as R
+
+    monkeypatch.setattr(R, "rank_descriptions", lambda views, c: (
+        c[0], [{"text": t, "clip_score": 0.3 - i * 0.01, "rank": i}
+               for i, t in enumerate(c)]))
+
+
+def test_an_out_of_memory_batch_frees_the_cache_before_retrying(monkeypatch):
+    """[C4] Free first, THEN fall back.
+
+    Without this the five sequential prefills run on a card still holding the
+    workspace that just failed, so the recovery inherits the condition it is
+    recovering from. `empty_cache()` cannot free live tensors -- it releases the
+    allocator's unused blocks, which after a failed generation is exactly the
+    transient prefill workspace.
+    """
+    from metafind.data import annotate_run as R
+
+    _rank_first(monkeypatch)
+    freed: list[int] = []
+    monkeypatch.setattr(R, "_release_cuda", lambda: freed.append(1))
+
+    ann = _BatchOOMs(UNANCHORED_RESPONSE)
+    rec, bad = R.annotate_one(ann, "uid0", _render_rec(),
+                              lvis_category=None, proportions=PROPS)
+
+    assert bad is None and rec is not None, "an OOM must not lose the asset"
+    assert freed, "the batch OOMed and the cache was never released"
+    assert ann.singles == R.N_CANDIDATES, "the fallback still draws every candidate"
+
+
+def test_the_out_of_memory_fallback_is_recorded_as_its_own_mode(monkeypatch):
+    """[C4] An OOM-driven fallback must not read as a per-asset one.
+
+    `draw_mode` reaches the sidecar. While both causes wrote
+    `sequential_fallback`, the run's OOM rate was unmeasurable after the fact --
+    and at 675 MiB of headroom over 5.4 days that rate is the number that
+    decides whether the configuration was survivable.
+    """
+    from metafind.data import annotate_run as R
+
+    _rank_first(monkeypatch)
+    monkeypatch.setattr(R, "_release_cuda", lambda: None)
+
+    rec, _ = R.annotate_one(_BatchOOMs(UNANCHORED_RESPONSE), "uid0", _render_rec(),
+                            lvis_category=None, proportions=PROPS)
+    assert rec["description_sampling"]["draw"] == "oom_sequential_fallback"
+    assert rec["description_sampling"]["batch_shape"] == 1, "the batch did not happen"
+
+
+def test_a_non_memory_failure_keeps_the_plain_fallback_and_frees_nothing(monkeypatch):
+    """[C4] The negative case, so the OOM branch cannot quietly swallow the other.
+
+    A malformed prompt or a transient kernel fault is genuinely per-asset. It
+    must still fall back, must NOT be labelled an OOM, and must not flush a
+    cache that is not the problem.
+    """
+    from metafind.data import annotate_run as R
+
+    _rank_first(monkeypatch)
+    freed: list[int] = []
+    monkeypatch.setattr(R, "_release_cuda", lambda: freed.append(1))
+
+    class _BatchFails(_BatchOOMs):
+        def generate(self, image_paths, prompt, *, sample=False, seed=None, n=1):
+            if sample and n > 1:
+                raise RuntimeError("CUDA hiccup")
+            return super().generate(image_paths, prompt, sample=sample, seed=seed, n=n)
+
+    rec, _ = R.annotate_one(_BatchFails(UNANCHORED_RESPONSE), "uid0", _render_rec(),
+                            lvis_category=None, proportions=PROPS)
+    assert rec["description_sampling"]["draw"] == "sequential_fallback"
+    assert not freed, "a non-OOM failure must not flush the allocator"
+
+
+def test_a_single_draw_that_ooms_frees_again_so_one_oom_does_not_become_five(monkeypatch):
+    """[C4] The per-draw release, which is a separate failure from the batch one.
+
+    The batch OOMs and is freed; then the FIRST single draw OOMs too. Without a
+    release inside the loop its workspace stays cached and draws 2-5 inherit a
+    full card, so one OOM reliably becomes five and the asset is quarantined for
+    a memory condition that had already been recovered from once.
+    """
+    from metafind.data import annotate_run as R
+
+    _rank_first(monkeypatch)
+    freed: list[int] = []
+    monkeypatch.setattr(R, "_release_cuda", lambda: freed.append(1))
+
+    ann = _BatchOOMs(UNANCHORED_RESPONSE, single_fails=1)
+    rec, bad = R.annotate_one(ann, "uid0", _render_rec(),
+                              lvis_category=None, proportions=PROPS)
+
+    assert bad is None and rec is not None
+    assert len(freed) >= 2, "the batch was freed but the failed single draw was not"
+    assert len(rec["description_candidates"]) == R.N_CANDIDATES - 1, \
+        "four of five draws survived"
+
+
+# --- C1 / D-2: the default model must be the one that actually runs ---------
+
+def test_the_default_model_is_not_on_the_archive_drive():
+    """[C1] A default that is safe only because one caller overrides it.
+
+    `MODEL_ID` was `/mnt/data1/kyzen/models/Qwen3.8-27B` -- 56 GB of bf16
+    against a 32,607 MiB card, on the SMR drive that `CLAUDE.md` §9 reserves for
+    cold read-mostly bulk. `tools/run_ulip_full.sh` passed `--model` and was the
+    only thing standing between that and an OOM, so every direct invocation --
+    a resume, a debug run, a validation batch, the timing arm -- loaded 56 GB
+    onto a 32 GB card, slowly, off SMR.
+
+    The assertion is the PROPERTY, not the path: a working checkpoint may not
+    live on the archive drive. Re-pointing D-2 to another SMR copy would pass a
+    string comparison and fail this.
+    """
+    from metafind.data.annotate_run import MODEL_ID
+
+    assert not MODEL_ID.startswith("/mnt/data1"), (
+        f"the default annotator {MODEL_ID} is on the SMR archive drive; "
+        "CLAUDE.md §9 reserves it for cold read-mostly bulk")
+
+
+def test_the_cli_default_and_the_deviation_record_name_the_same_model():
+    """[C1, D-2] The record and the runnable default may not drift apart.
+
+    `MODEL_ID`'s comment IS the registered `D-2` deviation record -- what stands
+    in for the paper's GPT-4o. While the record said `Qwen3.8-27B` and the chain
+    ran `gemma-4-12B-it`, every artifact was stamped honestly and the deviation
+    record described a model that had never run and could not run. The run was
+    correct and undescribable.
+    """
+    import argparse
+
+    from metafind.data.annotate_run import MODEL_ID
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--model", default=MODEL_ID)
+    assert ap.parse_args([]).model == MODEL_ID

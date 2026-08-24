@@ -45,6 +45,16 @@ eleven (`2methdology.tex:28`, PAPER FACT) and this is a **registered DEVIATION**
 from it: OpenShape's twelve are three polar rings of four and eleven does not
 divide into three rings.
 
+**The denoiser is named explicitly: OptiX, on the GPU.** [USER DECISION
+2026-08-24.] Upstream sets `use_denoising = True` and stops there, so the
+denoiser actually in force was BlenderProc's default `INTEL` -- Intel
+OpenImageDenoise, in the compositor, on the CPU. Measured on this machine,
+same asset, same load, one process each: **INTEL 27.8/26.8/26.8 s vs OPTIX
+5.9/5.9/6.2 s**. The images are not identical -- mean |diff| 0.1/255, 2-3% of
+pixels differ by more than 2, max 50/255 -- so this is a registered DEVIATION
+from the corpus rendered before 2026-08-24, which is why `RENDERER_VERSION`
+goes to 6 and the whole corpus is re-rendered rather than mixed.
+
 **Transparent RGBA is what gets stored.** Flattening is a consumer's decision
 and lives in `metafind.data.view_io`, once, for every consumer.
 """
@@ -79,6 +89,13 @@ N_VIEWS = 12
 CAMERA_DIST = 1.2
 RESOLUTION = 512
 
+# NOT an upstream value. OpenShape's script asks for denoising
+# (`scene.cycles.use_denoising = True`) but never names a denoiser, so the
+# effective choice was BlenderProc's default, `DefaultConfig.denoiser = "INTEL"`
+# -- Intel OpenImageDenoise, which runs in the compositor on the CPU.
+# [USER DECISION 2026-08-24] switch it to OptiX, which denoises on the GPU.
+DENOISER = "OPTIX"
+
 # Upstream's `views` list, restated here so the layout is greppable without
 # opening vendored code. Three polar rings of four, staggered in azimuth --
 # NOT the single 360/12 orbit ULIP-2's sentence describes. phi is measured from
@@ -103,6 +120,7 @@ def renderer_versions() -> dict[str, str]:
         "vendor_script_sha256":
             hashlib.sha256(VENDOR_SCRIPT.read_bytes()).hexdigest()[:16],
         "aux_passes": "disabled",
+        "denoiser": DENOISER,
     }
     commit = VENDOR_SCRIPT.with_name("COMMIT")
     if commit.exists():
@@ -142,6 +160,11 @@ def _patched_script(dst: Path) -> Path:
          '        #vis_data("depth", image, None, "", save_to_file=render_path, depth_max = image[image < 100].max())\n'
          "        plt.imsave(render_path, image, cmap='gray', vmax=image[image < 100].max())\n",
          "    # [METAFIND] depth pass disabled\n"),
+        ("    RendererUtility.set_cpu_threads(10)\n",
+         "    RendererUtility.set_cpu_threads(10)\n"
+         "    # [METAFIND] upstream leaves the denoiser unnamed, so BlenderProc's\n"
+         "    # CPU default (INTEL/OIDN) was in force. Name it explicitly.\n"
+         f"    RendererUtility.set_denoiser({DENOISER!r})\n"),
     ]
     for old, new in edits:
         if old not in src:
@@ -217,14 +240,36 @@ def render_asset(glb: Path, asset_dir: Path, *, timeout: int = 900) -> list[Path
             "--num_images", str(N_VIEWS),
             "--camera_dist", str(CAMERA_DIST),
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True,
-                              timeout=timeout, cwd=tmp)
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True,
+                                  timeout=timeout, cwd=tmp)
+        except subprocess.TimeoutExpired as exc:
+            # [ADDED 2026-08-24, Codex] `TimeoutExpired` propagated before the
+            # failure tail below was built, so the caller's message-based
+            # classifier saw only "Command ... timed out" and filed a resource
+            # failure as a broken mesh. Re-raise with the word the classifier
+            # can read, and with whatever the process managed to say.
+            out = (exc.stdout or b"")[-400:]
+            err = (exc.stderr or b"")[-400:]
+            if isinstance(out, bytes):
+                out, err = out.decode(errors="replace"), err.decode(errors="replace")
+            raise RuntimeError(
+                f"blender timed out after {timeout}s for {glb.name} -- "
+                f"out of time, not out of geometry.\nSTDERR:\n{err}\nSTDOUT:\n{out}"
+            ) from exc
         produced = sorted(out.glob("[0-9][0-9][0-9].png"))
         if proc.returncode != 0 or len(produced) != N_VIEWS:
             # Upstream's `__main__` swallows exceptions and prints "Failed to
             # render", so a zero exit code does NOT mean success -- the view
             # count is the real check and is tested first-class here.
-            tail = (proc.stderr or proc.stdout or "")[-600:]
+            # [FIXED 2026-08-24] Was `proc.stderr or proc.stdout`. Upstream's
+            # `__main__` CATCHES its exception and prints it to STDOUT
+            # (`render_single_glb.py`), while Blender writes warnings to stderr
+            # on almost every asset -- so `or` discarded the actual cause
+            # whenever any warning existed, and `failure_class` then classified
+            # a resource failure from evidence that never mentioned it.
+            tail = ("STDERR:\n" + (proc.stderr or "")[-600:]
+                    + "\nSTDOUT:\n" + (proc.stdout or "")[-600:])
             raise RuntimeError(
                 f"blender produced {len(produced)}/{N_VIEWS} views for {glb.name} "
                 f"(exit {proc.returncode}): {tail}")

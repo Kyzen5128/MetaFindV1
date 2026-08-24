@@ -45,6 +45,8 @@ from pathlib import Path
 import numpy as np
 
 from metafind import paths, runlog
+from metafind.data.render_blender import N_VIEWS as LIVE_N_VIEWS
+from metafind.data.view_io import VIEW_IO_VERSION, image_identity
 
 # Before transformers or open_clip reaches this process: HF_HOME is read at
 # import time, and ViT-bigG-14 is 9.5 GB. n05 learned this the slow way.
@@ -117,7 +119,8 @@ def sidecar_path(uid: str) -> Path:
     return paths.EMBEDDINGS / f"{uid}.json"
 
 
-def is_complete(uid: str, expected_text: str) -> bool:
+def is_complete(uid: str, expected_text: str, image_id: str,
+                aggregation: str | None = None) -> bool:
     """[B-1, D0-008 §11.2] Complete means: this sidecar holds the text THIS
     serializer produces for THIS uid, and the vectors it points at exist.
 
@@ -152,6 +155,20 @@ def is_complete(uid: str, expected_text: str) -> bool:
         return False
     if rec.get("text") != expected_text:
         return False
+    # [ADDED 2026-08-24] Same rule as the text, applied to the images. An empty
+    # id means n04's record could not say what it rendered, which is a reason to
+    # re-encode, not a reason to accept.
+    if not image_id or rec.get("image_identity") != image_id:
+        return False
+    # [ADDED 2026-08-24, Codex CHANGES REQUIRED] `image` IS the aggregate, so
+    # the rule that produced it is part of this artifact's identity. The
+    # protocol admits mean / max / fixed_view; without this, switching it
+    # scheduled no work at all and Stage 1 trained on the old pooled vector
+    # under the new label. (Stage 1 ALSO ignores its own aggregation argument --
+    # `train/stage1.py` Stage1Dataset -- which is a separate node and is
+    # reported, not fixed here.)
+    if aggregation is not None and rec.get("aggregation") != aggregation:
+        return False
     # Not `Path(rec.get("embedding_uri", "")).exists()`. An absent or empty field
     # made that `Path(".")`, the working directory, which exists -- so a sidecar
     # with no vectors at all was judged complete and its asset was skipped. The
@@ -170,7 +187,49 @@ def is_complete(uid: str, expected_text: str) -> bool:
             return False
     except OSError:
         return False
-    return npz.is_file()
+    if not npz.is_file():
+        return False
+    # [ADDED 2026-08-24, Codex CHANGES REQUIRED] Existence is not content. This
+    # returned True for a file holding only `text`, for a truncated file, and
+    # for arrays of the wrong width -- and n10's dataloader is where that
+    # surfaced, mid-epoch, with nothing pointing back here. Worse: a
+    # plausible-but-wrong width trains without any error at all.
+    # The width comes from the RECORD, not from a constant imported here: the
+    # sidecar states the dimension it wrote, so this checks the file against its
+    # own claim and needs no dependency on the backbone module.
+    dim = rec.get("embedding_dim")
+    n_views = rec.get("n_views")
+    try:
+        with np.load(npz) as z:
+            if not {"text", "views", "image"} <= set(z.files):
+                return False
+            if not isinstance(dim, int) or dim <= 0:
+                return False
+            if z["text"].shape != (dim,) or z["image"].shape != (dim,):
+                return False
+            if z["views"].ndim != 2 or z["views"].shape[1] != dim:
+                return False
+            # [FIXED 2026-08-24, Codex] `isinstance(n_views, int) and ...` made a
+            # MISSING or string-valued `n_views` skip the row check entirely --
+            # a validator that a malformed record disarms is not a validator.
+            if not isinstance(n_views, int) or z["views"].shape[0] != n_views:
+                return False
+    except Exception:  # noqa: BLE001 -- unreadable is incomplete, whatever the reason
+        return False
+    return True
+
+
+def _annotation_image_identity(annotation_path: Path) -> str:
+    """The render identity n05 stamped on this annotation, or "" if it has none.
+
+    "" is what every record written before 2026-08-24 carries, and it can never
+    equal a real identity -- so those are excluded rather than silently joined to
+    whatever is on disk now.
+    """
+    try:
+        return json.loads(annotation_path.read_text()).get("image_identity") or ""
+    except (OSError, json.JSONDecodeError):
+        return ""
 
 
 def expected_text_for(annotation_path: Path) -> str:
@@ -258,10 +317,17 @@ class Encoder:
         return out[0].float().cpu().numpy()
 
     def encode_views(self, view_paths: list[str]) -> np.ndarray:
-        from PIL import Image
+        # [FIXED 2026-08-24] Was `Image.open(p).convert("RGB")`, which DROPS
+        # alpha instead of compositing it. `view_io` exists precisely so that
+        # the annotator and the encoder cannot disagree about what the model
+        # saw, and this node -- named in that module's SUPPORTS-NODE line --
+        # was the one call site still bypassing it. Every anti-aliased
+        # silhouette edge in the corpus was a different colour here than in
+        # n05: a 50%-alpha white edge came out 255 rather than 128.
+        from metafind.data.view_io import load_views_rgb
 
-        batch = self.torch.stack([self.preprocess(Image.open(p).convert("RGB"))
-                                  for p in view_paths])
+        batch = self.torch.stack([self.preprocess(im)
+                                  for im in load_views_rgb(view_paths)])
         with self.torch.no_grad():
             out = self.backbone.encode_image(batch)
         return out.float().cpu().numpy()
@@ -297,25 +363,81 @@ def main() -> int:
     if not renders_index.exists():
         print(f"{renders_index} not found -- run n04 first", flush=True)
         return 2
+    # The WHOLE record, not only `view_paths`: `image_identity` needs the
+    # renderer version and the per-view digests that live beside them.
     renders = {}
     for line in renders_index.read_text().splitlines():
         if line.strip():
             r = json.loads(line)
-            renders[r["uid"]] = r["view_paths"]
+            renders[r["uid"]] = r
 
     paths.EMBEDDINGS.mkdir(parents=True, exist_ok=True)
     annotations = sorted(paths.ANNOTATIONS.glob("*.json"))
     # [B-1] Completion is decided against the text this serializer produces now,
     # so every sidecar written by a different serializer re-encodes. --force
     # still bypasses it, which is the one place a human states that intent.
+    # [ADDED 2026-08-24, Codex CHANGES REQUIRED] An embedding joins TEXT from the
+    # annotation to PIXELS from the renders. n05 stamps which images it was shown;
+    # this node used to ignore that field entirely, so an annotation written
+    # against renders that have since been replaced would be serialized as-is and
+    # cached beside vectors from the NEW pixels -- a permanent stale-text /
+    # new-image pair that then passes `is_complete()` forever. Re-annotating is
+    # n05's job, so these are excluded and COUNTED rather than encoded or hidden.
+    # An empty identity on EITHER side is a record that cannot say what it saw.
+    # `"" == ""` used to pass this filter and get encoded, and then n06's own
+    # completion check refused the same asset -- so it re-encoded on every resume
+    # and never settled. Unknown is not a match.
+    stale_text = [p for p in annotations
+                  if p.stem in renders
+                  and (not image_identity(renders[p.stem])
+                       or _annotation_image_identity(p) != image_identity(renders[p.stem]))]
+    stale = {p.stem for p in stale_text}
+    # [ADDED 2026-08-24, Codex] Excluding the annotation is not enough: if an OLD
+    # `<uid>.npz` is still there, n09 admits the uid and n10/n11 load that file
+    # directly, so the stale embedding survives being "excluded". n06 declares
+    # `partial_failure_semantics: halt`, so the artifact is RETIRED (renamed, not
+    # deleted -- it is evidence) rather than left to be picked up downstream.
+    for path in stale_text:
+        for art in (paths.EMBEDDINGS / f"{path.stem}.npz",
+                    sidecar_path(path.stem)):
+            if art.exists():
+                art.replace(art.with_suffix(art.suffix + ".stale"))
+    if stale_text:
+        print(f"{len(stale_text):,} annotation(s) describe a different render than the "
+              f"one on disk, e.g. {[p.stem for p in stale_text[:3]]}.\n"
+              "Not encoding them: the text and the pixels would not be the same asset. "
+              "Re-run n05 for these uids.", flush=True)
+        # [N-1, 2026-08-24] HALT, unconditionally, and this used to be
+        # `return 3 if stale_text else 0` guarded by `if not todo` twelve lines
+        # below. That reached rc 3 only when the stale set was the WHOLE corpus.
+        # With 500 stale and 45,500 fresh, `todo` was non-empty, the 500 were
+        # excluded, their artifacts retired, and `main` returned **0** -- the
+        # chain read success while the corpus had silently shrunk. The only
+        # thing downstream of that was `chain_to_stage1.sh:71`'s
+        # `[ "$EMB" -ge 45000 ]`, which admits losing ~955 assets without a word.
+        #
+        # `node_registry.yaml:334` (rank 5, above this code) declares n06
+        # `partial_failure_semantics: halt`. The comment above already cited
+        # that clause to justify RETIRING the artifacts, and then did not halt
+        # -- a citation that licenses the convenient half of a rule is worse
+        # than no citation, because it is what stops the next reader checking.
+        #
+        # Retire first, then halt: the retirement must survive the halt or a
+        # resume would find the stale `.npz` still in place and admit it.
+        return 3
     todo = [p for p in annotations
-            if p.stem in renders
-            and (args.force or not is_complete(p.stem, expected_text_for(p)))]
+            if p.stem in renders and p.stem not in stale
+            and (args.force or not is_complete(p.stem, expected_text_for(p),
+                                               image_identity(renders[p.stem]),
+                                               protocol["image_aggregation"]))]
     if args.limit:
         todo = todo[: args.limit]
     print(f"{len(annotations):,} annotated, {len(todo):,} to encode "
           f"(aggregation: {protocol['image_aggregation']})", flush=True)
     if not todo:
+        # `stale_text` can no longer be non-empty here -- the halt above returns
+        # 3 before this point -- so nothing left to encode now means exactly
+        # that: the corpus is complete.
         return 0
 
     enc = Encoder()
@@ -338,7 +460,7 @@ def main() -> int:
                 truncated = False
 
                 text_vec = enc.encode_text(text)
-                view_vecs = enc.encode_views(renders[uid])
+                view_vecs = enc.encode_views(renders[uid]["view_paths"])
                 pooled = aggregate(view_vecs, protocol["image_aggregation"])
 
                 npz = paths.EMBEDDINGS / f"{uid}.npz"
@@ -370,6 +492,10 @@ def main() -> int:
                 "embedding_dim": int(text_vec.shape[0]),
                 "text_serialization": protocol["text_serialization"],
                 "clip_train_scope": protocol["actual_clip_train_scope"],
+                # What these image vectors were taken from. See `image_identity`.
+                "image_identity": image_identity(renders[uid]),
+                "view_io_version": VIEW_IO_VERSION,
+                "renderer_version": renders[uid].get("renderer_version"),
             }
             sc = sidecar_path(uid)
             tmp = sc.with_suffix(".json.part")
@@ -385,7 +511,10 @@ def main() -> int:
                       f"over-length text {overlong}", flush=True)
 
     runlog.cost_ledger(wallclock_s=round(time.time() - started, 1),
-                       assets_encoded=done, views_encoded=done * 11)
+                       # [FIXED 2026-08-24] Was `done * 11`; the live artifact
+                       # carries 12 views. Read it off the renderer rather than
+                       # restating a literal that a version bump can strand.
+                       assets_encoded=done, views_encoded=done * LIVE_N_VIEWS)
     print(f"\n{done:,} encoded, {overlong:,} REFUSED for exceeding "
           f"{TEXT_CONTEXT_LENGTH} true tokens -> {paths.EMBEDDINGS}")
     return 0

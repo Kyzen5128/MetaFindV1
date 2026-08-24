@@ -68,6 +68,9 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures as cf
+# The submodule, explicitly: `cf.process` is lazily bound in 3.11 and
+# raises AttributeError until something touches `cf.ProcessPoolExecutor`.
+from concurrent.futures.process import BrokenProcessPool
 import multiprocessing as mp
 import hashlib
 import json
@@ -218,23 +221,133 @@ ORBIT_ELEVATION_DEG = 20.0
 # are kept only because `azimuth_orbit_directions` and `normalised_scene` are
 # still imported by the verification tools; nothing in `process_one` reads them
 # any more.
-RENDERER_VERSION = 5
+# [RENDERER_VERSION 6, 2026-08-24] The denoiser is now named explicitly
+# (OptiX/GPU, `render_blender.DENOISER`) instead of inheriting BlenderProc's
+# CPU default. It changes the pixels, so every v5 sidecar is stale.
+# NOT bumped to 7 for the 2026-08-24 guard rewrite, deliberately. The guards
+# decide which renders are ACCEPTED; they do not touch a single pixel, and the
+# 45,782 assets already on disk passed the stricter rules, so they pass the
+# looser ones unchanged. Re-rendering them would cost 6.6 hours to produce
+# byte-identical images.
+#
+# What DOES differ across that boundary is metadata: records written before the
+# rewrite carry `blank_views` under the old std()-of-black-composite definition
+# and have no `view_coverage` / `distinct_views` / `dark_views`. Nothing reads
+# those fields -- only `tools/measure_render_criteria.py` writes its own copy --
+# so the split is legible rather than load-bearing. It is recorded here because
+# a reader comparing two sidecars deserves to know why they differ.
+RENDERER_VERSION = 6
+
+# [ADDED 2026-08-24] How many assets may fail BACK TO BACK before the run is
+# treated as broken rather than unlucky. IMPLEMENTATION CHOICE: 8 workers deep,
+# so one bad pool generation cannot trip it, and at the measured 116 assets/min
+# it costs about 30 seconds to establish. Scattered bad meshes never reach it,
+# because any success resets the counter.
+# Alpha coverage below which a view is judged to have drawn NOTHING.
+#
+# [SET TO ZERO 2026-08-24 — the fitted constant did not survive measurement]
+#
+# This was 0.001, and its justification was rewritten three times. Each version
+# claimed a structure in the data; each was measured and did not hold:
+#
+#   v1  "an order of magnitude above the empty case"
+#       -- the empty case is 0. Zero has no order of magnitude. Unevaluable.
+#   v2  "specks at 0.0001-0.007" with the cut at 0.001
+#       -- the cut sat INSIDE the band it named, so it admitted specks by
+#          construction with the comment saying so.
+#   v3  "the two populations do not overlap; 0.001 sits in the gap"
+#       -- non-overlap is guaranteed by construction once you cut anywhere.
+#          The Reviewer then proposed a real defence, a spacing discontinuity
+#          at 181->349 px (1.93x against ~1.1x typical), measured over the 123
+#          quarantined-blank assets.
+#
+# I measured v3's defence over the FULL population of 270 rather than the 123,
+# and it does not hold. Best view per asset, in pixels of 512x512:
+#
+#     exactly 0            28 assets
+#     0 < cov < 0.001      41 assets      1 px .. 181 px
+#     cov >= 0.001        201 assets
+#
+#     spacing around the cut (0.001 = 262.1 px):
+#       36 ->  102   2.83x   <-- the LARGEST gap in the region, nowhere near the cut
+#      181 ->  198   1.09x
+#      198 ->  223   1.13x
+#      223 ->  252   1.13x
+#      252 ->  349   1.38x   <-- where 0.001 actually falls
+#
+# There is no discontinuity at 0.001. The distribution runs continuously from
+# one pixel upward, and the only genuinely discrete feature in it is EXACTLY
+# ZERO. So the honest cut is the definitional one:
+#
+#   "was anything drawn" is alpha > 0. It needs no constant and cannot be
+#   tuned until a number behaves, which is what S-3 prohibits and what three
+#   rewrites of this comment were circling.
+#
+# The cost is stated, not hidden: this admits 41 assets between 1 and 181
+# pixels. They are NOT thereby usable -- a 1-pixel object is not describable by
+# a VLM -- but usability is corpus membership, that is the USER's decision, and
+# `view_coverage` is recorded per view so the population is separable at any
+# time without re-rendering. A guard that answers "did the renderer draw
+# anything" must not also quietly answer "should this be in Table 1".
+MIN_COVERAGE = 0.0
+
+SYSTEMIC_RUN = 64
+
+# How many worker pools may die BACK TO BACK before the run is broken rather
+# than unlucky. A pool that cannot survive one batch will not survive the next
+# 92 either. 3 costs at most three batches; any asset success resets it.
+POOL_DEATHS_SYSTEMIC = 3
+
+def _fingerprint_sources():
+    """Everything whose bytes decide a rendered pixel, in one place.
+
+    `meshload` owns `FRAME_CORRECTION`. `render_blender` owns the engine, the
+    view count, the denoiser and the patch applied to the vendored script --
+    the 2026-08-24 OptiX change touched ONLY that file, and the fingerprint
+    moved solely because `renders.py` happened to be edited in the same commit.
+    That was luck, not coverage.
+
+    `render_single_glb.py` is passed as a file rather than a module because it
+    runs inside Blender's own Python; importing it here would execute it.
+    """
+    from metafind.data import meshload, render_blender
+
+    return ((sys.modules[__name__], meshload, render_blender),
+            (render_blender.VENDOR_SCRIPT,))
+
 
 def implementation_fingerprint() -> dict[str, str]:
-    """This node's own source files. See `runlog.implementation_fingerprint`.
-
-    `meshload` is here because it owns `FRAME_CORRECTION`: a change there moves
-    every asset while `renders.py` does not differ by a byte.
-    """
-    from metafind.data import meshload
-
-    return runlog.implementation_fingerprint(sys.modules[__name__], meshload)
+    """This node's own source files. See `runlog.implementation_fingerprint`."""
+    mods, files = _fingerprint_sources()
+    return runlog.implementation_fingerprint(*mods, extra_files=files)
 
 
 def verify_fingerprint(expected: dict[str, str] | None) -> None:
-    from metafind.data import meshload
+    """Modules once per worker; the VENDORED SCRIPT on every asset.
 
-    runlog.verify_fingerprint(expected, sys.modules[__name__], meshload)
+    [FIXED 2026-08-24, Codex CHANGES REQUIRED] `runlog.verify_fingerprint`
+    returns forever once `_FINGERPRINT_VERIFIED` is set, which is correct for
+    imported modules -- a worker cannot re-import them. It is WRONG for
+    `render_single_glb.py`, because `_patched_script` reads that file off disk
+    for EVERY asset. A vendor edit after a worker's first task was rendered
+    under the same `RENDERER_VERSION`, undetected, while a later worker's first
+    task caught it -- a mixed corpus with a gate that reported clean.
+    """
+    import hashlib
+
+    mods, files = _fingerprint_sources()
+    if expected:
+        for path in files:
+            name = path.name
+            want = expected.get(name)
+            got = hashlib.sha256(path.read_bytes()).hexdigest()
+            if want is not None and want != got:
+                raise RuntimeError(
+                    f"implementation changed while the run was in progress: {name}. "
+                    "This worker would write artifacts the rest of the corpus does not "
+                    "share, and no sidecar field would show it. Restart the run."
+                )
+    runlog.verify_fingerprint(expected, *mods, extra_files=files)
 
 
 
@@ -587,6 +700,14 @@ def is_complete(out_dir: Path, uid: str) -> bool:
     # A truncated or half-written PNG has the wrong size, which is what this
     # check is for; the sha256 stays in the record for provenance and
     # L2-RESUME, where reading the bytes is the point.
+    # [ADDED 2026-08-24, Codex] `view_sha256` is what `view_io.image_identity`
+    # turns into the identity n05 and n06 bind their caches to. A sidecar without
+    # it yields "" -- which n05 stamps, n06 then matches ""=="" and encodes, and
+    # n06's own completion check later refuses, so the asset never settles on
+    # resume. Accepted item A is "trust the stored hashes"; having NO hashes is a
+    # different thing and is not complete.
+    if len(rec.get("view_sha256") or []) != LIVE_N_VIEWS:
+        return False
     for path_str, want in zip(rec["view_paths"], sizes):
         try:
             if Path(path_str).stat().st_size != want:
@@ -622,31 +743,75 @@ def process_one(uid: str, glb: Path, out_dir: Path,
     if len(paths_out) != LIVE_N_VIEWS:
         raise ValueError(f"rendered {len(paths_out)} views, expected {LIVE_N_VIEWS}")
 
-    view_paths, view_sha, view_bytes, blank = [], [], [], 0
+    view_paths, view_sha, view_bytes, coverage, dark = [], [], [], [], 0
     for p in paths_out:
-        # A camera pointed at nothing returns a uniform frame. It is a valid
-        # PNG of the right shape, so only the content says anything is wrong.
+        # "Did anything get DRAWN here" is an ALPHA question, and only alpha
+        # answers it.
         #
-        # The test is on the COMPOSITED image, not on the raw RGBA: an asset
-        # rendered on a transparent background has a near-constant RGB plane
-        # wherever alpha is 0, so `std()` over the raw array reports "blank" for
-        # perfectly good renders. `view_io` is what every consumer sees, so it
-        # is what this must judge.
-        arr = np.asarray(load_view_rgb(p), dtype=np.float32)
-        if float(arr.std()) < 1.0:
-            blank += 1
+        # [CORRECTED 2026-08-24] This measured `std()` of the BLACK-COMPOSITED
+        # image and called a flat result "blank". A pitch-black object on the
+        # recorded black background composites to a uniform black frame, so an
+        # asset that rendered perfectly -- alpha covering 30-47% of the frame --
+        # was reported as "the asset never entered frame". Measured on this
+        # corpus: of 14 quarantined "blank" assets, 4 had alpha coverage of
+        # 31-47% and a maximum RGB value of 1/255. They entered frame. They are
+        # black.
+        #
+        # Alpha is independent of the background decision, which is what makes
+        # it the right test: `U-BG` can change and this check does not move.
+        rgba = np.asarray(Image.open(p).convert("RGBA"))
+        cov = float((rgba[..., 3] > 0).mean())
+        coverage.append(round(cov, 8))
+        # Recorded, never fatal: an object that IS black is a fact n05 and any
+        # audit should be able to see, not a render failure.
+        #
+        # [2026-08-24] Composited from the array already in hand rather than
+        # re-decoding the PNG through `load_view_rgb`. Same source-over rule,
+        # same result, half the decodes -- 552k of them on a full run, on the
+        # hot path of a 6.6-hour stage.
+        if cov > 0:
+            a = rgba[..., 3:4].astype(np.float32) / 255.0
+            flat = rgba[..., :3].astype(np.float32) * a  # over black == U-BG
+            if float(flat.std()) < 1.0:
+                dark += 1
         view_paths.append(str(p))
         blob = p.read_bytes()
         view_sha.append(hashlib.sha256(blob).hexdigest())
         view_bytes.append(len(blob))
 
+    blank = sum(1 for c in coverage if c <= MIN_COVERAGE)
     if blank == LIVE_N_VIEWS:
-        raise ValueError("every view is blank -- the asset never entered frame")
-    if len(set(view_sha)) != LIVE_N_VIEWS:
         raise ValueError(
-            f"only {len(set(view_sha))} distinct views of {LIVE_N_VIEWS}; the camera "
-            "is not moving between renders"
-        )
+            f"every view drew nothing -- max alpha coverage {max(coverage):.8f}")
+    # [CORRECTED 2026-08-24] This required all 12 renders to be byte-DISTINCT and
+    # said "the camera is not moving between renders". For a flat object that
+    # sentence is simply false: the four edge-on views of a carpet are genuinely
+    # and identically empty, the camera moved for every one of them, and the
+    # remaining eight views are perfect. Measured: 148 assets were discarded this
+    # way, 91 of them at exactly 9/12 -- 12 minus the four collapsed edge-on
+    # views, plus one. Carpets 32, manholes 12, chessboards 10, doormats 8.
+    #
+    # Pixel identity CANNOT separate "the camera did not move" from "the object
+    # looks the same from there" -- a featureless sphere would fail it too. Only
+    # the pathological case survives here: EVERY view identical, which no real
+    # object and no working camera produces.
+    #
+    # [CORRECTED 2026-08-24, MASTER] An earlier version of this comment claimed
+    # the camera is "checked where the camera actually lives (`view_directions`,
+    # asserted distinct in the test suite and recorded per asset)". IT IS NOT.
+    # `VIEW_DIRECTIONS` is a hardcoded constant in `render_blender`; the record
+    # restates it, and the test asserts the constant -- which cannot vary per run
+    # and therefore cannot fail on a bad render. That field is where the camera
+    # was SUPPOSED to be, never where it was.
+    #
+    # State it plainly instead: AFTER THIS CHANGE, NOTHING AT RUNTIME CHECKS THE
+    # CAMERA except the all-identical case above. That is accepted as the trade
+    # -- the old guard could not tell symmetry from fault either, and it was
+    # discarding 201 good assets to catch a fault it never caught -- but it is a
+    # gap, not a covered base, and it belongs in the run report as one.
+    if len(set(view_sha)) == 1:
+        raise ValueError(
+            f"all {LIVE_N_VIEWS} views are byte-identical; the camera did not move")
 
     record = {
         "uid": uid,
@@ -677,6 +842,11 @@ def process_one(uid: str, glb: Path, out_dir: Path,
         "n_views_source": "USER decision 2026-08-23; DEVIATION from MetaFind's stated 11",
         "background_source": "openshape film_transparent=True",
         "blank_views": blank,
+        # [ADDED 2026-08-24] The evidence the two guards above now judge, kept so
+        # a reader can see WHY an asset passed rather than only that it did.
+        "view_coverage": coverage,
+        "distinct_views": len(set(view_sha)),
+        "dark_views": dark,
     }
     sc_tmp = sidecar_path(out_dir, uid).with_suffix(".json.part")
     with sc_tmp.open("w") as fh:
@@ -685,6 +855,188 @@ def process_one(uid: str, glb: Path, out_dir: Path,
         os.fsync(fh.fileno())
     sc_tmp.replace(sidecar_path(out_dir, uid))
     return record
+
+
+# WHAT THIS DOES AND DOES NOT DO. [CORRECTED 2026-08-24, Codex CHANGES REQUIRED]
+# The registry declares RESOURCE and DETERMINISTIC_INPUT as different POLICIES.
+# **This node does not implement them.** `todo` is rebuilt from `is_complete`
+# alone on every pass, so EVERY quarantined asset -- both classes -- is retried
+# on the next pass, up to the chain's `MAX_PASSES`. Nothing reads
+# `failure_class`; it is written to the quarantine log and consumed by humans
+# and by G3's quarantine_rate.
+#
+# The earlier version of this comment asserted that the classification "decides
+# whether an asset is ever tried again". That was FALSE when it was written, in
+# this file, today. It is left described rather than deleted because a comment
+# that overstates what code does is the same defect as a comment that overstates
+# what a paper says, and this node has now produced one of each.
+#
+# The classification still matters -- it is what tells a human whether 900 rows
+# are broken meshes or a dying GPU -- which is why it is worth getting right:
+#
+# `isinstance(exc, (MemoryError, OSError))` could never see any of it. Rendering
+# is a SUBPROCESS: every non-zero Blender exit reaches this process as the plain
+# `RuntimeError` that `render_asset` raises, so the RESOURCE branch was dead and
+# every failure was filed as broken geometry. Measured over the 901 real
+# quarantine rows of the v5 corpus (the 36,542 fingerprint rejections excluded):
+#
+#     "System is out of GPU memory"    70   exit 1        -> RESOURCE
+#     BrokenProcessPool                21                 -> RESOURCE
+#     blank views                     537                 -> DETERMINISTIC_INPUT
+#     duplicate views                 228                 -> DETERMINISTIC_INPUT
+#     LinAlgError / IndexError         24                 -> DETERMINISTIC_INPUT
+#     exit 245, cause not in the log   21                 -> UNKNOWN
+#
+# The captured message is the only evidence a dead subprocess leaves, so it is
+# what gets read. `exit 245` is NOT guessed: its captured tail ends inside glTF
+# import with no error, and calling it either class would be inventing a retry
+# policy. UNKNOWN says so, and is reported rather than silently retried.
+_RESOURCE_MARKERS = (
+    "out of gpu memory",
+    "out of memory",
+    "failed to retain cuda context",
+    "cannot allocate memory",
+    # BrokenProcessPool: the WORKER died. Whatever killed it, it was not this
+    # asset's geometry.
+    "terminated abruptly",
+    # SIGKILL. The OOM killer or an operator -- unproven which, and it does not
+    # matter here: a killed process is not evidence of a defective mesh, and the
+    # 7 rows this produced on 2026-08-24 were an operator stopping the run.
+    "exit -9",
+    # [ADDED 2026-08-24, Codex] A 900 s timeout is the machine running out of
+    # time, not the mesh being malformed. `render_blender` now raises with this
+    # wording so the class is decidable from the message.
+    "timed out",
+)
+
+
+# The failure messages this node RECOGNISES as a property of the asset. A class
+# has to be EARNED by one of these, never inherited by default. See `Tally.failure`.
+_ASSET_FAULT_MARKERS = (
+    "every view drew nothing",
+    "distinct views",
+    "byte-identical",
+)
+
+
+def _is_asset_fault(exc: BaseException) -> bool:
+    """True only for failures POSITIVELY identified as a property of the asset."""
+    msg = str(exc).lower()
+    return any(m in msg for m in _ASSET_FAULT_MARKERS)
+
+
+def failure_class(exc: BaseException) -> str:
+    """RESOURCE (retry) / DETERMINISTIC_INPUT (quarantine) / UNKNOWN (report)."""
+    if isinstance(exc, (MemoryError, OSError)):
+        return "RESOURCE"
+    msg = str(exc).lower()
+    if any(m in msg for m in _RESOURCE_MARKERS):
+        return "RESOURCE"
+    if "exit 245" in msg:
+        return "UNKNOWN"
+    return "DETERMINISTIC_INPUT"
+
+
+class SystemicFailure(RuntimeError):
+    """Raised to leave `runlog.run_progress` by the exception path.
+
+    [ADDED 2026-08-24, ULIP2 Reviewer BLOCKER 2] The previous attempt wrote a
+    quarantine row and called that the fix, under a comment correctly stating
+    that `run_progress` records SUCCESS on any normal exit. It does: `rc` is 0
+    unless `except BaseException` runs, and leaving the `with` by `break` is a
+    normal exit. So a systemic stop left a durable `status: SUCCESS, rc: 0` row
+    -- and by that same comment, run_progress is the file a resume reads.
+
+    The comment named the mechanism and the code under it addressed a different
+    one while reading as the fix. That is this batch's own named defect, inside
+    the batch that named it.
+    """
+
+
+class Tally:
+    """The per-asset accounting `main` does, in one testable place.
+
+    [ADDED 2026-08-24, Codex BLOCKER 1] This logic lived inline inside a
+    `try/except/else` and an edit inverted it: `done += 1` ran only on the
+    exception path, so an all-success run reported "0 rendered" and returned 2,
+    and the cost ledger counted failures as work. Nothing caught it -- the only
+    test of the circuit break asserted `SYSTEMIC_RUN >= 8`, which is a constant,
+    not a behaviour. A seam did not exist; that was the reason given for not
+    testing it, so the seam is the fix.
+    """
+
+    def __init__(self, systemic_run: int = SYSTEMIC_RUN) -> None:
+        self.done = 0
+        self.failed = 0
+        self.consecutive = 0
+        self.pool_deaths = 0
+        self.systemic: str | None = None
+        self._limit = systemic_run
+
+    def success(self) -> None:
+        self.consecutive = 0
+        self.pool_deaths = 0
+        self.done += 1
+
+    def pool_death(self) -> None:
+        """A whole batch lost because the pool would not stay up.
+
+        [ADDED 2026-08-24, ULIP2 Reviewer MAJOR 3] `failure()` correctly excludes
+        `BrokenProcessPool` so ONE dead pool is not 64 bad assets. But the
+        batch-level handler never told the tally anything, so the fault this
+        breaker was built for -- "OptiX unavailable", which kills workers at
+        spawn and breaks EVERY pool -- left `consecutive` at 0 and `systemic` at
+        None for all 93 batches. The breaker was blind to its own headline case.
+        """
+        self.pool_deaths += 1
+        if self.pool_deaths >= POOL_DEATHS_SYSTEMIC and self.systemic is None:
+            self.systemic = (f"{self.pool_deaths} consecutive worker pools died before "
+                             "finishing their batch; this is the machine, not the assets")
+
+    def failure(self, exc: BaseException) -> None:
+        self.failed += 1
+        # A dead pool marks EVERY pending future with the same
+        # `BrokenProcessPool`. Counting those as separate consecutive asset
+        # failures made one recoverable worker death look systemic -- the
+        # opposite of what the batch handler exists to express.
+        #
+        # [FIXED 2026-08-24] A `DETERMINISTIC_INPUT` failure is a property of
+        # the ASSET -- a flat carpet whose edge-on views are identically empty,
+        # a mesh that draws nothing. It is not evidence that the machine is
+        # broken, and counting it as such made the breaker fire on the one pass
+        # where it is guaranteed to be wrong: the LAST pass of every run, whose
+        # work-list is by construction nothing but assets that already failed.
+        #
+        # Measured on this run: pass 3 retried 270 known-bad assets, 64 failed
+        # back to back exactly as expected, the breaker fired, and the chain
+        # halted with n04 at 45,782/46,052 -- 99.4% complete and past its own
+        # 95% gate. Nothing was wrong except this counter.
+        #
+        # This is also the first thing that READS `failure_class`. Codex found
+        # that field was written to a log and consumed by nothing; the class now
+        # decides whether a failure can indict the run.
+        #
+        # [CORRECTED 2026-08-24, ULIP2 Reviewer MAJOR-2] This tested
+        # `failure_class(exc) == "DETERMINISTIC_INPUT"`, which is that
+        # function's FALL-THROUGH. So the breaker's coverage collapsed to the
+        # seven strings in `_RESOURCE_MARKERS`, and every UNRECOGNISED failure
+        # -- a CUDA error with unseen wording, a new Blender abort, a driver
+        # fault phrased differently -- became invisible to it, silently and
+        # forever. Same defect as the dead `isinstance(exc, (MemoryError,
+        # OSError))` branch recorded above: a safety mechanism resting on a
+        # list being complete.
+        #
+        # A breaker fails CLOSED on the unknown, so the exclusion is POSITIVE:
+        # only a failure this node can NAME as the asset's own property is
+        # excused. Everything else counts.
+        if isinstance(exc, BrokenProcessPool):
+            return
+        if _is_asset_fault(exc):
+            return
+        self.consecutive += 1
+        if self.consecutive >= self._limit and self.systemic is None:
+            self.systemic = (f"{self.consecutive} consecutive assets failed; "
+                             f"last: {type(exc).__name__}: {str(exc)[:200]}")
 
 
 def rebuild_index(index_path: Path, out_dir: Path) -> int:
@@ -698,10 +1050,35 @@ def rebuild_index(index_path: Path, out_dir: Path) -> int:
     with tmp.open("w") as f:
         for sc in sorted(out_dir.glob("*.json")):
             try:
-                f.write(json.dumps(json.loads(sc.read_text())) + "\n")
-                n += 1
+                rec = json.loads(sc.read_text())
             except (OSError, json.JSONDecodeError):
                 continue
+            # [ADDED 2026-08-24] `is_complete` refuses a sidecar from a different
+            # renderer, but this function used to republish every parseable one --
+            # so a stale record the runner had correctly decided to re-render was
+            # still handed to n05 and n06 through the index, which is the file
+            # they actually read. The gate has to hold on BOTH sides of it.
+            #
+            # [STRENGTHENED 2026-08-24, Codex CHANGES REQUIRED] Checking only the
+            # version was still WEAKER than `is_complete`: a current-version
+            # sidecar left by an interruption, a `--limit` run or corruption can
+            # name the wrong number of views or files whose sizes no longer
+            # match, and it still reached n05/n06. Call the real predicate
+            # instead of restating part of it -- two completion rules is how they
+            # drift apart.
+            # [FIXED 2026-08-24, Codex] The uid was read from the RECORD and the
+            # record was published from the FILE. `A.json` claiming `"uid": "B"`
+            # got validated against `B.json` and then published unvalidated, and
+            # a record with no `uid` was validated by filename and published
+            # without one, which is a KeyError in every consumer. The filename is
+            # the identity `is_complete` and `sidecar_path` both use, so the
+            # record must agree with it or it is not this asset's record.
+            if rec.get("uid") != sc.stem:
+                continue
+            if not is_complete(out_dir, sc.stem):
+                continue
+            f.write(json.dumps(rec) + "\n")
+            n += 1
     tmp.replace(index_path)
     return n
 
@@ -772,8 +1149,24 @@ def main() -> int:
     print("implementation: " + "  ".join(f"{k} {v[:12]}" for k, v in fingerprint.items()),
           flush=True)
     quarantine, done, started = [], 0, time.time()
-    with runlog.run_progress(NODE):
+    # [ADDED 2026-08-24, Codex CHANGES REQUIRED] A systemic failure -- a driver
+    # that stops answering, a vendor edit, OptiX unavailable -- fails EVERY
+    # remaining asset one at a time, and every one of them was swallowed by the
+    # per-asset handler below. `main` then returned 0 because one early asset had
+    # succeeded, so an unattended 6.5-hour run could quarantine 45,000 assets and
+    # exit reporting success.
+    #
+    # A CONSECUTIVE counter over NON-asset failures, not a rate: bad meshes are
+    # normal corpus behaviour and never indict the machine, while a systemic
+    # fault -- a dead driver, OptiX gone, a vendor edit -- fails everything in a
+    # row for reasons no asset owns. 64 is an IMPLEMENTATION CHOICE: 8 workers
+    # deep, so one bad pool generation cannot reach it.
+    tally = Tally()
+    try:
+      with runlog.run_progress(NODE):
         for start in range(0, len(todo), BATCH):
+            if tally.systemic:
+                break
             batch = todo[start:start + BATCH]
             try:
                 with cf.ProcessPoolExecutor(max_workers=args.workers, mp_context=ctx,
@@ -788,21 +1181,33 @@ def main() -> int:
                             retire_stale_sidecar(out_dir, uid)
                             runlog.quarantine(NODE, [{
                                 "uid": uid,
-                                "failure_class": ("RESOURCE" if isinstance(exc, (MemoryError, OSError))
-                                                  else "DETERMINISTIC_INPUT"),
+                                "failure_class": failure_class(exc),
                                 "exception_type": type(exc).__name__,
                                 "exception_msg": str(exc)[:400],
                                 "traceback": traceback.format_exc()[-1500:],
                             }])
                             quarantine.append(uid)
+                            tally.failure(exc)
+                            # [FIXED 2026-08-24, Codex BLOCKER 3] Setting the flag
+                            # did not stop anything: all 500 futures were already
+                            # submitted and the executor drained them. Under the
+                            # case this exists for -- every job hitting the 900 s
+                            # timeout -- that is ~15.6 more hours after the run is
+                            # already known to be broken. Cancel what has not
+                            # started and stop collecting.
+                            if tally.systemic:
+                                for f2 in futures:
+                                    f2.cancel()
+                                break
                             continue
-                        done += 1
+                        tally.success()
+                        done = tally.done
                         if done % 200 == 0:
                             rate = done / max(time.time() - started, 1e-9) * 60
                             print(f"  [{done:6d}/{len(todo)}] {rate:.0f}/min, "
                                   f"剩餘約 {(len(todo)-done)/max(rate,1e-9):.0f} 分, "
                                   f"quarantine {len(quarantine)}", flush=True)
-            except cf.process.BrokenProcessPool as exc:
+            except BrokenProcessPool as exc:
                 # The batch is lost, not the run. Whatever this batch finished
                 # is kept and the rest is retried on resume, because an asset is
                 # complete only once its sidecar lands -- but see
@@ -816,15 +1221,50 @@ def main() -> int:
                     "exception_type": "BrokenProcessPool",
                     "exception_msg": str(exc)[:400], "traceback": "",
                 }])
+                tally.pool_death()
+                if tally.systemic:
+                    break
 
+        # Inside the context on purpose: this is what makes run_progress record
+        # FAILED instead of SUCCESS.
+        if tally.systemic:
+            raise SystemicFailure(tally.systemic)
+    except SystemicFailure:
+        pass
+    systemic = tally.systemic
+    done = tally.done
+    if systemic:
+        print(f"\nSTOPPED -- this is not a bad asset, it is a broken run: {systemic}",
+              flush=True)
+        # A row in the quarantine channel as well as the run_progress FAILED row
+        # above: G3 reads quarantine to compute the rate, and a run that stopped
+        # broken should say WHY there, not only THAT it failed.
+        #
+        # [CORRECTED 2026-08-24, ULIP2 Reviewer MINOR] This comment used to state
+        # that run_progress records SUCCESS here and that a systemic stop leaves
+        # a `SUCCESS / rc 0` row. Both halves are now false -- the context is
+        # left by `raise SystemicFailure`, and the durable row is `FAILED / rc 1`,
+        # measured. Left as a correction rather than deleted: a comment claiming
+        # a defect the code no longer has is the same notch pointing the other
+        # way, and it is how the next reader re-fixes something already fixed.
+        runlog.quarantine(NODE, [{
+            "uid": "__run", "failure_class": "RESOURCE",
+            "exception_type": "SystemicFailure",
+            "exception_msg": systemic[:400], "traceback": "",
+        }])
     n_indexed = rebuild_index(paths.LOGS / "renders_index.jsonl", out_dir)
     runlog.cost_ledger(
         cpu_seconds=round(time.time() - started, 1),
         assets_rendered=done,
         views_written=done * LIVE_N_VIEWS,
     )
-    print(f"\n{done:,} rendered this run, {n_indexed:,} complete on disk, "
-          f"{len(quarantine):,} quarantined -> {out_dir}")
+    print(f"\n{done:,} rendered this run, {tally.failed:,} failed, "
+          f"{n_indexed:,} complete on disk, {len(quarantine):,} quarantined -> {out_dir}")
+    # A run that tripped the systemic break did NOT succeed, however many assets
+    # it finished first. Reporting 0 there is what let the chain advance to the
+    # next stage on a corpus that was never rendered.
+    if systemic:
+        return 3
     return 0 if done or not todo else 2
 
 
