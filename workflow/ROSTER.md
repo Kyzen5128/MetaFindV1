@@ -93,18 +93,55 @@ find    data/outputs/renders -name '*.json' | wc -l  ->      0     WRONG, and si
 find -L data/outputs/renders -name '*.json' | wc -l  -> 45,782     right
 ```
 
-**Live, unfixed, found 2026-08-24 by scanning for it:**
+### 🔴 LIVE AND LYING RIGHT NOW — `tools/status.sh`, the human status board
+
+Found by the **ULIP2 Block Reviewer**, 2026-08-24, after checking Master's claim instead of
+relaying it. **OBSERVED DATA — Master ran the board:**
+
+```
+$ bash tools/status.sh
+  n03 點雲             0 個      <- actually 46,052
+  n04 渲染             0 個      <- actually 45,782
+  n07 場景圖       12000 個      <- correct
+  n07b 資產模態     1467 / 1,467 <- correct
+```
+
+```
+tools/status.sh:44   recs() { find "$1" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l; }
+tools/status.sh:50   count "n03 點雲"  "$(recs "$OUT/pointclouds") 個"
+tools/status.sh:51   count "n04 渲染"  "$(recs "$OUT/renders") 個"
+```
+
+**This is the board a human opens to ask "where are we", and it has been reporting two finished
+stages as zero.** Not a gate — worse in one way: it is the instrument trusted without a second
+thought, `2>/dev/null` guarantees it never complains, and lines 56/57 ARE correct
+(`scene_graphs`, `procthor_modalities` are real directories), so the two wrong rows sit beside four
+right ones and read as a working tool.
+
+**And the irony is written directly above the bug.** `recs()`'s own comment says a naive
+`ls | wc -l` *"doubles them, which is exactly the kind of number that reads as plausible and is
+wrong."* The helper written to avoid a plausible-wrong number produces a plausible-wrong number.
+
+### LATENT — `tools/chain_to_stage1.sh`
 
 ```
 tools/chain_to_stage1.sh:50   ANN=$(find "$OUT/annotations" -maxdepth 1 -name '*.json' | wc -l)
 tools/chain_to_stage1.sh:69   EMB=$(find "$OUT/embeddings"  -maxdepth 1 -name '*.npz'  | wc -l)
 ```
 
-Both start points are symlinks. **Both counters read 0 regardless of the corpus**, and whatever
-gate reads them sees an empty stage. `tools/run_ulip_full.sh` already carries `find -L` for this
-exact reason; `chain_to_stage1.sh` never got the fix. **Routed, not fixed — changing it is a code
-change and goes through the three gates.** Archived `TASK.md` files carry the same pattern in
-copy-pasteable baseline commands; harmless as history, wrong if anyone runs them.
+Both start points are symlinks — **OBSERVED**. Master first wrote *"both read 0 regardless of the
+corpus"*; the Reviewer measured and both directories are **empty**, so `no-L` and `-L` agree at 0
+and that claim could not have been measured. **It is INFERENCE from a mechanism proven elsewhere,
+not OBSERVED DATA** — corrected here, since the whole day has turned on that distinction. **The
+trap is latent and fires the moment n05 writes its first annotation.**
+
+`tools/run_ulip_full.sh` already carries `find -L` for exactly this reason; neither of these files
+got the fix. **All routed, none fixed — a code change goes through the three gates.**
+
+**Checked and safe:** `run_ulip_full.sh:151` (`/home/kyzen/upstream/OpenShape`, a real directory).
+**Unchecked, flagged rather than cleared:** `status.sh:49`, `fetch_ulip_shards.sh:65`. Archived
+`TASK.md` files carry the same pattern in copy-pasteable baseline commands; harmless as history,
+wrong if anyone runs them.
 
 This is `CONTEXT.md` §3's notch sourced from a **tool** rather than from us, which is why no code
 review would catch it: the command is correct, the flag is absent, and the output is a plausible
