@@ -56,20 +56,19 @@ exactly what Rule 0.3 exists for.
 > This row first read *"`DL-029` review of the batch returned PASS on the CODE"*. **Beside the
 > Engineer's `n04 halted 45,782` it reads as "reviewed and ready to run". It is not.**
 >
-> ```
-> REVIEWED, round 2 PASS   the 10-file batch: n06's view_io bypass, the cache-generation
->                          binding, rebuild_index, the fingerprint width, the failure
->                          classifier, the 3 blockers introduced with the circuit break.
->                          -> this is the code that produced the 45,782 on disk.
+> **Both batches now have verdicts. Replaced 2026-08-24 16:xx.**
 >
-> NOT REVIEWED BY ANYONE   the guard rewrite now in the working tree:
->                          blankness  std(black-composite) -> alpha, MIN_COVERAGE 0.001
->                          distinct   all-12-byte-distinct -> only all-12-identical refused
->                          breaker    DETERMINISTIC_INPUT no longer counts toward SYSTEMIC_RUN
->                          new fields view_coverage / distinct_views / dark_views
->                          effect     201 of 270 recovered, 99.41% -> 99.85%
->                          -> no request sent, no round 1, no verdict.
 > ```
+> +1030/-87    round-2 PASS   the batch that produced 45,782
+> +1391/-103   round-2 PASS   the guard rewrite, incl. tools/backfill_render_coverage.py
+>                             state reviewed: MIN_COVERAGE = 0.0 and _is_asset_fault
+> ```
+>
+> Both by the ULIP2 Block Reviewer under a `DL-029` substitution **USER-authorised for those
+> batches — not a capacity substitution and not a precedent.** Nothing in the tree is unreviewed
+> **provided nothing has been edited since**; an edit makes a new stage (`DL-030`, answer `B`).
+>
+> A PASS clears the CODE. **`DL-031`: only a `✅` from the USER clears a RUN.**
 >
 > **Reviewed on the code that produced the corpus; unreviewed on the code that would change which
 > assets count.** A verdict detached from its subject is the same defect as a count detached from
