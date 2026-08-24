@@ -217,6 +217,75 @@ one — and describing an instruction as a guarantee is the notch itself.
 
 ---
 
+### A one-line grep cannot find a wrapped call — scan in two steps
+
+Named by the **ESSGNN Engineer**, 2026-08-24, after investigating why his own scan missed the only
+live instance. The reason is worth more than the bug.
+
+```
+tools/status.sh:44   recs() { find "$1" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l; }
+tools/status.sh:50   count "n03 點雲"  "$(recs "$OUT/pointclouds") 個"
+```
+
+**The dangerous call and the dangerous argument are not on the same line.** `:44` has `find` and a
+generic `"$1"` — no path. `:50` has a symlinked path and **does not contain the word `find`.** A
+grep requiring both together matches neither. It matched only `:49`, which has both — **and `:49`
+is the one safe line.**
+
+**The ugly inversion: the cleaner the code, the less a one-line grep finds it.** Wrapping `find`
+in a helper is what a careful author does — and `recs()`'s own comment at `:40-43` is *about
+another counting trap*, warning that `ls | wc -l` gives *"exactly the kind of number that reads as
+plausible and is wrong."* **The author was actively thinking about deceptive counts and stepped
+into a different one on the same line.**
+
+**Scan in two steps:**
+
+```
+1  find every call site of the risky operation, helper definitions included
+2  for each helper, trace its call sites separately and check what each one is fed
+```
+
+Step 2 is not optional and a single grep cannot do it. This does not catch everything — it is the
+structure that was actually missed.
+
+**Worked, closed, 2026-08-24 — every `find` in `tools/`:**
+
+```
+status.sh:44 recs() -> :50  pointclouds           SYMLINK   LIVE, reporting 0 vs 46,052
+status.sh:44 recs() -> :51  renders               SYMLINK   LIVE, reporting 0 vs 45,782
+status.sh:44 recs() -> :56  scene_graphs          real      safe
+status.sh:44 recs() -> :57  procthor_modalities   real      safe
+status.sh:49                ../datasets           real      safe
+fetch_ulip_shards.sh:65     reference/ulip_npy    real      safe
+chain_to_stage1.sh:50       annotations           SYMLINK   latent (dir empty today)
+chain_to_stage1.sh:69       embeddings            SYMLINK   latent (dir empty today)
+run_ulip_full.sh:77         has -L                          correct
+run_ulip_full.sh:151        upstream/OpenShape    real      safe
+```
+
+**Four affected: two lying now, two loaded.** The search is closed for shell; Python `glob` is
+unaffected — `status.sh`'s own `v3_count()` uses `glob.glob` and its n05 row is correct. **Same
+script, one path clean and one not.**
+
+And the honest footnote, from the same Engineer: ESSGNN's `1,439` and `70.6%` survived this
+**because they went through `glob`, not because anyone was careful.** *「不是我當時謹慎，是我剛好
+用了另一個工具。」*
+
+**Two extensions to the notch check, both his:**
+
+```
+2  did I state "can explain" as "is the cause"?
+3  did I take "they said they checked" as "checked, and completely"?
+```
+
+Check 2 exists because the tell is not always a strong word. `decides` · `never` · `cannot`
+announce themselves; **the copula does not.** *"That 0 **is** the symlink trap"* carries no
+intensity marker at all and still makes a causal claim — Master's error, and it is the slipperiest
+of the set. Check 3 came from him endorsing Master's scan as complete on Master's word, then
+withdrawing it.
+
+---
+
 ## 4. Architecture
 
 | Component | Where | Notes |
