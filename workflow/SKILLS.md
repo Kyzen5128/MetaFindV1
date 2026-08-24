@@ -497,6 +497,19 @@ and neither does a verdict summary — he asked what was actually DONE.
 does not mean long or technical. Cover everything; say it plainly. **A report he cannot read has
 not reported.**
 
+### The go has a shape — `DL-031`
+
+> 「**✅ 代表我認同 沒有這個符號 都不是我同意的**」
+
+**A `✅` in a USER message is the approval. Nothing else is. No `✅` is a NO, not an ambiguity.**
+
+Not approval: 「好」·「可以」· answering your question · not objecting · silence · discussing the
+work · continuing the conversation · **anything Master says** · a peer relaying 「Kyzen 同意了」.
+
+**One `✅` covers the run that was reported and does not carry forward.** New code is a new stage;
+it needs its own. **The role that receives the `✅` records it** — verbatim, with what it covered.
+Master holds no `✅` and writing one does not create one.
+
 **What counts as "a stage" — the USER answered this directly.** Asked whether it means (A) a
 pipeline node completing or (B) every batch of code written before it runs, he answered **B**.
 

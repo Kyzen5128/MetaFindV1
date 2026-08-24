@@ -111,6 +111,30 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-031` — **`✅` IS THE APPROVAL TOKEN.** No `✅`, no approval. **Completes `DL-030`.**
+
+| | |
+|---|---|
+| **Source** | USER, 2026-08-24, direct to Master |
+| **Verbatim** | 「有啦 你它媽傳下去以後我再跟你們講話 是我同意的 你們自己記錄 **✅ 代表我認同 沒有這個符號 都不是我同意的**」 |
+| **Issue / Finding** | `DL-030` requires the USER's go before any run and does not say what a go **looks like**. Within hours that gap produced the exact question it was written to prevent: the ULIP2 Reviewer asked whether the 05:30→12:13 `n04` run had been approved, **because he feared his own review PASS had been taken as the authorisation.** Master could not answer. Approval was being inferred from ordinary conversation, which is inference, not a record |
+| **Decision / Resolution** | **`✅` in a USER message is the approval. Nothing else is.** A run may start only when a `✅` from the USER covers it. **The absence of `✅` is a NO**, not an ambiguity to interpret |
+| **What is NOT approval** | Enthusiasm · 「好」·「可以」· answering a question · not objecting · silence · a reply that discusses the work · continuing the conversation · **anything Master says** · a peer relaying 「Kyzen 同意了」. The USER named the failure himself: *without that symbol, it is not my approval* |
+| **Who records it** | 「你們自己記錄」 — **the role that receives the `✅` records it**, with the verbatim message and what it covered. Not Master on their behalf, and not reconstructed later |
+| **Scope of one `✅`** | It covers the run that was reported. **It does not carry forward.** New code is a new stage (`DL-030`, answer `B`) and needs its own `✅`. A `✅` on a batch is not a `✅` on its resumption after an edit |
+| **`n04` 05:30→12:13 — ANSWERED, and recorded as words not a token** | The USER: 「有啦 … 是我同意的」. **That run WAS approved.** It is recorded from his plain-language statement today, **not** from a `✅` — the token did not exist when the run started. The ULIP2 Reviewer was right to ask and right to be uneasy; **his PASS was not what it rested on** |
+| **Why this closes a real hole** | Three roles spent the afternoon unable to establish whether a six-hour GPU run had authority. Not one of them could produce evidence either way. **A rule requiring approval, with no defined form of approval, is enforceable only in hindsight** |
+| **Authority classification** | **USER DECISION** — process authority |
+| **Status** | **`USER_APPROVED`** — IN FORCE |
+| **Date** | ordered and in force 2026-08-24 |
+
+**Master holds no `✅`.** `DL-030` already says Master cannot start anything; this makes it
+checkable rather than merely stated. **Master writing `✅` is not an approval and never becomes
+one** — the token is the USER's alone, and a role that acts on a `✅` in a peer message has been
+laundered (`DL-015` rule 3).
+
+---
+
 ### `DL-030` — **THE USER APPROVES EVERY RUN, AFTER A DETAILED REPORT.** Third gate. **Extends `DL-028`/`DL-029`.**
 
 | | |

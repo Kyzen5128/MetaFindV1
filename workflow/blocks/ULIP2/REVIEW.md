@@ -2467,3 +2467,151 @@ it only.
 `implementation_fingerprint()` covers `renders.py` and `meshload.py`. `renders.py:599-600`
 imports `render_blender.py` and `view_io.py` — **both decide pixels, neither is covered.** The
 guard would not fire on an edit to either.
+
+---
+
+## R-31 — `DL-029` pre-execution review of the n04 batch: two BLOCKERs, one MAJOR, all measured
+
+**Standing:** `DL-029` substitution for Codex, authorised by the USER for this batch only
+(「沒關係 這一次只有這一次 你請reviewer審」). Not a capacity failure — Codex answered twice
+that day. **Not a precedent.** Scope: n04 render + its consumers + the orchestrator.
+Subject: 10 uncommitted files, +1030/−87 against `4de72f4`.
+
+**A review PASS clears the CODE. Only the USER clears the RUN** (`DL-030`).
+
+### B-1 — `count()`'s `die` could not halt the chain. MEASURED.
+
+```
+FINDING          `count()` is reached only through `before=$($counter)`. Command
+                 substitution is a SUBSHELL; `die` ends in `exit 1`, which exits
+                 the subshell. `say` is `echo` with no `>&2`, so `die`'s two lines
+                 were CAPTURED INTO THE VARIABLE instead of printed.
+EVIDENCE         his `say`/`die`/`count` lifted verbatim into an isolated script,
+                 missing path:
+                   REACHED LINE AFTER: chain did NOT halt
+                   before=[[ts] STOP -- counting ... 沒有此一檔案或目錄 ...]
+                   t.sh: 列 15: ... arithmetic syntax error: operand expected
+                   SCRIPT RAN TO THE END        final rc=0
+                 `set -e` is deliberately absent (line 9 says so), so the
+                 arithmetic error on `$((after-before))` did not abort either.
+CLASSIFICATION   OBSERVED IMPLEMENTATION
+IMPACT           the same class the fix removed: a counter yielding a confident
+                 wrong value while the chain proceeds. STRICTLY WORSE than the
+                 `0` it replaced — `0` at least looked like a number, and the
+                 halt notice went into a variable no log would ever show.
+SEVERITY         BLOCKER
+```
+
+The Engineer's Q3 asked whether `die` could kill a *healthy* run. **It could not kill anything
+from there.** That inversion is the finding.
+
+**Why nothing caught it:** `tools/run_ulip_full.sh` is the one file no Codex round ever saw, and
+**pytest does not run shell.** 605 green tests, two Codex rounds and `bash -n` all passed over it.
+
+### B-2 — the systemic stop still wrote `run_progress: SUCCESS`
+
+```
+FINDING          the comment at the fix site stated the mechanism CORRECTLY --
+                 "run_progress writes SUCCESS whenever its context exits normally,
+                 and this one does ... and run_progress is what a resume reads" --
+                 and the code beneath it wrote a QUARANTINE row, which does not
+                 change what run_progress writes.
+EVIDENCE         `runlog.run_progress` sets `rc = 0`, reaching `rc = 1` only via
+                 `except BaseException`. The systemic path left the `with` by
+                 `break` — a normal exit — so `finally` appended SUCCESS / rc 0.
+CLASSIFICATION   OBSERVED IMPLEMENTATION
+IMPACT           a resume reads the stage as succeeded. Silent-skip vector.
+SEVERITY         BLOCKER
+```
+
+**The notch, inside the batch that named the notch:** a comment states a mechanism and the lines
+under it address a different one *while reading as the fix*.
+
+### MAJOR-3 — the breaker was blind to its own headline case
+
+`Tally.failure()` correctly excluded `BrokenProcessPool` so one dead pool is not 64 bad assets.
+But the **batch-level** handler never told the tally anything. "OptiX unavailable" — the
+Engineer's own stated trigger — kills workers at spawn, breaks every pool, and left
+`consecutive` at 0 for all 93 batches. Blast radius bounded: `done == 0` → rc 2 → `drive` dies;
+otherwise the 95% gate catches it hours later. **Costs a night, not the corpus.**
+
+### Verification of the fixes — measured, not read
+
+| | verified by |
+|---|---|
+| B-1 | his fixed `count()` in isolation: healthy path counts, bad path halts `rc=1`, complaint on stderr. Also checked line 133 `local final; final=$(...)` is **split** — `local x=$(cmd)` returns `local`'s status and would have reintroduced B-1 at that one site. And that `-s $err` cannot fire on a healthy run with his argument order. |
+| B-2 | real `runlog.run_progress` with `paths.LOGS` redirected to a temp dir: `[('RUNNING', None), ('FAILED', 1)]`. **Control run also checked** — a clean run still writes SUCCESS; raising through a context manager could have made every run look failed. |
+| MAJOR-3 | `Tally` trips at `POOL_DEATHS_SYSTEMIC = 3`; one success resets; **and the original property still holds** — 500 pool-marked futures are still not systemic. Ran that third case specifically because adding `pool_death()` was the obvious way to break it. |
+
+`py_compile` clean on six modules, `bash -n` clean on the runner.
+
+### MINOR — a stale comment, the notch pointing the other way
+
+After the B-2 fix the comment still asserted the SUCCESS defect. **A comment claiming a defect
+the code no longer has** sends the next reader to re-fix it. Corrected in place by the Engineer.
+
+### What this PASS is not
+
+Three findings fixed, no new defect introduced by the fixes — the check that failed in Codex
+round 2 and in my own round 1. It is **not** a statement that the batch is correct, the
+reproduction faithful, or the run permitted. The four-axis completion review is separate and
+still owed.
+
+**I did not run pytest.** `607 passed` / `485 functions` / `2276 checks` are the Engineer's
+claims, unverified here.
+
+### The gap that stays open
+
+**`tools/run_ulip_full.sh` has zero automated coverage.** B-1 lived there and was found by
+reading. Both verifications of that file — his and mine — are scratchpad scripts that die with
+our sessions. **That is not coverage and is not scored as any.**
+
+### R-31a — what this PASS MISSED, found after the run, recorded against the Reviewer
+
+`SYSTEMIC_RUN`'s premise is stated in its own comment:
+
+> *"Scattered bad meshes never reach it, because any success resets the counter."*
+
+```
+FINDING          `todo` is rebuilt from `is_complete` on EVERY pass, so on any
+                 resume pass the work-list contains ONLY prior failures. The
+                 premise is true on pass 1 and FALSE BY CONSTRUCTION on pass 3 --
+                 successes are rare there by definition, so the counter is
+                 guaranteed to reach 64.
+EVIDENCE         the 05:30-12:13 run, pass 3: `0 rendered this run, 64 failed,
+                 45,782 complete on disk` then `STOPPED -- 64 consecutive assets
+                 failed; last: ValueError: only 8 distinct views of 12`.
+                 Raised by the ENGINEER, against his own code, after the halt.
+CLASSIFICATION   OBSERVED IMPLEMENTATION + OBSERVED DATA
+IMPACT           the breaker fired CORRECTLY BY ITS RULE and INCORRECTLY ABOUT
+                 THE WORLD. Both facts, same event.
+SEVERITY         MAJOR -- in code this Reviewer PASSED
+```
+
+**How it was missed.** The round-2 verification asked whether the breaker fires when told to, and
+whether a success resets it. Both hold; both were measured. **Neither asks what the work-list
+looks like on the pass it would fire on.** The mechanism was tested against its own rule instead
+of against the world it runs in — which is `CONTEXT.md` §3's notch arriving in a *test* rather
+than in a claim, and it is the reason a passing test is not evidence of correctness.
+
+The Engineer's `DETERMINISTIC_INPUT out of SYSTEMIC_RUN` is the right shape. **Unreviewed. No
+verdict issued.**
+
+### R-31b — the `-L` sweep: one LIVE instance, two latent
+
+```
+tools/status.sh:44   recs() { find "$1" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l; }
+tools/status.sh:50   n03 點雲   reports 0    actual 46,052
+tools/status.sh:51   n04 渲染   reports 0    actual 45,782
+```
+Measured on a non-empty directory: `find` → 0, `find -L` → 46,052. **Two wrong rows beside four
+right ones**, and the right ones are right only because `scene_graphs` and `procthor_modalities
+happen not to be symlinks. `2>/dev/null` guarantees it never complains.
+
+`recs()`'s own comment says it exists to avoid *"exactly the kind of number that reads as
+plausible and is wrong"*.
+
+`tools/chain_to_stage1.sh:50,69` — real symlinks, but **both directories are empty**, so `no-L`
+and `-L` agree at 0. The trap is `INFERENCE` from a mechanism proven elsewhere, **not observed**,
+and fires when n05 writes its first annotation. `run_ulip_full.sh:151` cleared (real directory).
+`status.sh:49` and `fetch_ulip_shards.sh:65` **flagged unchecked, not cleared.**
