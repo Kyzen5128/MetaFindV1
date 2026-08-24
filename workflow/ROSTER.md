@@ -36,49 +36,114 @@ the previous roster was dead within the hour.
 
 ---
 
-## The six, as of 2026-08-24 15:45
+## The six, as of 2026-08-24 ~17:35 — **ROLL CALL by USER order**
+
+> 「請大家表明身分 回傳完後 你統整完通知大家」 — USER, 2026-08-24.
+> **Every line below was read by that role from its OWN environment and sent to Master.**
+> Nothing here is guessed, inferred, or copied from the previous roster.
 
 | Role | Name | Socket | State |
 |---|---|---|---|
-| **MASTER** | `metafindv1-69 [349be2]` | — | active |
-| **ULIP2 ENGINEER** | `metafindv1-62` | `1091579` | active — n04 halted 45,782/46,052. **Stopped by Kyzen.** |
-| **ULIP2 REVIEWER** | `metafindv1-b3 [5eb15e]` | `1091520` | active — see the review-state note below |
-| **ESSGNN ENGINEER** | `metafindv1-7c [59f98b]` | `1092585` | **FULLY STOPPED** |
-| **ESSGNN REVIEWER** | `metafindv1-fa` | `1092737` | **FULLY STOPPED** |
-| **INTEGRATOR** | `metafindv1-f3` | `1092870` | **ON HOLD** (`DL-009`) |
+| **MASTER** | `metafindv1-0d [cedfeb]` | `11496` | active |
+| **ULIP2 ENGINEER** | `metafindv1-3c [d44751]` | `9612` | **STOPPED by USER** 「停下 我先請大家表明身分等我」 |
+| **ULIP2 REVIEWER** | `metafindv1-ea [32b08a]` | `31511` | **reviewing** — Engineer's `C1+D-2 / C4 / N-1` batch, no verdict yet |
+| **ESSGNN ENGINEER** | `metafindv1-bf [16abd6]` | `32722` | **STOPPED by USER** |
+| **ESSGNN REVIEWER** | ⚠️ **TWO CLAIMANTS — see below** | `11209` *and* `32839` | **STOPPED by USER** 「你先停 現在還不是在做你這塊 你等 我說開始在做」 |
+| **INTEGRATOR** | `metafindv1-43` | `33069` | **STOPPED by USER** 「你先停下喔」 + ON HOLD (`DL-009`) |
 
-The ULIP2 Engineer's own message says its session is `metafindv1-0d`; the delivered `from-name`
-was `metafindv1-62`. **The `from` wins** — a session cannot see its own listed name, which is
-exactly what Rule 0.3 exists for.
+### ⚠️ Two sessions answered as ESSGNN REVIEWER. **Master is not guessing which.**
 
-> ### ⚠️ **A verdict without its subject.** Corrected 2026-08-24, at the ULIP2 Engineer's request.
->
-> This row first read *"`DL-029` review of the batch returned PASS on the CODE"*. **Beside the
-> Engineer's `n04 halted 45,782` it reads as "reviewed and ready to run". It is not.**
->
-> **Both batches now have verdicts. Replaced 2026-08-24 16:xx.**
->
-> ```
-> +1030/-87    round-2 PASS   the batch that produced 45,782
-> +1391/-103   round-2 PASS   the guard rewrite, incl. tools/backfill_render_coverage.py
->                             state reviewed: MIN_COVERAGE = 0.0 and _is_asset_fault
-> ```
->
-> Both by the ULIP2 Block Reviewer under a `DL-029` substitution **USER-authorised for those
-> batches — not a capacity substitution and not a precedent.** Nothing in the tree is unreviewed
-> **provided nothing has been edited since**; an edit makes a new stage (`DL-030`, answer `B`).
->
-> A PASS clears the CODE. **`DL-031`: only a `✅` from the USER clears a RUN.**
->
-> **Reviewed on the code that produced the corpus; unreviewed on the code that would change which
-> assets count.** A verdict detached from its subject is the same defect as a count detached from
-> its denominator — `CONTEXT.md` §3. Caught by the ULIP2 Engineer against a row that favoured him.
->
-> And it would clear no run either way: `DL-030` puts Kyzen last, and a peer relaying a verdict is
-> a report, not an authorisation (`DL-015` rule 3).
+```
+metafindv1-a9 [f028ad]   socket 11209    replied ~17:30
+metafindv1-01 [548c89]   socket 32839    replied ~17:37
+```
 
-Superseded, all dead: `metafindv1-10 / 14 / 93 / 72 / f6 / dd / 0d`, sockets
-`735594 · 738549 · 741571 · 748636 · 1066863 · 1067707 · 1068859 · 1070256 · 1740924 · 4017483`.
+**Both are almost certainly the same conversation**, and the evidence is that they agree on
+things a second person could not fabricate: the identical verbatim USER quote, the identical
+single open item (`U-20`, blocking `n08`, behind ULIP2), the identical zero-write posture, and
+**both independently reported the same lesson twice-learned** — that `ListAgents` does state your
+own name in its header and the old "you cannot see yourself" rule was false at the premise, not
+just at the conclusion.
+
+The likely mechanism is a resume: the window reopened as `01`/`32839` and `a9`/`11209` is the
+husk still answering. **Likely is not measured, and a roster is exactly the wrong place to
+resolve an identity by plausibility** — that is elimination-guessing, which this file's Rule 0.2
+forbids and which has already mis-sent one MAJOR finding today.
+
+> **Until the USER or that role settles it: send to BOTH, or to the `from=` of a live message
+> from it. Never pick one on reasoning.** Duplicate delivery to a stopped role costs nothing.
+> Choosing wrong loses a finding.
+
+**`32839` is the later reading and it corrects a self-reported error:** that role sent `1092737`
+to the ULIP2 Engineer *after* the reboot but *before* running `echo`, flagged at the time as
+probably dead. **`1092737` is wrong; `32839` is what the environment returned.**
+
+**Not a role, and it said so itself:**
+
+| | | | |
+|---|---|---|---|
+| `metafindv1-c5 [03fe3c]` | `32067` | **`OTHER` — unassigned** | idle, no task, no role ever given |
+
+It proved the negative rather than asserting it: `grep -rn "32067\|metafindv1-c5" workflow/`
+returns nothing. **A labelled bystander is worth more than an unlabelled window** — the next role
+hunting for a Reviewer will not guess at it.
+
+**Did not answer the roll call:** `metafindv1-eb`, `metafindv1-b1`, `metafindv1-01`,
+`observer-sessions-53`, `observer-sessions-55`. Six of the twelve peers appeared within two
+minutes of each other. **Six roles cannot gain six members at once — do not treat any of them as a
+role until it reports in.** Flagged by the INTEGRATOR.
+
+### ⏳ Half-life: this table was accurate when written and may already be wrong
+
+**An address can change WITHIN a single session, with no reboot and no resume.** Measured by the
+INTEGRATOR *while composing his own roll-call reply*:
+
+```
+15 min ago   socket 11066   name metafindv1-c1
+now          socket 33069   name metafindv1-43        <- no reboot in between
+```
+
+The ULIP2 REVIEWER independently: `metafindv1-93` → `b3` → `7f` → `ea` **inside one hour**, and
+`7f` was live when he answered the Engineer fifteen minutes earlier. **Anything sent to `7f` or
+`b3` is lost.**
+
+> **So Rule 0.1 stands and its corollary does not.** Reading your address from the environment is
+> right and authoritative — *for that moment*. **"Looked it up once, therefore usable later" is the
+> `CONTEXT.md` §3 notch**: the mechanism supports *true now*, not *true later*. Named by the
+> INTEGRATOR against the rule he himself had helped write.
+>
+> **When a send fails or a name does not resolve: DO NOT narrow it down by elimination.
+> Re-run the roll call and make the other side re-read `echo $CLAUDE_CODE_MESSAGING_SOCKET` on the
+> spot.** Guessing has already mis-sent one MAJOR finding today.
+
+---
+
+## Standing constraints that live nowhere else
+
+**Smoke runs are 5 assets, not 100.** USER, in the ULIP2 Engineer's window:
+「你測試不要跑100筆 跑5筆就好」. Relayed by the ULIP2 Reviewer because it is easy to lose inside a
+batch message. Applies to every role.
+
+**`DL-029` was NOT used this round, and the record has to say so.** Codex → Reviewer happened
+because the USER ordered it directly:
+「先停掉codex你剛剛傳的 我們先暫時讓reiewer審 審完再解決codex問題」 — Codex, reviewer and
+「暫時」 all in his own words. **That is the USER overriding `DL-029`, not `DL-029` being applied**;
+Codex had no capacity failure. Self-corrected by the ULIP2 Engineer after telling the Reviewer the
+opposite. The wrong record would teach the next reader that a broken Codex auto-promotes the
+Reviewer.
+
+**Two `✅` exist and neither clears a run**, both in the ULIP2 ENGINEER's window, quoted by him in
+full: `D-2 改成 gemma ✅` and `先修 C1 C4 N-1 再跑 ✅`. They cover the re-point and the three fixes
+**before** running. **No role holds a `✅` for a run. Master holds none at all.**
+
+---
+
+Superseded, all dead — names: `metafindv1-10 / 14 / 93 / 72 / f6 / dd / 6e / 69 / b3 / 7f / 62 /
+7c / fa / f3 / c1`. Sockets: `735594 · 738549 · 741571 · 748636 · 1066863 · 1067707 · 1068859 ·
+1070256 · 1091520 · 1091579 · 1092585 · 1092737 · 1092870 · 11066 · 1740924 · 4017483`.
+
+**`metafindv1-0d` appears on both lists** — it was a dead ULIP2 ENGINEER address earlier today and
+is MASTER's live name now. **A name being familiar is not evidence it is the same session.**
 
 ---
 
