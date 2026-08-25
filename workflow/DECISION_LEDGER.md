@@ -111,6 +111,23 @@ id; nothing reuses `DL-006`.
 
 ---
 
+### `DL-032` — Stage 1 freezing: **CLIP stays FROZEN, PointBERT trains** — the ULIP-2 recipe, USER-decided
+
+| | |
+|---|---|
+| **Source** | USER, 2026-08-25, direct to Master, answering an explicit A/B put to him with both sides' evidence |
+| **The question** | MetaFind says Stage 1 trains "both query and gallery encoders" but never says how deep. Our implementation freezes CLIP (ViT-bigG-14 text+image) and trains PointBERT + pc_projection + fusion + logit_scale. MetaFind §2.4's own words lean the other way: *"While prior works typically align 3D encoders to a fixed CLIP embedding space by freezing pretrained text and image encoders, our MetaFind framework adopts a more flexible dual-tower design"* — a contrast drawn against exactly the practice we implement |
+| **The upstream fact that decided it** | ULIP-2's own paper is explicit, verbatim: *"We adopt the largest version of encoders from OpenCLIP (ViT-G/14) … and **freeze it during the pre-training**"* (`docs/paper/ulip2_source/main.tex:609`) and *"based on the **pre-aligned and frozen** image encoder E_I and text encoder E_T … We target to **train a 3D point cloud encoder** E_P"* (`main.tex:612`). The "prior work" MetaFind's §2.4 gestures away from **is its own backbone's official recipe** |
+| **Options as put to the USER** | **A** — freeze CLIP, per the upstream's explicit text and `DL-010` (MetaFind silent → official upstream is the reference); matches current code. **B** — fine-tune CLIP, per §2.4's tone; no explicit MetaFind text supports it, and 2.5B parameters would enter the optimizer |
+| **USER decision** | **`A`** |
+| **What A entails, recorded plainly** | §2.4's "more flexible" is read as referring to what MetaFind demonstrably adds — the fusion module, the dual towers, and Stage 2 — **not** to unfreezing CLIP. That reading is a judgment, not a paper fact, and it is the USER's |
+| **Authority classification** | Freezing = **UPSTREAM FACT** (ULIP-2 explicit) adopted as the reference under `DL-010` case 1 · the adoption itself = **USER DECISION** · §2.4-tone reading = **INFERENCE, USER-ratified** |
+| **Code impact** | **None.** The implementation already does A (`ulip_backbone.trainable_parameters`, `stage1.py`). This entry converts an unratified IMPLEMENTATION CHOICE into a USER-decided one; no diff, no gate, no run |
+| **Affected components** | n09 Stage 1 protocol · n10 training · every Table 1 number · decision-list item 2 of the reproduction map — now CLOSED |
+| **Status** | **`USER_APPROVED`** — decided 2026-08-25 |
+
+---
+
 ### `DL-031` — **`✅` IS THE APPROVAL TOKEN.** No `✅`, no approval. **Completes `DL-030`.**
 
 | | |
