@@ -1,6 +1,7 @@
 # MetaFind 復現筆記（Master 說明書・完整版）
 
-撰寫：Master（Claude），2026-08-25（v2，全面擴充）。
+撰寫：Master（Claude）。v2 2026-08-25 全面擴充；**v3 2026-08-26 依外部審查修正**。
+**狀態：條件通過，尚未 final。** 外部審查提出 3 項 P0，我逐條核對一手來源後**全部確認成立**，已在本版修正（MF-14 錯標、20% test 早停污染、U-16 推論過度），另補 5 個新登記沉默點（§9.5）、修正 1 個事實錯誤（n05 標註模型不是 GPT-4o，是 gemma-4-12B-it，見 §2.3）。剩 §10 第 3 項（早停協定 A／B）需 Kyzen 拍板後才可標 final。
 目的：MetaFind（arXiv 2510.04057, NeurIPS 2025 格式, 作者 Pan/Lu/Liu）的**每一個技術細節**——
 架構、張量維度、公式、資料格式、訓練配方、評估協定、已知矛盾、每個開放決策與其預設方案——
 一次寫清楚，讓實作規劃不再返工。這份文件交 GPT 外部審查。
@@ -137,7 +138,14 @@ requires_grad 和 train()/eval() 是兩件事——PointBERT 有 drop_path 0.1�
 - 教訓（Blender 事件）：n04 第一版用 pyrender 沒查上游 → 全語料重渲。**動手前先讀上游程式碼**。
 
 **文字（n05 標註 → n06 編碼）**
-- GPT-4o 對 12 視角圖生成結構化標註：category、尺寸(cm)、materials、placement 四布林、
+- **⚠ 標註模型：論文是 GPT-4o，我們實際跑的不是（DEVIATION D-2）。**
+  PAPER FACT：`2methdology.tex:28` 寫 GPT-4o。
+  OBSERVED IMPL／DATA：`annotate_run.py:84` `MODEL_ID = ".../gemma-4-12B-it"`，
+  實際產出的 sidecar 每一筆都記 `annotator_model = ".../gemma-4-12B-it"`（親自開檔核對）。
+  D-2 於 2026-08-24 由 Kyzen 決定重新指向 gemma（原文：「D-2 改成 gemma」），
+  歷經 Qwen2.5-VL-7B → Qwen3.8-27B → gemma-4-12B-it，**沒有一個是 GPT-4o；偏離是被重新指向，不是被解除**。
+  本筆記 v2 此處原寫「GPT-4o 標註」，是把 PAPER 當成 IMPL，**2026-08-26 修正**。
+- 標註內容：對 12 視角圖生成結構化欄位：category、尺寸(cm)、materials、placement 四布林、
   synset、volume、mass 等（schema 由 n05 contract 鎖定；PAPER Fig.2 只給 schema 不給字串化規則）。
 - **序列化模板（U-15，CHOICE，D0-008 §11.3 批准）**（IMPL `resolve_stage1.py:119`）：
   ```
@@ -183,10 +191,15 @@ fully_shared                      一份骨幹、同一個 Fusion 物件（rebin
 fully_separate                    兩份骨幹、兩份 Fusion（backbone 層級尚未實作，僅 fusion 層級）
 ```
 - 歷史 bug：把同一個 FusionConfig 給兩塔 ≠ 共享權重（兩次建構＝兩套參數）。已修為 rebind 模組。
-- **重要推論（IMPL `dual_tower.py:300-321`）**：`fully_shared` 到 Stage 2 **自相矛盾**——
-  2.6 要「凍 gallery、訓 query fusion」，同一個模組凍不了一半。程式碼直接 raise。
-  → 這其實排除了 U-16 的一種讀法（對 Stage 2 而言），是可寫進報告的結論。
-- U-16 殘留：PointBERT 一份或兩份，仍待 Kyzen（列 §10）。
+- **重要推論（IMPL `dual_tower.py:300-321`）**：`fully_shared` 與**論文 Stage 2 的凍結契約不相容**——
+  2.6 要求「凍 gallery、訓 query fusion」，同一個 Parameter 物件無法同時滿足這兩件事，程式碼直接 raise。
+  這是**契約不相容**（可寫進報告的結論），不是數值會爆炸。
+- **U-16 狀態：PAPER-AMBIGUOUS，維持現行 CHOICE（2026-08-26 覆核）**。
+  這不是論文沉默、而是論文自打架：正文 `2meth:34` 寫 "separate encoders"，
+  **Figure 1 卻標 `ULIP-2 (Shared)` 且只畫一個骨幹方塊**（已核對原圖）。
+  現行 `shared_backbone_separate_fusion` 是唯一同時滿足兩處的讀法：一份骨幹對上圖，兩份 Fusion 對上正文。
+  fully_separate 保留為競爭假設（PointBERT×2 約 +32M 參數，顯存可行，但 backbone 層級尚未實作）。
+  DPR 的 "two independent BERT networks" 只是雙塔**範式**的出處，不是本篇 backbone 的實作 authority。
 
 ---
 
@@ -235,7 +248,7 @@ sec25 版留作競爭假設要量測，不是 fallback。
 | C2 | 2.5 寫 h⁰=Concat(x_i,t_i)；appendix 證明假設 h⁰ 對 SE(3) 不變 | **h⁰ = t_i**（`h0_mode="semantic"`）；Concat 版留作 RA-1 審計（預期等變測試失敗） | Concat 讓 e_layout 繼承座標敏感性——正是 ESSGNN 要消滅的病 |
 | C3 | 2.5 型別 f_x→R³；證明要 Q 能提出括號、只有純量成立 | **φ_x 輸出純量，無旗標、無條件**（DL-004 USER 核准：判 PAPER-AMBIGUOUS，不寫「論文錯了」） | EGNN model.tex 明文 "φ_x: R^nf → R^1 outputs a scalar value"（一致但非證據） |
 | C4 | h 寬度不閉合（h⁰ 是 d+3，f_h 讀 2d 寫 d） | 隨 C2 的 semantic 讀法自動閉合 | — |
-| C5 | 2.5 用 j∈N(i)；appendix 用 j≠i | **N(i)**（scene graph 的邊） | EGNN 自己說兩者都是合法選項（model.tex verbatim）；且 e_ij 只在相連 pair 存在 |
+| C5 | 2.5 用 j∈N(i)；appendix 用 j≠i | **N(i)**（scene graph 的邊），**座標式 MF-13 與特徵式 MF-14 同時套用** | EGNN 自己說兩者都是合法選項（model.tex verbatim），且說明鄰域限制要在兩式一起套；e_ij 只在相連 pair 存在。**補登記的證明前提（2026-08-26）**：appendix 的等變性代數是對固定 `j≠i` 寫的；改成 sparse N(i) 後，證明額外需要「**N(i) 在剛體變換下不變**」。我們的邊來自 support／adjacency，平移旋轉後不變，前提成立，但這是**我們補的假設，論文沒寫**，必須列進等變性測試的前置條件。 |
 | C6/U-17 | d_ij 一次方（2.5）vs 平方（appendix、EGNN） | **squared** 為主線；`distance` 旗標保留 euclidean | 兩者都 SE(3) 不變、只是餵 MLP 的數字不同；appendix 帶著證明 |
 
 其他登記：C7 = Stage 1 單向 / Stage 2 雙向、論文未解釋（照做即可）；
@@ -286,19 +299,19 @@ F8 觀察：1280 維 e_ij 旁邊只有 1 個幾何純量，幾何訊號可能被
 |---|---|---|---|
 | MF-1 | `A*=argmax_{A∈𝒜} sim(f_query(Q), f_gallery(A))`（2meth:7） | §1 同式；`sim`=cosine 為 U-24 CHOICE（S1 沉默） | ✅＋✍️(sim) |
 | MF-U1 | `h_i^(0)=Concat(x_i,t_i)`（2meth:43） | 主線 h⁰=t_i（C2 裁決：印刷式違反 appendix 自己的不變性前提，且會讓 e_layout 繼承座標敏感——論文自己的定理與動機都站 t_i 這邊）；Concat 版留 RA-1 預期失敗審計 | ⚖️ C2 |
-| MF-2 | Eq.2 h 更新（2meth:50） | §3.2 逐字（含 d^l、θ_h）；ESSGCL `f_h(cat[h_i,h_j,radial,e_ij])`＋殘差在外 | ✅（註1） |
+| MF-2 | Eq.2 h 更新（2meth:50） | ESSGCL `f_h(cat[h_i,h_j,radial,e_ij])`＋殘差在外。**[降級 2026-08-26]** 論文引數序是 `(d, h_i, h_j, e)`，程式是 `[h_i, h_j, d, e]`：在 MLP 函數族上可由第一層權重欄置換互相表示，**架構等價但同一組參數值不逐字等價**，故不宜標 ✅ | 🔁 引數重排等價 |
 | MF-3 | Eq.3 x 更新，f_x→R³（2meth:50,54） | §3.2 逐字；實作 f_x 輸出**純量**（C3/DL-004：R³ 讀法讓論文自己的 Eq.13 證明失效——`Σ(Qx_i−Qx_j)φ_x = QΣ(x_i−x_j)φ_x` 只對純量成立） | ⚖️ C3 |
 | MF-U4 | `e_layout=Pooling({h_i^(L)})`（2meth:55） | 同式；Pooling 未命名（S2）→ mean CHOICE | ✅＋✍️ |
 | MF-4 | Eq.4 等變條件 R∈SO(3)（2meth:62） | §3.5；測試照此斷言 | ✅ |
-| MF-5 | Eq.5 L_pre 單向 InfoNCE（2meth:76） | `CE((q̂ĝᵀ)/τ, arange(B))`。**推導**：CE 第 i 列 = −log[exp(q̂_i·ĝ_i/τ)/Σ_j exp(q̂_i·ĝ_j/τ)]；sim=cosine=正規化點積、分母 Σ_{A'∈B} 含正例（CE 天然包含）、batch 取平均＝逐 query 式的期望。`losses.py:170-175` | 🔁 |
+| MF-5 | Eq.5 L_pre 單向 InfoNCE（2meth:76） | `CE((q̂ĝᵀ)/τ, arange(B))`。**推導**：CE 第 i 列 = −log[exp(q̂_i·ĝ_i/τ)/Σ_j exp(q̂_i·ĝ_j/τ)]；sim=cosine=正規化點積、分母 Σ_{A'∈B} 含正例（CE 天然包含）、batch 取平均＝逐 query 式的期望。`losses.py:170-175`。**[加註前提 2026-08-26]** 這個等價依賴三個論文沒明講的實作條件：(a) 正例是 batch 對角線；(b) 正例包含在分母 𝓑 內；(c) code 的 batch 平均對應論文的逐樣本 loss。三者都是我們的 reconstruction，不是論文寫的 | 🔁 條件式（對角配對＋正例∈𝓑） |
 | MF-6 | Eq.6 `e_query=Fusion(e_text,e_img,e_pc)+λ·e_layout`（2meth:84） | `dual_tower.py:248` `fused + lam*layout` 逐字；layout 缺席時整項省略（U-28 CHOICE；內文 :83 本來就說 e_layout「optional」） | ✅ |
-| MF-7 | Eq.7a/7b 雙向（2meth:93） | 7a=CE(logits)；7b=CE(logitsᵀ)。**推導**：logitsᵀ[i,j]=q̂_j·ĝ_i/τ=sim(e_gallery_i, e'_query_j)/τ（cosine 對稱），分母恰為 Σ_{e'_query∈B}。前提＝gallery batch 與 query batch 同組配對（`losses.py:188` 註明；解耦 gallery 需另算 logits） | 🔁 |
+| MF-7 | Eq.7a/7b 雙向（2meth:93） | 7a=CE(logits)；7b=CE(logitsᵀ)。**推導**：logitsᵀ[i,j]=q̂_j·ĝ_i/τ=sim(e_gallery_i, e'_query_j)/τ（cosine 對稱），分母恰為 Σ_{e'_query∈B}。前提＝gallery batch 與 query batch 同組配對（`losses.py:188` 註明；解耦 gallery 需另算 logits）。**[加註前提 2026-08-26]** 轉置成立還額外要求 `sim(a,b)=sim(b,a)`，而 **MetaFind 從未指定 sim**，對稱性來自我們選的 cosine（U-24）。所以這條同時帶一個 ✍️ | 🔁 條件式 ＋ ✍️（對稱 sim） |
 | MF-8 | Eq.8 `L=½(q2g+g2q)`（2meth:100） | `losses.py:193` `0.5*(...)` | ✅ |
 | MF-9/15 | 等變條件 Q orthogonal（app:25,72） | §3.5 群記法差說明 | ✅ |
 | MF-10 | `m_ij=φ_e(h_i,h_j,‖x_i−x_j‖²,e_ij)`（app:31） | ESSGCLShared `phi_e(cat[h_i,h_j,sq,e_ij])`，distance=squared | ✅（註1） |
 | MF-11/12, U15-17 | 證明中間步（app:37-55） | 非實作對象；§3 證明摘要與其一致 | ✅ |
 | MF-13 | `x_i^{l+1}=x_i^l+Σ_{j≠i}(x_i−x_j)·φ_x(m_ij)`（app:49） | 同式但 Σ over **N(i)**（C5：EGNN model.tex 明文兩者皆合法選項；完全圖需 ~1.07M 條 LLM 邊 vs 實際 ~1.3e5）；φ_x 純量（同 C3） | ⚖️ C5 |
-| MF-14 | `h_i^{l+1}=h_i^l+Σ_{j≠i}φ_h(m_ij)`（app:64） | `h + segment_sum(phi_h(m_ij))`——殘差在 φ_h **外**，與式一致（EGNN 的 φ_h 內建殘差，MetaFind 沒有；U-35 註記） | ✅ |
+| MF-14 | `h_i^{l+1}=h_i^l+Σ_{j≠i}φ_h(m_ij)`（app:64） | 殘差位置一致（在 φ_h 外；EGNN 的 φ_h 內建殘差，MetaFind 沒有，U-35 註記）**但求和範圍同樣被 C5 改成 N(i)**（IMPL `essgnn.py:458` 用 `row`＝edge_index）。**[修正 2026-08-26]** 本表原標 ✅，只核對了殘差位置、漏核求和範圍：C5 同時作用於 MF-13 與 MF-14，EGNN model.tex 也明說鄰域限制要在座標式與聚合式**兩邊一起**套用。這是筆記自身的疏漏，不是論文歧義。 | ⚖️ C5 |
 
 註1：MLP 輸入的**引數順序**（論文寫 f_h(d, h_i, h_j, e)；程式碼 cat 順序是 [h_i, h_j, d, e]）
 對學習到的線性層無語意差——第一層權重矩陣的欄排列而已。列出以免日後被當成發現。
@@ -306,7 +319,7 @@ F8 觀察：1280 維 e_ij 旁邊只有 1 個幾何純量，幾何訊號可能被
 文字性「公式」另兩條也對上：f_h/f_x 型別簽名 R^(2d+1+e)（2meth:54）＝code `2*h+1+edge_dim`；
 d_ij 定義（2meth:54 一次方 vs app Eq.10-12 平方）＝C6/U-17 已裁決 squared、旗標保留。
 
-**結論**：20 條全部有對應。不能逐字對上的**每一條都不是理解錯誤**，而是：
+**結論（2026-08-26 修訂措辭）**：20 條全部已建立 mapping。**其中 MF-14 原本標錯**（漏把 C5 套到特徵式），那是筆記自身的疏漏、已修正。其餘無法逐字對上的部分，分別是：
 (a) 論文自我矛盾處的已登記裁決（C2/C3/C5，各附「為什麼論文自己的定理站我們這邊」）；
 (b) 數學等價改寫（MF-5/7 的 CE 形式，推導已附）；
 (c) 論文未定義符號（sim/Pooling/Fusion）由已登記 CHOICE 補位。
@@ -328,7 +341,7 @@ split 固定於 n09、seed 記錄（IMPL `splits.py`）。
 τ：固定 0.5 buffer，不是 Parameter
 ```
 
-**每步流程（規劃定稿）**：
+**每步流程（目前提案，非定稿——本節仍有 epochs / λ / U-16 / 評估 gallery 四項未決）**：
 1. 取 batch 64 個資產。query 側與 gallery 側是**同一批資產**（正例=對角線）。
 2. gallery 側：三模態齊全 → cached e_text/e_img ＋ 現算 e_pc → Gallery Fusion。
 3. query 側：`sample_modality_mask(B=64, p=0.3)` 每模態獨立遮罩（per-sample per-modality；
@@ -340,7 +353,15 @@ split 固定於 n09、seed 記錄（IMPL `splits.py`）。
    出處：lr/batch/AdamW = UPSTREAM ulip1:367-370；wd/betas/warmup = UPSTREAM `upstream/ULIP/main.py`。
    已知衝突：ULIP repo default lr=3e-3 vs 論文 1e-3 → 取論文值（衝突已登記）。
 6. epochs：**50 為佔位（UNKNOWN，無任何論文出處）**——ULIP-1 寫 250（ShapeNet 規模）。
-   規劃：以 20% 測試集 R@1 早停，epoch 數作為待 Kyzen 簽核項一起上呈。
+
+**⚠ 已撤回的方案（2026-08-26，外部審查 P0）**：本節原寫「以 20% 測試集 R@1 早停」。
+**這會污染 Table 1**。MetaFind `3experiments.tex:8` 只切 80/20，那 20% 是 **test**；
+拿它做早停或選 best checkpoint，它就變成 model-selection set，最終回報的 test R@1 帶 selection bias。
+`metafind/data/splits.py:65` 目前只有 `TRAIN_FRACTION = 0.8`，**沒有 validation split**，所以問題是真的。
+n09 尚未執行，還來得及改。**兩個乾淨方案，待 Kyzen 二選一（§10 #3）**：
+  - **A 固定 recipe**：80% 全訓、epoch 數事先訂死、20% 只在最後測一次。最貼論文字面，代價是 epoch 數用猜的。
+  - **B 三段切分**：從 80% 訓練集再切出 validation（例如 72／8／20），拿 validation 早停，20% 保持未觸碰。
+    登記為 IMPLEMENTATION CHOICE／DEVIATION（論文沒有 validation split）。
 
 **InfoNCE 負例紀律**：負例數 = 實際 batch 內 gallery 數。**梯度累積不增加負例**——
 但 CLIP 兩支已凍結快取、只有 PointBERT 活著，batch 64 單卡預估可原生放下；
@@ -402,8 +423,8 @@ positive_map 由 n09b 寫死（identity mapping；無點雲者不得為正例—
 |---|---|---|---|
 | τ | 0.5 固定 | PAPER | 3experiments.tex:15 "The temperature is 0.5 for all experiments" |
 | τ 可學性 | 否 | CHOICE（USER 批准） | 論文把 f_h/f_x/λ 叫 learnable、τ 兩處叫 hyperparameter（詞彙對比推論，`resolve_stage1.py` C-001） |
-| 模態遮罩 | 30% per-modality per-sample | PAPER | 2methdology.tex:75 |
-| scene dropout | 30% per-**batch** | PAPER＋CHOICE(粒度) | 2methdology.tex:89 / U-32 |
+| 模態遮罩 | 30%，模態間獨立 | **PAPER（模態獨立）＋CHOICE（樣本獨立）** | 2meth:75 明寫 "each modality ... independently masked"，模態間獨立是 PAPER；「不同樣本的遮罩也獨立」論文沒寫，是實作選擇（2026-08-26 拆級） |
+| scene dropout | 30% per-**batch** | **PAPER，含粒度（2026-08-26 升級）** | 2meth:89 原句就是 "omitted in 30% of **batches**"，30% 與 batch 粒度都有直接文字支持；仍屬 CHOICE 的只有 RNG 實作細節 |
 | split | 80/20 兩資料集 | PAPER | 3experiments.tex:8 |
 | lr / batch / optimizer | 1e-3 / 64 / AdamW | UPSTREAM | ulip1 main.tex:367-370（standing rule 採用） |
 | wd / betas / eps / warmup | 0.1 / (0.9,0.98) / 1e-8 / 1 ep cosine | UPSTREAM | upstream/ULIP/main.py |
@@ -440,8 +461,7 @@ positive_map 由 n09b 寫死（identity mapping；無點雲者不得為正例—
   R@1 差很大 → **兩個協定都跑、都報**（IMPL `splits.py` docstring；
   想從 baseline 98% PC-only 反推庫大小是不可能的——自檢索兩種庫都趨近 100%）。
   query=測試集 20% 也是假設，已記錄。
-- MetaFind 預期型態（PAPER Table 1）：單塔 baseline 的 PC-only 98%+ 是 query=gallery 同支嵌入的灌水；
-  我們雙塔 PC-only 75.1 / 63.2（w/ ESSGNN）是誠實數字；部分模態條件我們大勝。
+- MetaFind 預期型態（PAPER Table 1）：單塔 baseline 的 PC-only 98%+ 來自 query 與 gallery 用同一支嵌入，論文自己的用詞是 **"leading to inflated accuracy"**（`3exp:24`）。我們雙塔 PC-only 是 75.1 ／ 63.2（w/ ESSGNN）。照論文用語寫 inflated 即可，不要寫成「別人灌水、我們誠實」，那是價值判斷、比出處強。
 - w/ ESSGNN 在 Table 1 全面掉分（如 T-only 13.8→11.3）：官方解釋 = Stage 2 fusion 適應了
   layout 特徵、在無 layout 資料上 attribution mismatch（PAPER `3experiments.tex:24` 全段）。
 - **上游數字不可直接對表**：ULIP/OpenShape 官方評估是 1,156 類 zero-shot 分類
@@ -464,11 +484,11 @@ positive_map 由 n09b 寫死（identity mapping；無點雲者不得為正例—
 |---|---|
 | Full (bidirectional, iterative, ESSGNN) 11.4 | `full`（訓練） |
 | w/o iterative 11.3 | `no_iterative`——**同權重**換 parallel 組合 |
-| w/o Layout Context 13.5 | Stage-1 模型直接評（無 ESSGNN） |
+| w/o Layout Context 13.5 | **INFER，checkpoint 來源未定（2026-08-26 降級）**：論文沒說這行用哪個 checkpoint，可能是 Stage-1 模型、也可能是 Stage-2 訓完但停用 layout。注意 Table 1 的 Text-only `w/o ESSGNN` 是 **13.8**，與此處 **13.5** 不相等，兩者不能直接畫等號 |
 | GAT 11.0 | layout_encoder=gat variant（需實作 GAT baseline） |
 | Fusion=Mean 9.4 / MLPs 9.9 | fusion 換型重訓 |
 | Dropout 10% 7.3 / 50% 13.2 | p_mask 換值重訓 |
-| Train fuser only 8.7 | train_scope="fuser_only"（**編碼器粒度消融**，不是拿掉 ESSGNN——與 GPT 已核對一致） |
+| Train fuser only 8.7 | train_scope="fuser_only"。**INFER（2026-08-26 降級）**：最合理讀法是**編碼器粒度消融**（只訓 fuser vs 連編碼器一起訓），不是拿掉 ESSGNN——ESSGNN 另有 `w/o Layout Context` 一行，且 `3exp:143` 明說 "full encoder fine-tuning yields better performance by allowing earlier layers to adapt"。但**論文沒寫這個消融跑在 Stage 1 還是 Stage 2**，而 `3exp:24` 又說回報的 Stage 2 兩塔全凍，階段歸屬仍是 INFER。原註「與 GPT 核對一致」已刪：與另一個模型核對不構成科學證據 |
 | Zero-pad 10.5 | fusion zero_pad=True |
 
 ### 6.4 比對論文數字的紀律
@@ -490,7 +510,7 @@ positive_map 由 n09b 寫死（identity mapping；無點雲者不得為正例—
 | EGNN | 2102.09844 | ESSGNN 數學母體（**參考架構**） | EGCL 式、φ_x 純量、N(i) 選項、MLP 形狀 variant 清單 |
 | ProcTHOR | 2206.06994 | Stage 2 場景源 | 10K+1K+1K 房、JSON 格式、SAG/擺放先驗、1,633 資產事實 |
 | Objaverse(-LVIS) | 2212.08051 | Stage 1 資產庫 | 46,832/1,156 官方數 |
-| GPT-4o | — | 標註（n05）＋評審（n15/n17） | 論文只說 GPT-4o，prompt 是我們的 CHOICE（contract 鎖定） |
+| GPT-4o | — | 論文指定的標註器（n05）與場景評審（n15/n17） | **標註側是 DEVIATION D-2**：實跑 `gemma-4-12B-it`，非 GPT-4o（見 §3.1）。評審側 n17 尚未執行，模型未定（`Q-JUDGE-MODEL` 開放）。prompt 一律是我們的 CHOICE（contract 鎖定） |
 | I-Design | 2404.02838 | Table 2 管線 | retrieve.py 替換點、評分模板 |
 | DPR | 2004.04906 | 雙塔範式概念源 | 概念引用而已 |
 | Flamingo | 2204.14198 | λ 初值辯論先例 | tanh(α) α=0、拆掉掉 4.2%＋不穩 |
@@ -551,6 +571,45 @@ Gates：G6 擋 Stage 2（essgnn_arch_protocol 未 resolved 不得開跑）；DL-
 
 ---
 
+## 9.5 本輪外部審查新增登記的沉默點與矛盾（2026-08-26）
+
+以下五條是外部審查指出、我逐條核對原文後**確認成立**的新登記項。它們原本不在 v2 裡。
+
+**S-A｜Algorithm 1 沒有定義「擺放算子」。** （PAPER 沉默，`2meth:117-135`）
+演算法只寫 `Place A* into the scene, update scene graph: G ← G ∪ {A*}`。
+但下一輪 ESSGNN 需要新物件的 `x_i ∈ R³`，而論文**沒有定義**：誰決定位置、旋轉、支撐面、
+碰撞怎麼解、pose 怎麼寫回圖。Table 2 很可能是由 I-Design 管線代勞，
+但**泛用的 MetaFind Algorithm 1 本身沒有 placer 介面**。
+影響：Stage 2 訓練與迭代推論之間的邊界不完整，必須自己補一個 placer 契約並登記為 CHOICE。
+
+**S-B｜論文對 baseline 是否雙塔自相矛盾。** （PAPER 內部矛盾，`3exp` Baselines 段 vs §3.2）
+Baselines 段寫 OpenShape "adopts a **dual-tower** contrastive retrieval design"；
+§3.2 卻寫 "since other models **do not adopt a dual-tower design**"。
+後句過度概括。影響：作者用來解釋 baseline PC-only 98–99% 的敘事有瑕疵，
+我們複述時不可照抄「所有 baseline 都不是雙塔」。
+
+**S-C｜Fusion 之前要不要先正規化各模態，論文沒說。** （PAPER 沉默）
+`2meth:30-35, 74-100` 只說各模態編碼後送 Fusion。
+是 `各模態先 normalize → Fusion`，還是 `原始向量 → Fusion → 最後才 normalize`？
+對 mean、MLP、Transformer 三種融合都會改變結果。
+本筆記對「最終 q/g 做 cosine 正規化」寫得很清楚，但**融合輸入端的正規化政策同樣要鎖，目前未鎖**。
+開訓前必須定案並登記。
+
+**S-D｜Eq. 7 的分母到底含不含正例。** （PAPER 沉默，`2meth:93-100`）
+原文寫 𝓑 "denotes the **batch of negatives**"，字面上不含正例；
+但標準 InfoNCE 與我們的 CE 實作**分母都含正例**。
+若照字面理解成純負例，CE 實作就不等價。
+協定必須明寫「分母 = 正例 ＋ batch 內負例」，並標 INFER／reconstruction choice，
+不能讓 CE 實作把這個選擇藏起來。
+
+**S-E｜Table 3 少一個消融維度的對應列。** （PAPER 內部不一致，`3exp:143`）
+作者說消融涵蓋六個維度，明列包含 **gallery encoder flexibility**；
+但 Table 3 的九列裡（layout×3、fusion×2、dropout×2、granularity×1、missing-modality×1）
+**沒有任何一列對應 gallery encoder flexibility**，表中也沒有 gallery 凍結／解凍的行。
+登記為 UNKNOWN，不得假設某一列就是它。
+
+---
+
 ## 10. 開放決策清單（含建議預設——Kyzen 拍板用）
 
 ### 已拍板（列出免得重問）
@@ -568,10 +627,10 @@ Gates：G6 擋 Stage 2（essgnn_arch_protocol 未 resolved 不得開跑）；DL-
 ### 待拍板（附我的建議；**2026-08-25 逐條重驗過「論文真的答不了嗎」**——結果見各行）
 | # | 議題 | 重驗結果 | 我的建議＋理由 |
 |---|---|---|---|
-| 1 | **U-14** 訓練時圖片視角 | **上游有明確答案**：OpenShape method.tex:77 "randomly sample one rendered image or thumbnail for each shape"＋ULIP-1 main.tex:236 每步隨機 1/60——兩個上游一致。不是 UNKNOWN，是「standing rule 預設=隨機單張」 | **B**（隨機單張訓練、gallery/eval 用 mean）。之所以仍列表：n05b 已把聚合 resolve 成 mean，改它是**協定變更**要你簽核，不是沒答案 |
-| 2 | **λ 初值** | 論文沒給數字，但 `2methdology.tex:87` 自己說殘差設計是為了 "**without disrupting the original embedding space**"——初始 λ 大就 disrupt，這句話本身傾向小/零初始（INFER）。MetaFind 引用的上游（DPR/ULIP-2/EGNN）都無 λ 機制 → 數字真的無源 | **0**（或 tanh(α), α=0）——論文自己的設計意圖句＋Flamingo 先例（content.tex:187-189：0-init 讓初始輸出=原模型；拆掉→−4.2%＋不穩）；等 GPT R1-R4 回覆後收斂上呈 |
-| 3 | **epochs（Stage 1）** | **重 grep 確認**：ULIP-2 全文 epoch/lr/batch/optimizer 四詞 **0 次命中**（量測）；MetaFind 唯一 "hyperparameter" 是 τ。唯一有的是 ULIP-1 的 250（ShapeNet 規模）。真的無源 | 早停（測試 R@1），跑完把實際值寫進帳 |
-| 4 | **U-16** 塔權重共享 | **新證據（本輪找到）**：MetaFind 自己寫 "**separate encoders** for the query and gallery"（2meth:34）＋它引用的 DPR 範式**逐字**寫 "we use **two independent BERT networks**"（DPR p.3，已存 `docs/paper/dpr_2004.04906.pdf`）。兩條都指向**不共享** → standing-rule 預設應是 fully_separate（可訓練部分=兩份 PointBERT＋兩份 Fusion；CLIP 凍結共用無妨） | **改列為需要你裁決的協定衝突**：現鎖的 shared_backbone_separate_fusion 與新證據相左。fully_separate 的 backbone 層級尚未實作（有工程成本）；PointBERT×2 約 +32M 參數（顯存可行）。我傾向照證據改 fully_separate，但這推翻既有決策，必須你點頭 |
+| 1 | **U-14** 訓練時圖片視角 | **證據升級（2026-08-26）**：最近的一手來源其實是 **ULIP-2 自己**，`ulip2 main.tex:612` 原文 "randomly sample its 2D rendered image **I ~ render(O)**"。再加 OpenShape method.tex:77 "randomly sample one rendered image or thumbnail"、ULIP-1 main.tex:236 每步隨機 1/60。**三個上游一致，其中一個就是我們的直接骨幹**，所以訓練側屬強 UPSTREAM FACT，不是 UNKNOWN。但**「gallery／評測用 12 視角平均」上游沒有背書**，那一半仍是我們的 CHOICE | **B**：訓練隨機單張、gallery 與評測用平均。快取已存 per-view 嵌入，換法零成本。仍列表是因為 n05b 協定已寫成 mean，改它算協定變更、要你簽 |
+| 2 | **λ 初值** | **雙方已收斂（2026-08-26）**：外部審查撤回原本的 0.1 主張，與我方一致。依據：MetaFind `2meth:87` 自述殘差設計是為了 "without disrupting the original embedding space"；Flamingo `content.tex:187-189` 是最同構的先例（凍結骨幹＋新分支＋殘差＋純量閘＋**初值 0**，目的明寫為初始化時行為等同原模型），拆掉該機制掉 4.2% 且訓練不穩 | **raw λ = 0.0，不加 tanh、不加 clamp、不加 LayerNorm**。MetaFind 寫的是 learnable scalar λ，**不要把 Flamingo 的 tanh(α) 一起搬過來**——tanh 會把有效閘限制在 (-1,1)，那是更大的模型改動。最小偏離就是 `nn.Parameter(0.0)` |
+| 3 | **epochs＋早停協定（Stage 1）** | **重 grep 確認**：ULIP-2 全文 epoch／lr／batch／optimizer 四詞 **0 次命中**（量測）；ULIP-1 有 250 但那是 ShapeNet 規模。輪數確實無源。**⚠ 且我上一輪的解法本身有問題（外部審查 P0，已確認）**：原寫「用 20% 測試集 R@1 早停」，而 `3exp:8` 那 20% 是 **test**；拿它選 checkpoint 就變成 model-selection set，Table 1 會帶 selection bias。`splits.py:65` 目前只有 `TRAIN_FRACTION=0.8`、**沒有 validation**，所以問題是真的。n09 未跑，還來得及 | **要你二選一**：**A** 固定 recipe（80% 全訓、輪數事先訂死、20% 最後只測一次，最貼論文字面）；**B** 從 80% 再切出 validation（例如 72／8／20）做早停，20% 保持未觸碰，登記為 CHOICE／DEVIATION。我傾向 **B**（輪數無源，訂死等於用猜的），但這是研究協定，必須你拍板 |
+| 4 | **U-16** 塔權重共享 | **[已撤回並修正 2026-08-26]** 我上一輪寫「standing rule 預設應是 fully_separate」，**這個推論不成立，撤回**。理由：standing rule 只適用於**論文沉默**；這裡論文並不沉默，而是**自我矛盾**——正文 `2meth:34` 寫 "separate encoders"，但 **Figure 1 圖上明確標 `ULIP-2 (Shared)`，而且整張圖只畫一個 ULIP-2 方塊**（已親眼核對 `MetaFind.drawio.png`）。另外 DPR 在 MetaFind 裡是**雙塔檢索範式的概念出處**，不是 backbone 實作 authority（不像 ULIP-2／EGNN 是實作母體），所以 DPR 用兩份 BERT 推不出 MetaFind 的 ULIP-2 必須兩份參數。"separate encoders" 在架構敘述裡也可以只表示兩個邏輯塔／介面，不必然等於參數不相交。 | **維持現行 `shared_backbone_separate_fusion` 不變**，狀態 **PAPER-AMBIGUOUS ＋ USER CHOICE**。現行選擇反而是唯一能同時滿足兩處文字的讀法：一份骨幹（對上圖的 Shared）、兩個獨立 Fusion 介面（對上正文的 separate）。fully_separate 的證據**變強但沒到推翻**，保留為競爭假設。若你之後想改，那是新決策，不是修正錯誤 |
 | 5 | **U-20/U-06** t_i 與 e_ij 編碼器 | 論文明文 "e.g., CLIP or BERT"（2meth:47）——作者自己給選單不給答案，確認無解 | 同骨幹 CLIP——不引入第二顆模型、同嵌入空間 |
 | 6 | **U-21** Table 2 gallery＋資產數 | **新量測**：12,000 間房實際只用 **1,528 個 unique assetId**（train 10K 房=1,036）；ProcTHOR 官方庫 1,633；MetaFind 說 "3,000+"——**三個數字互相都對不上**，任何在手論文/資料都湊不出 3,000 | 維持 procthor scope、照實報三方差異；等 GPT 有無新讀法 |
 | 7 | **U-09** Table 1 gallery | MetaFind 沒說；上游評估是分類不是檢索、無協定可繼承——確認無解 | **雙協定都跑都報**（已實作，維持） |
@@ -581,7 +640,15 @@ Gates：G6 擋 Stage 2（essgnn_arch_protocol 未 resolved 不得開跑）；DL-
 
 ---
 
-## 11. 給審查者（GPT）的指令
+## 11. 給審查者（GPT）的指令（第二輪範圍已收斂）
+
+**第一輪結果**：3 項 P0 全數採納並修正，P1／P2 大部分採納（見下方對照）。
+未採納的只有一項：外部審查建議把 U-14 的 gallery/eval 平均也視為可推導，我維持它是 CHOICE——ULIP-2 那句只講訓練取樣，沒有背書評測聚合方式。
+
+**第二輪只需審**：(a) 本版三處 P0 修正是否真的把問題關掉；(b) §9.5 五條新登記的分類是否正確；(c) 有無新的 stronger-than-evidence 措辭。
+不需要再從頭複述全文。
+
+### 原始指令（保留）
 
 逐節審，重點：
 1. §3 的 C1-C6 裁決——你若認為 2.5 版才是作者跑的，拿出內文證據；
