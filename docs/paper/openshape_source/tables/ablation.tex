@@ -1,0 +1,23 @@
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \vspace{-1em}
+    \begin{tabular}{c|cc}
+    \toprule
+    Variant & O-LVIS  & MNet40 \\
+    \midrule
+    No Objaverse shapes &   13.9    & 75.5  \\
+    Only Objaverse shapes &  41.6     & 79.2 \\
+    No backbone scale up &  31.7     & 78.7  \\
+    \midrule
+    No caption \& retrieval &  37.0 & 82.9 \\
+    No text filtering & 41.4  & 82.9 \\
+    \midrule
+    No point rgb, only xyz &    39.6   & 83.6  \\
+    No text contras. learning &  23.3 & 67.4 \\
+    No image contras. learning &  41.0     & 81.0  \\
+    \midrule
+    Full  &    42.0   &  83.1 \\
+    Full + hard mining & 43.4 & 83.4  \\
+    \bottomrule
+    \end{tabular}
+

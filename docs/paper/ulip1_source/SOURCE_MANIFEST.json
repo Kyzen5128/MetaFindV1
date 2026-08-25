@@ -1,0 +1,9 @@
+{
+ "arxiv_archive": "arXiv-2212.05171v4.tar.gz",
+ "archive_sha256": "b208e74335044228665b00b1364323c3bed5c1e8b4d9b45383128776b6e0dad1",
+ "extracted_at": "2026-08-25",
+ "downloaded_by": "Kyzen",
+ "tex_sha256": {
+  "main.tex": "ed25ea8dc4b97206f2e17ab902a68b3b60db381a6170fa042169cfa5c5b685ce"
+ }
+}

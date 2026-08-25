@@ -1,0 +1,30 @@
+{
+ "arxiv_archive": "arXiv-2204.14198v2.tar.gz",
+ "archive_sha256": "9e597e7b13fae9a3cda103a7d60233ed9b7c31cf18393b880f2d713b3aed7f4b",
+ "extracted_at": "2026-08-25",
+ "downloaded_by": "Kyzen",
+ "tex_sha256": {
+  "appendix.tex": "dc040f6528d1c32cdf83204e44f60460b9f3aa8c5a1694a4eae03e6161b0b7c6",
+  "appendix_sections/A_method.tex": "0f39ddaa23850992a59cf894d5533d753510dca697ddeb094de54e4084f6c59f",
+  "appendix_sections/B_experiments.tex": "0d230c8ffd3f0918579d5bd27ca554effcb839741fb7c7df1651b1d9f5f12814",
+  "appendix_sections/C_discussion.tex": "95d73b3590e04aa3d7629c46d6ac0c6bdcfb2bdfc33c54d76e4ef114e1d583bf",
+  "appendix_sections/D_model_card.tex": "62d71b3cb3451823305d5bd3c351bf6ce05ba4dcb3bd3e141c262e1e52e900d0",
+  "appendix_sections/E_datasheet.tex": "0db51d501399508f5d499b05535ac48499ad9cba70435637fddcff48edafd4b7",
+  "appendix_sections/F_visual_content_credit.tex": "8eff8c10b7e26182699b2aa0326075e8e7d5f6a11e0e1366fc037abef1937761",
+  "checklist.tex": "19c5cea8b39d91a98d31c09deb39cb2306f7870ba98e1697c747c5f290151d78",
+  "content.tex": "9407a1ceeea03d8bf7593aecf15b726567ab24096836f0bdd663cfee2df3c3f7",
+  "figures/teaser.tex": "f28ecf0d954b0eb32c5a8e9387b26d3f941767a4cf87589132ba0777b41e00c4",
+  "main.tex": "b45a9de9a4ee6e82962d3c13b8aac36e7c0233a5e5fac7243897efb67ef1751a",
+  "model_card.tex": "cc30305466daa467bbefbc0e34aa77b377efe9855653838161df789e1ee2b7e0",
+  "tables/ablations-appendix.tex": "d8d5fda5817fc535053d75a366c8e517e7f02facc2e65d786282a89d3688c4d7",
+  "tables/ablations_no_classif.tex": "776a9cb3cd3854fa1e959661b593b1bb6b22184cfac4a924aa73f424f231cfed",
+  "tables/contrastive_dataset_ablation.tex": "156170d696809b18362a7f8c99c5bb0ab3d1466f9b79698a01d2ba928aaea3ed",
+  "tables/contrastive_eval_retrieval.tex": "6479b10ed7c5c846cf131b49f95b7a2fc7925f91a77b6b69528d5104220cffa2",
+  "tables/fewshot_classif.tex": "29bc84a9898deb407a0a87ff641259b237d06f6df02299184edc886739cb9e14",
+  "tables/multi_benchmark.tex": "9cddb68583d3f4ad749a27125c27bff9fcaa2ff143e1cb96f373ae97cf1f52d8",
+  "tables/openended.tex": "5fd3b83338ca48782d66d5f386ba9a160a1f171d74e9f309672994e1fa879cf5",
+  "tables/qualitative_examples.tex": "007b23fe77cf67c04f9a88a7a18fbfbc8ca99e30299e4c2584b66faffce685db",
+  "tables/sota_comparison.tex": "fb7aaa7efbe4bb01ca1d5ca9ad69fd87041b4c31c070fafd8a07f4f0d038b442",
+  "tables/sota_comparison_mini.tex": "65e6da0b175003432a5b5de177dc2776e787e2096c4a2046ba8c15186e4275e3"
+ }
+}

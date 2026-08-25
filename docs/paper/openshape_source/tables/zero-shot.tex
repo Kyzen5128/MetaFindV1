@@ -1,0 +1,32 @@
+\begin{table}[t]
+\scriptsize
+  \setlength{\tabcolsep}{5pt}
+  \centering
+  \caption{Zero-shot classification on Objaverse-LVIS~\cite{objaverse}, ModelNet40~\cite{wu20153d}, and ScanObjectNN~\cite{udandaraounderstanding}.}
+  \vspace{-1em}
+    \begin{tabular}{c|c|ccc|ccc|ccc}
+    \toprule
+    \multirow{2}[4]{*}{Method} & training shape  & \multicolumn{3}{c|}{Objaverse-LVIS~\cite{objaverse}} & \multicolumn{3}{c|}{ModelNet40~\cite{wu20153d}} & \multicolumn{3}{c}{ScanObjectNN~\cite{uy2019revisiting}} \\
+\cmidrule{3-11}          & source & Top1  & Top3  & Top5  & Top1  & Top3  & Top5  & Top1  & Top3  & Top5 \\
+    \midrule
+    PointCLIP~\cite{zhang2022pointclip} & \multirow{2}[1]{1.5cm}{2D inferences, no 3D Training} & 1.9   & 4.1      & 5.8   & 19.3  & 28.6      & 34.8  & 10.5  & 20.8      & 30.6 \\
+    PointCLIP v2 \cite{zhu2022pointclipv2} &       & 4.7   & 9.5      & 12.9  & 63.6  & 77.9      & 85.0  & 42.2  & 63.3      & 74.5 \\
+    \midrule
+    ReCon \cite{qi2023contrast} & \multirow{6}[2]{*}{ShapeNet} & 1.1      & 2.7      & 3.7      & 61.2  & 73.9      & 78.1      & 42.3      & 62.5      & 75.6 \\
+    CG3D \cite{hegde2023clip} &       & 5.0      & 9.5       & 11.6      & 48.7  & 60.7      & 66.5      & 42.5    & 57.3      & 60.8  \\
+    CLIP2Point \cite{huang2022clip2point} &       & 2.7       & 5.8      & 7.9      & 49.5  & 71.3      & 81.2      & 25.5      & 44.6      & 59.4 \\
+     ULIP-PointBERT (Official) \cite{xue2022ulip} &       & 6.2   & 13.6      & 17.9  & 60.4  & 79.0      & 84.4    & 51.5  & 71.1      & 80.2 \\
+    OpenShape-SparseConv & & 11.6 & 21.8 & 27.1 & 72.9 & 87.2 & 93.0 & 52.7 & 72.7 & 83.6\\ 
+     OpenShape-PointBERT & & 10.8 & 20.2 & 25.0 & 70.3 & 86.9 & 91.3 & 51.3 & 69.4 & 78.4 \\
+    \midrule
+    ULIP-PointBERT (Retrained) & \multirow{2}[1]{*}{Ensembled}  & 21.4  & 38.1      & 46.0      & 71.4  & 84.4      & 89.2      & 46.0     & 66.1      & 76.4 \\
+    OpenShape-SparseConv  & \multirow{2}[1]{*}{(no LVIS)} & 37.0  &   58.4    & 66.9  & 82.6  &   95.0    & 97.5  &    54.9   &  76.8     &  87.0 \\
+     OpenShape-PointBERT & & 39.1 & 60.8 & 68.9 & \textbf{85.3} & 96.2 & 97.4 & 47.2 & 72.4 & 84.7 \\
+    \midrule
+    ULIP-PointBERT (Retrained) & \multirow{2}[2]{*}{Ensembled} & 26.8  & 44.8      & 52.6      & 75.1  & 88.1      & 93.2      & 51.6      & 72.5      & 82.3 \\
+    OpenShape-SparseConv  &       & 43.4 & 64.8 & 72.4 & 83.4 & 95.6 & 97.8 & \textbf{56.7} &   78.9    & 88.6 \\
+    OpenShape-PointBERT & & \textbf{46.8} & \textbf{69.1} & \textbf{77.0} & 84.4 & \textbf{96.5} & \textbf{98.0} & 52.2 & \textbf{79.7} & \textbf{88.7} \\
+    \bottomrule
+    \end{tabular}%
+  \label{tab:zero}%
+\end{table}%

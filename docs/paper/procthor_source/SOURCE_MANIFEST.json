@@ -1,0 +1,18 @@
+{
+ "arxiv_archive": "arXiv-2206.06994v1.tar.gz",
+ "archive_sha256": "92e947cd100d06223400cd28ec99959df8ffed76e2c39348d4f03cc28d2b8769",
+ "extracted_at": "2026-08-25",
+ "downloaded_by": "Kyzen",
+ "tex_sha256": {
+  "00_main.tex": "03aeb78a7c4ad437e338baeea7e75660068a8e92192059405d796a3a3f25425a",
+  "01_intro.tex": "a9cc3e4252a12c50d1c84f71156ac96e56851a6ef7a8ae87fc6da251380ca043",
+  "02_related.tex": "29df3cab5a407a1d9199315a5041e6d391382f1d30b3a81964835978e2640f89",
+  "03_generation.tex": "066db19a68adc9b8387c97dfa73f99b14b75f64834b804db3ffad6eaa6bedfac",
+  "04_analysis.tex": "daf32f4197b71ca2d35cb9fdb264245175ebe8e5ba49ad13470f4331c463b941",
+  "05_experiments.tex": "b425c5a0b3eac217e5b55c0c1f1e9df502a985f511fbc2cefe88796c522d61ec",
+  "06_conclusion.tex": "2fedab30470a4ebea6eb022c0a24f7bdf7e14d47df3b64bfa01261cb6dcd28d3",
+  "07_supp.tex": "0bb59e21cab56445fa4f7211f472fcbf7de110ff4e5207d4625a80b86bef5d4a",
+  "tables/all_tasks_results.tex": "d153352479c34b06938ffdd34fd6a6607b43aa6d90e793bade4312e7d5edb5be",
+  "tables/scale_ablation_results.tex": "d3589b31d6dfa3005ec9c0ba29739ebb2d039ae4650a607817bd08f25441d1cb"
+ }
+}

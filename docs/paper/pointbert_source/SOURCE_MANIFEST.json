@@ -1,0 +1,9 @@
+{
+ "arxiv_archive": "arXiv-2111.14819v2.tar.gz",
+ "archive_sha256": "e2ed14db2be274f8410339c4ae9e8da9e251cc00c64437b13084575bbdf2dde1",
+ "extracted_at": "2026-08-25",
+ "downloaded_by": "Kyzen",
+ "tex_sha256": {
+  "Pointbert_arxiv.tex": "3ca28d1832f77b1c50571116db332f2743ede9269a61f0ec33f7de22d419aa9f"
+ }
+}

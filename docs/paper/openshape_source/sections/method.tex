@@ -1,0 +1,102 @@
+\section{Method}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/pipeline.pdf}
+    \caption{(a) We ensemble four public 3D shape datasets, resulting in 876k shapes that encompass diverse categories and concepts. (b) We propose three strategies to automatically filter and enrich the noisy texts in the original datasets. (c) We train a 3D point cloud encoder to align the 3D shape embedding space with the CLIP's text and image embedding spaces. We perform cross-modal contrastive learning with scaled 3D backbones and hard negative mining. (d) OpenShape embeddings can be easily integrated with other CLIP-based models, enabling various cross-modality tasks.     \vspace{-0.5em}}
+    \label{fig:pipeline}
+    \vspace{-0.5em}
+\end{figure}
+
+We propose a novel method, \textit{OpenShape}, for learning generalizable and scalable multi-modal joint representation between language, 2D images, and 3D shapes, as shown in Figure~\ref{fig:pipeline}. We first introduce the multi-modal contrastive learning framework we used for aligning representations of three modalities in Section~\ref{sec:multi-modal-contras}. We then elaborate how we create our training sets and enrich our text data in Sections~\ref{sec:ensemble-datasets} and ~\ref{sec:text-filtering-enrichment}. In Section~\ref{sec:model-scaling}, we present how we scale up our 3D backbone models. Finally, we propose a hard negative mining strategy to enhance contrastive learning in Section~\ref{sec:hard-negative-mining}.
+
+
+\vspace{-0.5em}
+\subsection{Multi-Modal Representation Alignment}
+\label{sec:multi-modal-contras}
+\vspace{-0.5em}
+
+We aim to learn 3D shape representations that are aligned with pretrained CLIP embedding spaces of language and image. As shown in Figure~\ref{fig:pipeline} (c), we train a 3D native encoder $f^P$ that takes a 3D point cloud as input and extracts 3D shape feature. Following previous works~\cite{qi2023contrast,xue2022ulip,hegde2023clip}, such as ULIP~\cite{xue2022ulip}, we utilize multi-modal contrastive learning for representation alignment. Since CLIP is pretrained on a much larger scale data, we freeze both its text encoder $f^T$ and its image encoder $f^I$ during feature alignment to preserve CLIP's feature priors and avoid model collapse. Specifically, given a sampled batch of triplets $\{(P_i, T_i, I_i)\}$, where $P_i$ denotes a point cloud of a 3D shape, $T_i$ and $I_i$ denote corresponding text and image, the contrastive loss is calculated as: 
+\begin{equation}
+\scriptsize
+-\frac{1}{4n} \sum_i\left(\log\frac{\exp(h_i^P\cdot h_i^T/\tau)}{\sum_j \exp(h_i^P\cdot h_j^T/\tau)} +
+\log\frac{\exp(h_i^T\cdot h_i^P/\tau)}{\sum_j \exp(h_i^T\cdot h_j^P/\tau)} + 
+\log\frac{\exp(h_i^P\cdot h_i^I/\tau)}{\sum_j \exp(h_i^P\cdot h_j^I/\tau)} +
+\log\frac{\exp(h_i^I\cdot h_i^P/\tau)}{\sum_j \exp(h_i^I\cdot h_j^P/\tau)}\right) 
+\end{equation}
+where $n$ is the number of shapes in a batch; $\tau$ is a learnable temperature; $h_i^P=f^P(P_i)/|f^P(P_i)|$, $h_i^T=g^T(f^T(T_i))/|g^T(f^T(T_i))|$, and  $h_i^I=g^I(f^I(I_i))/|g^I(f^I(I_i))|$ denote normalized projected features of $P_i$, $T_i$, and $I_i$, where $g^T$ and $g^I$ are two learnable linear projections. Since $f^T$ and $f^I$ are frozen, we extract all $f^T(T_i)$ and $f^I(I_i)$ before training and cache them for acceleration. In most of our experiments, we utilize OpenCLIP ViT-bigG-14~\cite{ilharco_gabriel_2021_5143773} as the pretrained CLIP model.
+
+\vspace{-0.5em}
+\subsection{Ensembling 3D Datasets}
+\label{sec:ensemble-datasets}
+\vspace{-0.5em}
+
+Since the scale and diversity of training triplets play a crucial role in learning scalable shape representations, we ensemble four currently-largest public 3D datasets for training as shown in Figure~\ref{fig:pipeline} (a), resulting in 876k training shapes. Among these four datasets, ShapeNetCore~\cite{chang2015shapenet}, 3D-FUTURE~\cite{fu20213d} and ABO~\cite{collins2022abo} are three popular datasets used by prior works. They contain human-verified high-quality 3D shapes, but only cover a limited number of shapes and dozens of categories. The Objaverse~\cite{objaverse} dataset is a more recent dataset, containing many more 3D shapes and covering significantly more diverse categories. However, shapes in Objaverse are mainly uploaded by web users and not verified by experts, and thus have uneven quality and exhibit highly unbalanced distributions, necessitating further processing. 
+
+To create triplets for training, for each shape, we sample 10,000 points from the mesh surface and interpolate the point colors according to the mesh textures. We also render 12 color images from the preset camera poses that uniformly cover the whole shape. For datasets providing thumbnails, we include them as part of image candidates, since they typically capture the shape from a better camera view. For the Objaverse dataset, we use the model name as the raw text for each shape. For other datasets, we utilize provided metadata to create raw texts (see supplementary for details). During each pretraining iteration, we randomly sample one rendered image or thumbnail for each shape, and apply standard augmentation to the point clouds~\cite{xue2022ulip}.
+
+
+
+\vspace{-0.5em}
+\subsection{Text Filtering and Enrichment}
+\label{sec:text-filtering-enrichment}
+\vspace{-0.5em}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/text_enrichment.pdf}
+     \vspace{-1.5em}
+    \caption{\textbf{Text Filtering \& Enrichment Examples} In each example, the left section features the thumbnail, model name, and GPT-4 filtering results. The upper right section shows image captions from two captioning models, while the lower right section displays retrieved images and their corresponding texts.  \vspace{-0.5em}}
+    \label{fig:enrich}
+\end{figure}
+
+We find that only applying contrastive learning between 3D shapes and 2D images is insufficient to fuel zero-shot 3D classification, even when training on large-scale datasets. We conjecture that this is caused by the inherent domain gap in CLIP's language and image embedding spaces, which is also observed by previous studies~\cite{liang2022mind,udandaraounderstanding}. Consequently, 3D-text alignment is not guaranteed even if we obtain good 3D-image alignments via contrastive learning. Therefore, we need to explicitly align 3D shapes with text. Along this process, to facilitate better 3D-text alignment, we introduce 3 techniques to improve the text quality: filtering, captioning, and image retrieval, as shown in Figure~\ref{fig:pipeline} (b).
+
+\noindent \textbf{Filtering.}  As shown in Figure~\ref{fig:enrich}, the 3D shapes from our main dataset, Objaverse, is dominated with noisy text descriptions (``names'') uploaded by web users. Many of the problematic texts can be identified from the text itself without seeing the corresponding 3D shape. We thus leverage a powerful large language model, GPT-4~\cite{openai2023gpt4}, to filter out inaccurate or uninformative text descriptions. We find that GPT-4 excels at recognizing irrelevant contents, such as timestamps, pure model numbers, incomprehensible descriptions, random filenames (e.g., new project), and random characters. Through GPT-4, we filter out about 30\% of raw user texts. Note that we only filter the texts, and still keep all shapes for training. More details, such as the prompts we used, are presented in the supplementary.
+
+\noindent \textbf{Captioning.}  We utilize BLIP \cite{li2022blip} and the Azure cognition services to caption the 2D thumbnails (if present, or images rendered from a fixed frontal view) of the 3D models, obtaining two texts for each shape. As shown in Figure~\ref{fig:enrich}, the captioning models can usually produce meaningful and descriptive captions that either enhance user-uploaded texts or replace low-quality ones. We also notice that the two caption models complement each other, leading to better performance. 
+
+\noindent \textbf{Image Retrieval.}  In addition to image captioning, we also perform image retrieval to obtain additional descriptions of 3D models. We retrieve k-NN images of shape renderings from the LAION-5B dataset \cite{schuhmann2022laion} using the CLIP ViT-L retrieval index \cite{beaumont-2022-clip-retrieval}. We then take the captions of the k-NN images as the retrieved texts for our 3D models. Compared with captioning model generations, retrieved texts cover a wider range of text styles. They can also include more fine-grained semantics than both the user texts and the generated captions (e.g., ``Labrador'' in Figure~\ref{fig:enrich}).
+
+
+In each iteration of pretraining, for each shape, we first randomly sample a text source category among the raw text (if unfiltered), the captions, and the retrieved texts. We then select a text candidate from the selected category. We also apply the template-based prompt engineering technique used in ULIP~\cite{xue2022ulip} to both training texts and test-time category names. Specifically, we extend a word or a phrase to a collection of templated simple sentences and take their average embedding. %for contrastive learning.
+
+\vspace{-0.5em}
+\subsection{Scaling Up 3D Point Cloud Backbones}
+\label{sec:model-scaling}
+\vspace{-0.5em}
+
+
+
+\begin{figure}[t]
+\CenterFloatBoxes
+\begin{floatrow}
+\ttabbox[8.5cm]{%
+\input{tables/model_comparison}
+}{%
+\centering
+  \caption{Comparison of different 3D backbones \textbf{before scaling up their parameters}. Models are trained on ShapeNet~\cite{chang2015shapenet} or our ensembled dataset excluding Objaverse-LVIS~\cite{objaverse}. Zero-shot classification performance are evaluated on ModelNet40~\cite{wu20153d} and Objaverse-LVIS~\cite{objaverse}.}%
+   \label{tab:model_comparison}%
+   
+}
+\ffigbox[5cm]{%
+ \includegraphics[width=\linewidth]{figures/scaling.pdf}
+ \vspace{-20pt}
+}{%
+  \caption{Accuracy on Objaverse-LVIS~\cite{objaverse} when \textit{scaling up} the parameters of different models.}%
+  \label{fig:model-scale-up}
+}
+\end{floatrow}
+\vspace{-1em}
+\end{figure}
+
+Previous works on 3D point cloud learning have primarily focused on smaller-scale datasets like ShapeNet. These techniques may not be directly applicable to our larger-scale ensembled dataset and need to be scaled up accordingly. We find that different 3D backbones may exhibit distinct behavior and scalability when trained on datasets with varying sizes. Specifically, we compare six popular backbones trained on ShapeNet or our ensembled dataset by evaluating their zero-shot classification performance on ModelNet40~\cite{wu20153d} and Objaverse-LVIS datasets (for now, these backbones are trained with their original configurations and without scaling up model sizes). \textbf{Objaverse-LVIS} is a subset of Objaverse dataset with human-verified category labels. With 1,156 categories, it serves as a suitable dataset for evaluating zero-shot long-tail classification, and we exclude all shapes of Objaverse-LVIS from this experiment. Results are shown in Table~\ref{tab:model_comparison}. We find that when trained on ShapeNet, all backbones share similar performances. However, when trained on our ensembled dataset, the performance gap between backbones increases significantly. This suggests that while the original versions of these backbones share a similar number of parameters, some may have been saturated when trained on small datasets, while others do not.
+
+We also explore the performance and scalability of these backbones when scaling up the model sizes and training on our ensembled dataset. Please refer to the supplementary for details on how we scale up each model. As shown in Figure~\ref{fig:model-scale-up}, we observe that all 3D backbones benefit significantly from model scaling. However, traditional backbones without a shrinking hierarchical structure, such as DGCNN and PointNet, require operating completely on dense points or modeling the relationships (e.g., through kNN) between dense points. As a result, they become more time-consuming and memory-intensive when scaled up compared to more modern backbones. We therefore select PointBERT~\cite{yu2021pointbert} (Transformer-based) and SparseConv~\cite{choy20194d} (convolution-based) as our 3D backbones for the remaining experiments, as they exhibit strong performance and scalability.
+
+\vspace{-0.5em}
+\subsection{Hard Negative Mining}
+\label{sec:hard-negative-mining}
+\vspace{-0.5em}
+
+Our ensembled dataset exhibits a high degree of class imbalance. Certain common categories, such as building, may occupy tens of thousands of shapes, while many other categories, such as walrus and wallet, are underrepresented with only a few dozen or even fewer shapes. Consequently, when randomly constructing batches, it is unlikely that shapes from two confusing categories (e.g., apples and cherries) will be contrasted within the same batch. Inspired by some previous works~\cite{robinson2020contrastive,kalantidis2020hard}, we propose an offline hard negative mining strategy for improving the training efficiency and performance. Specifically, in the first round of training, we train our model with random batches until it is about to converge. We then compute the kNN for each shape in the learned 3D embedding space. In the second round of training, for each iteration, we randomly select $s$ seed shapes and then obtain $m$ neighbors from the kNN results of each seed shape, resulting $s\times m$ shapes per batch. In this way, confusing pairs are more likely to be selected in a single batch. However, this may also introduce false negative pairs (e.g., two apples) into contrastive learning. To mitigate this issue, we leverage image and text embeddings to filter out pairs sharing similar texts when calculating the contrastive loss. Specifically, for two shapes $i$ and $j$ selected from the same seed shape, if $h_j^T\cdot h_i^I  + \delta > h_i^T\cdot h_i^I$, where $h^T$ and $h^I$ are text and image embeddings, and $\delta$ is a small threshold, we believe that the text embeddings of $i$ and $j$ are very close to each other, and we remove $j$ from $i$'s negative examples when calculating contrastive loss. By employing this strategy to construct batches, we observe faster and better model learning.

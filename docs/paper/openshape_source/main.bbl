@@ -1,0 +1,538 @@
+\begin{thebibliography}{10}\itemsep=-1pt
+
+\bibitem{abdelreheem2023satr}
+Ahmed Abdelreheem, Ivan Skorokhodov, Maks Ovsjanikov, and Peter Wonka.
+\newblock Satr: Zero-shot semantic segmentation of 3d shapes.
+\newblock {\em arXiv preprint arXiv:2304.04909}, 2023.
+
+\bibitem{achituve2021self}
+Idan Achituve, Haggai Maron, and Gal Chechik.
+\newblock Self-supervised learning for domain adaptation on point clouds.
+\newblock In {\em Proceedings of the IEEE/CVF winter conference on applications
+  of computer vision}, pages 123--133, 2021.
+
+\bibitem{achlioptas2018learning}
+Panos Achlioptas, Olga Diamanti, Ioannis Mitliagkas, and Leonidas Guibas.
+\newblock Learning representations and generative models for 3d point clouds.
+\newblock In {\em International conference on machine learning}, pages 40--49.
+  PMLR, 2018.
+
+\bibitem{alayrac2022flamingo}
+Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, Antoine Miech, Iain Barr,
+  Yana Hasson, Karel Lenc, Arthur Mensch, Katie Millican, Malcolm Reynolds,
+  et~al.
+\newblock Flamingo: a visual language model for few-shot learning.
+\newblock {\em arXiv preprint arXiv:2204.14198}, 2022.
+
+\bibitem{aneja2022clipface}
+Shivangi Aneja, Justus Thies, Angela Dai, and Matthias Nie{\ss}ner.
+\newblock Clipface: Text-guided editing of textured 3d morphable models.
+\newblock {\em arXiv preprint arXiv:2212.01406}, 2022.
+
+\bibitem{beaumont-2022-clip-retrieval}
+Romain Beaumont.
+\newblock Clip retrieval: Easily compute clip embeddings and build a clip
+  retrieval system with them.
+\newblock \url{https://github.com/rom1504/clip-retrieval}, 2022.
+
+\bibitem{canfes2023text}
+Zehranaz Canfes, M~Furkan Atasoy, Alara Dirik, and Pinar Yanardag.
+\newblock Text and image guided 3d avatar generation and manipulation.
+\newblock In {\em Proceedings of the IEEE/CVF Winter Conference on Applications
+  of Computer Vision}, pages 4421--4431, 2023.
+
+\bibitem{chang2015shapenet}
+Angel~X Chang, Thomas Funkhouser, Leonidas Guibas, Pat Hanrahan, Qixing Huang,
+  Zimo Li, Silvio Savarese, Manolis Savva, Shuran Song, Hao Su, et~al.
+\newblock Shapenet: An information-rich 3d model repository.
+\newblock {\em arXiv preprint arXiv:1512.03012}, 2015.
+
+\bibitem{chen2023clip2scene}
+Runnan Chen, Youquan Liu, Lingdong Kong, Xinge Zhu, Yuexin Ma, Yikang Li,
+  Yuenan Hou, Yu Qiao, and Wenping Wang.
+\newblock Clip2scene: Towards label-efficient 3d scene understanding by clip.
+\newblock {\em arXiv preprint arXiv:2301.04926}, 2023.
+
+\bibitem{choy20194d}
+Christopher Choy, JunYoung Gwak, and Silvio Savarese.
+\newblock 4d spatio-temporal convnets: Minkowski convolutional neural networks.
+\newblock In {\em Proceedings of the IEEE Conference on Computer Vision and
+  Pattern Recognition}, pages 3075--3084, 2019.
+
+\bibitem{collins2022abo}
+Jasmine Collins, Shubham Goel, Kenan Deng, Achleshwar Luthra, Leon Xu, Erhan
+  Gundogdu, Xi Zhang, Tomas F~Yago Vicente, Thomas Dideriksen, Himanshu Arora,
+  et~al.
+\newblock Abo: Dataset and benchmarks for real-world 3d object understanding.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and
+  Pattern Recognition}, pages 21126--21136, 2022.
+
+\bibitem{objaverse}
+Matt Deitke, Dustin Schwenk, Jordi Salvador, Luca Weihs, Oscar Michel, Eli
+  VanderBilt, Ludwig Schmidt, Kiana Ehsani, Aniruddha Kembhavi, and Ali
+  Farhadi.
+\newblock Objaverse: A universe of annotated 3d objects.
+\newblock {\em arXiv preprint arXiv:2212.08051}, 2022.
+
+\bibitem{deng2018ppf}
+Haowen Deng, Tolga Birdal, and Slobodan Ilic.
+\newblock Ppf-foldnet: Unsupervised learning of rotation invariant 3d local
+  descriptors.
+\newblock In {\em Proceedings of the European conference on computer vision
+  (ECCV)}, pages 602--618, 2018.
+
+\bibitem{ding2022language}
+Runyu Ding, Jihan Yang, Chuhui Xue, Wenqing Zhang, Song Bai, and Xiaojuan Qi.
+\newblock Language-driven open-vocabulary 3d scene understanding.
+\newblock {\em arXiv preprint arXiv:2211.16312}, 2022.
+
+\bibitem{eckart2021self}
+Benjamin Eckart, Wentao Yuan, Chao Liu, and Jan Kautz.
+\newblock Self-supervised learning on 3d point clouds by learning discrete
+  generative models.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and
+  Pattern Recognition}, pages 8248--8257, 2021.
+
+\bibitem{fu20213d}
+Huan Fu, Rongfei Jia, Lin Gao, Mingming Gong, Binqiang Zhao, Steve Maybank, and
+  Dacheng Tao.
+\newblock 3d-future: 3d furniture shape with texture.
+\newblock {\em International Journal of Computer Vision}, 129:3313--3337, 2021.
+
+\bibitem{gupta2019lvis}
+Agrim Gupta, Piotr Dollar, and Ross Girshick.
+\newblock Lvis: A dataset for large vocabulary instance segmentation.
+\newblock In {\em Proceedings of the IEEE/CVF conference on computer vision and
+  pattern recognition}, pages 5356--5364, 2019.
+
+\bibitem{ha2022semantic}
+Huy Ha and Shuran Song.
+\newblock Semantic abstraction: Open-world 3d scene understanding from 2d
+  vision-language models.
+\newblock In {\em Conference on Robot Learning}, 2022.
+
+\bibitem{hegde2023clip}
+Deepti Hegde, Jeya Maria~Jose Valanarasu, and Vishal~M Patel.
+\newblock Clip goes 3d: Leveraging prompt tuning for language grounded 3d
+  recognition.
+\newblock {\em arXiv preprint arXiv:2303.11313}, 2023.
+
+\bibitem{hess2023masked}
+Georg Hess, Johan Jaxing, Elias Svensson, David Hagerman, Christoffer
+  Petersson, and Lennart Svensson.
+\newblock Masked autoencoder for self-supervised pre-training on lidar point
+  clouds.
+\newblock In {\em Proceedings of the IEEE/CVF Winter Conference on Applications
+  of Computer Vision}, pages 350--359, 2023.
+
+\bibitem{hess2022lidarclip}
+Georg Hess, Adam Tonderski, Christoffer Petersson, Lennart Svensson, and Kalle
+  {\AA}str{\"o}m.
+\newblock Lidarclip or: How i learned to talk to point clouds.
+\newblock {\em arXiv preprint arXiv:2212.06858}, 2022.
+
+\bibitem{hong2022avatarclip}
+Fangzhou Hong, Mingyuan Zhang, Liang Pan, Zhongang Cai, Lei Yang, and Ziwei
+  Liu.
+\newblock Avatarclip: Zero-shot text-driven generation and animation of 3d
+  avatars.
+\newblock {\em arXiv preprint arXiv:2205.08535}, 2022.
+
+\bibitem{huang2023joint}
+Rui Huang, Xuran Pan, Henry Zheng, Haojun Jiang, Zhifeng Xie, Shiji Song, and
+  Gao Huang.
+\newblock Joint representation learning for text and 3d point cloud.
+\newblock {\em arXiv preprint arXiv:2301.07584}, 2023.
+
+\bibitem{huang2022clip2point}
+Tianyu Huang, Bowen Dong, Yunhan Yang, Xiaoshui Huang, Rynson~WH Lau, Wanli
+  Ouyang, and Wangmeng Zuo.
+\newblock Clip2point: Transfer clip to point cloud classification with
+  image-depth pre-training.
+\newblock {\em arXiv preprint arXiv:2210.01055}, 2022.
+
+\bibitem{ilharco_gabriel_2021_5143773}
+Gabriel Ilharco, Mitchell Wortsman, Ross Wightman, Cade Gordon, Nicholas
+  Carlini, Rohan Taori, Achal Dave, Vaishaal Shankar, Hongseok Namkoong, John
+  Miller, Hannaneh Hajishirzi, Ali Farhadi, and Ludwig Schmidt.
+\newblock Openclip, July 2021.
+\newblock If you use this software, please cite it as below.
+
+\bibitem{jain2022zero}
+Ajay Jain, Ben Mildenhall, Jonathan~T Barron, Pieter Abbeel, and Ben Poole.
+\newblock Zero-shot text-guided object generation with dream fields.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and
+  Pattern Recognition}, pages 867--876, 2022.
+
+\bibitem{jatavallabhula2023conceptfusion}
+Krishna~Murthy Jatavallabhula, Alihusein Kuwajerwala, Qiao Gu, Mohd Omama, Tao
+  Chen, Shuang Li, Ganesh Iyer, Soroush Saryazdi, Nikhil Keetha, Ayush Tewari,
+  et~al.
+\newblock Conceptfusion: Open-set multimodal 3d mapping.
+\newblock {\em arXiv preprint arXiv:2302.07241}, 2023.
+
+\bibitem{jetchev2021clipmatrix}
+Nikolay Jetchev.
+\newblock Clipmatrix: Text-controlled creation of 3d textured meshes.
+\newblock {\em arXiv preprint arXiv:2109.12922}, 2021.
+
+\bibitem{jia2021scaling}
+Chao Jia, Yinfei Yang, Ye Xia, Yi-Ting Chen, Zarana Parekh, Hieu Pham, Quoc Le,
+  Yun-Hsuan Sung, Zhen Li, and Tom Duerig.
+\newblock Scaling up visual and vision-language representation learning with
+  noisy text supervision.
+\newblock In {\em International Conference on Machine Learning}, pages
+  4904--4916. PMLR, 2021.
+
+\bibitem{kalantidis2020hard}
+Yannis Kalantidis, Mert~Bulent Sariyildiz, Noe Pion, Philippe Weinzaepfel, and
+  Diane Larlus.
+\newblock Hard negative mixing for contrastive learning.
+\newblock {\em Advances in Neural Information Processing Systems},
+  33:21798--21809, 2020.
+
+\bibitem{kerr2023lerf}
+Justin Kerr, Chung~Min Kim, Ken Goldberg, Angjoo Kanazawa, and Matthew Tancik.
+\newblock Lerf: Language embedded radiance fields.
+\newblock {\em arXiv preprint arXiv:2303.09553}, 2023.
+
+\bibitem{khalid2022text}
+Nasir Khalid, Tianhao Xie, Eugene Belilovsky, and Tiberiu Popa.
+\newblock Text to mesh without 3d supervision using limit subdivision.
+\newblock {\em arXiv preprint arXiv:2203.13333}, 2022.
+
+\bibitem{lee2022understanding}
+Han-Hung Lee and Angel~X Chang.
+\newblock Understanding pure clip guidance for voxel grid nerf models.
+\newblock {\em arXiv preprint arXiv:2209.15172}, 2022.
+
+\bibitem{li2022blip}
+Junnan Li, Dongxu Li, Caiming Xiong, and Steven Hoi.
+\newblock Blip: Bootstrapping language-image pre-training for unified
+  vision-language understanding and generation.
+\newblock In {\em International Conference on Machine Learning}, pages
+  12888--12900. PMLR, 2022.
+
+\bibitem{li2022grounded}
+Liunian~Harold Li, Pengchuan Zhang, Haotian Zhang, Jianwei Yang, Chunyuan Li,
+  Yiwu Zhong, Lijuan Wang, Lu Yuan, Lei Zhang, Jenq-Neng Hwang, et~al.
+\newblock Grounded language-image pre-training.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and
+  Pattern Recognition}, pages 10965--10975, 2022.
+
+\bibitem{liang2022mind}
+Victor~Weixin Liang, Yuhui Zhang, Yongchan Kwon, Serena Yeung, and James~Y Zou.
+\newblock Mind the gap: Understanding the modality gap in multi-modal
+  contrastive representation learning.
+\newblock {\em Advances in Neural Information Processing Systems},
+  35:17612--17625, 2022.
+
+\bibitem{liu2022partslip}
+Minghua Liu, Yinhao Zhu, Hong Cai, Shizhong Han, Zhan Ling, Fatih Porikli, and
+  Hao Su.
+\newblock Partslip: Low-shot part segmentation for 3d point clouds via
+  pretrained image-language models.
+\newblock {\em arXiv preprint arXiv:2212.01558}, 2022.
+
+\bibitem{liu2022iss}
+Zhengzhe Liu, Peng Dai, Ruihui Li, Xiaojuan Qi, and Chi-Wing Fu.
+\newblock Iss: Image as stetting stone for text-guided 3d shape generation.
+\newblock {\em arXiv preprint arXiv:2209.04145}, 2022.
+
+\bibitem{lu2023open}
+Yuheng Lu, Chenfeng Xu, Xiaobao Wei, Xiaodong Xie, Masayoshi Tomizuka, Kurt
+  Keutzer, and Shanghang Zhang.
+\newblock Open-vocabulary point-cloud object detection without 3d annotation.
+\newblock {\em arXiv preprint arXiv:2304.00788}, 2023.
+
+\bibitem{ma2022rethinking}
+Xu Ma, Can Qin, Haoxuan You, Haoxi Ran, and Yun Fu.
+\newblock Rethinking network design and local geometry in point cloud: A simple
+  residual mlp framework.
+\newblock {\em arXiv preprint arXiv:2202.07123}, 2022.
+
+\bibitem{maturana2015voxnet}
+Daniel Maturana and Sebastian Scherer.
+\newblock Voxnet: A 3d convolutional neural network for real-time object
+  recognition.
+\newblock In {\em 2015 IEEE/RSJ international conference on intelligent robots
+  and systems (IROS)}, pages 922--928. IEEE, 2015.
+
+\bibitem{mersch2022self}
+Benedikt Mersch, Xieyuanli Chen, Jens Behley, and Cyrill Stachniss.
+\newblock Self-supervised point cloud prediction using 3d spatio-temporal
+  convolutional networks.
+\newblock In {\em Conference on Robot Learning}, pages 1444--1454. PMLR, 2022.
+
+\bibitem{michel2022text2mesh}
+Oscar Michel, Roi Bar-On, Richard Liu, Sagie Benaim, and Rana Hanocka.
+\newblock Text2mesh: Text-driven neural stylization for meshes.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and
+  Pattern Recognition}, pages 13492--13502, 2022.
+
+\bibitem{mokady2021clipcap}
+Ron Mokady, Amir Hertz, and Amit~H Bermano.
+\newblock Clipcap: Clip prefix for image captioning.
+\newblock {\em arXiv preprint arXiv:2111.09734}, 2021.
+
+\bibitem{openai2023gpt4}
+OpenAI.
+\newblock Gpt-4 technical report, 2023.
+
+\bibitem{pang2022masked}
+Yatian Pang, Wenxiao Wang, Francis~EH Tay, Wei Liu, Yonghong Tian, and Li Yuan.
+\newblock Masked autoencoders for point cloud self-supervised learning.
+\newblock In {\em Computer Vision--ECCV 2022: 17th European Conference, Tel
+  Aviv, Israel, October 23--27, 2022, Proceedings, Part II}, pages 604--621.
+  Springer, 2022.
+
+\bibitem{peng2022openscene}
+Songyou Peng, Kyle Genova, Chiyu Jiang, Andrea Tagliasacchi, Marc Pollefeys,
+  Thomas Funkhouser, et~al.
+\newblock Openscene: 3d scene understanding with open vocabularies.
+\newblock {\em arXiv preprint arXiv:2211.15654}, 2022.
+
+\bibitem{poursaeed2020self}
+Omid Poursaeed, Tianxing Jiang, Han Qiao, Nayun Xu, and Vladimir~G Kim.
+\newblock Self-supervised learning of point clouds via orientation estimation.
+\newblock In {\em 2020 International Conference on 3D Vision (3DV)}, pages
+  1018--1028. IEEE, 2020.
+
+\bibitem{qi2017pointnet}
+Charles~R Qi, Hao Su, Kaichun Mo, and Leonidas~J Guibas.
+\newblock Pointnet: Deep learning on point sets for 3d classification and
+  segmentation.
+\newblock In {\em Proceedings of the IEEE conference on computer vision and
+  pattern recognition}, pages 652--660, 2017.
+
+\bibitem{qi2017pointnet2}
+Charles~Ruizhongtai Qi, Li Yi, Hao Su, and Leonidas~J Guibas.
+\newblock Pointnet++: Deep hierarchical feature learning on point sets in a
+  metric space.
+\newblock {\em Advances in neural information processing systems}, 30, 2017.
+
+\bibitem{qi2023contrast}
+Zekun Qi, Runpei Dong, Guofan Fan, Zheng Ge, Xiangyu Zhang, Kaisheng Ma, and Li
+  Yi.
+\newblock Contrast with reconstruct: Contrastive 3d representation learning
+  guided by generative pretraining.
+\newblock {\em arXiv preprint arXiv:2302.02318}, 2023.
+
+\bibitem{qian2022pointnext}
+Guocheng Qian, Yuchen Li, Houwen Peng, Jinjie Mai, Hasan Hammoud, Mohamed
+  Elhoseiny, and Bernard Ghanem.
+\newblock Pointnext: Revisiting pointnet++ with improved training and scaling
+  strategies.
+\newblock {\em arXiv:2206.04670}, 2022.
+
+\bibitem{radford2021learning}
+Alec Radford, Jong~Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh,
+  Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark,
+  et~al.
+\newblock Learning transferable visual models from natural language
+  supervision.
+\newblock In {\em International Conference on Machine Learning}, pages
+  8748--8763. PMLR, 2021.
+
+\bibitem{ramesh2022hierarchical}
+Aditya Ramesh, Prafulla Dhariwal, Alex Nichol, Casey Chu, and Mark Chen.
+\newblock Hierarchical text-conditional image generation with clip latents.
+\newblock {\em arXiv preprint arXiv:2204.06125}, 2022.
+
+\bibitem{rao2020global}
+Yongming Rao, Jiwen Lu, and Jie Zhou.
+\newblock Global-local bidirectional reasoning for unsupervised representation
+  learning of 3d point clouds.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and
+  Pattern Recognition}, pages 5376--5385, 2020.
+
+\bibitem{robinson2020contrastive}
+Joshua Robinson, Ching-Yao Chuang, Suvrit Sra, and Stefanie Jegelka.
+\newblock Contrastive learning with hard negative samples.
+\newblock {\em arXiv preprint arXiv:2010.04592}, 2020.
+
+\bibitem{rombach2022high}
+Robin Rombach, Andreas Blattmann, Dominik Lorenz, Patrick Esser, and Bj{\"o}rn
+  Ommer.
+\newblock High-resolution image synthesis with latent diffusion models.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and
+  Pattern Recognition}, pages 10684--10695, 2022.
+
+\bibitem{rozenberszki2022language}
+David Rozenberszki, Or Litany, and Angela Dai.
+\newblock Language-grounded indoor 3d semantic segmentation in the wild.
+\newblock {\em arXiv preprint arXiv:2204.07761}, 2022.
+
+\bibitem{saharia2022photorealistic}
+Chitwan Saharia, William Chan, Saurabh Saxena, Lala Li, Jay Whang, Emily
+  Denton, Seyed Kamyar~Seyed Ghasemipour, Burcu~Karagol Ayan, S~Sara Mahdavi,
+  Rapha~Gontijo Lopes, et~al.
+\newblock Photorealistic text-to-image diffusion models with deep language
+  understanding.
+\newblock {\em arXiv preprint arXiv:2205.11487}, 2022.
+
+\bibitem{sanghi2020info3d}
+Aditya Sanghi.
+\newblock Info3d: Representation learning on 3d objects using mutual
+  information maximization and contrastive learning.
+\newblock In {\em Computer Vision--ECCV 2020: 16th European Conference,
+  Glasgow, UK, August 23--28, 2020, Proceedings, Part XXIX 16}, pages 626--642.
+  Springer, 2020.
+
+\bibitem{sanghi2022clip}
+Aditya Sanghi, Hang Chu, Joseph~G Lambourne, Ye Wang, Chin-Yi Cheng, Marco
+  Fumero, and Kamal~Rahimi Malekshan.
+\newblock Clip-forge: Towards zero-shot text-to-shape generation.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and
+  Pattern Recognition}, pages 18603--18613, 2022.
+
+\bibitem{sauder2019self}
+Jonathan Sauder and Bjarne Sievers.
+\newblock Self-supervised deep learning on point clouds by reconstructing
+  space.
+\newblock {\em Advances in Neural Information Processing Systems}, 32, 2019.
+
+\bibitem{schuhmann2022laion}
+Christoph Schuhmann, Romain Beaumont, Richard Vencu, Cade Gordon, Ross
+  Wightman, Mehdi Cherti, Theo Coombes, Aarush Katta, Clayton Mullis, Mitchell
+  Wortsman, et~al.
+\newblock Laion-5b: An open large-scale dataset for training next generation
+  image-text models.
+\newblock {\em arXiv preprint arXiv:2210.08402}, 2022.
+
+\bibitem{sharma2020self}
+Charu Sharma and Manohar Kaul.
+\newblock Self-supervised few-shot learning on point clouds.
+\newblock {\em Advances in Neural Information Processing Systems},
+  33:7212--7221, 2020.
+
+\bibitem{sun2021point}
+Chao Sun, Zhedong Zheng, Xiaohan Wang, Mingliang Xu, and Yi Yang.
+\newblock Point cloud pre-training by mixing and disentangling.
+\newblock {\em arXiv e-prints}, pages arXiv--2109, 2021.
+
+\bibitem{thabet2020self}
+Ali Thabet, Humam Alwassel, and Bernard Ghanem.
+\newblock Self-supervised learning of local features in 3d point clouds.
+\newblock In {\em Proceedings of the IEEE/CVF conference on computer vision and
+  pattern recognition workshops}, pages 938--939, 2020.
+
+\bibitem{udandaraounderstanding}
+Vishaal Udandarao.
+\newblock Understanding and fixing the modality gap in vision-language models.
+\newblock Master's thesis, University of Cambridge, 2022.
+
+\bibitem{uy2019revisiting}
+Mikaela~Angelina Uy, Quang-Hieu Pham, Binh-Son Hua, Thanh Nguyen, and Sai-Kit
+  Yeung.
+\newblock Revisiting point cloud classification: A new benchmark dataset and
+  classification model on real-world data.
+\newblock In {\em Proceedings of the IEEE/CVF international conference on
+  computer vision}, pages 1588--1597, 2019.
+
+\bibitem{wang2021unsupervised}
+Hanchen Wang, Qi Liu, Xiangyu Yue, Joan Lasenby, and Matt~J Kusner.
+\newblock Unsupervised point cloud pre-training via occlusion completion.
+\newblock In {\em Proceedings of the IEEE/CVF international conference on
+  computer vision}, pages 9782--9792, 2021.
+
+\bibitem{wang2019dynamic}
+Yue Wang, Yongbin Sun, Ziwei Liu, Sanjay~E Sarma, Michael~M Bronstein, and
+  Justin~M Solomon.
+\newblock Dynamic graph cnn for learning on point clouds.
+\newblock {\em Acm Transactions On Graphics (tog)}, 38(5):1--12, 2019.
+
+\bibitem{weibel2021sim2real}
+Jean-Baptiste Weibel, Timothy Patten, and Markus Vincze.
+\newblock Sim2real 3d object classification using spherical kernel point
+  convolution and a deep center voting scheme.
+\newblock {\em arXiv preprint arXiv:2103.06134}, 2021.
+
+\bibitem{wu20153d}
+Zhirong Wu, Shuran Song, Aditya Khosla, Fisher Yu, Linguang Zhang, Xiaoou Tang,
+  and Jianxiong Xiao.
+\newblock 3d shapenets: A deep representation for volumetric shapes.
+\newblock In {\em Proceedings of the IEEE conference on computer vision and
+  pattern recognition}, pages 1912--1920, 2015.
+
+\bibitem{xie2020pointcontrast}
+Saining Xie, Jiatao Gu, Demi Guo, Charles~R Qi, Leonidas Guibas, and Or Litany.
+\newblock Pointcontrast: Unsupervised pre-training for 3d point cloud
+  understanding.
+\newblock In {\em Computer Vision--ECCV 2020: 16th European Conference,
+  Glasgow, UK, August 23--28, 2020, Proceedings, Part III 16}, pages 574--591.
+  Springer, 2020.
+
+\bibitem{xu2022dream3d}
+Jiale Xu, Xintao Wang, Weihao Cheng, Yan-Pei Cao, Ying Shan, Xiaohu Qie, and
+  Shenghua Gao.
+\newblock Dream3d: Zero-shot text-to-3d synthesis using 3d shape prior and
+  text-to-image diffusion models.
+\newblock {\em arXiv preprint arXiv:2212.14704}, 2022.
+
+\bibitem{xue2022ulip}
+Le Xue, Mingfei Gao, Chen Xing, Roberto Mart{\'\i}n-Mart{\'\i}n, Jiajun Wu,
+  Caiming Xiong, Ran Xu, Juan~Carlos Niebles, and Silvio Savarese.
+\newblock Ulip: Learning unified representation of language, image and point
+  cloud for 3d understanding.
+\newblock {\em arXiv preprint arXiv:2212.05171}, 2022.
+
+\bibitem{yang2023regionplc}
+Jihan Yang, Runyu Ding, Zhe Wang, and Xiaojuan Qi.
+\newblock Regionplc: Regional point-language contrastive learning for
+  open-world 3d scene understanding.
+\newblock {\em arXiv preprint arXiv:2304.00962}, 2023.
+
+\bibitem{yu2022point}
+Xumin Yu, Lulu Tang, Yongming Rao, Tiejun Huang, Jie Zhou, and Jiwen Lu.
+\newblock Point-bert: Pre-training 3d point cloud transformers with masked
+  point modeling.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and
+  Pattern Recognition}, pages 19313--19322, 2022.
+
+\bibitem{yu2021pointbert}
+Xumin Yu, Lulu Tang, Yongming Rao, Tiejun Huang, Jie Zhou, and Jiwen Lu.
+\newblock Point-bert: Pre-training 3d point cloud transformers with masked
+  point modeling.
+\newblock In {\em Proceedings of the IEEE Conference on Computer Vision and
+  Pattern Recognition (CVPR)}, 2022.
+
+\bibitem{zeng2023clip}
+Yihan Zeng, Chenhan Jiang, Jiageng Mao, Jianhua Han, Chaoqiang Ye, Qingqiu
+  Huang, Dit-Yan Yeung, Zhen Yang, Xiaodan Liang, and Hang Xu.
+\newblock Clip\^{} 2: Contrastive language-image-point pretraining from
+  real-world point cloud data.
+\newblock {\em arXiv preprint arXiv:2303.12417}, 2023.
+
+\bibitem{zhang2022glipv2}
+Haotian Zhang, Pengchuan Zhang, Xiaowei Hu, Yen-Chun Chen, Liunian~Harold Li,
+  Xiyang Dai, Lijuan Wang, Lu Yuan, Jenq-Neng Hwang, and Jianfeng Gao.
+\newblock Glipv2: Unifying localization and vision-language understanding.
+\newblock {\em arXiv preprint arXiv:2206.05836}, 2022.
+
+\bibitem{zhang2023clip}
+Junbo Zhang, Runpei Dong, and Kaisheng Ma.
+\newblock Clip-fo3d: Learning free open-world 3d scene representations from 2d
+  dense clip.
+\newblock {\em arXiv preprint arXiv:2303.04748}, 2023.
+
+\bibitem{zhang2022pointclip}
+Renrui Zhang, Ziyu Guo, Wei Zhang, Kunchang Li, Xupeng Miao, Bin Cui, Yu Qiao,
+  Peng Gao, and Hongsheng Li.
+\newblock Pointclip: Point cloud understanding by clip.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and
+  Pattern Recognition}, pages 8552--8562, 2022.
+
+\bibitem{zhang2021self}
+Zaiwei Zhang, Rohit Girdhar, Armand Joulin, and Ishan Misra.
+\newblock Self-supervised pretraining of 3d features on any point-cloud.
+\newblock In {\em Proceedings of the IEEE/CVF International Conference on
+  Computer Vision}, pages 10252--10263, 2021.
+
+\bibitem{zhu2022pointclipv2}
+Xiangyang Zhu, Renrui Zhang, Bowei He, Ziyao Zeng, Shanghang Zhang, and Peng
+  Gao.
+\newblock Pointclip v2: Adapting clip for powerful 3d open-world learning.
+\newblock {\em arXiv preprint arXiv:2211.11682}, 2022.
+
+\end{thebibliography}

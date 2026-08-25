@@ -1,0 +1,28 @@
+\usepackage{multicol}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{floatrow}
+\usepackage{float}
+\usepackage{lipsum}  
+\floatstyle{plaintop}
+\restylefloat{table}
+\usepackage[tableposition=top]{caption}
+\usepackage{amsmath}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\usepackage[many]{tcolorbox} 
+
+\newtcolorbox{boxM}{
+    fontupper = \color{white},
+    rounded corners,
+    arc = 6pt,
+    colback = main!80, 
+    colframe = main, 
+    boxrule = 0pt, 
+    bottomrule = 4.5pt,
+    enhanced,
+    fuzzy shadow = {0pt}{-3pt}{-0.5pt}{0.5pt}{black!35}
+}
+
+\definecolor{main}{HTML}{5989cf}    % setting main color to be used
+\definecolor{sub}{HTML}{cde4ff}     % setting sub color to be used

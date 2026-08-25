@@ -1,0 +1,110 @@
+\vspace{-0.7em}
+\section{Experiments}
+\vspace{-0.7em}
+\subsection{Zero-Shot Shape Classification}
+\vspace{-0.7em}
+
+We evaluate the zero-shot classification performances of our models on three benchmarks: the traditional ModelNet40~\cite{wu20153d} and ScanObjectNN~\cite{uy2019revisiting}, as well as a new benchmark, Objaverse-LVIS~\cite{objaverse}. ModelNet40 and ScanObjacetNN consist of 40 and 15 common categories, respectively. Objaverse-LVIS is an annotated subset of Objaverse~\cite{objaverse} and comprises 46,832 shapes among 1,156 LVIS~\cite{gupta2019lvis} categories. With a much larger base of classes than other benchmarks, Objaverse-LVIS presents a challenging long-tailed distribution, making it a better reflection on models' performance in open-world scenarios. We compare OpenShape with existing zero-shot approaches, including PointCLIP~\cite{zhang2022pointclip}, PointCLIPv2~\cite{zhu2022pointclipv2}, ReCon~\cite{qi2023contrast}, CG3D~\cite{hegde2023clip}, CLIP2Point~\cite{huang2022clip2point}, and ULIP~\cite{xue2022ulip}. Among them, PointCLIP~\cite{zhang2022pointclip} and PointCLIPv2~\cite{zhu2022pointclipv2} project point clouds into 2D images and directly utilize 2D CLIP for inference, while other methods leverage the CLIP embedding spaces for alignment and require 3D shapes for training. We report results on these baselines using their released checkpoints. To better analyze the source of our performance gains, we also retrain the baseline ULIP~\cite{xue2022ulip} on our ensembled shape dataset, but we use the original texts in the four constituent datasets along with the official codebase without backbone scaling. We train OpenShape and ULIP on three different sets of training shapes: ``\textbf{Ensembled}'' denotes using all shapes from the four datasets; ``\textbf{Ensembled (no LVIS)}'' is the same but excludes all shapes from the Objavserse-LVIS subset; ``\textbf{ShapeNet}'' only includes shapes from the ShapeNet~\cite{chang2015shapenet} dataset. Note that even when LVIS shapes are included in the training shapes (i.e., the ``Ensembled'' dataset), their test-time category labels are probably not included in their training texts. Please refer to the supplementary for more training and evaluation details.
+
+
+\input{tables/zero-shot}
+
+Table~\ref{tab:zero} shows the results. We observe that OpenShape consistently outperforms prior approaches, even when trained only on ShapeNet. When models are trained on our larger-scale ensembled dataset, they receive a significant performance boost. In this case, OpenShape still surpasses retrained ULIP by a significant margin, demonstrating the advantages of our text enrichment, backbone scaling, and other training strategies. Specifically, OpenShape greatly improves the classification accuracy on the long tail categories in Objaverse-LVIS from a dull $< 10\%$ to $\mathbf{46.8}\%$, outperforming the retrained ULIP by about 20 points and reaching a decent top-$5$ accuracy of $\mathbf{77.0}\%$. These results demonstrate OpenShape's capability to recognize open-world objects effectively. As for ModelNet40, OpenShape achieves a $\mathbf{85.3\%}$ accuracy, surpassing previous methods by a substantial margin of at least 20 percent. OpenShape also achieves impressive top-3 and top-5 accuracies of $\mathbf{96.5}\%$ and $\mathbf{98.0}\%$. To the best of our knowledge, this is the first time zero-shot methods have matched the performance of a fully-supervised 3D learning method on ModelNet40, where OpenShape outperforms fully-supervised 3D ShapeNets~\cite{wu20153d} and VoxNet~\cite{maturana2015voxnet}.  In addition, on ScanObjectNN, which contains challenging real scans with noise and occlusion, OpenShape exhibits decent sim-to-real transfer capabilities. To contextualize, OpenShape-SparseConv achieves $\textbf{56.7}\%$ zero-shot accuracy on ScanObjectNN without specific sim-to-real training, which surpasses $52.7\%$ reported by SKPConv~\cite{weibel2021sim2real}, a recent method specially designed for sim-to-real transfer in point cloud classification tasks.
+
+\vspace{-0.5em}
+\subsection{Few-Shot Linear Probing}
+\vspace{-0.5em}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/linear_probe.pdf}
+        \vspace{-1.8em}
+    \caption{Few-shot linear probing on Objaverse-LVIS~\cite{objaverse}, ModelNet40~\cite{wu20153d}, and ScanObjectNN~\cite{udandaraounderstanding}. We report the average performance over 10 random seeds. \vspace{-0.7em}}
+    \label{fig:linprobe}
+\end{figure}
+
+In the literature, linear probing is a common way to assess the representation learning capabilities of a model. To perform linear probing, we gather and freeze the representation vectors from all samples in a dataset. Subsequently, we train a linear classifier using these fixed vectors and few-shot class labels. We evaluate the accuracy of the linear classifier on three benchmarks: Objaverse-LVIS~\cite{objaverse}, ModelNet40~\cite{wu20153d}, and ScanObjectNN~\cite{uy2019revisiting}. Figure~\ref{fig:linprobe} summarizes the performance of OpenShape in comparison with ULIP \cite{xue2022ulip} (official release and our retrained versions) and PointCLIPv2 \cite{zhu2022pointclipv2}. On the most challenging Objaverse-LVIS benchmark, OpenShape outperforms all other methods by a large margin. Notably, zero-shot OpenShape beats few-shot linear probes of other methods. On ModelNet40 and ScanObjectNN, we do not see a large performance margin between OpenShape and retrained ULIP. We hypothesize that for few-shot ModelNet40, the error is dominated by in-category sample bias rather than the representation quality; while for ScanObjectNN, the domain gap plays a major role. Since both OpenShape and retrained ULIP are exposed to the same source domain of training objects, their few-shot out-of-domain generalization performances tend to be similar.
+
+\vspace{-0.5em}
+\subsection{Ablation Study}
+\vspace{-0.5em}
+
+We perform various ablations by training a scaled version of SparseConv~\cite{choy20194d} on the ensembled dataset and then evaluate it on the Objaverse-LVIS~\cite{objaverse} and ModelNet40~\cite{wu20153d} zero-shot classification benchmarks, unless otherwise specified. The results are shown in Table~\ref{tab:ablmain} and Figures~\ref{fig:abldata} and~\ref{fig:ablenrich}.
+
+\begin{figure}[t]
+\CenterFloatBoxes
+\begin{floatrow}
+\ttabbox[5cm]{%
+\input{tables/ablation}
+}{%
+\centering
+  \caption{\small{Ablation study. Top 1 zero-shot accuracies on ModelNet40~\cite{wu20153d} and Objaverse-LVIS~\cite{objaverse} are shown.}}
+  \label{tab:ablmain}
+}
+\ffigbox[4cm]{%
+ \includegraphics[width=\linewidth]{figures/data_scale.pdf}
+ \vspace{-2.5em}
+}{%
+  \caption{Ablation study on using different ratios of training data.}%
+  \label{fig:abldata}
+}
+\hspace{0.5em}
+\ffigbox[4cm]{%
+ \includegraphics[width=0.95\linewidth]{figures/ablbar.pdf}
+  \vspace{-1em}
+}{%
+  \caption{Ablation study on different text enrichment strategies.}%
+  \label{fig:ablenrich}
+}
+
+\end{floatrow}
+\end{figure}
+
+\noindent \textbf{Data and Model Scaling.} We investigate the impact of training data by ablating (1) without or with only Objaverse shapes (Tab.~\ref{tab:ablmain}) and (2) with different ratios of our ensembled dataset (Fig.~\ref{fig:abldata}). We observe that training with $1\%$ of our ensembled dataset (about $8.8$k shapes) achieves similar or better zero-shot performance than training without Objaverse shapes (about $77.1$k shapes), indicating that the diversity of training data is sometimes more crucial than the scale. In addition, we compare the performances between scaled-up and non-scaled-up backbones. From Tab.~\ref{tab:ablmain}, we demonstrate that model scaling plays an essential role when training on our large-scale ensembled dataset (also Fig.~\ref{fig:model-scale-up}).
+
+\noindent \textbf{Text Filtering and Enrichment.} As shown in Tab.~\ref{tab:ablmain}, both text filtering and text enrichment are beneficial for performance. We also investigate the specific text enrichment strategies to use for the SparseConv and PointBERT backbones. In Fig.~\ref{fig:ablenrich}, we observe that both image captioning and text retrieval are helpful, and including both yield the best results. Notably, PointBERT improves more than 10 points from text enrichment, highlighting the significance of enhancing text quality.
+
+\begin{figure}[t]
+    \centering
+    \vspace{-0.5em}
+    \includegraphics[width=\linewidth]{figures/image_pc_retrieval.pdf}
+        \vspace{-2em}
+    \caption{3D shape retrieval from image (left, mid) and point cloud (right). \vspace{-1em}}
+    \label{fig:shaperetr}
+\end{figure}
+
+\noindent \textbf{Other Aspects.} We also conduct additional ablation studies on color information, contrastive loss components, and our hard-negative mining strategy in Tab.~\ref{tab:ablmain}. We observe that OpenShape performs well with only $xyz$ coordinates as input and no RGB color. While 3D-image contrastive loss is also helpful, we observe that 3D shape-text alignment plays a very essential role for model zero-shot generalization, which necessitates our text filtering and text enrichment strategies that significantly enhance text quality. Lastly, by employing our hard negative mining strategy, OpenShape effectively addresses the issue of unbalanced data distribution, leading to further improvements in performance.
+
+\begin{figure}[t]
+    \centering
+     \begin{subfigure}[a]{\textwidth}
+     \centering
+     \includegraphics[width=\textwidth]{figures/finegrained.pdf}
+     \end{subfigure}
+     \begin{subfigure}[b]{\textwidth}
+     \centering
+     \includegraphics[width=\textwidth]{figures/text_retrieval_mug.pdf}
+     \end{subfigure}
+     \vspace{-1.7em}
+    \caption{\textbf{Text-input 3D shape retrieval.} In each row, we show input texts on the left and two retrieved shapes for each text on the right. OpenShape embedding encodes a wide range of visual and semantic concepts and enables (a) retrieval of fine-grained subcategories (first two rows), and (b) control of attributes (e.g., color, shape, style) and their combinations (last two rows). \vspace{-0.5em}}
+    
+    \label{fig:finecatretr}
+\end{figure}
+
+\vspace{-0.5em}
+\subsection{Cross-Modal Applications}
+\label{sec:app}
+\vspace{-0.5em}
+
+
+\noindent \textbf{Multi-modal 3D Shape Retrieval.} Through OpenShape multi-modal representations, we can index and retrieve 3D shapes from images, texts, or point clouds. In this section, we retrieve 3D shapes from our ensembled dataset by calculating the cosine similarity between input embedding(s) and 3D shape embeddings and performing kNN. As shown in Figure~\ref{fig:shaperetr}, OpenShape is capable of retrieving visually or semantically similar shapes from a single image or point cloud input. OpenShape embeddings encode a wide range of visual and semantic concepts. In Figure~\ref{fig:finecatretr}, we show that OpenShape supports retrieving 3D shapes from detailed text descriptions, which include fine-grained subcategories, attributes, and their combinations. Note that these input texts are typically not present in the raw texts of the retrieved shapes, indicating that OpenShape effectively learns generalizable concepts across shapes. In Figure~\ref{fig:teaser}, we provide a demo which takes two 3D shapes as inputs and retrieves the shapes that are simultaneously closest to both inputs. This is achieved by finding $\argmax_i{\min(h_i^P\cdot h_a^P, h_i^P\cdot h_b^P)}$, where $h_a^P$ and $h_b^P$ denote normalized shape embeddings of the two input shapes. We can see that the retrieved shapes integrate visual or semantic elements in an interesting manner, highlighting the rich concepts and priors encoded in OpenShape embeddings. 
+
+\noindent \textbf{Shape-Conditioned Multimodal Generation.} As OpenShape's 3D shape representations are aligned with CLIP's image and text embedding spaces, they can serve as inputs into other CLIP-based models to facilitate various multimodal generation applications. For example, we show that by feeding our 3D shape embeddings into ClipCap~\cite{mokady2021clipcap}, an off-the-shelf image captioning model, along with Stable unCLIP~\cite{ramesh2022hierarchical}, a text-to-image diffusion model, we can perform point cloud captioning and point cloud-conditioned image generation (optional text prompt supported) without extra training or finetuning. Qualitative results are shown in Figure~\ref{fig:capgen}. Please refer to the supplementary for more results and details.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/capnsd.pdf}
+    \vspace{-1.8em}
+    \caption{\textbf{(a) Point cloud captioning. (b) Point cloud-conditioned image generation.} Our learned 3D shape embeddings can be integrated with off-the-shelf pretrained CLIP-based models (e.g., captioning and image generation models) to support various cross-modal applications. \vspace{-1.2em}}
+    \label{fig:capgen}
+\end{figure}

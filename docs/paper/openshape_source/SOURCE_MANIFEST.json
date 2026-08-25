@@ -1,0 +1,21 @@
+{
+ "arxiv_archive": "arXiv-2305.10764v2.tar.gz",
+ "archive_sha256": "5f8eeec1d042f03f34d0f71441cdf320254b0f4c60882d0b0679ecb264721308",
+ "extracted_at": "2026-08-25",
+ "downloaded_by": "Kyzen",
+ "tex_sha256": {
+  "header.tex": "bbed5b6fc8608eeb94a230c4fef3d4e8d1b24923857331735ff312b9799a3d7d",
+  "main.tex": "59525e72f1e48eaa92c2c19563a69dc769e6d6e6b91f3616f7aef6a16bf25734",
+  "sections/abstract.tex": "f44bad412d3aeee2f032aec385d9733a8540e3ef173368cd3a14d6e495da8f23",
+  "sections/conclusion.tex": "2b081714ea6a5cc4b4de8012e3b75fd04e5a6e1716d66e3989afff309e4d4203",
+  "sections/experiments.tex": "c07245cb85df3f36162cd052a4532a596da434d8a72888b69c650305dd41f662",
+  "sections/introduction.tex": "a95521824b179524950ade60650bce22b9b1503ef2a26014d2bc9a798fbae4ce",
+  "sections/method.tex": "8fa1d485f384221aa771d39fd91b856277d97a977a2a942afc79398f5893df6a",
+  "sections/related_work.tex": "321603b5b1cebba302ba74834d1aebf9fd6a604dffafa30a29486176726a677b",
+  "sections/supplementary.tex": "52672a495df74a2b16c755b2dd535a87c150757867dba07427c05f6772311471",
+  "tables/ablation.tex": "6675623e4cb2c15f00cb76a9694722233446f3c458dd44e0b90141497769a7e1",
+  "tables/dataset_ablation.tex": "9feff46860d812099d5d20b2eff69072c7d51d9f6f0b7a3b7a52a7d3c67c8b8d",
+  "tables/model_comparison.tex": "227cd0157a5862f84348b011b5b929fde78bc4081ad738f359e692b549318b4a",
+  "tables/zero-shot.tex": "a0caac6741940134a414e917a99f25da44445ddd147cb74d5c249ffd12923a17"
+ }
+}

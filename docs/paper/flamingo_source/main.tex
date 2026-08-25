@@ -1,0 +1,222 @@
+\documentclass{article} 
+
+    \PassOptionsToPackage{numbers, compress, sort}{natbib}
+
+
+\usepackage[final]{neurips_2022}
+
+
+
+
+
+
+
+
+\usepackage[utf8]{inputenc} %
+\usepackage[T1]{fontenc}    %
+\usepackage{hyperref}       %
+\usepackage{url}            %
+\usepackage{booktabs}       %
+\usepackage{amsfonts}       %
+\usepackage{nicefrac}       %
+\usepackage{microtype}      %
+\usepackage[dvipsnames,table,xcdraw]{xcolor}         %
+
+
+\usepackage{amsthm, amsmath, amssymb}
+\usepackage{cmap}
+\usepackage{pifont}
+\usepackage{graphicx}
+\usepackage{bibentry}
+
+\newcommand\vlpft[1]{\textcolor{gray}{#1}}
+\usepackage[normalem]{ulem}
+\useunder{\uline}{\ul}{}
+\usepackage{subcaption}
+\usepackage{multirow}
+\usepackage{longtable}
+\usepackage{listings}
+\usepackage[skins]{tcolorbox}
+\usepackage{array}
+\usepackage{algpseudocode}
+\usepackage{tocloft}
+\usepackage{etoc}
+\usepackage{setspace}
+\usepackage{multicol}
+\usepackage{kantlipsum, lipsum}
+\usepackage{dsfont}
+\usepackage{comment}
+
+\usepackage{fontawesome}
+
+\usepackage{selectp}
+
+\newcommand{\todo}[1]{{\color{red}[TODO: #1]}}
+\newcommand{\pleasereview}[1]{{\color{orange}[Please review: #1]}}
+
+\newcommand{\newtext}[1]{{\color{red}#1}}
+
+
+\newcommand{\method}{Flamingo}
+\newcommand{\methodfamily}{Flamingo models}
+\newcommand{\flamingoemoji}{\includegraphics[height=1.3\fontcharht\font`\B]{figures/flamingoemoji.pdf}}
+
+\newcommand{\flamingoemojiavatar}{\includegraphics[height=1.4\fontcharht\font`\B]{figures/FlamingoPaperColor.pdf}}
+
+\newcommand{\mmmw}{\emph{M3W}}
+
+\newcommand{\base}{\emph{\method{}}-3B}
+\newcommand{\medium}{\emph{\method{}}-9B}
+\newcommand{\largemfull}{\emph{\method{}}-80B}
+\newcommand{\largem}{\emph{\method{}}}
+\newcommand{\largemodelsize}{80B}
+
+\newcommand{\capfontsize}{}
+
+\graphicspath{{figures/}}
+
+\title{\centering \flamingoemoji{} Flamingo: a Visual Language Model \\ for Few-Shot Learning
+\vspace*{-0.3cm}
+}
+\newcommand{\titleheader}{Flamingo: a Visual Language Model for Few-Shot Learning}
+
+\newif\ifwithappendix
+\withappendixtrue  %
+
+
+\hypersetup{
+        plainpages=false,
+        colorlinks=true,              %
+        linkcolor=blue,               %
+        anchorcolor=blue,             %
+        citecolor=blue,               %
+        filecolor=blue,               %
+        urlcolor=blue,                %
+        pdfview=FitH,                 %
+        pdfstartview=FitH,            %
+        pdfpagelayout=SinglePage      %
+}
+
+
+
+
+\author{
+    Jean-Baptiste~Alayrac$^{*,\ddag}$ \And
+    \And
+    Jeff~Donahue$^{*}$ \And
+    \And
+    Pauline~Luc$^{*}$ \And
+    \And
+    Antoine~Miech$^{*}$ \And
+    Iain~Barr$^{\dagger}$ \And
+    Yana~Hasson$^{\dagger}$ \And
+    Karel~Lenc$^{\dagger}$ \And
+    Arthur~Mensch$^{\dagger}$ \And
+    Katie~Millican$^{\dagger}$ \And
+    Malcolm~Reynolds$^{\dagger}$ \And
+    Roman~Ring$^{\dagger}$ \And
+    Eliza~Rutherford$^{\dagger}$ \And
+    Serkan~Cabi \And
+    Tengda~Han \And
+    Zhitao~Gong \And
+    Sina~Samangooei \And
+    Marianne~Monteiro \And
+    Jacob~Menick \And
+    Sebastian~Borgeaud \And
+    Andrew~Brock \And
+    Aida~Nematzadeh \And
+    Sahand~Sharifzadeh \And
+    Mikolaj~Binkowski \And
+    Ricardo~Barreira \And
+    Oriol~Vinyals \And
+    Andrew~Zisserman \And
+    Karen~Simonyan$^{*,\ddag}$ \And
+    $^{*}$ \small{Equal contributions, ordered alphabetically, $^{\dagger}$ Equal contributions, ordered alphabetically,} \\
+    \small{\textbf{$^{\ddag}$ Equal senior contributions}} \AND
+    DeepMind
+        }
+
+
+
+\ifwithappendix\else
+\fi
+
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Building models that can be rapidly adapted to novel tasks
+using only a handful of annotated examples is an open challenge for multimodal machine learning research.
+We introduce \method{}, a family of Visual Language Models (VLM) with this ability.
+We propose key architectural innovations to:
+(i) bridge powerful pretrained vision-only and language-only models,
+(ii) handle sequences of arbitrarily interleaved visual and textual data,
+and (iii) seamlessly ingest images or videos as inputs.
+Thanks to their flexibility, \method{} models can be trained on large-scale multimodal web corpora containing arbitrarily interleaved text and images, which is key to endow them with in-context few-shot learning capabilities.
+We perform a thorough evaluation of our models, exploring and measuring their ability to rapidly adapt to a variety of image and video tasks.
+These include open-ended tasks such as visual question-answering, where the model is prompted with a question which it has to answer; captioning tasks, which evaluate the ability to describe a scene or an event;
+and close-ended tasks such as multiple-choice visual question-answering.
+For tasks lying anywhere on this spectrum, a \emph{single} \method{} model can achieve a new state of the art with few-shot learning, simply by prompting the model with task-specific examples.
+On numerous benchmarks, \largem{} outperforms models fine-tuned on thousands of times more task-specific data.%
+\end{abstract}
+
+
+\input{content}
+
+
+\paragraph{Acknowledgments and Disclosure of Funding.}
+This research was funded by DeepMind.
+We would like to thank many colleagues for useful discussions, suggestions, feedback, and advice, including:
+Samuel~Albanie,
+Relja~Arandjelović,
+Kareem~Ayoub,
+Lorrayne~Bennett,
+Adria~Recasens~Continente,
+Tom~Eccles,
+Nando~de~Freitas,
+Sander~Dieleman,
+Conor~Durkan,
+Aleksa~Gordić,
+Raia~Hadsell,
+Will~Hawkins,
+Lisa~Anne~Hendricks,
+Felix~Hill,
+Jordan~Hoffmann,
+Geoffrey~Irving,
+Drew~Jaegle,
+Koray~Kavukcuoglu,
+Agustin~Dal~Lago,
+Mateusz~Malinowski,
+Soňa~Mokrá,
+Gaby~Pearl,
+Toby~Pohlen,
+Jack~Rae,
+Laurent~Sifre,
+Francis~Song,
+Maria~Tsimpoukelli,
+Gregory~Wayne,
+and Boxi~Wu.
+
+
+\bibliographystyle{plainnat}
+\bibliography{template_refs}
+
+\input{checklist}
+
+
+\newpage
+\ifwithappendix
+\section*{Appendix}
+\else
+\section*{\flamingoemoji{} Flamingo: a Visual Language Model for Few-Shot Learning: Appendix}
+\fi
+\appendix
+\input{appendix.tex}
+
+
+
+\setcitestyle{square,numbers,comma}
+
+\end{document}
