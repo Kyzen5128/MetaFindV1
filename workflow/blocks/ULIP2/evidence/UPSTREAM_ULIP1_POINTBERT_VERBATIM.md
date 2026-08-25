@@ -79,8 +79,25 @@ Both carry `SOURCE_MANIFEST.json` with sha256. Every claim below is UPSTREAM FAC
 
 ---
 
-## Still unread from this batch (queued)
+## Batch complete — all five sources read (2026-08-25)
 
-`openshape_source` (672 tex lines) · `procthor_source` (2,417) · `flamingo_source` (3,593).
-OpenShape next (render/retrieval upstream); ProcTHOR before ESSGNN opens; Flamingo feeds the
-λ-init debate only.
+`openshape_source`, `procthor_source`, `flamingo_source` read verbatim on 2026-08-25
+(Flamingo datasheet/model-card admin sections skimmed only). Key harvests:
+
+- **OpenShape** (method.tex:60-68): 4-term bidirectional loss (P↔T, P↔I, no I↔T term),
+  learnable τ, learnable linear projections g^T/g^I; CLIP frozen, all text/image embeddings
+  **pre-cached before training** — the citable precedent for our n06 cache.
+  method.tex:77: 10,000 colored points per shape; **12 rendered color images from preset
+  uniform camera poses; each iteration randomly samples ONE image** — the U-14 option-B citation.
+  supplementary.tex:190: batch 200 / 1×A100 / exponential LR / PointBERT-32.3M lr 5e-4 / ~300 A100-hr.
+  supplementary.tex:192-194: unfreezing CLIP text encoder gave no gain and hurt generality →
+  third independent freeze citation (after ULIP-1 and ULIP-2).
+- **ProcTHOR** (07_supp House Generation): room-spec trees, Lopes recursive floorplans,
+  room weights r_w∈{0..3}, edge/corner/middle placement, 18 SAGs, BFS validator;
+  asset DB 1,633 assets / 108 types (01_intro.tex:10) — vs MetaFind's "3,000+ curated assets"
+  (conflict registered, U-21). ProcTHOR-10K: 10K train + 1K val + 1K test houses.
+- **Flamingo** (content.tex:187-189): tanh(α) gating with α **initialized to 0** so the frozen
+  model's output is exactly preserved at init; ablation (content.tex:350-352): removing
+  0-init gating → −4.2% and training instabilities. The λ-init debate's closest precedent.
+
+Full synthesis lives in `docs/METAFIND_NOTEBOOK.md`.
