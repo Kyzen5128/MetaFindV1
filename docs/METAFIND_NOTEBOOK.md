@@ -46,6 +46,9 @@ ulip2 先前讀完。每份都有 `SOURCE_MANIFEST.json` sha256。
 - `sim(·,·)`：論文只說 "the similarity function"（**S1 沉默**）。
   → CHOICE（U-24）：cosine similarity——ULIP/OpenShape/CLIP 全都用它；
   實作為 L2-normalize 後點積（IMPL `losses.py:166-170`）。protocol 記錄任何別的值都會被拒收。
+  **上游分歧（2026-08-25 補查）**：MetaFind 引用的另一個範式源 DPR 用的是**未正規化點積**
+  （UPSTREAM DPR p.3 Eq.1 `sim(q,p)=E_Q(q)ᵀE_P(p)`，本地 `docs/paper/dpr_2004.04906.pdf`）。
+  兩個上游答案不同；取 cosine 因為嵌入空間是 CLIP 的（ULIP-2 是更近的上游）。分歧已登記，不是沒查。
 - 挑戰點（PAPER :10）：查詢是多模態的、模態會缺、要 layout-aware 才能空間合理。
 
 ---
@@ -562,19 +565,19 @@ Gates：G6 擋 Stage 2（essgnn_arch_protocol 未 resolved 不得開跑）；DL-
 | U-08 全系列（Stage 2 樣本構造） | ✅ 見 §4.2 |
 | U-11/U-13/U-15/U-17/U-19/U-28/U-29/U-30/U-31/U-32/U-33 | ✅ 見各節 |
 
-### 待拍板（附我的建議）
-| # | 議題 | 選項 | 我的建議＋理由 |
+### 待拍板（附我的建議；**2026-08-25 逐條重驗過「論文真的答不了嗎」**——結果見各行）
+| # | 議題 | 重驗結果 | 我的建議＋理由 |
 |---|---|---|---|
-| 1 | **U-14** 訓練時圖片視角 | A=12 視角 mean（現況）／B=每步隨機 1 張、gallery/eval 用 mean | **B**——OpenShape verbatim "randomly sample one rendered image"（standing rule）；快取存 per-view 嵌入所以零成本切換 |
-| 2 | **λ 初值** | 0.1（GPT/LayerScale）／1.0（現佔位）／0（Flamingo 先例） | **0**（或 tanh-gated α=0）——最近似情境（新分支掛凍結模型）的上游先例＋訓練穩定性證據；等 GPT 對 R1-R4 回覆後收斂上呈 |
-| 3 | **epochs（Stage 1）** | 50 佔位／早停定值 | 早停（測試 R@1），跑完把實際值寫進帳 |
-| 4 | **U-16 殘留** PointBERT 份數 | 一份共用／兩份 | 一份——gallery 訓後凍結、query 側 PC 條件沿用同權重最一致；兩份會讓 Stage 1 顯存翻倍 |
-| 5 | **U-20/U-06** t_i 與 e_ij 編碼器 | 同骨幹 CLIP text(1280)／BERT(768)／CLIP-B(512) | 同骨幹 CLIP——不引入第二顆模型、同嵌入空間 |
-| 6 | **U-21** Table 2 gallery 範圍＋3,000 vs 1,633 | procthor（現 protocol）／46K | 維持 procthor 並照實報差異；等 GPT 審查有無新讀法 |
-| 7 | **U-09** Table 1 gallery | 46K／9,211 | **雙協定都跑都報**（已實作，維持） |
-| 8 | **Stage 2 超參數** | — | 沿 Stage 1 AdamW；lr∈{1e-3,1e-4} 小掃描以 val 定，全記 CHOICE |
-| 9 | Stage 2 正例分布落差 | 直接 leave-one-out／加場景子集 curriculum | 先 leave-one-out（論文可辯護的最小讀法），落差列為已知限制 |
-| 10 | 48K vs 46,832 vs 我們 46,052 | — | 不擋工；報告用實際語料數 |
+| 1 | **U-14** 訓練時圖片視角 | **上游有明確答案**：OpenShape method.tex:77 "randomly sample one rendered image or thumbnail for each shape"＋ULIP-1 main.tex:236 每步隨機 1/60——兩個上游一致。不是 UNKNOWN，是「standing rule 預設=隨機單張」 | **B**（隨機單張訓練、gallery/eval 用 mean）。之所以仍列表：n05b 已把聚合 resolve 成 mean，改它是**協定變更**要你簽核，不是沒答案 |
+| 2 | **λ 初值** | 論文沒給數字，但 `2methdology.tex:87` 自己說殘差設計是為了 "**without disrupting the original embedding space**"——初始 λ 大就 disrupt，這句話本身傾向小/零初始（INFER）。MetaFind 引用的上游（DPR/ULIP-2/EGNN）都無 λ 機制 → 數字真的無源 | **0**（或 tanh(α), α=0）——論文自己的設計意圖句＋Flamingo 先例（content.tex:187-189：0-init 讓初始輸出=原模型；拆掉→−4.2%＋不穩）；等 GPT R1-R4 回覆後收斂上呈 |
+| 3 | **epochs（Stage 1）** | **重 grep 確認**：ULIP-2 全文 epoch/lr/batch/optimizer 四詞 **0 次命中**（量測）；MetaFind 唯一 "hyperparameter" 是 τ。唯一有的是 ULIP-1 的 250（ShapeNet 規模）。真的無源 | 早停（測試 R@1），跑完把實際值寫進帳 |
+| 4 | **U-16** 塔權重共享 | **新證據（本輪找到）**：MetaFind 自己寫 "**separate encoders** for the query and gallery"（2meth:34）＋它引用的 DPR 範式**逐字**寫 "we use **two independent BERT networks**"（DPR p.3，已存 `docs/paper/dpr_2004.04906.pdf`）。兩條都指向**不共享** → standing-rule 預設應是 fully_separate（可訓練部分=兩份 PointBERT＋兩份 Fusion；CLIP 凍結共用無妨） | **改列為需要你裁決的協定衝突**：現鎖的 shared_backbone_separate_fusion 與新證據相左。fully_separate 的 backbone 層級尚未實作（有工程成本）；PointBERT×2 約 +32M 參數（顯存可行）。我傾向照證據改 fully_separate，但這推翻既有決策，必須你點頭 |
+| 5 | **U-20/U-06** t_i 與 e_ij 編碼器 | 論文明文 "e.g., CLIP or BERT"（2meth:47）——作者自己給選單不給答案，確認無解 | 同骨幹 CLIP——不引入第二顆模型、同嵌入空間 |
+| 6 | **U-21** Table 2 gallery＋資產數 | **新量測**：12,000 間房實際只用 **1,528 個 unique assetId**（train 10K 房=1,036）；ProcTHOR 官方庫 1,633；MetaFind 說 "3,000+"——**三個數字互相都對不上**，任何在手論文/資料都湊不出 3,000 | 維持 procthor scope、照實報三方差異；等 GPT 有無新讀法 |
+| 7 | **U-09** Table 1 gallery | MetaFind 沒說；上游評估是分類不是檢索、無協定可繼承——確認無解 | **雙協定都跑都報**（已實作，維持） |
+| 8 | **Stage 2 超參數** | S4 確認；**EGNN 官方 repo 有參考點**（main_qm9.py：Adam lr 1e-3、cosine、wd 1e-16、1000 ep）——任務不同（回歸 vs 對比）不能直接繼承，但與規劃預設同向 | 沿 Stage 1 AdamW＋cosine；lr∈{1e-3,1e-4} 小掃描以 val 定，全記 CHOICE |
+| 9 | Stage 2 正例分布落差 | 無上游做 layout-aware 檢索，確認無解 | 先 leave-one-out（論文可辯護的最小讀法），落差列為已知限制 |
+| 10 | 48K vs 46,832 vs 我們 46,052 | 無解（論文不解釋 48K 從哪來） | 不擋工；報告用實際語料數 |
 
 ---
 
