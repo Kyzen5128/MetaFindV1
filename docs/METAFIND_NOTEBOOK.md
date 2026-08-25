@@ -2,7 +2,8 @@
 
 撰寫：Master（Claude）。v2 2026-08-25 全面擴充；**v3 2026-08-26 依外部審查修正**。
 **狀態：條件通過，尚未 final。** 外部審查提出 3 項 P0，我逐條核對一手來源後**全部確認成立**，已在本版修正（MF-14 錯標、20% test 早停污染、U-16 推論過度），另補 5 個新登記沉默點（§9.5）、修正 1 個事實錯誤（n05 標註模型不是 GPT-4o，是 gemma-4-12B-it，見 §2.3）。**v3.1 同日追補**：Kyzen 指出我沒照 standing rule 走完（MetaFind 找不到 → 查 ULIP-2 官方**程式碼** → 再問人），我上一輪只 grep 論文就宣告「無源」。回查 `upstream/ULIP` 後，epochs（250）、不早停、取 best checkpoint、驗證資料不得取自最終回報 split，**四條上游都有明確答案，已全部採用**；同時查出 lr 是上游自己打架（論文 1e-3 vs 官方腳本明傳 3e-3，§10 #11 新登記）。**v3.2 再追補**：Kyzen 質疑「真的找不到嗎」，回頭把上游全部翻完，結論是**我上一輪標的「上游答不了」也是錯的**。OpenShape 訓練迴圈（`src/train.py:190-201`）提供了不需要任何 held-out 資料的 checkpoint 選擇依據（in-batch contrastive accuracy）＋每 epoch 存 latest／定期快照，**§10 #3 因此撤回上呈**。同時查出兩個事實錯誤：**PointBERT 深度是 18 不是 12**（yaml 的 live 區塊＋checkpoint 實測 18 blocks），以及 lr 有四個候選、其中 5e-4 是唯一針對 PointBERT 這個量級（實測 32.5M）給的值。**只剩 §10 #11（lr）一題需要拍板**，因為那是上游彼此分歧、不是沉默。
-流程教訓已寫成常駐規則 `.claude/rules/upstream-lookup.md`（四步查完才准上呈，含四次失敗紀錄）。
+**v3.3**：Kyzen 再指出「EGNN 也一樣」，確實如此。ESSGNN 的層數與 pooling 我同樣只讀論文公式就標成「我們自己選」，回查 EGNN 官方 repo 後發現：**層數 4 是 N-body 的值、QM9 是 7**；**pooling 官方 readout 是 sum 不是 mean**；而 MetaFind 引 EGNN 的脈絡明寫 drug design＝QM9。兩處建議改，見 §3.4 對照表。
+流程教訓已寫成常駐規則 `.claude/rules/upstream-lookup.md`（四步查完才准上呈，含五次失敗紀錄）。
 目的：MetaFind（arXiv 2510.04057, NeurIPS 2025 格式, 作者 Pan/Lu/Liu）的**每一個技術細節**——
 架構、張量維度、公式、資料格式、訓練配方、評估協定、已知矛盾、每個開放決策與其預設方案——
 一次寫清楚，讓實作規劃不再返工。這份文件交 GPT 外部審查。
@@ -263,9 +264,9 @@ C8 = 論文把 SE(3) 說成「縮放敏感」的解法但 SE(3) 不含縮放（R
   "distance": "squared",             // U-17
   "coord_feat": "current",           // appendix 家族唯一合法值（φ_x 讀 m_ij，由 h^l 建）
   "layer_sharing": "independent",    // U-31：L 層各自參數（shared 也實作，另一個模型）
-  "pooling": "mean",                 // S2：論文沒命名 Pooling；mean/sum/max 都實作
-  "hidden_dim": 128,                 // U-22：論文只寫「After L layers」無值——我們的超參數
-  "n_layers": 4,                     // U-22
+  "pooling": "mean",                 // ⚠ 建議改 sum，見下方 EGNN 官方對照
+  "hidden_dim": 128,                 // 與 EGNN QM9 的 nf=128 一致
+  "n_layers": 4,                     // ⚠ 建議改 7，這個 4 是 N-body 的值不是 QM9 的
   "mlp_structure": "linear_silu_linear" }  // U-35：Linear→SiLU→Linear（描述程式碼，防漂移斷言）
 ```
 ＋ PRIMARY_INTERPRETATION（`essgnn.py:276-281`）：
@@ -276,6 +277,31 @@ C8 = 論文把 SE(3) 說成「縮放敏感」的解法但 SE(3) 不含縮放（R
 `out_dim=1280`（必等於 fusion 輸出，Eq. 6 相加才成立——建構子強制檢查）。
 **規劃預設（待批）**：t_i 與 e_ij 都用「與骨幹同一顆凍結 CLIP text encoder」→ 1280/1280，
 理由：不引入第二顆文字模型、與 query 側同空間；appendix 說 "e.g., CLIP or BERT" 允許。
+
+**⚠ 三處偏離 EGNN 官方預設，我原本標成「我們自己選的」是沒查 repo（2026-08-26 補查）**
+
+MetaFind `2meth:42` 引 EGNN 的脈絡明寫是 **drug design**，那正是 EGNN 官方的 **QM9** 任務，
+所以 QM9 的設定才是對應的上游基準（N-body 是另一個任務、另一組數字）。
+
+| 項目 | EGNN QM9 官方 | 我們 | 判定 |
+|---|---|---|---|
+| `nf` / hidden | **128**（`main_qm9.py:30`） | 128 | ✅ 一致 |
+| `n_layers` | **7**（`main_qm9.py:34`） | **4** | ❌ **4 是 N-body 的值**（`main_nbody.py:35`）；我把兩個任務的設定混搭了 |
+| readout ／ Pooling | **sum**（`qm9/models.py:83` `torch.sum(h, dim=1)`） | **mean** | ❌ MetaFind 只寫 `Pooling(...)` 沒命名＝真沉默，standing rule 應照 sum |
+| `attention` | **啟用**（`main_qm9.py:32` default 1，做法是 `Sigmoid` 閘乘在 edge 輸出上） | 未實作 | ⚪ **維持不加**：MetaFind 的 MF-2/3/10/13/14 明文沒有 attention 項，論文有寫就不是沉默 |
+| `act_fn` | SiLU | SiLU | ✅ |
+| `residual` | True | True（殘差在外） | ✅ |
+| `normalize` ／ `tanh` | 皆 False，原碼註解寫「論文沒用」 | 皆 False | ✅ |
+| `embedding_in/out` | 有 | `use_io_projections=True` | ✅ |
+
+**建議照 standing rule 改兩個值：`n_layers 4 → 7`、`pooling mean → sum`。**
+兩者都是「MetaFind 真沉默、EGNN 官方有明確值」的情形，不需要裁決，
+但會改動已落檔的 `essgnn_arch_protocol`，屬協定變更，先報備再改。
+
+**Stage 2 訓練超參數也不是空白**（`main_qm9.py`）：
+`Adam` · `lr 1e-3` · `weight_decay 1e-16` · `batch 96` · `epochs 1000`。
+任務不同（分子性質回歸 vs 對比檢索）不能整包照搬，但**它不是「沒有出處」**，
+§10 #8 原寫「S4 全無」是低估。
 
 工程細節（IMPL）：φ_x 最後一層 xavier gain 0.001＋零 bias——第 0 步大位移會讓等變性數值檢查失去意義；
 F8 觀察：1280 維 e_ij 旁邊只有 1 個幾何純量，幾何訊號可能被淹沒——這是論文設計的性質，
@@ -457,7 +483,9 @@ positive_map 由 n09b 寫死（identity mapping；無點雲者不得為正例—
 | seed | 20260816 | CHOICE | resolve_stage1.py |
 | λ 初值 | 未定（code 佔位 1.0） | **UNKNOWN→待決** | §10 #2 |
 | fusion transformer 尺寸 | 2 層/8 頭/ffn 2048 | CHOICE | 論文無維度 |
-| ESSGNN hidden/L | 128 / 4 | CHOICE（U-22） | 論文無值 |
+| ESSGNN hidden | 128 | **UPSTREAM** | EGNN QM9 `main_qm9.py:30` nf=128，我們一致 |
+| ESSGNN 層數 | 4 → **建議 7** | **UPSTREAM（原標 CHOICE 是漏查 repo）** | QM9 是 7（`main_qm9.py:34`）；我們用的 4 是 N-body 的值 |
+| ESSGNN pooling | mean → **建議 sum** | **UPSTREAM（原標 CHOICE 是漏查 repo）** | QM9 readout `qm9/models.py:83` 是 `torch.sum(h, dim=1)` |
 | Stage 2 lr/batch/epochs | 未定 | UNKNOWN（S4） | 規劃：沿 Stage 1＋小掃描 |
 
 ---
@@ -659,7 +687,7 @@ Baselines 段寫 OpenShape "adopts a **dual-tower** contrastive retrieval design
 | 5 | **U-20/U-06** t_i 與 e_ij 編碼器 | 論文明文 "e.g., CLIP or BERT"（2meth:47）——作者自己給選單不給答案，確認無解 | 同骨幹 CLIP——不引入第二顆模型、同嵌入空間 |
 | 6 | **U-21** Table 2 gallery＋資產數 | **新量測**：12,000 間房實際只用 **1,528 個 unique assetId**（train 10K 房=1,036）；ProcTHOR 官方庫 1,633；MetaFind 說 "3,000+"——**三個數字互相都對不上**，任何在手論文/資料都湊不出 3,000 | 維持 procthor scope、照實報三方差異；等 GPT 有無新讀法 |
 | 7 | **U-09** Table 1 gallery | MetaFind 沒說；上游評估是分類不是檢索、無協定可繼承——確認無解 | **雙協定都跑都報**（已實作，維持） |
-| 8 | **Stage 2 超參數** | S4 確認；**EGNN 官方 repo 有參考點**（main_qm9.py：Adam lr 1e-3、cosine、wd 1e-16、1000 ep）——任務不同（回歸 vs 對比）不能直接繼承，但與規劃預設同向 | 沿 Stage 1 AdamW＋cosine；lr∈{1e-3,1e-4} 小掃描以 val 定，全記 CHOICE |
+| 8 | **Stage 2 超參數** | **原寫「S4 全無」是低估（2026-08-26 補查）**。EGNN 官方 QM9 有完整一組：`Adam` · `lr 1e-3` · `wd 1e-16` · `batch 96` · `epochs 1000`（`main_qm9.py:13,15,28,46`）。任務不同（分子回歸 vs 對比檢索）不能整包照搬，但不是沒有出處。另外 ESSGNN 的**架構**超參數更是有明確上游值，見 §3.4 對照表 | 架構值照 EGNN QM9（層數 7、pooling sum）；訓練值沿 Stage 1 的 AdamW＋cosine，lr 以 EGNN 的 1e-3 為起點小掃描，全部記 CHOICE |
 | 9 | Stage 2 正例分布落差 | 無上游做 layout-aware 檢索，確認無解 | 先 leave-one-out（論文可辯護的最小讀法），落差列為已知限制 |
 | 10 | 48K vs 46,832 vs 我們 46,052 | 無解（論文不解釋 48K 從哪來） | 不擋工；報告用實際語料數 |
 | 11 | **Stage 1 學習率** | **四個候選，各有一手出處（2026-08-26 查全）**：`1e-3` = ULIP-1 論文 main.tex:367-370，也是 OpenShape config default；`3e-3` = ULIP 官方腳本 `pretrain_pointbert.sh` 明傳、`main.py:52` default，但那條腳本跑的是 **ULIP-1 PointBERT 8192 點**，不是我們的 10k colored；`5e-4` = **OpenShape supp:190 明說「32.3M 版 PointBERT 用 5e-4，其他模型 1e-3」**，且 ULIP-2 yaml 的 optimizer 區塊也是 5e-4（該區塊 tri-modal 訓練不讀，但數字同源）。**實測：我們載入的 PointBERT 是 32.5M**，正落在 OpenShape 特地為它調小 lr 的那個量級 | **建議 5e-4**：它是唯一「針對 PointBERT 這個 backbone、在這個參數量級」明確給出的值；其餘三個不是別的 backbone 就是別的點數規模。這是上游彼此分歧、不是沉默，standing rule 選不出來，要你拍板 |
