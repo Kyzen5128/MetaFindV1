@@ -206,12 +206,14 @@ fully_separate                    兩份骨幹、兩份 Fusion（backbone 層級
 
 ### 3.2 論文的兩個 ESSGNN（C1，最大的矛盾）
 
-**§2.5 版（sec25_two_mlp）**——兩個獨立 MLP，各吃原始 tuple：
+**§2.5 版（sec25_two_mlp）**——兩個獨立 MLP，各吃原始 tuple（MF-2 / MF-3，逐字）：
 ```
-h_i^{l+1} = h_i^l + Σ_{j∈N(i)} f_h(d_ij, h_i^l, h_j^l, e_ij)          f_h: R^(2d+1+e)→R^d
-x_i^{l+1} = x_i^l + Σ_{j∈N(i)} (x_i^l−x_j^l)·f_x(d_ij, h_i^{l+1}, h_j^{l+1}, e_ij)   f_x: R^(2d+1+e)→R³
-d_ij = ‖x_i−x_j‖₂（一次方）
+h_i^{l+1} = h_i^l + Σ_{j∈N(i)} f_h(d_ij^l, h_i^l, h_j^l, e_ij; θ_h)          f_h: R^(2d+1+e)→R^d
+x_i^{l+1} = x_i^l + Σ_{j∈N(i)} (x_i^l−x_j^l)·f_x(d_ij^l, h_i^{l+1}, h_j^{l+1}, e_ij; θ_x)   f_x: R^(2d+1+e)→R³
+d_ij^l = ‖x_i^l−x_j^l‖₂（一次方；上標 l＝每層用當層座標重算）
 ```
+（「literal 2.5」完整組合 = sec25_two_mlp ＋ euclidean ＋ h⁰=Concat(x,t) ＋ coord_feat=updated——
+這一整包就是 RA-1 審計要跑的競爭假設；主線只在各子項有獨立裁決處偏離，見 §3.3。）
 **Appendix 版（appendix_shared_msg）**——一個共享 message，φ_x/φ_h 只看 message：
 ```
 m_ij      = φ_e(h_i^l, h_j^l, ‖x_i−x_j‖², e_ij)
@@ -267,6 +269,44 @@ F8 觀察：1280 維 e_ij 旁邊只有 1 個幾何純量，幾何訊號可能被
 - SC-4/5/6 三條分開斷言：座標通道等變、h 不變、e_layout 不變（三件事不是一件）。
 - `test_se3_equivariance` 兩個家族都跑；RA-1（concat_xt 預期失敗）、RA-4（scale 預期失敗）是「預期失敗」審計。
 - 隨機 Q∈SO(3)、T∈R³，容差內 assert `ESSGNN(Qx+T, h, E).e_layout == ESSGNN(x, h, E).e_layout`。
+- **群的記法差（非矛盾）**：方法章 Eq. 4 寫 R∈SO(3)（旋轉，主張 SE(3)）；appendix Eq. 9/15 寫
+  Q∈R^{3×3} orthogonal（含鏡射＝O(3)）。證明對整個 O(3)+平移（E(3)）成立，**強於**內文主張的
+  SE(3)，所以主張被涵蓋、不衝突。測試以 SO(3) 為準即可，鏡射 case 可加測不必加。
+
+### 3.6 公式逐條對照表（論文 20 條 display 公式 ↔ 本筆記 ↔ 程式碼）
+
+編號取自 `docs/audit/A_FORMULA_INVENTORY.md`（sha256 驗證過的 tex 原文）。
+判定分四類：**✅ 逐字等價**｜**🔁 數學等價（形式改寫，附推導）**｜**⚖️ 有裁決的偏離（論文自我矛盾，
+選擇已登記）**｜**✍️ 論文未定義、由已登記 CHOICE 補**。
+
+| MF | 論文原式（出處） | 本筆記/程式碼 | 判定 |
+|---|---|---|---|
+| MF-1 | `A*=argmax_{A∈𝒜} sim(f_query(Q), f_gallery(A))`（2meth:7） | §1 同式；`sim`=cosine 為 U-24 CHOICE（S1 沉默） | ✅＋✍️(sim) |
+| MF-U1 | `h_i^(0)=Concat(x_i,t_i)`（2meth:43） | 主線 h⁰=t_i（C2 裁決：印刷式違反 appendix 自己的不變性前提，且會讓 e_layout 繼承座標敏感——論文自己的定理與動機都站 t_i 這邊）；Concat 版留 RA-1 預期失敗審計 | ⚖️ C2 |
+| MF-2 | Eq.2 h 更新（2meth:50） | §3.2 逐字（含 d^l、θ_h）；ESSGCL `f_h(cat[h_i,h_j,radial,e_ij])`＋殘差在外 | ✅（註1） |
+| MF-3 | Eq.3 x 更新，f_x→R³（2meth:50,54） | §3.2 逐字；實作 f_x 輸出**純量**（C3/DL-004：R³ 讀法讓論文自己的 Eq.13 證明失效——`Σ(Qx_i−Qx_j)φ_x = QΣ(x_i−x_j)φ_x` 只對純量成立） | ⚖️ C3 |
+| MF-U4 | `e_layout=Pooling({h_i^(L)})`（2meth:55） | 同式；Pooling 未命名（S2）→ mean CHOICE | ✅＋✍️ |
+| MF-4 | Eq.4 等變條件 R∈SO(3)（2meth:62） | §3.5；測試照此斷言 | ✅ |
+| MF-5 | Eq.5 L_pre 單向 InfoNCE（2meth:76） | `CE((q̂ĝᵀ)/τ, arange(B))`。**推導**：CE 第 i 列 = −log[exp(q̂_i·ĝ_i/τ)/Σ_j exp(q̂_i·ĝ_j/τ)]；sim=cosine=正規化點積、分母 Σ_{A'∈B} 含正例（CE 天然包含）、batch 取平均＝逐 query 式的期望。`losses.py:170-175` | 🔁 |
+| MF-6 | Eq.6 `e_query=Fusion(e_text,e_img,e_pc)+λ·e_layout`（2meth:84） | `dual_tower.py:248` `fused + lam*layout` 逐字；layout 缺席時整項省略（U-28 CHOICE；內文 :83 本來就說 e_layout「optional」） | ✅ |
+| MF-7 | Eq.7a/7b 雙向（2meth:93） | 7a=CE(logits)；7b=CE(logitsᵀ)。**推導**：logitsᵀ[i,j]=q̂_j·ĝ_i/τ=sim(e_gallery_i, e'_query_j)/τ（cosine 對稱），分母恰為 Σ_{e'_query∈B}。前提＝gallery batch 與 query batch 同組配對（`losses.py:188` 註明；解耦 gallery 需另算 logits） | 🔁 |
+| MF-8 | Eq.8 `L=½(q2g+g2q)`（2meth:100） | `losses.py:193` `0.5*(...)` | ✅ |
+| MF-9/15 | 等變條件 Q orthogonal（app:25,72） | §3.5 群記法差說明 | ✅ |
+| MF-10 | `m_ij=φ_e(h_i,h_j,‖x_i−x_j‖²,e_ij)`（app:31） | ESSGCLShared `phi_e(cat[h_i,h_j,sq,e_ij])`，distance=squared | ✅（註1） |
+| MF-11/12, U15-17 | 證明中間步（app:37-55） | 非實作對象；§3 證明摘要與其一致 | ✅ |
+| MF-13 | `x_i^{l+1}=x_i^l+Σ_{j≠i}(x_i−x_j)·φ_x(m_ij)`（app:49） | 同式但 Σ over **N(i)**（C5：EGNN model.tex 明文兩者皆合法選項；完全圖需 ~1.07M 條 LLM 邊 vs 實際 ~1.3e5）；φ_x 純量（同 C3） | ⚖️ C5 |
+| MF-14 | `h_i^{l+1}=h_i^l+Σ_{j≠i}φ_h(m_ij)`（app:64） | `h + segment_sum(phi_h(m_ij))`——殘差在 φ_h **外**，與式一致（EGNN 的 φ_h 內建殘差，MetaFind 沒有；U-35 註記） | ✅ |
+
+註1：MLP 輸入的**引數順序**（論文寫 f_h(d, h_i, h_j, e)；程式碼 cat 順序是 [h_i, h_j, d, e]）
+對學習到的線性層無語意差——第一層權重矩陣的欄排列而已。列出以免日後被當成發現。
+
+文字性「公式」另兩條也對上：f_h/f_x 型別簽名 R^(2d+1+e)（2meth:54）＝code `2*h+1+edge_dim`；
+d_ij 定義（2meth:54 一次方 vs app Eq.10-12 平方）＝C6/U-17 已裁決 squared、旗標保留。
+
+**結論**：20 條全部有對應。不能逐字對上的**每一條都不是理解錯誤**，而是：
+(a) 論文自我矛盾處的已登記裁決（C2/C3/C5，各附「為什麼論文自己的定理站我們這邊」）；
+(b) 數學等價改寫（MF-5/7 的 CE 形式，推導已附）；
+(c) 論文未定義符號（sim/Pooling/Fusion）由已登記 CHOICE 補位。
 
 ---
 
