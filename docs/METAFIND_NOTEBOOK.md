@@ -1,7 +1,7 @@
 # MetaFind 復現筆記（Master 說明書・完整版）
 
 撰寫：Master（Claude）。v2 2026-08-25 全面擴充；**v3 2026-08-26 依外部審查修正**。
-**狀態：條件通過，尚未 final。** 外部審查提出 3 項 P0，我逐條核對一手來源後**全部確認成立**，已在本版修正（MF-14 錯標、20% test 早停污染、U-16 推論過度），另補 5 個新登記沉默點（§9.5）、修正 1 個事實錯誤（n05 標註模型不是 GPT-4o，是 gemma-4-12B-it，見 §2.3）。剩 §10 第 3 項（早停協定 A／B）需 Kyzen 拍板後才可標 final。
+**狀態：條件通過，尚未 final。** 外部審查提出 3 項 P0，我逐條核對一手來源後**全部確認成立**，已在本版修正（MF-14 錯標、20% test 早停污染、U-16 推論過度），另補 5 個新登記沉默點（§9.5）、修正 1 個事實錯誤（n05 標註模型不是 GPT-4o，是 gemma-4-12B-it，見 §2.3）。**v3.1 同日追補**：Kyzen 指出我沒照 standing rule 走完（MetaFind 找不到 → 查 ULIP-2 官方**程式碼** → 再問人），我上一輪只 grep 論文就宣告「無源」。回查 `upstream/ULIP` 後，epochs（250）、不早停、取 best checkpoint、驗證資料不得取自最終回報 split，**四條上游都有明確答案，已全部採用**；同時查出 lr 是上游自己打架（論文 1e-3 vs 官方腳本明傳 3e-3，§10 #11 新登記）。剩 §10 #3（用什麼當驗證依據）與 #11（lr）需 Kyzen 拍板後才可標 final。
 目的：MetaFind（arXiv 2510.04057, NeurIPS 2025 格式, 作者 Pan/Lu/Liu）的**每一個技術細節**——
 架構、張量維度、公式、資料格式、訓練配方、評估協定、已知矛盾、每個開放決策與其預設方案——
 一次寫清楚，讓實作規劃不再返工。這份文件交 GPT 外部審查。
@@ -349,19 +349,40 @@ split 固定於 n09、seed 記錄（IMPL `splits.py`）。
 4. 損失 **Eq. 5 單向 q→g**（PAPER :76-79）：
    `L = CE( (q̂ ĝᵀ)/τ , arange(B) )`，q̂ ĝ 皆 L2-normalized，τ=0.5。
    （C7：與上游雙向不同，論文明文，照做。）
-5. AdamW(lr 1e-3, wd 0.1, betas(0.9,0.98), eps 1e-8)、cosine、warmup 1 epoch（lr_start 1e-6）。
-   出處：lr/batch/AdamW = UPSTREAM ulip1:367-370；wd/betas/warmup = UPSTREAM `upstream/ULIP/main.py`。
-   已知衝突：ULIP repo default lr=3e-3 vs 論文 1e-3 → 取論文值（衝突已登記）。
-6. epochs：**50 為佔位（UNKNOWN，無任何論文出處）**——ULIP-1 寫 250（ShapeNet 規模）。
+5. AdamW(wd 0.1, betas(0.9,0.98), eps 1e-8)、cosine、warmup 1 epoch（lr_start 1e-6）、batch 64。
+   出處：batch/AdamW = UPSTREAM ulip1:367-370；wd/betas/warmup/cosine = UPSTREAM `upstream/ULIP/main.py:47-59,203`。
+   **⚠ lr 是上游自己打架（2026-08-26 查 repo 後升級的認識）**：
+   ULIP-1 **論文** `main.tex:367-370` 寫 **1e-3**；
+   但 ULIP **官方預訓練腳本** `scripts/pretrain_pointbert.sh` **明確傳 `--lr 3e-3`**，
+   `main.py:52` 的 default 也是 3e-3。
+   所以這不是「default 沒改到」的遺留值，而是**作者實際跑的就是 3e-3，跟自己論文寫的不一致**。
+   兩邊都是一手來源，standing rule 在這裡失效（上游內部衝突）→ **需要 Kyzen 裁決，見 §10 #11**。
+6. epochs：**250，UPSTREAM FACT（2026-08-26 更正，原標 UNKNOWN 是錯的）**。
+   我上一輪只 grep 了 ULIP-2 **論文**就宣告無源，**漏查 repo**，違反 standing rule 的「論文＋程式碼」。
+   三方一致：ULIP-1 論文 `main.tex:367-370` 寫 250；`main.py:47` default 250；
+   官方腳本 `pretrain_pointbert.sh` 沒有覆蓋它。ULIP-2 共用同一支 `main.py`（模型名 `ULIP2_PointBERT_Colored`），
+   官方沒有釋出 ULIP-2 專屬的預訓練腳本，所以 ULIP-2 的預訓練輪數就繼承 250。
+   **依 standing rule 採用 250**，`resolve_stage1.py` 目前的 50 是佔位、要改。
 
-**⚠ 已撤回的方案（2026-08-26，外部審查 P0）**：本節原寫「以 20% 測試集 R@1 早停」。
-**這會污染 Table 1**。MetaFind `3experiments.tex:8` 只切 80/20，那 20% 是 **test**；
-拿它做早停或選 best checkpoint，它就變成 model-selection set，最終回報的 test R@1 帶 selection bias。
-`metafind/data/splits.py:65` 目前只有 `TRAIN_FRACTION = 0.8`，**沒有 validation split**，所以問題是真的。
-n09 尚未執行，還來得及改。**兩個乾淨方案，待 Kyzen 二選一（§10 #3）**：
-  - **A 固定 recipe**：80% 全訓、epoch 數事先訂死、20% 只在最後測一次。最貼論文字面，代價是 epoch 數用猜的。
-  - **B 三段切分**：從 80% 訓練集再切出 validation（例如 72／8／20），拿 validation 早停，20% 保持未觸碰。
-    登記為 IMPLEMENTATION CHOICE／DEVIATION（論文沒有 validation split）。
+7. **早停與 checkpoint 選擇：上游有明確做法，照抄即可（2026-08-26 查 repo 後改寫）**。
+
+   **⚠ 先撤回**：本節原寫「以 20% 測試集 R@1 早停」。那會污染 Table 1——
+   MetaFind `3exp:8` 那 20% 是 **test**，拿它選 checkpoint 就變成 model-selection set。
+   `splits.py:65` 只有 `TRAIN_FRACTION=0.8`、沒有 validation。撤回。
+
+   **上游怎麼做（UPSTREAM FACT，`upstream/ULIP/main.py:212-240`）**：
+   - **不早停**。`for epoch in range(start_epoch, args.epochs)` 一路跑滿 250。
+   - 每個 epoch 跑一次驗證，`is_best = acc1 > best_acc1`，存 best checkpoint（`main.py:225-231`）。
+   - **驗證資料是訓練集以外的獨立 benchmark**：`--validate_dataset_name` default `modelnet40`（`main.py:40`），
+     而預訓練跑在 ShapeNet／Objaverse 上。**上游從不從訓練集切 validation，也從不用最終回報的 split 選 checkpoint。**
+
+   **所以上游的紀律有三條，我們全部採用**：跑滿固定輪數不早停 · 取 best 而非 last ·
+   **選擇依據必須來自不是最終回報的那個 split**。第三條正好證實上一輪的擔心是對的，
+   而且這不是我們的潔癖，是上游自己在守的規矩。
+
+   **唯一缺口**：上游有一個現成的獨立 benchmark（ModelNet40）可當驗證，
+   MetaFind 訓練與評估**都在 Objaverse-LVIS 上**，缺這個前提。
+   這一小塊上游答不了 → 上呈 Kyzen（§10 #3），選項見該處。
 
 **InfoNCE 負例紀律**：負例數 = 實際 batch 內 gallery 數。**梯度累積不增加負例**——
 但 CLIP 兩支已凍結快取、只有 PointBERT 活著，batch 64 單卡預估可原生放下；
@@ -426,9 +447,12 @@ positive_map 由 n09b 寫死（identity mapping；無點雲者不得為正例—
 | 模態遮罩 | 30%，模態間獨立 | **PAPER（模態獨立）＋CHOICE（樣本獨立）** | 2meth:75 明寫 "each modality ... independently masked"，模態間獨立是 PAPER；「不同樣本的遮罩也獨立」論文沒寫，是實作選擇（2026-08-26 拆級） |
 | scene dropout | 30% per-**batch** | **PAPER，含粒度（2026-08-26 升級）** | 2meth:89 原句就是 "omitted in 30% of **batches**"，30% 與 batch 粒度都有直接文字支持；仍屬 CHOICE 的只有 RNG 實作細節 |
 | split | 80/20 兩資料集 | PAPER | 3experiments.tex:8 |
-| lr / batch / optimizer | 1e-3 / 64 / AdamW | UPSTREAM | ulip1 main.tex:367-370（standing rule 採用） |
+| batch / optimizer | 64 / AdamW | UPSTREAM | ulip1 main.tex:367-370；`main.py:50` default 亦 64 |
+| **lr** | **1e-3 或 3e-3，未決** | **上游自己打架** | 論文 ulip1:367-370 寫 1e-3；官方腳本 `scripts/pretrain_pointbert.sh` 明傳 `--lr 3e-3`，`main.py:52` default 也是 3e-3。兩邊都是一手來源，standing rule 失效 → §10 #11 |
 | wd / betas / eps / warmup | 0.1 / (0.9,0.98) / 1e-8 / 1 ep cosine | UPSTREAM | upstream/ULIP/main.py |
-| epochs | 50 佔位 | **UNKNOWN** | 無任何出處；待簽核 |
+| epochs | **250** | **UPSTREAM（2026-08-26 更正）** | ULIP-1 論文、`main.py:47` default、官方腳本三方一致；ULIP-2 共用同一支 main.py。原標 UNKNOWN 是我只查論文、漏查 repo |
+| 早停 | **不早停，跑滿** | **UPSTREAM** | `main.py:212` 迴圈跑滿 args.epochs，無 early-stop 分支 |
+| checkpoint 選擇 | **每 epoch 驗證取 best** | **UPSTREAM** | `main.py:225-231` `is_best = acc1 > best_acc1`；驗證用**訓練集以外**的獨立 benchmark（`main.py:40` default modelnet40） |
 | seed | 20260816 | CHOICE | resolve_stage1.py |
 | λ 初值 | 未定（code 佔位 1.0） | **UNKNOWN→待決** | §10 #2 |
 | fusion transformer 尺寸 | 2 層/8 頭/ffn 2048 | CHOICE | 論文無維度 |
@@ -629,7 +653,7 @@ Baselines 段寫 OpenShape "adopts a **dual-tower** contrastive retrieval design
 |---|---|---|---|
 | 1 | **U-14** 訓練時圖片視角 | **證據升級（2026-08-26）**：最近的一手來源其實是 **ULIP-2 自己**，`ulip2 main.tex:612` 原文 "randomly sample its 2D rendered image **I ~ render(O)**"。再加 OpenShape method.tex:77 "randomly sample one rendered image or thumbnail"、ULIP-1 main.tex:236 每步隨機 1/60。**三個上游一致，其中一個就是我們的直接骨幹**，所以訓練側屬強 UPSTREAM FACT，不是 UNKNOWN。但**「gallery／評測用 12 視角平均」上游沒有背書**，那一半仍是我們的 CHOICE | **B**：訓練隨機單張、gallery 與評測用平均。快取已存 per-view 嵌入，換法零成本。仍列表是因為 n05b 協定已寫成 mean，改它算協定變更、要你簽 |
 | 2 | **λ 初值** | **雙方已收斂（2026-08-26）**：外部審查撤回原本的 0.1 主張，與我方一致。依據：MetaFind `2meth:87` 自述殘差設計是為了 "without disrupting the original embedding space"；Flamingo `content.tex:187-189` 是最同構的先例（凍結骨幹＋新分支＋殘差＋純量閘＋**初值 0**，目的明寫為初始化時行為等同原模型），拆掉該機制掉 4.2% 且訓練不穩 | **raw λ = 0.0，不加 tanh、不加 clamp、不加 LayerNorm**。MetaFind 寫的是 learnable scalar λ，**不要把 Flamingo 的 tanh(α) 一起搬過來**——tanh 會把有效閘限制在 (-1,1)，那是更大的模型改動。最小偏離就是 `nn.Parameter(0.0)` |
-| 3 | **epochs＋早停協定（Stage 1）** | **重 grep 確認**：ULIP-2 全文 epoch／lr／batch／optimizer 四詞 **0 次命中**（量測）；ULIP-1 有 250 但那是 ShapeNet 規模。輪數確實無源。**⚠ 且我上一輪的解法本身有問題（外部審查 P0，已確認）**：原寫「用 20% 測試集 R@1 早停」，而 `3exp:8` 那 20% 是 **test**；拿它選 checkpoint 就變成 model-selection set，Table 1 會帶 selection bias。`splits.py:65` 目前只有 `TRAIN_FRACTION=0.8`、**沒有 validation**，所以問題是真的。n09 未跑，還來得及 | **要你二選一**：**A** 固定 recipe（80% 全訓、輪數事先訂死、20% 最後只測一次，最貼論文字面）；**B** 從 80% 再切出 validation（例如 72／8／20）做早停，20% 保持未觸碰，登記為 CHOICE／DEVIATION。我傾向 **B**（輪數無源，訂死等於用猜的），但這是研究協定，必須你拍板 |
+| 3 | **Stage 1 選 checkpoint 的依據** | **上游大部分都答了（2026-08-26 查 repo）**：epochs **250**、**不早停跑滿**、**取 best 而非 last**、**選擇依據必須來自訓練集以外、且不是最終回報的 split**（上游訓練在 ShapeNet／Objaverse，驗證用 ModelNet40）。這四條全部照抄。**上游唯一答不了的**：它有現成獨立 benchmark 可用，MetaFind 訓練與評估都在 Objaverse-LVIS 上，缺這個前提 | **三選一**：**A** 不做選擇，跑滿 250 取 last（零污染，但偏離上游 best-checkpoint 紀律）；**B** 仿上游，拿手上現成、與 Objaverse-LVIS **完全不重疊**的 ProcTHOR 1,439 件資產當驗證選 best（最貼上游，且 80/20 不動、那 20% 全程未觸碰）；**C** 從 80% 再切 validation（如 72／8／20），登記為 DEVIATION。**建議 B**：同時滿足上游三條紀律、不消耗訓練資料、不碰測試集，資產也已編碼好放著 |
 | 4 | **U-16** 塔權重共享 | **[已撤回並修正 2026-08-26]** 我上一輪寫「standing rule 預設應是 fully_separate」，**這個推論不成立，撤回**。理由：standing rule 只適用於**論文沉默**；這裡論文並不沉默，而是**自我矛盾**——正文 `2meth:34` 寫 "separate encoders"，但 **Figure 1 圖上明確標 `ULIP-2 (Shared)`，而且整張圖只畫一個 ULIP-2 方塊**（已親眼核對 `MetaFind.drawio.png`）。另外 DPR 在 MetaFind 裡是**雙塔檢索範式的概念出處**，不是 backbone 實作 authority（不像 ULIP-2／EGNN 是實作母體），所以 DPR 用兩份 BERT 推不出 MetaFind 的 ULIP-2 必須兩份參數。"separate encoders" 在架構敘述裡也可以只表示兩個邏輯塔／介面，不必然等於參數不相交。 | **維持現行 `shared_backbone_separate_fusion` 不變**，狀態 **PAPER-AMBIGUOUS ＋ USER CHOICE**。現行選擇反而是唯一能同時滿足兩處文字的讀法：一份骨幹（對上圖的 Shared）、兩個獨立 Fusion 介面（對上正文的 separate）。fully_separate 的證據**變強但沒到推翻**，保留為競爭假設。若你之後想改，那是新決策，不是修正錯誤 |
 | 5 | **U-20/U-06** t_i 與 e_ij 編碼器 | 論文明文 "e.g., CLIP or BERT"（2meth:47）——作者自己給選單不給答案，確認無解 | 同骨幹 CLIP——不引入第二顆模型、同嵌入空間 |
 | 6 | **U-21** Table 2 gallery＋資產數 | **新量測**：12,000 間房實際只用 **1,528 個 unique assetId**（train 10K 房=1,036）；ProcTHOR 官方庫 1,633；MetaFind 說 "3,000+"——**三個數字互相都對不上**，任何在手論文/資料都湊不出 3,000 | 維持 procthor scope、照實報三方差異；等 GPT 有無新讀法 |
@@ -637,6 +661,7 @@ Baselines 段寫 OpenShape "adopts a **dual-tower** contrastive retrieval design
 | 8 | **Stage 2 超參數** | S4 確認；**EGNN 官方 repo 有參考點**（main_qm9.py：Adam lr 1e-3、cosine、wd 1e-16、1000 ep）——任務不同（回歸 vs 對比）不能直接繼承，但與規劃預設同向 | 沿 Stage 1 AdamW＋cosine；lr∈{1e-3,1e-4} 小掃描以 val 定，全記 CHOICE |
 | 9 | Stage 2 正例分布落差 | 無上游做 layout-aware 檢索，確認無解 | 先 leave-one-out（論文可辯護的最小讀法），落差列為已知限制 |
 | 10 | 48K vs 46,832 vs 我們 46,052 | 無解（論文不解釋 48K 從哪來） | 不擋工；報告用實際語料數 |
+| 11 | **Stage 1 學習率 1e-3 還是 3e-3** | **上游內部衝突（2026-08-26 新登記）**：ULIP-1 論文白紙黑字 1e-3；ULIP 官方預訓練腳本 `pretrain_pointbert.sh` **明確傳 `--lr 3e-3`**，`main.py:52` default 也是 3e-3。不是預設值遺留，是作者實跑值與自己論文不符。上游自己打架時 standing rule 失效 | **建議 3e-3**：腳本是「作者實際執行過」的證據，強度高於論文散文；且官方釋出的 checkpoint 就是那條腳本產出的，我們要接續它的權重。但兩邊都是一手來源，要你拍板 |
 
 ---
 
