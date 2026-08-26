@@ -3,6 +3,19 @@
 > 這份是給人看的進度表。真正的規格在 `docs/graph/`，公式稽核在 `docs/audit/`。
 > 進度數字用 `bash tools/status.sh` 隨時重查，不要相信這裡的快照。
 
+> ## ⚠ 這份已過期
+>
+> **最後更新 2026-08-17，距今已久，數字與狀態都不可信。**
+>
+> 現況請用：
+> - 進度數字 → `bash tools/status.sh`
+> - 決策狀態 → `workflow/DECISION_LEDGER.md`
+> - 復現規格 → `docs/METAFIND_NOTEBOOK.md`
+> - 治理規則 → `docs/_rules_preamble.md`
+>
+> 本檔保留是因為 `workflow/MASTER.md` 仍引用它，**不是**因為內容仍然有效。
+> 不要拿這裡的任何數字做決定。
+
 **更新於 2026-08-17 · SHA `430afdd`**
 **互動版（同步內容）：** https://claude.ai/code/artifact/4065e9eb-0c16-4c18-9514-63cfbe05c962
 

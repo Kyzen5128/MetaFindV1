@@ -613,8 +613,29 @@ n09c（房屋）**未動** —— Stage 2 在 G6 後面，開了再比照辦理�
 | GAT | 1710.10903 | 被否定的 baseline | Table 3 GAT 行需要它 |
 | SCA3D/Uni3D(L)/OmniBind/PointCLIP | — | Table 1 baselines | 各自 released checkpoint 評估 |
 
-**Standing rule（Kyzen 2026-08-25）**：MetaFind 沉默 → 預設照上游官方（論文＋程式碼），記 UPSTREAM；
-上游也沉默才上呈。反例教訓 = Blender 事件（沒查 OpenShape 渲染器，全語料重渲一次）。
+**⚠ 舊 standing rule 已於 2026-08-26 被 Kyzen 整份改寫取代。** 舊文如下，保留供對照，**不再有效**：
+
+> ~~MetaFind 沉默 → 預設照上游官方（論文＋程式碼），記 UPSTREAM；上游也沉默才上呈。~~
+
+**現行規則（`docs/_rules_preamble.md`，commit 9218616）—— 上游是必查的證據來源，不是自動的決策來源：**
+
+| 型 | 內容 | 繼承權限 |
+|---|---|---|
+| **A** | 架構／數學／模組機制 | 可作首選重建候選，標 UPSTREAM FACT，**絕不標 PAPER FACT** |
+| **B** | 數值超參／訓練配方／checkpoint 政策／early stopping | **只能 UPSTREAM CANDIDATE，需 Kyzen 逐項核可才入協定** |
+| **C** | 上游「別的任務」的實驗設定（EGNN 在 QM9 用 7 層） | 權威性最弱 |
+| **D** | argparse／函式庫預設 | **永遠不能單獨解決 MetaFind 沉默** |
+
+Rule 0：`Evidence discovery is NOT decision authority.`
+Rule 16：進入官方協定只有三條路 —— MetaFind PAPER FACT ／ Kyzen 明確核可 ／
+既有 ledger 條目載明該**具體參數**。UPSTREAM FACT 本身不夠。
+
+**Kyzen 2026-08-27 補充**：「找得到原架構怎麼設定的，就照原架構」。
+適用於**機制**（weight decay 分組、warmup 形狀、`D_m = D_h`），
+不適用於**數值**（lr、輪數 —— 上游彼此打架且隨任務而異，仍需核可）。
+
+**「必須去查上游」這一半沒有變，而且是強制的。** 反例教訓 = Blender 事件
+（沒查 OpenShape 渲染器就用 pyrender，全語料重渲一次）。
 
 ---
 
@@ -718,7 +739,12 @@ Baselines 段寫 OpenShape "adopts a **dual-tower** contrastive retrieval design
 | DL-004 f_x 純量 | ✅ PAPER-AMBIGUOUS 裁決 |
 | tower_sharing | ✅ shared_backbone_separate_fusion |
 | U-08 全系列（Stage 2 樣本構造） | ✅ 見 §4.2 |
-| U-11/U-13/U-15/U-17/U-19/U-28/U-29/U-30/U-31/U-32/U-33 | ✅ 見各節 |
+| U-11/U-13/U-15/U-17/U-19/U-28/U-29/U-30/U-32 | ✅ 見各節 |
+| **U-31 / U-33** | **⚠ 2026-08-27 更正：不再列為已拍板。** `docs/ESSGNN_DIM_REVIEW.md` v3 §7 把 `layer_sharing` 與 `use_io_projections` 列為 OPEN，與本表衝突。依 Rule 16，「曾被某個 block 標 resolved」不構成 promotion path —— 需要指得出**具體參數**的核可。**在指出之前一律視為待決** |
+| **U-20（ESSGNN 節點文字編碼器）** | **⚠ 標「已解決」但有兩個缺陷。** `DECISION_LEDGER.md:557` 記錄現況為 `laion/CLIP-ViT-B-32-laion2B-s34B-b79K`、512 維（實測 `procthor_node_embeddings.json` 的 `text_encoder_version` 相符）。**缺陷一**：它是十個 RESOLVED 條目中**唯一 `decided_by` 沒有 USER 的**（`DECISION_LEDGER.md:564`）。**缺陷二**：ESSGNN Engineer 2026-08-22 證明它的理由被程式碼推翻（`:585`）—— 原理由稱「共用編碼器才能共用語意空間」，但 `essgnn.py:456` 的 `use_io_projections` 已把 `t_i` 投影成學出來的 128 維，`:471` 的 `e_ij` 則原始 512 維進入，**兩者本來就不在同一空間**。**待 Kyzen 裁決** |
+
+**（2026-08-27）注意**：Stage 1 骨幹是 ViT-bigG-14 / 1280 維（`ulip_backbone.py:90`），
+ESSGNN 節點向量是 ViT-B/32 / 512 維。**兩者本來就不同，不是誰算錯**，但 U-20 未經裁決。
 
 ### 待拍板（附我的建議；**2026-08-25 逐條重驗過「論文真的答不了嗎」**——結果見各行）
 | # | 議題 | 重驗結果 | 我的建議＋理由 |
