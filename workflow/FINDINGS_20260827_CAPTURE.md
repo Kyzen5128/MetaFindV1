@@ -33,6 +33,11 @@ INTEGRATOR 補充一條先前未記錄的 USER 規則：
 轉達時必須說明 `✅` 打在誰的視窗、涵蓋哪一次執行。
 「一個 `✅` 只涵蓋當次報告、不順延」不變。
 
+**界線（INTEGRATOR 2026-08-27 補正，Kyzen 原話）**：
+「我在你這視窗打 ✅ 代表 我同意 你可以給他 不要我來回傳」——
+所以有效的是**直接收到該 `✅` 的角色**轉達。
+**第三手（A 轉給 B、B 再轉給 C）不在這句話的授權範圍內。** 不得拉成鏈。
+
 ---
 
 ## 1. 🔴 F-A — `phi_e` 少了 EGNN 明定的尾端 Swish
@@ -96,6 +101,30 @@ EGNN QM9           n_layers 7    nf 128    main_qm9.py:30,34 · appendix.tex:135
 `n_layers` 已於 `NOTEBOOK:299` 由 Kyzen 核可改為 7。**`hidden_dim` 仍 OPEN。**
 
 **不得記述為「沿用 EGNN」** —— 沒有任何一個 EGNN 實驗是 4/128。
+
+**補充（ESSGNN ENGINEER，2026-08-27，`.claude/rules/upstream-lookup.md` 的 step 3 已補）**：
+我原本只引 argparse 預設，那正是該規則明文記載踩過的坑
+（「2026-08-25 — Declared "epochs has no source" ... **Step 3 was skipped.**」）。
+它把 launch scripts 與 README 啟動指令查完了：
+
+```
+argparse 預設   main_nbody.py:29 --nf 64 · main_ae.py:36 --nf 64 · main_qm9.py:30 --nf 128
+repo 內唯一 .sh  n_body_system/dataset/script.sh —— 只產資料，不訓練，不傳 --nf
+README 啟動指令  :75 --model tfn --nf 32 · :81 --model se3_transformer --nf 64
+                :36 eg.EGNN(hidden_nf=32) 是函式庫用法示例，不是實驗
+                **沒有任何一行對 --model egnn 傳 --nf**
+→ 三個任務都跑 argparse 預設，無 launch script 覆蓋。64 / 64 / 128 成立。
+```
+
+**更銳利的形式**：128 只出現在 QM9，而 QM9 是 7 層。
+`main_qm9.py:30` 的 128 與 `:34` 的 7 **是同一組設定的兩半**。
+取 128 卻不取 7，是把一組設定拆開。
+`n_layers` 核可改 7 之後，我們就是 7/128 = QM9 那一組，
+**使 `hidden_dim = 128` 的 provenance 由「不成立」變成「條件成立」。**
+
+⚠ **這不是決定填 128。** `DIM_REVIEW` §7 Step 5 明寫「前四步定了才有合法上游」，
+而 Step 1–4（`use_io_projections` / Pooling / `layer_sharing` / edge 維度契約）**一步都還沒定**。
+`hidden_dim` 仍 OPEN，`resolve_stage2.py` 仍寫 `None`。
 
 ---
 
@@ -273,6 +302,58 @@ chain_to_stage1.sh:51  [ "$ANN" -ge 45000 ] —— n05 跑完那一刻就會過�
 
 > **⚠ 在 Kyzen 對超參數那批打 `✅` 之前，不得有任何人起 `chain_to_stage1.sh`。**
 > 這不是我能決定的事，是要上呈的事。已上呈。
+
+### 🔴🔴 但它連過期值都輪不到 —— `:50` 會回 0，鏈會當場 die
+
+**出處**：ULIP2 REVIEWER `metafindv1-c4`
+**我的查證狀態**：**OBSERVED DATA，我剛剛親自量的**
+
+```
+find    data/outputs/annotations -maxdepth 1 -name '*.json' | wc -l          →      0
+find -L data/outputs/annotations -maxdepth 1 -name '*.json' -type f | wc -l  → 31,860
+```
+
+**原因**：`data/outputs/annotations` 是一個 symlink →
+`/home/kyzen/metafind_out/annotations`（`ls -ld` 顯示 `lrwxrwxrwx`，2026-08-22 建立）。
+`find` 沒有 `-L` 就不跟隨 symlink，只把它當成一個檔名處理，而那個名字不符 `*.json`。
+
+`chain_to_stage1.sh:50` 逐字就是**沒有 `-L` 的那一條**：
+
+```
+:50   ANN=$(find "$OUT/annotations" -maxdepth 1 -name '*.json' | wc -l)
+:52   [ "$ANN" -ge 45000 ] || die "only $ANN annotations; expected ~45,955"
+```
+
+→ **`ANN` 會是 0。鏈會 die，訊息是「only 0 annotations」，而語料實際有 46,024 筆健康的。**
+
+**這是一個 die，不是一次污染。** 沒有任何東西被損壞、沒有資料遺失、沒有 GPU 時間被浪費。
+**真正的傷害是那個人會下的結論** —— 跑了五天，早上看到「0 annotations」，
+每一個理由都指向「這批跑失敗了」。
+
+**而且 `status.sh:50/51` 有完全相同的問題，我也量了：**
+
+```
+status.sh:50   count "n03 點雲"  "$(recs "$OUT/pointclouds") 個"
+status.sh:51   count "n04 渲染"  "$(recs "$OUT/renders") 個"
+
+實測  data/outputs/renders      no-L: 1   with-L: 46,053   （symlink）
+      data/outputs/pointclouds  no-L: 1   with-L: 1        （symlink，內部結構不同）
+```
+
+**兩個儀表會同時報同一個假的 0。** 兩個儀表互相印證的假零，比一個有說服力得多。
+這是我要放在 Kyzen 面前的組合。
+
+**修法是兩行加一個旗標**（`find -L`），但那是程式碼，屬 Engineer lane，我不碰。
+
+### 證據等級的變化本身值得記下
+
+ULIP2 REVIEWER 第一次提這兩處時，把它們標為 **INFERENCE 不是 OBSERVED** ——
+機制在 `renders` 上已證明，但當時兩個目錄都是空的，`no-L` 與 `-L` 都是 0，量不出差別。
+**n05 今晚把 31,860 個檔放進其中一個，同一條指令就從「無法測試」變成「可證明是錯的」。**
+`:69`（`embeddings`）仍是 **INFERENCE** —— 那個目錄還是空的。
+
+> **這就是第一次就誠實標註的全部價值。** 當時若硬記成 OBSERVED，今晚什麼都不會改變，
+> 這次升級也就不帶任何資訊。
 
 ---
 
