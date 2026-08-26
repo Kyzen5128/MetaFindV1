@@ -410,8 +410,8 @@ split 固定於 n09、seed 記錄（IMPL `splits.py`）。
      而預訓練跑在 ShapeNet／Objaverse 上。**上游從不從訓練集切 validation，也從不用最終回報的 split 選 checkpoint。**
 
    **（2026-08-27 更正）上游的紀律有三條，但不是「全部採用」—— 那句是越權，已撤回。**
-   三條分別經 Kyzen 逐項裁決（見 §4.3 台帳）：不設自動早停 ✅ · 取 best ✅（但依據改為 D-3 的
-   10% validation，因為我們沒有上游那個獨立下游 benchmark） ·
+   三條分別經 Kyzen 逐項裁決（見 §4.3 台帳）：不設自動早停 ✅ · 取 best ✅（但依據改為
+   **開發期在 80% 內部的 dev-val**，因為我們沒有上游那個獨立下游 benchmark） ·
    **選擇依據必須來自不是最終回報的那個 split**。第三條正好證實上一輪的擔心是對的，
    而且這不是我們的潔癖，是上游自己在守的規矩。
 
@@ -427,9 +427,12 @@ split 固定於 n09、seed 記錄（IMPL `splits.py`）。
 `set_train_scope("fuser_only")` 讓 PointBERT 進 eval（drop_path 0.1 否則索引非確定性），
 全 46K 資產重新編碼 → gallery index（n10）。
 
-**檢查點選擇（2026-08-27 Kyzen 拍板，DEVIATION D-3）**：以 **10% validation** 的
-Mean R@1（跨模態條件平均）選 best，平手用 Mean R@5。**10% test 全程不參與選擇，只在最後報一次分。**
-上一版寫「以測試集 R@1 選 best」是漏刪的殘句，與同節 §4.1 的撤回自相矛盾，已刪除。
+**檢查點選擇（2026-08-27 Kyzen 拍板，DEVIATION D-3，同日修正）**：
+**開發期**在 80% training pool 內部切 dev-val，用它的 Mean R@1（跨模態平均，平手用 Mean R@5）
+定下 lr、輪數與 checkpoint 政策；**正式期**設定鎖死、從頭重訓完整 80%、不中途挑 checkpoint、
+最後才第一次打開 20% test 考一次。**20% test 全程不參與任何選擇。**
+（上一版寫「以測試集 R@1 選 best」是漏刪的殘句；再上一版寫「切 10% val 但 gallery 維持整個 20%」
+則有 transductive contamination，兩者都已撤回，見 §4.3 的 D-3 全文。）
 保存 optimizer state、seed、
 git SHA、protocol hashes（`stage1_protocol` 帶超參數 artifact 的 hash，IMPL splits.py）。
 
@@ -478,33 +481,59 @@ positive_map 由 n09b 寫死（identity mapping；無點雲者不得為正例—
 
 ### 4.3 超參數總帳（單一真相表）
 
-**DEVIATION D-3 — 資料切分（2026-08-27，Kyzen 拍板）**
+**DEVIATION D-3 — 資料切分與 checkpoint 選擇（2026-08-27，Kyzen 拍板；同日經外部審查修正）**
 
 論文 `3experiments.tex:8` 的全部原話：
 
 > "we allocate **80%** of the data for training and reserve the remaining **20%** for testing"
 
-**兩份，沒有 validation，而且對「怎麼挑 checkpoint」一個字都沒寫。**
+**兩份，沒有 validation，而且對「怎麼挑 checkpoint」一字未提。**
 
-Kyzen 的裁決：把**保留的 20% 再對半切**，10% 挑 checkpoint、10% 報分。
+**⚠ 本節第一版已作廢。** 它寫「把保留的 20% 對半切成 val/test，gallery 維持整個 20%，
+val 的資產只當幹擾項所以不構成洩漏」。**那句「不構成洩漏」不成立**，外部審查指出，我查證後接受：
 
 ```
-80%  訓練          ← 與論文完全一致，一個資產都沒動
-10%  validation    ← 挑 checkpoint（查詢）
-10%  test          ← 最後報一次分（查詢）
-
-gallery（候選池）= 整個 20% = 9,211      ← 不對半切
+val 的查詢要從 9,211 個候選裡被找出來，其中約一半是未來的 test 資產
+換一個 checkpoint → 那些 test 資產的向量跟著變 → val 分數跟著變
+而 checkpoint 是用 val 分數挑的
+→ test 資產參與了 model selection
 ```
 
-**gallery 為什麼不切**：在檢索裡候選池大小就是題目難度。池子砍半，R@1 會**機械性地變高**，
-那個分數就不能跟論文並列了。validation 的資產只是**當幹擾項**留在池子裡，從不當 test 的查詢，
-所以不構成洩漏。
+沒有用到 test 的**答案**，但用了它們當**幹擾項**。這是 transductive contamination，
+違反 Rule 10（論文指定的 test set 不得用於 model selection）。
 
-**這是對論文明文的偏離，記為 D-3。** 偏離的只有「查詢從哪來」，訓練量與候選池大小都與論文一致。
+**現行做法（Kyzen 核可）：開發期與正式期分開。**
 
-IMPL `metafind/data/splits.py`：`split_heldout()` · `V_val_selection` 協定（`reported: False`）·
-三向洩漏斷言 · `splits.json` 帶 `deviation: "D-3"`。
-n09c（房屋）**未動** —— Stage 2 在 G6 後面，開了再比照辦理。
+```
+開發期
+  從論文的 80% training pool 內部再切 dev-val
+  20% test 完全封存，一次都不打開
+  用 dev-val 決定：lr · 訓練輪數 · checkpoint 政策
+
+正式期
+  設定全部鎖死，從頭重訓一次，吃完整 80%
+  正式那一跑不中途挑 checkpoint
+  最後第一次打開 20%：query = 20%，gallery = 20%，考一次
+```
+
+**三個量都與論文一致**：訓練 80% · gallery 20% · test 全程未參與選擇。
+
+**代價**：正式那一跑沒有 validation 支撐的 checkpoint 選擇，輪數在開發期就定死。
+與已核可的「不設自動早停、跑固定輪數」相容。
+
+**正式期仍然可以存 checkpoint**（crash recovery、稽核、除錯），
+但正式分數只能用**事前已指定**的 checkpoint 規則。
+跑完 test 之後說「epoch 170 比 180 好，改報 170」＝ 重新污染。
+
+**已知風險（外部審查提出，尚未解決）**：開發期在 72% 上定的最佳輪數，
+搬到完整 80% 上不保證仍是最佳 —— 資料變多，每個 epoch 的 step 數變多，
+overfitting 時點也可能後移，而**方向不保證**。
+建議在 80% 內部做多個 dev fold，取一個穩定的 training-duration 規則，
+而不是相信單一次 split 的最佳輪數。**全程不碰 test。**
+
+**IMPL 狀態：尚未實作。** `metafind/data/splits.py` 目前仍只有 `train` / `test`。
+Master 曾寫過 `split_heldout()` 但已還原（Engineer lane）。
+**本節描述的是已核可的協定，不是已存在的程式碼。**
 
 ---
 
@@ -520,9 +549,12 @@ n09c（房屋）**未動** —— Stage 2 在 G6 後面，開了再比照辦理�
 | batch / optimizer | 64 / AdamW | UPSTREAM | ulip1 main.tex:367-370；`main.py:50` default 亦 64 |
 | **lr** | **5e-4 起跑** | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27） | 上游四個候選：1e-3（ulip1:367-370）· 3e-3（`pretrain_pointbert.sh`，但那是 ULIP-1 8192 點）· 5e-4（OpenShape supp:190 指定給 32.3M PointBERT；Point-BERT 論文 `:216` 亦同）· 4e-4（supp:190，72.1M 版，同節 `:146` 說該版嚴重過擬合）。**Kyzen 定 5e-4 起跑**，第一輪 sweep 2.5e-4 / 5e-4 / 7.5e-4 / 1e-3，3e-3 不入第一輪。**不得用 10% test 調 lr** |
 | wd / betas / eps / warmup | 0.1 / (0.9,0.98) / 1e-8 / 1 ep cosine | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27），上游參考 `upstream/ULIP/main.py` | Kyzen 的理由：MetaFind 未交代訓練配方，Stage 1 骨幹 lineage 來自 ULIP-2，第一版先用 ULIP 成熟配方，避免一次動太多變因。pilot 顯示不穩仍可調 |
+| **weight decay 分組** | `p.ndim < 2` 或名稱含 `bias`／`ln`／`bn` → **wd = 0**；其餘 → **wd = 0.1** | **USER-APPROVED**（2026-08-27），上游**機制**照抄 `main.py:129-135` | Kyzen 2026-08-27：「找得到原架構怎麼設定的，就照原架構」。這是**機制**不是數值，故可直接落地。一律 0.1 會把 LayerNorm 的縮放參數往 0 拉，破壞正規化 |
+| **cosine 起訖 lr** | `lr_start = 1e-6` · `lr_end = 1e-5` | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27），上游參考 `main.py:53-56` | ⚠ **這兩個是數值不是機制**，不適用「照原架構」自動落地（外部審查指出，已修正）。Kyzen 2026-08-27 明確選甲：照 ULIP，理由是與 base lr 5e-4 同一套配方，不混搭。**warmup + cosine 的形狀**才是機制，那部分本來就可繼承 |
+| **D_m（訊息寬度）** | `D_m = D_h` | **USER-APPROVED**（2026-08-27），上游**機制**照抄 `egnn/models/gcl.py:165-168` | EGNN 的 `edge_mlp` 輸出就是 `hidden_nf`。論文沒要求 `D_m = D_h`（`ESSGNN_DIM_REVIEW.md` v3 §3 已拆開五個獨立寬度），所以這是照原架構機制，**不是 PAPER FACT** |
 | epochs | **250（上限）** | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27），上游參考 ULIP-1 論文 `main.tex:367-370` | Kyzen 原話：「250 啊 因為 ULIP 有說喔 我覺得就參考啊」「要測試所以慢慢加」。**先跑 5 → 10 → 25 pilot** 確認 loss／梯度／記憶體／管線正常，再進完整訓練。250 是上限，不是無條件跑滿。**`main.py:47` 的 argparse 預設是 Type D，不能單獨當根據** |
 | 早停 | **不設自動早停** | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27） | Kyzen 的理由：現在就設 patience=20 等於偷偷先決定了 model selection 協定。`early_stopping=False`，**保留依實際 validation 曲線人工中止的權利**。上游參考 `main.py:212`（跑滿，無 early-stop 分支）。**10% test 不得參與任何中止判斷** |
-| checkpoint 選擇 | **10% validation 的 Mean R@1 取 best**，平手用 Mean R@5 | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27，DEVIATION D-3） | 上游有 best-checkpoint 的做法（`main.py:225-231`），但上游是拿**獨立下游 benchmark**（`main.py:40` default modelnet40）當依據，我們沒有那個 benchmark。所以改由 D-3 切出的 10% validation 擔任。**IMPL `splits.py` `V_val_selection`，`reported: False`** |
+| checkpoint 選擇 | **開發期用 80% 內部的 dev-val 定政策；正式期鎖死重訓、不挑** | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27，DEVIATION D-3） | 上游有 best-checkpoint 做法（`main.py:225-231`），但它拿的是**獨立下游 benchmark**（`main.py:40` default modelnet40），我們沒有。改為全部在 80% 內部完成選擇。**20% test 全程封存。IMPL 尚未實作** |
 | seed | 20260816 | CHOICE | resolve_stage1.py |
 | λ 初值 | 未定（code 佔位 1.0） | **UNKNOWN→待決** | §10 #2 |
 | fusion transformer 尺寸 | 2 層/8 頭/ffn 2048 | CHOICE | 論文無維度 |
@@ -741,6 +773,7 @@ Baselines 段寫 OpenShape "adopts a **dual-tower** contrastive retrieval design
 | U-08 全系列（Stage 2 樣本構造） | ✅ 見 §4.2 |
 | U-11/U-13/U-15/U-17/U-19/U-28/U-29/U-30/U-32 | ✅ 見各節 |
 | **U-31 / U-33** | **⚠ 2026-08-27 更正：不再列為已拍板。** `docs/ESSGNN_DIM_REVIEW.md` v3 §7 把 `layer_sharing` 與 `use_io_projections` 列為 OPEN，與本表衝突。依 Rule 16，「曾被某個 block 標 resolved」不構成 promotion path —— 需要指得出**具體參數**的核可。**在指出之前一律視為待決** |
+| **n07c ProcTHOR 節點文字重生** | ✅ **USER-APPROVED 2026-08-27。** 現況 `procthor_object_text.json` 1,467 個資產只有 **93 個不同字串**，`source` 全部是 `procthor_category`（抓類別名套「a ___」模板，冠詞也沒處理：`"a apple"`）。最極端：74 個不同的 side table 共用 `"a side table"` → **拿到完全相同的節點特徵**。材料早已備妥：`procthor_modalities/` 底下每個資產都有 `view_00~10.png` 與 `pointcloud.npz`（2026-08-16）。**做法**：11 張渲染圖丟 `gemma-4-12B-it`（與 n05 同流程同模型）重生描述，成本 1,467 × 6.2s ≈ 2.5 小時，**須等 n05 讓出 GPU**。**分類**：論文對 ProcTHOR 節點文字**完全沉默** → 這是 IMPLEMENTATION CHOICE，**與 D-2 分開記**（D-2 是「論文寫 GPT-4o、我們跑 gemma」的偏離；n07c 是「論文沒寫、我們自己決定」的選擇），模型與流程引用 D-2。**成功標準不是「1,467 筆都有文字」**，要重新量：不同字串數、同類別內的不同比例、顏色／材質／風格屬性的多樣性、空值、幻覺抽樣 |
 | **U-20（ESSGNN 節點文字編碼器）** | **⚠ 標「已解決」但有兩個缺陷。** `DECISION_LEDGER.md:557` 記錄現況為 `laion/CLIP-ViT-B-32-laion2B-s34B-b79K`、512 維（實測 `procthor_node_embeddings.json` 的 `text_encoder_version` 相符）。**缺陷一**：它是十個 RESOLVED 條目中**唯一 `decided_by` 沒有 USER 的**（`DECISION_LEDGER.md:564`）。**缺陷二**：ESSGNN Engineer 2026-08-22 證明它的理由被程式碼推翻（`:585`）—— 原理由稱「共用編碼器才能共用語意空間」，但 `essgnn.py:456` 的 `use_io_projections` 已把 `t_i` 投影成學出來的 128 維，`:471` 的 `e_ij` 則原始 512 維進入，**兩者本來就不在同一空間**。**待 Kyzen 裁決** |
 
 **（2026-08-27）注意**：Stage 1 骨幹是 ViT-bigG-14 / 1280 維（`ulip_backbone.py:90`），
