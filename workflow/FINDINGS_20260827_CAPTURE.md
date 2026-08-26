@@ -229,7 +229,50 @@ argparse／函式庫預設「永遠不能單獨解決 MetaFind 沉默」。
 未修的 ULIP2 open findings：
 `N-2` `N-5` `C3` `C6` `R-32` `N-3` `N-4` `C5` `C2` `mon`，
 外加 `status.sh:50/51` 與 `chain_to_stage1.sh:50,69`。
-**⚠ `chain_to_stage1.sh` 會在 n05 產出被計數的那一刻觸發，而那已迫在眉睫。**
+
+### 🔴 `chain_to_stage1.sh` —— REVIEWER 的原句已由 ENGINEER 更正，我複驗過
+
+**REVIEWER 原句**：「會在 n05 產出被計數的那一刻觸發，而那已迫在眉睫。」
+**ULIP2 ENGINEER 更正 · 我 CONFIRMED**：**它不會自己觸發。**
+
+```
+crontab -l | grep chain|stage1     無
+pgrep -af chain_to_stage1          沒有在跑
+tools/chain_to_stage1.sh:4 的用法註解是 nohup bash tools/... &
+→ 手動啟動的腳本，沒有 watcher、沒有 cron。n05 跑完那一刻它不會自己動。
+```
+
+**「會自動觸發」應撤回。但風險沒有消失，只是換了形狀，而且更該擔心：**
+
+```
+chain_to_stage1.sh:45-48  preflight 只檢查「檔案存在」，不檢查「值對不對」：
+    for f in annotations/. procthor_modalities/. sem_edge_cache.json \
+             stage1_encoding_protocol.json stage1_hyperparameters.json; do
+        [ -e "$OUT/$f" ] || die "missing prerequisite"
+
+我實測 data/outputs/stage1_hyperparameters.json（2026-08-21 產生，現在就存在）：
+    learning_rate  0.001    ← Kyzen 08-27 核可的是 5e-4 起跑
+    epochs         50       ← Kyzen 08-27 核可的是 250 上限
+    weight_decay   0.1      相符
+    batch_size     64       相符
+
+chain_to_stage1.sh:51  [ "$ANN" -ge 45000 ] —— n05 跑完那一刻就會過。
+```
+
+**後果**：只要 08-28 早上有任何人（含我們任何一個角色）手動起這條鏈，
+它會一路 n06 → n09 → Stage 1 smoke 全部跑完，而且：
+
+```
+· n09 把「lr 1e-3 / epochs 50」寫死進 stage1_protocol.json 的 hash
+· splits.json 生成時沒有 dev-val（第 4 節漏 3 的順序被整個跳過）
+· 之後要改超參數就得把 n09 整個重做
+```
+
+`:53-55` 有 `pgrep` 擋「別的 metafind stage 在跑」，
+但那只擋 GPU 打架，**不擋「用過期的協定生成 artifact」**。
+
+> **⚠ 在 Kyzen 對超參數那批打 `✅` 之前，不得有任何人起 `chain_to_stage1.sh`。**
+> 這不是我能決定的事，是要上呈的事。已上呈。
 
 ---
 
