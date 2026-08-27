@@ -39,6 +39,7 @@ import argparse
 import hashlib
 import json
 import os
+import random
 import time
 from pathlib import Path
 
@@ -52,6 +53,8 @@ paths.setup_env()
 
 from metafind.models.stage1_config import (  # noqa: E402
     PAPER_P_MASK,
+    PER_VIEW_AGGREGATIONS,
+    PRECOMPUTABLE_AGGREGATIONS,
     REQUIRED_HYPERPARAMETERS,
 )
 
@@ -60,6 +63,82 @@ TRAINER_VERSION = 2   # v2 saves backbone + tower + loss; v1 dropped the point e
 
 CKPT_PATH = paths.CHECKPOINTS / "stage1.pt"
 CKPT_RECORD = paths.CHECKPOINTS / "stage1_ckpt.json"
+
+
+def weight_decay_groups(named, weight_decay: float) -> list[dict]:
+    """Two optimizer groups; the rule reads the parameter NAME.
+
+    [UPSTREAM-OFFICIAL-IMPL upstream/ULIP/main.py:129-135] verbatim predicate:
+    `p.ndim < 2 or 'bias' in n or 'ln' in n or 'bn' in n` goes to the group with
+    no decay. A single flat weight_decay pulls LayerNorm scales and every bias
+    toward zero -- decay applied to parameters that have nothing to overfit
+    with. The MECHANISM is inherited; `weight_decay` itself is USER-APPROVED
+    separately (resolve_stage1.py).
+
+    Frozen parameters are dropped here rather than by the caller, so an
+    optimizer can never receive one.
+
+    ANY GROUP ADDED HERE MUST STATE ITS OWN `weight_decay`. Upstream passes
+    `weight_decay=args.wd` to AdamW as well as per-group; that top-level value
+    is dropped here so nothing implicit competes with the groups -- which also
+    removes the fallback, so a third group that omits the key would silently get
+    torch's own default of 1e-2, an order of magnitude off.
+    """
+    p_wd, p_non_wd = [], []
+    for n, p in named:
+        if not p.requires_grad:
+            continue
+        if p.ndim < 2 or "bias" in n or "ln" in n or "bn" in n:
+            p_non_wd.append(p)
+        else:
+            p_wd.append(p)
+    return [{"params": p_wd, "weight_decay": weight_decay},
+            {"params": p_non_wd, "weight_decay": 0.0}]
+
+
+def cosine_schedule(base: float, final: float, epochs: int, niter_per_ep: int,
+                    warmup_epochs: int, start_warmup: float) -> np.ndarray:
+    """One learning rate per optimizer step: linear warmup, then cosine to `final`.
+
+    [UPSTREAM-OFFICIAL-IMPL upstream/ULIP/utils/utils.py:215-226] The shape is
+    reproduced rather than imported -- that module pulls in ULIP's distributed
+    training stack -- and it is a SHAPE, which is what may be inherited; the four
+    numbers that parameterise it are USER-APPROVED separately.
+
+    `torch.optim.lr_scheduler.CosineAnnealingLR`, which stood here, cannot
+    express it. It has no warmup, and its floor is `eta_min`, default 0, not
+    `lr_end`. A run using it spent step 0 at the full base rate and finished at
+    exactly 0.
+
+    Measured against a verbatim reimplementation of upstream's function: on
+    every input upstream survives, this returns a BIT-IDENTICAL array (5x100,
+    250x10, no-warmup, warmup==epochs, niter==0 -- exact equality, not
+    approximate). The two guards below change only inputs upstream refuses.
+
+      * `warmup_epochs > epochs` -- upstream raises AssertionError here, because
+        `warmup_iters` exceeds the total and its concatenation comes out the
+        wrong length. Warmup is truncated to the run instead. NOTE: the case
+        `warmup_epochs == epochs` needs no guard -- upstream handles it, and so
+        does this, identically. An earlier version of this comment named that
+        case, and named it wrongly.
+      * `niter_per_ep == 0` -- upstream ALSO returns an empty array here; this
+        does not repair anything, it makes the empty return explicit instead of
+        incidental.
+    """
+    total = epochs * niter_per_ep
+    if total <= 0:
+        return np.zeros(0, dtype=np.float64)
+    warmup_iters = min(max(warmup_epochs, 0) * niter_per_ep, total)
+    warmup = (np.linspace(start_warmup, base, warmup_iters)
+              if warmup_iters > 0 else np.zeros(0, dtype=np.float64))
+    n_cos = total - warmup_iters
+    if n_cos <= 0:
+        return warmup
+    iters = np.arange(n_cos)
+    cos = final + 0.5 * (base - final) * (1 + np.cos(np.pi * iters / n_cos))
+    schedule = np.concatenate((warmup, cos))
+    assert len(schedule) == total
+    return schedule
 
 
 def load_protocols() -> tuple[dict, dict, dict]:
@@ -96,11 +175,27 @@ class Stage1Dataset:
     The asymmetry is the whole design. Text and image come from n06 because
     OpenCLIP is frozen; the point cloud is loaded raw because PointBERT is in
     the optimizer and a cached embedding would be stale after step one.
+
+    [U-14] `aggregation` decides which image vector this returns, and until
+    2026-08-27 it decided nothing: the constructor stored it and `__getitem__`
+    read `cached["image"]` -- the pooled vector -- unconditionally. Setting the
+    protocol to `random_single_view` therefore trained on the 12-view mean while
+    the protocol recorded per-view sampling, with nothing raising. The value was
+    a name in `stage1_config.PER_VIEW_AGGREGATIONS` with no consumer anywhere.
+
+    This is NOT a change of protocol. `n05b` still resolves `mean`, and `mean`
+    still returns the pooled vector byte for byte. What changed is that the other
+    value now does what its name says instead of being silently ignored.
     """
 
     def __init__(self, uids: list[str], aggregation: str) -> None:
+        if aggregation not in PRECOMPUTABLE_AGGREGATIONS + PER_VIEW_AGGREGATIONS:
+            raise ValueError(
+                f"unknown image_aggregation {aggregation!r}; "
+                f"stage1_config knows {PRECOMPUTABLE_AGGREGATIONS + PER_VIEW_AGGREGATIONS}")
         self.uids = uids
         self.aggregation = aggregation
+        self.per_view = aggregation in PER_VIEW_AGGREGATIONS
 
     def __len__(self) -> int:
         return len(self.uids)
@@ -112,10 +207,42 @@ class Stage1Dataset:
         xyz = cloud["xyz"].astype(np.float32)
         rgb = cloud["rgb"].astype(np.float32) if "rgb" in cloud else None
         pc = xyz if rgb is None else np.concatenate([xyz, rgb], axis=1)
+        if self.per_view:
+            # [UPSTREAM ulip2 main.tex:612] "randomly sample its 2D rendered
+            # image I ~ render(O)"; OpenShape method.tex:77 and ULIP-1
+            # main.tex:236 do the same. A fresh view per step, not per asset --
+            # `views` is the per-view matrix n06 stores for exactly this.
+            #
+            # `random` rather than a dataset-owned RNG because torch seeds each
+            # dataloader worker's `random` from the generator passed to
+            # DataLoader, so the draw is reproducible from `seed` for a given
+            # worker count. It is NOT reproducible across a change in
+            # `num_workers`; that is upstream's behaviour too and it is recorded
+            # rather than hidden.
+            #
+            # AND `num_workers` IS NOT IN THE RECORDED HYPERPARAMETERS. It is a
+            # literal at the DataLoader below and appears in neither
+            # `resolve_stage1.DEFAULT_HYPERPARAMETERS` nor
+            # `stage1_config.REQUIRED_HYPERPARAMETERS`. Under `mean` that costs
+            # nothing -- nothing draws. Under `random_single_view` it decides
+            # WHICH IMAGES THE MODEL SAW, so the honest statement is:
+            #
+            #     random_single_view is NOT reproducible from
+            #     stage1_hyperparameters.json alone.
+            #
+            # Adding the field would change the canonical hash and is therefore
+            # a protocol change, not a code change; it is raised rather than
+            # taken here. Written down now because the moment it starts to
+            # matter -- someone selecting per-view sampling -- is exactly the
+            # moment nobody re-reads this comment.
+            views = cached["views"]
+            image = views[random.randrange(views.shape[0])]
+        else:
+            image = cached["image"]
         return {
             "uid": uid,
             "text": cached["text"].astype(np.float32),
-            "image": cached["image"].astype(np.float32),
+            "image": image.astype(np.float32),
             "pc": pc,
         }
 
@@ -371,11 +498,23 @@ def main() -> int:
     model.to(args.device)
     loss_fn.to(args.device)
 
-    params = [p for p in list(backbone.trainable_parameters())
-              + list(model.parameters()) + list(loss_fn.parameters())
-              if p.requires_grad]
-    opt = torch.optim.AdamW(params, lr=values["learning_rate"],
-                            weight_decay=values["weight_decay"])
+    # [UPSTREAM-OFFICIAL-IMPL upstream/ULIP/main.py:129-135] Two groups, and the
+    # rule reads the parameter NAME. A single flat `weight_decay=0.1` pulls
+    # LayerNorm scales and every bias toward zero, which is decay applied to
+    # parameters that have nothing to overfit with. The mechanism is inherited;
+    # the number 0.1 is USER-APPROVED separately (see resolve_stage1.py).
+    named = (list(backbone.named_trainable_parameters())
+             + list(model.named_parameters())
+             + list(loss_fn.named_parameters()))
+    groups = weight_decay_groups(named, values["weight_decay"])
+    opt = torch.optim.AdamW(groups,
+                            lr=values["learning_rate"],
+                            betas=tuple(values["betas"]),
+                            eps=values["eps"])
+    p_wd, p_non_wd = groups[0]["params"], groups[1]["params"]
+    print(f"optimizer: {len(p_wd):,} decayed / {len(p_non_wd):,} not decayed, "
+          f"lr {values['learning_rate']}, betas {tuple(values['betas'])}, "
+          f"eps {values['eps']}", flush=True)
 
     loader = DataLoader(
         Stage1Dataset(train_uids, encoding["image_aggregation"]),
@@ -383,8 +522,25 @@ def main() -> int:
         num_workers=4, drop_last=True, generator=generator)
 
     epochs = args.epochs or values["epochs"]
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(
-        opt, T_max=max(epochs * len(loader), 1))
+    if epochs > values["max_epochs"]:
+        # max_epochs is a ceiling the operator enforces, so say so rather than
+        # silently clamping: clamping would run a DIFFERENT experiment than the
+        # command asked for, which is worse than refusing.
+        print(f"WARNING: {epochs} epochs exceeds the approved ceiling "
+              f"{values['max_epochs']} (resolve_stage1.py). Nothing stops you; "
+              f"record it as a deviation.", flush=True)
+    lr_schedule = cosine_schedule(
+        base=values["learning_rate"], final=values["lr_end"],
+        epochs=epochs, niter_per_ep=len(loader),
+        warmup_epochs=values["warmup_epochs"], start_warmup=values["lr_start"])
+    # Without this the `min()` in the loop is not a guard but a mask: a schedule
+    # shorter than the loop would pin the lr at the floor and train on happily,
+    # discoverable only in the curve thousands of steps later. Upstream raises
+    # IndexError, which at least names the step it happened at; this names the
+    # condition before any step happens.
+    assert len(lr_schedule) == epochs * len(loader), (
+        f"schedule has {len(lr_schedule)} entries for "
+        f"{epochs} x {len(loader)} = {epochs * len(loader)} steps")
 
     print(f"{len(train_uids):,} train assets, batch {values['batch_size']}, "
           f"{epochs} epochs, {len(loader):,} steps/epoch", flush=True)
@@ -413,8 +569,14 @@ def main() -> int:
                 out = loss_fn(q, g)
                 opt.zero_grad(set_to_none=True)
                 out["loss"].backward()
+                # [UPSTREAM-OFFICIAL-IMPL upstream/ULIP/main.py:292] the lr is
+                # WRITTEN per iteration from a precomputed array, not stepped by
+                # a torch scheduler. Set before opt.step() so this iteration
+                # uses this iteration's rate.
+                lr = float(lr_schedule[min(step, len(lr_schedule) - 1)])
+                for group in opt.param_groups:
+                    group["lr"] = lr
                 opt.step()
-                sched.step()
                 step += 1
 
                 if step % 20 == 0:

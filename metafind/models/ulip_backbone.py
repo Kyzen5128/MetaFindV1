@@ -273,6 +273,17 @@ class ULIPBackbone:
         """Exactly the parameters an optimizer should receive."""
         return [p for p in self.model.parameters() if p.requires_grad]
 
+    def named_trainable_parameters(self) -> list:
+        """The same parameters, with their names.
+
+        `trainable_parameters` cannot serve the weight-decay grouping rule that
+        `upstream/ULIP/main.py:129-135` uses, because that rule reads the NAME:
+        `bias` / `ln` / `bn` decide the group. Same filter, same order, names
+        kept.
+        """
+        return [(n, p) for n, p in self.model.named_parameters()
+                if p.requires_grad]
+
     @staticmethod
     def _load_and_verify(model, ckpt_path: Path) -> None:
         ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
