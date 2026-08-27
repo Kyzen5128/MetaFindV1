@@ -52,7 +52,14 @@ done
 # many annotations existed.
 ANN=$(find -L "$OUT/annotations" -maxdepth 1 -name '*.json' | wc -l)
 say "annotations $ANN  ·  n08 artifacts present"
-[ "$ANN" -ge 45000 ] || die "only $ANN annotations; expected ~45,955"
+# The threshold is unchanged. Only the message: it named ~45,955, a previous
+# corpus size, so a reader who hit this gate was told the wrong target.
+# The braces matter: `wc -l < missing 2>/dev/null` does NOT suppress the
+# error, because the redirect fails in the SHELL before wc starts, so the
+# message is bash's and the 2>/dev/null attached to wc never sees it. The
+# fallback still worked -- only the suppression was theatre.
+N05_TARGET=$({ wc -l < "$LOGS/renders_index.jsonl"; } 2>/dev/null || echo '?')
+[ "$ANN" -ge 45000 ] || die "only $ANN annotations; n04 indexed $N05_TARGET"
 
 if pgrep -f "metafind\.(data|train)\." > /dev/null; then
     die "another metafind stage is already running; refusing to compete for the GPU"
@@ -69,7 +76,13 @@ $PY -m metafind.data.encode_text_image >> "$LOGS/n06_full.log" 2>&1
 rc=$?
 [ $rc -eq 0 ] || die "n06 exited $rc -- read $LOGS/n06_full.log"
 
-EMB=$(find "$OUT/embeddings" -maxdepth 1 -name '*.npz' 2>/dev/null | wc -l)
+# -L, same defect as the annotation count above: $OUT/embeddings is a symlink
+# to /home/kyzen/metafind_out/embeddings. The directory is still empty, so the
+# difference is not measurable HERE -- it is measured on its sibling
+# $OUT/annotations, identical construction, which reads 0 without -L and
+# 38,849 with it. Once n06 writes its ~45,953 .npz this returned 0 and the
+# gate below killed the chain immediately after a SUCCESSFUL n06.
+EMB=$(find -L "$OUT/embeddings" -maxdepth 1 -name '*.npz' 2>/dev/null | wc -l)
 say "embeddings written: $EMB"
 [ "$EMB" -ge 45000 ] || die "n06 returned 0 but wrote only $EMB embeddings"
 
