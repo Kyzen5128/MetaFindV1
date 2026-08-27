@@ -11,13 +11,16 @@ from __future__ import annotations
 import pytest
 
 from metafind.data.splits import (
+    DEFAULT_DEV_SEED,
     DEFAULT_FUSION,
     DEFAULT_SEED,
     DEFAULT_TOWER_SHARING,
+    DEV_VAL_FRACTION,
     TRAIN_FRACTION,
     build_eval_protocols,
     build_stage1_protocol,
     split_assets,
+    split_dev,
 )
 
 
@@ -153,3 +156,75 @@ def test_an_unknown_similarity_is_refused():
             s.build_stage1_protocol(hyperparameters(), "tester")
     finally:
         s.SUPPORTED_SIMILARITY = original
+
+
+# --- [D-3] dev-val, carved out of the 80% -------------------------------------
+#
+# The whole point of these is that the 20% test split never touches model
+# selection. Each one fails if it starts to.
+
+def test_dev_train_and_dev_val_partition_the_training_pool():
+    train, _ = split_assets(uids(1000), DEFAULT_SEED)
+    dev_train, dev_val = split_dev(train, DEFAULT_DEV_SEED)
+    assert set(dev_train) | set(dev_val) == set(train)
+    assert not set(dev_train) & set(dev_val)
+
+
+def test_dev_val_never_contains_a_test_asset():
+    """[D-3] The failure this deviation exists to prevent."""
+    train, test = split_assets(uids(1000), DEFAULT_SEED)
+    _, dev_val = split_dev(train, DEFAULT_DEV_SEED)
+    assert not set(dev_val) & set(test)
+
+
+def test_moving_one_test_asset_into_dev_val_is_detectable():
+    """The check above passes trivially unless it can also fail."""
+    train, test = split_assets(uids(1000), DEFAULT_SEED)
+    _, dev_val = split_dev(train, DEFAULT_DEV_SEED)
+    assert set(dev_val + test[:1]) & set(test)
+
+
+def test_the_dev_val_share_matches_the_recorded_fraction():
+    train, _ = split_assets(uids(1000), DEFAULT_SEED)
+    _, dev_val = split_dev(train, DEFAULT_DEV_SEED)
+    assert len(dev_val) == round(len(train) * DEV_VAL_FRACTION)
+
+
+def test_the_same_dev_seed_reproduces_the_dev_split():
+    train, _ = split_assets(uids(500), DEFAULT_SEED)
+    a = split_dev(train, 7)
+    b = split_dev(train, 7)
+    c = split_dev(train, 8)
+    assert a == b
+    assert a != c
+
+
+def test_the_selection_protocol_is_marked_not_reported():
+    """[D-3] Its numbers choose lr and checkpoints; they are never a result."""
+    train, test = split_assets(uids(1000), DEFAULT_SEED)
+    _, dev_val = split_dev(train, DEFAULT_DEV_SEED)
+    p = build_eval_protocols(train, test, dev_val)
+    assert p["C_dev_selection"]["reported"] is False
+    assert p["A_test_gallery"]["reported"] is True
+    assert p["B_full_gallery"]["reported"] is True
+
+
+def test_the_selection_gallery_is_dev_val_not_the_training_pool():
+    """Ranking against 36k candidates is a different task from ranking against 9k.
+
+    A training duration tuned against a pool an order of magnitude larger than
+    the final one does not transfer, so this is a property of the protocol and
+    not a detail of it.
+    """
+    train, test = split_assets(uids(1000), DEFAULT_SEED)
+    _, dev_val = split_dev(train, DEFAULT_DEV_SEED)
+    p = build_eval_protocols(train, test, dev_val)
+    assert p["C_dev_selection"]["gallery_split"] == "dev_val"
+    assert p["C_dev_selection"]["gallery_size"] == len(dev_val)
+    assert p["C_dev_selection"]["gallery_size"] != len(train)
+
+
+def test_no_selection_protocol_without_a_dev_val():
+    """Callers that pass no dev-val must not silently get a third protocol."""
+    train, test = split_assets(uids(1000), DEFAULT_SEED)
+    assert "C_dev_selection" not in build_eval_protocols(train, test)

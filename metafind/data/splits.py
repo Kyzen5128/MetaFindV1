@@ -65,14 +65,56 @@ NODE = "n09_build_splits"
 TRAIN_FRACTION = 0.8
 DEFAULT_SEED = 20260816
 
+# [DEVIATION D-3, Kyzen 2026-08-27] Development-time model selection happens
+# INSIDE the paper's 80% training pool. The 20% test split is opened once, at
+# the end, and never participates in choosing lr, epochs or a checkpoint.
+#
+# An earlier version halved the held-out 20% into val/test while keeping the
+# whole 20% as the gallery, on the grounds that the val queries' answers were
+# never used. That does not hold: a val query is ranked against a candidate pool
+# roughly half of which is future test assets, so changing the checkpoint moves
+# those assets' vectors, moves the val score, and the checkpoint is chosen by
+# that score. Transductive contamination. Withdrawn.
+#
+# [USER-APPROVED, Kyzen 2026-08-27] 0.125 OF THE TRAINING POOL, which is 10% of
+# the corpus: 70% dev-train / 10% dev-val / 20% test.
+#
+# He was offered 80/10/10 -- halving the paper's 20% into val and test -- and
+# rejected it, consistent with the D-3 he approved the same day: that shape is
+# the transductive contamination this deviation exists to avoid, and it would
+# leave the reported gallery at 10% instead of the paper's 20%.
+#
+# So the fraction is expressed against the TRAINING POOL, not the corpus, and
+# the arithmetic is stated because the two are easy to confuse:
+#
+#     0.125 x 0.80 = 0.10 of the corpus
+#     train 80% = dev_train 70% + dev_val 10%      test 20%, sealed
+#
+# The three quantities the paper fixes are unchanged: 80% trains, 20% tests, and
+# the test split takes no part in choosing anything.
+DEV_VAL_FRACTION = 0.125
+# A separate seed, not a reuse of the object seed: the same seed on a subset
+# would make dev-val membership a deterministic function of train membership in
+# a way nobody would have chosen deliberately.
+DEFAULT_DEV_SEED = 20260827
+
 SPLITS_PATH = paths.OUTPUTS / "splits.json"
 EVAL_PROTOCOLS_PATH = paths.OUTPUTS / "eval_protocols.json"
 STAGE1_PROTOCOL_PATH = paths.OUTPUTS / "stage1_protocol.json"
 
-# [U-13] The paper lists five fusion strategies in 2.4 and never says which the
-# full model uses. Table 3 ablates Mean and MLPs as separate rows, so the main
-# line is none of those two. `masked_mlp` is ours and is recorded as such.
-DEFAULT_FUSION = "masked_mlp"
+# [PAPER FACT 3experiments.tex:143] "MLP and the final selected Transformer
+# outperform others". The three lines that stood here said the paper never names
+# the full model's fusion. It does, and DECISION_LEDGER.md:723 (U-T) already
+# corrected that false UNKNOWN back to a PAPER FACT -- but the fix landed in
+# fusion.py:89, whose default the trainer never reads: stage1.py:322 and
+# stage1_config.py:367 both construct FusionConfig with
+# kind=training_protocol["fusion"].
+#
+# THIS constant is the one that reaches stage1_protocol.json and therefore the
+# model. Said plainly because the same bug has already been fixed in the wrong
+# half once: a default is only a default for callers that omit the argument,
+# and here every caller supplies it.
+DEFAULT_FUSION = "transformer"
 
 # [U-16] 2.6 requires the gallery encoder frozen while the query fuser trains.
 # If the towers were ONE module those cannot both hold, so `fully_shared` is a
@@ -101,7 +143,22 @@ def split_assets(uids: list[str], seed: int,
     return sorted(ordered[:cut]), sorted(ordered[cut:])
 
 
-def build_eval_protocols(train: list[str], test: list[str]) -> dict:
+def split_dev(train: list[str], seed: int,
+              val_fraction: float = DEV_VAL_FRACTION) -> tuple[list[str], list[str]]:
+    """[D-3] Carve a dev-val out of the training pool, same discipline as above.
+
+    Returns (dev_train, dev_val) whose union is exactly `train`, so the
+    development phase never sees an asset the paper allocated to testing.
+    """
+    ordered = sorted(train)
+    rng = random.Random(seed)
+    rng.shuffle(ordered)
+    cut = int(round(len(ordered) * (1.0 - val_fraction)))
+    return sorted(ordered[:cut]), sorted(ordered[cut:])
+
+
+def build_eval_protocols(train: list[str], test: list[str],
+                         dev_val: list[str] | None = None) -> dict:
     """[U-09] Both gallery scopes, both reported.
 
     `gallery_size` is DERIVED from the split rather than written down. An
@@ -109,20 +166,47 @@ def build_eval_protocols(train: list[str], test: list[str]) -> dict:
     gallery arithmetic while the manifest holds 46,052 (U-01), which silently
     moved every denominator.
     """
-    return {
+    protocols = {
         "A_test_gallery": {
             "query_split": "test",
             "gallery_split": "test",
             "gallery_size": len(test),
             "layout_free_context": "omitted",
+            "reported": True,
         },
         "B_full_gallery": {
             "query_split": "test",
             "gallery_split": "full",
             "gallery_size": len(train) + len(test),
             "layout_free_context": "omitted",
+            "reported": True,
         },
     }
+    if dev_val is not None:
+        # [D-3] The development-phase selection protocol. `reported: False` is
+        # the whole point: its numbers choose lr, epochs and checkpoint policy
+        # and must never appear as a result.
+        #
+        # gallery = dev_val, NOT the whole training pool. Ranking a dev-val
+        # query against all 36,819 training assets is a different task from the
+        # final one (query 20%, gallery 20%, ~9,200 candidates), and a duration
+        # tuned against a pool an order of magnitude larger does not transfer.
+        # This is inference from D-3's logic rather than its text, and it is
+        # recorded here so it can be overruled rather than discovered.
+        #
+        # Consequence of that choice: these numbers rank checkpoints against
+        # each other and are NOT comparable to A or B, whose candidate pools are
+        # different sizes. `reported: False` encodes that; this says why, because
+        # the next person to see a dev-val recall figure will want to put it
+        # beside a reported one.
+        protocols["C_dev_selection"] = {
+            "query_split": "dev_val",
+            "gallery_split": "dev_val",
+            "gallery_size": len(dev_val),
+            "layout_free_context": "omitted",
+            "reported": False,
+        }
+    return protocols
 
 
 def build_stage1_protocol(hyperparameters: dict, decided_by: str,
@@ -174,6 +258,10 @@ def admitted_uids() -> list[str]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    ap.add_argument("--dev-seed", type=int, default=DEFAULT_DEV_SEED)
+    ap.add_argument("--dev-val-fraction", type=float, default=DEV_VAL_FRACTION,
+                    help="fraction of the 80%% training pool held out as dev-val "
+                         "(NOT ratified; see DEV_VAL_FRACTION)")
     ap.add_argument("--decided-by", default=None)
     args = ap.parse_args()
 
@@ -191,33 +279,52 @@ def main() -> int:
 
     decided_by = args.decided_by or getpass.getuser()
 
-    with runlog.run_progress(NODE):
+    with runlog.run_progress(NODE) as progress:
         uids = admitted_uids()
         if not uids:
             print("no asset survived all of n03, n04 and n05", flush=True)
+            progress.rc = 2
             return 2
         train, test = split_assets(uids, args.seed)
+        dev_train, dev_val = split_dev(train, args.dev_seed,
+                                       args.dev_val_fraction)
 
-        # [L2-LEAK-OBJECT] A leaking split must not reach disk.
-        leaked = set(train) & set(test)
-        if leaked:
-            raise AssertionError(f"{len(leaked)} assets in both splits")
+        # [L2-LEAK-OBJECT] A leaking split must not reach disk. Three pairs now,
+        # and the middle one is the one D-3 exists to prevent.
+        for a, b, why in ((train, test, "train/test"),
+                          (dev_val, test, "dev_val/test"),
+                          (dev_train, dev_val, "dev_train/dev_val")):
+            if leaked := set(a) & set(b):
+                raise AssertionError(f"{len(leaked)} assets in both {why}")
+        if set(dev_train) | set(dev_val) != set(train):
+            raise AssertionError(
+                "dev_train + dev_val is not the training pool; the development "
+                "phase would be training on something the paper did not allocate "
+                "to training")
 
         _write(SPLITS_PATH, {
-            "object": {"train": train, "test": test},
+            "object": {"train": train, "test": test,
+                       "dev_train": dev_train, "dev_val": dev_val},
             "split_seed": args.seed,
             "train_fraction": TRAIN_FRACTION,
+            "dev_split_seed": args.dev_seed,
+            "dev_val_fraction": args.dev_val_fraction,
             "admitted_total": len(uids),
         })
-        _write(EVAL_PROTOCOLS_PATH, build_eval_protocols(train, test))
+        _write(EVAL_PROTOCOLS_PATH,
+               build_eval_protocols(train, test, dev_val))
         _write(STAGE1_PROTOCOL_PATH,
                build_stage1_protocol(hyperparameters, decided_by))
 
     print(f"{len(train):,} train / {len(test):,} test objects "
           f"(seed {args.seed}, {len(uids):,} admitted)")
-    for name, p in build_eval_protocols(train, test).items():
+    print(f"  of the train pool: {len(dev_train):,} dev_train / "
+          f"{len(dev_val):,} dev_val "
+          f"(seed {args.dev_seed}, fraction {args.dev_val_fraction})")
+    for name, p in build_eval_protocols(train, test, dev_val).items():
+        flag = "" if p["reported"] else "   [NOT REPORTED -- selection only]"
         print(f"  {name}: query={p['query_split']}, gallery={p['gallery_split']} "
-              f"({p['gallery_size']:,})")
+              f"({p['gallery_size']:,}){flag}")
     return 0
 
 
