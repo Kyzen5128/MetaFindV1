@@ -862,3 +862,23 @@ def test_an_unrecognised_failure_still_trips_the_breaker(monkeypatch):
     for _ in range(400):
         t.failure(ValueError("every view drew nothing -- max alpha coverage 0.00000000"))
     assert t.systemic is None
+
+
+def test_a_second_retirement_keeps_the_first_stale_record(tmp_path):
+    """`sc.replace(".json.stale")` overwrote, on the re-render path this
+    function exists for: the evidence about the FIRST failure was destroyed by
+    the second."""
+    from metafind.data.renders import retire_stale_sidecar, sidecar_path
+
+    out = tmp_path
+    sc = sidecar_path(out, "u")
+    sc.parent.mkdir(parents=True, exist_ok=True)
+
+    sc.write_text("first failure")
+    assert retire_stale_sidecar(out, "u") is True
+    assert sc.with_suffix(".json.stale").read_text() == "first failure"
+
+    sc.write_text("second failure")
+    assert retire_stale_sidecar(out, "u") is True
+    assert sc.with_suffix(".json.stale").read_text() == "first failure"
+    assert sc.with_suffix(".json.stale.2").read_text() == "second failure"

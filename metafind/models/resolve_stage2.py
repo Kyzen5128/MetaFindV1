@@ -277,10 +277,11 @@ def main() -> int:
     stamp = {"decided_by": decided_by,
              "decided_at": datetime.now(timezone.utc).isoformat()}
 
-    with runlog.run_progress(NODE):
+    with runlog.run_progress(NODE) as progress:
         mapping, skipped = build_positive_map()
         if not mapping:
             print("no eligible ProcTHOR asset has a point cloud", flush=True)
+            progress.rc = 2
             return 2
 
         _write(STAGE2_PROTOCOL, {"status": "resolved", **STAGE2_DECISIONS, **stamp})

@@ -366,7 +366,21 @@ def provenance_state(uid: str, registry: dict[str, tuple[str, int, str]],
     # annotated, not blocked, not counted, and `blocked == 0` reads as "nothing
     # is stuck". A silent skip is the one outcome AC-1 exists to prevent, and
     # the ENGINEER reported to MASTER that a missing identity routes to
-    # UNACCOUNTED unconditionally. It did not. It does now.
+    # UNACCOUNTED unconditionally. It did not.
+    #
+    # [CORRECTED 2026-08-27] The sentence that stood here was "It does now."
+    # That claim was still stronger than the mechanism. The comparison is
+    # `image_id is not None and ...`, so a caller that passes no id disables it,
+    # and until today NO test passed one: `grep -rn 'image_ids' tests/` and
+    # `grep -rn 'image_id=' tests/` both returned nothing, across 14 call sites.
+    # A behavioural claim written in the file with nothing in the suite able to
+    # falsify it is a green light wired to nothing.
+    #
+    # The default stays. `main()` supplies the ids from n04's index, and the
+    # callers that legitimately have none -- an audit over a registry alone --
+    # must not be forced to invent one. What changed is that the comparison half
+    # now has tests that fail if it stops comparing, and this comment states the
+    # condition instead of asserting the outcome.
     if image_id is not None and rec.get("image_identity") != image_id:
         return UNACCOUNTED
     return state

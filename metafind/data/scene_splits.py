@@ -122,7 +122,7 @@ def main() -> int:
         print(f"no scene graphs in {paths.SCENE_GRAPHS} -- run n07 first", flush=True)
         return 2
 
-    with runlog.run_progress(NODE):
+    with runlog.run_progress(NODE) as progress:
         train, test = split_houses(house_ids, args.seed)
 
         # [L2-LEAK-SCENE] asserted here as well as measured downstream, because
@@ -136,6 +136,7 @@ def main() -> int:
             if not SEM_EDGE_CACHE.exists():
                 print(f"{SEM_EDGE_CACHE} not found -- run n08 first, or pass "
                       "--skip-coverage to split without it", flush=True)
+                progress.rc = 2
                 return 2
             cache = json.loads(SEM_EDGE_CACHE.read_text())
             text_map = json.loads((paths.OUTPUTS / "procthor_object_text.json").read_text())

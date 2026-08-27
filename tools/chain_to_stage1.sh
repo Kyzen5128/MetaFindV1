@@ -31,6 +31,26 @@ mkdir -p "$LOGS"
 say() { echo "[$(date '+%F %H:%M:%S')] $*"; }
 curves() { $PY "$REPO/tools/plot_training.py" 2>&1 | sed 's/^/  /'; }
 
+# `x=$(find ... | wc -l)` swallows find's exit status: the pipeline's status is
+# wc's, which is 0 whatever find did, so a failed count still yields a plausible
+# number and that number decides whether a chain runs. Any stderr from find is
+# also a failure and not a warning -- one unreadable subdirectory makes find
+# exit 0 with a SHORT count, and a short count at a gate kills a healthy run.
+# Same shape as tools/run_ulip_full.sh:74-85, which already treats it this way.
+# `-type f` so a DIRECTORY named *.json cannot count as an artifact.
+count() {
+    local n err rc
+    err=$(mktemp) || return 1
+    n=$(find -L "$@" -type f 2>"$err"); rc=$?
+    if [ $rc -ne 0 ] || [ -s "$err" ]; then
+        printf 'counting %s failed (rc=%s): %s\n' "$1" "$rc" "$(head -c 300 "$err")" >&2
+        rm -f "$err"
+        return 1
+    fi
+    rm -f "$err"
+    printf '%s\n' "$n" | grep -c . || true
+}
+
 die() {
     say "STOPPED: $*"
     curves
@@ -50,7 +70,8 @@ done
 # -L: $OUT/annotations is a symlink to /home/kyzen/metafind_out/annotations.
 # Without it this counted 0 and the gate below killed the chain no matter how
 # many annotations existed.
-ANN=$(find -L "$OUT/annotations" -maxdepth 1 -name '*.json' | wc -l)
+ANN=$(count "$OUT/annotations" -maxdepth 1 -name '*.json') \
+    || die "could not count annotations -- see the error above"
 say "annotations $ANN  ·  n08 artifacts present"
 # The threshold is unchanged. Only the message: it named ~45,955, a previous
 # corpus size, so a reader who hit this gate was told the wrong target.
@@ -82,7 +103,8 @@ rc=$?
 # $OUT/annotations, identical construction, which reads 0 without -L and
 # 38,849 with it. Once n06 writes its ~45,953 .npz this returned 0 and the
 # gate below killed the chain immediately after a SUCCESSFUL n06.
-EMB=$(find -L "$OUT/embeddings" -maxdepth 1 -name '*.npz' 2>/dev/null | wc -l)
+EMB=$(count "$OUT/embeddings" -maxdepth 1 -name '*.npz') \
+    || die "n06 returned 0 but its output could not be counted"
 say "embeddings written: $EMB"
 [ "$EMB" -ge 45000 ] || die "n06 returned 0 but wrote only $EMB embeddings"
 

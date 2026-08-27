@@ -165,6 +165,7 @@ IMAGE_ID = "0123456789abcdef"
 # tests now looks like a complete artifact on disk.
 DIM = 4
 N_VIEWS = 12
+CKPT_SHA = "0" * 64
 
 
 def complete_npz(tmp_path, **over):
@@ -178,6 +179,10 @@ def sidecar(tmp_path, **over) -> str:
     """A complete sidecar for `abc`, minus whatever the caller overrides."""
     rec = {"uid": "abc",
            "encoder_version": 1,
+           # [registry:328] Part of this node's cache key. A v2 sidecar without
+           # it was not written by this code, so a fixture without it is not a
+           # complete sidecar -- see the tests at the end of this file.
+           "ulip2_ckpt_sha": CKPT_SHA,
            "embedding_uri": str(tmp_path / "abc.npz"),
            "image_identity": IMAGE_ID,
            "embedding_dim": DIM,
@@ -658,3 +663,74 @@ def test_a_clean_corpus_with_nothing_to_do_still_returns_zero(monkeypatch, tmp_p
         {**ANNOTATION, "uid": "fresh", "image_identity": view_io.image_identity(rec)}))
 
     assert m.main() == 0
+
+
+# --- [registry:328] the checkpoint half of the cache key ----------------------
+
+def test_a_sidecar_without_a_checkpoint_sha_is_not_complete(monkeypatch, tmp_path):
+    """A weights swap without an ENCODER_VERSION bump used to resume across two
+    encoders, and every sidecar written by either passed forever.
+
+    The field is required for its own sake, not only when the caller supplies a
+    sha to compare against: a record claiming this encoder_version while lacking
+    the field was not written by this code.
+    """
+    import metafind.data.encode_text_image as m
+
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path)
+    complete_npz(tmp_path)
+    text = sidecar(tmp_path, encoder_version=m.ENCODER_VERSION)
+    assert is_complete("abc", text, IMAGE_ID) is True
+
+    rec = json.loads((tmp_path / "abc.json").read_text())
+    del rec["ulip2_ckpt_sha"]
+    (tmp_path / "abc.json").write_text(json.dumps(rec))
+    assert is_complete("abc", text, IMAGE_ID) is False
+
+
+def test_a_different_checkpoint_forces_a_re_encode(monkeypatch, tmp_path):
+    """The failure this exists to stop: new weights, same ENCODER_VERSION, and a
+    gallery built in two halves that is self-consistent and wrong."""
+    import metafind.data.encode_text_image as m
+
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", tmp_path)
+    complete_npz(tmp_path)
+    text = sidecar(tmp_path, encoder_version=m.ENCODER_VERSION)
+
+    assert is_complete("abc", text, IMAGE_ID, None, CKPT_SHA) is True
+    assert is_complete("abc", text, IMAGE_ID, None, "f" * 64) is False
+
+
+def test_the_checkpoint_sha_is_the_file_not_a_label(tmp_path, monkeypatch):
+    """`ulip2_ckpt_sha` must read the bytes; a name or a path would not change
+    when the weights inside it do."""
+    import metafind.data.encode_text_image as m
+
+    ckpt = tmp_path / "w.pt"
+    ckpt.write_bytes(b"first weights")
+    monkeypatch.setattr(m.paths, "ULIP2_CKPT", ckpt)
+    m.ulip2_ckpt_sha.cache_clear()
+    first = m.ulip2_ckpt_sha()
+
+    ckpt.write_bytes(b"second weights")     # same path, same name
+    m.ulip2_ckpt_sha.cache_clear()
+    assert m.ulip2_ckpt_sha() != first
+
+
+# --- retiring an artifact must not destroy the previous retirement -----------
+
+def test_a_second_retirement_does_not_overwrite_the_first(tmp_path):
+    """`art.replace(art.suffix + ".stale")` overwrites, on the exact
+    re-annotate path the retirement was written for. Keeping evidence and then
+    deleting the older evidence is the same as not keeping it."""
+    import metafind.data.encode_text_image as m
+
+    art = tmp_path / "abc.json"
+    art.write_text("first")
+    m._retire(art)
+    assert (tmp_path / "abc.json.stale").read_text() == "first"
+
+    art.write_text("second")
+    m._retire(art)
+    assert (tmp_path / "abc.json.stale").read_text() == "first"
+    assert (tmp_path / "abc.json.stale.2").read_text() == "second"

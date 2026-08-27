@@ -643,11 +643,21 @@ def retire_stale_sidecar(out_dir: Path, uid: str) -> bool:
 
     Renamed, not deleted -- the record is evidence about a failure, and `.stale`
     falls outside the `*.json` glob that defines the corpus.
+
+    Numbered, because `sc.replace(".json.stale")` OVERWRITES: a second
+    retirement destroyed the first one, on the exact re-render path this
+    function exists for. Keeping evidence and then silently deleting the older
+    evidence is the same as not keeping it.
     """
     sc = sidecar_path(out_dir, uid)
     if not sc.exists():
         return False
-    sc.replace(sc.with_suffix(".json.stale"))
+    target = sc.with_suffix(".json.stale")
+    n = 1
+    while target.exists():
+        n += 1
+        target = sc.with_suffix(f".json.stale.{n}")
+    sc.replace(target)
     return True
 
 
@@ -1163,7 +1173,7 @@ def main() -> int:
     # deep, so one bad pool generation cannot reach it.
     tally = Tally()
     try:
-      with runlog.run_progress(NODE):
+      with runlog.run_progress(NODE) as progress:
         for start in range(0, len(todo), BATCH):
             if tally.systemic:
                 break
@@ -1227,6 +1237,16 @@ def main() -> int:
 
         # Inside the context on purpose: this is what makes run_progress record
         # FAILED instead of SUCCESS.
+        # [R-32] The rc has to be recorded while this block is still OPEN.
+        # `run_progress` cannot see a `return` that happens after it closes, and
+        # the `return 0 if done or not todo else 2` below did exactly that: a
+        # run that rendered nothing returned 2, halted the chain, and left a
+        # durable row saying SUCCESS / rc 0. The systemic path never had this
+        # problem because it leaves by raising -- which is why raising is the
+        # shape that cannot be forgotten, and this assignment is the shape that
+        # can. It is used here because n04's non-systemic failure is a normal
+        # outcome, not an exception.
+        progress.rc = 0 if tally.done or not todo else 2
         if tally.systemic:
             raise SystemicFailure(tally.systemic)
     except SystemicFailure:
@@ -1265,7 +1285,9 @@ def main() -> int:
     # next stage on a corpus that was never rendered.
     if systemic:
         return 3
-    return 0 if done or not todo else 2
+    # Single source: the same value the durable row already carries. Recomputing
+    # it here is how the two would drift.
+    return progress.rc
 
 
 if __name__ == "__main__":

@@ -68,7 +68,21 @@ count() { printf '  %-22s %s\n' "$1" "$2"; }
 # The two callers that pass a REAL directory (scene_graphs 12,000 and
 # procthor_modalities 1,467) count identically with and without -L, so this is
 # one fix at the fork rather than two at the call sites.
-recs() { find -L "$1" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l; }
+# `find ... | wc -l` swallows find's exit status -- the pipeline reports wc's,
+# always 0 -- so a failed count printed a plausible number on a screen people
+# read to decide whether to start the next stage. It prints `?` now. `-type f`
+# so a DIRECTORY named *.json cannot be counted as a record; none exist today,
+# which is why this is a latent fix and not a visible one.
+recs() {
+    local n err rc
+    err=$(mktemp) || { printf '?\n'; return; }
+    n=$(find -L "$1" -maxdepth 1 -name '*.json' -type f 2>"$err"); rc=$?
+    if [ $rc -ne 0 ] || [ -s "$err" ]; then
+        rm -f "$err"; printf '?\n'; return
+    fi
+    rm -f "$err"
+    printf '%s\n' "$n" | grep -c . || true
+}
 # Count the records n05 ITSELF calls current. Keying on prompt_version was
 # wrong twice over: it was pinned to 3 while the live corpus writes 8, so this
 # read 0 against 32,000 finished records; and prompt_version alone cannot

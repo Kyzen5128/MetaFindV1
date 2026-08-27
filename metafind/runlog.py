@@ -80,6 +80,32 @@ def _append(path: Path, record: dict[str, Any]) -> None:
         os.fsync(f.fileno())
 
 
+class Progress:
+    """The handle `run_progress` yields, so a node can report a non-zero rc.
+
+    A context manager cannot see the value its body returns. `rc = 0` plus
+    `except BaseException: rc = 1` therefore recorded SUCCESS for every failure
+    that came back as a RETURN rather than a raise -- and a `return 2` leaves
+    the block normally.
+
+    Measured in run_progress.jsonl: a pass that returned 2, halted the chain and
+    never started n05 is on disk as `status: SUCCESS, rc: 0`. The durable record
+    of a failure said the opposite of what happened.
+
+    Nodes that fail by returning set `progress.rc` before returning:
+
+        with runlog.run_progress(NODE) as progress:
+            if not path.exists():
+                progress.rc = 2
+                return 2
+    """
+
+    __slots__ = ("rc",)
+
+    def __init__(self) -> None:
+        self.rc = 0
+
+
 @contextmanager
 def run_progress(name: str, attempt: int = 1):
     """Bracket a node's execution and emit its run_progress record.
@@ -87,6 +113,9 @@ def run_progress(name: str, attempt: int = 1):
     Writes on the way out whatever happens, including on an exception, because
     a stage that vanished without a record is indistinguishable from one that
     never started -- and that is exactly the state a resume has to interpret.
+
+    Yields a `Progress`; set its `rc` before returning non-zero from inside the
+    block, or the record will say the run succeeded.
     """
     started = time.time()
     # A record on the way IN as well as out. The exit record is written in a
@@ -98,13 +127,16 @@ def run_progress(name: str, attempt: int = 1):
         "ended_at": None, "attempt": attempt, "rc": None,
         "stdout_broken": False, "code_revision": code_revision(),
     })
-    rc = 0
+    progress = Progress()
+    raised = False
     try:
-        yield
+        yield progress
     except BaseException:
-        rc = 1
+        raised = True
         raise
     finally:
+        # An exception always means failure; otherwise the body's own rc stands.
+        rc = 1 if raised else int(progress.rc)
         _append(paths.LOGS / "run_progress.jsonl", {
             "stage": name,
             "status": "SUCCESS" if rc == 0 else "FAILED",

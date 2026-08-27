@@ -36,6 +36,8 @@ than inferred from a config file later.
 from __future__ import annotations
 
 import argparse
+import functools
+import hashlib
 import json
 import os
 import time
@@ -62,7 +64,33 @@ from metafind.models.stage1_config import (  # noqa: E402
 )
 
 NODE = "n06_encode_text_image"
-ENCODER_VERSION = 1
+ENCODER_VERSION = 2   # v2 binds the sidecar to the checkpoint that produced it
+
+
+@functools.lru_cache(maxsize=1)
+def ulip2_ckpt_sha() -> str:
+    """sha256 of the ULIP-2 checkpoint the encoder is built from.
+
+    `docs/graph/node_registry.yaml:328` specifies this node's cache key as
+    [annotation_sha256, render_sha256, ulip2_ckpt_sha]. `is_complete` compared
+    the first two and nothing about the checkpoint, so swapping weights without
+    bumping ENCODER_VERSION would resume across two encoders and every affected
+    sidecar would pass forever -- a gallery in two halves, self-consistent and
+    wrong, exactly the failure the text comparison was added to stop.
+
+    It is worth binding even though today's checkpoint contributes only the
+    point encoder (the open_clip half comes from `create_model_and_transforms`,
+    `ulip_backbone.py:205`): "today's checkpoint does not touch text and image"
+    is a fact about this file's contents, not a guarantee about the next one,
+    and the sidecar cannot tell the difference after the fact.
+
+    0.37 GiB, measured 0.4 s, once per process.
+    """
+    h = hashlib.sha256()
+    with open(paths.ULIP2_CKPT, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 22), b""):
+            h.update(block)
+    return h.hexdigest()
 
 # CLIP truncates at 77 tokens silently, and the pinned template puts the
 # description first -- so an overlong one loses the TAIL, where the placement
@@ -119,8 +147,30 @@ def sidecar_path(uid: str) -> Path:
     return paths.EMBEDDINGS / f"{uid}.json"
 
 
+def _retire(art: Path) -> Path:
+    """Rename an artifact out of the way without destroying an earlier one.
+
+    `art.replace(art.with_suffix(art.suffix + ".stale"))` OVERWRITES, and it
+    does so on the exact path this code was written for: re-annotate, retire,
+    re-annotate again, and the first `.stale` -- the evidence about the first
+    failure -- is gone. Retiring is done instead of deleting because the file is
+    evidence; silently destroying the older evidence defeats the reason.
+
+    Suffixes are numbered rather than timestamped so the order is readable and
+    the result does not depend on a clock.
+    """
+    target = art.with_suffix(art.suffix + ".stale")
+    n = 1
+    while target.exists():
+        n += 1
+        target = art.with_suffix(f"{art.suffix}.stale.{n}")
+    art.replace(target)
+    return target
+
+
 def is_complete(uid: str, expected_text: str, image_id: str,
-                aggregation: str | None = None) -> bool:
+                aggregation: str | None = None,
+                ckpt_sha: str | None = None) -> bool:
     """[B-1, D0-008 §11.2] Complete means: this sidecar holds the text THIS
     serializer produces for THIS uid, and the vectors it points at exist.
 
@@ -168,6 +218,16 @@ def is_complete(uid: str, expected_text: str, image_id: str,
     # `train/stage1.py` Stage1Dataset -- which is a separate node and is
     # reported, not fixed here.)
     if aggregation is not None and rec.get("aggregation") != aggregation:
+        return False
+    # [registry:328] The checkpoint half of the cache key. `None` means the
+    # caller did not supply one, and that is a real case -- the tests construct
+    # sidecars without a backbone -- so it cannot be required unconditionally.
+    # What CAN be required is that a sidecar written by this version carries the
+    # field at all: a v2 record with no `ulip2_ckpt_sha` was not written by this
+    # code, whatever it claims about `encoder_version`.
+    if "ulip2_ckpt_sha" not in rec:
+        return False
+    if ckpt_sha is not None and rec.get("ulip2_ckpt_sha") != ckpt_sha:
         return False
     # Not `Path(rec.get("embedding_uri", "")).exists()`. An absent or empty field
     # made that `Path(".")`, the working directory, which exists -- so a sidecar
@@ -401,7 +461,7 @@ def main() -> int:
         for art in (paths.EMBEDDINGS / f"{path.stem}.npz",
                     sidecar_path(path.stem)):
             if art.exists():
-                art.replace(art.with_suffix(art.suffix + ".stale"))
+                _retire(art)
     if stale_text:
         print(f"{len(stale_text):,} annotation(s) describe a different render than the "
               f"one on disk, e.g. {[p.stem for p in stale_text[:3]]}.\n"
@@ -429,7 +489,8 @@ def main() -> int:
             if p.stem in renders and p.stem not in stale
             and (args.force or not is_complete(p.stem, expected_text_for(p),
                                                image_identity(renders[p.stem]),
-                                               protocol["image_aggregation"]))]
+                                               protocol["image_aggregation"],
+                                               ulip2_ckpt_sha()))]
     if args.limit:
         todo = todo[: args.limit]
     print(f"{len(annotations):,} annotated, {len(todo):,} to encode "
@@ -483,6 +544,7 @@ def main() -> int:
             rec = {
                 "uid": uid,
                 "encoder_version": ENCODER_VERSION,
+                "ulip2_ckpt_sha": ulip2_ckpt_sha(),
                 "embedding_uri": str(npz),
                 "text": text,
                 "text_tokens": n_tokens,

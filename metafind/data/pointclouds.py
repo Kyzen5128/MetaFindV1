@@ -845,7 +845,7 @@ def main() -> int:
     print("implementation: " + "  ".join(f"{k} {v[:12]}" for k, v in fingerprint.items()),
           flush=True)
 
-    with runlog.run_progress(NODE), \
+    with runlog.run_progress(NODE) as progress, \
             cf.ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {pool.submit(process_one, u, g, o): u for u, g, o in todo}
         for fut in cf.as_completed(futures):
@@ -880,6 +880,17 @@ def main() -> int:
                 print(f"  [{done:6d}/{len(todo)}] {rate:.0f}/min, "
                       f"剩餘約 {left:.0f} 分, quarantine {len(quarantine)}", flush=True)
 
+        # [R-32] Recorded while the block is still OPEN. `run_progress` cannot
+        # see the `return 0 if done or not todo else 2` at the end of this
+        # function -- that return escapes after the row is already written, so a
+        # run that sampled nothing left SUCCESS / rc 0 on disk.
+        #
+        # Set rather than raised: `proceed_with_admitted` (see the comment at
+        # the return) makes a partial corpus a legitimate outcome here, so an
+        # exception would be the wrong shape for n03 even though it is the
+        # unforgettable one.
+        progress.rc = 0 if done or not todo else 2
+
     # The aggregate index is DERIVED from the per-asset sidecars, never
     # appended to. Appending made it grow duplicates on every resumed run and
     # made it disagree with the filesystem the moment one was interrupted.
@@ -899,7 +910,8 @@ def main() -> int:
     # proceed_with_admitted: a partial corpus is a legitimate outcome here, and
     # G2_pc_sanity decides whether what survived is usable. Only an empty result
     # is a failure of this node.
-    return 0 if done or not todo else 2
+    # Single source: the same value the durable row already carries.
+    return progress.rc
 
 
 if __name__ == "__main__":

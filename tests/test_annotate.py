@@ -1622,3 +1622,82 @@ def test_the_cli_default_and_the_deviation_record_name_the_same_model():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default=MODEL_ID)
     assert ap.parse_args([]).model == MODEL_ID
+
+
+# --- [AC-1] the image-identity half of the guard, which nothing could falsify --
+#
+# `provenance_state(..., image_id=None)` disables its own comparison, and until
+# 2026-08-27 no test in this suite passed an id: `grep -rn 'image_ids' tests/`
+# and `grep -rn 'image_id='` both returned nothing across 14 call sites, under a
+# comment reading "It did not. It does now." These exist so that claim can fail.
+
+def _declared(tmp_path, monkeypatch, image_identity=None):
+    """One accepted record, declared in a registry, optionally carrying an id."""
+    import hashlib
+    import json as _json
+    R, ann, _ = _corpus(tmp_path, monkeypatch)
+
+    rec = _json.loads((ann / "legacy_a.json").read_text())
+    if image_identity is not None:
+        rec["image_identity"] = image_identity
+    (ann / "legacy_a.json").write_text(_json.dumps(rec))
+
+    digest = hashlib.sha256((ann / "legacy_a.json").read_bytes()).hexdigest()
+    registry = tmp_path / "reg2.json"
+    registry.write_text(_json.dumps({
+        "registry_version": 1,
+        "populations": [{"state": R.ACCEPTED_LEGACY_V3, "prompt_version": 3,
+                         "records": {"legacy_a": digest}}]}))
+    return R, R.load_provenance_registry(registry)
+
+
+def test_a_re_render_makes_a_declared_record_unaccounted(tmp_path, monkeypatch):
+    """The failure AC-1 exists to prevent: a byte-matching record survives a
+    re-render, lands in NEITHER todo nor blocked, and `blocked == 0` reads as
+    "nothing is stuck" while the asset is silently skipped."""
+    R, reg = _declared(tmp_path, monkeypatch, image_identity="renders-v4")
+
+    assert R.provenance_state("legacy_a", reg, "renders-v4") == R.ACCEPTED_LEGACY_V3
+    assert R.provenance_state("legacy_a", reg, "renders-v5") == R.UNACCOUNTED
+
+
+def test_a_record_that_cannot_say_what_it_saw_is_unaccounted(tmp_path, monkeypatch):
+    """Absence fails CLOSED. A declaration cannot vouch for images rendered
+    after it was written."""
+    R, reg = _declared(tmp_path, monkeypatch, image_identity=None)
+    assert R.provenance_state("legacy_a", reg, "renders-v4") == R.UNACCOUNTED
+
+
+def test_no_image_id_means_the_comparison_is_not_made(tmp_path, monkeypatch):
+    """Documenting the default rather than asserting it away.
+
+    A caller with no ids -- an audit over a registry alone -- must not be forced
+    to invent one, so the comparison is opt-in. This test exists so that the
+    weakness is stated in the suite instead of only in a comment: if someone
+    makes the id mandatory, this fails and the decision is visible.
+    """
+    R, reg = _declared(tmp_path, monkeypatch, image_identity="renders-v4")
+    assert R.provenance_state("legacy_a", reg) == R.ACCEPTED_LEGACY_V3
+    assert R.provenance_state("legacy_a", reg, None) == R.ACCEPTED_LEGACY_V3
+
+
+def test_classify_all_passes_each_uid_its_own_image_id(tmp_path, monkeypatch):
+    R, reg = _declared(tmp_path, monkeypatch, image_identity="renders-v4")
+    assert R.classify_all(["legacy_a"], reg,
+                          {"legacy_a": "renders-v4"}) == {"legacy_a": R.ACCEPTED_LEGACY_V3}
+    assert R.classify_all(["legacy_a"], reg,
+                          {"legacy_a": "renders-v5"}) == {"legacy_a": R.UNACCOUNTED}
+
+
+def test_a_re_rendered_asset_reaches_the_blocked_list_not_neither(tmp_path, monkeypatch):
+    """Through `build_work_list`, which is what `main()` actually calls.
+
+    Neither-list was the whole defect; asserting the state alone would not have
+    caught it.
+    """
+    R, reg = _declared(tmp_path, monkeypatch, image_identity="renders-v4")
+
+    todo, blocked, _ = R.build_work_list(["legacy_a"], force=False, registry=reg,
+                                         image_ids={"legacy_a": "renders-v5"})
+    assert blocked == ["legacy_a"]
+    assert todo == []
