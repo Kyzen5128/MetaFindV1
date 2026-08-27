@@ -435,3 +435,96 @@ Rule 16 未變：進協定只有三條路 —— MetaFind PAPER FACT ／ Kyzen �
 既有 ledger 條目載明該具體參數。
 
 全部角色於本日 **零寫入、零 commit、零 GPU**。n05（PID 113455）未受影響。
+
+---
+
+## 9. 🔴 儀表全部在說謊 —— 同四行輸出裡四個獨立的失真源
+
+**出處**：ULIP2 ENGINEER `metafindv1-be` ＋ ULIP2 REVIEWER `metafindv1-c4`
+**我的查證狀態**：**CONFIRMED**，逐條開檔驗過
+
+`tools/status.sh` 這四行，2026-08-27 05:25 的實際輸出：
+
+```
+跑中   n05 標註   45,553 annotated this run, 45,955 complete on disk, 3 quarantined
+n05 標註(v3)      0 / 45,955
+
+真實狀態  n05_full.log 尾巴：[ 32000/46024] 9.5/min, quarantine 226
+```
+
+**四個不同機制，沒有一個是 symlink：**
+
+```
+① :56  v3_count 濾 prompt_version == 3，實測 sidecar 是 8 → 分子恆為 0
+       與 symlink 無關。Python 的 glob 會穿透 symlink，-L 蓋不到這個。
+② :63  分母寫死 "45,955"，現行目標是 46,024
+       隔離數再降就會印出超過 100%
+③ :22  tail 的是 n05_v3_full.log（mtime 08-20 07:09），實際在寫 n05_full.log
+④ :32  pgrep 找已改名的 chain_after_n05，分支恆真
+外加   chain_to_stage1.sh:55 的 die 訊息也寫死 "~45,955"
+```
+
+**最陰的是 45,955 出現兩次（② 與 ③），兩行互相佐證，反而更像真的。**
+
+REVIEWER 的判定，我原話保留：
+
+> **假的 0 只是讓人懷疑健康的語料；假的 45,955 讓人相信一個階段做完了 ——
+> 而它邀請的動作正好是「開始下一階段」。**
+
+而下一階段正是 `chain_to_stage1.sh`，門檻 45,000。**假訊號剛好邀請被禁止的動作。**
+
+---
+
+## 10. 今日第三次：指令看不到被問的東西，而它乾淨的答案讀起來像世界的事實
+
+三次，三個不同的人，三種不同的機制：
+
+```
+1  `| head` 截斷   —— 我加的視窗，被讀成「資料裡從來沒有」
+2  `ps` 的比對     —— 早上那次
+3  裸 `find <symlink>` 沒有 -name —— 我今晚報「pointclouds 結構不同」，
+   並據此把 ENGINEER 派去查一個不存在的差異。
+   REVIEWER 重現了我的數字：`find data/outputs/pointclouds -maxdepth 1 | wc -l` → 1，
+   那個 1 是 **symlink 自己那一筆**。加上 `-name '*.npz'` 之後：no-L 0 / with-L 46,052。
+   四個目錄形狀完全一樣。**是我的指令錯，不是磁碟。已撤回並通知 ENGINEER 停止。**
+```
+
+**共同形狀**：指令的作用域被自己縮小了，而輸出沒有任何地方顯示這件事。
+`status.sh` 的四個失真源是同一族的第四到第七例 —— 只是它們住在儀表裡，不是住在一次性的查詢裡。
+
+> 這一族不會因為「知道有這回事」而消失。它每次都以一個乾淨、合理、
+> 看起來就是答案的數字出現。**唯一擋得住的是「換一個角度再量一次」。**
+
+---
+
+## 11. 2026-08-27 Kyzen 放行紀錄
+
+**原話：「1234」。`✅` 打在 MASTER 視窗，涵蓋四項，僅此一次，不順延。**
+
+```
+1  commit 兩處 -L（chain_to_stage1.sh:50 · status.sh:44 recs()）
+2  修 chain_to_stage1.sh:72 的 embeddings 同型缺陷
+3  status.sh 四個失真源一次修完，含 chain_to_stage1.sh:55 的寫死舊值
+4  改 resolve_stage1.py:239 lr 1e-3 → 5e-4 · :243 epochs 50 → 250
+   並處理 ENGINEER 的漏 2（五欄進 REQUIRED_HYPERPARAMETERS）
+   與漏 3（hash 連動順序 resolve_stage1 → n05b → n09）
+```
+
+**這個 `✅` 不涵蓋任何執行。** 不准跑 n09、不准起 chain、不准跑 n05b、不准碰 GPU、
+不准順手修其他 open findings、不准加 preflight 的 provenance 守門（列下一輪）。
+
+**記錄紀律（Rule 17，寫死，日後不得被改述）：**
+
+```
+· epochs 250 是上限，先跑 5 → 10 → 25 pilot，不是無條件跑滿
+· lr 5e-4 是起跑點，第一輪 sweep 2.5e-4 / 5e-4 / 7.5e-4 / 1e-3
+· lr_start 1e-6 / lr_end 1e-5 是**數值不是機制**，Kyzen 明確選「照 ULIP」，
+  記 USER-APPROVED，不是自動繼承
+· ULIP 的 --lr 預設是 3e-3，Kyzen 刻意排除。
+  **日後不得把這個 sweep 描述為「照 ULIP 的設定」** —— 照的是機制，偏離的是數值
+· 全部記 USER-APPROVED，上游列為佐證而非依據
+  （否則後來的人套 Type D 會把 250 重開，因為 --epochs default 正是 Type D）
+```
+
+**流程未變**：改完 → 送審（Codex 額度 8:18 AM 恢復，之前依 DL-029 由 REVIEWER 代審）
+→ 八項報告 → MASTER 轉呈 → Kyzen 另外放行才執行。
