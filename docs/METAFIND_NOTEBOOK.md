@@ -570,7 +570,7 @@ overfitting 時點也可能後移，而**方向不保證**。
 | fusion transformer 尺寸 | 2 層/8 頭/ffn 2048 | CHOICE | 論文無維度 |
 | ESSGNN hidden | **未決** | **待決，排在四項之後** | 128 出自 EGNN 論文 `appendix.tex:135` 的 **QM9 實作細節節** → **EGNN EXPERIMENT-SPECIFIC SETTING**，不能單靠 lineage 落地。且 QM9 的 15 維原子 one-hot → 128 是**放大**，我們 1280 → 128 是**壓縮**，同一個數字方向相反。順序見 `docs/ESSGNN_DIM_REVIEW.md` §7 |
 | ESSGNN 層數 | ⚠ **未決。現行協定是 `4`。** | 🔴 **2026-08-27 更正：上一版標 USER-APPROVED 是錯的，查無此決定。**與 pooling 同一個錯：`DECISION_LEDGER.md`／`C_PAPER_CONTRADICTIONS.md` 均無 `n_layers` 決定條目；協定檔 `n_layers = 4`，`decided_by = Kyzen (2026-08-19)`。**7 是我從 EGNN QM9 `main_qm9.py:34` 提的建議**（Type C，別的任務的實驗設定），需 Kyzen 核可才能落地 | 7 出自 `main_qm9.py:34` 與論文 `appendix.tex:135`，屬 **EGNN EXPERIMENT-SPECIFIC SETTING**。注意 `qm9/models.py:46` 的 class 建構子預設**也是 4**，是 QM9 腳本顯式覆寫成 7 —— 更證明 7 是實驗設定不是 intrinsic 架構。原文寫「4 是 N-body 的值」不完整，已更正 |
-| ESSGNN pooling | ⚠ **未決。現行協定是 `mean`。** | 🔴 **2026-08-27 更正：上一版標「USER-APPROVED（2026-08-17 定 sum）」是錯的，查無此決定。** | **查證（ESSGNN REVIEWER 2026-08-27 提出，我複驗）**：`DECISION_LEDGER.md` 與 `C_PAPER_CONTRADICTIONS.md` **沒有任何一條 08-17 的 pooling 決定**；magnetic `essgnn_arch_protocol.json` 的 `decided_by` 是 **`Kyzen (2026-08-19, C1 決定後補寫)`**、`pooling` 是 **`mean`**。**08-17 是 U-26（架構家族）的日期，我把它安到 pooling 頭上了。**<br>**所以真相是**：`mean` 是 Kyzen 08-19 核可的現行值；`sum` 是我 08-26 從 EGNN QM9 提的**建議**，而該建議的理由已於 08-27 撤回（EGNN 從未說過「因為目標外延所以 sum」，且 QM9 亦含 HOMO/LUMO/gap/μ 等非外延目標）。<br>**我把自己的建議標成他的核可 —— 那正是 Rule 16 禁止的無聲晉升，而且是我犯的。**<br>論文只寫 `Pooling({h_i^(L)})`，**未命名** → PAPER AMBIGUITY。工程取捨仍成立：sum 會讓 ‖e_layout‖ 隨物件數變動而單一 λ 補不回；mean 則弱化物件數資訊。**現行值維持 `mean`，改成 sum 需要 Kyzen 核可，或先做短跑比較再上呈。** |
+| ESSGNN pooling | ⚠ **未決。現行協定是 `mean`。** | 🔴 **2026-08-27 更正：上一版標「USER-APPROVED（2026-08-17 定 sum）」是錯的，查無此決定。** | **查證（ESSGNN REVIEWER 2026-08-27 提出，我複驗）**：`DECISION_LEDGER.md` 與 `C_PAPER_CONTRADICTIONS.md` **沒有任何一條 08-17 的 pooling 決定**；magnetic `essgnn_arch_protocol.json` 的 `decided_by` 是 **`Kyzen (2026-08-19, C1 決定後補寫)`**、`pooling` 是 **`mean`**。**08-17 是 U-26（架構家族）的日期，我把它安到 pooling 頭上了。**<br>**⚠ 而我第一次撤回時寫的「`mean` 是 Kyzen 08-19 核可的現行值」，也是過度解讀同一個戳。** ESSGNN ENGINEER 讀那個檔案時發現：**`decided_by` 是整份檔案的一個頂層欄位，不是逐 key 的**，它同時蓋住五個參數（`n_layers` / `pooling` / `hidden_dim` / `use_io_projections` / `layer_sharing`）。**我對其中兩個當成核可、對另外三個當成待決，而我給不出理由。**<br>**這變成一個必須由 Kyzen 回答的問題，見 §10 新增條目。**<br>`sum` 是我 08-26 從 EGNN QM9 提的**建議**，該建議的理由已於 08-27 撤回（EGNN 從未說過「因為目標外延所以 sum」，且 QM9 亦含 HOMO/LUMO/gap/μ 等非外延目標）。**我把自己的建議標成他的核可 —— 那正是 Rule 16 禁止的無聲晉升，而且是我犯的。**<br>論文只寫 `Pooling({h_i^(L)})`，**未命名** → PAPER AMBIGUITY。工程取捨仍成立：sum 會讓 ‖e_layout‖ 隨物件數變動而單一 λ 補不回；mean 則弱化物件數資訊。**現行值維持 `mean`，改成 sum 需要 Kyzen 核可，或先做短跑比較再上呈。** |
 | Stage 2 lr/batch/epochs | 未定 | UNKNOWN（S4） | 規劃：沿 Stage 1＋小掃描 |
 
 ---
@@ -891,6 +891,43 @@ upstream/OpenShape/src/train.py:66-73     同一形狀，labels = arange(batch)
 
 **（2026-08-27）注意**：Stage 1 骨幹是 ViT-bigG-14 / 1280 維（`ulip_backbone.py:90`），
 ESSGNN 節點向量是 ViT-B/32 / 512 維。**兩者本來就不同，不是誰算錯**，但 U-20 未經裁決。
+
+### 🔴 最優先：2026-08-19 那個戳，對五個參數各自是不是核可？
+
+**這一題答完，下面五項同時有答案。ESSGNN ENGINEER 2026-08-27 提出，我複驗確認前提成立。**
+
+`data/outputs/essgnn_arch_protocol.json` 全文只有**一個**頂層 `decided_by`：
+
+```
+n_layers            4
+pooling             "mean"
+hidden_dim          128
+use_io_projections  true
+layer_sharing       "independent"
+
+decided_by  "Kyzen (2026-08-19, C1 決定後補寫)"    ← 五個共用這一個戳
+decided_at  2026-08-19T13:17:25
+```
+
+**我先前對其中兩個當成核可（`n_layers` `pooling`）、對另外三個當成待決，而我給不出理由。**
+
+| 讀法 | 推論 | 對 resolver 的影響 |
+|---|---|---|
+| **A** 這個戳是逐參數的真核可 | 五個**全部已核可** | 檔案照現況，一個字不用改，`status = resolved`。而 §10 與 `DIM_REVIEW §7` 把三個列為待決是**錯的** |
+| **B** 這個戳只是「C1 決定後把檔案補寫出來」的一次批次蓋章 | 五個**全部未核可**，只是現行值 | 五個全部 `None`，`status = unresolved:...`，**G6 關著，Stage 2 不能開** |
+
+**戳的字面偏向 B**：它自己說是「在 C1 決定**之後**補寫的」，而 **C1 決定的是架構家族，不是這五個**。
+一個描述「跟著別的決定順手補寫」的戳，很難同時是對這五個參數各自的核可。
+**而 Rule 16 要的正是指得出具體參數的核可 —— 這個戳指的是一次寫檔動作。**
+
+**我查不到 2026-08-19 當天實際同意了什麼**：`DECISION_LEDGER.md`、
+`C_PAPER_CONTRADICTIONS.md`、以及全 repo 的 `.md` 都沒有對應條目。
+那段脈絡在對話紀錄裡，不在 repo 裡。**所以我無法代答，必須 Kyzen 裁。**
+
+**在 A/B 未定之前，`resolve_stage2.py` 的那五個值不能寫任何一版** ——
+兩種讀法給出兩份不同的目標值，寫哪一版都是替他選。
+
+---
 
 ### 待拍板（附我的建議；**2026-08-25 逐條重驗過「論文真的答不了嗎」**——結果見各行）
 | # | 議題 | 重驗結果 | 我的建議＋理由 |
