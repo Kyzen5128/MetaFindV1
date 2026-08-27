@@ -720,6 +720,34 @@ Gates：G6 擋 Stage 2（essgnn_arch_protocol 未 resolved 不得開跑）；DL-
 
 ---
 
+## 9.6 「協定寫了，生效的那條路沒讀」—— 2026-08-27 一天內第四例
+
+**這是本專案目前最會產生沉默錯誤的一個形狀，四個實例的機制完全相同：**
+
+| # | 協定寫在哪 | 生效的路徑讀的是什麼 | 狀態 |
+|---|---|---|---|
+| 1 | `fusion.py:89` 已改 `transformer` | `stage1.py:322` 與 `stage1_config.py:367` 都讀 `training_protocol["fusion"]`，來源是 `splits.py:75` = **`masked_mlp`** | 🔴 **已發生**。修在不生效的檔上 |
+| 2 | `image_aggregation` 可設 `random_single_view` | `stage1.py:103` 存了 `self.aggregation` 卻**從未再讀**；`:110-121` 直接讀 `cached["image"]`（已聚合），`z["views"]` 無人碰 | ⚠ **地雷已埋**，改值的那一刻踩到 |
+| 3 | `tower_sharing="fully_separate"` 定義為兩個骨幹（`dual_tower.py:60`） | `stage1.py:368` 只建一個，且不驗證數量 | ⚠ 設下去照跑，跑出來是 `shared_backbone_separate_fusion`（INTEGRATOR 提，UNVERIFIED） |
+| 4 | `Stage1RuntimeConfig.from_protocols` 做協定驗證 | 只有 `tests/` 呼叫；訓練器 `stage1.py:309` 直讀原始協定字典 | ⚠ **所有協定驗證在真實訓練路徑上都不執行**（INTEGRATOR 提，UNVERIFIED） |
+
+**共同形狀**：協定層有一個看起來被消費的欄位，執行層有另一條路。
+**兩邊都不會報錯**，因為沒有任何東西比對它們。
+
+**諷刺的是 `stage1_config.py:8-20` 的 docstring 教的正好是這個陷阱**：
+
+> A trainer that writes `FusionConfig(dim=d)` gets `masked_mlp` whatever the
+> protocol resolved to, and nothing downstream notices.
+
+**寫下這句話的檔案，正是 #1 發生的地方。** 規則不會自己跑到手邊。
+
+**驗證方法**（下次遇到同型時直接用）：不要問「協定寫了什麼」，
+要從**執行入口**往回追到那個值第一次被讀取的地方，並確認中間沒有第二條路。
+`grep -rn '<常數名>' metafind/ --include=*.py` 若只回到定義處與註解，
+那個欄位就是死的。
+
+---
+
 ## 9.5 本輪外部審查新增登記的沉默點與矛盾（2026-08-26）
 
 以下五條是外部審查指出、我逐條核對原文後**確認成立**的新登記項。它們原本不在 v2 裡。
@@ -782,9 +810,9 @@ ESSGNN 節點向量是 ViT-B/32 / 512 維。**兩者本來就不同，不是誰�
 ### 待拍板（附我的建議；**2026-08-25 逐條重驗過「論文真的答不了嗎」**——結果見各行）
 | # | 議題 | 重驗結果 | 我的建議＋理由 |
 |---|---|---|---|
-| 1 | **U-14** 訓練時圖片視角 | **證據升級（2026-08-26）**：最近的一手來源其實是 **ULIP-2 自己**，`ulip2 main.tex:612` 原文 "randomly sample its 2D rendered image **I ~ render(O)**"。再加 OpenShape method.tex:77 "randomly sample one rendered image or thumbnail"、ULIP-1 main.tex:236 每步隨機 1/60。**三個上游一致，其中一個就是我們的直接骨幹**，所以訓練側屬強 UPSTREAM FACT，不是 UNKNOWN。但**「gallery／評測用 12 視角平均」上游沒有背書**，那一半仍是我們的 CHOICE | **B**：訓練隨機單張、gallery 與評測用平均。快取已存 per-view 嵌入，換法零成本。仍列表是因為 n05b 協定已寫成 mean，改它算協定變更、要你簽 |
+| 1 | **U-14** 訓練時圖片視角 | **證據升級（2026-08-26）**：最近的一手來源其實是 **ULIP-2 自己**，`ulip2 main.tex:612` 原文 "randomly sample its 2D rendered image **I ~ render(O)**"。再加 OpenShape method.tex:77 "randomly sample one rendered image or thumbnail"、ULIP-1 main.tex:236 每步隨機 1/60。**三個上游一致，其中一個就是我們的直接骨幹**，所以訓練側屬強 UPSTREAM FACT，不是 UNKNOWN。但**「gallery／評測用 12 視角平均」上游沒有背書**，那一半仍是我們的 CHOICE | **B**：訓練隨機單張、gallery 與評測用平均。⚠ **2026-08-27 更正：「換法零成本」是錯的，已撤回。** per-view 嵌入確實已快取（**重編碼**成本為零，這半句仍成立），但**沒有任何程式碼消費它**：`random_single_view` 在 `metafind/` 底下只出現兩次，都在 `stage1_config.py`（`:125` 常數定義、`:241` 註解），**沒有第三處**。`stage1.py:103` 存了 `self.aggregation` 之後**從未再讀取**；`:110-121` 的 `__getitem__` 直接讀 `cached["image"]`，也就是已聚合的那一支，`z["views"]` 在訓練路徑上無人碰。**所以現在把協定改成 `random_single_view`，訓練會照樣用 12 張平均，協定會記載 random_single_view，而且不會有任何東西報錯。** 真實成本：約 10 行（`__getitem__` 依 aggregation 從 `z["views"]` 隨機取一列）＋ 一個測試。不大，但不是零，而且不是純協定改動 —— 要送審。（ULIP2 ENGINEER 2026-08-27 提出，Master 複驗確認）|
 | 2 | **λ 初值** | **雙方已收斂（2026-08-26）**：外部審查撤回原本的 0.1 主張，與我方一致。依據：MetaFind `2meth:87` 自述殘差設計是為了 "without disrupting the original embedding space"；Flamingo `content.tex:187-189` 是最同構的先例（凍結骨幹＋新分支＋殘差＋純量閘＋**初值 0**，目的明寫為初始化時行為等同原模型），拆掉該機制掉 4.2% 且訓練不穩 | **raw λ = 0.0，不加 tanh、不加 clamp、不加 LayerNorm**。MetaFind 寫的是 learnable scalar λ，**不要把 Flamingo 的 tanh(α) 一起搬過來**——tanh 會把有效閘限制在 (-1,1)，那是更大的模型改動。最小偏離就是 `nn.Parameter(0.0)` |
-| 3 | **Stage 1 選 checkpoint 的依據** | **撤回上呈，上游全部答完了（2026-08-26 二度回查）**。我上一輪說「上游有獨立 benchmark、我們沒有，這塊答不了」，**那句話同樣是沒查完就下的結論**。OpenShape `src/train.py:190-201` 的訓練迴圈：跑滿 `max_epoch`（1000）**不早停**、**每個 epoch 存一次 `latest`**、每 `save_freq`（20）存一次快照、各 benchmark 各存各的 best。關鍵是它同時追蹤 **`img_contras_acc` / `text_contras_acc`**（`train.py:124,133`），那是**訓練批次自己的對比準確率**，不碰任何 held-out 資料。ULIP 同樣跑滿不早停（`main.py:212`） | **不需要你在互斥選項裡挑，照上游做即可**：跑滿 250、不早停、每 epoch 存 latest、每 N epoch 存快照、全程記錄 in-batch contrastive accuracy。**要用哪個 checkpoint 可以事後再定**，而且不論選「訓練對比準確率最好的」或「最後一個」，**都不碰那 20% 測試集**，污染問題自動消失 |
+| 3 | **Stage 1 選 checkpoint 的依據** | ⚠ **本條已於 2026-08-27 整條撤回，由 §4.3 的 DEVIATION D-3 取代。撤回理由：本條的整個論證建立在一個已被推翻的前提上。** 它宣稱 OpenShape 用 in-batch contrastive accuracy 選 checkpoint —— **OpenShape 沒有這樣做**。`upstream/OpenShape/src/train.py` 的 `best_img_contras_acc` / `best_text_contras_acc` 只在 `:27-28` 初始化、`:46-47` 從 checkpoint 讀回、`:167-168` 存進每個 checkpoint，**全檔沒有任何一行更新或比較它們**。真正會存 `best_*` 的只有 `:244` `:247` `:297`，全部由 **held-out benchmark** 的準確率驅動。所以本條不是「另一個管別的事的方案」，是**一個錯的方案**。以下原文保留供對照，**不再有效**：~~撤回上呈，上游全部答完了（2026-08-26 二度回查）~~。我上一輪說「上游有獨立 benchmark、我們沒有，這塊答不了」，**那句話同樣是沒查完就下的結論**。OpenShape `src/train.py:190-201` 的訓練迴圈：跑滿 `max_epoch`（1000）**不早停**、**每個 epoch 存一次 `latest`**、每 `save_freq`（20）存一次快照、各 benchmark 各存各的 best。關鍵是它同時追蹤 **`img_contras_acc` / `text_contras_acc`**（`train.py:124,133`），那是**訓練批次自己的對比準確率**，不碰任何 held-out 資料。ULIP 同樣跑滿不早停（`main.py:212`） | ⚠ **已撤回。** 原建議是「不需要你在互斥選項裡挑，照上游做即可」—— 那句話同時是**越權**（替 Kyzen 宣告不需裁決）與**事實錯誤**（上游沒有那個做法）。**現行做法見 §4.3 的 D-3**：開發期在 80% training pool 內部切 dev-val 定政策，正式期鎖死重訓完整 80%、不中途挑、最後才開 20% 考一次 |
 | 4 | **U-16** 塔權重共享 | **[已撤回並修正 2026-08-26]** 我上一輪寫「standing rule 預設應是 fully_separate」，**這個推論不成立，撤回**。理由：standing rule 只適用於**論文沉默**；這裡論文並不沉默，而是**自我矛盾**——正文 `2meth:34` 寫 "separate encoders"，但 **Figure 1 圖上明確標 `ULIP-2 (Shared)`，而且整張圖只畫一個 ULIP-2 方塊**（已親眼核對 `MetaFind.drawio.png`）。另外 DPR 在 MetaFind 裡是**雙塔檢索範式的概念出處**，不是 backbone 實作 authority（不像 ULIP-2／EGNN 是實作母體），所以 DPR 用兩份 BERT 推不出 MetaFind 的 ULIP-2 必須兩份參數。"separate encoders" 在架構敘述裡也可以只表示兩個邏輯塔／介面，不必然等於參數不相交。 | **維持現行 `shared_backbone_separate_fusion` 不變**，狀態 **PAPER-AMBIGUOUS ＋ USER CHOICE**。現行選擇反而是唯一能同時滿足兩處文字的讀法：一份骨幹（對上圖的 Shared）、兩個獨立 Fusion 介面（對上正文的 separate）。fully_separate 的證據**變強但沒到推翻**，保留為競爭假設。若你之後想改，那是新決策，不是修正錯誤 |
 | 5 | **U-20/U-06** t_i 與 e_ij 編碼器 | 論文明文 "e.g., CLIP or BERT"（2meth:47）——作者自己給選單不給答案，確認無解 | 同骨幹 CLIP——不引入第二顆模型、同嵌入空間 |
 | 6 | **U-21** Table 2 gallery＋資產數 | **新量測**：12,000 間房實際只用 **1,528 個 unique assetId**（train 10K 房=1,036）；ProcTHOR 官方庫 1,633；MetaFind 說 "3,000+"——**三個數字互相都對不上**，任何在手論文/資料都湊不出 3,000 | 維持 procthor scope、照實報三方差異；等 GPT 有無新讀法 |
@@ -792,14 +820,14 @@ ESSGNN 節點向量是 ViT-B/32 / 512 維。**兩者本來就不同，不是誰�
 | 8 | **Stage 2 超參數** | **原寫「S4 全無」是低估（2026-08-26 補查）**。EGNN 官方 QM9 有完整一組：`Adam` · `lr 1e-3` · `wd 1e-16` · `batch 96` · `epochs 1000`（`main_qm9.py:13,15,28,46`）。任務不同（分子回歸 vs 對比檢索）不能整包照搬，但不是沒有出處。另外 ESSGNN 的**架構**超參數更是有明確上游值，見 §3.4 對照表 | 架構值照 EGNN QM9（層數 7、pooling sum）；訓練值沿 Stage 1 的 AdamW＋cosine，lr 以 EGNN 的 1e-3 為起點小掃描，全部記 CHOICE |
 | 9 | Stage 2 正例分布落差 | 無上游做 layout-aware 檢索，確認無解 | 先 leave-one-out（論文可辯護的最小讀法），落差列為已知限制 |
 | 10 | 48K vs 46,832 vs 我們 46,052 | 無解（論文不解釋 48K 從哪來） | 不擋工；報告用實際語料數 |
-| 11 | **Stage 1 學習率** | **四個候選，各有一手出處（2026-08-26 查全）**：`1e-3` = ULIP-1 論文 main.tex:367-370，也是 OpenShape config default；`3e-3` = ULIP 官方腳本 `pretrain_pointbert.sh` 明傳、`main.py:52` default，但那條腳本跑的是 **ULIP-1 PointBERT 8192 點**，不是我們的 10k colored；`5e-4` = **OpenShape supp:190 明說「32.3M 版 PointBERT 用 5e-4，其他模型 1e-3」**，且 ULIP-2 yaml 的 optimizer 區塊也是 5e-4（該區塊 tri-modal 訓練不讀，但數字同源）。**實測：我們載入的 PointBERT 是 32.5M**，正落在 OpenShape 特地為它調小 lr 的那個量級 | **建議 5e-4**：它是唯一「針對 PointBERT 這個 backbone、在這個參數量級」明確給出的值；其餘三個不是別的 backbone 就是別的點數規模。這是上游彼此分歧、不是沉默，standing rule 選不出來，要你拍板 |
+| 11 | **Stage 1 學習率** | ✅ **已於 2026-08-27 由 Kyzen 拍板：5e-4 起跑**，第一輪 sweep `2.5e-4 / 5e-4 / 7.5e-4 / 1e-3`，**3e-3 不入第一輪**。記為 **USER-APPROVED IMPLEMENTATION CHOICE**，上游列為佐證而非依據。⚠ 承重的只有 **OpenShape supp:190**（同一顆 backbone、同一個尺寸、同一個目標，Type B）；**Point-BERT `:216` 的 5e-4 是 MPM 遮罩點建模，與我們的 tri-modal 對比對齊不是同一個任務 → Type C，不是第二張獨立的票**（ULIP2 REVIEWER 2026-08-27 指出）。⚠ **日後不得把這個 sweep 描述為「照 ULIP 的設定」** —— ULIP 論文 `main.tex:370` 是 `1e-3`、官方腳本 `pretrain_pointbert.sh` 明傳 `3e-3`，Kyzen 把前者收進 sweep 上緣、把後者排除。照的是機制，偏離的是數值。以下原始四候選分析保留供對照：**四個候選，各有一手出處（2026-08-26 查全）**：`1e-3` = ULIP-1 論文 main.tex:367-370，也是 OpenShape config default；`3e-3` = ULIP 官方腳本 `pretrain_pointbert.sh` 明傳、`main.py:52` default，但那條腳本跑的是 **ULIP-1 PointBERT 8192 點**，不是我們的 10k colored；`5e-4` = **OpenShape supp:190 明說「32.3M 版 PointBERT 用 5e-4，其他模型 1e-3」**，且 ULIP-2 yaml 的 optimizer 區塊也是 5e-4（該區塊 tri-modal 訓練不讀，但數字同源）。**實測：我們載入的 PointBERT 是 32.5M**，正落在 OpenShape 特地為它調小 lr 的那個量級 | ~~建議 5e-4~~ → **已拍板，見左欄。** 原建議理由仍成立：它是唯一「針對 PointBERT 這個 backbone、在這個參數量級」明確給出的值 |
 
 ---
 
 ## 11. 給審查者（GPT）的指令（第二輪範圍已收斂）
 
 **第一輪結果**：3 項 P0 全數採納並修正，P1／P2 大部分採納（見下方對照）。
-未採納的只有一項：外部審查建議把 U-14 的 gallery/eval 平均也視為可推導，我維持它是 CHOICE——ULIP-2 那句只講訓練取樣，沒有背書評測聚合方式。
+⚠ **本句是 2026-08-26 的狀態，已過期。** 原文：~~未採納的只有一項：外部審查建議把 U-14 的 gallery/eval 平均也視為可推導~~。該判斷本身仍成立（ULIP-2 那句只講訓練取樣，沒有背書評測聚合方式，所以 gallery/eval 平均維持 CHOICE），但「未採納的只有一項」這個計數在 2026-08-27 之後不再正確 —— 見本節各條的撤回與更新。
 
 **第二輪只需審**：(a) 本版三處 P0 修正是否真的把問題關掉；(b) §9.5 五條新登記的分類是否正確；(c) 有無新的 stronger-than-evidence 措辭。
 不需要再從頭複述全文。
