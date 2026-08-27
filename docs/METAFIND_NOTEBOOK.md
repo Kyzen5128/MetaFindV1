@@ -266,7 +266,7 @@ C8 = 論文把 SE(3) 說成「縮放敏感」的解法但 SE(3) 不含縮放（R
   "layer_sharing": null,             // ⚠ U-31 已於 2026-08-27 撤回為待決，見 §10。null = 未決
   "pooling": "mean",                 // ⚠ 現行值，Kyzen 2026-08-19 核可。sum 是未核可的建議，見 §4.3
   "hidden_dim": null,                // ⚠ 待決。128 是 EGNN QM9 的實驗設定（Type C），且 DIM_REVIEW §7 Step 5 要求前四步先定
-  "n_layers": 7,                     // USER-APPROVED，上游參考 EGNN QM9 main_qm9.py:34（Type C 經核可才落地）
+  "n_layers": 4,                     // ⚠ 現行值，Kyzen 2026-08-19 核可。7 是未核可的建議，見 §4.3
   "mlp_structure": "linear_silu_linear" }  // U-35：Linear→SiLU→Linear（描述程式碼，防漂移斷言）
 ```
 ＋ PRIMARY_INTERPRETATION（`essgnn.py:276-281`）：
@@ -296,7 +296,13 @@ MetaFind `2meth:42` 引 EGNN 的脈絡明寫是 **drug design**，那正是 EGNN
 
 **（2026-08-27 更正）「不需要裁決」是越權，已撤回。**
 兩個值都屬 **Type C**（EGNN 在 QM9 這個**別的任務**上的實驗設定），依 Rule 16 必須經 Kyzen 核可。
-現況：`n_layers = 7` 已核可；`pooling` 保留 sum 為起點但要**短跑比 sum vs mean** 後再定。
+🔴 **2026-08-27 二度更正：`n_layers = 7` 與 `pooling = sum` 兩者都查無核可，兩條都撤回。**
+現況：協定檔 `essgnn_arch_protocol.json` 是 **`n_layers = 4`、`pooling = "mean"`**，
+`decided_by = "Kyzen (2026-08-19, C1 決定後補寫)"`。
+`DECISION_LEDGER.md` 與 `C_PAPER_CONTRADICTIONS.md` **對這兩項都沒有任何決定條目** ——
+只有列舉「協定有哪些 key」的地方提到它們的名字。
+**7 與 sum 都是我從 EGNN QM9 提的建議，我後來把自己的建議寫成了他的核可。**
+兩者都要 Kyzen 拍板，或先做短跑比較再上呈。
 原文如下（保留供對照）：兩者都是「MetaFind 真沉默、EGNN 官方有明確值」的情形，
 但會改動已落檔的 `essgnn_arch_protocol`，屬協定變更，先報備再改。
 
@@ -563,7 +569,7 @@ overfitting 時點也可能後移，而**方向不保證**。
 | λ 初值 | 未定（code 佔位 1.0） | **UNKNOWN→待決** | §10 #2 |
 | fusion transformer 尺寸 | 2 層/8 頭/ffn 2048 | CHOICE | 論文無維度 |
 | ESSGNN hidden | **未決** | **待決，排在四項之後** | 128 出自 EGNN 論文 `appendix.tex:135` 的 **QM9 實作細節節** → **EGNN EXPERIMENT-SPECIFIC SETTING**，不能單靠 lineage 落地。且 QM9 的 15 維原子 one-hot → 128 是**放大**，我們 1280 → 128 是**壓縮**，同一個數字方向相反。順序見 `docs/ESSGNN_DIM_REVIEW.md` §7 |
-| ESSGNN 層數 | **7** | **USER-APPROVED IMPLEMENTATION CHOICE**，上游參考 EGNN QM9 | 7 出自 `main_qm9.py:34` 與論文 `appendix.tex:135`，屬 **EGNN EXPERIMENT-SPECIFIC SETTING**。注意 `qm9/models.py:46` 的 class 建構子預設**也是 4**，是 QM9 腳本顯式覆寫成 7 —— 更證明 7 是實驗設定不是 intrinsic 架構。原文寫「4 是 N-body 的值」不完整，已更正 |
+| ESSGNN 層數 | ⚠ **未決。現行協定是 `4`。** | 🔴 **2026-08-27 更正：上一版標 USER-APPROVED 是錯的，查無此決定。**與 pooling 同一個錯：`DECISION_LEDGER.md`／`C_PAPER_CONTRADICTIONS.md` 均無 `n_layers` 決定條目；協定檔 `n_layers = 4`，`decided_by = Kyzen (2026-08-19)`。**7 是我從 EGNN QM9 `main_qm9.py:34` 提的建議**（Type C，別的任務的實驗設定），需 Kyzen 核可才能落地 | 7 出自 `main_qm9.py:34` 與論文 `appendix.tex:135`，屬 **EGNN EXPERIMENT-SPECIFIC SETTING**。注意 `qm9/models.py:46` 的 class 建構子預設**也是 4**，是 QM9 腳本顯式覆寫成 7 —— 更證明 7 是實驗設定不是 intrinsic 架構。原文寫「4 是 N-body 的值」不完整，已更正 |
 | ESSGNN pooling | ⚠ **未決。現行協定是 `mean`。** | 🔴 **2026-08-27 更正：上一版標「USER-APPROVED（2026-08-17 定 sum）」是錯的，查無此決定。** | **查證（ESSGNN REVIEWER 2026-08-27 提出，我複驗）**：`DECISION_LEDGER.md` 與 `C_PAPER_CONTRADICTIONS.md` **沒有任何一條 08-17 的 pooling 決定**；magnetic `essgnn_arch_protocol.json` 的 `decided_by` 是 **`Kyzen (2026-08-19, C1 決定後補寫)`**、`pooling` 是 **`mean`**。**08-17 是 U-26（架構家族）的日期，我把它安到 pooling 頭上了。**<br>**所以真相是**：`mean` 是 Kyzen 08-19 核可的現行值；`sum` 是我 08-26 從 EGNN QM9 提的**建議**，而該建議的理由已於 08-27 撤回（EGNN 從未說過「因為目標外延所以 sum」，且 QM9 亦含 HOMO/LUMO/gap/μ 等非外延目標）。<br>**我把自己的建議標成他的核可 —— 那正是 Rule 16 禁止的無聲晉升，而且是我犯的。**<br>論文只寫 `Pooling({h_i^(L)})`，**未命名** → PAPER AMBIGUITY。工程取捨仍成立：sum 會讓 ‖e_layout‖ 隨物件數變動而單一 λ 補不回；mean 則弱化物件數資訊。**現行值維持 `mean`，改成 sum 需要 Kyzen 核可，或先做短跑比較再上呈。** |
 | Stage 2 lr/batch/epochs | 未定 | UNKNOWN（S4） | 規劃：沿 Stage 1＋小掃描 |
 
