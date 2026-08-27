@@ -133,11 +133,22 @@ REQUIRED_HYPERPARAMETERS = (
     "weight_decay",
     "scheduler",
     "batch_size",
+    # `epochs` is the pilot ladder's current rung; `max_epochs` is the approved
+    # ceiling. Both are required so a protocol cannot record one without the
+    # other and leave "how far is this allowed to run" unstated.
     "epochs",
+    "max_epochs",
     "p_mask",
     "init_temperature",
     "learnable_temperature",
     "max_logit_scale",
+    # Required so the recipe cannot be half-recorded. They are written by
+    # resolve_stage1 and are NOT yet read by stage1.py -- see the note there.
+    "betas",
+    "eps",
+    "warmup_epochs",
+    "lr_start",
+    "lr_end",
     "seed",
 )
 

@@ -236,11 +236,78 @@ MISSING_MODALITY = "learned_token"
 # that Table 3 ablates, not a free choice.
 DEFAULT_HYPERPARAMETERS = {
     "optimizer": "adamw",
-    "learning_rate": 1e-3,
+
+    # [LR] USER-APPROVED (Kyzen, 2026-08-27). 5e-4 is the STARTING POINT of a
+    # sweep -- 2.5e-4 / 5e-4 / 7.5e-4 / 1e-3 -- not a settled value.
+    #
+    # Corroboration, NOT grounds -- each with a path a reader can open:
+    #   docs/paper/openshape_source/sections/supplementary.tex:190
+    #     "For 32.3M version of PointBERT, we utilize a learning rate of 5e-4"
+    #     (72.1M uses 4e-4; everything else 1e-3). Same backbone, same size, same
+    #     objective as ours -- this is the load-bearing one.
+    #     upstream/OpenShape/src/configs/train.yaml:13 carries lr 0.001, which is
+    #     that sentence's "other models" case, not a contradiction of it.
+    #   docs/paper/pointbert_source/Pointbert_arxiv.tex:216
+    #     MPM pre-training: AdamW, initial learning rate 0.0005.
+    #     TYPE C -- masked-point-modelling is a DIFFERENT OBJECTIVE from
+    #     tri-modal contrastive alignment, so this is upstream's setting for
+    #     another task and carries the weakest inheritance authority. It agrees
+    #     with the number; it is not a second independent vote for it.
+    #
+    # ULIP GIVES TWO DIFFERENT ANSWERS AND BOTH ARE PRIMARY:
+    #   docs/paper/ulip1_source/main.tex:370   "We use 64 as the batch size,
+    #                                           10^-3 as the learning rate"
+    #   upstream/ULIP/main.py:52                 --lr default 3e-3
+    #   upstream/ULIP/scripts/pretrain_pointbert.sh:1  passes --lr 3e-3 for
+    #     `--model ULIP_PointBERT`, our lineage. (pointmlp and pointnext pass
+    #     1e-3; 3e-3 is PointBERT-specific.)
+    # This is the self-contradiction `.claude/rules/upstream-lookup.md` names by
+    # this exact example, so it is a known open conflict, not a new finding.
+    #
+    # Kyzen's sweep -- 2.5e-4 / 5e-4 / 7.5e-4 / 1e-3, with 3e-3 excluded --
+    # therefore TOPS OUT AT ULIP'S PAPER VALUE and excludes ULIP'S CODE VALUE.
+    # Whether that is deliberate is his to say. Recorded here so a later reader
+    # does not conclude we departed from ULIP when we bracketed one of its two
+    # answers. Either way this must never be described as "ULIP's settings":
+    # the recipe follows ULIP's MECHANISM and picks among its NUMBERS by
+    # decision.
+    "learning_rate": 5e-4,
+
     "weight_decay": 0.1,
     "scheduler": "cosine",
     "batch_size": 64,
-    "epochs": 50,
+
+    # [EPOCHS] A CEILING AND A CURRENT RUNG, deliberately two fields.
+    #
+    # Kyzen, 2026-08-27, twice: "250 上限，先跑 5 -> 10 -> 25 pilot 慢慢加，不是
+    # 無條件跑滿" and, correcting an earlier reading of this file, "不是直接填啊
+    # 我要你記得要從少 epochs 慢慢測啊".
+    #
+    # `epochs` is what a bare `python -m metafind.train.stage1` runs
+    # (stage1.py:385, `args.epochs or values["epochs"]`). Writing the ceiling
+    # into it would make the unqualified run go straight to 250 -- the one thing
+    # he named and excluded. So `epochs` carries the CURRENT RUNG of the pilot
+    # ladder and `max_epochs` carries the approved ceiling.
+    #
+    # THE LADDER IS A PROCEDURE, NOT A NUMBER. Each rung runs, its result is
+    # reported, and only then may the next rung start. A small default reduces
+    # the cost of forgetting `--epochs`; it does NOT satisfy "慢慢測", because a
+    # config value cannot force anyone to look at the intermediate result.
+    #
+    # 250 is USER-APPROVED. Corroboration only:
+    #   docs/paper/ulip1_source/main.tex:369  "ULIP is trained for 250 epochs."
+    #   upstream/ULIP/main.py:47              --epochs default 250
+    # The argparse default is a Type D source, which the 2026-08-27 rules say can
+    # never resolve MetaFind's silence on its own.
+    "epochs": 5,
+
+    # NOTHING ENFORCES THIS. No production code reads `max_epochs` -- `--epochs
+    # 5000` runs 5000 (stage1.py:385). The ceiling's enforcer is the operator,
+    # not the program. Said plainly because the five fields below carry an
+    # explicit "not yet consumed" label and this one's NAME claims enforcement:
+    # unlabelled beside labelled reads as live beside inert.
+    "max_epochs": 250,
+
     "p_mask": PAPER_P_MASK,
     # [C-001] tau. The two halves of this pair do NOT have the same authority and
     # must never be reported as though they did.
@@ -279,6 +346,32 @@ DEFAULT_HYPERPARAMETERS = {
     # it is inert. It stays because REQUIRED_HYPERPARAMETERS demands the field and
     # because a later run that re-enables learning must not silently lose the clamp.
     "max_logit_scale": 100.0,
+
+    # [ADAMW / SCHEDULE] USER-APPROVED (Kyzen, 2026-08-27), upstream ULIP as the
+    # reference. His reason: MetaFind states no training recipe, the Stage 1
+    # backbone lineage is ULIP-2, so version one uses ULIP's mature recipe rather
+    # than moving several variables at once. Pilot instability may revise these.
+    #
+    #   betas / eps      upstream/ULIP/main.py:58,61
+    #   warmup_epochs    upstream/ULIP/main.py:48
+    #   lr_start/lr_end  upstream/ULIP/main.py:53-56
+    #
+    # lr_start and lr_end are NUMBERS, not mechanism, so they do NOT inherit
+    # automatically -- Kyzen chose to follow ULIP here explicitly, on the grounds
+    # that they belong to the same recipe as the base lr. The warmup+cosine SHAPE
+    # is the mechanism and is inheritable on its own.
+    #
+    # RECORDED, NOT YET CONSUMED. stage1.py:377 still builds AdamW without betas
+    # or eps and without parameter grouping, and :386 still uses
+    # CosineAnnealingLR, which has neither warmup nor an lr floor. Wiring those
+    # is a separate authorised change; until it lands these five fields describe
+    # the approved recipe, not the running one.
+    "betas": [0.9, 0.98],
+    "eps": 1e-8,
+    "warmup_epochs": 1,
+    "lr_start": 1e-6,
+    "lr_end": 1e-5,
+
     "seed": 20260816,
 }
 

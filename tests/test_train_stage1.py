@@ -90,9 +90,13 @@ def protocols(tmp_path, **over):
              "hyperparameter_config_hash": "abc123"}
     hp = {"sha256": "abc123", "values": {
         "optimizer": "adamw", "learning_rate": 1e-3, "weight_decay": 0.1,
-        "scheduler": "cosine", "batch_size": 64, "epochs": 50, "p_mask": 0.30,
+        "scheduler": "cosine", "batch_size": 64, "epochs": 50, "max_epochs": 250,
+        "p_mask": 0.30,
         "init_temperature": 0.07, "learnable_temperature": True,
-        "max_logit_scale": 100.0, "seed": 1}}
+        "max_logit_scale": 100.0,
+        "betas": [0.9, 0.98], "eps": 1e-8, "warmup_epochs": 1,
+        "lr_start": 1e-6, "lr_end": 1e-5,
+        "seed": 1}}
     enc.update(over.get("enc", {}))
     train.update(over.get("train", {}))
     hp.update(over.get("hp", {}))
