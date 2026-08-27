@@ -29,7 +29,7 @@
 未知登記簿：U-xx 編號散見各 protocol 與本文件 §10。
 決策帳：`workflow/DECISION_LEDGER.md`（DL-xxx）。
 
-**一手來源（全部逐字讀完）**：metafind_source 541 行；ulip1 1,125；pointbert 624；
+**一手來源（⚠ **2026-08-27 更正**：上一版寫「全部逐字讀完」，那比本文件自己的紀錄強一階 —— 同一份文件至少五處記載了相反的事：`:4`「只 grep 論文就宣告無源」、`:390`「漏查 repo」、`:868`「沒查完就下的結論」、§7 的 Blender 事件。正確的說法是**部分逐字、部分 grep 覆蓋**，逐字讀完的清單見各節的行號引用）**：metafind_source 541 行；ulip1 1,125；pointbert 624；
 openshape 672（含 supp）；procthor 2,417（含 supp）；flamingo 方法/實驗/訓練全部；
 ulip2 先前讀完。每份都有 `SOURCE_MANIFEST.json` sha256。
 上游程式碼：`/home/kyzen/upstream/{ULIP, OpenShape, egnn, IDesign}`，關鍵行號逐一核對。
@@ -264,7 +264,7 @@ C8 = 論文把 SE(3) 說成「縮放敏感」的解法但 SE(3) 不含縮放（R
   "distance": "squared",             // U-17
   "coord_feat": "current",           // appendix 家族唯一合法值（φ_x 讀 m_ij，由 h^l 建）
   "layer_sharing": null,             // ⚠ U-31 已於 2026-08-27 撤回為待決，見 §10。null = 未決
-  "pooling": "sum",                  // USER-APPROVED（2026-08-17 定 sum；2026-08-27 加註「先測測看有沒有效」），見 §4.3
+  "pooling": "mean",                 // ⚠ 現行值，Kyzen 2026-08-19 核可。sum 是未核可的建議，見 §4.3
   "hidden_dim": null,                // ⚠ 待決。128 是 EGNN QM9 的實驗設定（Type C），且 DIM_REVIEW §7 Step 5 要求前四步先定
   "n_layers": 7,                     // USER-APPROVED，上游參考 EGNN QM9 main_qm9.py:34（Type C 經核可才落地）
   "mlp_structure": "linear_silu_linear" }  // U-35：Linear→SiLU→Linear（描述程式碼，防漂移斷言）
@@ -395,7 +395,7 @@ split 固定於 n09、seed 記錄（IMPL `splits.py`）。
    `epochs` 屬 **Type B**，`main.py:47` 的 argparse 預設更屬 **Type D**，兩者都不能單獨落地。
    **250 現在的地位是 Kyzen 核可的 IMPLEMENTATION CHOICE（2026-08-27），上游參考 ULIP-1 論文，
    並且要先跑 5 → 10 → 25 pilot 慢慢加上去**，不是無條件跑滿。
-   `resolve_stage1.py` 目前的 50 在 pilot 期間反而是合適的起點。
+   `resolve_stage1.py` 現在是 `epochs: 5` ＋ `max_epochs: 250`（Kyzen 2026-08-27 選的階梯／上限拆分）。⚠ 上一版寫「目前的 50」已過期；結論不變，pilot 從小開始是對的。
 
 7. **早停與 checkpoint 選擇：上游有明確做法，照抄即可（2026-08-26 查 repo 後改寫）**。
 
@@ -525,15 +525,19 @@ val 的查詢要從 9,211 個候選裡被找出來，其中約一半是未來的
 但正式分數只能用**事前已指定**的 checkpoint 規則。
 跑完 test 之後說「epoch 170 比 180 好，改報 170」＝ 重新污染。
 
-**已知風險（外部審查提出，尚未解決）**：開發期在 72% 上定的最佳輪數，
+**已知風險（外部審查提出，尚未解決）**：開發期在 **70%**（`0.125 × 0.80 = 0.10` 切走，
+46,052 → dev_train 32,236 / dev_val 4,605 / test 9,211）上定的最佳輪數，
+⚠ 上一版寫 72%，那是 `DEV_VAL_FRACTION = 0.1` 時的數字，Kyzen 已核可 0.125。
 搬到完整 80% 上不保證仍是最佳 —— 資料變多，每個 epoch 的 step 數變多，
 overfitting 時點也可能後移，而**方向不保證**。
 建議在 80% 內部做多個 dev fold，取一個穩定的 training-duration 規則，
 而不是相信單一次 split 的最佳輪數。**全程不碰 test。**
 
-**IMPL 狀態：尚未實作。** `metafind/data/splits.py` 目前仍只有 `train` / `test`。
-Master 曾寫過 `split_heldout()` 但已還原（Engineer lane）。
-**本節描述的是已核可的協定，不是已存在的程式碼。**
+**IMPL 狀態（2026-08-27 更新）**：`metafind/data/splits.py:146` 已有 `split_dev()`，
+`DEV_VAL_FRACTION = 0.125`（`:95`，Kyzen 2026-08-27 核可）。⚠ **上一版寫「尚未實作」已過期。**
+
+⚠ **本節之後不再複述程式碼的當下狀態。** 這份筆記的用途是記錄**決定**，
+決定不會過期，程式碼會。要看現值請直接開 `splits.py`。
 
 ---
 
@@ -547,20 +551,20 @@ Master 曾寫過 `split_heldout()` 但已還原（Engineer lane）。
 | scene dropout | 30% per-**batch** | **PAPER，含粒度（2026-08-26 升級）** | 2meth:89 原句就是 "omitted in 30% of **batches**"，30% 與 batch 粒度都有直接文字支持；仍屬 CHOICE 的只有 RNG 實作細節 |
 | split | 80/20 兩資料集 | PAPER | 3experiments.tex:8 |
 | batch / optimizer | 64 / AdamW | UPSTREAM | ulip1 main.tex:367-370；`main.py:50` default 亦 64 |
-| **lr** | **5e-4 起跑** | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27） | 上游四個候選：1e-3（ulip1:367-370）· 3e-3（`pretrain_pointbert.sh`，但那是 ULIP-1 8192 點）· 5e-4（OpenShape supp:190 指定給 32.3M PointBERT；Point-BERT 論文 `:216` 亦同）· 4e-4（supp:190，72.1M 版，同節 `:146` 說該版嚴重過擬合）。**Kyzen 定 5e-4 起跑**，第一輪 sweep 2.5e-4 / 5e-4 / 7.5e-4 / 1e-3，3e-3 不入第一輪。**不得用 10% test 調 lr** |
+| **lr** | **5e-4 起跑** | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27） | 上游四個候選：1e-3（ulip1:367-370）· 3e-3（`pretrain_pointbert.sh`，但那是 ULIP-1 8192 點）· 5e-4（OpenShape supp:190 指定給 32.3M PointBERT；Point-BERT 論文 `:216` 亦同）· 4e-4（supp:190，72.1M 版，同節 `:146` 說該版嚴重過擬合）。**Kyzen 定 5e-4 起跑**，第一輪 sweep 2.5e-4 / 5e-4 / 7.5e-4 / 1e-3，3e-3 不入第一輪。**不得用那 20% test 調 lr**（⚠ 上一版寫「10% test」，那個切法已於同節撤回，見 D-3） |
 | wd / betas / eps / warmup | 0.1 / (0.9,0.98) / 1e-8 / 1 ep cosine | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27），上游參考 `upstream/ULIP/main.py` | Kyzen 的理由：MetaFind 未交代訓練配方，Stage 1 骨幹 lineage 來自 ULIP-2，第一版先用 ULIP 成熟配方，避免一次動太多變因。pilot 顯示不穩仍可調 |
 | **weight decay 分組** | `p.ndim < 2` 或名稱含 `bias`／`ln`／`bn` → **wd = 0**；其餘 → **wd = 0.1** | **USER-APPROVED**（2026-08-27），上游**機制**照抄 `main.py:129-135` | Kyzen 2026-08-27：「找得到原架構怎麼設定的，就照原架構」。這是**機制**不是數值，故可直接落地。一律 0.1 會把 LayerNorm 的縮放參數往 0 拉，破壞正規化 |
 | **cosine 起訖 lr** | `lr_start = 1e-6` · `lr_end = 1e-5` | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27），上游參考 `main.py:53-56` | ⚠ **這兩個是數值不是機制**，不適用「照原架構」自動落地（外部審查指出，已修正）。Kyzen 2026-08-27 明確選甲：照 ULIP，理由是與 base lr 5e-4 同一套配方，不混搭。**warmup + cosine 的形狀**才是機制，那部分本來就可繼承 |
 | **D_m（訊息寬度）** | `D_m = D_h` | **USER-APPROVED**（2026-08-27），上游**機制**照抄 `egnn/models/gcl.py:165-168` | EGNN 的 `edge_mlp` 輸出就是 `hidden_nf`。論文沒要求 `D_m = D_h`（`ESSGNN_DIM_REVIEW.md` v3 §3 已拆開五個獨立寬度），所以這是照原架構機制，**不是 PAPER FACT** |
 | epochs | **250（上限）** | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27），上游參考 ULIP-1 論文 `main.tex:367-370` | Kyzen 原話：「250 啊 因為 ULIP 有說喔 我覺得就參考啊」「要測試所以慢慢加」。**先跑 5 → 10 → 25 pilot** 確認 loss／梯度／記憶體／管線正常，再進完整訓練。250 是上限，不是無條件跑滿。**`main.py:47` 的 argparse 預設是 Type D，不能單獨當根據** |
-| 早停 | **不設自動早停** | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27） | Kyzen 的理由：現在就設 patience=20 等於偷偷先決定了 model selection 協定。`early_stopping=False`，**保留依實際 validation 曲線人工中止的權利**。上游參考 `main.py:212`（跑滿，無 early-stop 分支）。**10% test 不得參與任何中止判斷** |
+| 早停 | **不設自動早停** | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27） | Kyzen 的理由：現在就設 patience=20 等於偷偷先決定了 model selection 協定。`early_stopping=False`，**保留依實際 validation 曲線人工中止的權利**。上游參考 `main.py:212`（跑滿，無 early-stop 分支）。**那 20% test 不得參與任何中止判斷**（⚠ 上一版寫「10% test」，同上） |
 | checkpoint 選擇 | **開發期用 80% 內部的 dev-val 定政策；正式期鎖死重訓、不挑** | **USER-APPROVED IMPLEMENTATION CHOICE**（2026-08-27，DEVIATION D-3） | 上游有 best-checkpoint 做法（`main.py:225-231`），但它拿的是**獨立下游 benchmark**（`main.py:40` default modelnet40），我們沒有。改為全部在 80% 內部完成選擇。**20% test 全程封存。IMPL 尚未實作** |
 | seed | 20260816 | CHOICE | resolve_stage1.py |
 | λ 初值 | 未定（code 佔位 1.0） | **UNKNOWN→待決** | §10 #2 |
 | fusion transformer 尺寸 | 2 層/8 頭/ffn 2048 | CHOICE | 論文無維度 |
 | ESSGNN hidden | **未決** | **待決，排在四項之後** | 128 出自 EGNN 論文 `appendix.tex:135` 的 **QM9 實作細節節** → **EGNN EXPERIMENT-SPECIFIC SETTING**，不能單靠 lineage 落地。且 QM9 的 15 維原子 one-hot → 128 是**放大**，我們 1280 → 128 是**壓縮**，同一個數字方向相反。順序見 `docs/ESSGNN_DIM_REVIEW.md` §7 |
 | ESSGNN 層數 | **7** | **USER-APPROVED IMPLEMENTATION CHOICE**，上游參考 EGNN QM9 | 7 出自 `main_qm9.py:34` 與論文 `appendix.tex:135`，屬 **EGNN EXPERIMENT-SPECIFIC SETTING**。注意 `qm9/models.py:46` 的 class 建構子預設**也是 4**，是 QM9 腳本顯式覆寫成 7 —— 更證明 7 是實驗設定不是 intrinsic 架構。原文寫「4 是 N-body 的值」不完整，已更正 |
-| ESSGNN pooling | **sum 為起點，之後短跑比 sum vs mean** | **USER-APPROVED**（2026-08-17 定 sum；2026-08-27 Kyzen 加註「先測測看有沒有效」） | 論文只寫 `Pooling({h_i^(L)})`，**未命名** → PAPER AMBIGUITY。QM9 用 sum（`qm9/models.py:83`、`appendix.tex:135`）屬 EXPERIMENT-SPECIFIC。**原本「因為 QM9 目標是外延量所以 sum 物理正確」的理由已撤回** —— EGNN 從未如此陳述，且 QM9 亦含 HOMO/LUMO/gap/μ 等非外延目標。sum 會讓 ‖e_layout‖ 隨物件數變動而單一 λ 補不回；mean 則弱化物件數資訊。**兩者短跑比較後再定** |
+| ESSGNN pooling | ⚠ **未決。現行協定是 `mean`。** | 🔴 **2026-08-27 更正：上一版標「USER-APPROVED（2026-08-17 定 sum）」是錯的，查無此決定。** | **查證（ESSGNN REVIEWER 2026-08-27 提出，我複驗）**：`DECISION_LEDGER.md` 與 `C_PAPER_CONTRADICTIONS.md` **沒有任何一條 08-17 的 pooling 決定**；magnetic `essgnn_arch_protocol.json` 的 `decided_by` 是 **`Kyzen (2026-08-19, C1 決定後補寫)`**、`pooling` 是 **`mean`**。**08-17 是 U-26（架構家族）的日期，我把它安到 pooling 頭上了。**<br>**所以真相是**：`mean` 是 Kyzen 08-19 核可的現行值；`sum` 是我 08-26 從 EGNN QM9 提的**建議**，而該建議的理由已於 08-27 撤回（EGNN 從未說過「因為目標外延所以 sum」，且 QM9 亦含 HOMO/LUMO/gap/μ 等非外延目標）。<br>**我把自己的建議標成他的核可 —— 那正是 Rule 16 禁止的無聲晉升，而且是我犯的。**<br>論文只寫 `Pooling({h_i^(L)})`，**未命名** → PAPER AMBIGUITY。工程取捨仍成立：sum 會讓 ‖e_layout‖ 隨物件數變動而單一 λ 補不回；mean 則弱化物件數資訊。**現行值維持 `mean`，改成 sum 需要 Kyzen 核可，或先做短跑比較再上呈。** |
 | Stage 2 lr/batch/epochs | 未定 | UNKNOWN（S4） | 規劃：沿 Stage 1＋小掃描 |
 
 ---
@@ -589,7 +593,12 @@ Master 曾寫過 `split_heldout()` 但已還原（Engineer lane）。
   R@1 差很大 → **兩個協定都跑、都報**（IMPL `splits.py` docstring；
   想從 baseline 98% PC-only 反推庫大小是不可能的——自檢索兩種庫都趨近 100%）。
   query=測試集 20% 也是假設，已記錄。
-- MetaFind 預期型態（PAPER Table 1）：單塔 baseline 的 PC-only 98%+ 來自 query 與 gallery 用同一支嵌入，論文自己的用詞是 **"leading to inflated accuracy"**（`3exp:24`）。我們雙塔 PC-only 是 75.1 ／ 63.2（w/ ESSGNN）。照論文用語寫 inflated 即可，不要寫成「別人灌水、我們誠實」，那是價值判斷、比出處強。
+- MetaFind 預期型態（PAPER Table 1）：單塔 baseline 的 PC-only 98%+ 來自 query 與 gallery 用同一支嵌入，論文自己的用詞是 **"leading to inflated accuracy"**（`3exp:24`）。**PAPER Table 1（`3exp:45,46`）：MetaFind 自報的雙塔 PC-only 是 75.1（w/o ESSGNN）／ 63.2（w/ ESSGNN）。**
+  ⚠ **2026-08-27 更正**：上一版寫「**我們**雙塔 PC-only 是 75.1／63.2」。
+  **那是論文自己的數字，不是我們的。** 而且我們**從未訓練過 Stage 1** ——
+  實測 `checkpoints` 0 個檔、`embeddings` 0 個檔、`run_progress.jsonl` 的 n10 紀錄 0 筆。
+  **「我們」在那句話裡不可能指涉任何測量，因為沒有測量存在。**
+  同一句話的結尾在警告不要寫得比出處強，而那句話本身把別人的成績掛了我們的名字。照論文用語寫 inflated 即可，不要寫成「別人灌水、我們誠實」，那是價值判斷、比出處強。
 - w/ ESSGNN 在 Table 1 全面掉分（如 T-only 13.8→11.3）：官方解釋 = Stage 2 fusion 適應了
   layout 特徵、在無 layout 資料上 attribution mismatch（PAPER `3experiments.tex:24` 全段）。
 - **上游數字不可直接對表**：ULIP/OpenShape 官方評估是 1,156 類 zero-shot 分類
@@ -638,7 +647,7 @@ Master 曾寫過 `split_heldout()` 但已還原（Engineer lane）。
 | EGNN | 2102.09844 | ESSGNN 數學母體（**參考架構**） | EGCL 式、φ_x 純量、N(i) 選項、MLP 形狀 variant 清單 |
 | ProcTHOR | 2206.06994 | Stage 2 場景源 | 10K+1K+1K 房、JSON 格式、SAG/擺放先驗、1,633 資產事實 |
 | Objaverse(-LVIS) | 2212.08051 | Stage 1 資產庫 | 46,832/1,156 官方數 |
-| GPT-4o | — | 論文指定的標註器（n05）與場景評審（n15/n17） | **標註側是 DEVIATION D-2**：實跑 `gemma-4-12B-it`，非 GPT-4o（見 §3.1）。評審側 n17 尚未執行，模型未定（`Q-JUDGE-MODEL` 開放）。prompt 一律是我們的 CHOICE（contract 鎖定） |
+| GPT-4o | — | 論文指定的標註器（n05）與場景評審（n15/n17） | **標註側是 DEVIATION D-2**：實跑 `gemma-4-12B-it`，非 GPT-4o（見 §2.3）。評審側 n17 尚未執行，模型未定（`Q-JUDGE-MODEL` 開放）。prompt 一律是我們的 CHOICE（contract 鎖定） |
 | I-Design | 2404.02838 | Table 2 管線 | retrieve.py 替換點、評分模板 |
 | DPR | 2004.04906 | 雙塔範式概念源 | 概念引用而已 |
 | Flamingo | 2204.14198 | λ 初值辯論先例 | tanh(α) α=0、拆掉掉 4.2%＋不穩 |
