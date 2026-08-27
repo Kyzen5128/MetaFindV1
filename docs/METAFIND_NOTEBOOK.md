@@ -913,8 +913,58 @@ decided_at  2026-08-19T13:17:25
 
 | 讀法 | 推論 | 對 resolver 的影響 |
 |---|---|---|
-| **A** 這個戳是逐參數的真核可 | 五個**全部已核可** | 檔案照現況，一個字不用改，`status = resolved`。而 §10 與 `DIM_REVIEW §7` 把三個列為待決是**錯的** |
-| **B** 這個戳只是「C1 決定後把檔案補寫出來」的一次批次蓋章 | 五個**全部未核可**，只是現行值 | 五個全部 `None`，`status = unresolved:...`，**G6 關著，Stage 2 不能開** |
+| **A** 這個戳是逐參數的真核可 | 五個**全部已核可** | 檔案照現況，一個字不用改 |
+| **B** 這個戳只是「C1 決定後把檔案補寫出來」的一次批次蓋章 | 五個**都缺乏足以進協定的逐項 authority** | 見下方結案 |
+
+## ✅ 已結案 — 2026-08-27，Kyzen 核可 **B**（經外部審查修正措辭與範圍）
+
+**措辭要精確**（外部審查改的，我原本講得太滿）：
+
+> **不是「證明 2026-08-19 從未有任何口頭核可」——Rule 2 不允許這樣反推。**
+> 是「**以目前可核證的證據，這幾項沒有足夠的 Rule 16 authority，所以不能維持 `resolved`**」。
+
+**而且不能一刀切。同一個戳底下的欄位要逐個看它自己的來源：**
+
+| 欄位 | 判定 | 理由 |
+|---|---|---|
+| `architecture_family` | **保留 RESOLVED** | U-26 有獨立裁決（2026-08-17，`decided_by` = user + external review，`C_PAPER_CONTRADICTIONS.md:55`）。Rule 13：不重開 |
+| `coord_feat = current` | **保留**，但分類是 **DERIVED**，不是獨立核可 | 選了 `appendix_shared_msg` 之後，`m_ij = φ_e(h_i^l, ...)` 用的就是舊的 `h^l`；`updated` 是 §2.5 家族的語義。**它是 U-26 的架構後果** |
+| `distance = squared` | 🔴 **改為 UNRESOLVED** | `01_GRAPH_SPEC.md:608` **U-17 明列 UNKNOWN**。§2.5 寫 `‖·‖₂`、Appendix C 用 `‖·‖²`，兩者都 SE(3) 不變、都不破壞證明，**但數值不同**。⚠ **我先前完全沒查這一項** |
+| `mlp_structure = linear_silu_linear` | 🔴 **改為 UNRESOLVED** | `01_GRAPH_SPEC.md:622` **U-35 明列 UNKNOWN**，原文自己說「那從來不是一個決定，只是它剛好長這樣」。⚠ **我先前完全沒查這一項** |
+| `n_layers` `pooling` `hidden_dim` `use_io_projections` `layer_sharing` | **五個都 UNRESOLVED** | 無逐項 authority |
+| `status` | 🔴 **不得為 `resolved`** | 見下 |
+
+**「為什麼出現這個值」與「它有沒有 authority」是兩件事**，五個的來源其實不同：
+`hidden_dim=128` 有 QM9 的 experiment-specific 先例 · `use_io_projections=True` 有 EGNN 實作先例 ·
+`n_layers=4` / `layer_sharing=independent` / `pooling=mean` 是現行實作值。
+**但沒有一個具備 Rule 16 要求的逐項核可。**
+
+### 🔴 連帶查出三個獨立缺陷（外部審查提出，我逐條驗過）
+
+```
+缺陷 1  status 的「產生條件」與「讀取條件」不一致，而且它是活的閘門
+        resolve_stage2.py:297   arch_status = "resolved" if ARCH_DECISIONS["architecture_family"] else ...
+                                ← 只要「架構家族」有值，整份就標 resolved
+        essgnn.py:231           if protocol.get("status") != "resolved": raise
+                                ← 執行期真的讀它
+        → 寫檔的只看一個欄位，讀檔的以為全部都定了。**這是 §9.6 的又一例。**
+
+缺陷 2  G6 只檢查「有沒有值 / status」，不檢查「憑什麼」
+        有值 ✓ · status resolved ✓ · 誰決定的？→ 閘門看不到
+        → 就算這次修乾淨，default → materialize → resolved → G6 PASS 的路徑仍然開著。
+          **Rule 16 沒有被機器化。**
+
+缺陷 3  U-26 的文件漂移
+        C_PAPER_CONTRADICTIONS.md:55   U-26 DECIDED，appendix_shared_msg is primary
+        01_GRAPH_SPEC.md:619           U-26 UNKNOWN，候選欄還寫「實作依 §2.5」
+        → 兩份文件對同一個 id 給相反狀態。不修的話，
+          下一個人會把一個 Rule 13 不該重開的問題重開。
+```
+
+**這三個都不是本題的答案，是本題查出來的。列在這裡免得又只活在對話裡。**
+
+---
+
 
 **戳的字面偏向 B**：它自己說是「在 C1 決定**之後**補寫的」，而 **C1 決定的是架構家族，不是這五個**。
 一個描述「跟著別的決定順手補寫」的戳，很難同時是對這五個參數各自的核可。
