@@ -41,7 +41,15 @@ count() { printf '  %-22s %s\n' "$1" "$2"; }
 # render is a directory + .json, each ProcTHOR asset likewise -- so a naive
 # `ls | wc -l` doubles them, which is exactly the kind of number that reads as
 # plausible and is wrong.
-recs() { find "$1" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l; }
+#
+# -L because `data/outputs/{pointclouds,renders,annotations,embeddings}` are
+# symlinks into /home/kyzen/metafind_out. Without it find never descends: it
+# tests the link itself against *.json, fails, and reports 0 -- a zero that
+# reads as "this stage has produced nothing" while 46,052 records sit on disk.
+# The two callers that pass a REAL directory (scene_graphs 12,000 and
+# procthor_modalities 1,467) count identically with and without -L, so this is
+# one fix at the fork rather than two at the call sites.
+recs() { find -L "$1" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l; }
 v3_count() { "${METAFIND_PYTHON:-python3}" -c '
 import json, glob, sys
 print(sum(1 for f in glob.glob(sys.argv[1] + "/*.json")

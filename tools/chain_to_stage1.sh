@@ -47,7 +47,10 @@ for f in annotations/. procthor_modalities/. sem_edge_cache.json \
          stage1_encoding_protocol.json stage1_hyperparameters.json; do
     [ -e "$OUT/$f" ] || die "missing prerequisite: $OUT/$f"
 done
-ANN=$(find "$OUT/annotations" -maxdepth 1 -name '*.json' | wc -l)
+# -L: $OUT/annotations is a symlink to /home/kyzen/metafind_out/annotations.
+# Without it this counted 0 and the gate below killed the chain no matter how
+# many annotations existed.
+ANN=$(find -L "$OUT/annotations" -maxdepth 1 -name '*.json' | wc -l)
 say "annotations $ANN  ·  n08 artifacts present"
 [ "$ANN" -ge 45000 ] || die "only $ANN annotations; expected ~45,955"
 
