@@ -765,19 +765,72 @@ Baselines 段寫 OpenShape "adopts a **dual-tower** contrastive retrieval design
 後句過度概括。影響：作者用來解釋 baseline PC-only 98–99% 的敘事有瑕疵，
 我們複述時不可照抄「所有 baseline 都不是雙塔」。
 
-**S-C｜Fusion 之前要不要先正規化各模態，論文沒說。** （PAPER 沉默）
+**S-C｜Fusion 之前要不要先正規化各模態。** ⚠ **2026-08-27 大幅縮小：現況已與論文記號一致，缺的只是一筆記錄。**
+
+**上游答不了，而且理由很硬**：ULIP 與 OpenShape **都沒有 fusion 模組**，
+兩家的 `normalize` 都是「進 logits 前的最後一步」（`ULIP/models/losses.py:34-36`、
+`OpenShape/src/train.py:62-68`）。**「fusion 之前」這個位置在上游不存在**，
+所以這不是沒查到，是問題在上游無從提出。
+
+**Step 1 給了方向（INFERENCE，不是 PAPER FACT）：**
+
+```
+Eq.6   e_query = Fusion(e_text, e_img, e_pc) + λ·e_layout
+       Fusion 收的是未加修飾的 e_*，式子裡沒有 hat 也沒有 ‖·‖
+Eq.5/7 正規化整個藏在 sim(·,·) 裡（U-24 讀成 cosine）
+       → 論文的記號把正規化放在「最後算相似度」那一步，不在融合輸入端
+
+補強   Eq.6 是殘差相加，論文自述目的是 "without disrupting the original
+       embedding space"（2methdology.tex:87）。若在 Fusion 輸出後、
+       加 λ·e_layout 之前先 normalize，那個殘差就不是加在「原本的嵌入空間」上了。
+       不 normalize 才守得住作者自己給的理由。
+```
+
+**而現行程式碼已經正是這樣**（`ULIP2 ENGINEER` 查，我複驗）：
+`fusion.py` 與 `dual_tower.py` 各零筆 normalize；
+全 repo 只有 `losses.py:166-167` 一處，就在算相似度之前。
+
+→ **正確描述不是「政策未鎖、可能往兩邊跑」，而是「現況已對，但從沒被記成一個決定」。**
+→ 要 Kyzen 的因此只有一句追認：把「只在 sim 之前 normalize、fusion 輸入端不 normalize」
+  記為 IMPLEMENTATION CHOICE（依據：Eq.6 的記號＋它自述的殘差理由），還是要改成別的。
 `2meth:30-35, 74-100` 只說各模態編碼後送 Fusion。
 是 `各模態先 normalize → Fusion`，還是 `原始向量 → Fusion → 最後才 normalize`？
 對 mean、MLP、Transformer 三種融合都會改變結果。
 本筆記對「最終 q/g 做 cosine 正規化」寫得很清楚，但**融合輸入端的正規化政策同樣要鎖，目前未鎖**。
 開訓前必須定案並登記。
 
-**S-D｜Eq. 7 的分母到底含不含正例。** （PAPER 沉默，`2meth:93-100`）
-原文寫 𝓑 "denotes the **batch of negatives**"，字面上不含正例；
-但標準 InfoNCE 與我們的 CE 實作**分母都含正例**。
-若照字面理解成純負例，CE 實作就不等價。
-協定必須明寫「分母 = 正例 ＋ batch 內負例」，並標 INFER／reconstruction choice，
-不能讓 CE 實作把這個選擇藏起來。
+**S-D｜分母含不含正例。** ⚠ **2026-08-27 重新分類：本條原本的框架是錯的，已改寫。**
+
+原本寫「PAPER 沉默，`2meth:93-100`」，並把 Eq.7 那句當成 Stage 1 的問題。
+**實際上論文對同一個符號 𝓑 給了兩個不同的定義，而 Stage 1 那個是明確的：**
+
+```
+Eq.5（Stage 1）  2methdology.tex:79  逐字
+  "where τ is a temperature hyperparameter and 𝓑 denotes the gallery batch."
+                                                         ^^^^^^^^^^^^^^^^^
+Eq.7（Stage 2）  2methdology.tex:99  逐字
+  "where τ is a temperature hyperparameter, and 𝓑 denotes the batch of negatives."
+                                                         ^^^^^^^^^^^^^^^^^^^^^^
+```
+
+| 階段 | 論文說什麼 | 分類 | 要不要 Kyzen 拍板 |
+|---|---|---|---|
+| **Stage 1（Eq.5）** | 「the **gallery batch**」—— gallery batch 當然含正例那一件 | **METAFIND PAPER FACT。不是沉默，也不是歧義。** | **不用。** 我們的 CE 實作與它一致 |
+| **Stage 2（Eq.7）** | 「the **batch of negatives**」，與 Eq.5 對同一符號的定義**不一致** | **PAPER 內部矛盾（C 類），不是沉默（S 類）** | 要，但**不擋 Stage 1** |
+
+**上游兩家獨立佐證，都把正例放進分母（`ULIP2 ENGINEER` 2026-08-27 查，我複驗）：**
+
+```
+upstream/ULIP/models/losses.py:43-51      CE 的分母是整列 logits，正例是其中一欄
+upstream/OpenShape/src/train.py:66-73     同一形狀，labels = arange(batch)
+```
+
+**還有一個不需要出處的論證**：若分母真的只含負例，分子的正例項不在分母裡，
+`-log(exp(s⁺)/Σexp(s⁻))` 對 `s⁺` **沒有上界，損失可以無限往下掉**。
+那不是 InfoNCE，是一個發散的目標函數。
+→ **Eq.7 的 "negatives" 是鬆散措辭，Eq.5 的 "gallery batch" 才是精確的。**
+
+**Stage 2 的建議**：照 Eq.5 的定義，記為 `DEVIATION-from-Eq.7-wording`。待 Kyzen 簽。
 
 **S-E｜Table 3 少一個消融維度的對應列。** （PAPER 內部不一致，`3exp:143`）
 作者說消融涵蓋六個維度，明列包含 **gallery encoder flexibility**；
