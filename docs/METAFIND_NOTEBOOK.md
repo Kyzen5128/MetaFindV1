@@ -129,7 +129,7 @@ requires_grad 和 train()/eval() 是兩件事——PointBERT 有 drop_path 0.1�
 - 我們的雲 ≠ ULIP 官方釋出的雲（U-02 記錄；不是 gate，因為 Stage 1 本來就訓 point encoder）。
 - ProcTHOR 資產無 mesh 管線 → **multiview depth shell**（n07b），存世界座標，
   **編碼時**才 pc_norm ＋ 灰色 0.5 填 RGB（幾何無色，不捏造顏色）
-  （IMPL `ulip_backbone.py:138-165` prepare_depth_shell；24 件透明資產 depth 拍不到 → 排除出 gallery，F26）。
+  （IMPL `ulip_backbone.py:138-165` prepare_depth_shell；**28** 件透明／鏡面資產 depth 拍不到 → 排除出 gallery，F26。⚠ **2026-08-27 更正：上一版寫 24，是舊值。** 實測 `procthor_modalities/*.json` 缺 `pointcloud_uri` 者 **28** 筆，`1,467 − 28 = 1,439`，與本文件 §6 的「~1,439 合格」一致；`1,467 − 24 = 1,443` 對不上。同一個過期的 24 也活在 `gallery_index.py:244/:253`，那兩處未動，屬 Engineer lane）。
 
 **渲染（n04，IMPL `render_blender.py:88-107`）**
 - 論文說 **11 orthogonal viewpoints**（PAPER `2methdology.tex:28`）→ 我們 **12 視角**（USER 決策，DEV）：
@@ -260,13 +260,13 @@ C8 = 論文把 SE(3) 說成「縮放敏感」的解法但 SE(3) 不含縮放（R
 
 ```json
 { "architecture_family": "appendix_shared_msg",
-  "use_io_projections": true,        // U-33：embed_in(t_i→hidden) + embed_out(hidden→1280)，EGNN 慣例
+  "use_io_projections": null,        // ⚠ U-33 已於 2026-08-27 撤回為待決，見 §10。null = 未決，resolver 應拒絕產出
   "distance": "squared",             // U-17
   "coord_feat": "current",           // appendix 家族唯一合法值（φ_x 讀 m_ij，由 h^l 建）
-  "layer_sharing": "independent",    // U-31：L 層各自參數（shared 也實作，另一個模型）
-  "pooling": "mean",                 // ⚠ 建議改 sum，見下方 EGNN 官方對照
-  "hidden_dim": 128,                 // 與 EGNN QM9 的 nf=128 一致
-  "n_layers": 4,                     // ⚠ 建議改 7，這個 4 是 N-body 的值不是 QM9 的
+  "layer_sharing": null,             // ⚠ U-31 已於 2026-08-27 撤回為待決，見 §10。null = 未決
+  "pooling": "sum",                  // USER-APPROVED（2026-08-17 定 sum；2026-08-27 加註「先測測看有沒有效」），見 §4.3
+  "hidden_dim": null,                // ⚠ 待決。128 是 EGNN QM9 的實驗設定（Type C），且 DIM_REVIEW §7 Step 5 要求前四步先定
+  "n_layers": 7,                     // USER-APPROVED，上游參考 EGNN QM9 main_qm9.py:34（Type C 經核可才落地）
   "mlp_structure": "linear_silu_linear" }  // U-35：Linear→SiLU→Linear（描述程式碼，防漂移斷言）
 ```
 ＋ PRIMARY_INTERPRETATION（`essgnn.py:276-281`）：
@@ -695,8 +695,25 @@ Rule 16：進入官方協定只有三條路 —— MetaFind PAPER FACT ／ Kyzen
 ```
 物件鏈： n02→n03(點雲)→n04(渲染)→n05(標註,跑步中)→n05b(編碼協定)→n06(快取)
         →n09(split+協定)→n10(Stage1訓練+gallery index)→Table 1/3
-場景鏈： n07(房)→n07b(場景圖+depth shell)→n08(語意邊)→n09b/c(Stage2協定+scene split)
-        →n11b(Stage2訓練)→n13(檢索)→n14(I-Design)→n15/16(評分)→n17→Table 2
+場景鏈： n07(ProcTHOR 房→場景圖)→n07b(每個資產的隔離渲染／depth shell／文字)
+        →n08(語意邊)→n09b/c(Stage2協定+scene split)→n11b(Stage2 gallery index，
+        用凍結的 Stage 1 gallery 塔編碼)→n13(Stage 2 訓練)→n14(等變性檢驗)
+        →n15a/b/c(評估場景協定與準備)→n16(Algorithm 1 場景組合)→n17(模型評審)→Table 2
+
+⚠ **2026-08-27 整條更正。** 上一版從 n11b 之後**每一個節點都標錯**，而且是整體位移：
+寫成 `n11b(Stage2訓練)→n13(檢索)→n14(I-Design)→n15/16(評分)`。
+逐條對照 `docs/graph/node_registry.yaml` 的 `purpose`（我用 yaml.safe_load 讀出來的）：
+
+| 上一版寫 | 實際是 |
+|---|---|
+| n11b = Stage 2 訓練 | **Stage 2 gallery index** —— 用**凍結的** Stage 1 gallery 塔編碼 ProcTHOR 資產 |
+| n13 = 檢索 | **Stage 2 訓練**（fuser 與 ESSGNN 的 layout-aware 微調） |
+| n14 = I-Design | **等變性檢驗**（三個層級的 SE(3) 行為） |
+| n15/16 = 評分 | n15 = Table 1 檢索評估；n15a/b/c = 評估場景協定與準備；**n16 = Algorithm 1 場景組合** |
+| n07b = 場景圖 + depth shell | **場景圖是 n07 寫的**；n07b 是「每個資產的隔離渲染／depth shell／文字」 |
+
+**這一節是「Repo 對應表」，是給人查表用的。照上一版排工作順序，會把訓練排在建索引之前。**
+（ESSGNN ENGINEER 2026-08-27 逐條讀 node_registry.yaml 後提出，我複驗確認。）
 Gates：G6 擋 Stage 2（essgnn_arch_protocol 未 resolved 不得開跑）；DL-028/029/030/031 管流程。
 ```
 
