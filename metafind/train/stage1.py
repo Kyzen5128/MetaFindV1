@@ -582,6 +582,19 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         "config_hash": training["hyperparameter_config_hash"],
         "seed": seed,
         "epoch": epoch,
+        # [ULIP2 ENGINEER 2026-08-29, approved by MASTER as a bug fix] This
+        # record named a config_hash and a seed and no code state at all, so
+        # `stage1_best.pt` from the 06:17 dev run -- produced by a working tree
+        # carrying gradient checkpointing that does not exist at HEAD fdfd6a8 --
+        # could not be tied to any commit. `code_dirty` is carried beside the
+        # revision because the revision ALONE is the false claim: it names a
+        # commit at which this checkpoint could not have been produced (batch 64
+        # OOMs without checkpointing). `run_id` matches the value stamped on the
+        # `train_stage1.jsonl` rows, so a checkpoint and its loss curve can be
+        # joined even though six runs share that file.
+        "run_id": runlog.run_id(),
+        "code_revision": runlog.code_revision(),
+        "code_dirty": runlog.code_dirty(),
         "train_scope": training.get("train_scope", "point_encoder_and_fuser"),
         "trainable_only": True,
         "n_params_saved": int(n_params),
@@ -804,8 +817,15 @@ def main() -> int:
     torch.manual_seed(seed)
     generator = torch.Generator(device="cpu").manual_seed(seed)
 
+    # [MEASURED 2026-08-29] `batch_size: 64` does not fit on this card without
+    # recomputing PointBERT's blocks: measured OOM at 48 and at 64, 23.8 GiB at
+    # 32. Checkpointing is exact -- same batch, same in-batch negatives, same
+    # gradients -- so this keeps the ratified hyperparameter instead of halving
+    # it. Off on CPU, where there is no memory pressure and the recompute is
+    # pure cost. See BackboneConfig.grad_checkpointing.
     backbone = ULIPBackbone(BackboneConfig(device=args.device,
-                                           train_scope="point_encoder_and_fuser"))
+                                           train_scope="point_encoder_and_fuser",
+                                           grad_checkpointing=args.device.startswith("cuda")))
     model, loss_fn = build_model(encoding, training, hyperparameters)
     model.to(args.device)
     loss_fn.to(args.device)

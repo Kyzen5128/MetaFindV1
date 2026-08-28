@@ -23,16 +23,20 @@ import json
 import os
 import subprocess
 import time
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 from metafind import paths
 
-__all__ = ["code_revision", "cost_ledger", "quarantine", "run_progress"]
+__all__ = ["code_dirty", "code_revision", "cost_ledger", "quarantine",
+           "run_id", "run_progress"]
 
 
 _REVISION: str | None = None
+_DIRTY: bool | None = None
+_RUN_ID: str | None = None
 
 
 def code_revision() -> str:
@@ -63,6 +67,64 @@ def code_revision() -> str:
         except Exception:  # noqa: BLE001 -- provenance is best-effort, never fatal
             _REVISION = "unknown"
     return _REVISION
+
+
+def code_dirty() -> bool | None:
+    """Whether the working tree carried uncommitted changes when this run began.
+
+    [ULIP2 ENGINEER 2026-08-29, approved by MASTER as a bug fix] `code_revision`
+    alone is not provenance. The 5-epoch dev run of 2026-08-29 06:17 was
+    produced by `ulip_backbone.py` and `stage1.py` in a MODIFIED working tree --
+    gradient checkpointing, which does not exist at HEAD `fdfd6a8` -- and
+    nothing in `train_stage1.jsonl` or `stage1_best_ckpt.json` recorded that.
+    The checkpoint therefore claimed a commit that could not have produced it,
+    and would not have run at all at that commit (batch 64 OOMs without
+    checkpointing). A commit hash beside a dirty tree is a false provenance
+    claim, not a partial one.
+
+    Resolved once and cached for the same reason `code_revision` is: the answer
+    is meant to describe THE RUN, not the instant of each write.
+
+    `None` means the question could not be answered (no git, timeout), which is
+    deliberately distinct from `False`.
+    """
+    global _DIRTY
+    if _DIRTY is None:
+        try:
+            r = subprocess.run(
+                ["git", "-C", str(paths.REPO), "status", "--porcelain"],
+                capture_output=True, text=True, timeout=5)
+            _DIRTY = bool(r.stdout.strip()) if r.returncode == 0 else None
+        except Exception:  # noqa: BLE001 -- provenance is best-effort, never fatal
+            _DIRTY = None
+    return _DIRTY
+
+
+def run_id() -> str:
+    """Identifier for THIS process's run, stamped on every metrics row.
+
+    [ULIP2 ENGINEER 2026-08-29] `train_metrics` appends, and the file is named
+    for the stage rather than the run, so every attempt at a stage lands in one
+    file. On 2026-08-29 six Stage 1 attempts -- four of them killed by machine
+    crashes -- shared `train_stage1.jsonl` with nothing to tell them apart. The
+    only way to separate them was to notice `step` jumping backwards, and a
+    reader doing the obvious thing (`tail`) sees the tail of the LAST attempt
+    grafted onto the body of an earlier one and reads it as one curve.
+
+    Stamped per ROW, not written as a header: the reader this protects is the
+    one running `tail`, who never sees a header.
+    """
+    global _RUN_ID
+    if _RUN_ID is None:
+        # time+pid alone is not unique: `test_two_runs_appending_to_one_file_
+        # stay_separable` went red on it. A crash-restart inside the same second
+        # can reuse a pid, and that is the exact case this field exists for --
+        # the 2026-08-29 crashes restarted Stage 1 four times. The timestamp is
+        # kept because it makes ids sort into run order when reading a mixed
+        # file; the pid because it ties a row to a live process during a run;
+        # the random suffix because only it makes the id actually unique.
+        _RUN_ID = f"{int(time.time())}-{os.getpid()}-{uuid.uuid4().hex[:6]}"
+    return _RUN_ID
 
 
 def _append(path: Path, record: dict[str, Any]) -> None:
@@ -175,7 +237,9 @@ def train_metrics(run: str, **fields: Any) -> None:
     simply appears in the rows where it applies, and the plotter skips the rest.
     """
     _append(paths.LOGS / f"train_{run}.jsonl",
-            {"ts": time.time(), **fields})
+            {"ts": time.time(), "run_id": run_id(),
+             "code_revision": code_revision(), "code_dirty": code_dirty(),
+             **fields})
 
 
 def cost_ledger(**resources: float) -> None:

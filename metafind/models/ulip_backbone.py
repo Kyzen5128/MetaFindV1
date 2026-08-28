@@ -110,6 +110,24 @@ class BackboneConfig:
     # infeasible, but that is an INFERENCE and the old sentence stated it as
     # measured. Do not quote either number as a measurement until one is taken.
     train_scope: TrainScope = "point_encoder_and_fuser"
+    # [MEASURED 2026-08-29] Recompute PointBERT's 18 blocks in the backward pass
+    # instead of storing their activations. NOT a recipe change: same batch, same
+    # loss, same in-batch negatives, same gradients -- only the memory/compute
+    # trade differs. It exists because the recorded `batch_size: 64` does not fit
+    # on this card without it:
+    #
+    #     encode_pc forward+backward, 10,000 points, peak allocated
+    #       batch 32   23.8 GiB   OK
+    #       batch 48   ---        OOM
+    #       batch 64   ---        OOM      <- the recorded batch size
+    #     with checkpointing
+    #       batch 64   23.0 GiB   OK
+    #
+    # The alternative was halving `batch_size`, and that IS a recipe change: the
+    # contrastive loss draws its negatives from the batch, so 32 would train
+    # against half as many. Gradient accumulation cannot substitute for the same
+    # reason. This keeps the ratified hyperparameter and pays in wall-clock.
+    grad_checkpointing: bool = False
 
 
 def pc_norm(xyz: np.ndarray) -> np.ndarray:
@@ -196,6 +214,8 @@ class ULIPBackbone:
 
         self.model = model.to(cfg.device, dtype=cfg.dtype)
         self._apply_train_scope()
+        if cfg.grad_checkpointing:
+            self._enable_point_encoder_checkpointing()
 
         self.tokenizer = model.tokenizer
         # open_clip's preprocess pipeline lives on the constructed model, but the
@@ -205,6 +225,41 @@ class ULIPBackbone:
         _, _, self.preprocess = open_clip.create_model_and_transforms(
             "ViT-bigG-14", pretrained=None
         )
+
+    def _enable_point_encoder_checkpointing(self) -> None:
+        """Recompute PointBERT's blocks in backward instead of storing them.
+
+        The replacement replicates ``TransformerEncoder.forward`` exactly --
+        ``point_encoder.py:107-110``, ``for block in self.blocks: x = block(x + pos)``
+        -- so the only difference is where the activations live.
+
+        ``use_reentrant=False`` is not a style preference. These blocks contain
+        ``DropPath`` at rate 0.1 (``drop_path_rate`` in the ULIP config, spread
+        over 18 blocks by ``torch.linspace``), so the forward is STOCHASTIC, and
+        a recomputation that drew a different mask would produce a different
+        gradient while reporting success. The non-reentrant implementation saves
+        and restores the RNG state around the recompute, which is what makes the
+        two passes draw the same mask. `test_grad_checkpointing_changes_no_gradient`
+        pins that rather than trusting it.
+        """
+        from torch.utils.checkpoint import checkpoint
+
+        encoder = self.model.point_encoder.blocks
+        blocks = encoder.blocks
+
+        def forward(x, pos):
+            for block in blocks:
+                x = checkpoint(block, x + pos, use_reentrant=False)
+            return x
+
+        # PER-INSTANCE. This rebinds an attribute on THIS encoder object, not on
+        # its class, so the patch does not travel: re-instantiating the backbone,
+        # deep-copying it, or reaching through `type(encoder).forward` all get the
+        # unpatched loop back, silently and with no error. Nothing on the Stage 1
+        # path does any of those -- the backbone is built once in `main()` -- but
+        # the next caller should not assume otherwise.
+        # [ULIP2 Block Reviewer 2026-08-29, non-blocking residual]
+        encoder.forward = forward
 
     # ------------------------------------------------------------------ freezing
 
