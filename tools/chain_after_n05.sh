@@ -12,6 +12,29 @@
 # script decides; an implicit exit would leave no record of which step stopped
 # it or why.
 
+# ─────────────────────────────────────────────────────────────────────────────
+# RETIRED 2026-08-28 [MASTER]. Superseded by tools/chain_to_stage1.sh.
+#
+# This chain queues n08 BEFORE a Stage 1 smoke. n08 is a Stage 2 input: the only
+# production reader of sem_edge_cache.json is metafind/train/stage2.py:320, and
+# PAPER FACT 2methdology.tex:75 / 3experiments.tex:24 put Stage 1 on
+# Objaverse-LVIS isolated assets with no layout. Running this would put a
+# 2.5-hour scene-graph node on Stage 1's critical path for nothing.
+#
+# The file is KEPT, not deleted: it is the origin of that misreading, and the
+# ledger points at it as evidence. A comment cannot stop `bash
+# tools/chain_after_n05.sh`, so the guard is executable and comes first.
+# 78 = EX_CONFIG, so a mistaken run gets a non-zero status rather than silence.
+{
+  echo "RETIRED 2026-08-28. Superseded by tools/chain_to_stage1.sh."
+  echo "This chain puts n08 ahead of Stage 1. n08 belongs to Stage 2; Stage 1"
+  echo "trains on Objaverse-LVIS with no scene graphs (2methdology.tex:75)."
+  echo "Kept only as evidence of where that misreading came from. Not run."
+} >&2
+exit 78
+# Everything below is preserved unchanged.
+# ─────────────────────────────────────────────────────────────────────────────
+
 set -uo pipefail
 
 REPO=/home/kyzen/MetaFindV1
