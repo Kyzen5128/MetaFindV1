@@ -101,6 +101,20 @@ def load_stage2_protocols() -> tuple[dict, dict, dict]:
     from metafind.models.essgnn import ESSGNNConfig
 
     try:
+        # The three widths here are SCAFFOLDING for a round-trip probe, not
+        # values anything trains with. The live path reads them off the
+        # artifacts instead: `node_feat_dim=data.node_dim` and
+        # `edge_feat_dim=data.edge_dim` at the bottom of main(), sourced from
+        # procthor_node_embeddings.json and sem_edge_cache.
+        #
+        # [U-20] Kyzen decided 2026-08-27 that both encoders are OpenCLIP
+        # ViT-bigG-14, 1280-d (METAFIND_NOTEBOOK.md:937). **That decision is NOT
+        # represented here and cannot be** -- `node_feat_dim` and
+        # `edge_feat_dim` are not keys of essgnn_arch_protocol.json at all, so
+        # there is nothing for a probe to check them against.
+        # `01_GRAPH_SPEC.md:1123` item 201 required exactly that -- both widths
+        # into the protocol BEFORE n13 was implemented. n13 is 680 lines. The
+        # debt is unpaid, and changing these scaffolding numbers does not pay it.
         ESSGNNConfig.from_protocol(arch, node_feat_dim=1, edge_feat_dim=1, out_dim=1)
     except (ValueError, KeyError) as exc:
         raise ValueError(
@@ -501,7 +515,15 @@ def main() -> int:
     args = ap.parse_args()
 
     import torch
-    from metafind.train.stage1 import build_model, load_protocols
+    # [BUG FIX 2026-08-28] `load_stage1_checkpoint` was called at the bottom of
+    # this function and imported nowhere -- a NameError the moment Stage 2
+    # reached it. It survived because this module has never executed that far
+    # (it needs stage1_ckpt, and n10 has not run), so no test and no run could
+    # touch the line. `gallery_index.py` imports all three from the same module.
+    # Found by MASTER, confirmed here by grep: two hits for the name in this
+    # file, both at the call site, zero in any import.
+    from metafind.train.stage1 import (
+        build_model, load_protocols, load_stage1_checkpoint)
     from metafind.models.losses import ContrastiveConfig, MetaFindContrastiveLoss
     from metafind.models.ulip_backbone import (
         BackboneConfig, ULIPBackbone, prepare_depth_shell)

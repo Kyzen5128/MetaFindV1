@@ -224,9 +224,23 @@ def assert_matches_code(arch: dict) -> None:
     # step -- rather than substituting a placeholder family -- keeps this
     # function from being the place that quietly picks one.
     if arch["architecture_family"] is not None:
+        # SCAFFOLDING, not a decision. This call exists to check that the seven
+        # protocol fields below survive ESSGNNConfig; the three widths are
+        # arbitrary inputs to that probe. The live path never reads them --
+        # stage2.py takes node_feat_dim/edge_feat_dim off the artifacts
+        # (procthor_node_embeddings.json, sem_edge_cache), not off this protocol.
+        #
+        # [U-20] Kyzen decided 2026-08-27: both encoders are OpenCLIP
+        # ViT-bigG-14, 1280-d (METAFIND_NOTEBOOK.md:937). The 512s below are
+        # updated to match so this probe stops advertising a superseded width --
+        # but **that is cosmetic and pays no debt**: neither width is a key of
+        # essgnn_arch_protocol.json, so U-20 has no machine-checked enforcement
+        # point anywhere. `01_GRAPH_SPEC.md:1123` item 201 required both widths
+        # in the protocol BEFORE n13 was implemented; n13 is 680 lines and they
+        # are still absent. Do not read this edit as the debt being paid.
         cfg = ESSGNNConfig.from_protocol(
             {**arch, "status": "resolved"},
-            node_feat_dim=512, edge_feat_dim=512, out_dim=1280)
+            node_feat_dim=1280, edge_feat_dim=1280, out_dim=1280)
         for field in ("distance", "coord_feat", "layer_sharing", "pooling",
                       "hidden_dim", "n_layers", "use_io_projections"):
             if getattr(cfg, field) != arch[field]:

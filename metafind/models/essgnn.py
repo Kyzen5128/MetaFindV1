@@ -142,8 +142,28 @@ class ESSGNNConfig:
     # t_i in R^d and f_h : R^(2d+1+e) -> R^d, and "After L layers" without an L.
     # Widths that a checkpoint or a protocol determines are REQUIRED arguments,
     # so a caller cannot inherit a number that looks like a paper value:
-    #   node_feat_dim  the t_i encoder's width (U-20, still open)
-    #   edge_feat_dim  the semantic edge encoder's width (U-06, still open)
+    #   node_feat_dim  t_i's encoder width. [U-20] DECIDED 2026-08-27 by Kyzen
+    #                  (METAFIND_NOTEBOOK.md:937): OpenCLIP ViT-bigG-14, 1280-d,
+    #                  superseding the ViT-B/32 512 that had been self-selected
+    #                  on 08-17. **The decision is not enforced anywhere.**
+    #   edge_feat_dim  e_ij's encoder width. [U-06] closed by the SAME ruling,
+    #                  not separately: semantic_edges_run.encode_sentences()
+    #                  serves the edges and the nodes from one TEXT_ENCODER and
+    #                  edge_dim is read straight off embeddings.shape[1], so
+    #                  U-06 never had an independent choice space.
+    #
+    #                  ** BOTH ARE STILL ABSENT FROM THE PROTOCOL. ** They are
+    #                  not keys of essgnn_arch_protocol.json; the trainer infers
+    #                  them from the artifacts at runtime. So nothing compares
+    #                  what U-20 decided against what n08 actually wrote -- a
+    #                  512-wide artifact would train silently.
+    #                  `01_GRAPH_SPEC.md:1123` item 201 required both widths in
+    #                  the protocol BEFORE n13 was implemented. n13 is complete.
+    #                  Reading "DECIDED" here as "guarded" is the mistake this
+    #                  paragraph exists to prevent.
+    #                  Both widths are INFERENCE from ulip_backbone.py:90
+    #                  EMBED_DIM, not measured; n08's first run prints
+    #                  emb.shape and that is when they become OBSERVED DATA.
     #   out_dim        must equal the fusion output so Eq. 6's residual is well
     #                  formed; read from the loaded ULIP-2 checkpoint
     # An earlier version defaulted all three to 1280, which is the ULIP-2
