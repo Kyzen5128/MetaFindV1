@@ -814,6 +814,75 @@ Gates：G6 擋 Stage 2（essgnn_arch_protocol 未 resolved 不得開跑）；DL-
 
 ---
 
+## 9.11 兩個訓練器都會 NameError，而全套測試是綠的（2026-08-28 新增）
+
+**發現者：ULIP2 Engineer，起因是 Kyzen 要他「把 Stage 1 全部步驟寫好送審才准跑」並與本文件逐項比對。
+我獨立驗證兩處。**
+
+### 兩處 CONFIRMED
+
+```
+[OBSERVED IMPLEMENTATION，我 grep HEAD 版本]
+metafind/train/stage1.py:593   lr=round(sched.get_last_lr()[0], 8)
+metafind/train/stage1.py:595   for p in params
+  → `sched` 全檔僅此一處出現；`params` 在 main() 內僅此一處
+    （:95/:96 是 dict key，:514 是別的函式的區域變數）
+  → **第一個 epoch 的第 20 步 NameError。** 成因：8/27 把 torch scheduler
+    換成上游的預先算好陣列時，刪了 scheduler 與 params，留著引用它們的 log 行。
+
+metafind/train/stage2.py:570   load_stage1_checkpoint(...)
+metafind/train/stage2.py:504   from metafind.train.stage1 import build_model, load_protocols
+  → **沒有 import 它。** 對照 gallery_index.py:174 有。
+  → Stage 2 一走到載入 checkpoint 那行就 NameError。
+```
+
+**兩個訓練器，兩個都跑不動，而 `pytest` 全綠。**
+
+### 為什麼綠
+
+- Stage 1：那 13 個測試測的是 `cosine_schedule` 與 `weight_decay_groups` 兩個**純函式**，從未進過訓練迴圈。迴圈要 9.5 GB 骨幹＋GPU 才進得去。
+- Stage 2：`stage2.py:5` 自己寫著「it has never been executed, because it needs `stage1_ckpt`」。**從來沒跑到那一行。**
+
+### 修法值得記下來：補的是規則，不是那個 case
+
+ULIP2 沒有只補一個測試。他加了 `tests/test_train_stage1.py` 的 AST 走訪：
+**訓練模組裡任何函式都不得讀取「非參數、非本函式賦值、非模組層級、非 builtin」的名字。**
+靜態檢查，因為它保護的迴圈進不去。**把 `sched` 那行種回去 → 紅並指名；拿掉 → 綠。474 passed。**
+他用它掃八個檔，只有 stage1（已修）與 stage2（ESSGNN 線）中招。
+
+> **與 §9.8 的關係**：§9.8 是「防線是綠的但它量錯」；這一條是「**沒有防線，而全綠讓人以為有**」。
+> 兩者的共同點是綠燈本身不帶資訊。差別在 §9.8 要執行防線去對它自己的宣稱，
+> 這一條要問「**這條路徑上到底有沒有任何測試進得去**」。
+
+---
+
+## 9.12 決定了、記進本文件了、但沒有任何程式碼消費它（2026-08-28 新增）
+
+ULIP2 拿本文件逐項比對實作時抓出兩個。**兩個都不是 bug，是「決定與實作之間斷線」，
+而且斷線的兩端都在本文件裡看起來是完整的。**
+
+**(a) dev-val 沒有消費者。**
+本文件 `:517` 逐字寫著「用 dev-val 決定：lr · 訓練輪數 · checkpoint 政策」。
+`splits.py` 8/27 已做出 `C_dev_selection` 協定與 4,602 筆 dev-val（`DEV_VAL_FRACTION = 0.125`）。
+[OBSERVED IMPLEMENTATION] **`grep dev_val metafind/train/stage1.py` = 0。訓練迴圈裡沒有任何驗證步驟。**
+→ **pilot 跑完，沒有東西可以拿來決定 lr 或輪數，只有 train loss。**
+
+**(b) checkpoint 選擇沒有實作。**
+本文件 v3.2 記著 OpenShape `src/train.py:190-201` 的 in-batch contrastive accuracy
+可在沒有 held-out 的情況下選 checkpoint，並據此**撤回了 §10 #3 的上呈**。
+[OBSERVED IMPLEMENTATION] `stage1.py:621` 每個 epoch 無條件 `save_checkpoint`，
+全檔 grep `best` 零命中。**不早停是對的（`for epoch in range(epochs)` 跑滿），
+但「取 best checkpoint」不存在。**
+
+**兩件都需要 Kyzen 裁決，不由工程師自行補**：要用哪個指標選模型、要不要每 epoch 跑 dev-val，
+是研究行為（`acc_q2g` 已經在 metrics 裡算了，但「拿它當選擇依據」是一個決定）。
+**已列入 §10 待拍板。**
+
+> **這一族的形狀**：§9.6 是「協定寫了、生效的路沒讀」；這一條是「**本文件寫了、根本沒有那條路**」。
+> 前者 grep 得到一個沒被讀的欄位，後者 grep 得到零 —— **而零看起來就像沒有這個議題。**
+
+---
+
 ## 9.10 兩個文字空間，靜靜地不同 —— U-34 若翻案，沒有任何東西會發現（2026-08-28 新增）
 
 **發現者：ESSGNN Engineer。他更正的是我。我逐條驗過，他對，而且他的版本比我的更糟也更準。**
