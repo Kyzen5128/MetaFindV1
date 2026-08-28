@@ -814,6 +814,38 @@ Gates：G6 擋 Stage 2（essgnn_arch_protocol 未 resolved 不得開跑）；DL-
 
 ---
 
+## 9.9 `run_progress` 把「部分執行」與「什麼都沒產出」都記成 SUCCESS（2026-08-28 新增）
+
+**起因**：我對 ULIP2 Engineer 說「共用 runlog 裡有 4 列 n08 是你留的」。**錯的，只有 2 列是他的。**
+但我去查歸屬時，發現那四列本身有比歸屬更重要的問題。
+
+[OBSERVED DATA `data/outputs/logs/run_progress.jsonl`，`stage == "n08_semantic_edges"` 全部四列]：
+
+```
+RUNNING  started 1786939789  rev 73f9f8a5   （2026-08-17）
+SUCCESS  ended   1786940916  rc=0           歷時 1,127 秒
+RUNNING  started 1787901160  rev 9e914572   （2026-08-28）
+SUCCESS  ended   1787901162  rc=0           歷時 1.93 秒
+```
+
+**兩個問題，都不是誰的操作失誤，是 runlog 的形狀：**
+
+1. **2026-08-17 那次記 `SUCCESS rc=0`、跑了 1,127 秒，而 n08 的三個產物一個都不存在**
+   （`sem_edge_cache.json` / `sem_edge_embeddings.npz` / `sem_edge_sentences.jsonl` 今日實測皆 absent）。
+   要嘛它成功了卻沒寫產物，要嘛產物後來被移走而 runlog 不知道。**兩種情況 runlog 都說 SUCCESS。**
+2. **2026-08-28 那次是 `--limit-pairs 5 --skip-encode`，1.93 秒，同樣記 `SUCCESS rc=0`，
+   而 runlog 裡沒有任何欄位說它是部分執行。**
+
+→ **只讀 `run_progress` 的人會看到「n08 成功兩次」，然後推論 n08 已經跑過。**
+兩次都不是。這正是 `tools/status.sh` 那族「假數字」的上游 —— 修了 status.sh 的 `find -L`，
+但它讀的這份紀錄本身分不出「跑完」「跑一點點」「跑完但沒東西」。
+
+**要做的（列 n13／n08 前置，尚未實作）**：`runlog` 的 SUCCESS 至少要帶
+(a) 是否為受限執行（`--limit-*` / `--skip-*` 任一存在即記錄其值），
+(b) 宣告的產出路徑在結束當下是否存在。**沒有 (b)，SUCCESS 只證明 process 沒有拋例外。**
+
+---
+
 ## 9.8 防線寫了、具名了、解釋了 —— 但防線自己量錯（2026-08-28 新增）
 
 **發現者：ESSGNN Engineer。我獨立重現，並在過程中發現他自己也被同一件事騙過。**
