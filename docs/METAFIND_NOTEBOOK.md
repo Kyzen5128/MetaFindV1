@@ -211,7 +211,7 @@ fully_separate                    兩份骨幹、兩份 Fusion（backbone 層級
 
 - 節點 = 已擺物件：座標 x_i∈R³（**場景座標不 normalize**——論文的賣點就是能吃未正規化座標系，
   PAPER `2methdology.tex:40`；IMPL `essgnn.py:544-550` 註明「pre-centring 會把要展示的能力刪掉」）
-  ＋文字特徵 t_i∈R^d（編碼器沒指定，**S6/U-20 開放**）。
+  ＋文字特徵 t_i∈R^d（論文沒指定編碼器 → S6；~~**U-20 開放**~~ **U-20 已於 2026-08-27 由 Kyzen 拍板：OpenCLIP ViT-bigG-14，d=1280**，見本文件 §10「U-20」列。此處先前仍寫「開放」，2026-08-28 由 ULIP2 Engineer 據此誤判 n08 被未決事項擋住 —— 是本文件漂移，不是他讀錯）。
 - 邊兩種（PAPER :28,47）：物理邊（adjacency/support）＋語意邊（LLM 生成關係句 → 凍結文字編碼器 → e_ij）。
 - **U-29（CHOICE）**：2.5 的 f_h/f_x 只吃**一個** e_ij 參數，物理邊沒有數學入口 →
   物理邊只決定鄰域 N(i)、邊特徵純語意（唯一讓公式簽名字面成立的讀法）
@@ -273,7 +273,7 @@ C8 = 論文把 SE(3) 說成「縮放敏感」的解法但 SE(3) 不含縮放（R
 `h0_mode=semantic / coords_agg=sum（Eq.3 是 Σ；EGNN 預設 mean，F9）/ edge_proj_dim=None / normalize_coord_diff=False`。
 
 尚缺三個 REQUIRED 維度（建 config 時必填、來源不是論文）：
-`node_feat_dim`（t_i 編碼器寬度，U-20 開放）、`edge_feat_dim`（e_ij 編碼器寬度，U-06 開放：CLIP 1280 / BERT 768 / CLIP-B 512）、
+`node_feat_dim`（t_i 編碼器寬度，~~U-20 開放~~ **= 1280，U-20 已拍板 ViT-bigG-14**）、`edge_feat_dim`（e_ij 編碼器寬度，~~U-06 開放：CLIP 1280 / BERT 768 / CLIP-B 512~~ **也是 1280，且不是獨立選項**：[OBSERVED IMPLEMENTATION] `semantic_edges_run.py:247` 的 `encode_sentences()` 同時服務邊（`:378`）與節點（`:394`），共用同一個 `TEXT_ENCODER`，`:414` 的 `edge_dim = embeddings.shape[1]` 直接跟著編碼器走 —— **U-20 一次裁決同時決定兩者，U-06 沒有獨立的選擇空間**。仍然開放的是另一件事：ESSGNN 內部要不要把 1280 投影到更窄，那是模型內的一層，**不需要重跑 n08**）、
 `out_dim=1280`（必等於 fusion 輸出，Eq. 6 相加才成立——建構子強制檢查）。
 **規劃預設（待批）**：t_i 與 e_ij 都用「與骨幹同一顆凍結 CLIP text encoder」→ 1280/1280，
 理由：不引入第二顆文字模型、與 query 側同空間；appendix 說 "e.g., CLIP or BERT" 允許。
