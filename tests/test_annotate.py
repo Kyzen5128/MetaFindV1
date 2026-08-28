@@ -383,8 +383,11 @@ def test_the_prompt_still_permits_accented_latin():
 
 def test_the_prompt_version_moved_because_the_prompt_changed():
     """[P-1] v4 asks for something v3 did not. Pretending they are one contract
-    is what makes a corpus unfalsifiable later."""
-    assert PROMPT_VERSION == 8
+    is what makes a corpus unfalsifiable later.
+
+    v9 asks for at most MAX_DESCRIPTION_WORDS words in ONE sentence; v8 asked
+    for "one or two sentences" with no bound at all."""
+    assert PROMPT_VERSION == 9
 
 
 def test_editing_the_prompt_moves_the_contract_id():
@@ -1248,10 +1251,20 @@ def test_the_record_carries_the_anchor_so_disagreement_stays_measurable():
     assert rec["synset"] == "chair.n.01"
 
 
-def test_all_three_contract_axes_moved_for_v8():
-    # SCHEMA_VERSION 4 -> 5 with `synset_source` (`U-SY`, 2026-08-23).
-    assert (PROMPT_VERSION, VALIDATOR_VERSION, SCHEMA_VERSION) == (8, 4, 5)
-    assert annotation_contract_id().startswith("metafind_annot_v8@")
+def test_all_three_contract_axes_moved_for_v9():
+    """All three moved together on 2026-08-28, and each for its own reason --
+    which is the whole point of keeping them separate.
+
+      PROMPT    8 -> 9  the description is asked to fit MAX_DESCRIPTION_WORDS
+      VALIDATOR 4 -> 5  a record whose serialized string exceeds 77 tokens is
+                        REFUSED (`annotate_run._fit_description`)
+      SCHEMA    5 -> 6  the record stores `description_fit`
+
+    A change that moved only PROMPT would have said the model was asked
+    something new while claiming the same rules admitted it and the same record
+    held it. Neither was true."""
+    assert (PROMPT_VERSION, VALIDATOR_VERSION, SCHEMA_VERSION) == (9, 5, 6)
+    assert annotation_contract_id().startswith("metafind_annot_v9@")
 
 
 def test_swapping_the_synset_table_moves_the_contract_id():

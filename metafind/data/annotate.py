@@ -106,7 +106,11 @@ __all__ = [
 # and `annotation_contract_id()` binds all three to the actual text of the
 # prompt and the actual admission bounds, so an edit that someone forgets to
 # version still moves the identity.
-PROMPT_VERSION = 8  # v8 supplies the Objaverse-LVIS identity, lets the model
+PROMPT_VERSION = 9  # v9 BOUNDS the description length (MAX_DESCRIPTION_WORDS).
+                    # Kyzen 2026-08-28: re-annotate the 2,095 assets whose
+                    # serialized string exceeds CLIP's 77-token context,
+                    # rather than truncate them (B) or drop them (A).
+                    # v8 supplies the Objaverse-LVIS identity, lets the model
                     # REFINE it but never replace it, and conditions the five
                     # description candidates on it. v7 measured the blind
                     # baseline that decided this: ~28% of 97 assets outright
@@ -125,7 +129,14 @@ PROMPT_VERSION = 8  # v8 supplies the Objaverse-LVIS identity, lets the model
                     # language; v3 did not, and 3 records came back
                     # part-Chinese. v2 followed Figure 2 but left 41% with all
                     # four flags false
-VALIDATOR_VERSION = 4  # v4 admits an UNANCHORED response: `synset` comes from
+VALIDATOR_VERSION = 5  # v5 REFUSES a record whose serialized string exceeds
+                       # CLIP's 77-token context. The rule lives in
+                       # `annotate_run._fit_description` rather than in
+                       # `validate_annotation`, because it needs the whole
+                       # record and the ranked candidate list -- but it is an
+                       # ADMISSION rule by this constant's own definition
+                       # ("what was ACCEPTED from it"), so it is versioned here.
+                       # v4 admits an UNANCHORED response: `synset` comes from
                        # the model and is checked for shape only, there is no
                        # `identity_confirmed` to require, and `description` is
                        # injected from the CLIP ranking rather than read from
@@ -133,7 +144,11 @@ VALIDATOR_VERSION = 4  # v4 admits an UNANCHORED response: `synset` comes from
                        # from the mesh instead of accepting them, and looks
                        # `synset` up rather than reading it from the model.
                        # v2 refused non-Latin script; v1 had no language rule
-SCHEMA_VERSION = 5  # v5 stores `synset_source`: the synset now follows the
+SCHEMA_VERSION = 6   # v6 stores `description_fit`: which ranked candidate
+                     # survived the 77-token bound and how long it came out.
+                     # Without it a run where every winner fitted and a run
+                     # that fell back to rank 3 on every asset look identical.
+                     # v5 stores `synset_source`: the synset now follows the
                     # MODEL's category (`U-SY`) rather than the LVIS anchor, so
                     # the record has to say which rung of that lookup answered.
                     # v4 stores the turn-1 blind guess, its raw text and
@@ -931,13 +946,143 @@ def build_unanchored_prompt(n_views: int,
 # sampling on, so the candidates differ because the sampler differs -- not
 # because the model was told to vary them, which is a different thing and would
 # make the spread an artefact of the instruction.
+# [PROMPT_VERSION 9] The description's own budget, in WORDS because that is the
+# only unit the model can count. Derived, not chosen: over the 2,095 assets whose
+# v8 string exceeded 77 tokens, the tightest non-description remainder -- SOT/EOT
+# plus category, materials, dimensions, placement and the fixed connectives --
+# was 52 tokens, leaving 25 for the description (OBSERVED DATA, measured over the
+# whole corpus 2026-08-28).
+#
+# The words-to-tokens rate is MEASURED on this corpus's own descriptions, not
+# taken as a convention: over all 45,692 of them the BPE rate is median 1.302
+# and mean 1.308 tokens per word, p90 1.439, p99 1.579, max 2.344 (OBSERVED
+# DATA 2026-08-28). Against the 25-token worst-case remainder:
+#
+#     15 words   median 19.5 tok   p99 23.7 tok    fits
+#     18 words   median 23.4 tok   p99 28.4 tok    p99 overflows
+#     20 words   median 26.0 tok   p99 31.6 tok    p99 overflows
+#
+# [ULIP2 Block Reviewer 2026-08-28] The line above is a PRODUCT OF MAXIMA --
+# the worst ratio from one asset times the worst remainder from a different
+# one. It is a valid upper bound and it is conservative in the safe direction,
+# but it is not a measurement of any real asset, and read as one it says 15
+# words cannot work (15 x 2.344 = 35 tokens against a 25-token remainder).
+#
+# The quantity that actually decides it is the MAXIMUM OF PRODUCTS,
+# `max over assets of (nondesc_i + 15 x ratio_i)`, each asset paired with its
+# own ratio. Computed over all 45,692 (OBSERVED DATA 2026-08-28):
+#
+#     worst    73.1 tokens  = nondesc 50 + 15 x 1.543   (2fe1650ef892...)
+#     p99      64.7
+#     median   54.5
+#     assets over 77:  0 of 45,692
+#
+# So 15 words clears every real asset with ~4 tokens to spare. The caveat is
+# named rather than hidden: `ratio_i` is measured on that asset's v8
+# description, and a v9 description is a different sentence whose rate could
+# differ. It is a strong prior, not a proof about text that does not exist yet.
+#
+# [ULIP2 Block Reviewer 2026-08-28, second pass] The 0/45,692 above is measured
+# on a length band v9 will not produce, and the correct band is worse. The
+# tokens-per-word rate RISES as descriptions get shorter -- short text carries
+# fewer common multi-word merges per word: less filler, more adjectives and
+# proper nouns. Measured over the whole corpus, bucketed by word count:
+#
+#     <= 15 words   n=   106   median 1.385   p99 1.786   max 1.800
+#     16-25         n= 1,375   median 1.333   p99 1.688   max 1.824
+#     26-40         n=28,066   median 1.314   p99 1.586   max 2.344
+#     > 40          n=16,145   median 1.280   p99 1.524   max 1.956
+#
+# The corpus median of ~1.30 is carried by the two long buckets -- exactly the
+# lengths v9 abolishes. Redone at the length-matched tail, against the worst
+# remainder in the corpus (52 tokens, uid e050dd76cc11...):
+#
+#     words   r=1.786   r=1.800   r=1.929      <- tail estimate used
+#        12         0         0         0
+#        13         0         0         1
+#        14         1         1        11
+#        15         3         3        22
+#        16        22        22       137
+#
+#     1.786 / 1.800 = this corpus's <=15 bucket, p99 and max, n=106
+#     1.929         = the Reviewer's independent p99, n=29
+#
+# [CORRECTED] An earlier version of this comment said "14 words: 0 of 45,692".
+# That is FALSE and it was mine: it came from a sweep that skipped records
+# while bucketing and never saw the worst remainder, which is 52 and not 50.
+# 14 words leaves ONE asset at this corpus's own tail, and eleven at the
+# Reviewer's. The first number to reach zero on both tails is 12.
+#
+# Neither tail is trustworthy. The `<=15` bucket is 106 records out of 45,692 --
+# it exists only as an accident of v8's variance, because v8 almost never
+# produced text that short. v9 makes that band the WHOLE corpus, which is the
+# first time the tail becomes measurable. Read this table as a range, not a
+# value.
+#
+# What keeps the stakes low: whatever number is chosen, `_fit_description`
+# measures the finished sentence and falls to the next ranked candidate.
+# The residual is 0-22 assets of 45,692, and none of them is lost silently --
+# each either drops a rank or is quarantined, and `description_fit` records
+# which. The word budget decides HOW OFTEN rank 2 is used, not whether assets
+# survive.
+#
+# NOTHING ABOVE IS A GUARANTEE, and this constant enforces nothing. No word
+# count can, because words do not map to tokens at a fixed rate. The bound that
+# is actually enforced is `annotate_run._fit_description`, on TOKENS, on the
+# finished sentence. Read this constant as what it is: a prompt instruction to
+# a model that overruns stated word counts routinely. What the word budget
+# actually buys is how OFTEN the run falls back to rank 2 or 3 -- and
+# `description_fit["rank_used"]` is the instrument that reports it.
+#
+# This is an IMPLEMENTATION CHOICE. MetaFind states only that assets are
+# "annotated using GPT-4o" with "category, size dimensions, materials, and
+# placement constraints" (`2methdology.tex:28`) -- it specifies no prompt, no
+# length, and no upper bound. The 160-CHARACTER cap this replaces was equally
+# unsourced, and it is what produced the corpus's mid-sentence tails
+# ("It features a.", "and a small red.") on 95.8% of records.
+# [PROVENANCE CORRECTED 2026-08-29, ULIP2 Engineer, ruled by MASTER]
+# This paragraph previously opened "[KYZEN 2026-08-28] 12, not 15 ... his word
+# was 「跑」", which records the approver as the one who chose the value. He did
+# not. Kyzen's words that day were 「並且給規定限制字數」, 「我只想跑D 小」and
+# 「跑」: he required THAT there be a word cap and approved RUNNING the D-small
+# re-annotation. He was never asked to choose between 12 and 15, and did not.
+#
+# **12 is the ULIP2 Block Engineer's IMPLEMENTATION CHOICE.** Kyzen has not
+# overruled it; that is not the same as having selected it, and the two must not
+# be written as if they were.
+#
+# The derivation: 12 is the largest budget that leaves ZERO assets unable to fit
+# under BOTH tail estimates (1.786/1.800 from this corpus's own <=15 bucket, and
+# 1.929 from the Reviewer's independent sample). 15 left 3 or 22 depending on
+# which tail you believe, and 14 left 1 or 11 -- a disagreement 12 makes moot
+# rather than resolves.
+#
+# **The derivation's weakness, stated plainly because it does not disappear by
+# being survived:** it multiplies the worst ratio by the worst remainder, and
+# those two worst values never occur on the same asset (the point already made
+# at the `1.929 x 25` line above). So 12 clears a bar set higher than the corpus
+# ever actually raises. It is safe, but part of that safety is luck rather than
+# derivation, and a future corpus could make the two maxima coincide.
+#
+# **12 is a request in a prompt, not a constraint.** OBSERVED DATA from the run
+# it produced (2,095 assets, measured 2026-08-29): 5 records came back at 13
+# words. What actually holds the line is `annotate_run._fit_description`, which
+# measures TOKENS on the finished serialized record and falls to the next ranked
+# candidate. That same run: tokens min 44, median 56, max 73, zero above 77,
+# smallest margin 4 tokens, and `rank_used` was 0 on 100% of records -- the
+# fallback branch never fired.
+MAX_DESCRIPTION_WORDS = 12
+
 DESCRIPTION_PROMPT = (
     "You are looking at {n_views} rendered views of a single 3D asset.\n"
     "\n"
     "{identity}"
-    "Describe it in one or two sentences: what makes THIS instance distinctive "
-    "-- colour, style, finish, condition, ornament, distinguishing detail. "
-    "Describe what you can actually see in these views.\n"
+    "Describe it in ONE sentence of at most {max_words} words: what makes THIS "
+    "instance distinctive -- colour, style, finish, condition, ornament, "
+    "distinguishing detail. Describe what you can actually see in these views.\n"
+    "\n"
+    "Keep it under {max_words} words. A complete short sentence is better than "
+    "a long one that gets cut off.\n"
     "\n"
     "English only. Reply with the description alone, no preamble, no JSON."
 )
@@ -972,7 +1117,8 @@ def build_description_prompt(n_views: int, category: str | None = None) -> str:
     """
     identity = (f'This asset is a "{category}". Take that as given.\n\n'
                 if category else "")
-    return DESCRIPTION_PROMPT.format(n_views=n_views, identity=identity)
+    return DESCRIPTION_PROMPT.format(n_views=n_views, identity=identity,
+                                     max_words=MAX_DESCRIPTION_WORDS)
 
 
 def build_repair_prompt(original: str, error: str, raw_response: str) -> str:
@@ -1020,6 +1166,21 @@ def annotation_contract() -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "prompt": build_prompt(CANONICAL_N_VIEWS, CANONICAL_LVIS_CATEGORY,
                                CANONICAL_PROPORTIONS),
+        # [FIXED 2026-08-28] The DESCRIPTION prompt was not in this mapping, so
+        # editing it moved nothing -- measured: changing `DESCRIPTION_PROMPT`
+        # left the id at metafind_annot_v8@95e37eb05182d364, while bumping a
+        # dimension bound moved it. The description is the one field retrieval
+        # actually consumes (`build_description_prompt` docstring: "the
+        # retrieval text is the one thing in this record that training actually
+        # consumes"), so of everything here it was the worst omission. Its
+        # guard test only ever patched `build_prompt`.
+        #
+        # The gap is structural, not carelessness: the fingerprint was written
+        # 2026-08-21 and the separate description prompt arrived 2026-08-23
+        # (PROMPT_VERSION 7). Nobody connected the new thing to the old guard.
+        "description_prompt": build_description_prompt(CANONICAL_N_VIEWS,
+                                                       CANONICAL_LVIS_CATEGORY),
+        "max_description_words": MAX_DESCRIPTION_WORDS,
         "required_fields": list(REQUIRED_FIELDS),
         "horizontal_axes": list(HORIZONTAL_AXES),
         # The synset table is part of what the corpus MEANS: swap it and every

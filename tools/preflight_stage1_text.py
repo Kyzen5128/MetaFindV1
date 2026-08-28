@@ -46,8 +46,11 @@ from metafind.data.encode_text_image import (  # noqa: E402
     TEXT_CONTEXT_LENGTH,
     expected_text_for,
     is_complete,
+    load_protocol,
     true_token_count,
+    ulip2_ckpt_sha,
 )
+from metafind.data.view_io import image_identity  # noqa: E402
 from metafind.models.resolve_stage1 import text_serialization_id  # noqa: E402
 
 # The fields a record must carry for this serializer to handle it. Keyed on the
@@ -137,6 +140,41 @@ def ratified_string(ann: dict) -> str:
             f"{ratified_placement(ann)}.")
 
 
+def rendered_dimensions(text: str) -> list[str]:
+    """The three dimension strings as the template actually rendered them.
+
+    [FIXED 2026-08-28] This was inline and used `split(", roughly ", 1)`, the
+    FIRST occurrence -- but the description is free text and contains it:
+    "a weathered, roughly hewn stone pillar", "a dark grey, roughly forged
+    metal head". The parse then handed `float()` a sentence, ValueError landed
+    in the caller's `except`, and the uid was reported as rendering a stored
+    non-zero dimension as 0. All 21 records this gate refused to start n06 over
+    were prose, not bad data: their width/length/height are finite and
+    non-zero. `rsplit` because the dimension clause is the LAST ", roughly " in
+    the template -- description, then category, then the clause.
+
+    It is a function rather than an expression so a test can reach it. Both
+    bugs this tool carried survived because nothing imported it.
+
+    [ULIP2 Block Reviewer 2026-08-28] Two limits, neither blocking, both worth
+    knowing before anyone extends this.
+
+    `rsplit` is right only while nothing AFTER the dimension clause contains
+    ", roughly ". Today that tail is `{placement}`, rendered from four
+    booleans, so it cannot. The guarantee is "the last occurrence is the
+    template's", and it holds only while the tail stays non-prose.
+
+    More importantly: DO NOT EXTEND THIS PARSER. `width`, `length` and `height`
+    are structured fields on the annotation record. Reading them back out of
+    the serialized prose re-derives data that was never lost, and every
+    separator in the template is a token the free-text fields may also contain.
+    This function patches a parse that should not exist. It survives because
+    this is a read-only preflight tool and replacing it is not proportionate --
+    not because the approach is sound.
+    """
+    return text.rsplit(", roughly ", 1)[1].split(" centimetres,", 1)[0].split(" by ")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--limit", type=int, help="first N annotations, for a smoke run")
@@ -146,7 +184,16 @@ def main() -> int:
     if not index.exists():
         print(f"{index} not found -- run n04_render_views first")
         return 2
-    rendered = {json.loads(l)["uid"] for l in index.read_text().splitlines() if l.strip()}
+    # [FIXED 2026-08-28] This was a SET of uids, and `is_complete` was called
+    # with two arguments while n06 calls it with five. The tool crashed with
+    # TypeError before printing anything, so the gate that exists to run BEFORE
+    # n06 spends GPU time could not run at all. The whole render record is kept
+    # because `image_identity` needs the per-view digests, not just the uid.
+    rendered = {}
+    for line in index.read_text().splitlines():
+        if line.strip():
+            r = json.loads(line)
+            rendered[r["uid"]] = r
 
     annotations = sorted(paths.ANNOTATIONS.glob("*.json"))
     if args.limit:
@@ -171,6 +218,8 @@ def main() -> int:
     independent_valid = 0
     foreign_but_valid: list[str] = []
     max_tokens, max_uid = 0, ""
+    aggregation = load_protocol()["image_aggregation"]
+    ckpt_sha = ulip2_ckpt_sha()
 
     for path in work_list:
         ann = json.loads(path.read_text())
@@ -208,8 +257,7 @@ def main() -> int:
                 bad_dim.append(uid)
                 break
 
-        rendered_dims = text.split(", roughly ", 1)[1].split(" centimetres,", 1)[0]
-        for shown, field in zip(rendered_dims.split(" by "),
+        for shown, field in zip(rendered_dimensions(text),
                                 ("width", "length", "height")):
             try:
                 shown_value = float(shown)
@@ -240,7 +288,12 @@ def main() -> int:
         # n06 will actually apply, so it is the one that decides the run; the
         # second reconstructs the answer from the sidecar without calling it, so
         # the reported proof is not simply the implementation restating itself.
-        if is_complete(uid, text):
+        # The SAME five arguments n06 passes at encode_text_image.py:490-493.
+        # Fewer would make this gate answer an easier question than the one the
+        # encode run actually asks, and report a cache-valid count n06 will not
+        # honour.
+        if is_complete(uid, text, image_identity(rendered[uid]),
+                       aggregation, ckpt_sha):
             cache_valid += 1
             rec = json.loads((paths.EMBEDDINGS / f"{uid}.json").read_text())
             if rec.get("text_serialization") != identity:

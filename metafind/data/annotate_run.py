@@ -414,6 +414,99 @@ def build_work_list(candidates, force: bool, registry=None,
             states)
 
 
+def _fit_description(parsed: dict, lvis_category, proportions, ranked: list[dict],
+                     model_id: str):
+    """[PROMPT_VERSION 9] The highest-ranked description whose SERIALIZED string
+    fits CLIP's 77-token context, and the record of which one that was.
+
+    Returns ``(Annotation, fit_record)``, or ``(None, fit_record)`` when no
+    candidate fits.
+
+    Why here and not in the prompt. `MAX_DESCRIPTION_WORDS` is an INSTRUCTION --
+    the model overruns a stated word count routinely, and a word count is not a
+    token count in any case. This is the bound that is actually enforced, and it
+    is checked against the real serialized sentence rather than a proxy, because
+    the remainder differs per asset: over the corpus the non-description part
+    costs between 31 and 52 tokens, so a single fixed description budget is
+    either unsafe for the worst asset or wasteful for the median.
+
+    Why it can be done by SELECTION rather than by cutting. `describe_rank`
+    already draws five candidates and ranks them, so taking the best one that
+    fits costs no model call and produces no mid-sentence tail -- which is the
+    whole point of v9, since the 160-character cap it replaces produced
+    "It features a." on 95.8% of the v8 corpus.
+
+    [ULIP2 Block Reviewer 2026-08-28] This used to say the reason was that
+    "every one of them is a complete sentence". **That sentence is false** and
+    the conclusion does not need it. Generation is capped at MAX_NEW_TOKENS, so
+    a repetition loop returns a candidate cut mid-word; rare under "ONE sentence
+    of at most 15 words", not impossible. The real reason is stronger: a
+    runaway candidate is LONG, so it fails the token bound and is skipped. **A
+    malformed candidate can only be discarded, never selected.** Safety comes
+    from the bound, not from the candidates being well-formed -- which is the
+    property worth having, because it does not depend on the generator
+    behaving.
+
+    The rank actually used is RECORDED. If this routinely lands on rank 3, the
+    word budget is too loose and the number is how anyone would find that out;
+    a silent fallback would look exactly like a run where every winner fitted.
+    """
+    from copy import deepcopy
+
+    from metafind.data.encode_text_image import TEXT_CONTEXT_LENGTH, true_token_count
+    from metafind.models.resolve_stage1 import serialize_annotation
+
+    tried = []
+    for candidate in ranked:
+        text = candidate["text"]
+        # [ESSGNN Reviewer 2026-08-28] This call is OUTSIDE the repair loop's
+        # `try`, so an escaping AnnotationError would leave `annotate_one`
+        # entirely -- skipping both the repair loop and the quarantine path
+        # below, and crashing the run instead of losing one asset.
+        #
+        # Today it cannot fire, and I checked rather than assumed. Three rules
+        # in `validate_annotation` read `description`: the two emptiness checks
+        # and `_refuse_non_english`. The draw loop's pre-filter is
+        # `if text and not non_english_characters(text)`, and
+        # `_refuse_non_english` is `non_english_characters` plus a raise -- the
+        # SAME function, so every candidate here already satisfies all three.
+        # Every other rule in that function reads a field the winner already
+        # passed on this same `parsed`.
+        #
+        # It is caught anyway, because that argument is about the state of
+        # ANOTHER module: it holds only while the pre-filter and the validator
+        # keep applying the identical rule, and nothing makes them. This file
+        # already states the principle at `serialize_annotation` -- "a guard
+        # that depends on a check in another module is a guard that disappears".
+        # A candidate that will not validate is the same fact to the caller as
+        # a candidate that will not fit: this one cannot be used.
+        try:
+            annotation = validate_annotation(deepcopy(parsed),
+                                             lvis_category=lvis_category,
+                                             proportions=proportions,
+                                             description=text)
+        except AnnotationError as exc:
+            tried.append({"rank": candidate["rank"], "rejected": str(exc)[:200]})
+            continue
+        n = true_token_count(serialize_annotation(annotation.as_record(model_id)))
+        tried.append({"rank": candidate["rank"], "tokens": n})
+        if n <= TEXT_CONTEXT_LENGTH:
+            return annotation, {"rank_used": candidate["rank"],
+                                "tokens": n,
+                                "candidates_tried": len(tried),
+                                "context_length": TEXT_CONTEXT_LENGTH}
+    # Two reasons reach here and the record must say WHICH: "none fitted" and
+    # "none validated" call for different responses, and one message covering
+    # both would state the wrong cause for whichever it was not.
+    return None, {"rank_used": None,
+                  "tried": tried,
+                  "over_context": [t["tokens"] for t in tried if "tokens" in t],
+                  "rejected_by_validator": [t["rank"] for t in tried
+                                            if "rejected" in t],
+                  "candidates_tried": len(tried),
+                  "context_length": TEXT_CONTEXT_LENGTH}
+
+
 # --- v5 anchors -----------------------------------------------------------
 #
 # Two inputs that PROMPT_VERSION 5 requires and v4 never read: the dataset's own
@@ -1095,6 +1188,7 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
         raw = gen(current)
         last_raw = raw
         try:
+            parsed = parse_annotation(raw)
             annotation = validate_annotation(
                 parse_annotation(raw),
                 lvis_category=lvis_category,
@@ -1109,10 +1203,38 @@ def annotate_one(ann: Annotator, uid: str, render_rec: dict, *,
                 current = build_repair_prompt(prompt, last_error, raw)
             continue
 
+        # [PROMPT_VERSION 9] The winner is the best DESCRIPTION; it is not
+        # necessarily one that fits. Swap in the best that does, before the
+        # record is built -- after it, the string is already the artifact.
+        annotation, description_fit = _fit_description(
+            parsed, lvis_category, proportions, ranked, ann.model_id)
+        if annotation is None:
+            return None, {
+                "uid": uid,
+                "failure_class": "DETERMINISTIC_INPUT",
+                "exception_type": "NoDescriptionFitsContext",
+                "exception_msg": (
+                    f"none of {description_fit['candidates_tried']} ranked "
+                    f"descriptions could be used. "
+                    f"{len(description_fit['over_context'])} exceeded "
+                    f"{description_fit['context_length']} tokens "
+                    f"({description_fit['over_context']}); "
+                    f"{len(description_fit['rejected_by_validator'])} were "
+                    f"refused by the validator (ranks "
+                    f"{description_fit['rejected_by_validator']}). The asset is "
+                    "QUARANTINED rather than truncated: a mid-sentence tail is "
+                    "what PROMPT_VERSION 9 exists to stop."),
+                "traceback": "",
+            }
+
         rec = annotation.as_record(ann.model_id)
         rec |= {
             "uid": uid,
             "prompt_version": PROMPT_VERSION,
+            # Which ranked candidate actually survived the context bound, and
+            # how long it came out. `rank_used` > 0 on many assets means the
+            # word budget is too loose; without the field that is invisible.
+            "description_fit": description_fit,
             "attempts": attempt,
             # [PROMPT_VERSION 7] Every candidate and its score, not just the
             # winner. `E-10` promises the spread is recorded so "would ten have
