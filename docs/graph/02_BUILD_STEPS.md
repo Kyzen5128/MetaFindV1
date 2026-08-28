@@ -297,7 +297,7 @@ key = sha256(desc_i, desc_j, prompt_version, llm_model, text_encoder_version)
 §2.3 只寫「prompting an LLM on object pairs」—— 全部對？只有物理鄰居？某個 kNN？
 這直接影響 ESSGNN 的輸入。選一個並記錄，且列為報告中的未定項。
 
-**[未定 U-20] 句子再由哪個 encoder 變成 `t_i`，論文也沒說。**
+**~~[未定 U-20]~~ [已定 U-20，2026-08-27 Kyzen] 句子由哪個 encoder 變成 `t_i`，論文沒說 → 裁定為 OpenCLIP ViT-bigG-14／1280 維，經 `ULIPBackbone`（`METAFIND_NOTEBOOK.md:937`）。⚠ 尚未進協定，無執行點。**
 §2.5 只寫 `t_i ∈ ℝ^d`、稱它 "a text-derived feature"。文中確實提到一個
 「frozen text encoder (e.g., CLIP or BERT)」，但那句話講的是**語意邊** `e_ij`，
 不是 `t_i` —— 而且連那句都是 "e.g."。兩者是否同一個 encoder，論文從未說明。
@@ -852,7 +852,7 @@ IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Ta
 | U-17 | ESSGNN 用 `d` 還是 `d²`（§2.5 vs Appendix C） | 所有訓練結果 |
 | **U-18** | **Algorithm 1 放置後圖怎麼更新**（**阻斷**） | **Table 2 全部** |
 | U-19 | 邊是有向還是無向 | ESSGNN message passing |
-| U-20 | `t_i` 由哪個 encoder 產生 | ESSGNN 輸入與 `d` |
+| U-20 | ~~`t_i` 由哪個 encoder 產生~~ **已定 2026-08-27：ViT-bigG-14／1280** | ESSGNN 輸入與 `d`；**尚未進 `essgnn_arch_protocol`** |
 | **U-21** | **Algorithm 1 的 `G_0` 與 query list 從哪來**（**阻斷**） | **Table 2 全部** |
 | U-22 | **訓練超參數論文一個都沒給** | 所有訓練結果 |
 | U-23 | 三個模態同時被遮罩時代表什麼（獨立 30% → 2.7% 的 query 全空） | Stage 1 訓練訊號 |
