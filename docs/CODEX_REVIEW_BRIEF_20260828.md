@@ -237,3 +237,244 @@ a home in the artifact rather than only in a message.
   undecided) is not in this engineer's files. Reported, not touched.
 - 1280 remains INFERENCE from metafind/models/ulip_backbone.py line 90. Nothing
   has printed a real embedding shape yet.
+
+---
+
+# ROUND 3 -- 2026-08-28, Stage 1 made runnable and given a validation loop
+
+Two things happened since round 2. The first is that Stage 1 was found to be
+unrunnable. The second is that Kyzen decided two open questions, and the
+mechanism for both turned out to be already ratified, so this implements a
+decision rather than making one.
+
+Nothing here has been executed beyond the test suite. No GPU.
+
+## 1. metafind/train/stage1.py -- Stage 1 could not train at all
+
+Found by reading the file while comparing it against docs/METAFIND_NOTEBOOK.md.
+
+    stage1.py:593   lr=round(sched.get_last_lr()[0], 8)
+    stage1.py:595   for p in params
+
+Neither name exists anywhere in the module. Both sit inside the
+`if step % 20 == 0:` metrics block, so a real run raises NameError twenty steps
+into the first epoch. The cause: on 2026-08-27 the torch scheduler was replaced
+by the precomputed `lr_schedule` array (upstream writes the lr per iteration,
+upstream/ULIP/main.py:292) and the two names were deleted while the line reading
+them was left behind.
+
+There is a second defect inside the first: even had it run, the logged lr was
+`sched.get_last_lr()` and the applied lr came from `lr_schedule`. The pilot
+exists to look at that curve, so the logged rate has to BE the applied rate.
+
+Fixed: the applied value is now named `lr_now` and logged directly; grad_norm is
+summed over `opt.param_groups`.
+
+CHECK: is `lr_now` assigned before every read of it on every path through the
+loop. Is the grad-norm sum now over the same parameter set the optimizer holds.
+
+## 2. tests/test_train_stage1.py -- a rule, then its coverage
+
+The thirteen existing tests did not catch the above because they exercise
+`cosine_schedule` and `weight_decay_groups` as pure functions and never enter
+the loop. A fourteenth test of that shape would not have caught it either.
+
+Added `test_no_function_reads_a_name_that_does_not_exist`: an AST walk asserting
+no function reads a name that is not a parameter, not bound in that function,
+not module-level, not a builtin, and not a module dunder.
+
+MASTER then pointed out the committed version hardcoded one file path while the
+claim made from it ("eight files scanned") came from a throwaway run. It is now
+parameterised over metafind/train/*.py and metafind/models/*.py -- eleven
+modules. metafind/data/*.py is deliberately excluded and the comment says why.
+
+Result of the widened scan: one hit, `metafind/train/stage2.py:570`, which calls
+`load_stage1_checkpoint` while line 504 imports only `build_model` and
+`load_protocols` from stage1. That test is LEFT FAILING on purpose -- it is a
+real NameError in a file this engineer does not own.
+
+CHECK: does the walk have false positives on any of the eleven modules that were
+suppressed rather than fixed. Are nested scopes, comprehensions, walrus targets,
+except-as names, global/nonlocal, and class bodies handled. Does the exclusion of
+metafind/data overclaim anything.
+
+## 3. metafind/train/stage1.py -- dev-val validation and best-checkpoint selection
+
+Kyzen 2026-08-28 answered two questions with "yes" and "yes, pick the best". The
+mechanism was NOT invented here. METAFIND_NOTEBOOK.md:435-440 records it as
+DEVIATION D-3, ratified by Kyzen 2026-08-27:
+
+    development phase: carve dev-val out of the 80% training pool, use its
+    Mean R@1 (averaged across modalities, ties broken by Mean R@5) to fix the
+    learning rate, the epoch count and the checkpoint policy; the final phase
+    locks the settings, retrains from scratch on the whole 80%, does NOT pick a
+    checkpoint mid-run, and only then opens the 20% test once. The 20% test
+    takes part in no selection at any point.
+
+Added:
+- `--phase dev|final`. In `dev`, the training pool is `dev_train` and `dev_val`
+  is scored every epoch. In `final`, the pool is the whole `train` and nothing
+  is selected.
+- `evaluate_dev_val()`: gallery is dev_val itself (protocol C_dev_selection in
+  splits.build_eval_protocols sets both query_split and gallery_split to
+  dev_val); the seven Table 1 conditions come from
+  metafind/eval/retrieval.QUERY_CONDITIONS via the deterministic
+  `condition_mask`; scoring is `recall_at_k`. Returns {} for an empty pool so a
+  caller can tell "no dev-val" from "dev-val scored zero".
+- `better_checkpoint()`: strictly greater on (mean_R@1, mean_R@5), so an exact
+  tie keeps the earlier epoch.
+- `stage1_best.pt` and `stage1_best_ckpt.json` beside the per-epoch file.
+
+THE CONTAMINATION POINT, and the one thing most worth attacking: `dev_val` is a
+SUBSET of `train` (splits.split_dev). A dev-phase run that trained on `train`
+and scored `dev_val` would score the model on assets it had just fitted. The
+first version of this change wrote `splits.get("dev_train") or splits["train"]`
+-- that fallback would have done exactly this, silently. The test
+`test_the_dev_phase_trains_on_dev_train_not_train` caught it; the fallback is
+gone and missing dev_train is now a hard stop.
+
+That test is itself worth checking: two earlier versions of it were broken --
+`"train" not in branch` can never pass because "train" is a substring of
+"dev_train", and a regex over the source matched the sentence in the comment
+explaining the bug. It now walks the parsed `if` statement, so only real
+subscript and .get accesses count.
+
+CHECK, in order of what would hurt most:
+- Can any path reach a dev-phase run whose training pool intersects dev_val.
+- Is `targets = np.arange(...)` correct: it assumes row i of the query stack and
+  row i of the gallery stack are the same asset, which rests on the eval loader
+  being shuffle=False and drop_last=False. Verify both.
+- `--limit` truncates dev_val as well as the training pool. Is that right for a
+  smoke run, and does it make the reported number incomparable in a way the
+  output does not say.
+- `model.eval()` before scoring and `model.train()` after: is anything else
+  stateful left in the wrong mode (dropout in the backbone, drop_path in
+  PointBERT).
+- The gallery and query embeddings are L2-normalised here. Is that consistent
+  with how the loss computes similarity during training.
+- `shutil.copyfile(CKPT_PATH, BEST_CKPT_PATH)` copies a file just written by
+  `save_checkpoint`. Is there any path where CKPT_PATH is stale or partially
+  written at that moment.
+
+## 4. Not decided here, and not to be inferred from the code
+
+- The two questions above were answered by Kyzen; the metric and tie-break come
+  from D-3. Nothing in this change picks a metric.
+- 1280 is still INFERENCE from ulip_backbone.py:90. Nothing has printed a real
+  embedding shape.
+- The five items round 2 listed as deliberately not done are still not done.
+
+---
+
+# ROUND 4 -- 2026-08-28, what rounds 1 to 3 got wrong about themselves
+
+This section corrects earlier sections. It does NOT rewrite them. What we
+believed at the time is the useful part of a review record, and editing it out
+would remove the only evidence of how the belief was wrong.
+
+## The timing, stated once so the rest is readable
+
+Codex reviewed a working tree that several sessions were editing. Round 3's
+report was produced against the tree as it stood roughly 20 minutes into that
+review, which is after some of round 2's fixes and before the two corrections
+MASTER made during it. Two of its findings therefore look stale and one of them
+is not.
+
+## Codex #1, first half: SUPERSEDED, and the brief was right when written
+
+The ROUND 3 section says the AST test has one deliberate failure because
+`metafind/train/stage2.py` calls `load_stage1_checkpoint` without importing it.
+That was true when written. It was fixed and committed while the review ran:
+
+    ec1f996   import the function stage2 already calls
+    23385e3   the second name that only exists inside main()
+
+The second commit is a second instance of the same shape, found by the widened
+guard: `encode_query` (module level) read `prepare_depth_shell`, which was
+imported only inside `main()`. Both are in. The test is green and no longer
+deliberately red.
+
+## Codex #1, second half: CODEX WAS RIGHT AND THIS ENGINEER SAID IT WAS NOT
+
+Codex reported that `tools/chain_to_stage1.sh` still said `chain_after_n05.sh`
+"feeds Stage 2". The engineer replied that the finding did not hold, quoted the
+corrected wording, and attributed the discrepancy to Codex reading an old
+snapshot.
+
+The corrected wording was not in the file. It had never been in the file.
+
+Root cause, and it is the reason `tools/audit_claims.py` now exists: the edit
+was a Python `str.replace` whose anchor did not match the file's line wrapping,
+in a batch where every other replacement was guarded by `assert old in s` and
+that one was not. `replace` returns the string unchanged when it matches
+nothing. There was no exception, no non-zero exit, and no diff to notice --
+and `git status` did show the file as modified, because other edits in the same
+batch had landed.
+
+So the sequence was: a change that did not happen, reported as done, then used
+to rebut a third party who had correctly observed that it had not happened.
+
+Two things came out of it rather than one:
+
+- A 24-item audit of every change this session had reported. 23 were present;
+  that one was not. The audit is now `tools/audit_claims.py` and runs before
+  every submission. Its docstring carries the sentence that names the trap:
+  **a file having changed is not the claimed line having changed.**
+- The first attempt at writing the assertion for the fix asserted that the new
+  text must not contain the false sentence -- while the new text quotes the false
+  sentence in order to correct it. The assertion tripped on its own subject.
+  Recorded because it is the same class as the guard-that-cannot-fail found
+  twice earlier today.
+
+## Codex #2: CONFIRMED, fixed, and it was the most serious finding of the day
+
+Checkpoints stored `named_parameters()` only, so BatchNorm running statistics --
+which Stage 1 moves, because `ulip_backbone.py:235` puts the point encoder in
+train() and PointBERT's stack holds `BatchNorm1d` -- were discarded at every
+save. A reload produced trained weights sitting on the original upstream
+statistics, and eval mode reads exactly those. The restored encoder was neither
+the one that trained nor the one that was scored, and `gallery_index.py:90`
+hashes parameters only, so encoder identity could not see it.
+
+`trainable_state_dict` now also saves the buffers of submodules that hold a
+trainable parameter; a frozen submodule's buffers are still excluded, so
+L1-CKPT-TRAINABLE-ONLY is unchanged in intent -- what upstream can rebuild
+byte-for-byte still stays out, and what training changed no longer does.
+
+Explicitly NOT taken, and recorded because it is the other way to be correct:
+putting BatchNorm in eval for the whole run would freeze the statistics and make
+"do not save them" right. That changes training dynamics, which is Kyzen's
+decision and not this node's.
+
+## Codex #3 and #7: CONFIRMED, fixed
+
+- Stage 1 did not verify `dev_train ∩ dev_val = ∅` at consumption; `splits.py`
+  enforces it only at write time. A stale or hand-repaired splits.json would have
+  contaminated every checkpoint decision silently. Checked where it is used now.
+- `--limit` smoke runs shared `stage1_best.pt` with real development runs, and
+  the copy was not atomic. Smoke runs now write a distinct name, the write is
+  temp-and-rename, and the record carries phase, limit, both pool sizes and a
+  digest of the two uid lists.
+
+## Codex #4: PARTLY CONFIRMED, claim narrowed rather than check tightened
+
+Three false negatives and one false positive were reproduced. The check was NOT
+tightened; its assertion message now lists them verbatim. The reasoning is in the
+message itself: tightening makes it half a type checker, half a type checker is
+not maintained, and it found two real NameErrors today because it is simple.
+
+## Codex #5 and #6: CONFIRMED, and mostly already self-reported
+
+The semantic-edge cache key uses the checkpoint directory's basename, which is
+stable across moves and does not identify contents; recorded in that module in
+round 2. `label_duel.py` recording a git commit that did not contain the script
+itself was NOT self-reported and Codex was right -- resolved by the script
+entering version control in 345f542.
+
+## What is still open
+
+- `metafind/data/*.py` is in the AST guard as of this round, after both the
+  false-positive sweep (27 modules, 0) and a seeded false-negative calibration.
+- Tightening the AST check is a separate piece of work and has not been started.
+- 1280 remains INFERENCE from `ulip_backbone.py:90`. Nothing has printed a real
+  embedding shape, and nothing will until Stage 1 is allowed to run.
