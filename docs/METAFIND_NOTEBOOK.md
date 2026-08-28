@@ -814,6 +814,80 @@ Gates：G6 擋 Stage 2（essgnn_arch_protocol 未 resolved 不得開跑）；DL-
 
 ---
 
+## 9.8 防線寫了、具名了、解釋了 —— 但防線自己量錯（2026-08-28 新增）
+
+**發現者：ESSGNN Engineer。我獨立重現，並在過程中發現他自己也被同一件事騙過。**
+
+### 這一族與前兩族的差別，在「怎麼抓」
+
+| | 形狀 | 抓法 |
+|---|---|---|
+| §9.6 | 協定寫了，生效的那條路沒讀 | **讀**那兩條路，對照 |
+| §9.7 | 一條路，但儀器解析度不夠 | **先量儀器自己的雜訊** |
+| **§9.8** | **防線存在、名字正確、論證完整 —— 但它量錯** | **執行那道防線，把它的輸出跟它自己的宣稱對照** |
+
+**§9.6 和 §9.7 讀程式碼就能發現。§9.8 讀不出來。**
+`test_f8_does_not_generalise_to_the_appendix_layer` 這個測試：
+名字精確、docstring 解釋了它為什麼存在、斷言有意義、**而且它是綠的**。
+跑整套 pytest 不會有任何訊號。
+
+### 這次的實例
+
+`tests/test_essgnn.py:255`：
+
+```python
+for seed in range(6):                              # seed 從未被使用
+    n = geometric_sensitivity(16,   family="appendix_shared_msg")
+    w = geometric_sensitivity(1280, family="appendix_shared_msg")
+    ratios.append(w / n)
+```
+
+`geometric_sensitivity()`（`:204`）沒有 seed 參數 → 呼叫 `make_scene(n, cfg)` →
+`make_scene`（`:38`）的 `seed: int = 0` 每次 `torch.manual_seed(0)`。
+**六次呼叫回傳位元相同的值。宣稱六樣本，實際單樣本。**
+
+[OBSERVED DATA 2026-08-28，MASTER 於 CPU 獨立重跑，未修改任何檔案]：
+
+```
+appendix 連續六次 narrow(16) → 1.250882e-01 × 6，all identical = True
+appendix   narrow 1.250882e-01  wide 3.740838e-01  ratio 2.990560
+two_mlp    narrow 4.463185e+01  wide 1.889776e+00  ratio 0.042341
+```
+
+### 連帶查出：同一組數字在三處都不可重現
+
+| 出處 | 宣稱 | 2026-08-28 實測 |
+|---|---|---|
+| `docs/graph/00_FINDINGS.md:277` | `16 → 50.9`、`1280 → 1.14` | `44.63` / `1.89` ❌ |
+| `tests/test_essgnn.py:233` docstring | two_mlp median 0.055、range 0.007–0.243 | 單值 `0.042341`（在範圍內，但**不是區間**）❌ |
+| `tests/test_essgnn.py:233` docstring | appendix median 0.126、range 0.031–2.278 | 單值 `2.990560`，**落在宣稱範圍之外** ❌ |
+
+**那些數字來自某個沒有留下的更早版本或臨時執行。**
+
+⚠ **一個要更正的計數**：ESSGNN Engineer 報「四份文件都錯」，第四份指
+`semantic_edges_run.py` 的註解。**我開檔查過，那份沒有數字**（grep `50.9` 零命中），
+它寫的是定性句：「a 1280-wide e_ij does drown the single ||x_i − x_j||² scalar
+**inside `f_h`**」。**是三份，不是四份。**
+但那句自己有另一個問題：`f_h` 是 two-MLP 層（`essgnn.py:325`），
+附錄層用的是 `phi_e`（`:422`）。**它描述的機制屬於我們沒選的那一支，卻被寫成無爭議的通則。**
+
+### 結論的範圍：定性活著，量級死了
+
+- ✅ **F8 在 two_mlp 上成立**：ratio `0.042341`，斷言門檻 `wide < narrow/5 = 0.2`，餘裕 4.7 倍。加了 seed 變多樣本後大概率仍成立。
+- ✅ **F8 不能推廣到 appendix**：ratio `2.990560`，方向相反。
+- ❌ 所有具體的中位數與區間。
+- ❌ 「U-20 選到 F8 量到最差的寬度」——在我們的家族上，加寬讓幾何**變強**。
+
+**修測試時的範圍限制（ESSGNN Engineer 提出，採納）**：要修的是
+「單樣本偽裝成六樣本」與「三處對不上的數字」，**不是「F8 這個發現要重來」**。
+四處都錯的觀感容易讓修的人順手把結論一起撤掉。
+
+**分級**：`geometric_sensitivity()` 是 F8 範圍主張的唯一守門員 → 研究關鍵測試 →
+走 code → 審 → 放行三道閘。`:233` 的 `wide < narrow/5` 同為單樣本，**兩個一起重測**。
+**列入 n13 前置，2026-08-28 未動。**
+
+---
+
 ## 9.5 本輪外部審查新增登記的沉默點與矛盾（2026-08-26）
 
 以下五條是外部審查指出、我逐條核對原文後**確認成立**的新登記項。它們原本不在 v2 裡。
