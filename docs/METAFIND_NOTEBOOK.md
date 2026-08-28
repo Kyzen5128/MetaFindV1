@@ -814,6 +814,78 @@ Gates：G6 擋 Stage 2（essgnn_arch_protocol 未 resolved 不得開跑）；DL-
 
 ---
 
+## 9.10 兩個文字空間，靜靜地不同 —— U-34 若翻案，沒有任何東西會發現（2026-08-28 新增）
+
+**發現者：ESSGNN Engineer。他更正的是我。我逐條驗過，他對，而且他的版本比我的更糟也更準。**
+
+### 我說錯的
+
+我對他說：「U-34 若從 frozen 翻成 trainable，Stage 1 會動到文字塔，
+你的 n08 產物（4,242 邊 + 1,467 節點）全部作廢」，並要他在 n08 開跑前
+檢查 `stage1_encoding_protocol.json` 的 `actual_clip_train_scope` 是否仍是 `frozen`。
+
+**兩句都錯，而且錯在同一個地方：n08 根本不讀 Stage 1 的任何東西。**
+
+[OBSERVED IMPLEMENTATION]
+
+```
+semantic_edges_run.py:322  ULIPBackbone(BackboneConfig(device="cuda",
+                                        train_scope="fuser_only"))   ← 沒傳 checkpoint
+ulip_backbone.py:100       checkpoint: Path = DEFAULT_CKPT
+ulip_backbone.py:87        DEFAULT_CKPT = paths.ULIP2_CKPT           ← 官方釋出的 ULIP-2 權重
+stage1.py:64               CKPT_PATH = paths.CHECKPOINTS / "stage1.pt"   ← 另一個檔
+stage1.py:262              「Only what the optimizer moves.」          ← 只存 optimizer 動過的
+```
+
+→ **n08 與 n06 都讀 `ULIP2_CKPT`。「一個文字空間」目前是由建構保證的，不是由紀律保證的。**
+這比我給的理由（「Stage 1 沒去動它」）強一級。我的前置檢查則完全無效：
+即使那個欄位翻成 `trainable`，n08 也會若無其事地跑完，因為它不看那個檔。
+
+### 真正的失效方式，形狀完全不同
+
+```
+U-34 = frozen（現在）
+  文字權重只在 ULIP2_CKPT，stage1.pt 裡沒有
+  檢索空間 與 t_i/e_ij = 同一份權重                      ✅
+
+U-34 → trainable
+  Stage 1 更新文字塔 → 它進入 stage1.pt
+  檢索空間  = 訓練「後」的文字空間
+  n08 仍讀 ULIP2_CKPT → t_i/e_ij = 訓練「前」的文字空間
+  → 兩個文字空間，維度相同、名稱相同、沒有任何檢查會發現
+```
+
+**不是「要重跑」，是「不用重跑，而且錯了也不會有人知道」。**
+重跑至少是個看得見的動作；這個沒有動作、沒有錯誤、沒有訊號。
+
+**而 U-20 的核可理由逐字是「同一個專案不要兩套文字理解」——
+U-34 一翻就有兩套，而 U-20 的機器化執行點是零（§10 的 U-20 條目：兩個維度都還沒進協定）。**
+
+### 缺口在哪：n08 記名稱，gallery 記指紋
+
+```
+sem_edge_cache 的 provenance（semantic_edges_run.py:473-475）
+  llm_model · text_encoder · text_encoder_version · prompt_version · edge_dim
+  → **五個都是名稱或數字，沒有一個能分辨「訓練前」與「訓練後」的同名權重**
+
+gallery index 那邊已經有機制
+  gallery_index.py:70  gallery_encoder_sha256(backbone, model)
+  → **n08 沒有這個，而它應該有同一個**
+```
+
+### 要做的（併入 §10 U-20 的第 ④ 項，同一個 raise 點）
+
+1. `sem_edge_cache` 的 provenance 記下 **n08 實際編碼所用 checkpoint 的身分**（路徑＋sha256），不是只記名稱。
+2. n13 啟動時比對：**n08 產物的 checkpoint 指紋 == gallery index 的 encoder 指紋**，不同就 raise。
+
+**分類**：ESSGNN 節點的缺陷，不是新選擇。三道閘，等 Kyzen 放行。
+
+> **這一族與 §9.6 的差別**：§9.6 是「協定寫了、生效的路沒讀」。
+> 這一條是**兩條路都在跑、各自都自洽、而它們讀的是不同的權重**——
+> 兩邊都不會拋例外，因為兩邊都沒有錯。錯的是它們之間沒有人比對。
+
+---
+
 ## 9.9 `run_progress` 把「部分執行」與「什麼都沒產出」都記成 SUCCESS（2026-08-28 新增）
 
 **起因**：我對 ULIP2 Engineer 說「共用 runlog 裡有 4 列 n08 是你留的」。**錯的，只有 2 列是他的。**
