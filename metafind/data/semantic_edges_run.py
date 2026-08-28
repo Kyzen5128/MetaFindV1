@@ -74,34 +74,70 @@ from metafind.data.semantic_edges import (  # noqa: E402
 
 NODE = "n08_semantic_edges"
 
-LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"  # D-2's stand-in, text-only here
+# [USER 2026-08-28] 「我說過所有LLM模型都改成用gemma」. D-2 was re-pointed at gemma
+# on 2026-08-24 (METAFIND_NOTEBOOK.md:147, 「D-2 改成 gemma」) and this line was
+# not moved with it -- it still named the model D-2 pointed at BEFORE that
+# ruling, so n08 would have written its sentences with a model the project had
+# already stopped using, while citing the decision that stopped it.
+#
+# Imported rather than re-spelled: two nodes each holding their own literal is
+# how the two drifted apart in the first place.
+from metafind.data.annotate_run import MODEL_ID as LLM_MODEL_PATH  # noqa: E402
 
-# [U-06, the "width of e_ij" half] The paper says "a frozen text encoder (e.g.,
-# CLIP or BERT)" and stops, so the width is ours to choose -- and F8 MEASURED
-# that the choice is consequential rather than cosmetic:
+# The PATH loads the weights; the NAME goes in the cache key and the provenance
+# record. Splitting them is not tidiness -- `MODEL_ID` is a local absolute path,
+# and an earlier version of this line let that path into
+# `cache_key(..., llm_model, ...)`, whose sha256 then depended on where the
+# checkpoint happens to sit. That directory has already moved once
+# (/mnt/data1/kyzen/models -> /home/kyzen/metafind_out), and moving it again
+# would have invalidated all 4,242 cached sentences for an unchanged model.
+# It also made `llm_model` in the record a path rather than a model identity.
+# Caught by ESSGNN ENGINEER [487717] 2026-08-28; a same-machine smoke cannot
+# catch it, because the path is identical on both runs.
+LLM_MODEL = Path(LLM_MODEL_PATH).name          # 'gemma-4-12B-it'
+
+
+# [U-20] ✅ USER-APPROVED 2026-08-27 (METAFIND_NOTEBOOK.md:937): the node and
+# edge text encoder is **OpenCLIP ViT-bigG-14, 1280-d**. Kyzen's reason is
+# consistency: Stage 1's 1280 is forced by the ULIP-2 checkpoint
+# (`ulip_backbone.py:90` EMBED_DIM = 1280, projection shaped (768, 1280)), and
+# one project should not hold two different text understandings.
 #
-#     e_ij width      geometric sensitivity
-#            16                       50.9
-#          1280                       1.14
+# WITHDRAWN, and left visible rather than deleted so it cannot be re-derived:
+# this constant used to be `laion/CLIP-ViT-B-32-laion2B-s34B-b79K` at 512, on the
+# argument that "the tower's job is to be the retrieval space, ESSGNN's job is to
+# keep geometry legible, and F8 says those pull in opposite directions". That
+# argument was overruled on 2026-08-27.
 #
-# f_h takes (2*hidden + 1 + e), where hidden is 128 and the geometry enters as
-# the SINGLE scalar ||x_i - x_j||^2. A 1280-wide edge feature is ten times the
-# node width and drowns that scalar about 45-fold. Note this is about `hidden`,
-# not about t_i's raw width: ESSGNN projects node features to hidden_dim first,
-# so the thing e_ij is concatenated with is 128-d whatever encoder produced t_i.
+# SCOPE, and this correction is the point [MASTER 2026-08-28]: F8's "a wide e_ij
+# drowns the single ||x_i - x_j||^2 scalar" is a statement about f_h, the TWO-MLP
+# layer (`essgnn.py:325`). Our family is `appendix_shared_msg`
+# (`essgnn_arch_protocol.json`), which uses phi_e (`essgnn.py:422`), and there
+# the measured direction is the OPPOSITE -- widening strengthened the geometric
+# term. `tests/test_essgnn.py:255`
+# (`test_f8_does_not_generalise_to_the_appendix_layer`) already exists to stop
+# exactly this generalisation, and its docstring says so; this comment was
+# written without reading it. The magnitudes once quoted for F8 are also not
+# reproducible from the current test -- its `for seed in range(6)` never passes
+# the seed, so six calls are one sample (METAFIND_NOTEBOOK.md 9.8). What
+# survives is a qualitative finding about two_mlp only, and it is not a reason
+# for n08 to emit a different encoder's vectors.
 #
-# CLIP ViT-B/32 at 512 is the smaller of the two CLIPs already cached here. The
-# tower uses ViT-bigG-14 (1280) and deliberately is NOT reused: the tower's job
-# is to be the retrieval space, ESSGNN's job is to keep geometry legible, and
-# F8 says those pull in opposite directions.
+# Reached through `ULIPBackbone` rather than through `transformers`
+# `CLIPTextModelWithProjection`: OBSERVED DATA, the only bigG in the local cache
+# is `open_clip_model.safetensors` (no config.json, no HF-format weights), so a
+# `from_pretrained("laion/CLIP-ViT-bigG-14-laion2B-39B-b160k")` would download a
+# SECOND ~10 GB copy and encode with a different implementation of the same
+# model. "One text understanding" is the whole reason U-20 was decided this way,
+# so the tower's own weights are what must be used -- the same object n06 uses.
 #
-# [U-20] This also pins t_i's encoder, and pinning it here is the point. t_i and
-# e_ij both feed f_h; letting n08 pick one encoder and a later node pick another
-# would put ESSGNN's node and edge features in two unrelated semantic spaces for
-# no stated reason. Whatever encodes t_i must be THIS model.
-TEXT_ENCODER = "laion/CLIP-ViT-B-32-laion2B-s34B-b79K"
-TEXT_ENCODER_VERSION = "clip-vit-b32-laion2b-s34b-b79k"
-EDGE_DIM = 512
+# [U-20 continued] This pins t_i's encoder as well, and pinning it here is the
+# point. t_i and e_ij both feed f_h; letting n08 pick one encoder and a later
+# node pick another would put ESSGNN's node and edge features in two unrelated
+# semantic spaces for no stated reason. Whatever encodes t_i must be THIS model.
+TEXT_ENCODER = "open_clip:ViT-bigG-14"       # via ULIPBackbone, not from_pretrained
+TEXT_ENCODER_VERSION = "open-clip-vit-bigg-14-ulip2-tower"
+EDGE_DIM = 1280
 
 MAX_NEW_TOKENS = 64
 ENCODE_BATCH = 256
@@ -147,15 +183,23 @@ def collect_pairs(text_map: dict, limit: int | None = None) -> dict[str, tuple[s
 # --- phase 2: a sentence per pair -----------------------------------------
 
 class RelationWriter:
-    """Qwen, text-only. One instance per process."""
+    """gemma, text-only. One instance per process.
 
-    def __init__(self, model_id: str = LLM_MODEL, device: str = "cuda") -> None:
+    Loaded the way n05 loads it, not the way a text-only checkpoint would be:
+    `gemma-4-12B-it`'s config declares `Gemma4UnifiedForConditionalGeneration`,
+    so `AutoModelForCausalLM` + `AutoTokenizer` is the wrong pair for it. The
+    processor also owns the chat template; the tokenizer alone does not.
+    Text-only here means the content list carries no image, NOT that the model
+    is a text-only one.
+    """
+
+    def __init__(self, model_id: str = LLM_MODEL_PATH, device: str = "cuda") -> None:
         import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import AutoModelForImageTextToText, AutoProcessor
 
         self.model_id = model_id
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
-        self.model = AutoModelForCausalLM.from_pretrained(
+        self.processor = AutoProcessor.from_pretrained(model_id)
+        self.model = AutoModelForImageTextToText.from_pretrained(
             model_id, dtype=torch.bfloat16, device_map=device,
         )
         self.model.eval()
@@ -163,11 +207,44 @@ class RelationWriter:
     def generate(self, prompt: str) -> str:
         import torch
 
-        text = self.tokenizer.apply_chat_template(
-            [{"role": "user", "content": prompt}],
-            tokenize=False, add_generation_prompt=True,
-        )
-        inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
+        # [PAPER FACT `2methdology.tex:47`] "semantic edges are generated by
+        # prompting a large language model (LLM) with object descriptions to
+        # produce natural language relation sentences" -- the input to this node
+        # is DESCRIPTIONS. Images do not appear in that definition.
+        #
+        # The guard exists because the loader below is the image-text-to-text
+        # one (gemma-4-12B-it declares Gemma4UnifiedForConditionalGeneration and
+        # will not load any other way), which puts "also pass the eleven views"
+        # one line away and silently turns n08 into a different method. Nothing
+        # would raise; the sentences would just quietly stop being the paper's.
+        #
+        # [MASTER 2026-08-28] WHAT THIS DOES NOT CATCH, stated so the next reader
+        # does not mistake it for complete protection: it only inspects the
+        # content list this function builds. Anyone calling `self.model.generate`
+        # directly is not bound by it. Widening it would mean changing
+        # RelationWriter's interface, which still would not stop a determined
+        # caller and would leave the impression that it did -- worse than no
+        # guard. The guard is for a slip; n08's text-only nature is carried by
+        # the SPEC.
+        content = [{"type": "text", "text": prompt}]
+        non_text = sorted({c.get("type") for c in content} - {"text"})
+        if non_text:
+            raise SemanticEdgeError(
+                f"n08 is text-only and was given {non_text}. "
+                "2methdology.tex:47 defines semantic edges as an LLM prompted "
+                "WITH OBJECT DESCRIPTIONS; feeding views here is a different "
+                "method and must be recorded as a DEVIATION before it runs."
+            )
+        messages = [{"role": "user", "content": content}]
+        # Same guard as n05: a template with no such variable raises on an
+        # unexpected keyword, and a thinking model narrates instead of answering.
+        template_kwargs: dict = {}
+        if "enable_thinking" in (getattr(self.processor, "chat_template", "") or ""):
+            template_kwargs["enable_thinking"] = False
+        inputs = self.processor.apply_chat_template(
+            messages, add_generation_prompt=True, tokenize=True,
+            return_dict=True, return_tensors="pt", **template_kwargs,
+        ).to(self.model.device)
         with torch.no_grad():
             out = self.model.generate(
                 **inputs,
@@ -175,10 +252,10 @@ class RelationWriter:
                 # Greedy: a C2 retry must differ because the PROMPT carries the
                 # error back, not because the sampler rolled differently.
                 do_sample=False,
-                pad_token_id=self.tokenizer.eos_token_id,
+                pad_token_id=self.processor.tokenizer.eos_token_id,
             )
-        trimmed = out[:, inputs.input_ids.shape[1]:]
-        return self.tokenizer.decode(trimmed[0], skip_special_tokens=True)
+        trimmed = out[:, inputs["input_ids"].shape[1]:]
+        return self.processor.tokenizer.decode(trimmed[0], skip_special_tokens=True)
 
 
 def write_one(gen: RelationWriter, desc_a: str, desc_b: str) -> tuple[str | None, str | None]:
@@ -223,7 +300,7 @@ def append_sentence(rec: dict) -> None:
 
 # --- phase 3: encode ------------------------------------------------------
 
-def encode_sentences(sentences: list[str], model_id: str = TEXT_ENCODER) -> np.ndarray:
+def encode_sentences(sentences: list[str]) -> np.ndarray:
     """[PAPER 2.5] The frozen text encoder that produces e_ij.
 
     Frozen means no gradients and no training here; the embeddings are computed
@@ -231,28 +308,33 @@ def encode_sentences(sentences: list[str], model_id: str = TEXT_ENCODER) -> np.n
     tower and keeps e_ij on the same scale across pairs.
     """
     import torch
-    from transformers import AutoTokenizer, CLIPTextModelWithProjection
 
-    tok = AutoTokenizer.from_pretrained(model_id)
-    enc = CLIPTextModelWithProjection.from_pretrained(model_id).eval().cuda()
-    for p in enc.parameters():
-        p.requires_grad_(False)
+    # [U-20] The tower's own text half, not a second copy of the same model
+    # loaded through `transformers`. `train_scope="fuser_only"` freezes
+    # everything here, which is what "frozen text encoder" means -- and this is
+    # the same object n06 encodes the corpus with, so t_i, e_ij and the
+    # retrieval space are one text understanding rather than three that happen
+    # to share a name. Tokenisation is open_clip's 77-token context, applied by
+    # `ULIPBackbone.encode_text`; truncation past 77 is CLIP's documented
+    # behaviour and applies equally to every sentence.
+    from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
 
+    backbone = ULIPBackbone(BackboneConfig(device="cuda", train_scope="fuser_only"))
     out = []
     with torch.no_grad():
         for start in range(0, len(sentences), ENCODE_BATCH):
-            batch = sentences[start : start + ENCODE_BATCH]
-            inputs = tok(batch, padding=True, truncation=True, max_length=77,
-                         return_tensors="pt").to("cuda")
-            emb = enc(**inputs).text_embeds
+            emb = backbone.encode_text(sentences[start : start + ENCODE_BATCH])
             out.append(torch.nn.functional.normalize(emb, dim=-1).float().cpu().numpy())
     embeddings = np.concatenate(out, axis=0)
+    del backbone
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     # F8 makes e a load-bearing number, so a model swap that silently changed it
     # would change how much geometry survives message passing without anything
     # saying so.
     if embeddings.shape[1] != EDGE_DIM:
         raise ValueError(
-            f"{model_id} produced {embeddings.shape[1]}-d embeddings, not "
+            f"{TEXT_ENCODER} produced {embeddings.shape[1]}-d embeddings, not "
             f"{EDGE_DIM}. e_ij's width is a recorded decision (U-06, F8), not "
             "whatever the encoder happens to emit -- update EDGE_DIM "
             "deliberately or use the declared model."

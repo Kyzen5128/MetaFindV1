@@ -63,8 +63,37 @@ die() {
 # after n08 had already run for 22 minutes; the input was missing the whole
 # time and could have been reported before anything started.
 say "=== preflight ==="
-for f in annotations/. procthor_modalities/. sem_edge_cache.json \
-         stage1_encoding_protocol.json stage1_hyperparameters.json; do
+# [MASTER 2026-08-28] `procthor_modalities/.` and `sem_edge_cache.json` were in
+# this list and are NOT prerequisites of this chain. This chain is
+# n06 -> n09 -> Stage 1 smoke, and nothing on the Stage 1 path
+# (encode_text_image -> splits -> train/stage1.py) reads either artifact.
+#
+# [CORRECTED 2026-08-28, Codex finding 6] An earlier version of this comment
+# said `sem_edge_cache.json` has exactly one production reader,
+# `metafind/train/stage2.py:320`. That is FALSE:
+# `metafind/data/scene_splits.py:141` (n09c) reads it too, to compute semantic
+# edge coverage. Both readers are on the Stage 2 side, which is what actually
+# matters here -- but "only one reader" was a stronger claim than the evidence,
+# and the removal below rests on "no Stage 1 reader", not on "one reader". PAPER FACT `3experiments.tex:24`: Stage 1 "uses isolated assets (no
+# layout)", so it is unrelated to the scene graphs at the method level too.
+#
+# The gate being over-strict is not harmless: it made n08 look like a blocker
+# for Stage 1, and the fix for that would have been to run n08 early over a
+# 93-string ProcTHOR vocabulary and throw the result away.
+#
+# [CORRECTED 2026-08-28, MASTER] This used to say `chain_after_n05.sh` keeps
+# the same checks because that chain feeds Stage 2. FALSE, and it contradicted
+# the retirement notice written into that very file in the same change: that
+# chain is this one's RETIRED predecessor (exit 78), it queued n08 followed by
+# a Stage 1 smoke, and it checks these artifacts because it ran n08 itself --
+# not because it feeds Stage 2.
+#
+# The first attempt at this correction was reported as done and was not in the
+# file: a str.replace with no assert, whose anchor did not match, silently did
+# nothing. The claim outlived the change. Every edit here now asserts.
+# The file's own comment says "Every prerequisite THIS CHAIN assumes"; this
+# restores that.
+for f in annotations/. stage1_encoding_protocol.json stage1_hyperparameters.json; do
     [ -e "$OUT/$f" ] || die "missing prerequisite: $OUT/$f"
 done
 # -L: $OUT/annotations is a symlink to /home/kyzen/metafind_out/annotations.
@@ -72,7 +101,11 @@ done
 # many annotations existed.
 ANN=$(count "$OUT/annotations" -maxdepth 1 -name '*.json') \
     || die "could not count annotations -- see the error above"
-say "annotations $ANN  ·  n08 artifacts present"
+# [FIXED 2026-08-28, Codex finding 6] This said "n08 artifacts present" -- and
+# still said it after the checks that proved it were removed six lines above.
+# A chain with no semantic-edge artifacts at all would announce that they were
+# there and carry on. It now reports only what it actually counted.
+say "annotations $ANN"
 # The threshold is unchanged. Only the message: it named ~45,955, a previous
 # corpus size, so a reader who hit this gate was told the wrong target.
 # The braces matter: `wc -l < missing 2>/dev/null` does NOT suppress the
