@@ -250,6 +250,20 @@ def encode_query(model, backbone, graph: dict, target_index: int, asset_id: str,
     import torch
     from PIL import Image
 
+    # [BUG FIX 2026-08-28] `prepare_depth_shell` is used at the bottom of this
+    # function and was imported only inside `main()`, i.e. as one of main's
+    # LOCAL names -- so calling encode_query raised NameError. Second instance
+    # of one pattern, not a second accident: a module-level function reading a
+    # name that exists only in main's scope. The other was
+    # `load_stage1_checkpoint` (ec1f996).
+    #
+    # Imported here rather than at module level to match `torch` and `PIL`
+    # above: this module is imported by tooling that must not pay for torch.
+    # SWEPT for a third: of the nine names main() imports and the module does
+    # not, `prepare_depth_shell` was the only one read by any other top-level
+    # function. `torch` is also main-only but every reader imports it itself.
+    from metafind.models.ulip_backbone import prepare_depth_shell
+
     rec = data.modalities[asset_id]
     with torch.no_grad():
         # The query encoders are frozen in Stage 2 (2.6); only the fuser and
