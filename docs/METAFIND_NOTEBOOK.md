@@ -870,6 +870,37 @@ ESSGNN Engineer 想把這條規則推廣，**自寫了一支 AST 掃描器，掃
 (2) 假陰性 —— **在那個乾淨模組**（不是 `stage1.py`）裡種一個同型 bug，必須紅並指名，拿掉必須綠。
 **第 2 步紅不起來就回報、不要套用**，那表示它只在出生地有效。
 
+**校準結果（ESSGNN Engineer 執行，2026-08-28，唯讀）**：拿 ULIP2 那支檢查的邏輯掃他這邊七個檔 ——
+`stage2.py` 1 個（`main() line 570: load_stage1_checkpoint`，正是 grep 已獨立確認的那個），
+`gallery_index.py` / `semantic_edges_run.py` / `resolve_stage2.py` / `essgnn.py` /
+`scene_graphs.py` / `fusion.py` 全部 0。
+**兩步都過，而且假陰性這一步比我設計的更強**：不是種一個假 bug，
+是它在一個**不是為它而寫的檔**上抓到一個真的、已被獨立確認的 bug。**推廣性成立。**
+（對照他自己那支掃描器在同一批檔上：`fusion.py` 6 個、`scene_graphs.py` 5 個。同樣的檔，他的 11、ULIP2 的 0。）
+
+🔴 **但校準過程中查出第三件，而且是我們三個都沒想到的**：
+
+```
+tests/test_train_stage1.py:472
+    src = (repo / "metafind" / "train" / "stage1.py").read_text()
+    ← **路徑硬寫死。committed 的那支測試只掃這一個檔。**
+```
+
+**所以「他用那個檢查掃了八個檔，只有 stage1 與 stage2 中招」——
+committed 的測試做不到這件事。那個數字來自一次沒有留下的臨時執行。**
+**與本節的 F8 三處數字完全同型：一個結論，而產生它的程式碼不會產生它。**
+
+→ **判準沒問題（剛驗過），問題在覆蓋範圍，而覆蓋範圍是一行路徑。**
+`stage2.py` 那個 NameError 到今天才被發現，不是因為沒人寫檢查，**是因為檢查只看一個檔**。
+→ 修法因此比想像的簡單：**把那行硬寫死改成模組清單**（`metafind/train/*.py` 與 `metafind/models/*.py`），
+**這是擴大既有檢查的覆蓋範圍，不是新寫檢查。**
+⚠ 擴大後 `metafind/data/*.py` 仍未涵蓋 —— 其中只有兩個檔驗過乾淨，**其餘不得視為已保證。**
+
+> **ESSGNN Engineer 的收尾，採用**：今天最有效的那個守衛之所以有效，
+> 不是因為署名，**是因為它被寫成「檢查一條規則」而不是「檢查一個案例」**——
+> 它自己的註解逐字：「Adding a fourteenth test of the same shape would not have caught it either.」
+> **它唯一的缺陷不在判準，在覆蓋範圍。**
+
 > **兩句要一起記住**（ESSGNN Engineer 前句、我後句）：
 > **「自己臨時寫的守衛更要驗，因為沒有人會來驗它。」**
 > 今天我給他的兩道守衛（F8 方向、frozen scope 檢查）都是我臨時寫的，兩道都錯，
