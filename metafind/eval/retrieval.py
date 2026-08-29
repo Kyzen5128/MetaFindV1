@@ -90,13 +90,85 @@ def rank_of_target(similarity: np.ndarray, targets: np.ndarray) -> np.ndarray:
     scoring strictly higher, plus the ties, plus one. A degenerate model that
     returns identical scores everywhere would otherwise report R@1 = 100%.
 
-    The tie test is BIT-EQUALITY, so it catches EXACT collapse and not NEAR
-    collapse: cosines at 0.5 exactly are caught, cosines differing by 1e-12 are
-    not, and near-collapse is the commoner way a contrastive model fails. No
-    tolerance is applied deliberately -- an epsilon chosen after seeing a score
-    distribution is a fitted constant, and it would hide the very case it was
-    fitted to. If an R@1 looks impossibly high, the score spread is where to
-    look; this function will not flag it.
+    ⚠ **CORRECTED 2026-08-30. This paragraph used to claim the tie test
+    "catches EXACT collapse and not NEAR collapse". That is false, and was
+    measured false on the production path.**
+
+    The tie test is bit-equality, and bit-equality does not hold even between
+    gallery entries that are byte-identical, because a single BLAS `gemm` does
+    not return the same last bit for every output column:
+
+        one `q @ g[:3].T`, three IDENTICAL gallery rows, d=10
+            5.938673867335661  and  5.938673867335662
+        61 of 400 random collapsed galleries showed >1 distinct value
+        numpy 2.4.6, scipy-openblas
+
+    ⚠ **The failure rate depends entirely on the shape, and the first numbers
+    written here were measured in a shape this project never runs.**
+
+    In a TOY regime -- `d` between 4 and 40, embeddings NOT normalised -- the
+    exact rank of a fully collapsed gallery came out wrong in 20 of 200 trials
+    (the ULIP2 Block Reviewer measured 42/200 on a different draw). Those are
+    the numbers that first stood here, and extrapolating them to production was
+    an error the Reviewer made and then withdrew.
+
+    At PRODUCTION shape -- `d = 1280`, L2-normalised, gallery sizes 999 / 4,569
+    / 9,138 / 45,692 -- the picture is different, and the question that matters
+    is whether a collapsed model can score R@1 > 0:
+
+        float32   0 trials with R@1 > 0, out of 1,120, at every gallery size
+        float64   0 at every real gallery size; fails only at ng <= 13
+                  (ng=5: 14/200, ng=13: 6/200), which no protocol uses --
+                  the smallest real gallery is 4,569
+
+    **So at the shapes actually used, a totally collapsed model reports R@1 = 0
+    and the tie mechanism does its job.** The docstring's original promise was
+    not false in production; it was unproven, and the disproof came from a
+    regime that does not occur here.
+
+    What does survive at production shape is smaller and is a DIAGNOSTIC issue:
+    in float32 the exact `rank` and `tie_count` of a collapsed gallery move with
+    the caller's block size (7-9 of 12 trials); in float64 they do not (0 of
+    12). `run_retrieval` therefore scores in float64. R@1 is unaffected either
+    way.
+
+    What this does and does not change:
+
+    * **Whether any existing number moves is `UNKNOWN`.** [CODEX 2026-08-30]
+      This paragraph asserted "No existing number moves", on the reasoning that
+      a healthy model does not produce bit-identical scores. That reasoning is
+      plausible and it is not evidence: nobody has recomputed e5, e10 or e25
+      under a tolerant tie policy, so the claim is withdrawn rather than
+      softened. It becomes answerable only by rerunning them.
+    * **What changes is what may be CLAIMED.** "Ties count against the model, so
+      a collapsed model cannot report 100%" has been used as partial reassurance
+      about `full` R@1 = 1.0000. That reassurance is withdrawn: the guarantee
+      does not exist. Whether `full` is saturated or collapsed is `UNKNOWN` and
+      needs a negative control, not this function.
+
+    A derived tolerance (the `gamma_d` dot-product backward error bound -- NOT
+    an epsilon fitted to an observed score distribution) was proposed and
+    measured to be monotonically unfavourable to the model: over 1,200 queries
+    it never produced a rank BETTER than bit-equality, so it could not flatter a
+    result. **STATUS: NOT ADOPTED, 2026-08-30.** Scoring in float64 closed every
+    symptom actually observed at production shape -- R@1 was never affected, and
+    `tie_count`'s drift with the caller's block size went from 7-9 of 12 trials
+    to 0 of 12. A tolerance would additionally change the DEFINITION of three
+    quantities that go into Table 1, out of proportion to a symptom that higher
+    precision already removes. The monotonicity measurement above is kept so the
+    option can be revisited with evidence if it is ever needed.
+
+    ⚠ **What NOTHING here catches: NEAR collapse.** Scores differing by 1e-9 are
+    not tied under bit-equality, and would not be tied under any tolerance
+    derived from floating-point error either -- 1e-9 is four orders of magnitude
+    above the 2.8e-13 such a bound gives at d=1280. Near-collapse is the
+    commoner way a contrastive model fails, and the tie mechanism cannot see it
+    at all.
+
+    The two are not substitutes: **the tie mechanism answers EXACT collapse, the
+    margin diagnostics answer NEAR collapse.** For the latter read
+    `signed_target_margin` and `top1_top2_gap` quantiles from
+    `run_retrieval.py`, and run a negative control.
     """
     if similarity.ndim != 2:
         raise ValueError(f"similarity must be 2-D, got {similarity.shape}")
