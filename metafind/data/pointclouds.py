@@ -2,6 +2,12 @@
 
 # IMPLEMENTS-NODE: n03_sample_pointclouds
 
+Every asset count in this module -- 46,052, and the 23,675 / 8 / 1,130 subsets
+of it -- is against the Objaverse-LVIS uid MANIFEST, which is n03's input and
+has 46,052 entries (``logs/pointclouds_index.jsonl``, 46,052 lines, verified
+2026-08-30). It is NOT the 45,692 admitted corpus that reaches a gallery; that
+number is n05's output and is derived in ``data/splits.py``. Neither is stale.
+
 The output has to be readable by a frozen ULIP-2 checkpoint that was trained on
 someone else's clouds, so the format is not ours to choose. Three properties are
 copied from ULIP's own loader rather than decided here:

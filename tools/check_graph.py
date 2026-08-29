@@ -827,13 +827,32 @@ registry_ids = set(re.findall(r"^\| \*\*`?(U-[0-9a-z]+)`?\*\* \|", spec_md, re.M
 registry_ids |= set(re.findall(r"^\| \*\*(U-[0-9a-z]+)\*\* \|", spec_md, re.M))
 check("UNKNOWN registry non-empty", bool(registry_ids), "found no U-ids in 01_GRAPH_SPEC")
 
+# A superseded *section* is a markdown heading, and nothing else is. This
+# splitter used to cut at the bare word `SUPERSEDED` anywhere in the file.
+# DL-022 recorded that trap and the fix chosen then was to keep the word out of
+# the yaml -- a rule about what people may type, not a fix to the splitter. It
+# held until 2026-08-28, when U-20's `decided: "SUPERSEDED 2026-08-28. ..."`
+# put the word back into graph_spec.yaml. From then the file was truncated at
+# that line and U-25, U-32 and U-35 were invisible to every check below, while
+# the run still printed a four-digit check count that named none of them.
+# Anchor on the heading, and only in markdown: yaml has no markdown headings,
+# so a yaml file is now never truncated here at all.
+_SUPERSEDED_SECTION = re.compile(r"^#{1,6} .*SUPERSEDED", re.M)
+
+# Any lowercase suffix, not just `a` and `b`. The registry grew `U-08d` and
+# `U-08e`; the old `[ab]?` could not see them, so they were exempt from every
+# check below while the run still reported a four-digit pass count. A checker
+# that cannot name an id cannot report it missing -- the failure looks exactly
+# like success.
+_UID = r"\bU-[0-9]{2}[a-z]?\b"
+
 for f in sorted(DOCS.glob("*.md")) + sorted(DOCS.glob("*.yaml")):
     if f.name == "01_GRAPH_SPEC.md":
         continue
     body = f.read_text()
-    if "SUPERSEDED" in body:
-        body = body.split("SUPERSEDED")[0]
-    for uid in set(re.findall(r"\bU-[0-9]{2}[ab]?\b", body)):
+    if f.suffix == ".md":
+        body = _SUPERSEDED_SECTION.split(body)[0]
+    for uid in set(re.findall(_UID, body)):
         check(
             f"{f.name} {uid}",
             uid in registry_ids,

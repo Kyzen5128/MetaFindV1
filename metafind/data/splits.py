@@ -14,8 +14,31 @@ Why two evaluation protocols and not one
 
 [U-09] The paper says retrieval runs against a "pre-encoded asset database" and
 separately that an 80/20 split exists. It never says which of the two the
-gallery is, and the difference is large -- a gallery of 9,211 versus 46,052
+gallery is, and the difference is large -- a gallery of 9,138 versus 45,692
 changes R@1 substantially for the same model.
+
+Which corpus size is which
+--------------------------
+
+Three sizes appear across this codebase and none of them is a typo. Counted
+2026-08-30, OBSERVED DATA:
+
+    46,052  the Objaverse-LVIS uid manifest (``download.py``), which is n03's
+            input. Every count in ``data/pointclouds.py`` is against this one:
+            ``logs/pointclouds_index.jsonl`` has 46,052 lines.
+    46,024  what n04 actually rendered; ``logs/renders_index.jsonl``. The
+            incident figures in ``data/renders.py`` are against the 46,052 it
+            was handed, because they describe runs, not results.
+    45,692  THIS corpus. 46,024 - 311 quarantined by n05 - 21 rejected in manual
+            review, per ``outputs/annotation_exclusions.json``. It is what
+            ``admitted_uids()`` returns, what ``splits.json`` records as
+            ``admitted_total``, and the only one of the three that ever reaches
+            a gallery. Splits: test 9,138 / train 36,554, and inside the train
+            pool dev_train 31,985 / dev_val 4,569.
+
+The prose above used to read "9,211 versus 46,052" -- an 80/20 of the manifest,
+taken before rendering and annotation removed 360 assets from it. 46,052 is not
+wrong about the manifest; it was wrong about the gallery.
 
 An earlier draft locked one integer and planned to back-solve it from the
 baselines' 98-99% PC-Only figure. That is impossible: under PC-Only the query
@@ -164,7 +187,10 @@ def build_eval_protocols(train: list[str], test: list[str],
     `gallery_size` is DERIVED from the split rather than written down. An
     earlier draft hardcoded 48,000 -- the paper's approximate figure -- into
     gallery arithmetic while the manifest holds 46,052 (U-01), which silently
-    moved every denominator.
+    moved every denominator. BOTH of those are now wrong for a gallery: n05
+    admitted 45,692 of the manifest's 46,052 (see `admitted_uids` and the
+    module docstring), so B is 45,692 and A is 9,138. Those figures are quoted
+    to let a reader recognise a stale constant, never to be read back into code.
     """
     protocols = {
         "A_test_gallery": {
@@ -188,9 +214,12 @@ def build_eval_protocols(train: list[str], test: list[str],
         # and must never appear as a result.
         #
         # gallery = dev_val, NOT the whole training pool. Ranking a dev-val
-        # query against all 36,819 training assets is a different task from the
-        # final one (query 20%, gallery 20%, ~9,200 candidates), and a duration
+        # query against all 36,554 training assets is a different task from the
+        # final one (query 20%, gallery 20%, 9,138 candidates), and a duration
         # tuned against a pool an order of magnitude larger does not transfer.
+        # The dev-val gallery is 4,569. Those three are splits.json as built on
+        # the 45,692 corpus; the 36,819 and ~9,200 that stood here were the same
+        # 80/20 taken against the 46,024 RENDER corpus, one node too early.
         # This is inference from D-3's logic rather than its text, and it is
         # recorded here so it can be overruled rather than discovered.
         #
@@ -244,6 +273,11 @@ def admitted_uids() -> list[str]:
     An asset quarantined by n03, n04 or n05 has no point cloud, no views or no
     annotation, so putting it in the gallery would create an entry nothing can
     retrieve and a denominator that overstates the corpus.
+
+    Counted 2026-08-30 (OBSERVED DATA): pointclouds_index 46,052, renders_index
+    46,024, annotations_index 45,692. The three-way intersection is 45,692,
+    which matches both the 45,692 files in ``outputs/annotations/`` and
+    ``splits.json``'s ``admitted_total``.
     """
     def index_uids(name: str) -> set[str]:
         path = paths.LOGS / name

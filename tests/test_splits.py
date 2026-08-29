@@ -4,6 +4,15 @@ Two things matter: object-level leakage (L2-LEAK-OBJECT, gated by G3), and that
 both U-09 protocols exist with DERIVED gallery sizes. The second is where an
 earlier draft went wrong by hardcoding the paper's approximate 48,000 against a
 manifest of 46,052.
+
+The synthetic corpus below is 45,692, not 46,052, and the difference is the
+point. 46,052 is the Objaverse-LVIS uid MANIFEST and is still the right
+denominator inside n03/n04; 45,692 is what n05 admitted (46,024 rendered - 311
+quarantined - 21 rejected, per outputs/annotation_exclusions.json) and is the
+only one that ever reaches a gallery. Sizing the fixture at the live corpus
+makes the derived counts below equal splits.json's real ones -- train 36,554,
+test 9,138, dev_val 4,569 -- so a drift in the splitter shows up as a number
+somebody can recognise instead of an abstract one.
 """
 
 from __future__ import annotations
@@ -24,6 +33,12 @@ from metafind.data.splits import (
 )
 
 
+# The admitted corpus, OBSERVED DATA 2026-08-30: `splits.json`'s
+# `admitted_total`, the 45,692 files in `outputs/annotations/`, and the
+# three-way intersection `splits.admitted_uids()` returns all agree.
+CORPUS = 45692
+
+
 def uids(n: int) -> list[str]:
     return [f"{i:032x}" for i in range(n)]
 
@@ -31,7 +46,7 @@ def uids(n: int) -> list[str]:
 # --- L2-LEAK-OBJECT --------------------------------------------------------
 
 def test_train_and_test_are_disjoint():
-    train, test = split_assets(uids(46052), DEFAULT_SEED)
+    train, test = split_assets(uids(CORPUS), DEFAULT_SEED)
     assert set(train) & set(test) == set()
 
 
@@ -50,7 +65,7 @@ def test_every_asset_lands_in_exactly_one_split():
 
 # --- the 80/20 -------------------------------------------------------------
 
-@pytest.mark.parametrize("n", [10, 1000, 46052])
+@pytest.mark.parametrize("n", [10, 1000, CORPUS])
 def test_the_train_share_is_eighty_percent(n):
     train, _ = split_assets(uids(n), DEFAULT_SEED)
     assert len(train) == round(n * TRAIN_FRACTION)
@@ -72,27 +87,32 @@ def test_the_same_seed_reproduces_the_split():
 def test_both_gallery_protocols_are_defined():
     """[U-09] The paper never says which of the two the gallery is, and the
     difference moves R@1 substantially, so both run and both are reported."""
-    train, test = split_assets(uids(46052), DEFAULT_SEED)
+    train, test = split_assets(uids(CORPUS), DEFAULT_SEED)
     p = build_eval_protocols(train, test)
     assert set(p) == {"A_test_gallery", "B_full_gallery"}
 
 
 def test_gallery_sizes_are_derived_from_the_split_not_hardcoded():
     """An earlier draft hardcoded 48,000 -- the paper's approximate figure --
-    while the manifest holds 46,052 (U-01), moving every denominator."""
-    train, test = split_assets(uids(46052), DEFAULT_SEED)
-    p = build_eval_protocols(train, test)
-    assert p["A_test_gallery"]["gallery_size"] == len(test)
-    assert p["B_full_gallery"]["gallery_size"] == len(train) + len(test) == 46052
+    while the manifest held 46,052 (U-01), moving every denominator. The
+    admitted corpus is 45,692, so a constant would now be wrong twice over.
 
-    # and it tracks a different corpus rather than staying at 46,052
+    The split sizes asserted here are the ones splits.json actually holds.
+    """
+    train, test = split_assets(uids(CORPUS), DEFAULT_SEED)
+    p = build_eval_protocols(train, test)
+    assert p["A_test_gallery"]["gallery_size"] == len(test) == 9138
+    assert p["B_full_gallery"]["gallery_size"] == len(train) + len(test) == 45692
+    assert len(train) == 36554
+
+    # and it tracks a different corpus rather than staying at 45,692
     t2, e2 = split_assets(uids(1000), DEFAULT_SEED)
     assert build_eval_protocols(t2, e2)["B_full_gallery"]["gallery_size"] == 1000
 
 
 def test_the_two_protocols_have_different_gallery_sizes():
     """If they ever coincide the pair has stopped answering U-09."""
-    train, test = split_assets(uids(46052), DEFAULT_SEED)
+    train, test = split_assets(uids(CORPUS), DEFAULT_SEED)
     p = build_eval_protocols(train, test)
     assert p["A_test_gallery"]["gallery_size"] < p["B_full_gallery"]["gallery_size"]
 

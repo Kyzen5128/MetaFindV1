@@ -280,16 +280,27 @@ def main() -> int:
                   f"-> {STAGING_PATH}")
         else:
             # [2.6] "The gallery encoder is trained to be modality-complete."
-            # F26 measured that 24 of the 1,467 ProcTHOR assets have no depth at
-            # all -- transparent materials are absent from Unity's depth prepass
-            # -- so they have text and images and no point cloud.
+            # 28 of the 1,467 ProcTHOR assets have no depth at all -- transparent
+            # materials are absent from Unity's depth prepass -- so they have
+            # text and images and no point cloud.
+            #
+            # 28 is defined by the SAME condition the loop below tests, and the
+            # condition is the definition: a record whose `pointcloud_uri` key is
+            # present and null. Rescanned 2026-08-30 over all 1,467 files in
+            # `procthor_modalities/` (OBSERVED DATA): 28 null, 0 with the key
+            # absent, 0 with an empty string, 1,439 non-null -- and all 1,439 of
+            # those .npz files exist on disk, so "missing file" is a different
+            # (currently empty) failure mode and is NOT what this counts. All 28
+            # carry the same `pointcloud_missing_reason`: "every view was empty;
+            # the asset never entered frame". The 24 that stood here was an
+            # earlier measurement and is superseded.
             #
             # They are EXCLUDED from the Stage 2 gallery rather than admitted
             # with a gap. Admitting them would mean the gallery side runs a
             # presence mask, which 2.6 rules out, and the alternative of
             # zero-filling is the failure L1-SEMEDGE-NO-ZEROFILL exists to name.
             # The cost is that those assets cannot be Stage 2 positives, hence
-            # cannot be targets: 24 of 1,467, 1.6%, recorded here rather than
+            # cannot be targets: 28 of 1,467, 1.9%, recorded here rather than
             # discovered as a mysterious KeyError inside n13.
             mods = sorted(paths.PROCTHOR_MODALITIES.glob("*.json"))
             if args.limit:

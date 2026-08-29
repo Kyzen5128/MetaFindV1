@@ -15,11 +15,29 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # RETIRED 2026-08-28 [MASTER]. Superseded by tools/chain_to_stage1.sh.
 #
-# This chain queues n08 BEFORE a Stage 1 smoke. n08 is a Stage 2 input: the only
-# production reader of sem_edge_cache.json is metafind/train/stage2.py:320, and
+# This chain queues n08 BEFORE a Stage 1 smoke. n08 is a Stage 2 input, and
 # PAPER FACT 2methdology.tex:75 / 3experiments.tex:24 put Stage 1 on
 # Objaverse-LVIS isolated assets with no layout. Running this would put a
 # 2.5-hour scene-graph node on Stage 1's critical path for nothing.
+#
+# [CORRECTED 2026-08-30] This said "the only production reader of
+# sem_edge_cache.json is metafind/train/stage2.py:320". Codex R2 judged that
+# FALSE on 2026-08-28 and the correction landed in the sibling
+# tools/chain_to_stage1.sh; this file was missed. Both halves were wrong:
+#
+#   * There are TWO production readers, not one. Grepped 2026-08-30 over
+#     metafind/ tools/ tests/, unpiped:
+#       - metafind/train/stage2.py, Stage2Data.__init__  (line 379 today)
+#       - metafind/data/scene_splits.py, main(), for semantic-edge coverage
+#         (line 141 today)
+#     Both are on the Stage 2 side, which is why the retirement below still
+#     holds -- but it rests on "no Stage 1 reader", never on "one reader".
+#   * ":320" was already stale when written; the stage2.py read is at 379.
+#     Line numbers rot, so the readers are named by symbol above.
+#
+# Non-production mentions, for completeness, so the next grep is not a surprise:
+# semantic_edges_run.py WRITES it; this file and tools/status.sh only check the
+# path exists; tools/audit_claims.py and tools/check_graph.py refer to it.
 #
 # The file is KEPT, not deleted: it is the origin of that misreading, and the
 # ledger points at it as evidence. A comment cannot stop `bash

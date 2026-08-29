@@ -2,6 +2,12 @@
 
 # IMPLEMENTS-NODE: n04_render_views
 
+The 46,052 in the incident notes below is the manifest n04 was HANDED, not what
+it produced: ``logs/renders_index.jsonl`` holds 46,024, and the corpus that
+survives annotation and reaches a gallery is 45,692 (derived in
+``data/splits.py``, which carries the arithmetic). Those figures describe runs,
+so they stay as measured; none of the three is a stale copy of another.
+
 [RENDERER_VERSION 5, 2026-08-23] **This node no longer renders anything itself.**
 It orchestrates; `metafind.data.render_blender` invokes OpenShape's own
 `render_single_glb.py`, vendored byte-identical at
