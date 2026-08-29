@@ -1566,3 +1566,88 @@ sha plus OpenCLIP revision and blob — present.
 **Arm 2 is not authorised.** Kyzen's rule is one, then seven, and the second authorisation is
 his to give after seeing this. GPU released.
 
+
+---
+
+## DL-038 — the write guard did not watch Bash, and I had already gone through it
+
+`RECORDED` · 2026-08-30 · found by MASTER while fixing something else · fixed the same night
+
+The research-authority guard blocked writes to the governance files, the vendored upstream, and
+the paper source. Its guarded-tool set was `Write`, `Edit`, `NotebookEdit`.
+
+**Bash was not in it.** A shell command reached every protected path untouched.
+
+```
+Write to the settings file                        blocked
+Bash running python that writes the same file     not seen at all
+```
+
+**And that is how the settings file was edited earlier the same night**, when the subagent env
+block was added: a python heredoc inside a Bash call. Nobody was working around the guard.
+Nobody knew the door was there — the guard's own docstring included, which claimed its own
+directory was protected from having the guard disabled. Bash disabled nothing. It went around.
+
+### Why it was found at all
+
+Only because the reviewers' read-only setup collided with the graphify hook, which sent MASTER
+to read the guard. **The hole was not found by looking for holes.** Nothing was watching for it.
+
+That is DL-035's variant 4 living inside the guard: the property held because no caller had
+used the other door yet.
+
+### The fix, and what it is not
+
+Bash and PowerShell now reach a command-checking branch. Tokens are resolved against the repo,
+and a protected path plus a write marker blocks. Reading stays free — a guard that prompts on
+displaying a governance file becomes noise, and noise is what gets switched off.
+
+**It is a heuristic and the file says so in capitals.** A command that assembles the path from
+pieces, encodes it, or reaches it through a symlink made in the same command will pass. It is a
+speed bump against accident, not a sandbox. Its purpose is narrower and worth stating plainly:
+that nobody edits one of these files again *without knowing they did*.
+
+Verified live, not only in tests: a copy onto a rules file now returns `GOVERNANCE INTEGRITY`
+and is refused.
+
+### It blocked its own first commit, and that mattered
+
+The first attempt to file this entry was refused by the guard that had just shipped. The ledger
+prose *quotes* shell commands naming protected paths, and the guard read the whole command
+string — heredoc body included — as one blob.
+
+**A guard that stops you writing about the guard is noise.** Fixed the same hour: inside a
+heredoc body only file-API calls count, not shell verbs, because the real bypass was a python
+call and the false positive was prose. Two named tests hold both halves — one that prose must
+pass, one that a genuine python heredoc write must still be refused, so the exemption cannot
+quietly reopen the hole it sits beside.
+
+### The part that outlives the guard
+
+`tests/test_research_authority_guard.py` is **tracked**. The guard is gitignored per DL-036, so
+it has no history and no diff anyone can review. The test does. It carries the exact heredoc
+that went through unseen, as a regression, and one test that fails if the "HEURISTIC / not a
+sandbox" wording is ever deleted — so a future edit has to decide deliberately whether the
+claim changed or only the wording did.
+
+**39 tests, all passing against the installed guard. Nine of them fail against the version that
+was running two hours earlier.**
+
+### Also fixed, and how it was found
+
+A gate now skips the graphify search guard for `ulip2-reviewer` and `essgnn-reviewer`. That
+guard says a `graphify query` is MANDATORY before grepping, and both reviewers have no Bash by
+design, so it named an action they cannot take.
+
+**The ESSGNN Block Reviewer hit it on its first live run and filed it as a known blind spot
+rather than ignoring it.** An instruction an agent cannot obey is not a guard; it is what
+teaches an agent to read past guards.
+
+### Recorded against myself
+
+While fixing this I edited the live guard in place, broke its syntax, and the wrapper's
+fail-closed branch then blocked every write in the repository until Kyzen restored the backup
+by hand. The second attempt was built and tested in a scratch directory and installed in one
+step.
+
+**Editing the running guard was the mistake. The syntax error was only how it showed up.**
