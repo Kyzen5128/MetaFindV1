@@ -1436,6 +1436,59 @@ establishing authorship; the reviewer's first attribution was wrong and he corre
 
 ---
 
+
+**⚠ ATTRIBUTION CORRECTED 2026-08-30 by INTEGRATOR himself. Rule 6: the entry above stays as
+written. Its attribution is wrong.**
+
+DL-035 above says the framing and variants 1–3 are INTEGRATOR's. **They are not.** He objected
+to his own credit, unasked, and gave the real provenance:
+
+```
+the seam criterion        workflow/roles/INTEGRATOR.md §3 -- his job description, handed to
+                          him. Not something he derived.
+"wrong but it will not
+ shout" (the phrasing)    INTEGRATOR. A previous MASTER filed it under his name and that one
+                          is his.
+variant 1                 METAFIND_NOTEBOOK.md §9.6, written by a previous MASTER. Of its four
+                          instances, two came from INTEGRATOR and two did not.
+variant 2                 INTEGRATOR -- and already superseded by the ESSGNN Block Engineer's
+                          sharper form: not "a fingerprint nobody reads" but "the protocol has
+                          no such key at all".
+variant 3                 ULIP2 Block Reviewer [869408], raised while tracing the authorship of
+                          Codex's five files.
+variant 4                 ULIP2 Block Reviewer [869408]. His measurement: float32 drifted 6 of
+                          6, float64 0 of 6.
+the four-way ordering,
+and "variant 4 is the
+most dangerous"           INTEGRATOR. This part is his.
+```
+
+**His reason for objecting is worth more than the correction.** In his words: the project spent
+a full round today on a finding filed under the wrong owner, and the standing lesson in the
+older records is *never record the approver as the one who did the work*. **Filing four people's
+findings as one person's framework is that same error mirrored** — and it costs the next reader
+the original measurement, because variant 4's float32 6-of-6 numbers are the ULIP2 Block
+Reviewer's, not his.
+
+**MASTER's error, recorded plainly:** I asked him "what cases did you generalise this from",
+which assumed he had generalised it. He answered the question I should have asked instead of
+the one I did. **A question can carry a false premise, and a helpful answer will carry it
+forward.**
+
+**⚠ Also corrected by him: the seam number.** DL-035 and the FINDINGS §3 note both discuss
+"seam 1". The fingerprint finding is **seam 3**, not seam 1. His numbering:
+
+```
+1  splits / stage1_protocol
+2  gallery index + encoder fingerprints
+3  stage2 protocol / node vectors / sem_edge      <- the fingerprint one
+4  the deviation registry
+```
+
+**A wrong seam number sends the next reader to the wrong file.**
+
+---
+
 ## DL-036 — `.claude/` and `output/look/` stay out of git
 
 `USER_DECIDED` · 2026-08-30 · Kyzen, asked directly, answered **「甲乙都不要」**
