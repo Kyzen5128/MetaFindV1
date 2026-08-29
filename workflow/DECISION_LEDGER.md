@@ -1101,8 +1101,26 @@ So δ genuinely cannot be derived from it. **This is paper silence, not a failed
 It says δ is "at least as large as the smallest gap MetaFind itself reports as a finding".
 **The same table has `w/o iterative retrieval 11.3` against `Full 11.4` — a 0.1 pp row**
 (`3experiments.tex:94,96`), which is smaller than the 0.9 pp floor it cites.
-**Correct phrasing: δ sits inside the band of differences the paper draws conclusions from (0.9–5.9 pp);
-that table also contains a 0.1 pp row.** δ = 1.0 stands; only the justification is narrowed.
+**Correct phrasing: δ sits inside the band of differences the paper draws conclusions from,
+which is `0.1 – 4.1 pp`.** δ = 1.0 stands; only the justification is narrowed.
+
+🔴 **Corrected again, same day, by the same reviewer — and this time the wrong number was mine.**
+The first version of this entry wrote the band as `0.9 – 5.9 pp`, copied from the evidence file
+without deriving it. **I verified the individual table values and not the band computed from them.**
+I have now computed every gap against `Full 11.4` myself
+([PAPER FACT `3experiments.tex:92-110`]):
+
+```
+0.1  w/o iterative retrieval        1.8  Modality Dropout 50%
+0.4  w/ Layout Context (GAT)        2.0  Fusion = Mean
+0.9  Padding missing modalities 0   2.7  Train fuser only
+1.5  Fusion = MLPs                  4.1  Modality Dropout 10%
+                    → band 0.1 – 4.1 pp
+```
+
+**Where the wrong `5.9` came from**: `13.2 − 7.3`, i.e. Modality Dropout 50% against 10%.
+**That is variant against variant, not a single ablation's effect on the full model.**
+It never belonged in a band of ablation effects.
 
 ### Three things recorded with it
 
