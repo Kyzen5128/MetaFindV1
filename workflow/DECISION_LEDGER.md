@@ -1113,10 +1113,26 @@ I have now computed every gap against `Full 11.4` myself
 ```
 0.1  w/o iterative retrieval        1.8  Modality Dropout 50%
 0.4  w/ Layout Context (GAT)        2.0  Fusion = Mean
-0.9  Padding missing modalities 0   2.7  Train fuser only
-1.5  Fusion = MLPs                  4.1  Modality Dropout 10%
-                    → band 0.1 – 4.1 pp
+0.9  Padding missing modalities 0   2.1  w/o Layout Context   (13.5 vs 11.4)
+1.5  Fusion = MLPs                  2.7  Train fuser only
+                                    4.1  Modality Dropout 10%
+                    → band 0.1 – 4.1 pp   (nine rows)
 ```
+
+🔴 **The list above was eight rows and said "every gap". Codex found the missing one; I verified it
+at [`3experiments.tex:97`] `w/o Layout Context 13.5` against `Full 11.4` = 2.1 pp.**
+Neither the band nor δ moves — 2.1 sits inside 0.1–4.1 — **so this is a claim that outran its content,
+not a wrong number.**
+
+⚠ **Third time in this entry's short life, and all three are the same shape:**
+```
+1  band copied from the evidence file without deriving it        (MASTER)
+2  the evidence file's Authority row not moved with its body     (ULIP2 Engineer)
+3  a list announced as complete that was not                     (MASTER)
+```
+**None of the three is an arithmetic error. All three are a claim made one notch wider than the work done.**
+Recorded because the fix for arithmetic is checking, and the fix for this is different:
+**say what you actually did, not what the sentence would be nicer for.**
 
 **Where the wrong `5.9` came from**: `13.2 − 7.3`, i.e. Modality Dropout 50% against 10%.
 **That is variant against variant, not a single ablation's effect on the full model.**
@@ -1166,6 +1182,65 @@ Current          → awaiting Codex R3
 ```
 
 **Still true from the first round: no training, sweep, n15 or A/B has been run. GPU idle.**
+
+---
+
+## DL-034 — three approvals for the LR sweep and n15
+
+`USER_APPROVED` · 2026-08-30 · Kyzen's word was **「甲」** to each of three
+
+```
+1  The first batch of 8 is a MEASUREMENT round, not a selection round.
+   It produces the project's first honest seed-to-seed dispersion and a rough
+   position for each of the four LRs. It does NOT produce "which LR wins".
+   Codex's five unspecified items — interval method and confidence level, max
+   seeds, multiplicity across the four LRs, alpha spending for the sequential
+   design, single-condition degradation guardrail — are deferred until that
+   dispersion exists.
+
+2  Run 1 arm first, then the other 7.
+   `preload` has never completed a full run; the single arm confirms wall-clock
+   and stability before committing the batch.
+
+3  n15's SCOPE is approved. Writing may proceed now.
+```
+
+**The argument that carried item 1** (ULIP2 Block Reviewer, recorded verbatim because it is the
+reasoning, not the conclusion, that will be needed later):
+
+> **δ must be declared a priori — that is "what we want".
+> The interval method must be chosen a posteriori — that is "what the data looks like".
+> Pinning both in advance commits, in the second place, the very error δ exists to avoid.**
+
+Its companion, on ordering: **n15 does not exist, so Table 1 has no reportable number at all.
+The LR sweep tunes a number that cannot yet be reported; n15 unlocks having any number.**
+And n15 costs no GPU, so it runs in parallel with waiting on Codex — **not a queue-jump, a gap-fill.**
+
+Evidence: `workflow/blocks/ULIP2/evidence/kyzen_decisions_20260830.md`
+(written by the ULIP2 Engineer; the Reviewer verified the decisions, not the file's wording.)
+
+### 🔴 What these three approvals do NOT authorise
+
+**All three are design and scope approvals.** Executing the sweep and executing n15 each still
+need a fresh `✅` from Kyzen. **As of this entry, no GPU work has been run at all.**
+
+### `full = 1.0000` — the debt in DL-033 does not close because n15 was written
+
+n15 exists as code (`metafind/eval/run_retrieval.py`) and has not passed review:
+
+```
+R1 BLOCKER (fixed)  the streaming scorer scored a fully collapsed model at R@1 = 100%,
+                    and the shuffle_targets negative control did not fire on it.
+                    Root cause: `own` and `sim` take different arithmetic paths and
+                    differ by one ULP. Reviewer re-verified the collapse case now reports 0.
+R2 MAJOR (open)     third exit from the same root cause — a differently-sized final block
+                    selects a different BLAS kernel, so the same data and the same model
+                    return different `rank` and `tie_count` when only `block` changes.
+                    **A performance knob is moving the reported metric.**
+```
+
+→ **Negative-control coverage for `full = 1.0000` is still zero.**
+**DL-033's entry stands open. Do not close it on the grounds that n15 has been written.**
 
 ---
 
