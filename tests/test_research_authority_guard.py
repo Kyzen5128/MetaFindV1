@@ -199,6 +199,26 @@ def test_redirect_onto_a_protected_path_is_blocked(command):
     assert run(bash_call(command)) == BLOCK
 
 
+@pytest.mark.parametrize("command", [
+    # `open()` for READING is the commonest thing open does. The ESSGNN Block
+    # Reviewer could not get a syntax check on the guard past the guard.
+    "python3 -c \"import ast; ast.parse(open('.claude/hooks/research_authority_guard.py').read())\"",
+    "python3 -c \"print(open('CLAUDE.md').read()[:80])\"",
+    "python3 -c \"import json; d=json.load(open('.claude/settings.json'))\"",
+])
+def test_open_for_reading_a_protected_file_is_allowed(command):
+    assert run(bash_call(command)) == ALLOW
+
+
+@pytest.mark.parametrize("command", [
+    "python3 -c \"open('CLAUDE.md', 'w').write('x')\"",
+    "python3 -c \"open('.claude/settings.json','a').write('x')\"",
+    'python3 -c "open(\'.claude/rules/research-rigor.md\', \'wb\').write(b\'x\')"',
+])
+def test_open_for_writing_a_protected_file_is_blocked(command):
+    assert run(bash_call(command)) == BLOCK
+
+
 def test_bash_override_lets_it_through():
     assert run(bash_call("echo x > .claude/settings.json"),
                allow_override=True) == ALLOW
