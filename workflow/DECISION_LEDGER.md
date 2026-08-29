@@ -1153,6 +1153,20 @@ and both towers then see the same input) but it needs a negative control to be s
 
 Re-review by Codex after the fix. **No training, sweep, n15 or A/B has been run.**
 
+**⚠ SUPERSEDED 2026-08-30 (later the same day) — the paragraph above records the FIRST round only.**
+Per maintenance rule 6 the original conclusion is left standing and the current state is added here.
+
+```
+Two MAJOR fixed  → ULIP2 Block Reviewer R-34 PASS
+                   （he restored ARM_EXCLUDED to ("seed",) in memory and re-ran the same
+                     assertions: all four flipped, so the tests are not could-not-fail）
+Codex R2         → CHANGES REQUIRED (2 BLOCKER, 2 MAJOR, 1 MINOR) → all fixed, reviewer re-verified
+Added            → frozen key-set test, two-way assertions, reading the real artifact from disk
+Current          → awaiting Codex R3
+```
+
+**Still true from the first round: no training, sweep, n15 or A/B has been run. GPU idle.**
+
 ---
 
 ## Maintenance rules
