@@ -172,6 +172,23 @@ README 啟動指令  :75 --model tfn --nf 32 · :81 --model se3_transformer --nf
 >           講的都是一個這個 repo 目前不存在的檔案。
 > ```
 >
+> **⚠⚠ 2026-08-30 同日再更正：上面那條 `find` 是假的。**
+> `data -> /home/kyzen/metafind_data` 是 symlink，`find` 預設不跟隨起點的 symlink，
+> 而且**不報錯，安靜回傳空集合**。`find -L` 找得到 7 個協定檔。
+> 我用一次因機械原因為空的搜尋做了裁定。**這一條由 ULIP2 Block Reviewer 抓出。**
+>
+> 重新裁定（證據見 `DL-035`）：
+> ```
+> 指紋那一半      已關閉   stage2.py:94-99 驗 sha256、:269 讀 llm_model 與
+>                          text_encoder_version、:397-398 往下傳。行號已漂移，
+>                          原句的 303-327 現在是查詢編碼，不是驗證。
+> sem_edge_cache  不適用   find -L 找不到該產物，沒有東西可讀
+> 協定缺 key      仍開著   essgnn_arch_protocol.json 沒有 node_feat_dim /
+>                          edge_feat_dim。這是 U-20／④，與接縫 1 講的不是同一件事。
+> ```
+>
+> **舊 UNRESOLVED 附註原文保留於下，不刪，因為它本身是證據。**
+>
 > **UNRESOLVED。沒有就地改寫，因為兩種措辭都還沒被確立，
 > 而一個自己都沒查證的更正，正是它宣稱要修的那個錯。**
 > 完整脈絡見 `workflow/DECISION_LEDGER.md` 的 `DL-035`。

@@ -1364,6 +1364,68 @@ OBSERVED 2026-08-30, MASTER:
 correction that is itself unverified is the failure it claims to fix.** A note carrying these
 two observations has been appended to §3.
 
+**⚠ CORRECTED 2026-08-30, same day, by the ULIP2 Block Reviewer. Rule 6: the paragraph above
+stays as written. The second `OBSERVED` in it is FALSE.**
+
+```
+find . -name "*protocol*.json"        → 0     ← what I ran
+find -L . -name "*protocol*.json"     → 7     ← the truth
+
+data -> /home/kyzen/metafind_data  is a symlink, and `find` does not follow a symlinked
+starting point unless given -L. It does not warn. It returns the empty set.
+```
+
+**I ruled §3 UNRESOLVED on a search that was empty for a mechanical reason, and I wrote the
+sentence "an unverified correction is the failure it claims to fix" in the same commit that
+contained one.** The reviewer had already recorded this same `find` trap in `REVIEW.md` R-31b
+on 2026-08-29, from his own encounter with it.
+
+**This is the eighth instance of the probe not reaching the target, and the first where the
+instrument was mine while I was writing the entry about instruments.**
+
+### §3 seam 1, ruled properly this time
+
+```
+OBSERVED 2026-08-30  data/outputs/essgnn_arch_protocol.json exists. Its keys are:
+                     architecture_family, coord_feat, decided_at, decided_by, distance,
+                     hidden_dim, layer_sharing, mlp_structure, n_layers, pooling, status,
+                     use_io_projections
+                     `node_feat_dim` and `edge_feat_dim` are NOT among them.
+                     ⇒ the ESSGNN Engineer's wording, "the protocol has no such key",
+                       is CONFIRMED -- for the ARCH protocol and the 1280-d question (U-20).
+
+OBSERVED 2026-08-30  data/outputs/procthor_node_embeddings.json carries:
+                     asset_ids, embedding_dim, n_assets, sha256, text_encoder_version, uri
+
+OBSERVED 2026-08-30  stage2.py:94-99   reads and verifies `sha256`, refusing an artifact
+                                       whose record carries none
+                     stage2.py:269     reads meta["llm_model"], meta["text_encoder_version"]
+                     stage2.py:397-398 writes both forward
+                     stage2.py:598-607 verifies `stage1_checkpoint_sha256` against the
+                                       loaded checkpoint
+                     ⇒ seam 1's "stage2.py:303-327 compares vector widths only, and reads
+                       none of those fields" is NO LONGER TRUE of the current tree. Those
+                       line numbers now point at query encoding, not at verification.
+
+OBSERVED 2026-08-30  find -L . -name "sem_edge_cache*"  → nothing. That artifact does not
+                     exist in this tree under any name.
+```
+
+**Ruling: seam 1 is two claims and they now part company.**
+
+```
+the fingerprint half   CLOSED   stage2.py verifies sha256 and carries llm_model /
+                                text_encoder_version forward. Landed with the artifact
+                                verifier in 2916327.
+the sem_edge_cache half  N/A    the artifact does not exist yet; nothing can read it
+the arch-protocol key   OPEN    node_feat_dim / edge_feat_dim absent from
+                                essgnn_arch_protocol.json. This is U-20 / item ④ and it
+                                is unchanged by any of today's work.
+```
+
+**Only the third stays open, and it is not what seam 1 was about.**
+
+
 ### Process fact, recorded not blamed
 
 Codex wrote seven product files directly at 02:17:50 / 02:19:31 / 02:20:34 on 2026-08-30.
