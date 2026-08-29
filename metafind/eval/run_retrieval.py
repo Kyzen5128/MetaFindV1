@@ -133,6 +133,28 @@ def score_streaming(query: np.ndarray, gallery: np.ndarray,
         raise ValueError(f"{targets.shape} targets for {nq} queries")
     if targets.size and (targets.min() < 0 or targets.max() >= ng):
         raise ValueError("a target column is outside the gallery")
+    # [ULIP2 REVIEWER 2026-08-30, MAJOR] Block-independence held only because
+    # `encode_pools` happens to hand over float64. Nothing here required it, so
+    # one test, one future caller, or one "save memory" refactor passing float32
+    # brings the defect back in silence -- and `tie_count` is the diagnostic
+    # added specifically to detect collapse.
+    #
+    # MEASURED on the current code, collapsed gallery, d=1280, L2-normalised:
+    #     float32   tie_count changed with `block` in 6 of 6 trials at
+    #               ng = 999, 4,569 and 9,138 alike (4568 vs 4567)
+    #     float64   0 of 6 at every size
+    #
+    # Third time today a property was left to the caller to maintain instead of
+    # enforced by the callee: `ARM_EXCLUDED` declared fields it did not contain,
+    # and `ENFORCED_SINGLETONS` checked a merged dict so the encoding half was
+    # never looked at. A guard is the difference between "nobody calls it that
+    # way" and "it cannot be called that way".
+    if query.dtype != np.float64 or gallery.dtype != np.float64:
+        raise ValueError(
+            f"score_streaming needs float64 (got {query.dtype}/{gallery.dtype}). "
+            "In float32 tie_count moved with `block` in 6 of 6 trials at every "
+            "production gallery size; in float64, 0 of 6. Normalise through "
+            "retrieval.normalize_for_scoring.")
 
     plan = block_plan(ng, block)
 

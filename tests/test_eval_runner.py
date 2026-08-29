@@ -317,8 +317,13 @@ def test_a_collapsed_model_cannot_score_at_production_shape(dtype, ng):
         g = np.tile(v, (ng, 1))
         q = g[:16].copy()
         t = rng.integers(0, ng, size=16)
-        r = n15.score_streaming(q, g, t, block=4096)
-        assert (r["rank"] <= 1).mean() == 0.0, (
+        # float32 goes through the reference scorer: `score_streaming` now
+        # REFUSES float32 (see test_score_streaming_refuses_float32), and the
+        # question here is about the metric at production shape, not about which
+        # entry point is used to ask it.
+        ranks = (n15.score_streaming(q, g, t, block=4096)["rank"]
+                 if dtype is np.float64 else rank_of_target(q @ g.T, t))
+        assert (ranks <= 1).mean() == 0.0, (
             "a totally collapsed model scored a hit at production shape")
 
 
@@ -395,3 +400,34 @@ def test_a_single_gemm_is_not_bit_reproducible_across_identical_rows():
         "identical gallery rows now hash to one value in a single gemm. The "
         "BLAS or numpy changed; every argument that rests on 'same arithmetic "
         "path implies bit-equality' must be re-measured before it is trusted.")
+
+
+
+def test_score_streaming_refuses_float32():
+    """[ULIP2 REVIEWER 2026-08-30, MAJOR] Block-independence must be ENFORCED,
+    not merely true today.
+
+    It held only because `encode_pools` happens to return float64. Nothing in
+    `score_streaming` required it, so a test, a future caller, or a "save
+    memory" refactor would bring the defect back silently -- and `tie_count` is
+    the diagnostic added specifically to detect collapse.
+
+    MEASURED before the guard: with float32 a collapsed 4,569 gallery reported
+    tie_count 4568 at some block sizes and 4567 at others. THIS test is what
+    closes R2's MAJOR; "nobody calls it that way" is not a closure.
+    """
+    rng = np.random.default_rng(0)
+    v = rng.normal(size=(1, 1280))
+    v = (v / np.linalg.norm(v)).astype(np.float32)
+    g = np.tile(v, (64, 1))
+    with pytest.raises(ValueError, match="needs float64"):
+        n15.score_streaming(g[:4].copy(), g, np.arange(4), block=16)
+
+
+def test_score_streaming_accepts_what_normalize_for_scoring_produces():
+    """The guard must not block the production path it exists to protect."""
+    from metafind.eval.retrieval import normalize_for_scoring
+    rng = np.random.default_rng(1)
+    g = normalize_for_scoring(rng.normal(size=(40, 32)))
+    q = normalize_for_scoring(rng.normal(size=(5, 32)))
+    assert n15.score_streaming(q, g, np.arange(5), block=8)["rank"].shape == (5,)
