@@ -1433,3 +1433,44 @@ The engineer and the reviewer both learned of it by seeing files change, and eac
 establishing authorship; the reviewer's first attribution was wrong and he corrected it.
 **Suggested: when Codex edits product code itself, a notice ahead of the ruling.**
 
+
+---
+
+## DL-036 — `.claude/` and `output/look/` stay out of git
+
+`USER_DECIDED` · 2026-08-30 · Kyzen, asked directly, answered **「甲乙都不要」**
+
+Two proposals were put to him and both were declined:
+
+```
+甲  track .claude/ and CLAUDE.md          DECLINED
+乙  track output/look/*.json as evidence   DECLINED
+```
+
+`.gitignore:56` excludes `CLAUDE.md` and `.claude/` under the comment
+"Local Claude / Graphify settings". `.gitignore:27` excludes `output/`.
+
+**What this means, recorded so nobody re-derives it later as a discovery:**
+
+```
+NOT IN GIT   CLAUDE.md
+             .claude/rules/  (research-rigor, experiments, paper-reproduction,
+                              code-changes, upstream-lookup)
+             .claude/hooks/research_authority_guard.py
+             .claude/settings.json  (the three PreToolUse hooks)
+             .claude/skills/
+             .claude/agents/  (the five subagent definitions, 2026-08-30)
+             output/look/dtype_effect.json  and the other evidence JSON
+
+IN GIT       docs/METAFIND_NOTEBOOK.md, workflow/DECISION_LEDGER.md, and all
+             product code and tests
+```
+
+The rules that govern how this project does research, and the hook that enforces
+them, exist in one copy on one disk. So does the evidence JSON that DL-033 and
+commit `2916327` cite.
+
+**This is Kyzen's call and it is recorded as made, not as pending.** It is not
+an oversight and should not be re-raised as a finding. If the working copy is
+lost, these are the files that do not come back.
+
