@@ -1474,3 +1474,95 @@ commit `2916327` cite.
 an oversight and should not be re-raised as a finding. If the working copy is
 lost, these are the files that do not come back.
 
+
+---
+
+## DL-037 — sweep arm 1, the measurement round's first run
+
+`RECORDED` · 2026-08-30 · run by the ULIP2 Block Engineer under Kyzen's 02:26 authorisation
+
+The first of the eight runs DL-034 approved as a **measurement** round. It answers what the
+seed-to-seed dispersion is. **It does not answer which learning rate wins, and nothing here
+may be read that way.**
+
+```
+run_id                 1788027986-222044-d7a50a
+command                python -m metafind.train.stage1 --phase dev --epochs 5 --preload
+                       --lr 0.00075 --seed 20260830 --repeat-index 1
+                       --out-dir sweep_lr/lr7.50e-4_s20260830
+wall clock             02:26:25 -> 02:52:25, 26 minutes (estimate was 25)
+out_dir                /home/kyzen/metafind_out/checkpoints/sweep_lr/lr7.50e-4_s20260830
+arm_config_hash        eaa855ba8f1071d6c862291799a1545536c3990040d55a27309815d014cec708
+seed / repeat_index    20260830 / 1
+best epoch             4      checkpoint_schema 4      sha256 6e4ae4e05aad1e7a…
+n_train / n_selection  31,985 / 4,569
+train content sha256   fb44b5a19d0dabd36ebe5c164ed666e0…
+pointcloud sidecars    0 mismatches between claimed and actual bytes
+open_clip hf_revision  743c27bd53dfe508…
+preload                True, first full execution: 560 ms/step against a 589 ms/step baseline
+```
+
+### Code state, written the way the engineer insisted and he was right
+
+```
+code_revision          2916327e + dirty
+runtime_source_sha256  cbf275817e0e4e5bb0cd1e29d8afa6487cb5c92e3a1eb148e546af110dd50483
+                       identical to the working tree after 169b0cb
+dirty content          the score_streaming float64 guard, written before it was committed
+                       engineer's judgement: not on the training path; stage1.py does not
+                       call score_streaming
+```
+
+**"Identical hash" is the observation. "Therefore the same commit" is an inference, and the two
+are written apart on purpose.** The engineer refused the shorter wording and asked for this one.
+
+**"The dirty content is harmless" is a human judgement. No field can carry it, and it is
+recorded as a judgement rather than promoted to a fact.**
+
+This is the first run where all three provenance fields were used together, and each did a
+different job: `code_revision` named a commit older than the code that ran, `code_dirty` said
+"there is more than that", and `runtime_source_sha256` said which code it actually was.
+**Any one of them alone would have been misleading. That is the argument for keeping all three.**
+
+### Result
+
+```
+epoch    seven-condition mean R@1
+  0      0.8582
+  1      0.8432        the usual dip at a high learning rate
+  2      0.9055
+  3      0.9332
+  4      0.9443        best
+
+best epoch 4:  text 0.7577 · image 0.9606 · pc 0.9140 · full 1.0000
+               unsaturated three-condition mean 0.8774 · seven-condition mean 0.9443
+```
+
+**`full = 1.0000` again.** DL-033's debt is unchanged: it is INFERENCE, the negative control is
+still owed, and it is not discharged by another run reproducing it.
+
+### A comparison that is NOT a comparison
+
+```
+DIED_e5_0542   lr 5e-4    5 epochs    three-condition 0.8927
+arm 1          lr 7.5e-4  5 epochs    three-condition 0.8774
+```
+
+Looks like 1.5 pp for the lower rate. **It is not a controlled comparison and is not filed as
+one:** different seed, different code (DIED_e5 came from a dirty tree on 2026-08-29), and that
+run was terminated by a crash. Kyzen has ruled this batch a measurement round, not a selection
+round. **The engineer flagged this himself and asked that it not be entered as a comparison.**
+
+### New machinery that held on a real run
+
+`--out-dir` wrote to its own directory and the canonical four files were untouched. `flock` on
+`stage1_run.lock` was taken, held, and released at exit. The reservation `stage1_run.json` was
+written before training, not after. The arm hash and its resolved recipe went into the
+checkpoint. 32k input content fingerprints, zero mismatches. Initializer provenance — ULIP-2
+sha plus OpenCLIP revision and blob — present.
+
+### Standing
+
+**Arm 2 is not authorised.** Kyzen's rule is one, then seven, and the second authorisation is
+his to give after seeing this. GPU released.
+
