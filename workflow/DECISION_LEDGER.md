@@ -1278,3 +1278,96 @@ R2 MAJOR (open)     third exit from the same root cause — a differently-sized 
 4. Superseded entries are **marked**, never deleted, and must name their replacement.
 5. When a decision is approved, Master integrates it and records which files were updated.
 6. If a decision is later found to rest on a mistaken finding, add a new entry that supersedes it. Do not edit the original's conclusion.
+
+---
+
+## DL-035 — one family of silent error, four variants
+
+`RECORDED` · 2026-08-30 · framing and variants 1–3 from INTEGRATOR `metafindv1-e7 [ba9699]`,
+relayed by the ULIP2 Block Reviewer because INTEGRATOR is ON HOLD and cannot write files.
+Variant 4 measured by the ULIP2 Block Reviewer the same day. Filed as ONE entry at his request.
+
+**Filed whole on purpose. Split into four rows, each looks like a small thing. Together they
+are the shape that currently produces this project's silent failures.**
+
+The shape: **something is in force in the system, and the system cannot answer where it came
+from or why it holds.**
+
+```
+1  protocol written, the live path does not read it     wrong today
+2  fingerprint written, no consumer                     wrong today
+3  artifact exists, author unknown                      missing today
+4  property holds, nothing enforces it                  CORRECT today   ← the dangerous one
+```
+
+**Variant 4 is the dangerous one, and the reason is INTEGRATOR's: the first three are a defect
+when a reviewer looks at them. The fourth is a correct piece of code when a reviewer looks at
+it — because it is correct.**
+
+### The instance, 2026-08-30
+
+`metafind/eval/run_retrieval.py`, `score_streaming`. Collapsed gallery, d=1280, L2-normalised:
+
+```
+float32   tie_count moved with `block` in 6 of 6 trials, ng = 999 / 4,569 / 9,138
+float64   0 of 6 at every size
+```
+
+`block` is a performance parameter. `tie_count` is the diagnostic added to detect collapse.
+
+Every number it produced was right. It passed its tests. It passed Codex R5 APPROVED. It was
+right because `encode_pools` happens to return float64, and nothing in the function required
+that. **No tool distinguishes "correct because guaranteed" from "correct because lucky."**
+
+It was not a bug waiting to be found. It was a correctness waiting for its caller to change.
+
+Guard and two named tests landed in `169b0cb`. **The guard will not fire once today.** That is
+why nobody would have added it, and why it is recorded here.
+
+### Ruling on the R2 MAJOR
+
+**NOT CLOSED by Codex R5.** R5 approved the behaviour as it stands; the reviewer's objection is
+that the block-independence was closed by float64 rather than by structure. With `169b0cb` the
+structure now enforces it. **The entry closes on the guard, not on the approval.**
+
+### The third instance today of the same sub-shape
+
+A property left to the caller to maintain instead of enforced by the callee:
+
+```
+ARM_EXCLUDED          declared fields it did not contain
+ENFORCED_SINGLETONS   checked a merged dict, so the encoding half was never looked at
+score_streaming       needed float64 and did not say so
+```
+
+**A guard is the difference between "nobody calls it that way" and "it cannot be called that way."**
+
+### Related, and NOT resolved by this entry
+
+`workflow/FINDINGS_20260827_CAPTURE.md` §3 seam 1 is INTEGRATOR's, is marked UNVERIFIED there,
+and two things about it are now established:
+
+```
+OBSERVED 2026-08-30, MASTER:
+  scene_splits.py:102 DOES read cache["llm_model"] and cache["text_encoder_version"].
+  Seam 1's "those fields are not read by anything" is too broad. stage2.py:303-327 does
+  not read them; another consumer does.
+
+OBSERVED 2026-08-30, MASTER:
+  find . -name "*protocol*.json"  returns nothing.
+  No protocol JSON exists in this tree under any name. Both the old wording
+  ("fingerprint written, not wired") and the newer one ("the protocol has no such key")
+  describe a file this repository does not currently contain.
+```
+
+**UNRESOLVED. Not rewritten in place, because neither wording has been established and a
+correction that is itself unverified is the failure it claims to fix.** A note carrying these
+two observations has been appended to §3.
+
+### Process fact, recorded not blamed
+
+Codex wrote seven product files directly at 02:17:50 / 02:19:31 / 02:20:34 on 2026-08-30.
+The engineer and the reviewer both learned of it by seeing files change, and each spent a round
+establishing authorship; the reviewer's first attribution was wrong and he corrected it.
+**Suggested: when Codex edits product code itself, a notice ahead of the ruling.**
+

@@ -159,6 +159,23 @@ README 啟動指令  :75 --model tfn --nf 32 · :81 --model se3_transformer --nf
           （前任 MASTER 的觀察，對 INTEGRATOR 自己也是 UNVERIFIED）
 ```
 
+> **⚠ 2026-08-30 MASTER 附註（原文一字未改，這是加註不是改寫）**
+>
+> 接縫 1 有兩點已經可以觀察到，兩點都讓原措辭站不住：
+>
+> ```
+> OBSERVED  scene_splits.py:102 確實讀了 cache["llm_model"] 與 cache["text_encoder_version"]
+>           所以「那些欄位一個都沒讀」太寬。stage2.py:303-327 沒讀，但別的消費者讀了。
+>
+> OBSERVED  find . -name "*protocol*.json"  在本樹回傳空
+>           不論舊措辭「指紋寫了沒接線」或新措辭「協定裡根本沒有那個 key」，
+>           講的都是一個這個 repo 目前不存在的檔案。
+> ```
+>
+> **UNRESOLVED。沒有就地改寫，因為兩種措辭都還沒被確立，
+> 而一個自己都沒查證的更正，正是它宣稱要修的那個錯。**
+> 完整脈絡見 `workflow/DECISION_LEDGER.md` 的 `DL-035`。
+
 **接縫 3 與 4 最值得優先驗**：它們讓「設定寫了但不生效」，
 正是 Rule 5「不得用檔名／變數名／schema 推論執行期行為」要防的那一類。
 
