@@ -19,6 +19,7 @@ resume from without a record of what finished.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -30,13 +31,17 @@ from typing import Any
 
 from metafind import paths
 
-__all__ = ["code_dirty", "code_revision", "cost_ledger", "quarantine",
+__all__ = ["code_dirty", "code_revision", "cost_ledger",
+           "quarantine", "runtime_source_sha256", "runtime_source_status",
            "run_id", "run_progress"]
 
 
 _REVISION: str | None = None
 _DIRTY: bool | None = None
 _RUN_ID: str | None = None
+_UNAVAILABLE = object()   # sentinel: tried, failed. Never a digest.
+_SOURCE_SHA: object | None = None
+_RUN_CONTEXT: dict[str, Any] = {}
 
 
 def code_revision() -> str:
@@ -98,6 +103,87 @@ def code_dirty() -> bool | None:
         except Exception:  # noqa: BLE001 -- provenance is best-effort, never fatal
             _DIRTY = None
     return _DIRTY
+
+
+def runtime_source_sha256(root: Path | None = None) -> str | None:
+    """One digest over the source that actually decides what this run produces.
+
+    [ULIP2 REVIEWER R-33 + CODEX 2026-08-30] Replaces a first attempt that
+    hashed `git diff HEAD` plus untracked `*.py` under the package. Codex named
+    the defect precisely: that mixture was neither a worktree forensic patch nor
+    a runtime program identity. Its tracked half swept in documentation and test
+    edits from the whole repository, while its untracked half admitted only
+    package Python -- so the same digest answered two different questions, badly.
+
+    The question worth answering is the second one, because it is the one that
+    was got wrong on real data: `e25_400w` and `e25_500w` shared revision
+    `3f6fdde` and `code_dirty=true`, were reported as a clean repeat, and their
+    0.00123 spread was quoted as the noise floor. Their checkpoint records do
+    not even carry the same FIELDS, so the program had changed between them.
+    That noise floor is withdrawn.
+
+    So: every existing `*.py` under one explicit root, hashed as
+    `path\0length\0content` -- the framing is not decoration, without it a
+    rename that shifts bytes between two files leaves the digest unchanged.
+    Tracked and untracked cross the same boundary, and git is not consulted at
+    all: what ran is what is on disk, and a file's tracking status has never
+    changed what Python imported.
+
+    Snapshotted at first call, which `main` makes before training. A long run
+    whose worktree is edited at hour two must still report the program it
+    started with -- the previous version first resolved this at the end of epoch
+    one, which is a different claim than the one the field makes.
+
+    Not a substitute for `code_revision`: this says WHAT ran, that says which
+    published commit it is nearest. Both are recorded.
+    """
+    global _SOURCE_SHA
+    if _SOURCE_SHA is None:
+        try:
+            base = root or (paths.REPO / "metafind")
+            files = [] if not base.is_dir() else [
+                f for f in sorted(base.rglob("*.py"))
+                if "__pycache__" not in f.parts]
+            # [CODEX MINOR 2026-08-30] `rglob` on a missing directory returns an
+            # EMPTY iterator, not an error, so the old code hashed nothing and
+            # returned e3b0c442... -- sha256 of the empty string. A perfectly
+            # valid-looking digest meaning "there was no source here at all",
+            # which every reader would have compared as if it identified a
+            # program. Zero files is a failure, and it has to say so.
+            if not files:
+                raise FileNotFoundError(f"no *.py under {base}")
+            h = hashlib.sha256()
+            for f in files:
+                b = f.read_bytes()
+                h.update(str(f.relative_to(base)).encode())
+                h.update(b"\0")
+                h.update(str(len(b)).encode())
+                h.update(b"\0")
+                h.update(b)
+            _SOURCE_SHA = h.hexdigest()
+        except Exception:  # noqa: BLE001 -- provenance is best-effort, never fatal
+            # [ULIP2 REVIEWER 2026-08-30] Cached, not returned bare: a bare
+            # `return None` left `_SOURCE_SHA` unset, so a later call recomputed
+            # against a worktree that may have been edited since. The docstring
+            # promises a snapshot at first call; a retry is a different promise.
+            #
+            # [CODEX MINOR 2026-08-30] The sentinel is NOT a hash-shaped string.
+            # `"unavailable"` sat in a field named `..._sha256`, where anything
+            # that reads digests as opaque strings would compare it, index it,
+            # or print it as one. `None` cannot be mistaken for a digest, and
+            # `runtime_source_status` says why it is absent.
+            _SOURCE_SHA = _UNAVAILABLE
+    return None if _SOURCE_SHA is _UNAVAILABLE else _SOURCE_SHA
+
+
+def runtime_source_status(root: Path | None = None) -> str:
+    """`ok` if the source snapshot was taken, `unavailable` if it could not be.
+
+    Distinct from `runtime_source_sha256() is None` only in being explicit: a
+    null digest with no status reads as "nobody tried".
+    """
+    runtime_source_sha256(root)
+    return "unavailable" if _SOURCE_SHA is _UNAVAILABLE else "ok"
 
 
 def run_id() -> str:
@@ -221,6 +307,11 @@ def _stdout_writable() -> bool:
         return False
 
 
+def set_run_context(**fields: Any) -> None:
+    """Fields every subsequent metrics row carries. Called once, by the trainer."""
+    _RUN_CONTEXT.update(fields)
+
+
 def train_metrics(run: str, **fields: Any) -> None:
     """One row per logged training step, for plotting afterwards.
 
@@ -239,7 +330,14 @@ def train_metrics(run: str, **fields: Any) -> None:
     _append(paths.LOGS / f"train_{run}.jsonl",
             {"ts": time.time(), "run_id": run_id(),
              "code_revision": code_revision(), "code_dirty": code_dirty(),
-             **fields})
+             "runtime_source_sha256": runtime_source_sha256(),
+             "runtime_source_status": runtime_source_status(),
+             # [CODEX 2026-08-30] Stamped from run context, not passed per call
+             # site: a loss curve that cannot say which arm and which seed
+             # produced it is unusable for the paired-difference analysis the
+             # stopping rule is built on, and joining it to a checkpoint record
+             # first is a step a reader running `tail` will not take.
+             **_RUN_CONTEXT, **fields})
 
 
 def cost_ledger(**resources: float) -> None:

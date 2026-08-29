@@ -2870,3 +2870,104 @@ instead of compositing made n05 and n06 see different pixels on every anti-alias
 **A suspicion killed before sending:** `image_ids.get(uid)` returning `None` for a candidate
 absent from `renders` would disable the check — but `main:922-926` returns 2 on any such
 candidate first. Traced before reporting; it does not hold through `main`.
+
+---
+
+## R-33 · Kyzen `✅` 2026-08-29 — 三項設計批准（逐字紀錄）
+
+**Kyzen 原話：`✅`**
+
+打在 ULIP2 Block Reviewer (`metafindv1-16 [869408]`) 視窗，回覆的是我提出的三項、
+編號一二三的設計問題。依 2026-08-24 修訂，本 `✅` 可由我帶著範圍轉達。
+
+### COVERS
+
+**1 · Provenance schema.** 三層語義取代工程師原提的 `base config_hash + lr_override`：
+```
+base_hyperparameter_sha256   未修改 artifact 的來源
+arm_config_hash              合併後 canonical effective values 的雜湊 = 實驗身分
+run record                   run_id / seed / repeat_index / dirty_patch_sha256 /
+                             pools_sha256 / initial+output checkpoint sha / 硬體精度
+```
+- hash 合併後的 effective values，**不 hash override patch**；
+  「沒有 override」與「override 成同值」必須得到同一個 arm hash。
+- LR / epochs / lr_horizon / batch / p_mask / temperature / train_scope 進 arm hash。
+- **seed 不進 arm hash**，進 run record。
+- checkpoint 存 resolved values，不能只存 hash。
+- 名稱用 `arm_config_hash`，**不用** `effective_config_hash`。
+
+**2 · Sweep 配置.** `4 個 LR × 2 個相同 seed = 8 runs`，同一組 seed 配對每個 arm，
+執行順序隨機化。單 seed 僅作 NaN / 發散 / OOM smoke，**不作統計淘汰**。
+仍分不開的相鄰 arm 再加 seed。取代我原提的「區域搜尋」與 Codex 原提的
+「1 seed 取前兩名」。
+
+**3 · Selector 變更.** LR sweep 的 primary development selector 改為
+`mean R@1 of {text, image, pc}`。七格平均與每格數字繼續完整報告，作 guardrail。
+理由：七格中 text+image / text+pc / image+pc / full 在每個 checkpoint 都 >= 0.98，
+四格飽和使七格平均失去解析力；且論文只報七格，`mean_R@1` 本就是專案選擇。
+
+### DOES NOT COVER
+
+- **不是執行授權。** 8 次 LR sweep、n15、協定 A/B 都未獲准執行，各需新的 `✅`。
+- **不含 n15 實作範圍本身**（未列入這三項）。
+- **不含 `δ`（值得追求的最小改善）的數值。** Codex 明確要求 `δ` 事先宣告且
+  不得由雜訊導出；本 `✅` 未涵蓋它，仍待 Kyzen 決定。
+- **不解除 DL-028。** `--lr` / `--seed` / `--out-dir` / `dirty_patch_sha256` /
+  n15 都是新程式碼，寫完仍須 Codex 審核。
+- 不含 `reported: true` → `reportable` 的更名（我提出，未列入三項表決）。
+
+### 同一輪的兩項撤回（我自己的錯，非 Kyzen 裁決）
+
+- **「兩個 e25 是乾淨重複、雜訊底線 0.00123」作廢。** 兩者 `code_dirty: true` 而無
+  patch hash；checkpoint 欄位集合不同（`e25_400w` 缺 `preload`/`num_workers`，
+  `e25_500w` 有），證明工作樹在兩次之間改過。連帶撤回「階梯訊號是雜訊的 8 倍」。
+- **「full=1.0000 成因已確立」降級為 `INFERENCE`。** 機制（0.7^3 = 34.3% 兩塔同輸入）
+  成立且經工程師獨立複驗，但不足以證明是唯一成因。需負控制：初始化 checkpoint 的
+  full 分數、打亂 target mapping 應掉至 chance、或排除目標後檢索。
+
+### Codex 提出、雙方先前均未察覺
+
+**協定 A 與 B 使用 sealed test split，絕對不可用於 LR sweep。**
+sweep 只能用協定 C 或另一個明確的 train-internal development protocol。
+應寫成 n15 的硬性檢查，不只寫在文件。
+
+---
+
+## R-34 · `PASS` — `--lr` / `--seed` / `--out-dir` / arm identity / provenance 批次
+
+**2026-08-30. ULIP2 Block Reviewer `metafindv1-16 [869408]`.**
+第一輪我開 `CHANGES REQUIRED`（兩個 MAJOR、一個 MINOR）；第二輪全部修畢。
+
+### 我自己驗過的（讀碼與執行，不核對工程師敘述）
+
+- `ARM_EXCLUDED = ("seed", "preload", "num_workers", "device", "max_epochs")` — `stage1.py:709`。
+- `runlog.py` except 路徑改為 `_SOURCE_SHA = "unavailable"`，快照承諾成立。
+- **兩個具名測試不是 could-not-fail。** 我在記憶體中把 `ARM_EXCLUDED` 還原成 `("seed",)`
+  再跑同一組斷言：
+  ```
+  as shipped           max_epochs=PASS  preload=PASS  num_workers=PASS  device=PASS
+  reverted to (seed,)  max_epochs=FAIL  preload=FAIL  num_workers=FAIL  device=FAIL
+  ```
+  四項全部翻轉，測試確實鑑別得出這個缺陷。`_values(**over)` 用 `{**v, **over}`，
+  未知 key 真的會進 dict，所以斷言走的是真正的排除路徑。
+- `--lr` / `--seed` 在 `:1059-1061` 合併進 `values`，`arm_config_hash` 在 `:1245` 才呼叫 —— 順序正確。
+- out-dir fail-closed 在 `if out_dir is not None:` 之外，**省略旗標同樣受保護**。
+- production `init_temperature 0.5` / `learnable_temperature false`，與論文一致；
+  測試輸出的 `0.07 learnable` 警告來自 fixture，非 production。
+- δ 文件三處修正到位，且原句以 `Corrected 2026-08-30` 保留而非抹除。
+- 我跑的子集：`test_run_identity / test_lr_horizon / test_train_stage1 / test_preload /
+  test_eval_retrieval / test_splits` → **166 passed, 1 skipped**。
+
+### PASS COVERS
+
+本批程式碼：run paths、arm identity、provenance schema、`--lr` / `--seed` / `--out-dir`、
+`runtime_source_sha256`、lr 與 epochs 護欄，以及 δ 證據文件。
+
+### PASS DOES NOT COVER
+
+- **不是執行授權。** LR sweep、n15、協定 A/B 皆未獲准執行，各需 Kyzen 新的 `✅`。
+- **未驗證工程師報的 `799 passed`** — 全套會開 Blender 打 GPU，我不跑。我驗的是涵蓋本批的子集。
+- **端到端「`--lr`/`--seed` 真的寫進 checkpoint record」未測** — 需一次真實訓練。
+- **downstream 消費 run-specific checkpoint 未測** — 需 n11。
+- **n15 範圍未批；「協定 A/B 絕不可用於 sweep」的硬性檢查不在本批。**
+- **DL-028 未解除：仍待 Codex R2。**

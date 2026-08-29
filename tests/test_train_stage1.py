@@ -862,13 +862,26 @@ def test_a_smoke_run_cannot_overwrite_the_canonical_best_checkpoint():
     started after a multi-hour development run would replace the selected
     checkpoint with one chosen over a 200-asset gallery -- same name, same
     shape, no signal."""
-    from metafind.train.stage1 import BEST_CKPT_PATH, best_paths
+    # `best_paths` was replaced by `resolve_run_paths` on 2026-08-30 (CODEX
+    # BLOCKER: the destination had to become a frozen object, and the fixed
+    # filenames had to fail closed). The INVARIANT is unchanged and is what this
+    # test protects, so it follows the function rather than being deleted.
+    from metafind.train.stage1 import BEST_CKPT_PATH, resolve_run_paths
 
-    full_ckpt, full_rec = best_paths(_Args())
-    smoke_ckpt, smoke_rec = best_paths(_Args(limit=200))
-    assert full_ckpt == BEST_CKPT_PATH
-    assert smoke_ckpt != full_ckpt and smoke_rec != full_rec
-    assert "200" in smoke_ckpt.name, "the smoke path should say what it was limited to"
+    full = resolve_run_paths(None, overwrite=True)
+    smoke = resolve_run_paths(None, limit=200, overwrite=True)
+    for rp in (full, smoke):
+        # Release the live-run flock and remove what claiming left behind: this
+        # is the real checkpoint directory, and a stray reservation there would
+        # read as the record of a run that never happened.
+        rp.release()
+        rp.reservation.unlink(missing_ok=True)
+        rp.lock.unlink(missing_ok=True)
+    assert full.best_checkpoint == BEST_CKPT_PATH
+    assert full.best_checkpoint != smoke.best_checkpoint
+    assert full.best_record != smoke.best_record
+    assert "200" in smoke.best_checkpoint.name, (
+        "the smoke path should say what it was limited to")
 
 
 def test_the_dev_phase_refuses_overlapping_pools():

@@ -60,11 +60,39 @@ PROMOTED_PATH = paths.OUTPUTS / "gallery_index.json"
 STAGE2_PATH = paths.OUTPUTS / "stage2_gallery_index.json"
 
 
-def load_checkpoint_record() -> dict:
-    path = paths.CHECKPOINTS / "stage1_ckpt.json"
+def load_checkpoint_record(record_path: str | Path | None = None) -> dict:
+    """Which Stage 1 checkpoint this index is built from.
+
+    [CODEX MAJOR 2026-08-30] Was a fixed `paths.CHECKPOINTS / "stage1_ckpt.json"`.
+    Stage 1 gained `--out-dir` so a sweep's arms stop overwriting each other, and
+    with the path fixed here, a run-specific checkpoint could reach downstream
+    only by being copied back over the canonical name -- which destroys the
+    provenance the out-dir was added to create.
+
+    The default is unchanged, so every existing command keeps working; naming
+    the record is how a sweep's selected arm is promoted without a copy.
+    """
+    path = Path(record_path) if record_path else paths.CHECKPOINTS / "stage1_ckpt.json"
     if not path.exists():
         raise FileNotFoundError(f"{path} not found -- run n10_train_stage1 first")
-    return json.loads(path.read_text())
+    record = json.loads(path.read_text())
+    # [CODEX MAJOR 2026-08-30] The record is a CLAIM about a file, and until now
+    # nothing checked it. Codex demonstrated the consequence: a record naming
+    # checkpoint A's provenance can be pointed at checkpoint B's bytes and every
+    # downstream artifact inherits the wrong identity, silently. `--out-dir`
+    # makes several checkpoints exist at once, so this stops being theoretical.
+    weights = Path(record["uri"])
+    if not weights.exists():
+        raise FileNotFoundError(
+            f"{path} names {weights}, which does not exist. The record and its "
+            "weights have been separated.")
+    actual = hashlib.sha256(weights.read_bytes()).hexdigest()
+    if actual != record["sha256"]:
+        raise ValueError(
+            f"{path} records sha256 {record['sha256'][:16]}... but {weights} "
+            f"hashes to {actual[:16]}.... Refusing: an index built from these "
+            "bytes would carry the other checkpoint's provenance.")
+    return record
 
 
 def gallery_encoder_sha256(backbone, model) -> str:
@@ -162,6 +190,11 @@ def main() -> int:
     ap.add_argument("mode", choices=("stage1", "promote", "stage2"))
     ap.add_argument("--limit", type=int)
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--stage1-ckpt-record", default=None,
+                    help="Stage 1 checkpoint record to build from. Defaults to "
+                         "the canonical stage1_ckpt.json; name a run's own "
+                         "record to promote a sweep arm without copying it "
+                         "over the canonical file.")
     ap.add_argument("--gate-passed", action="store_true",
                     help="promote only: assert G4_gallery_freeze returned PASS")
     args = ap.parse_args()
@@ -176,7 +209,7 @@ def main() -> int:
         BackboneConfig, ULIPBackbone, prepare_depth_shell)
 
     encoding, training, hyperparameters = load_protocols()
-    ckpt_record = load_checkpoint_record()
+    ckpt_record = load_checkpoint_record(args.stage1_ckpt_record)
 
     # train_scope="point_encoder_and_fuser", NOT "fuser_only": the scope decides
     # which parameters carry requires_grad, and load_stage1_checkpoint checks the
@@ -236,6 +269,12 @@ def main() -> int:
                 np.stack(vectors), ids,
                 paths.OUTPUTS / f"gallery_index_{ckpt_record['sha256'][:16]}.npz")
             record["gallery_encoder_sha256"] = encoder_sha
+            # [CODEX MAJOR 2026-08-30] Stated in the record, not only in the
+            # dict key: Stage 2 reads the record, and a key is not a field.
+            record["stage1_checkpoint_sha256"] = ckpt_record["sha256"]
+            record["stage1_ckpt_record"] = str(
+                args.stage1_ckpt_record
+                or paths.CHECKPOINTS / "stage1_ckpt.json")
             _write(STAGING_PATH, {ckpt_record["sha256"]: record})
             print(f"\nstaged {record['count']:,} x {record['dim']} "
                   f"-> {STAGING_PATH}")
@@ -295,6 +334,10 @@ def main() -> int:
                     "complete": len(ids),
                     "excluded_no_pointcloud": excluded,
                 },
+                # [CODEX MAJOR 2026-08-30] Stage 2's [G6] comment claimed the
+                # index and the checkpoint were compared. Nothing compared them,
+                # because the index never said which checkpoint made it.
+                "stage1_checkpoint_sha256": ckpt_record["sha256"],
             })
             _write(STAGE2_PATH, record)
             print(f"\nstage2 index: {record['n_assets']:,} assets, "

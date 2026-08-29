@@ -526,6 +526,9 @@ def main() -> int:
     ap.add_argument("--epochs", type=int)
     ap.add_argument("--limit-houses", type=int)
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--stage1-ckpt-record", default=None,
+                    help="Stage 1 checkpoint record to initialise from. "
+                         "Defaults to the canonical stage1_ckpt.json.")
     args = ap.parse_args()
 
     import torch
@@ -548,11 +551,59 @@ def main() -> int:
 
     positive_map = json.loads((paths.OUTPUTS / "stage2_positive_map.json").read_text())
     index_record = json.loads((paths.OUTPUTS / "stage2_gallery_index.json").read_text())
-    ckpt = json.loads((paths.CHECKPOINTS / "stage1_ckpt.json").read_text())
+    # [CODEX MAJOR 2026-08-30] See gallery_index.load_checkpoint_record: a
+    # run-specific Stage 1 checkpoint must be able to reach Stage 2 without
+    # being copied over the canonical name.
+    ckpt = json.loads(Path(getattr(args, "stage1_ckpt_record", None)
+                           or paths.CHECKPOINTS / "stage1_ckpt.json").read_text())
 
     # [G6] The index must come from the checkpoint this run loads. Comparing
     # here as well as at the gate: a gate verdict is a record of the past, and
     # the index can be rebuilt between the verdict and the run.
+    #
+    # [CODEX MAJOR 2026-08-30] The comment above stood for weeks over no
+    # comparison at all -- the index carried no statement of which checkpoint
+    # produced it, so there was nothing to compare. Both halves now exist.
+    built_from = index_record.get("stage1_checkpoint_sha256")
+    if built_from is None:
+        raise ValueError(
+            f"{paths.OUTPUTS / 'stage2_gallery_index.json'} predates "
+            "`stage1_checkpoint_sha256` and cannot say which checkpoint built "
+            "it. Rebuild the index (n11) before running Stage 2.")
+    if built_from != ckpt["sha256"]:
+        raise ValueError(
+            f"the gallery index was built from checkpoint {built_from[:16]}... "
+            f"but this run loads {ckpt['sha256'][:16]}.... Queries and gallery "
+            "would come from different encoders. Rebuild the index.")
+    weights = Path(ckpt["uri"])
+    actual = hashlib.sha256(weights.read_bytes()).hexdigest()
+    if actual != ckpt["sha256"]:
+        raise ValueError(
+            f"{weights} hashes to {actual[:16]}... but its record claims "
+            f"{ckpt['sha256'][:16]}.... Record and weights have diverged.")
+
+    # [CODEX MAJOR 2026-08-30] `build_index` has always recorded the `.npz`'s
+    # sha256 and nothing ever read it. An index overwritten or truncated after
+    # the record was written still loaded, while the record went on claiming the
+    # old digest AND the producer checkpoint -- so the linkage check above would
+    # pass over bytes neither of them describes.
+    index_path = Path(index_record["uri"])
+    if not index_path.exists():
+        raise FileNotFoundError(
+            f"the gallery index record names {index_path}, which does not "
+            "exist. Rebuild the index (n11).")
+    index_sha = index_record.get("sha256")
+    if index_sha is None:
+        raise ValueError(
+            f"{index_path}'s record carries no sha256 and cannot be verified. "
+            "Rebuild the index (n11).")
+    actual_index = hashlib.sha256(index_path.read_bytes()).hexdigest()
+    if actual_index != index_sha:
+        raise ValueError(
+            f"{index_path} hashes to {actual_index[:16]}... but its record "
+            f"claims {index_sha[:16]}.... The index has changed since it was "
+            "recorded; rebuild it.")
+
     gallery_index = np.load(index_record["uri"])
     id_to_row = {a: i for i, a in enumerate(gallery_index["ids"].tolist())}
     gallery_vecs = torch.from_numpy(gallery_index["embeddings"]).to(args.device)

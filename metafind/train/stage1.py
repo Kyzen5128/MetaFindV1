@@ -36,18 +36,24 @@ so the claim is checkable.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import contextlib
+import fcntl
 import json
+import math
 import os
 import random
 import time
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
 import shutil
+import sys
 
 from metafind import paths, runlog
+from metafind.models.stage1_config import UnsupportedProtocol
 
 # Before torch or open_clip: HF_HOME is read at import time and ViT-bigG-14 is
 # 9.5 GB.
@@ -62,6 +68,10 @@ from metafind.models.stage1_config import (  # noqa: E402
 
 NODE = "n10_train_stage1"
 TRAINER_VERSION = 2   # v2 saves backbone + tower + loss; v1 dropped the point encoder
+
+# Open lock file descriptors, kept referenced so the flock survives. Closing
+# an fd releases the lock, and nothing else holds these.
+_HELD_LOCKS: list[int] = []
 
 CKPT_PATH = paths.CHECKPOINTS / "stage1.pt"
 CKPT_RECORD = paths.CHECKPOINTS / "stage1_ckpt.json"
@@ -195,7 +205,8 @@ class Stage1Dataset:
     value now does what its name says instead of being silently ignored.
     """
 
-    def __init__(self, uids: list[str], aggregation: str) -> None:
+    def __init__(self, uids: list[str], aggregation: str,
+                 preload: bool = False) -> None:
         if aggregation not in PRECOMPUTABLE_AGGREGATIONS + PER_VIEW_AGGREGATIONS:
             raise ValueError(
                 f"unknown image_aggregation {aggregation!r}; "
@@ -203,12 +214,78 @@ class Stage1Dataset:
         self.uids = uids
         self.aggregation = aggregation
         self.per_view = aggregation in PER_VIEW_AGGREGATIONS
+        self.cache: dict[str, dict] | None = None
+        if preload:
+            self._preload()
+
+    def _preload(self) -> None:
+        """Read every asset once, up front, and keep it in RAM.
+
+        [KYZEN 2026-08-29] Not an optimisation -- a hypothesis about why this
+        machine hard-resets. It survived four DAYS of VLM annotation and 45,692
+        encodes, then died within twenty minutes of the first training run, and
+        has now done so eight times. The difference is not average power:
+        measured, annotation and training both sit near 550 W. It is that
+        training opens 128 compressed files, decompresses them, and allocates
+        and frees their buffers EVERY step -- ~240 file opens a second across
+        four worker processes -- so the GPU alternates between waiting on I/O
+        and running flat out twice a second, and the memory allocator never
+        settles. Inference does neither.
+
+        Preloading removes all of it: no per-step open, no decompress, no
+        allocation churn, and `num_workers` drops to 0 so the worker processes
+        stop existing. Whether that stops the resets is the experiment; it is
+        not assumed.
+
+        The DATA IS IDENTICAL -- same arrays, same dtypes, read from the same
+        files -- so this cannot change a result. Only where the bytes are when
+        the step asks for them.
+
+        Cost: ~8.8 GB for the 31,985-asset dev pool (measured: 35 KB of
+        embedding + 234 KB of cloud per asset, unpacked) against 52 GB free,
+        and two to three minutes at the start.
+        """
+        import sys
+        n = len(self.uids)
+        print(f"preloading {n:,} assets into RAM "
+              f"(no per-step file I/O, no dataloader workers)", flush=True)
+        self.cache = {}
+        for k, uid in enumerate(self.uids):
+            cached = np.load(paths.EMBEDDINGS / f"{uid}.npz")
+            cloud = np.load(paths.POINTCLOUDS / f"{uid}.npz")
+            entry = {"text": cached["text"].astype(np.float32),
+                     "image": cached["image"].astype(np.float32)}
+            if self.per_view:
+                # Only kept under per-view sampling: `views` is 12x the size of
+                # the pooled vector, and under `mean` nothing ever reads it.
+                entry["views"] = cached["views"]
+            xyz = cloud["xyz"].astype(np.float32)
+            rgb = cloud["rgb"].astype(np.float32) if "rgb" in cloud else None
+            entry["pc"] = xyz if rgb is None else np.concatenate([xyz, rgb], axis=1)
+            self.cache[uid] = entry
+            if (k + 1) % 5000 == 0:
+                print(f"  {k + 1:,}/{n:,}", flush=True)
+        gb = sum(a.nbytes for e in self.cache.values() for a in e.values()) / 1e9
+        print(f"preloaded {n:,} assets, {gb:.1f} GB resident", flush=True)
 
     def __len__(self) -> int:
         return len(self.uids)
 
     def __getitem__(self, i: int) -> dict:
         uid = self.uids[i]
+        if self.cache is not None:
+            e = self.cache[uid]
+            if self.per_view:
+                v = e["views"]
+                image = v[random.randrange(v.shape[0])]
+            else:
+                image = e["image"]
+            # Copies, not views: the collate stacks these and torch would
+            # otherwise alias the cache. A training step that wrote through one
+            # of these would corrupt the asset for every later epoch, silently.
+            return {"uid": uid, "text": e["text"].copy(),
+                    "image": np.asarray(image, dtype=np.float32).copy(),
+                    "pc": e["pc"].copy()}
         cached = np.load(paths.EMBEDDINGS / f"{uid}.npz")
         cloud = np.load(paths.POINTCLOUDS / f"{uid}.npz")
         xyz = cloud["xyz"].astype(np.float32)
@@ -404,24 +481,178 @@ def modules_in_eval(*modules):
             m.training = was_training
 
 
-def best_paths(args) -> tuple[Path, Path]:
-    """[Codex 2026-08-28] A `--limit` run does NOT write the canonical name.
+@dataclass(frozen=True)
+class Stage1RunPaths:
+    """Where ONE run writes. Frozen, so nothing can move it after training starts.
 
-    `chain_to_stage1.sh` runs Stage 1 as a 200-asset smoke, and the smoke went
-    through the same dev-val selection and the same `stage1_best.pt`. So a smoke
-    started after a real development run would silently replace the selected
-    checkpoint with one chosen from a 200-asset gallery, and the file would look
-    exactly the same. The suffix is not tidiness: it is the only thing that keeps
-    a 10-minute run from overwriting a multi-hour one.
+    [CODEX 2026-08-30, BLOCKER] Replaces module globals reassigned by an
+    `apply_out_dir` call. The globals worked, but Codex refused them as the
+    provenance seam and the reason holds: a mutable module-level destination is
+    reachable from anywhere, and the failure it guards against is precisely one
+    run's output landing where another run's belongs.
+
+    `smoke` carries the `--limit` suffix rule that `best_paths` used to own:
+    a 200-asset smoke must never write the canonical `stage1_best.pt`, because a
+    smoke started after a development run would replace a multi-hour selection
+    with one chosen over a 200-asset gallery and the file would look identical.
     """
-    if args.limit:
-        return (BEST_CKPT_PATH.with_suffix(f".smoke{args.limit}.pt"),
-                BEST_CKPT_RECORD.with_suffix(f".smoke{args.limit}.json"))
-    return BEST_CKPT_PATH, BEST_CKPT_RECORD
+    root: Path
+    latest_checkpoint: Path
+    latest_record: Path
+    best_checkpoint: Path
+    best_record: Path
+    reservation: Path
+    lock: Path
+    lock_fd: int = -1
+
+    def release(self) -> None:
+        """Drop the live-run lock. FOR TESTS AND SHORT TOOLS ONLY.
+
+        A training run must hold its lock until the process exits, which the
+        kernel does for it -- so production never calls this. A test process
+        runs many resolutions in one interpreter and would otherwise lock itself
+        out of the paths it just claimed.
+        """
+        if self.lock_fd >= 0:
+            with contextlib.suppress(OSError):
+                os.close(self.lock_fd)
+            if self.lock_fd in _HELD_LOCKS:
+                _HELD_LOCKS.remove(self.lock_fd)
+
+    def targets(self) -> tuple[Path, ...]:
+        return (self.latest_checkpoint, self.latest_record,
+                self.best_checkpoint, self.best_record)
+
+
+def resolve_run_paths(out_dir: str | None, limit: int | None = None,
+                      overwrite: bool = False) -> Stage1RunPaths:
+    """Decide this run's four destinations, and refuse to start on top of a run.
+
+    Three defects Codex confirmed in the first version, all of which survive a
+    passing test suite and only show up as a lost run:
+
+    * **`--out-dir` was optional and silent.** A sweep arm that forgot the flag
+      wrote the canonical names, and the arm before it was gone. There is no
+      flag discipline that fixes this; the guard has to be on the write.
+    * **`mkdir(exist_ok=True)` accepted an occupied directory.** Two arms given
+      the same name overwrote each other exactly as the shared canonical names
+      did, one directory further down.
+    * **Absolute paths and `..` escaped the checkpoint root.** A typo could
+      write outside the data tree entirely.
+
+    So: relative paths only, resolved under `paths.CHECKPOINTS` and re-checked
+    after resolution (`..` survives string inspection, it does not survive
+    `resolve()` plus `is_relative_to`), and FAIL CLOSED if any of the four
+    targets already exists. `--overwrite` is the deliberate way past it, which
+    is what `data/outputs/ladder/e5_RECOVERED/` needed and did not have: it
+    holds 8 KB of metrics and no weights because a later run reached
+    `stage1_best.pt` first, in silence.
+
+    The check is here, before the first batch, not at the first save -- an hour
+    of training that ends in a refusal to write is the same lost run.
+    """
+    root = paths.CHECKPOINTS
+    if out_dir is not None:
+        if Path(out_dir).is_absolute():
+            raise SystemExit(
+                f"--out-dir must be relative to {paths.CHECKPOINTS}; got an "
+                f"absolute path {out_dir!r}")
+        root = (paths.CHECKPOINTS / out_dir).resolve()
+        if not root.is_relative_to(paths.CHECKPOINTS.resolve()):
+            raise SystemExit(
+                f"--out-dir {out_dir!r} resolves to {root}, outside "
+                f"{paths.CHECKPOINTS}. Checkpoints do not leave the data root.")
+
+    suffix = f".smoke{limit}" if limit else ""
+    rp = Stage1RunPaths(
+        root=root,
+        latest_checkpoint=root / f"stage1{suffix}.pt",
+        latest_record=root / f"stage1{suffix}_ckpt.json",
+        best_checkpoint=root / f"stage1_best{suffix}.pt",
+        best_record=root / f"stage1_best{suffix}_ckpt.json",
+        reservation=root / f"stage1{suffix}_run.json",
+        lock=root / f"stage1{suffix}_run.lock")
+
+    if not overwrite:
+        if occupied := [t for t in rp.targets() if t.exists()]:
+            raise SystemExit(
+                "refusing to start: " + ", ".join(str(t) for t in occupied)
+                + " already exist(s). Give --out-dir a fresh name, or pass "
+                  "--overwrite if losing that run is intended.")
+    root.mkdir(parents=True, exist_ok=True)
+
+    # [CODEX 2026-08-30, BLOCKER 2] The existence check above is not a
+    # reservation. Codex demonstrated it: two processes both pass it -- nothing
+    # is written until the end of epoch one, minutes later -- and then share the
+    # same `.part` and the same final names. Checking is not claiming.
+    #
+    # `O_CREAT | O_EXCL` is the claim, and it is atomic in the kernel: exactly
+    # one of any number of simultaneous callers creates the file, the rest get
+    # FileExistsError. It also survives a crash, which the four-target check
+    # cannot: a run killed before its first save leaves no checkpoint at all, so
+    # the next run saw an empty directory and started on top of an attempt that
+    # may still have been alive. This machine hard-reset nine times on
+    # 2026-08-29, so that is not hypothetical here.
+    #
+    # Written at reservation time, before any training, so an interrupted
+    # attempt still says what it was.
+    # [CODEX MAJOR 2026-08-30] The previous attempt kept `O_EXCL` but let
+    # `--overwrite` unlink the reservation first -- so two --overwrite processes
+    # still both succeeded, which Codex demonstrated directly and my own test
+    # missed because its second call did not pass `overwrite=True`. A file whose
+    # existence is the lock cannot also be the thing `--overwrite` deletes.
+    #
+    # Two separate mechanisms now, because they answer two different questions:
+    #
+    #   stage1_run.lock   IS ANOTHER PROCESS RUNNING HERE RIGHT NOW?
+    #       `flock(LOCK_EX | LOCK_NB)`. Held for the life of the process and
+    #       released BY THE KERNEL when it dies -- including a hard reset, which
+    #       this machine did nine times on 2026-08-29. A crashed run therefore
+    #       does not block the retry, and `--overwrite` never touches it.
+    #
+    #   stage1_run.json   WHAT PRODUCED THE OUTPUTS ALREADY HERE?
+    #       provenance, and one of the outputs `--overwrite` may replace.
+    lock_fd = os.open(rp.lock, os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(lock_fd)
+        raise SystemExit(
+            f"refusing to start: another process holds {rp.lock}. It is "
+            f"training into this directory right now. Give --out-dir a fresh "
+            f"name. (--overwrite replaces an OLD run's outputs; it never joins "
+            f"a live one.)") from None
+    # Kept alive for the process lifetime. A closed fd releases the lock, and
+    # the fd is otherwise unreferenced the moment this function returns.
+    _HELD_LOCKS.append(lock_fd)
+    rp = replace(rp, lock_fd=lock_fd)
+
+    if overwrite:
+        rp.reservation.unlink(missing_ok=True)
+    try:
+        fd = os.open(rp.reservation,
+                     os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError:
+        raise SystemExit(
+            f"refusing to start: {rp.reservation} exists, so another run has "
+            f"claimed this directory (it may still be running, or it may have "
+            f"died before its first checkpoint). Give --out-dir a fresh name, "
+            f"or pass --overwrite if losing that run is intended.") from None
+    with os.fdopen(fd, "w") as fh:
+        json.dump({"run_id": runlog.run_id(), "argv": sys.argv[1:],
+                   "started_at": time.time(),
+                   "code_revision": runlog.code_revision()}, fh, indent=1)
+        fh.flush()
+        # fsync, because the claim's whole purpose is to survive a machine that
+        # hard-resets -- which this one did nine times on 2026-08-29. A claim
+        # sitting in the page cache when the power goes is not a claim.
+        os.fsync(fh.fileno())
+    return rp
 
 
 def save_best(record: dict, epoch: int, scores: dict, args,
-              train_uids: list, dev_val_uids: list) -> None:
+              train_uids: list, dev_val_uids: list,
+              rp: Stage1RunPaths) -> None:
     """Copy the epoch's checkpoint aside, atomically, with what selected it.
 
     Temp-and-rename for BOTH files, matching `save_checkpoint`. `copyfile`
@@ -434,12 +665,12 @@ def save_best(record: dict, epoch: int, scores: dict, args,
     was chosen over -- a number without its denominators is the U-09 problem
     again, one directory down.
     """
-    ckpt_path, record_path = best_paths(args)
+    ckpt_path, record_path = rp.best_checkpoint, rp.best_record
     digest = hashlib.sha256(
         json.dumps([sorted(train_uids), sorted(dev_val_uids)]).encode()).hexdigest()
 
     tmp_ckpt = ckpt_path.with_suffix(ckpt_path.suffix + ".part")
-    shutil.copyfile(CKPT_PATH, tmp_ckpt)
+    shutil.copyfile(rp.latest_checkpoint, tmp_ckpt)
     tmp_ckpt.replace(ckpt_path)
 
     payload = {**record, "uri": str(ckpt_path), "epoch": epoch,
@@ -480,6 +711,51 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
     Returns ``{}`` when there is nothing to evaluate, so a caller can tell
     "no dev-val" from "dev-val scored 0.0" -- an empty gallery silently scoring
     zero is how a selection metric starts choosing checkpoints at random.
+
+    **Scored in float64** [ULIP2 REVIEWER 2026-08-30, PASS]. Two reasons, one
+    measured here and one measured in `run_retrieval`:
+
+    * `run_retrieval` (n15) scores in float64 because at production shape the
+      collapse diagnostic `tie_count` moved with the caller's block size in
+      float32 (7-9 of 12 trials) and not at all in float64. Two evaluators with
+      different numerical semantics is the thing this project already refused
+      once, so this one follows.
+    * The obvious objection -- "then the ladder numbers become incomparable" --
+      was a guess, and it was measured and is **false, in the opposite
+      direction**. `tools/measure_dtype_effect.py`, 2026-08-30, encoding
+      dev_val's 4,569 assets ONCE with `ladder/e25_500w/stage1_best.pt` and
+      scoring the same embeddings twice::
+
+          condition     recorded run    rescored f32    rescored f64
+          text          0.713066316     0.713066316     0.713066316
+          image         0.945283432     0.945283432     0.945283432
+          pc            0.896476253     0.896476253     0.896476253
+          text+image    0.985335960     0.985335960     0.985335960
+          text+pc       0.996498140     0.996498140     0.996498140
+          image+pc      0.987743489     0.987962355     0.987743489
+          full          1.000000000     1.000000000     1.000000000
+          mean_R@1      0.932057656     0.932088922     0.932057656
+
+          bit-exact agreement with the recorded run:
+              float64  7/7 conditions        float32  6/7
+
+      **float64 reproduces the recorded run exactly; float32 rescored in numpy
+      does not**, differing by one query in 4,569 on `image+pc`. WHY the
+      original torch-float32 run agrees with numpy-float64 and not with
+      numpy-float32 has NOT been measured, and no mechanism is asserted here.
+
+    If a future dev_val score ever disagrees with an earlier value at the same
+    arm, this table is the first thing to re-read. The evidence is kept at
+    `output/look/dtype_effect.json`.
+
+    ⚠ Scope: one checkpoint, one split. It can find a disagreement; it cannot
+    prove the two dtypes agree for every model.
+
+    🎁 One thing this also settled, on the way past: `full` R@1 is
+    **1.000000000 in float64 as well**, bit-exact. "The 1.0000 is float32
+    rounding" is therefore **eliminated** -- the first candidate explanation for
+    that cell to be closed by measurement rather than argument. The rest still
+    need n15's negative controls.
     """
     import torch
     from torch.utils.data import DataLoader
@@ -517,7 +793,7 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
                 per_condition_q[cond].append(
                     model.query(embeds, present=mask).float().cpu())
 
-    g = torch.cat(gallery)
+    g = torch.cat(gallery).double()
     g = torch.nn.functional.normalize(g, dim=-1)
     # The loader is `shuffle=False` and `drop_last=False`, so row i of the query
     # stack and row i of the gallery stack are the same asset. That is what makes
@@ -526,7 +802,7 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
     targets = np.arange(g.size(0))
     out = {}
     for cond, chunks in per_condition_q.items():
-        q = torch.nn.functional.normalize(torch.cat(chunks), dim=-1)
+        q = torch.nn.functional.normalize(torch.cat(chunks).double(), dim=-1)
         sim = (q @ g.T).numpy()
         out[cond] = recall_at_k(sim, targets, ks=(1, 5))
     out["mean_R@1"] = float(np.mean([out[c]["R@1"] for c in QUERY_CONDITIONS]))
@@ -535,8 +811,352 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
     return out
 
 
+# Excluded from the arm on purpose, each for a different reason.
+#   seed        -- two seeds are REPEATS of one treatment [R-33]; folding it in
+#                  would make every repeat its own experiment and leave the
+#                  paired-difference analysis nothing to pair.
+#   preload,
+#   num_workers,
+#   device      -- [CODEX 2026-08-30] execution facts, not treatment. Under the
+#                  resolved `mean` aggregation nothing in `__getitem__` draws, so
+#                  the worker count cannot change what the model sees. THIS IS
+#                  CONDITIONAL: under `random_single_view` `random` is seeded per
+#                  worker and these become arm-effective. The assertion below
+#                  fails if that protocol is ever resolved, rather than letting
+#                  the exclusion quietly stop being true.
+#                  These three are named here even though nothing merges them
+#                  into `values` today: [ULIP2 REVIEWER 2026-08-30] the error
+#                  message below sends the reader to ARM_EXCLUDED, and this
+#                  batch established `values["learning_rate"] = args.lr` as the
+#                  way to fold a flag in. The next `values["preload"] =
+#                  args.preload` would enter every arm hash with nothing to stop
+#                  it. Absent keys are harmless; an untrue declaration is not.
+#   max_epochs  -- [ULIP2 REVIEWER 2026-08-30] the operator's approved CEILING,
+#                  not a treatment. `stage1.py:1187` only WARNS when a run
+#                  exceeds it and `resolve_stage1.py:304` states outright that
+#                  "no production code reads max_epochs". Raising it from 250 to
+#                  500 leaves training bit-identical -- and, while it sat in
+#                  `values`, changed every arm hash. That is the mirror of the
+#                  enumeration hole: under-inclusion gives two experiments one
+#                  identity, over-inclusion gives one experiment two, and the
+#                  second silently strips comparability from every arm already
+#                  run.
+ARM_EXCLUDED = ("seed", "preload", "num_workers", "device", "max_epochs")
+
+
+# The two protocol artifacts are hashed WHOLE, minus these. Same discipline as
+# ARM_EXCLUDED and for the same reason: an enumeration of what to include is a
+# list of what someone remembered, and `allow_all_masked` is what it forgot --
+# it reaches `sample_modality_mask` at stage1.py:1310 and decides whether an
+# all-masked query can occur, and two runs differing in it shared one arm hash.
+# [CODEX 2026-08-30, BLOCKER 1]
+TRAINING_EXCLUDED = (
+    "status", "decided_by", "decided_at",
+    # Recorded separately and verbatim as `base_hyperparameter_sha256`. Hashing
+    # it here too would make the arm change whenever the artifact's digest does,
+    # which is already covered and is not itself a treatment.
+    "hyperparameter_config_hash",
+)
+ENCODING_EXCLUDED = (
+    "status", "decided_by", "decided_at",
+    # Prose ABOUT the paper's claim, not about what this run does. Rewording the
+    # basis note would otherwise give one experiment a second identity -- the
+    # over-inclusion failure, which strips comparability from every arm already
+    # run. `actual_clip_train_scope` is what runs and IS hashed.
+    "paper_clip_train_scope", "paper_clip_train_scope_basis",
+    "paper_clip_train_scope_confidence",
+)
+
+# Fields the protocols DECLARE but the trainer does not branch on. Declaring a
+# value the code cannot honour is the failure Codex named: a run could set
+# `scheduler: linear`, change its arm hash, and still be annealed by
+# `cosine_schedule`. Refusing is the only way the declaration stays true.
+ENFORCED_SINGLETONS = {
+    "values": {
+        "optimizer": "adamw",   # torch.optim.AdamW is constructed unconditionally
+        "scheduler": "cosine",  # cosine_schedule() is called unconditionally
+    },
+    "training": {
+        "similarity": "cosine",  # normalize + matmul, no other branch exists
+        # [CODEX BLOCKER 2026-08-30] `stage1.py:1324` hardcodes
+        # `train_scope="point_encoder_and_fuser"` when it builds the backbone.
+        # The value was hashed into the arm and ignored by the trainer, so a
+        # protocol declaring `fuser_only` produced a checkpoint whose recorded
+        # recipe named an ablation the run did not perform. Table 3's
+        # "Train fuser only" row is a REAL ablation that this repository does
+        # not implement -- refusing says so; hashing it pretended otherwise.
+        "train_scope": "point_encoder_and_fuser",
+    },
+    "encoding": {
+        # [CODEX BLOCKER 2026-08-30] Stage 1 consumes text and image embeddings
+        # that were computed once, offline, by a FROZEN ViT-bigG-14 (n06). No
+        # value of this field can change that inside a Stage 1 run: the CLIP
+        # towers are never in the optimizer and the cached vectors are read from
+        # disk. `trainable` and `finetuned` were accepted and hashed.
+        "actual_clip_train_scope": "frozen",
+    },
+}
+
+
+def arm_config_hash(values: dict, training: dict, encoding: dict,
+                    phase: str) -> tuple[str, dict]:
+    """Identity of the EXPERIMENTAL CONDITION, and the resolved recipe behind it.
+
+    [R-33 ratified by Kyzen; corrected twice by CODEX, 2026-08-30] The first
+    version hashed eight enumerated fields. The second took `values` whole but
+    still enumerated what it pulled out of the two protocols, and Codex found
+    the field that enumeration had missed: `allow_all_masked`, which reaches
+    `sample_modality_mask` and decides whether an all-masked query is legal.
+    Two genuinely different maskings shared one arm hash.
+
+    So all three sources are now taken WHOLE and the exclusions are enumerated
+    instead, because those are the ones that need a stated reason. See
+    `ARM_EXCLUDED`, `TRAINING_EXCLUDED`, `ENCODING_EXCLUDED`.
+
+    Rules kept literally from R-33:
+
+    * **Hash the merged effective values, never the override patch.** No `--lr`
+      and `--lr 5e-4` train the same model and MUST hash equal.
+    * **`seed` is excluded**, and lives in the run record.
+
+    Returns the digest AND the dict it was taken over. A digest alone is
+    unreadable provenance; the checkpoint stores both.
+    """
+    if encoding["image_aggregation"] != "mean":
+        raise UnsupportedProtocol(
+            f"image_aggregation is {encoding['image_aggregation']!r}, not "
+            "'mean'. Under a per-view draw the dataloader worker count and "
+            "--preload change what the model sees, so they stop being "
+            "execution details and must enter the arm. See ARM_EXCLUDED.")
+    # [CODEX 2026-08-30] A declared value the trainer ignores is worse than an
+    # unrecorded one: the record asserts a recipe that did not run.
+    # Checked per SOURCE, not against a merged dict: `train_scope` lives in the
+    # training protocol and `actual_clip_train_scope` in the encoding protocol,
+    # and a merged lookup silently misses whichever source it did not include --
+    # which is how both of them stayed unchecked.
+    for source, fields in ENFORCED_SINGLETONS.items():
+        d = {"values": values, "training": training, "encoding": encoding}[source]
+        for field, only in fields.items():
+            got = d.get(field, only)
+            if got != only:
+                raise UnsupportedProtocol(
+                    f"{source}.{field} is {got!r}; this trainer implements "
+                    f"{only!r} only and does not branch on it. Running would "
+                    f"record a recipe that did not happen. Implement the branch "
+                    f"or correct the protocol.")
+
+    resolved = {k: v for k, v in values.items() if k not in ARM_EXCLUDED}
+    # Underscore-prefixed keys are THIS RUN's facts riding on the protocol dict
+    # (see main); they are run record, not treatment -- except the two lifted
+    # out explicitly below, which are command-line and belong to the arm.
+    resolved.update({f"training.{k}": v for k, v in training.items()
+                     if k not in TRAINING_EXCLUDED and not k.startswith("_")})
+    resolved.update({f"encoding.{k}": v for k, v in encoding.items()
+                     if k not in ENCODING_EXCLUDED})
+    resolved.update({
+        # Command-line only, so absent from every artifact and from
+        # `base_hyperparameter_sha256`. This is the hole that hash had: e5, e10
+        # and e25 all quoted one digest while training three different things.
+        "epochs": training["_epoch_count"],
+        "lr_horizon": training["_lr_horizon"],
+        "phase": phase,
+        "train_scope": training.get("train_scope", "point_encoder_and_fuser"),
+    })
+    blob = json.dumps(resolved, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode()).hexdigest(), resolved
+
+
+def pool_provenance(train_uids: list, selection_uids: list) -> dict:
+    """Which assets this run trained on, in which ORDER, for BOTH phases.
+
+    [CODEX MAJOR 4, 2026-08-30] `save_best` already hashed the sorted uid lists,
+    but only into the dev-phase best record: a `--phase final` checkpoint --
+    the one a paper number would come from -- carried no pool identity at all.
+
+    Two digests, because they answer different questions and one of them was
+    missing:
+
+    * **sequence** -- the uid list in the order the DataLoader received it. The
+      shuffle is a permutation of POSITIONS, so at a fixed seed a different
+      input order produces a different sequence of batches, and therefore
+      different in-batch negatives for the contrastive loss. Sorted membership
+      cannot see that.
+    * **set** -- sorted membership, which is what "the same pool" usually means
+      and what makes two runs comparable regardless of enumeration order.
+
+    Computed AFTER `--limit` is applied, so a smoke's digests describe the smoke.
+    """
+    def seq(u): return hashlib.sha256(json.dumps(u).encode()).hexdigest()
+    def st(u): return hashlib.sha256(json.dumps(sorted(u)).encode()).hexdigest()
+    return {"train_uid_sequence_sha256": seq(train_uids),
+            "train_uid_set_sha256": st(train_uids),
+            "selection_uid_sequence_sha256": seq(selection_uids),
+            "selection_uid_set_sha256": st(selection_uids),
+            "n_train": len(train_uids), "n_selection": len(selection_uids)}
+
+
+def input_content_digest(uids: list[str]) -> dict:
+    """What the uids POINTED AT, not merely which uids were used.
+
+    [CODEX MAJOR 2026-08-30] `pool_provenance` proves which assets and in what
+    order. It cannot prove what those assets contained: re-run n06 or n07 and
+    the same uid list, at the same arm hash, reads different `.npz` bytes and
+    nothing recorded would differ. That is the same failure as `code_revision`
+    without `runtime_source_sha256`, one layer down in the data.
+
+    Point-cloud digests are READ from the sidecars n07 already wrote
+    (`data/outputs/pointclouds/<uid>.json:sha256`), so they cost no I/O over the
+    7.7 GB of clouds. Embedding sidecars carry no digest, so those `.npz` are
+    hashed -- 33 KB each, measured at ~3 s for the 32 k dev pool, against a run
+    of hours.
+
+    `n_missing` is reported rather than raised on: a missing sidecar is a real
+    condition to record, and refusing to start a multi-hour run over one absent
+    provenance file would be the guard doing more harm than the gap.
+    """
+    pc_dir, emb_dir = paths.POINTCLOUDS, paths.EMBEDDINGS
+    h = hashlib.sha256()
+    missing_pc = missing_emb = mismatched = 0
+    for uid in sorted(uids):
+        h.update(uid.encode())
+        # [CODEX MAJOR 2026-08-30] The first version read the sidecar's claimed
+        # sha256 and hashed THAT. A sidecar is a claim about a file, and a claim
+        # is exactly what the rest of this batch stopped trusting -- an edited
+        # `.npz` beside an untouched sidecar produced a complete-looking digest
+        # that described the old bytes. The digest is now taken over the ACTUAL
+        # bytes, and the sidecar's claim is checked against them.
+        # MEASURED: 1,500 clouds in 0.2 s, so ~4 s for the 32 k dev pool.
+        npz = pc_dir / f"{uid}.npz"
+        if npz.exists():
+            digest = hashlib.sha256(npz.read_bytes()).hexdigest()
+            h.update(digest.encode())
+            side = pc_dir / f"{uid}.json"
+            if side.exists():
+                claimed = json.loads(side.read_text()).get("sha256")
+                if claimed and claimed != digest:
+                    mismatched += 1
+            else:
+                missing_pc += 1
+        else:
+            missing_pc += 1
+        npz = emb_dir / f"{uid}.npz"
+        if npz.exists():
+            h.update(hashlib.sha256(npz.read_bytes()).digest())
+        else:
+            missing_emb += 1
+    return {"content_sha256": h.hexdigest(), "n_assets": len(uids),
+            "n_missing_pointcloud_sidecar": missing_pc,
+            "n_missing_embedding_npz": missing_emb,
+            # Reported, not raised on: a run of hours should not be refused over
+            # a stale sidecar, but a nonzero count here means n07's record and
+            # its clouds have diverged and every claim about them is suspect.
+            "n_pointcloud_sidecar_mismatch": mismatched,
+            "pointcloud_digest_source": "sha256 of the .npz bytes; the n07 "
+                                        "sidecar's claim is checked against it",
+            "embedding_digest_source": "sha256 of the .npz bytes"}
+
+
+def initializer_provenance(backbone) -> dict:
+    """The weights this run STARTED from, which no artifact recorded.
+
+    [CODEX MAJOR 4, 2026-08-30] Two separate initializers reach Stage 1 and
+    neither was written down:
+
+    * the ULIP-2 PointBERT checkpoint, loaded from disk;
+    * **OpenCLIP ViT-bigG-14 `laion2b_s39b_b160k`, which is NOT inside that
+      checkpoint** -- `ulip_backbone.py:225` builds it through
+      `open_clip.create_model_and_transforms` and its weights arrive from
+      OpenCLIP's own cache. A reader holding our checkpoint and the ULIP-2
+      checkpoint still could not reconstruct the run.
+
+    Hashing the ULIP-2 file costs a few seconds once per run, against a run
+    measured in hours.
+    """
+    out: dict = {}
+    try:
+        ckpt = Path(getattr(backbone.cfg, "checkpoint", "")) if hasattr(
+            backbone, "cfg") else None
+        if ckpt and ckpt.exists():
+            out["ulip2"] = {"uri": str(ckpt),
+                            "sha256": hashlib.sha256(ckpt.read_bytes()).hexdigest(),
+                            "size_bytes": ckpt.stat().st_size}
+    except Exception:  # noqa: BLE001 -- provenance is best-effort, never fatal
+        out["ulip2"] = {"status": "unavailable"}
+    try:
+        import open_clip
+        oc = {"model": "ViT-bigG-14", "pretrained": "laion2b_s39b_b160k",
+              "package_version": getattr(open_clip, "__version__", None)}
+        oc.update(_open_clip_weight_identity())
+        out["open_clip"] = oc
+    except Exception:  # noqa: BLE001
+        out["open_clip"] = {"status": "unavailable"}
+    return out
+
+
+def _open_clip_weight_identity() -> dict:
+    """The actual bytes behind `laion2b_s39b_b160k`, not just its name.
+
+    [CODEX MAJOR 2026-08-30] A model name, a pretrained tag and a package
+    version identify a REQUEST, not a file. The tag resolves through a Hugging
+    Face repo whose `main` can move, so two runs could record identical
+    initializer provenance and start from different weights.
+
+    Read out of the HF cache rather than hashed: the snapshot entry is a symlink
+    into `blobs/`, and for an LFS file the blob's FILENAME is its sha256 --
+    which is why this costs a `readlink` instead of digesting 10.2 GB on every
+    run. `refs/main` gives the resolved commit.
+
+    `ULIP_models.py:354-355` is what actually downloads this
+    (`create_model_and_transforms(..., pretrained='laion2b_s39b_b160k')`);
+    `ulip_backbone.py:225` builds a second copy with `pretrained=None` purely to
+    recover the preprocess transform, and contributes no weights.
+    """
+    import os as _os
+
+    repo = "models--laion--CLIP-ViT-bigG-14-laion2B-39B-b160k"
+    roots = [_os.environ.get("HF_HUB_CACHE"),
+             (Path(_os.environ["HF_HOME"]) / "hub") if _os.environ.get("HF_HOME")
+             else None,
+             Path.home() / ".cache" / "huggingface" / "hub"]
+    for root in roots:
+        if not root:
+            continue
+        d = Path(root) / repo
+        if not d.is_dir():
+            continue
+        out: dict = {"hf_repo": "laion/CLIP-ViT-bigG-14-laion2B-39B-b160k",
+                     "hf_cache": str(d)}
+        ref = d / "refs" / "main"
+        rev = ref.read_text().strip() if ref.exists() else None
+        if rev:
+            out["hf_revision"] = rev
+        # [CODEX MINOR 2026-08-30] Was `glob("snapshots/*/*")`, which with more
+        # than one cached revision would pair `refs/main`'s revision with some
+        # OTHER snapshot's blob -- a provenance record whose two halves describe
+        # different downloads. The snapshot for THIS revision, or nothing.
+        snap_root = (d / "snapshots" / rev) if rev else None
+        if snap_root is None or not snap_root.is_dir():
+            out["weight_identity"] = (
+                f"unavailable -- no snapshot directory for revision {rev!r}")
+            return out
+        for snap in sorted(snap_root.iterdir()):
+            if snap.name.startswith("open_clip"):
+                blob = snap.resolve()
+                out["weight_file"] = snap.name
+                # The blob name IS the git-lfs sha256 for an LFS file. Recorded
+                # under a name that says where it came from, so nobody mistakes
+                # it for something this code computed.
+                out["weight_blob_sha256"] = blob.name
+                if blob.exists():
+                    out["weight_size_bytes"] = blob.stat().st_size
+                break
+        return out
+    return {"weight_identity": "unavailable -- HF cache not found"}
+
+
 def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
-                    encoding: dict, training: dict, seed: int, epoch: int) -> dict:
+                    encoding: dict, training: dict, seed: int, epoch: int,
+                    rp: Stage1RunPaths) -> dict:
     """Save EVERY trainable module, not just the dual tower.
 
     The optimizer is built from three modules::
@@ -567,19 +1187,21 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
     assert_checkpoint_covers_optimizer(backbone, model, loss_fn, sections)
     n_params = sum(v.numel() for s in sections.values() for v in s.values())
 
-    tmp = CKPT_PATH.with_suffix(".part")
-    torch.save({**sections,
-                "trainer_version": TRAINER_VERSION,
-                "epoch": epoch,
-                "train_scope": training.get("train_scope", "point_encoder_and_fuser")},
-               tmp)
-    tmp.replace(CKPT_PATH)
-
-    digest = hashlib.sha256(CKPT_PATH.read_bytes()).hexdigest()
-    record = {
-        "uri": str(CKPT_PATH),
-        "sha256": digest,
-        "config_hash": training["hyperparameter_config_hash"],
+    tmp = rp.latest_checkpoint.with_suffix(".part")
+    # [CODEX MAJOR 4, 2026-08-30] The metadata is built BEFORE the save and
+    # embedded in the `.pt` itself, not only written to the sidecar. Weights and
+    # sidecar are two files: one gets copied, renamed, or moved without the
+    # other, and until now the weights alone could not answer which run produced
+    # them. The `.pt` deliberately does NOT carry its own output sha256 -- a
+    # file cannot contain its own digest -- so that stays in the sidecar, which
+    # is also what binds the two.
+    metadata = {
+        # [CODEX D 2026-08-30] Was `config_hash`. It and
+        # `base_hyperparameter_sha256` are the SAME value, and two hashes side
+        # by side invited a reader to treat one of them as the experiment's
+        # identity, which neither is -- `arm_config_hash` below is.
+        "base_hyperparameter_sha256": training["hyperparameter_config_hash"],
+        "checkpoint_schema": 4,
         "seed": seed,
         "epoch": epoch,
         # [ULIP2 ENGINEER 2026-08-29, approved by MASTER as a bug fix] This
@@ -595,20 +1217,73 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         "run_id": runlog.run_id(),
         "code_revision": runlog.code_revision(),
         "code_dirty": runlog.code_dirty(),
+        # [R-33] `code_revision` + `code_dirty` was measured insufficient: it
+        # called e25_400w and e25_500w a clean repeat when the tree had been
+        # edited between them. See runlog.dirty_patch_sha256.
+        "runtime_source_sha256": runlog.runtime_source_sha256(),
+        "runtime_source_status": runlog.runtime_source_status(),
+        # [R-33] The experiment's identity. `config_hash` above names the
+        # ARTIFACT the run started from; this names what it actually trained,
+        # after --lr / --epochs / --lr-horizon. Resolved values stored beside
+        # the digest so the run is readable without recomputing it.
+        "arm_config_hash": training["_arm_config_hash"],
+        "arm_config": training["_arm_config"],
+        # [CODEX MAJOR 2026-08-30] R-33's run record asked for these and the
+        # first version shipped without them. `repeat_index` is what makes two
+        # runs a declared pair rather than two runs that happen to share an arm;
+        # `argv` is the only field that survives a reader who does not trust any
+        # of the others.
+        "repeat_index": training.get("_repeat_index"),
+        "argv": training.get("_argv"),
+        "hardware": training.get("_hardware"),
+        # [KYZEN 2026-08-29] Which ladder construction produced this checkpoint.
+        # Equal to `epoch_count` -> the cosine curve finished inside this run;
+        # larger -> the run is a PREFIX of a longer curve and is comparable with
+        # other rungs sharing the horizon. Without it, e5 and e10 look like the
+        # same experiment at two lengths, which is what they were reported as.
+        # `.get` with a None default: runs before this field existed are
+        # UNKNOWN, and that is different from "the horizon equalled the epochs".
+        "lr_horizon": training.get("_lr_horizon"),
+        "epoch_count": training.get("_epoch_count"),
+        # `num_workers` was a hardcoded 4 and appeared in NO artifact, so no run
+        # before today recorded how many processes fed it. Under `mean` that
+        # costs nothing scientifically, but it is the variable this machine's
+        # crash investigation now turns on, and it was invisible.
+        "preload": training.get("_preload"),
+        "num_workers": training.get("_num_workers"),
         "train_scope": training.get("train_scope", "point_encoder_and_fuser"),
         "trainable_only": True,
         "n_params_saved": int(n_params),
         "n_params_by_section": {k: int(sum(v.numel() for v in s.values()))
                                 for k, s in sections.items()},
-        "size_bytes": CKPT_PATH.stat().st_size,
         "clip_train_scope": encoding["actual_clip_train_scope"],
+        # [CODEX MAJOR 4] Which assets, in which order, and which weights this
+        # run started from. `pool_provenance` covers a `--phase final` run,
+        # which previously recorded no pool at all; `initializer_provenance`
+        # covers OpenCLIP, which is loaded separately from the ULIP-2
+        # checkpoint and appeared in no artifact.
+        "inputs": training.get("_pools"),
+        "initializers": training.get("_initializers"),
     }
-    tmp = CKPT_RECORD.with_suffix(".json.part")
+
+    torch.save({**sections,
+                "trainer_version": TRAINER_VERSION,
+                "epoch": epoch,
+                "metadata": metadata,
+                "train_scope": training.get("train_scope", "point_encoder_and_fuser")},
+               tmp)
+    tmp.replace(rp.latest_checkpoint)
+
+    record = {**metadata,
+              "uri": str(rp.latest_checkpoint),
+              "sha256": hashlib.sha256(rp.latest_checkpoint.read_bytes()).hexdigest(),
+              "size_bytes": rp.latest_checkpoint.stat().st_size}
+    tmp = rp.latest_record.with_suffix(".json.part")
     with tmp.open("w") as fh:
         json.dump(record, fh)
         fh.flush()
         os.fsync(fh.fileno())
-    tmp.replace(CKPT_RECORD)
+    tmp.replace(rp.latest_record)
     return record
 
 
@@ -746,6 +1421,41 @@ def build_model(encoding: dict, training: dict, hyperparameters: dict):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--epochs", type=int, help="override the recorded value")
+    ap.add_argument("--preload", action="store_true",
+                    help="read every asset into RAM once instead of opening two "
+                         ".npz per sample per step; sets num_workers=0. Same data, "
+                         "same results; ~8.8 GB for the dev pool.")
+    ap.add_argument("--lr-horizon", type=int, default=None,
+                    help="epochs the cosine curve spans; training still stops at "
+                         "--epochs. Omit to anneal fully within --epochs (the "
+                         "behaviour of every run before 2026-08-29).")
+    # [R-33, ratified by Kyzen 2026-08-29] The three values a comparison needs
+    # to vary and could not. `learning_rate` and `seed` live in a signed
+    # artifact, so varying them meant editing `stage1_hyperparameters.json` --
+    # rewriting the ratified recipe to run one arm of a sweep. These override
+    # for THIS RUN only; the artifact is never touched, its sha256 is recorded
+    # as `base_hyperparameter_sha256`, and what actually ran is recorded as
+    # `arm_config_hash` + `arm_config`.
+    ap.add_argument("--lr", type=float, default=None,
+                    help="override learning_rate for this run. The artifact is "
+                         "not modified; the effective value goes into "
+                         "arm_config_hash.")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="override the seed for this run. NOT part of "
+                         "arm_config_hash -- two seeds are repeats of one "
+                         "treatment, not two experiments.")
+    ap.add_argument("--out-dir", default=None,
+                    help="directory for this run's checkpoints, RELATIVE to "
+                         "data/outputs/checkpoints. Omit and the run writes the "
+                         "canonical names. Either way the run refuses to start "
+                         "on top of existing checkpoints.")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="permit writing over checkpoints that already exist. "
+                         "Without it an occupied destination stops the run "
+                         "before the first batch.")
+    ap.add_argument("--repeat-index", type=int, default=None,
+                    help="which repeat of this arm this run is. Recorded, never "
+                         "hashed: repeats share an arm by definition.")
     ap.add_argument("--limit", type=int, help="assets, for a smoke run")
     ap.add_argument("--device", default="cuda")
     # [D-3] `dev` is the development phase: train on dev_train, score dev_val
@@ -757,6 +1467,11 @@ def main() -> int:
                     help="dev: train dev_train, select on dev_val (D-3). "
                          "final: train the full 80%%, no selection.")
     args = ap.parse_args()
+    # Checked here, before protocols, splits or CUDA: an argument that can never
+    # produce a run should cost a second, not a dataset load. The resolution of
+    # `epochs` still happens below, where the artifact's value is available.
+    if args.epochs is not None and args.epochs <= 0:
+        raise SystemExit(f"--epochs {args.epochs} must be positive")
 
     import torch
     from torch.utils.data import DataLoader
@@ -764,7 +1479,43 @@ def main() -> int:
     from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
 
     encoding, training, hyperparameters = load_protocols()
-    values = hyperparameters["values"]
+    # A COPY. `hyperparameters` stays exactly as loaded so its recorded sha256
+    # keeps describing the file on disk; the overrides below apply to this run's
+    # working values only. Mutating in place would leave the artifact's digest
+    # attached to values the artifact does not contain.
+    values = copy.deepcopy(hyperparameters["values"])
+    if args.lr is not None:
+        values["learning_rate"] = args.lr
+    if args.seed is not None:
+        values["seed"] = args.seed
+    # [CODEX F 2026-08-30] No arbitrary upper bound -- a ceiling on lr would be
+    # an invented hyperparameter. These three are internal consistency: a
+    # non-finite base rate poisons the whole cosine array, and a base below
+    # either endpoint inverts the schedule into a curve that WARMS UP to the
+    # floor and anneals upward, which trains happily and looks like a bad
+    # learning rate rather than a broken one.
+    lr = values["learning_rate"]
+    if not math.isfinite(lr) or lr <= 0:
+        raise SystemExit(f"learning_rate {lr} must be finite and positive")
+    if lr < values["lr_end"] or lr < values["lr_start"]:
+        raise SystemExit(
+            f"learning_rate {lr} is below lr_end {values['lr_end']} or "
+            f"lr_start {values['lr_start']}: the cosine schedule would run "
+            "backwards. Check --lr.")
+    run_paths = resolve_run_paths(args.out_dir, args.limit, args.overwrite)
+    # Snapshot the program NOW, before any training, so a worktree edited at
+    # hour two cannot change what this run reports it ran.
+    #
+    # [CODEX MINOR 2026-08-30] Fail closed rather than record a null. A run of
+    # this cost whose produced-by-what cannot be answered is a run that will be
+    # argued about later and cannot be settled -- exactly the position the
+    # withdrawn e25 noise floor left us in. Nothing normal reaches this: the
+    # package is beside the module doing the asking.
+    if runlog.runtime_source_status() != "ok":
+        raise SystemExit(
+            "cannot fingerprint the source tree under "
+            f"{paths.REPO / 'metafind'}, so this run could not say what code "
+            "produced it. Refusing to start.")
 
     splits_path = paths.OUTPUTS / "splits.json"
     if not splits_path.exists():
@@ -848,12 +1599,30 @@ def main() -> int:
           f"lr {values['learning_rate']}, betas {tuple(values['betas'])}, "
           f"eps {values['eps']}", flush=True)
 
+    # [KYZEN 2026-08-29] `num_workers` goes to 0 under --preload. With the data
+    # already resident the workers have nothing to do, and keeping them would be
+    # actively worse: fork gives each of the four a view of an 8.8 GB cache, and
+    # they are the per-step process churn this flag exists to remove.
+    #
+    # Under `mean` this changes no result -- nothing in `__getitem__` draws, so
+    # the worker count cannot affect what the model sees (stage1.py:230 says why,
+    # and `stage1_encoding_protocol.json` resolves `mean`). Under
+    # `random_single_view` it WOULD, because `random` is seeded per worker; that
+    # protocol is not in use and this flag must be re-examined before it is.
+    workers = 0 if args.preload else 4
     loader = DataLoader(
-        Stage1Dataset(train_uids, encoding["image_aggregation"]),
+        Stage1Dataset(train_uids, encoding["image_aggregation"], preload=args.preload),
         batch_size=values["batch_size"], shuffle=True, collate_fn=collate,
-        num_workers=4, drop_last=True, generator=generator)
+        num_workers=workers, drop_last=True, generator=generator)
 
-    epochs = args.epochs or values["epochs"]
+    # [CODEX F 2026-08-30] `args.epochs or values["epochs"]` stood here, and
+    # `--epochs 0` fell through to the artifact's value -- the operator asked
+    # for nothing and got a full run. Same shape as the `--lr-horizon 0` defect
+    # the Reviewer found on 2026-08-29: `or` erases the input before any guard
+    # can see it.
+    epochs = values["epochs"] if args.epochs is None else args.epochs
+    if epochs <= 0:
+        raise SystemExit(f"--epochs {epochs} must be positive")
     if epochs > values["max_epochs"]:
         # max_epochs is a ceiling the operator enforces, so say so rather than
         # silently clamping: clamping would run a DIFFERENT experiment than the
@@ -861,18 +1630,95 @@ def main() -> int:
         print(f"WARNING: {epochs} epochs exceeds the approved ceiling "
               f"{values['max_epochs']} (resolve_stage1.py). Nothing stops you; "
               f"record it as a deviation.", flush=True)
+    # [KYZEN 2026-08-29] The pilot ladder asks "how many epochs before it stops
+    # improving". It could not answer that, because the cosine curve spans
+    # `epochs * niter_per_ep` -- so raising --epochs also SLOWS THE ANNEAL, and
+    # each rung was a different training rather than a longer one. Measured on
+    # the first two rungs: e5 finished its anneal and peaked at 0.9571; e10 was
+    # still near peak lr at epoch 4, dipped to 0.8873, and had only climbed back
+    # to 0.9471 by epoch 9. "10 is worse than 5" was not a statement about
+    # epochs, and nothing in the run recorded that.
+    #
+    # `--lr-horizon 250` pins the curve to the full approved ceiling and stops
+    # early, so every rung is a PREFIX of one trajectory and the rungs become
+    # comparable. Kyzen chose this construction after being shown both.
+    #
+    # It is opt-in and defaults to the old behaviour: silently repointing the
+    # schedule would have changed what every past run means without changing any
+    # recorded value. The horizon is written into the checkpoint instead, so a
+    # run says which construction produced it.
+    # `is None`, not `or`: [ULIP2 REVIEWER 2026-08-29] traced the failure --
+    # `--lr-horizon 0` under `or` becomes `epochs`, the guard below then tests
+    # `epochs < epochs` and passes, and the run silently uses the OLD
+    # construction while the operator asked for something else. The `or` erases
+    # the input before the guard can see it. One word turns a silent
+    # wrong-experiment into a refusal.
+    horizon = epochs if args.lr_horizon is None else args.lr_horizon
+    if horizon < epochs:
+        raise SystemExit(
+            f"--lr-horizon {horizon} is shorter than --epochs {epochs}: the "
+            f"schedule would run out and the last {epochs - horizon} epochs "
+            f"would train at the floor rate. Raise the horizon or lower epochs.")
+    # Underscore-prefixed: `training` is the stage1_protocol.json artifact, and
+    # these two are facts about THIS RUN, not fields of that protocol. They ride
+    # along so `save_checkpoint` can record them without a seventh parameter
+    # threaded through two call sites.
+    training["_lr_horizon"] = horizon
+    training["_epoch_count"] = epochs
+    training["_preload"] = bool(args.preload)
+    training["_num_workers"] = workers
+    # [CODEX MAJOR 4] Computed AFTER --limit and AFTER the phase chose the
+    # pools, so the digests describe what this run actually iterated.
+    training["_pools"] = pool_provenance(train_uids, dev_val_uids)
+    print("  digesting input contents...", flush=True)
+    training["_pools"]["train_content"] = input_content_digest(train_uids)
+    if dev_val_uids:
+        training["_pools"]["selection_content"] = input_content_digest(dev_val_uids)
+    training["_initializers"] = initializer_provenance(backbone)
+    training["_repeat_index"] = args.repeat_index
+    training["_argv"] = sys.argv[1:]
+    training["_hardware"] = {
+        "device": args.device,
+        "gpu": (torch.cuda.get_device_name(0)
+                if args.device.startswith("cuda") and torch.cuda.is_available()
+                else None),
+        "torch": torch.__version__,
+        "cuda": torch.version.cuda,
+        # Recorded because it changes the numbers, not because it changes the
+        # experiment: TF32 matmuls are a different arithmetic than the default.
+        "tf32_matmul": bool(torch.backends.cuda.matmul.allow_tf32),
+        "cudnn_tf32": bool(torch.backends.cudnn.allow_tf32),
+    }
+    training["_arm_config_hash"], training["_arm_config"] = arm_config_hash(
+        values, training, encoding, args.phase)
+    # [CODEX E 2026-08-30] Stamped once, onto every later metrics row, so a loss
+    # curve says which arm and seed produced it without a join.
+    runlog.set_run_context(arm_config_hash=training["_arm_config_hash"],
+                           seed=seed, repeat_index=args.repeat_index)
+    print(f"arm {training['_arm_config_hash'][:12]} -> {run_paths.root}\n"
+          f"  {json.dumps(training['_arm_config'], sort_keys=True)}", flush=True)
     lr_schedule = cosine_schedule(
         base=values["learning_rate"], final=values["lr_end"],
-        epochs=epochs, niter_per_ep=len(loader),
+        epochs=horizon, niter_per_ep=len(loader),
         warmup_epochs=values["warmup_epochs"], start_warmup=values["lr_start"])
     # Without this the `min()` in the loop is not a guard but a mask: a schedule
     # shorter than the loop would pin the lr at the floor and train on happily,
     # discoverable only in the curve thousands of steps later. Upstream raises
     # IndexError, which at least names the step it happened at; this names the
     # condition before any step happens.
-    assert len(lr_schedule) == epochs * len(loader), (
+    assert len(lr_schedule) == horizon * len(loader), (
         f"schedule has {len(lr_schedule)} entries for "
-        f"{epochs} x {len(loader)} = {epochs * len(loader)} steps")
+        f"{horizon} x {len(loader)} = {horizon * len(loader)} steps")
+    # The loop indexes with min(step, len-1). Under a longer horizon that min
+    # never clamps, so the run reads a PREFIX and the clamp stays a guard rather
+    # than becoming the mechanism -- assert that too, or a future off-by-one in
+    # the loop would be absorbed silently by the same min().
+    assert epochs * len(loader) <= len(lr_schedule)
+    if horizon != epochs:
+        print(f"lr horizon {horizon} epochs, training stops at {epochs}: this run "
+              f"uses the first {epochs / horizon:.1%} of the cosine curve "
+              f"(lr {lr_schedule[0]:.3g} -> {lr_schedule[epochs * len(loader) - 1]:.3g}, "
+              f"floor {values['lr_end']:.3g} reached at epoch {horizon})", flush=True)
 
     print(f"{len(train_uids):,} train assets, batch {values['batch_size']}, "
           f"{epochs} epochs, {len(loader):,} steps/epoch", flush=True)
@@ -951,7 +1797,7 @@ def main() -> int:
                           f"tau {loss_fn.temperature.item():.4f}", flush=True)
 
             record = save_checkpoint(backbone, model, loss_fn, hyperparameters,
-                                     encoding, training, seed, epoch)
+                                     encoding, training, seed, epoch, run_paths)
             print(f"  epoch {epoch} saved: {record['n_params_saved']:,} params, "
                   f"{record['size_bytes'] / 1e6:.0f} MB", flush=True)
 
@@ -985,23 +1831,23 @@ def main() -> int:
                 if better_checkpoint(key, best[0] if best else None):
                     best = (key, epoch)
                     save_best(record, epoch, scores, args, train_uids,
-                              dev_val_uids)
+                              dev_val_uids, run_paths)
                     print(f"  epoch {epoch} is the best so far -> "
-                          f"{best_paths(args)[0].name}", flush=True)
+                          f"{run_paths.best_checkpoint.name}", flush=True)
 
     runlog.cost_ledger(wallclock_s=round(time.time() - started, 1),
                        steps=step, epochs=epochs)
-    print(f"\nStage 1 done: {step:,} steps -> {CKPT_PATH}")
+    print(f"\nStage 1 done: {step:,} steps -> {run_paths.latest_checkpoint}")
     if best is not None:
         print(f"best epoch {best[1]} (dev-val mean R@1 {best[0][0]:.4f}) "
-              f"-> {BEST_CKPT_PATH}")
+              f"-> {run_paths.best_checkpoint}")
     elif args.phase == "final":
         # Saying it out loud: in the locked run the answer is the LAST epoch,
         # because the epoch count was already chosen in the development phase.
         # A reader who expects a `stage1_best.pt` here should not have to infer
         # from its absence that nothing selected.
         print("phase=final: no selection was performed [D-3]; "
-              f"the run's result is the last epoch in {CKPT_PATH}")
+              f"the run's result is the last epoch in {run_paths.latest_checkpoint}")
     return 0
 
 
