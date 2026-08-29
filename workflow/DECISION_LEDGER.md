@@ -1183,6 +1183,32 @@ Current          → awaiting Codex R3
 
 **Still true from the first round: no training, sweep, n15 or A/B has been run. GPU idle.**
 
+**⚠ SUPERSEDED AGAIN 2026-08-30, third paragraph — the block above stopped at "awaiting Codex R3".**
+Rule 6 again: the two paragraphs above stay as written, this one carries the current state.
+
+```
+Codex R3, R4     → answered; fixes applied and re-verified
+Committed        → a005be7 (run identity, provenance, float64 dev-val scoring)
+                   6d87ca1 (n15 evaluator, its tests, the evidence files)
+                   890f477 (crash-investigation tooling)
+                   3,418 of those lines had never been in git at all
+n15 R2 MAJOR     → STILL OPEN. Changing only `block`, a performance parameter,
+                   changes the reported `rank` and `tie_count`.
+Codex R5         → has not answered on the n15 evaluator
+```
+
+**One candidate explanation for `full = 1.0000` was eliminated by measurement, not by argument.**
+The hypothesis that it is float32 rounding is dead: the same embeddings recomputed in float64 give
+R@1 = 1.000000000, bit-identical, and float64 reproduces all seven recorded cells of `e25_500w`
+bit-for-bit where float32 differs on one query (`tools/measure_dtype_effect.py`,
+`output/look/dtype_effect.json`).
+
+This is the first time on this project a hypothesis was closed by measuring rather than by reasoning.
+It removes one candidate. **It does not discharge the debt: `full = 1.0000` is still INFERENCE and the
+negative control is still owed.**
+
+**Still true, three rounds later: no training, sweep, n15 or A/B has been run. GPU idle.**
+
 ---
 
 ## DL-034 — three approvals for the LR sweep and n15
