@@ -8,10 +8,10 @@
 |---|---|---|---|
 | MASTER | `metafindv1-d7` | `c920c7` | — |
 | ULIP2 Block Engineer | `metafindv1-2c` | `943a73` | `/run/user/1002/cc-socks/7037.sock` |
-| ULIP2 Block Reviewer | `metafindv1-16` | `869408` | `/run/user/1002/cc-socks/6268.sock` |
+| ULIP2 Block Reviewer | `metafindv1-16` | `869408` ⚠ | `/run/user/1002/cc-socks/6268.sock` |
 | ESSGNN Block Engineer | `metafindv1-a9` | `554aa1` | `/run/user/1002/cc-socks/48142.sock` |
 | ESSGNN Block Reviewer | `metafindv1-53` | `d57120` | `/run/user/1002/cc-socks/49032.sock` |
-| INTEGRATOR | `metafindv1-e7` | `ba9699` | 見下 |
+| INTEGRATOR | `metafindv1-e7` | `ba9699` | `/run/user/1002/cc-socks/49198.sock` |
 
 ## 三個今天真的害過人的陷阱
 
@@ -20,16 +20,27 @@
 ESSGNN Reviewer 連四輪換名（`40` → `a5` → `53`）。
 ULIP2 Engineer 曾因此以為自己的 Reviewer 失聯，去找上一輪的名字 —— 人一直在。
 
-**二、有人會把上一輪的 ref 帶過來。**
-INTEGRATOR 本輪自報 `metafindv1-82 [963894]`，**寄過去被退回「not reachable」**；
-ListAgents 表頭與它自己的回信來源都是 `metafindv1-e7 [ba9699]`。
-`963894` 是上一輪的。**自報也要對兩個來源。**
+**二、🔴 兩個來源必須在同一回合一起重讀。一新一舊會生出一個從未存在過的身分。**
+INTEGRATOR 本輪自報 `metafindv1-82 [963894]`，**寄過去被退回「not reachable」**。
+它自己查出根因，這條比原本那句「要從環境讀」重要：
+
+> socket 是它那一封現讀的（`49198`，**正確**）；
+> name/ref 是更早一次 `ListAgents` 留下來的（`82/963894`，**已過期**）。
+> **兩個欄位各自都曾為真，合起來的那個身分從來沒有存在過。**
+
+→ **失效的單位不是單一欄位，是整組身分。**
+→ 只強調「要從環境讀」不夠 —— 它照做了，仍然報錯，因為錯的是**另一半**。
+→ **兩個來源同時過期才安全；各自新舊才會生出假身分。**
 
 **三、socket 會在同一輪內變，沒有重開也會。**
 INTEGRATOR 實測回信途中從 `13562` 變成 `49198`。
 
-**四、有的 session 讀不到自己的 ref。**
-ULIP2 Block Reviewer 本輪只拿得到 socket。ref 要由 MASTER 從 ListAgents 表頭補給它。
+**四、兩個來源各缺一半，這是結構性的。**
+`ListAgents` 表頭是唯一給得出 **ref** 的來源，**但它給不出自己的 socket**；
+`echo $CLAUDE_CODE_MESSAGING_SOCKET` 給得出 **socket**，**卻給不出 ref**。
+→ 所以「兩個都讀」不是保險，是**必要**。
+→ ⚠ 上表 ULIP2 Block Reviewer 的 `869408` **是 MASTER 從表頭取的，非本人自報** ——
+  該 session 本輪讀不到自己的 ref。
 
 ## 認領規則
 
