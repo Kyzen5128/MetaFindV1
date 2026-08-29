@@ -176,6 +176,29 @@ def test_python_heredoc_that_really_writes_is_still_blocked():
     assert run(bash_call(command)) == BLOCK
 
 
+@pytest.mark.parametrize("command", [
+    # `2>/dev/null` is a redirect, but not to a protected path. The ULIP2 Block
+    # Engineer hit this on the first live capability test: it could not even
+    # `ls` to confirm the guard had worked.
+    "ls -l .claude/rules/__probe.md 2>/dev/null",
+    "cat CLAUDE.md 2>/dev/null | head -5",
+    "grep -c foo .claude/settings.json 2>/dev/null",
+    "diff CLAUDE.md /tmp/other.md > /tmp/diff.txt",
+])
+def test_redirect_that_does_not_target_a_protected_path_is_allowed(command):
+    assert run(bash_call(command)) == ALLOW
+
+
+@pytest.mark.parametrize("command", [
+    "echo x > CLAUDE.md",
+    "echo x >> .claude/rules/research-rigor.md",
+    "cat /tmp/x >  .claude/settings.json",
+    "ls -l 2>/dev/null > .claude/settings.local.json",
+])
+def test_redirect_onto_a_protected_path_is_blocked(command):
+    assert run(bash_call(command)) == BLOCK
+
+
 def test_bash_override_lets_it_through():
     assert run(bash_call("echo x > .claude/settings.json"),
                allow_override=True) == ALLOW
