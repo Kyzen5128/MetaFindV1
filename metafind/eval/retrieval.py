@@ -42,6 +42,7 @@ from metafind.models.fusion import MODALITIES
 __all__ = [
     "QUERY_CONDITIONS",
     "condition_mask",
+    "normalize_for_scoring",
     "recall_at_k",
     "rank_of_target",
 ]
@@ -58,6 +59,32 @@ QUERY_CONDITIONS: dict[str, tuple[bool, bool, bool]] = {
     "image+pc":    (False, True,  True),
     "full":        (True,  True,  True),
 }
+
+
+def normalize_for_scoring(embeddings: np.ndarray) -> np.ndarray:
+    """Return one shared float64, L2-normalised retrieval representation.
+
+    Stage 1 checkpoint selection, n15, and the dtype comparison harness must not
+    each implement a slightly different meaning of "float64 scoring".  Before
+    this helper existed they did: Torch-f64 normalisation/GEMM, Torch-f32
+    normalisation followed by NumPy-f64 GEMM, and NumPy-f64 throughout.  The
+    measurement in ``tools/measure_dtype_effect.py`` exercised only the last of
+    those paths, so it could not validate the other two.
+
+    Model outputs arrive as float32 CPU arrays.  Conversion happens *before*
+    normalisation, and all subsequent similarity GEMMs are NumPy float64.  The
+    rank/tie definition remains exact comparison; this only makes the numerical
+    path explicit and shared.
+    """
+    x = np.asarray(embeddings, dtype=np.float64)
+    if x.ndim != 2:
+        raise ValueError(f"embeddings must be 2-D, got {x.shape}")
+    if not np.isfinite(x).all():
+        raise ValueError("embeddings contain a non-finite value")
+    norms = np.linalg.norm(x, axis=1, keepdims=True)
+    if np.any(norms == 0):
+        raise ValueError("cannot score a zero-norm embedding")
+    return x / norms
 
 
 def condition_mask(condition: str, batch_size: int):

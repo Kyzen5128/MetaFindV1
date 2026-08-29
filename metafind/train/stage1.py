@@ -760,7 +760,12 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
     import torch
     from torch.utils.data import DataLoader
 
-    from metafind.eval.retrieval import QUERY_CONDITIONS, condition_mask, recall_at_k
+    from metafind.eval.retrieval import (
+        QUERY_CONDITIONS,
+        condition_mask,
+        normalize_for_scoring,
+        recall_at_k,
+    )
 
     if not dev_val_uids:
         return {}
@@ -793,21 +798,24 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
                 per_condition_q[cond].append(
                     model.query(embeds, present=mask).float().cpu())
 
-    g = torch.cat(gallery).double()
-    g = torch.nn.functional.normalize(g, dim=-1)
+    # The shared helper is also used by n15 and the dtype measurement harness.
+    # Keeping the normalisation as well as the GEMM in NumPy float64 is what
+    # makes those three paths the same numerical experiment rather than three
+    # implementations that happen to carry the same dtype label.
+    g = normalize_for_scoring(torch.cat(gallery).numpy())
     # The loader is `shuffle=False` and `drop_last=False`, so row i of the query
     # stack and row i of the gallery stack are the same asset. That is what makes
     # arange the target column; it is stated rather than assumed because
     # `rank_of_target` exists precisely so callers do not assume the diagonal.
-    targets = np.arange(g.size(0))
+    targets = np.arange(g.shape[0])
     out = {}
     for cond, chunks in per_condition_q.items():
-        q = torch.nn.functional.normalize(torch.cat(chunks).double(), dim=-1)
-        sim = (q @ g.T).numpy()
+        q = normalize_for_scoring(torch.cat(chunks).numpy())
+        sim = q @ g.T
         out[cond] = recall_at_k(sim, targets, ks=(1, 5))
     out["mean_R@1"] = float(np.mean([out[c]["R@1"] for c in QUERY_CONDITIONS]))
     out["mean_R@5"] = float(np.mean([out[c]["R@5"] for c in QUERY_CONDITIONS]))
-    out["n_gallery"] = int(g.size(0))
+    out["n_gallery"] = int(g.shape[0])
     return out
 
 

@@ -74,6 +74,37 @@ VARIANT_STATUS = paths.OUTPUTS / "variant_status.json"
 VARIANT_CKPTS = paths.OUTPUTS / "variant_ckpts.json"
 
 
+def verify_recorded_artifact(record: dict, label: str,
+                             rebuild_hint: str) -> Path:
+    """Return the recorded path only after its bytes match the recorded SHA.
+
+    Stage 2 previously performed this check inline only for its gallery index,
+    which made the scientific seam difficult to exercise without constructing
+    the whole training entry point.  Keeping the check as a pure helper gives
+    wrong-bytes, missing-file, and missing-digest cases direct negative tests.
+    """
+    uri = record.get("uri")
+    if not uri:
+        raise ValueError(f"the {label} record carries no uri. {rebuild_hint}")
+    artifact = Path(uri)
+    if not artifact.exists():
+        raise FileNotFoundError(
+            f"the {label} record names {artifact}, which does not exist. "
+            f"{rebuild_hint}")
+    claimed = record.get("sha256")
+    if claimed is None:
+        raise ValueError(
+            f"{artifact}'s record carries no sha256 and cannot be verified. "
+            f"{rebuild_hint}")
+    actual = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    if actual != claimed:
+        raise ValueError(
+            f"{artifact} hashes to {actual[:16]}... but its record claims "
+            f"{claimed[:16]}.... The {label} has changed since it was recorded; "
+            f"{rebuild_hint}")
+    return artifact
+
+
 def load_stage2_protocols() -> tuple[dict, dict, dict]:
     def read(name: str, writer: str) -> dict:
         path = paths.OUTPUTS / name
@@ -587,24 +618,10 @@ def main() -> int:
     # the record was written still loaded, while the record went on claiming the
     # old digest AND the producer checkpoint -- so the linkage check above would
     # pass over bytes neither of them describes.
-    index_path = Path(index_record["uri"])
-    if not index_path.exists():
-        raise FileNotFoundError(
-            f"the gallery index record names {index_path}, which does not "
-            "exist. Rebuild the index (n11).")
-    index_sha = index_record.get("sha256")
-    if index_sha is None:
-        raise ValueError(
-            f"{index_path}'s record carries no sha256 and cannot be verified. "
-            "Rebuild the index (n11).")
-    actual_index = hashlib.sha256(index_path.read_bytes()).hexdigest()
-    if actual_index != index_sha:
-        raise ValueError(
-            f"{index_path} hashes to {actual_index[:16]}... but its record "
-            f"claims {index_sha[:16]}.... The index has changed since it was "
-            "recorded; rebuild it.")
+    index_path = verify_recorded_artifact(
+        index_record, "gallery index", "Rebuild the index (n11).")
 
-    gallery_index = np.load(index_record["uri"])
+    gallery_index = np.load(index_path)
     id_to_row = {a: i for i, a in enumerate(gallery_index["ids"].tolist())}
     gallery_vecs = torch.from_numpy(gallery_index["embeddings"]).to(args.device)
 

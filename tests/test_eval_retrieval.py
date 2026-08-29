@@ -14,6 +14,7 @@ import pytest
 from metafind.eval.retrieval import (
     QUERY_CONDITIONS,
     condition_mask,
+    normalize_for_scoring,
     rank_of_target,
     recall_at_k,
 )
@@ -55,6 +56,24 @@ def test_the_mask_is_deterministic_not_the_training_sampler():
 def test_an_unknown_condition_is_refused():
     with pytest.raises(ValueError, match="unknown query condition"):
         condition_mask("text+layout", 4)
+
+
+def test_scoring_normalisation_is_shared_float64():
+    x = np.array([[3.0, 4.0], [1.0, -1.0]], dtype=np.float32)
+    got = normalize_for_scoring(x)
+    assert got.dtype == np.float64
+    assert np.array_equal(got[0], np.array([0.6, 0.8], dtype=np.float64))
+    assert np.allclose(np.linalg.norm(got, axis=1), 1.0)
+
+
+@pytest.mark.parametrize("bad", [
+    np.array([1.0, 2.0]),
+    np.array([[0.0, 0.0]]),
+    np.array([[np.nan, 1.0]]),
+])
+def test_scoring_normalisation_refuses_undefined_inputs(bad):
+    with pytest.raises(ValueError):
+        normalize_for_scoring(bad)
 
 
 # --- ranking -----------------------------------------------------------------

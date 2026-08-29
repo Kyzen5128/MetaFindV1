@@ -14,12 +14,48 @@ import pytest
 from metafind.train.stage2 import (
     build_context_graph,
     unique_positive_batches,
+    verify_recorded_artifact,
 )
 
 
 def samples(pattern: list[str]) -> list[tuple[str, int, str]]:
     """`pattern` gives each sample's assetId; house and index are incidental."""
     return [(f"h{i//5:03d}", i, a) for i, a in enumerate(pattern)]
+
+
+# --- downstream artifact integrity -----------------------------------------
+
+def test_stage2_refuses_an_index_record_pointed_at_wrong_bytes(tmp_path):
+    import hashlib
+
+    index = tmp_path / "index.npz"
+    index.write_bytes(b"the bytes that were recorded")
+    record = {"uri": str(index),
+              "sha256": hashlib.sha256(index.read_bytes()).hexdigest()}
+    index.write_bytes(b"different bytes")
+    with pytest.raises(ValueError, match="changed since it was recorded"):
+        verify_recorded_artifact(record, "gallery index", "Rebuild n11.")
+
+
+def test_stage2_refuses_an_unverifiable_or_missing_index(tmp_path):
+    index = tmp_path / "index.npz"
+    index.write_bytes(b"x")
+    with pytest.raises(ValueError, match="no sha256"):
+        verify_recorded_artifact({"uri": str(index)}, "gallery index", "Rebuild n11.")
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        verify_recorded_artifact(
+            {"uri": str(tmp_path / "gone.npz"), "sha256": "0" * 64},
+            "gallery index", "Rebuild n11.")
+
+
+def test_stage2_accepts_index_bytes_matching_the_record(tmp_path):
+    import hashlib
+
+    index = tmp_path / "index.npz"
+    index.write_bytes(b"stable")
+    record = {"uri": str(index),
+              "sha256": hashlib.sha256(index.read_bytes()).hexdigest()}
+    assert verify_recorded_artifact(record, "gallery index", "Rebuild n11.") == index
 
 
 # --- U-08e: no duplicate positive in a batch -------------------------------

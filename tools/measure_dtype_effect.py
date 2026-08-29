@@ -5,11 +5,11 @@
 
 Why this exists
 ---------------
-`run_retrieval` (n15) now scores in float64, because at production shape the
-collapse diagnostic `tie_count` moved with the caller's block size in 7-9 of 12
-float32 trials and in 0 of 12 float64 trials. `stage1.evaluate_dev_val` still
-scores in float32, and two evaluators with different numerical semantics is the
-thing we already refused once.
+`run_retrieval` (n15) moved to float64 because at production shape the collapse
+diagnostic `tie_count` moved with the caller's block size in 7-9 of 12 float32
+trials and in 0 of 12 float64 trials.  At the time this measurement was designed,
+`stage1.evaluate_dev_val` still scored in float32.  Both production evaluators
+now use the same `normalize_for_scoring` helper exercised by this harness.
 
 Changing it looks research-significant, because dev_val R@1 is the metric that
 SELECTS checkpoints and the ladder numbers (e5 0.9571, e10 0.9471, e25 0.9333 /
@@ -43,15 +43,24 @@ from metafind import paths, runlog
 
 
 def score(queries: dict, gallery: np.ndarray, dtype) -> dict:
-    from metafind.eval.retrieval import recall_at_k
+    from metafind.eval.retrieval import normalize_for_scoring, recall_at_k
 
-    g = gallery.astype(dtype)
-    g = g / np.linalg.norm(g, axis=1, keepdims=True)
+    # float64 is the production path shared by Stage 1 and n15.  The float32
+    # branch remains local to this diagnostic because it intentionally measures
+    # the legacy numerical path.
+    if dtype == np.float64:
+        g = normalize_for_scoring(gallery)
+    else:
+        g = gallery.astype(dtype)
+        g = g / np.linalg.norm(g, axis=1, keepdims=True)
     targets = np.arange(g.shape[0])
     out = {}
     for cond, q in queries.items():
-        q = q.astype(dtype)
-        q = q / np.linalg.norm(q, axis=1, keepdims=True)
+        if dtype == np.float64:
+            q = normalize_for_scoring(q)
+        else:
+            q = q.astype(dtype)
+            q = q / np.linalg.norm(q, axis=1, keepdims=True)
         out[cond] = recall_at_k(q @ g.T, targets, ks=(1, 5))
     out["mean_R@1"] = float(np.mean([out[c]["R@1"] for c in queries]))
     out["mean_R@5"] = float(np.mean([out[c]["R@5"] for c in queries]))

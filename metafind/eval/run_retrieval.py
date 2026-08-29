@@ -46,7 +46,11 @@ from pathlib import Path
 import numpy as np
 
 from metafind import paths, runlog
-from metafind.eval.retrieval import QUERY_CONDITIONS, condition_mask
+from metafind.eval.retrieval import (
+    QUERY_CONDITIONS,
+    condition_mask,
+    normalize_for_scoring,
+)
 
 __all__ = ["ProtocolResult", "score_streaming", "load_protocols", "main"]
 
@@ -441,8 +445,7 @@ def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
         a rank is counted differs; the same arithmetic is done with more bits.
         """
         import torch
-        x = torch.cat(chunks)
-        return torch.nn.functional.normalize(x, dim=-1).numpy().astype(np.float64)
+        return normalize_for_scoring(torch.cat(chunks).numpy())
 
     return {c: norm(v) for c, v in per_cond.items()}, norm(gal)
 
