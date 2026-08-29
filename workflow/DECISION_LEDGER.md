@@ -1069,6 +1069,74 @@ Master must not treat a pre-gate acceptance as though the gate had been satisfie
 
 ---
 
+## DL-033 — δ, the stopping threshold for the LR sweep
+
+`USER_APPROVED` · 2026-08-30 · Kyzen's word was **「甲」**
+
+```
+δ         = 1.0 percentage point  (0.010 absolute R@1)
+metric    = mean R@1 over {text, image, pc}
+protocol  = C_dev_selection  (query dev_val, gallery dev_val, n = 4,569)
+class     = IMPLEMENTATION CHOICE, user-approved
+```
+
+**How it is used** — on the paired difference's uncertainty interval:
+lower bound > δ ⇒ real improvement · upper bound < δ ⇒ may stop · interval straddles δ ⇒ add seeds.
+
+**δ was declared before the runs, not derived from the observed spread.**
+(Codex's condition: a threshold chosen after seeing the results is not a threshold.)
+
+Evidence: `workflow/blocks/ULIP2/evidence/delta_stopping_threshold.md`
+
+### Why the paper cannot supply δ
+
+[PAPER FACT `docs/paper/metafind_source/3experiments.tex:94-108`] — I read the table myself:
+`Fusion = Mean 9.4` · `Fusion = MLPs 9.9` · `Modality Dropout 10% 7.3 / 50% 13.2` ·
+`Train fuser only 8.7` · `Padding with 0 10.5` · `Full 11.4`.
+**The paper carries no standard deviation, no seed, no repeated run anywhere.**
+So δ genuinely cannot be derived from it. **This is paper silence, not a failed search.**
+
+⚠ **The evidence file's wording is one notch stronger than the table supports, and is corrected here**
+(ULIP2 Block Reviewer raised it; I checked the table and he is right).
+It says δ is "at least as large as the smallest gap MetaFind itself reports as a finding".
+**The same table has `w/o iterative retrieval 11.3` against `Full 11.4` — a 0.1 pp row**
+(`3experiments.tex:94,96`), which is smaller than the 0.9 pp floor it cites.
+**Correct phrasing: δ sits inside the band of differences the paper draws conclusions from (0.9–5.9 pp);
+that table also contains a 0.1 pp row.** δ = 1.0 stands; only the justification is narrowed.
+
+### Three things recorded with it
+
+**1. Primary development selector changed** (`✅` Kyzen 2026-08-29, R-33 item 3):
+the LR sweep selects on the **mean of the three unsaturated conditions** (text, image, pc).
+All seven conditions and every per-condition figure are still reported, as a guardrail.
+Reason: `text+image`, `text+pc`, `image+pc` and `full` are ≥ 0.98 at every checkpoint,
+so a seven-condition mean is diluted by four ceilings.
+
+**2. 🔴 Retracted, and must not enter this ledger as fact:**
+"the two e25 runs are a clean repeat, noise floor 0.00123."
+**Withdrawn** — `e25_400w` lacks the `preload` / `num_workers` fields that `e25_500w` has,
+so **the working tree changed between the two runs**; they also ran at different power caps.
+The dependent claim "the ladder's signal is 8× the noise" is withdrawn with it.
+**We currently have no measured seed-to-seed dispersion at all.**
+
+**3. `full = 1.0000` is INFERENCE, not established.**
+The mechanism is plausible (all three modalities survive masking for 0.7³ = 34.3% of samples,
+and both towers then see the same input) but it needs a negative control to be settled.
+**That debt sits on n15.**
+
+### Code review status of the batch this decision governs
+
+`CHANGES REQUIRED` (ULIP2 Block Reviewer). Two MAJOR, both one-line:
+- `ARM_EXCLUDED = ("seed",)` omits `preload` / `num_workers` / `device`, while `stage1.py:722`'s
+  error message sends the reader to it. They are excluded today only by not being merged into
+  `values`, and `:1059` establishes the opposite idiom.
+- `max_epochs` enters the arm hash but only warns (`:1187-1193`, "Nothing stops you"), so moving
+  the ceiling gives identical training a different arm identity.
+
+Re-review by Codex after the fix. **No training, sweep, n15 or A/B has been run.**
+
+---
+
 ## Maintenance rules
 
 1. Only Master edits this file.
