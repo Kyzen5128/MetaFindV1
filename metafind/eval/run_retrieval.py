@@ -33,6 +33,16 @@ and is recorded in the output, so breaking the seal is an act, not an accident.
 2026-08-30] A later aggregator that finds `signed_target_margin` next to `R@1`
 will eventually report one as the other.
 
+**A reported gallery is READ, not re-encoded.** [DL-048] Until 2026-08-30 this
+module re-encoded the whole gallery on every run and had never once opened
+`gallery_index.json` -- so the artifact n11 stages, G4 verifies and n12 promotes
+had **no consumer on the evaluation path**, and Table 1's A and B would have
+been scored against bytes no gate ever saw. A `reported: true` protocol now
+takes its gallery from the promoted index for this checkpoint's sha256 and
+REFUSES if there is not one; see `gallery_from_promoted_index`. Every result
+carries `gallery_source`, so "was this number index-backed?" is answerable from
+one field.
+
 Why the similarity matrix is never materialised
 -----------------------------------------------
 Protocol B is 9,138 queries x 45,692 gallery entries x 7 conditions = 2.9e9
@@ -56,9 +66,17 @@ from metafind.eval.retrieval import (
     normalize_for_scoring,
 )
 
-__all__ = ["ProtocolResult", "score_streaming", "load_protocols", "main"]
+__all__ = ["ProtocolResult", "score_streaming", "load_protocols",
+           "GALLERY_SOURCES", "gallery_source_for",
+           "gallery_from_promoted_index", "main"]
 
 NODE = "n15_eval_retrieval"
+
+# The complete set. A result's `gallery_source` is one of these three and is
+# never null: it is the field that makes "was this number index-backed?"
+# answerable without reading provenance prose.
+GALLERY_SOURCES = ("promoted_index", "direct_dev_encode",
+                   "untrained_direct_encode")
 
 # Cosine similarity is bounded above by 1, so the softmax shift needed for a
 # stable exp() is a constant rather than a streaming max. One less pass.
@@ -426,7 +444,155 @@ def check_seal(protocol_name: str, protocol: dict, unsealed: bool) -> bool:
     return touches_test
 
 
-def protocol_caveat(protocol: dict, splits: dict) -> str:
+def gallery_source_for(protocol: dict, untrained: bool) -> str:
+    """Where this protocol's gallery comes from -- FROM FIELDS, never a name.
+
+    Same rule as `protocol_caveat`, for the same reason: a protocol the artifact
+    adds carrying `reported: true` must not silently get the development path
+    because its key is not one this module happens to know. `reported` decides
+    it.
+
+    `--ckpt-record none` wins over `reported`, and that is not a loophole: an
+    untrained run reads no checkpoint record, so it has no Stage 1 sha256, so
+    there is no promoted index it could be bound to. It encodes its own gallery
+    and the returned value says so on its face.
+    """
+    if untrained:
+        return "untrained_direct_encode"
+    if protocol.get("reported", False):
+        return "promoted_index"
+    return "direct_dev_encode"
+
+
+def gallery_from_promoted_index(name: str, gallery_uids: list[str], ckpt: dict,
+                                backbone, model) -> tuple[dict, np.ndarray]:
+    """A reported protocol's gallery: the bytes a gate verified. FAIL CLOSED.
+
+    [DL-048] n15 re-encoded the gallery on every run and never opened
+    `gallery_index.json`, so the promoted index had no consumer here at all.
+    Table 1's A and B must be scored against the artifact n11 staged, G4
+    verified and n12 promoted -- not against a fresh encode nothing checked.
+
+    Every one of these REFUSES. None of them falls back to re-encoding: a silent
+    fallback would put a number in `table1.json` that nothing verified, and
+    nothing in the artifact would say so.
+
+    Raised by `load_promoted_index_for_checkpoint`, which does the lookup, the
+    bytes re-verification and the read as ONE call, and which n15 lets
+    propagate untouched -- `FileNotFoundError` (no registry, or the record names
+    a file that is gone), `KeyError` (no promoted index for this checkpoint),
+    `ValueError` (bytes do not hash to the record, the array disagrees with the
+    record's own count/dim, an asset id repeats, an identity field is missing).
+
+    ⚠ **n15 does not re-hash the file itself, and that is deliberate.** A verify
+    in one module and an open in another are two separate opens of the same
+    path, and the file can change between them: verification that does not hand
+    back the bytes it verified has not verified the bytes you score. The
+    re-verify is live on every read because it is inside the read.
+
+    Raised here, because they need this protocol's uids or this run's weights:
+
+    * the record's `stage1_checkpoint_sha256` is not this checkpoint. The lookup
+      is already keyed by that sha; this reads the FIELD, because
+      `gallery_index.main` writes it precisely on the ground that "a key is not
+      a field", and `verified_index` checks the field is PRESENT without
+      checking it AGREES
+    * the live gallery encoder does not hash to the record's
+      `gallery_encoder_sha256`
+    * a uid this protocol's gallery needs is absent from the index
+
+    ⚠ **ROW ORDER.** `gallery_index.main` writes `sorted(train + test)`;
+    `resolve_split(splits, "full")` returns `list(train) + list(test)`. Those
+    are DIFFERENT orders and `targets` is built from the protocol's order. Rows
+    are gathered by uid lookup, so the matrix returned is in the protocol's
+    order. Using the index's own order instead would score every query against
+    the wrong row and still produce a complete, plausible Table 1.
+
+    ⚠ **The uid relation is SUPERSET, not equality.** Protocol A's gallery is
+    the 9,138 test uids taken out of a 45,692-row index. Requiring the sets to
+    be equal would refuse A.
+
+    ⚠ **Whether this path and the re-encode path produce the same vectors is
+    UNVERIFIED, and nothing here should be read as claiming they do.** The
+    INPUTS match (OBSERVED IMPLEMENTATION: under `image_aggregation: mean`
+    `Stage1Dataset.__getitem__` returns `cached["image"]`, the array
+    `gallery_index` reads directly, and both build the cloud as xyz concatenated
+    with rgb). That is a statement about inputs only. `gallery_index` encodes
+    one asset at a time and `encode_pools` encodes in batches of 64, and a
+    different batch shape can select a different kernel -- the same class of
+    difference `block_plan` exists for. Only a synthetic parity test exists
+    today. Measuring the real delta needs a real promoted index.
+
+    Returns `(record, gallery)` where `gallery` is float64 and L2-normalised by
+    `normalize_for_scoring`, exactly as `encode_pools.norm` produces. The index
+    stores raw float32; this is the SAME single normalisation, not a second one.
+    """
+    # Owned by `metafind/train/gallery_index.py`. n15 does NOT parse
+    # `gallery_index.json` itself: two readers of one registry is how the two
+    # halves drift apart.
+    from metafind.train.gallery_index import (
+        gallery_encoder_sha256, load_promoted_index_for_checkpoint)
+
+    sha = ckpt.get("sha256")
+    if not sha:
+        raise ValueError(
+            f"{name} is reported, so its gallery must come from the promoted "
+            "index -- but the checkpoint record carries no sha256, so there is "
+            "nothing to look one up by.")
+
+    # (record, ids, embeddings) -- the loader raises if there is no promoted
+    # index for this sha, if the file is gone, or if its bytes no longer match
+    # the record. Refusing to re-encode after any of those is the whole point:
+    # Table 1's reported galleries are the bytes G4 verified and n12 published.
+    loaded = load_promoted_index_for_checkpoint(sha)
+    required = ("uri", "sha256", "gallery_encoder_sha256",
+                "stage1_checkpoint_sha256")
+    try:
+        record, ids, embeddings = loaded
+        assert isinstance(record, dict) and all(k in record for k in required)
+    except (TypeError, ValueError, AssertionError):
+        raise ValueError(
+            "load_promoted_index_for_checkpoint did not return the agreed "
+            f"(record, ids, embeddings), where record carries {list(required)}. "
+            f"Got {type(loaded).__name__}: {loaded!r:.200}.") from None
+
+    if record["stage1_checkpoint_sha256"] != sha:
+        raise ValueError(
+            f"the promoted index found for {sha[:16]}... states "
+            f"stage1_checkpoint_sha256 {record['stage1_checkpoint_sha256'][:16]}"
+            ".... The registry key and the record disagree about which "
+            "checkpoint built this index.")
+
+    live = gallery_encoder_sha256(backbone, model)
+    if live != record["gallery_encoder_sha256"]:
+        raise ValueError(
+            f"the gallery encoder loaded here hashes to {live[:16]}... but the "
+            f"index was built by {record['gallery_encoder_sha256'][:16]}.... "
+            "The vectors in the index are not the ones this model would "
+            "produce, and scoring against them would report a model that was "
+            "never measured.")
+
+    # No duplicate-id check here, and no ids/rows length check: `verified_index`
+    # raises on both, and its docstring says so. A second copy in this module is
+    # the drift the single-loader ruling exists to prevent -- these are
+    # guaranteed by the callee, not merely true of today's registry.
+    at = {u: i for i, u in enumerate(ids)}
+    absent = [u for u in gallery_uids if u not in at]
+    if absent:
+        raise ValueError(
+            f"{len(absent):,} of {name}'s {len(gallery_uids):,} gallery uids "
+            f"are absent from the promoted index (e.g. {absent[:3]}). The "
+            "index does not cover this protocol's gallery; it is not the index "
+            "this protocol should be scored against.")
+
+    # By uid, in the PROTOCOL's order. See the ROW ORDER note above.
+    rows = np.fromiter((at[u] for u in gallery_uids), dtype=np.int64,
+                       count=len(gallery_uids))
+    return record, normalize_for_scoring(embeddings[rows])
+
+
+def protocol_caveat(protocol: dict, splits: dict,
+                    gallery_source: str | None = None) -> str:
     """What a reader has to be told about this protocol's number -- FROM FIELDS.
 
     [ULIP2 REVIEWER 2026-08-30, MAJOR] This was a
@@ -451,10 +617,18 @@ def protocol_caveat(protocol: dict, splits: dict) -> str:
 
     [U-09] is unconditional on a reported protocol: the paper does not state its
     gallery for any of them.
+
+    `gallery_source` is a third derived clause, added for the same reason: a C
+    or D number is scored against a gallery this run encoded itself, and nothing
+    in the prose said so. It is derived by `gallery_source_for` from `reported`
+    and `--ckpt-record none`, never from the protocol's key, and it is passed in
+    rather than recomputed so the sentence and the `gallery_source` FIELD in the
+    same artifact cannot disagree.
     """
     if not protocol.get("reported", False):
-        return ("development protocol -- eval_protocols.json marks it "
+        base = ("development protocol -- eval_protocols.json marks it "
                 "reported: false; it selects checkpoints and is never reported")
+        return f"{base}; {_source_clause(gallery_source)}" if gallery_source else base
     parts = ["the paper does not state its gallery [U-09]"]
     if protocol.get("query_split") == "test":
         parts.append("query = test is this project's assumption")
@@ -464,7 +638,24 @@ def protocol_caveat(protocol: dict, splits: dict) -> str:
     if distractors:
         parts.append(f"the gallery contains {distractors:,} training assets "
                      "as distractors")
+    if gallery_source:
+        parts.append(_source_clause(gallery_source))
     return "; ".join(parts)
+
+
+def _source_clause(gallery_source: str) -> str:
+    """One sentence per `GALLERY_SOURCES` value. Unknown values are not silent."""
+    return {
+        "promoted_index":
+            "the gallery is the PROMOTED INDEX, verified by sha256 against the "
+            "record n12 published for this checkpoint",
+        "direct_dev_encode":
+            "the gallery was ENCODED BY THIS RUN and is not the promoted index, "
+            "so this number is not index-backed and no gate has seen it",
+        "untrained_direct_encode":
+            "the gallery was ENCODED BY THIS RUN from untrained fusion towers; "
+            "there is no Stage 1 checkpoint and therefore no promoted index",
+    }.get(gallery_source, f"unrecognised gallery_source {gallery_source!r}")
 
 
 def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
@@ -474,6 +665,14 @@ def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
     The gallery is encoded ONCE and shared by all seven conditions: the gallery
     tower sees every modality regardless of what the query withheld, which is
     what makes a condition a statement about the QUERY.
+
+    ``gallery_uids=None`` returns ``(queries, None)`` and **does not construct a
+    dataset, open a file or call the gallery tower at all.** That is how a
+    reported protocol's promise is kept: its gallery comes from the promoted
+    index, and "the encoder was not called" has to be a property of this
+    function rather than a habit of its caller. `run_protocol` is what passes
+    None, and `test_a_reported_protocol_never_calls_the_gallery_encoder` is what
+    holds it there.
     """
     import torch
     from torch.utils.data import DataLoader
@@ -501,8 +700,13 @@ def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
                     print(f"    batch {i}", flush=True)
         return gal, per_cond
 
-    print(f"  encoding gallery ({len(gallery_uids):,} assets)", flush=True)
-    gal, _ = embed(gallery_uids, [])
+    if gallery_uids is None:
+        gal = None
+        print("  gallery NOT encoded -- it comes from the promoted index",
+              flush=True)
+    else:
+        print(f"  encoding gallery ({len(gallery_uids):,} assets)", flush=True)
+        gal, _ = embed(gallery_uids, [])
     print(f"  encoding queries ({len(query_uids):,} assets, 7 conditions)",
           flush=True)
     _, per_cond = embed(query_uids, list(QUERY_CONDITIONS))
@@ -552,7 +756,8 @@ def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
         import torch
         return normalize_for_scoring(torch.cat(chunks).numpy())
 
-    return {c: norm(v) for c, v in per_cond.items()}, norm(gal)
+    return ({c: norm(v) for c, v in per_cond.items()},
+            None if gal is None else norm(gal))
 
 
 def apply_control(control: str, targets: np.ndarray, n_gallery: int,
@@ -648,8 +853,15 @@ def apply_control(control: str, targets: np.ndarray, n_gallery: int,
 
 def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
                  aggregation: str, device: str, batch_size: int,
-                 control: str, seed: int, block: int) -> tuple[dict, list]:
-    """One protocol, seven conditions. Returns (core result, per-query rows)."""
+                 control: str, seed: int, block: int,
+                 untrained: bool = False,
+                 ckpt: dict | None = None) -> tuple[dict, list]:
+    """One protocol, seven conditions. Returns (core result, per-query rows).
+
+    The gallery's SOURCE is decided here, from the protocol's own fields, not by
+    the caller handing one in -- see `gallery_source_for`. A reported protocol
+    gets the promoted index or an exception; nothing in between.
+    """
     query_uids = resolve_split(splits, protocol["query_split"])
     gallery_uids = resolve_split(splits, protocol["gallery_split"])
 
@@ -707,8 +919,24 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
             f"{name} declares gallery_size {declared:,} but the split resolves "
             f"to {len(gallery_uids):,}. One of them is stale.")
 
-    queries, gallery = encode_pools(backbone, model, query_uids, gallery_uids,
-                                    aggregation, device, batch_size)
+    # Decided from the protocol's own fields, here in the callee. A reported
+    # protocol gets the promoted index or an exception; there is no third
+    # outcome and no caller can arrange one. Note the ordering: the three
+    # refusals above -- empty pool, duplicate gallery uid, a query whose own
+    # asset is not in the gallery -- all fire BEFORE this, so they hold on the
+    # index-backed path exactly as they did on the re-encode path.
+    source = gallery_source_for(protocol, untrained)
+    index_record = None
+    if source == "promoted_index":
+        index_record, gallery = gallery_from_promoted_index(
+            name, gallery_uids, ckpt or {}, backbone, model)
+        # `None`, not `gallery_uids`: the gallery encoder is not called at all.
+        queries, _ = encode_pools(backbone, model, query_uids, None,
+                                  aggregation, device, batch_size)
+    else:
+        queries, gallery = encode_pools(backbone, model, query_uids,
+                                        gallery_uids, aggregation, device,
+                                        batch_size)
 
     eff_targets, control_used = apply_control(control, targets,
                                               len(gallery_uids), seed)
@@ -781,6 +1009,23 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
         # because removing a field changes the schema of a file other nodes read.
         "duplicate_gallery_uids": dupes,
         "control": control_used,
+        # ⚠ The five fields that make "was this number index-backed?"
+        # answerable without reading provenance prose. `gallery_source` is one
+        # of `GALLERY_SOURCES` and is never null; the other four are null
+        # exactly when there is no index and no checkpoint behind them.
+        #
+        # `gallery_encoder_sha256` is the RECORD's, and it is only non-null on
+        # the promoted path. IMPLEMENTATION CHOICE, stated rather than left to
+        # be discovered: computing it on a direct encode would hash the whole
+        # of `backbone.model` -- OpenCLIP ViT-bigG-14 included -- on every
+        # development run, to produce a value nothing compares against.
+        # `stage1_checkpoint_sha256` already identifies the weights there.
+        "gallery_source": source,
+        "gallery_index_uri": index_record["uri"] if index_record else None,
+        "gallery_index_sha256": index_record["sha256"] if index_record else None,
+        "gallery_encoder_sha256": (index_record["gallery_encoder_sha256"]
+                                   if index_record else None),
+        "stage1_checkpoint_sha256": (ckpt or {}).get("sha256"),
         "conditions": conditions,
         "embedding_health": embedding_health(gallery),
     }
@@ -996,12 +1241,14 @@ def main() -> int:
             core, rows = run_protocol(
                 name, protocols[name], splits, backbone, model,
                 encoding["image_aggregation"], args.device, args.batch_size,
-                args.control, args.seed, args.block)
+                args.control, args.seed, args.block, untrained, ckpt)
             # From the protocol's FIELDS, never its name. See protocol_caveat:
             # the name lookup that used to be here gave any protocol the
             # artifact adds the "never reported" caveat, printed beside a
-            # reported number.
-            core["caveat"] = protocol_caveat(protocols[name], splits)
+            # reported number. `gallery_source` is passed rather than
+            # recomputed, so the sentence and the field cannot disagree.
+            core["caveat"] = protocol_caveat(protocols[name], splits,
+                                             core.get("gallery_source"))
             core["sealed_split_read"] = seals[name]
             results[name] = core
 

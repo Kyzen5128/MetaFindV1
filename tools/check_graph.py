@@ -213,10 +213,31 @@ if m:
     # node id is not an implementation of it, and the first version of this
     # check counted three such comments as working code.
     implemented = re.findall(r"^# IMPLEMENTS-NODE: (\S+)$", src, re.M)
+    # SPLIT 2026-08-30, when G4_gallery_freeze became the first gate with code.
+    # The heading's second number sits in a sentence about NON-GATE nodes, and
+    # this check compared it against EVERY marker. Folding a gate into it would
+    # have made the sentence count something it does not name -- a check going
+    # green because the thing it measures was redefined to fit. The 19 does not
+    # move; that is the tell that splitting is the right fix rather than a
+    # rewrite around one marker.
+    impl_non_gate = [i for i in implemented if not i.startswith("G")]
+    impl_gate = [i for i in implemented if i.startswith("G")]
     check("README non-gate node count", len(non_gate) == int(m.group(1)),
           f"table says {m.group(1)}, registry has {len(non_gate)}")
-    check("README implemented-node count", len(implemented) == int(m.group(2)),
-          f"table says {m.group(2)}, filesystem shows {len(implemented)}: {sorted(implemented)}")
+    check("README implemented-node count", len(impl_non_gate) == int(m.group(2)),
+          f"table says {m.group(2)}, filesystem shows {len(impl_non_gate)}: "
+          f"{sorted(impl_non_gate)}")
+    # Worded to avoid the `(\d+)\s*個\s*gate` pattern further down, which counts
+    # TOTAL gates and matched "1 個 gate 節點" as a claim that there are 7.
+    mg = re.search(r"另有 \*\*(\d+) 個\*\*帶 `# IMPLEMENTS-NODE:` 標記的 gate 節點",
+                   readme_txt)
+    check("README implemented-gate heading present", mg is not None,
+          "the gate-implementation sentence changed shape; update this check "
+          "with it")
+    if mg:
+        check("README implemented-gate count", len(impl_gate) == int(mg.group(1)),
+              f"README says {mg.group(1)}, filesystem shows {len(impl_gate)}: "
+              f"{sorted(impl_gate)}")
 
 _ru = spec["risks_unknowns"]
 _ru_items = _ru["unknowns"] if isinstance(_ru, dict) else _ru

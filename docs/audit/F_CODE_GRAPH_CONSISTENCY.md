@@ -80,7 +80,7 @@ and is left for a deliberate commit rather than folded into this audit.
 | **encoder identity hash** | — | "gallery encoder matches Stage 1" | **backbone + fusion** | — | `FIXED`, `SPEC ONLY` |
 | index pinned to checkpoint | — | ✓ | digest compared at promote | promote tests | `CONSISTENT` |
 | **index filename is immutable** | — | write_once | named per checkpoint sha | — | `FIXED`, `SPEC ONLY` |
-| staging → gate → promote | — | ✓ | `promote(gate_passed)` | refuses without the gate | `CONSISTENT` |
+| staging → gate → promote | — | ✓ | `promote(gate_record_path)` reads G4's record | `test_gallery_freeze_gate.py` (refuses a missing / FAIL / non-terminal / foreign record, and a changed digest) | `CONSISTENT` |
 | Objaverse ≠ ProcTHOR index | U-08a | ✓ | separate paths | — | `SPEC ONLY` |
 | **ProcTHOR `pc_norm`** | — | — | `prepare_depth_shell` | — | `FIXED`, `SPEC ONLY` |
 

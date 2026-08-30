@@ -247,6 +247,11 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 
 ### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 19 個**
 
+另有 **1 個**帶 `# IMPLEMENTS-NODE:` 標記的 gate 節點：`G4_gallery_freeze`
+（`metafind/gates/g4_gallery_freeze.py`）。**兩者分開數**：上面那個 19 是
+「非 gate 節點」這句話裡的數字，把 gate 併進去會讓那句話數到它沒有指的東西。
+兩個數字都由 `tools/check_graph.py` 分別實測比對。
+
 > ⚠ **不要相信這張表，跑檢查器。**
 >
 > ```bash
@@ -254,14 +259,15 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 > grep -rn "^# IMPLEMENTS-NODE:" metafind/ tools/ setup/
 > ```
 >
-> 上面那兩個數字（31／19）是 `tools/check_graph.py` **會實測並比對**的，所以它們寫錯會紅；
+> 上面那三個數字（31／19／gate 的 1）是 `tools/check_graph.py` **會實測並比對**的，所以它們寫錯會紅；
 > 但**下面那張逐節點的表格沒有任何機器在看**，它只會安靜地過期。
 > 2026-08-30 這一輪就在裡面找到四處與檔案系統不符的敘述（見各列的「[已更正]」）。
 > **需要現況時以檢查器與 `git log` 為準，不要引用這張表的措辭。**
 >
-> 注：19 是 `# IMPLEMENTS-NODE:` **標記數**，不是相異節點數 ——
+> 注：19 是**非 gate** 的 `# IMPLEMENTS-NODE:` **標記數**，不是相異節點數 ——
 > `n15_eval_retrieval` 有兩支程式（`metafind/eval/retrieval.py` 與 `run_retrieval.py`）
-> 各帶一個標記，所以相異節點是 **18** 個。檢查器數的是標記。
+> 各帶一個標記，所以相異的非 gate 節點是 **18** 個。檢查器數的是標記。
+> gate 那邊 1 個標記對 1 個相異節點，沒有這個重複。
 
 規格完整不等於管線存在。這張表是為了讓讀者不會把前者讀成後者
 （第十九輪剛因為同一個理由修過 `L1-STAGE1-PROTOCOL-APPLIED` 的措辭）。
@@ -306,9 +312,9 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 > 這句話同時和本表 `n10_train_stage1` 那一列自相矛盾，**在同一份檔案裡**，
 > 而沒有任何檢查器在比對散文與表格。
 
-703 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、
+758 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、
 場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態，**沒有一條涵蓋任何節點的執行**。
-（703 = `tests/test_*.py` 裡 `^def test_` 的數量，由 `tools/check_graph.py` 實測並比對。）
+（758 = `tests/test_*.py` 裡 `^def test_` 的數量，由 `tools/check_graph.py` 實測並比對。）
 **[已更正 2026-08-30]** 先前寫「492 個測試函式…展開成 614 個 case」；492 已過期，
 而「614 個 case」是 pytest 參數化後的展開數、**本輪未重量，標 UNVERIFIED**。
 

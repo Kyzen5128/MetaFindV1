@@ -718,6 +718,7 @@ def test_the_untrained_run_loads_no_stage1_weights_and_says_so(tmp_path, monkeyp
 
     def fake_run_protocol(name, protocol, splits, *a, **k):
         captured["splits"] = splits
+        captured["tail"] = a
         return ({"protocol": name, "n_query": 1, "n_gallery": 1,
                  "conditions": {"full": {"R@1": 0.0, "R@5": 0.0,
                                          "diagnostics": {"signed_target_margin": {}}}},
@@ -757,3 +758,10 @@ def test_the_untrained_run_loads_no_stage1_weights_and_says_so(tmp_path, monkeyp
     # And the caveat for a `reported: false` protocol still came from the field.
     proto = json.loads((out / "table1.json").read_text())["protocols"]
     assert "never reported" in proto["C_dev_selection"]["caveat"]
+
+    # `main` hands run_protocol the two arguments that decide the gallery
+    # SOURCE, in that order. Asserted here because this is the only test that
+    # drives `main`, and a swapped pair would send a reported protocol down the
+    # untrained branch -- where it would encode its own gallery and say so in a
+    # field nobody was looking at yet.
+    assert captured["tail"][-2:] == (True, {}), captured["tail"][-2:]

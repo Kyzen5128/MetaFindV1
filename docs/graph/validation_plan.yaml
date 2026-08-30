@@ -1382,8 +1382,30 @@ level_3_gates:
     evidence: [L2-GALLERY-SELF]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G4_gallery_freeze.yaml"
-    implemented: false
-    record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
+    implemented: true
+    implementation: "metafind/gates/g4_gallery_freeze.py"
+    record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, code_dirty, runtime_source_sha256, runtime_source_status, is_terminal, index_uri, index_sha256, staging_record_sha256, stage1_checkpoint_sha256, gallery_encoder_sha256, expected_uid_set_sha256, sample_uid_sequence_sha256]
+    record_fields_note: >
+      Longer than the other gates' shared list, and the extra fields are the
+      ones n12 READS. Promotion re-verifies three identities against the
+      artifacts on disk -- staging record bytes, index bytes, checkpoint sha --
+      and it must not have to dig them out of `observed`, whose shape depends on
+      the verdict. `sample_uid_sequence_sha256` is what makes the "fixed 1000"
+      auditable: the seed names a recipe whose output depends on the RNG
+      implementation, the digest names what was actually drawn.
+    observed_but_not_a_criterion: >
+      `effective_rank` / `effective_rank_centred` and `ids_are_sorted` are
+      RECORDED and are NOT pass conditions. Both exist because the criterion
+      above cannot see what they measure. [MEASURED 2026-08-30] a fully
+      collapsed gallery satisfies the corrected self-retrieval criterion in
+      120 of 120 trials, because every vector ties for the maximum -- the
+      [CORRECTED] change bought tie-safety and paid in collapse-blindness. And
+      L2-GALLERY-SELF's own `negative_injection` ("shuffle the index id
+      mapping") does NOT fail this criterion: it scores each gallery ROW against
+      itself, so shuffling ids against rows leaves the arithmetic bit-identical.
+      `tests/test_gallery_freeze_gate.py::test_the_declared_negative_injection_does_not_fire`
+      holds that refutation. Detecting a row/id misalignment needs a re-encode
+      against the checkpoint, which this criterion does not specify.
     on_fail: "Do NOT promote. Discard the staging index and rebuild; the promoted location stays untouched."
     downstream_blocked: [n12_promote_index, n15_eval_retrieval, n16_compose_scenes]
 

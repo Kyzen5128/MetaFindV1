@@ -49,6 +49,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import yaml
 from PIL import Image
 
 from metafind import paths, runlog
@@ -123,10 +124,17 @@ def gallery_encoder_sha256(backbone, model) -> str:
     return h.hexdigest()
 
 
-def _write(path: Path, obj) -> None:
+def _write(path: Path, obj, dump=json.dump) -> None:
+    """Atomic, fsynced write. ``dump(obj, fh)`` -- json by default.
+
+    ``dump`` exists so G4's YAML gate record goes through THIS writer rather
+    than a second one: the temp-and-rename plus fsync is the property that
+    matters, and it should not have to be re-implemented per serialisation.
+    ``yaml.safe_dump`` has the same ``(obj, stream)`` signature as ``json.dump``.
+    """
     tmp = path.with_suffix(path.suffix + ".part")
     with tmp.open("w") as fh:
-        json.dump(obj, fh)
+        dump(obj, fh)
         fh.flush()
         os.fsync(fh.fileno())
     tmp.replace(path)
@@ -145,28 +153,219 @@ def build_index(embeddings: np.ndarray, ids: list[str], out: Path) -> dict:
     }
 
 
-def promote(gate_passed: bool) -> int:
+INDEX_RECORD_FIELDS = ("uri", "sha256", "dim", "count",
+                       "stage1_checkpoint_sha256", "gallery_encoder_sha256")
+
+
+class IndexUnreadable(ValueError):
+    """The .npz cannot be opened, or does not carry ``ids`` and ``embeddings``.
+
+    A subclass so the documented contract ("raises ValueError") stays true, and
+    a distinct type so G4 can tell MISSING EVIDENCE from a FAILED CHECK without
+    matching on an exception message. Those are rc 3 and rc 2 and they are not
+    interchangeable: a corrupt archive means nobody knows whether the index was
+    good, while a record that misdescribes its index means somebody knows it was
+    not.
+    """
+
+
+def verified_index(record: dict, source: str) -> tuple[list[str], np.ndarray]:
+    """Hash the bytes, then read THOSE bytes. Both halves, one call.
+
+    Splitting them -- verify here, open there -- is two separate opens of one
+    path, and the file can change in between. A verification that does not hand
+    back the bytes it verified has verified something other than what gets used.
+
+    ``source`` names whoever is making the claim (the promoted registry, the
+    staging record) so the error says which document is wrong. Returns
+    ``(ids, embeddings)`` with ``embeddings`` exactly as stored: float32,
+    unnormalised, in the index's own row order.
+    """
+    if missing := [k for k in INDEX_RECORD_FIELDS if k not in record]:
+        raise ValueError(f"{source} record is missing {missing}; it cannot "
+                         "identify the index it describes")
+    uri = Path(record["uri"])
+    if not uri.exists():
+        raise FileNotFoundError(
+            f"{source} names {uri}, which does not exist. The record and its "
+            "vectors have been separated.")
+    actual = hashlib.sha256(uri.read_bytes()).hexdigest()
+    if actual != record["sha256"]:
+        raise ValueError(
+            f"{uri} hashes to {actual[:16]}... but {source} records "
+            f"{record['sha256'][:16]}.... These are not the verified vectors.")
+
+    try:
+        npz = np.load(uri)
+        ids = [str(x) for x in npz["ids"]]
+        embeddings = npz["embeddings"]
+    except Exception as exc:  # noqa: BLE001 -- any read failure is unreadable
+        raise IndexUnreadable(f"{uri} cannot be read as an index: {exc}") from exc
+    if embeddings.ndim != 2:
+        raise ValueError(f"embeddings must be 2-D, got {embeddings.shape}")
+    if len(ids) != embeddings.shape[0]:
+        raise ValueError(f"{len(ids)} ids for {embeddings.shape[0]} vectors "
+                         f"in {uri}")
+    if (embeddings.shape[0], embeddings.shape[1]) != (record["count"], record["dim"]):
+        raise ValueError(f"{uri} is {embeddings.shape} but {source} records "
+                         f"count={record['count']} dim={record['dim']}")
+    return ids, embeddings
+
+
+def load_promoted_index_for_checkpoint(
+    checkpoint_sha: str,
+    promoted_path: Path | None = None,
+) -> tuple[dict, list[str], np.ndarray]:
+    """The promoted gallery index for one Stage 1 checkpoint. CONTRACT.
+
+    Every consumer of ``gallery_index`` goes through here. n15 does not parse
+    the registry itself, because the registry is a map of CLAIMS about files --
+    ``{stage1_sha: {uri, sha256, dim, count, ...}}`` -- and a claim nobody
+    re-checks is how an index built by one encoder gets read under another
+    one's provenance.
+
+    Re-verified on EVERY call, not once at import: the file named by the record
+    lives on a shared volume, and "it was correct when this process started" is
+    not the question a reader is asking.
+
+    Args:
+        checkpoint_sha: the Stage 1 checkpoint sha256 the index must belong to.
+            This is the registry key AND the identity being asserted.
+        promoted_path: the registry. Defaults to ``gallery_index.json``.
+
+    Returns:
+        ``(record, ids, embeddings)``. ``record`` is the registry entry, whose
+        provenance fields the caller carries into its own output.
+        ``embeddings`` is ``(N, D)`` **exactly as stored** -- float32,
+        unnormalised, in the index's own row order -- and ``ids[i]`` names row
+        ``i``. Row selection, uid ordering and the float64 normalisation are
+        n15's semantics, not the registry's, and none of them happen here.
+
+    Raises:
+        FileNotFoundError: no registry, or the record names a file that is gone.
+        KeyError: the registry holds no index for this checkpoint.
+        ValueError: the record cannot identify its index, the bytes do not hash
+            to the recorded digest, the array disagrees with the record's own
+            ``count``/``dim``, or an asset id repeats. Never returns None, an
+            empty result, or a partially-verified array.
+    """
+    path = Path(promoted_path) if promoted_path else PROMOTED_PATH
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path} not found -- n12 has not promoted an index. A missing "
+            "registry is not an empty one; refusing to score against nothing.")
+    promoted = json.loads(path.read_text())
+    if checkpoint_sha not in promoted:
+        raise KeyError(
+            f"{path} holds no index for checkpoint {checkpoint_sha[:16]}...; "
+            f"it has {sorted(k[:16] for k in promoted)}")
+    record = promoted[checkpoint_sha]
+    ids, embeddings = verified_index(record, str(path))
+    if len(set(ids)) != len(ids):
+        # A consumer building a uid -> column map from a list with repeats
+        # silently loses every earlier duplicate, and the loss shows up as a
+        # slightly lower R@k that nothing explains. G4 rejects duplicates too;
+        # this is here because the loader is what n15 trusts, and a trust
+        # boundary that relies on an upstream gate having run is not one.
+        raise ValueError(f"{record['uri']} repeats "
+                         f"{len(ids) - len(set(ids))} asset id(s)")
+    return record, ids, embeddings
+
+
+GATE_RECORD_PATH = paths.LOGS / "gates" / "G4_gallery_freeze.yaml"
+
+
+def promote(gate_record_path: Path | None = None) -> int:
     """[n12] Late commit: publish the artifact G4 actually verified.
 
     The digest is compared rather than trusted. A staging index rebuilt between
     verification and promotion would otherwise be published under G4's verdict
     without G4 having seen it -- which is the failure the two-step exists to
     prevent, so promotion cannot be the step that reintroduces it.
+
+    [2026-08-30] This took ``gate_passed: bool`` from a ``--gate-passed`` CLI
+    flag, so an operator typing a word stood in for the evidence the gate exists
+    to produce -- and nothing in the promoted registry recorded which verdict,
+    if any, had been asserted. The flag is GONE rather than ignored: an argument
+    that no longer decides anything still reads as "the gate is asserted here",
+    and the next person to add a caller would pass it.
+
+    Promotion now reads G4's own record and re-verifies all three identities it
+    contains -- staging record bytes, index bytes, checkpoint sha -- against
+    what is on disk NOW. Verifying one and inferring the others is exactly the
+    hole this closes: the staging-record digest proves the record is the one G4
+    read, and the index digest proves the vectors are the ones G4 scored, and
+    neither implies the other.
+
+    [L1-GATE-NORECORD] A missing gate record is NOT PASSED, never pass-by-default.
+
+    Returns 0 on success, 3 when the gate evidence is absent or does not say
+    PASS, 2 when an artifact disagrees with what the gate recorded.
     """
     if not STAGING_PATH.exists():
         print(f"{STAGING_PATH} not found -- run n11 first", flush=True)
         return 2
     staging = json.loads(STAGING_PATH.read_text())
-    if not gate_passed:
-        print("G4_gallery_freeze has not passed; refusing to promote", flush=True)
+
+    gate_path = Path(gate_record_path) if gate_record_path else GATE_RECORD_PATH
+    if not gate_path.exists():
+        print(f"{gate_path} not found -- G4_gallery_freeze has not run; "
+              "a missing gate record is not a pass", flush=True)
+        return 3
+    try:
+        gate = yaml.safe_load(gate_path.read_text())
+    except yaml.YAMLError as exc:
+        print(f"{gate_path} is not readable YAML: {exc}", flush=True)
+        return 3
+    if not isinstance(gate, dict) or gate.get("gate_id") != "G4_gallery_freeze":
+        print(f"{gate_path} is not a G4_gallery_freeze record "
+              f"(gate_id={gate.get('gate_id') if isinstance(gate, dict) else None})",
+              flush=True)
+        return 3
+    if gate.get("verdict") != "PASS":
+        print(f"{gate_path} records verdict {gate.get('verdict')!r} "
+              f"(rc {gate.get('rc')}); refusing to promote", flush=True)
+        return 3
+    if gate.get("is_terminal") is not True:
+        print(f"{gate_path} is not a terminal record; refusing to promote",
+              flush=True)
         return 3
 
+    # The record G4 read must be the record on disk now, byte for byte. This
+    # subsumes every field inside it -- and the two digests below are still
+    # compared, because "the file did not change" and "these bytes are the
+    # index G4 scored" are different claims and only one of them is about the
+    # .npz.
+    staging_now = hashlib.sha256(STAGING_PATH.read_bytes()).hexdigest()
+    if gate.get("staging_record_sha256") != staging_now:
+        print(f"{STAGING_PATH} changed since G4 verified it "
+              f"({str(gate.get('staging_record_sha256'))[:12]} -> "
+              f"{staging_now[:12]}); refusing", flush=True)
+        return 2
+
     for stage1_sha, record in staging.items():
+        if gate.get("stage1_checkpoint_sha256") != record["stage1_checkpoint_sha256"]:
+            print(f"G4 verified an index built from checkpoint "
+                  f"{str(gate.get('stage1_checkpoint_sha256'))[:12]}... but the "
+                  f"staging record names "
+                  f"{record['stage1_checkpoint_sha256'][:12]}...; refusing",
+                  flush=True)
+            return 2
+        # Hashed ONCE, compared against BOTH authorities. They are different
+        # questions -- "is this what G4 scored?" and "is this what the staging
+        # record describes?" -- and only the second one existed before.
         on_disk = hashlib.sha256(Path(record["uri"]).read_bytes()).hexdigest()
+        if gate.get("index_sha256") != on_disk:
+            print(f"{record['uri']} is not the artifact G4 verified "
+                  f"({str(gate.get('index_sha256'))[:12]} -> {on_disk[:12]}); "
+                  "refusing", flush=True)
+            return 2
         if on_disk != record["sha256"]:
             print(f"{record['uri']} changed since staging "
                   f"({record['sha256'][:12]} -> {on_disk[:12]}); refusing", flush=True)
             return 2
+
+    gate_sha = hashlib.sha256(gate_path.read_bytes()).hexdigest()
 
     promoted = json.loads(PROMOTED_PATH.read_text()) if PROMOTED_PATH.exists() else {}
     for stage1_sha, record in staging.items():
@@ -178,8 +377,15 @@ def promote(gate_passed: bool) -> int:
             print(f"gallery_index[{stage1_sha[:12]}] already published with a "
                   f"different digest; refusing to overwrite", flush=True)
             return 2
-        promoted[stage1_sha] = {**record,
-                                "promoted_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+        promoted[stage1_sha] = {
+            **record,
+            # Which verdict published this, and the bytes of that verdict. A
+            # promoted index whose record cannot name the gate record that
+            # cleared it is back to being an assertion.
+            "gate_record_uri": str(gate_path),
+            "gate_record_sha256": gate_sha,
+            "promoted_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        }
     _write(PROMOTED_PATH, promoted)
     print(f"promoted {len(staging)} index/indices -> {PROMOTED_PATH}")
     return 0
@@ -195,12 +401,14 @@ def main() -> int:
                          "the canonical stage1_ckpt.json; name a run's own "
                          "record to promote a sweep arm without copying it "
                          "over the canonical file.")
-    ap.add_argument("--gate-passed", action="store_true",
-                    help="promote only: assert G4_gallery_freeze returned PASS")
     args = ap.parse_args()
 
     if args.mode == "promote":
-        return promote(args.gate_passed)
+        # No flag. `--gate-passed` used to let the operator assert the verdict;
+        # promotion reads G4's record instead, and an unrecognised argument is
+        # the loudest possible way to tell an old command that it no longer
+        # means what it says.
+        return promote()
 
     import torch
     from metafind.train.stage1 import (
