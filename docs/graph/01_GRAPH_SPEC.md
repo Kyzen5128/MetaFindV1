@@ -29,7 +29,7 @@ cycle 僅存在於 subgraph 內。
 | Qwen 語意邊 | 同上，另以描述雜湊為 key 快取 |
 | Qwen 場景評分 | 貪婪解碼 + 固定 prompt 版本 + 記錄模型 revision |
 | GPU atomics | 固定 seed；等變性測試用數值容差 |
-| ANN 近似 | **消除** —— 46,052 × 1280 × 4B ≈ 236 MB，用精確內積 |
+| ANN 近似 | **消除** —— gallery 是 n05 admitted 的 **45,692** 筆語料，45,692 × 1280 × 4B ≈ 234 MB，用精確內積 |
 
 ---
 
@@ -70,10 +70,18 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 
 ### 偏離清單
 
+> 🔴 **[2026-08-30] 這張表只到 D-6，而登記表已經到 D-14。**
+> `graph_spec.yaml` 的 `boundary.deviations` ＋ `conditional_deviations` 實際是
+> **D-1 … D-14 共 14 筆**（D-1 為條件式且已判定不啟用，其餘 13 筆為 active）。
+> `tools/check_graph.py` 只比對 `README.md`、`02_BUILD_STEPS.md` 與根目錄 `README.md`
+> 三份鏡像表，**不看這一張**，所以它可以無聲落後八筆。
+> **權威清單在 `graph_spec.yaml`，人類可讀的完整版在 [`README.md`](README.md) 的偏離表。**
+> 這裡**不再補成第四份副本** —— 三份鏡像已經是這族錯誤的成因；下面六列保留為 D-1…D-6 的細節說明。
+
 | id | 偏離 | 理由 | 影響 |
 |---|---|---|---|
 | **D-1** | ViT-bigG-14 保持凍結 | — | **狀態：`resolved_inactive`（2026-08-16）**。`paper_clip_train_scope = actual_clip_train_scope = frozen`，`active_if` 為 false，**不列為 active deviation**。判定它的是**讀法**，不是硬體 —— 這一格先前寫「2.5B 在 24GB 上無法訓練」，那已不是 D-1 成立與否的理由。**判讀依據**：MetaFind 明確建立於 ULIP-2；ULIP-2 §3.3 明文 "freeze it during pre-training"；MetaFind 全文未逐 module 聲明改變此策略。**不得寫成「MetaFind 明文說 OpenCLIP frozen」** —— 論文沒有這句。重開條件：取得官方 code 或作者回覆，證實 optimizer 更新到 OpenCLIP 參數。 規則保留不刪：它是「論文要訓練、我們凍結」這個狀態的唯一編碼，重開後即可再次生效。RA-3 保留，但改為 **alternative trainable-scope 可行性稽核**，只記錄不阻斷 |
-| **D-2** | Qwen2.5-VL 取代 GPT-4o | 專案決定 | **Table 1 與 Table 2 都受影響** —— Qwen 不只換掉裁判，也換掉 46,052 筆資產標註（文字塔的訓練資料）。所以 SC-1 只報告差距、不設門檻 |
+| **D-2** | **`gemma-4-12B-it`** 取代 GPT-4o（**資產標註 n05**） | 專案決定 | **主要影響 Table 1** —— 它換掉的是 **45,692 筆**資產標註（文字塔的訓練資料）。**[已更正 2026-08-30]** 這一格先前寫 `Qwen2.5-VL`／`46,052 筆`，兩者都不是產物裡的東西：普查 `data/outputs/annotations/*.json` 全部 45,692 筆，`annotator_model` **無一例外**是 `gemma-4-12B-it`（prompt_version 8 共 43,597 筆、v9 共 2,095 筆）。46,052 是 Objaverse-LVIS uid 清單數，不是標註數。裁判（n17）另計，見 D-8。所以 SC-1 只報告差距、不設門檻 |
 | **D-3** | 不重跑 baseline | 只復現 MetaFind | SC-2 只能與論文公佈值比較 |
 | **D-4** | 不做人工評分 | 無標註人力 | Table 2 人工欄 `INSUFFICIENT_EVIDENCE` |
 | **D-5** | I-Design 中**所有**設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` | 無專有 API | **與 D-2 不同**：D-2 換的是標註與評分用的 GPT-4o。規劃器換掉會**改變場景本身**，Table 2 全部與 Table 3 場景欄一起位移；**Table 1 完全不受影響**（它不跑規劃器） |
@@ -87,7 +95,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 
 | channel | merge | 為什麼 |
 |---|---|---|
-| `asset_manifest` | `write_once` | 論文說「約 48,000」，實際 46,052。**一律 `len(manifest)`，不得寫死** |
+| `asset_manifest` | `write_once` | 論文說「約 48,000」，實際 **46,052（Objaverse-LVIS uid 清單）**。**一律 `len(manifest)`，不得寫死**。注意這是三個語料數字裡的**第一個**：manifest 46,052 → n04 實際渲染 46,024 → n05 admitted 45,692 |
 | `splits` / `split_seed` | `write_once` | **物件級**。洩漏是 G-INVALID，定案後不得改 |
 | `scene_splits` | `write_once` | **新增**。ProcTHOR 房屋 split 從 `splits` 拆出來，讓 Stage 1 不再等 ProcTHOR 分支 |
 | `composition_protocol` | `replace` | **新增**。U-18／U-21，未決前保持可改 |
@@ -95,7 +103,7 @@ Objaverse-LVIS 與 ProcTHOR 資料管線、Table 1/2/3、SE(3) 驗證、復現�
 | `eval_protocols` | `write_once` | **取代先前的 `gallery_size_locked` 單一整數**，見 §7 |
 | `asset_glb` | `upsert_by_key` | **保留不刪** —— Algorithm 1 需要真實幾何 |
 | `pointclouds` | `upsert_by_key` | 從 mesh 取樣；`G2_pc_sanity` 檢查結構有效性，U-02 降為診斷 |
-| `renders` | `upsert_by_key` | 11 視角 × 46,052 |
+| `renders` | `upsert_by_key` | **12 視角 × 46,024**（`logs/renders_index.jsonl` 實數）。**[已更正 2026-08-30]** 先前寫「11 視角 × 46,052」：視角數見 D-11 附註的 12-視角偏離，46,052 是 manifest 不是渲染產出 |
 | `objaverse_annotations` | `upsert_by_key` | **以 Objaverse uid 為 key**。ProcTHOR 物件屬於另一個命名空間，不得讀這條 |
 | `procthor_object_text` | `upsert_by_key` | **新增**。ProcTHOR 場景圖的 `t_i` 與語意邊的輸入，來自 ProcTHOR 自己的 metadata |
 | `procthor_dataset` | `write_once` | **新增**。先前 ProcTHOR 根本沒進 graph state，導致 G1 無從檢查它 |
@@ -139,13 +147,13 @@ SG4 每輪的 scene graph（可由初始圖 + placed_assets 重建）、model cl
 |---|---|---|
 | `n03_sample_pointclouds` | compute | 從 mesh 取樣 10,000 點 xyz+rgb，複製 ULIP 的 `pc_norm` |
 | **`G2_pc_sanity`** | evaluate | **G-INVALID**。形狀／有限／`pc_norm`／非退化／自我可辨識。**與 ULIP 官方點雲的比較降為 L2 診斷** |
-| `n04_render_views` | compute | 11 個視角、224px；**投影方式為設定值，預設正交（U-03a，不是論文明文）** |
-| `n05_annotate` | model | Qwen2.5-VL → category / dimensions / materials / placement_constraints |
+| `n04_render_views` | compute | **實際：12 視角（OpenShape `openshape_three_rings_of_four`）、512px、perspective、transparent RGBA**，由 `metafind/data/render_blender.py` 產生。**[已更正 2026-08-30]** 先前寫「11 個視角、224px、預設正交」—— 那些常數還在 `metafind/data/renders.py`，但該檔自己標註它們是 **RETIRED 的 pyrender 路徑**，live 路徑讀的是 `render_blender.N_VIEWS = 12`。11／224／orthographic 仍是**論文陳述值**與 U-03／U-03a／U-04 的比較基準，不是我們的產出 |
+| `n05_annotate` | model | **`gemma-4-12B-it`** → category / dimensions / materials / placement_constraints。**[已更正 2026-08-30]** 先前寫 `Qwen2.5-VL`；45,692 筆產物的 `annotator_model` 全是 `gemma-4-12B-it`（見 D-2） |
 | `n05b_resolve_stage1_encoding` | **human** | **決定 `n06` 該編碼什麼**（層 6b，早於 `n06`）：U-15 序列化／U-14 視圖聚合／U-11 缺席模態表示；並**記錄已解決的 U-34 = `frozen`** 連同 `paper_clip_train_scope_basis` 與 `_confidence`（供 `n21` 引用）；並產出 `stage1_hyperparameters` 與 `variant_registry` |
 | `n06_encode_text_image` | model | CLIP 凍結 → 可快取；**PC 不在此列**。**`actual=trainable` 時整個不執行**（`e09` 的 guard），此時 `n09` 改由 `e11b` 取得原始 renders／annotations |
 | `n07_scene_graphs` | compute | ProcTHOR → 節點（位置 + `t_i`）、物理邊（support 讀自 children 樹）。**`t_i` 來自 ProcTHOR metadata，不是 Objaverse 標註** |
 | `n08_semantic_edges` | model | Qwen 對 **ProcTHOR 物件描述**產生關係句 → frozen text encoder → `e_ij` |
-| `n07b_procthor_asset_modalities` | compute | **每個 ProcTHOR 資產的隔離渲染（11 視角正交，與 n04 同協定）＋ 深度外殼點雲 ＋ 文字**。U-08b 判定後新增 —— 沒有它，「Stage 2 的目標是 ProcTHOR 資產」只是文件上的一句話，`n13` 拿不到 `e_query` |
+| `n07b_procthor_asset_modalities` | compute | **每個 ProcTHOR 資產的隔離渲染（實測 sidecar：11 視角、224px、orthographic）＋ 深度外殼點雲 ＋ 文字**。🔴 **[2026-08-30 發現的缺口，未修]「與 n04 同協定」現在不成立。** `procthor_modalities.py` 從 `renders.py` **import** `N_VIEWS/RESOLUTION/PROJECTION` 並在 docstring 宣稱「n04-compatible is enforced by construction」，但 n04 的 live 路徑早已改讀 `render_blender.py`（12 視角／512px／perspective／transparent），`renders.py` 那三個常數自己標註為 **RETIRED**。兩側影像因此走**同一個凍結 gallery encoder** 卻來自兩種渲染協定 —— 這是 seam 級問題，屬 n04／n07b，已上呈 MASTER，不在本文件修。U-08b 判定後新增 —— 沒有它，「Stage 2 的目標是 ProcTHOR 資產」只是文件上的一句話，`n13` 拿不到 `e_query` |
 | `n09_build_splits` | compute | **物件 80/20，只讀 Objaverse** |
 | `n09c_build_scene_splits` | compute | **新增**。房屋 80/20，只讀 ProcTHOR |
 | `n09b_resolve_stage2_protocol` | **human** | **決定 U-08a／U-08b** —— 正樣本對應與模態來源。論文沒說，只能由人決定 |
@@ -301,21 +309,31 @@ n01_env_bootstrap → n02_download → G1_sources_valid
 **[論文 §2.1]** > retrieves the asset from a **pre-encoded asset database** $\mathcal{A}$
 **[論文 §3.1]** > 80% training / 20% testing
 
-論文沒說檢索時 gallery 是全部 46,052 還是只有 20% 測試集，差別是隨機命中率 5 倍。
+論文沒說檢索時 gallery 是全部語料還是只有 20% 測試集，差別是隨機命中率 5 倍。
 
 **先前草稿打算「用 baseline PC-Only ≈98–99% 反推分母」—— 那不可能成立。**
 PC-Only 的 query embedding 就等於它自己的 gallery 條目，
-**無論分母是 46,052 還是 9,210，自我檢索都趨近 100%**，完全無法區分。
+**無論分母是 45,692 還是 9,138，自我檢索都趨近 100%**，完全無法區分。
 
-**改為兩個協定都跑、都報**：
+**[已更正 2026-08-30] 實際落地的是三個協定，不是兩個**，而且數字要用 admitted 語料
+（45,692 = 46,024 − 311 − 21），不是 manifest 的 46,052。以下逐字取自
+`data/outputs/eval_protocols.json`（OBSERVED DATA）：
 
 ```yaml
 eval_protocols:
-  A_test_gallery:  {query: test, gallery: test}    # ~9,210
-  B_full_gallery:  {query: test, gallery: full}    # 46,052
+  A_test_gallery:   {query: test,     gallery: test,     gallery_size:  9138, reported: true }
+  B_full_gallery:   {query: test,     gallery: full,     gallery_size: 45692, reported: true }
+  C_dev_selection:  {query: dev_val,  gallery: dev_val,  gallery_size:  4569, reported: false}
 ```
 
-產出 `R@1_A / R@5_A / R@1_B / R@5_B`。**[未定 U-09]**
+`C_dev_selection` 是**開發期選型用的**，`reported: false` —— 它不進報告，但它存在，
+而先前這份文件寫「兩個協定」等於在說它不存在。**一個不被文件承認的評估協定，
+就是一條沒有人在看的模型選擇路徑。**
+
+切分實數（`data/outputs/splits.json`）：test 9,138 ／ train 36,554
+（其中 dev_train 31,985 ／ dev_val 4,569）／ `admitted_total` 45,692。
+
+產出 `R@1_A / R@5_A / R@1_B / R@5_B`（C 不報）。**[未定 U-09]**
 
 ---
 
@@ -446,7 +464,7 @@ eval_protocols:
 | **O5 Cost** | 逐節點 GPU 秒 / wallclock / Qwen token / 外部呼叫 |
 
 **B1**：進度真相是原子寫入的 checkpoint，stdout 只是鏡像；stdout 失效不得讓工作失敗。
-**B2**：46,052 資產與 12,000 房屋逐項 sidecar（含來源 sha256、seed、失敗原因）。
+**B2**：逐項 sidecar（含來源 sha256、seed、失敗原因）。**[已更正 2026-08-30]** 三個階段的分母不同，不得寫成單一個 46,052：manifest／點雲 **46,052**、渲染 **46,024**、標註 **45,692**；房屋 **12,000**。
 
 ---
 
@@ -568,7 +586,7 @@ graph TD
 | 20 | | **G5** | — |
 | 21 | `n22` | | <1 h |
 
-**關鍵路徑**：Layer 2（GLB 下載）與 Layer 6（Qwen 標註 46,052 資產）。
+**關鍵路徑**：Layer 2（GLB 下載）與 Layer 6（`gemma-4-12B-it` 標註 **45,692** 個 admitted 資產）。
 
 > **先前的草稿把 `n20` 與 `n21` 排在同一層平行執行**，但 dependency 明寫
 > `n21 depends_on n20` —— 不可能平行。`tools/check_graph.py` 現在會用
@@ -595,8 +613,11 @@ graph TD
 | **U-06** | UNKNOWN | 語意邊要對哪些物件對；`e_ij` 的寬度 | 選一個並記錄；列入報告未定項 |
 | **U-07** | UNKNOWN | ProcTHOR 官方 split vs 論文 80/20 | 主線用論文 80/20，兩者都記錄 |
 | **U-08** | UNKNOWN | **Stage 2 訓練樣本如何建構** | 論文完全未定義；明列我們採用的協定 |
-| **U-08a** | **UNKNOWN・阻斷** | **Stage 2 的正樣本是哪一個 gallery 條目**。實測 ProcTHOR assetId 與 Objaverse uid **交集為 0**（995 vs 46,052） | `n09b` 決定，`G6` 強制 |
-| **U-08b** | **UNKNOWN・阻斷** | ProcTHOR 目標物件的 text / image / point cloud 從哪來 | 同上，Eq.6 的三個模態沒有來源 |
+| **U-08a** | **RESOLVED 2026-08-16** | **Stage 2 的正樣本是哪一個 gallery 條目**。實測 ProcTHOR assetId 與 Objaverse uid **交集為 0**（995 vs 46,052 —— 後者是 Objaverse-LVIS uid 清單，不是我們的語料數） | 判定：Stage 2 用**自己的 ProcTHOR gallery**，正樣本是**同一個 assetId**，完全不需要 ProcTHOR→Objaverse 對應。由 `n09b` 物化、`G6` 強制。**[已更正 2026-08-30]** 這一格先前寫「UNKNOWN・阻斷」，而 `graph_spec.yaml` 的 `risks_unknowns` 從 2026-08-16 起就是 `marked: RESOLVED` —— 又一次登記表半途遷移 |
+| **U-08b** | **RESOLVED 2026-08-16** | ProcTHOR 目標物件的 text / image / point cloud 從哪來 | 判定：AI2-THOR 隔離渲染（F24）；點雲為多視角深度外殼；query 側可缺點雲。由 `n07b` 產出。**[已更正 2026-08-30]**，同上 |
+| **U-08c** | UNKNOWN | **MetaFind 實際用的 ProcTHOR 資產數是多少** —— 四個數字互不相同。**[PAPER]** §2.3 與 §3.1 兩次寫 >3,000，是作者自己的宣稱不是我們誤讀；**[UPSTREAM]** ProcTHOR 2022 寫 1,633 個家用資產、108 類，且把資產身分與材質隨機化／物件狀態分開，所以「算變體」的解釋很弱；**[MEASURED]** 本機 AI2-THOR 5.0.0 的 asset database 有 1,934 筆，重新下載的 12,000 間房只用到 1,467 個相異 assetId。已排除：副本壞掉（重載位元相同）、revision 差異（舊 revision 相同）、房屋抽自更大的庫（庫就是 1,934）、以及「算的是 object instance」（ProcTHOR 自報每間房 76±48 個物件，是幾十萬不是 3,000） | **一律從安裝的 build 現場推導，不寫死任何已公佈數字**；把出處落差做成報告裡的一張表；用觀測集合的子集跑 Stage 2 資產宇宙敏感度診斷，**不捏造資產湊到 3,000**。影響負樣本多樣性、hard-negative 頻率與覆蓋率，**不影響 Eq.7 的定義**（負樣本是 in-batch）。兩個並存的可能性都不斷言：(a) 作者用了未公開／自行擴充的資產宇宙，(b) 用的是公開語料而把數字報錯了 |
+| **U-08d** | **RESOLVED 2026-08-16** | **一個 Stage 2 訓練樣本 `(G_context, Q_j, A_j+)` 怎麼從一間 ProcTHOR 房子生出來**。U-08a 定了正樣本是誰、U-08b 定了它的模態，但「哪個物件當目標／一間房產幾筆／ESSGNN 跑之前目標有沒有從圖裡拿掉／一個 epoch 是什麼」四件事沒有一件有人說。留著不決定，DataLoader 的預設會把四件一起默默答完 | 逐個合格 object instance 做 leave-one-out：`sampling_unit=object_instance`；目標必須在 `procthor_asset_modalities` 裡**且有點雲**（F26 實測 24 個透明材質資產的深度 prepass 整個看不到，而 §2.6 要求 gallery 模態完整，所以它們不得當正樣本）；`target_removed_before_essgnn=true`（留著等於讓佈局編碼器看到答案）；`samples_per_house=all_eligible`；`instance_resampling=fixed`；epoch = 掃過一次列舉出來的樣本。**實測 12,000 間房共 827,730 個 instance、train 側約 662,000**，與「一間房一筆」的 9,600 差兩個數量級。論文一項都沒寫 |
+| **U-08e** | **RESOLVED 2026-08-16** | **同一個 assetId 在一個對比 batch 裡出現兩次怎麼辦**。U-08d 讓每個合格 instance 都成為樣本是對的，但 665,320 個 train instance 只用 1,467 個相異資產，assetId 必然重複；Eq.7a/7b 下第二次出現會落進分母當**負樣本**，而它和正樣本是同一個資產 | `batch_positive_uniqueness = true` —— sampler 讓每個 `positive_asset_id` 一個 batch 最多出現一次；一個 epoch 仍用滿 665,320 筆，只限制同批共存。**實測**：batch 64 有 99.3% 的 batch 至少含一組重複正樣本，128 以上是 100%。直接損害不大（batch 64 的不可約 loss 下限 0.098 nats，對比亂猜的 log(64)=4.159），但**凍結編碼器下同一 assetId 的 gallery 向量完全相同**，`sim(q, g_dup) == sim(q, g_pos)` 逐位元相等，那個 false-negative 梯度要模型把兩個一模一樣的向量分開 —— 目標不可達，貢獻的是雜訊而不是訊號。已否決改成 multi-positive InfoNCE（那會動到 Eq.7 本身；論文寫的是標準成對 in-batch 目標，加一條 sampler 約束不動它） |
 | **U-09** | UNKNOWN | Table 1 的 gallery 範圍**以及 query 範圍**。§3.1 只寫 80/20，從未說 query 就是那 20% | gallery 兩個協定都跑；query=test **列為假設** |
 | **U-10** | UNKNOWN | Table 2 的 Scene Coherence 對應 IDesign 哪個面向 | 記錄對應假設 |
 | **U-11** | UNKNOWN | **缺席模態怎麼表示**。§2.6 只排除 zero-padding，從沒說用什麼取代 | `stage1_encoding_protocol.missing_modality_representation` 記錄，`G3` 檢查。三個讀法：`learned_token`（目前唯一實作）／`validity_mask`／`drop_slot`。**先前這是 `FusionConfig` 的預設在決定** —— 登記成 UNKNOWN 卻讓 dataclass 選，而它影響 Table 1 每一個 partial-modality 欄位 |
@@ -625,7 +646,7 @@ graph TD
 | **U-32** | UNKNOWN | **scene dropout 的粒度**。§2.6 寫 "omitted in 30% of **batches**"，字面是**整批**一起丟；**現行主線就是 batch-level**（`scene_dropout_granularity="batch"`），`sample` 保留為變體。對 in-batch 對比 loss 而言兩者的訓練分布不同 | `stage2_protocol.scene_dropout_granularity` 記錄，G6 檢查。注意 §2.6 另一個 30%（Stage 1 的 modality masking）明文 "independently"，那個才真的是 per-sample |
 | **U-31** | UNKNOWN・**可執行** | **ESSGNN 的 L 層是否共用參數**。§2.5 寫 `θ_h`、`θ_x` 都沒有層索引。這會改變參數量，也改變 F11：獨立層時最後一層座標頭沒有 loss path，**共用參數時同一個 `f_x` 仍會從前 L−1 層收到梯度** | 實作用每層獨立權重，記錄為選擇 |
 | **R-01** | RISK・**部分實測** | **I-Design 裝得起來、初始設計會成功，但 5 次嘗試 0 個場景完成**。詳見下方 | Table 2/3 全靠它 |
-| **R-02** | RISK | 單卡 24GB 限制訓練範圍 | D-1 已聲明 |
+| **R-02** | RISK | 單卡顯存限制訓練範圍。**[已更正 2026-08-30]** 本機是 **RTX 5090，32,607 MiB**（`nvidia-smi`），不是先前寫的 24GB；那是前一台機器 | D-1 已聲明。⚠ **不得因為顯存變大就把結論改成「可行」** —— 32GB 上**從未重量過**任何一個訓練範圍，本條的可行性判斷一律 **UNVERIFIED**，要由 RA-3 量 |
 | **R-03** | RISK | Qwen 標註品質未知 | pilot 後人工抽查 |
 
 ### D-6：對 I-Design 的行為性修改
@@ -683,7 +704,7 @@ preposition 對齊 enum（無法映射者落到 "on"）
 | 項目 | 論文 | 我們 |
 |---|---|---|
 | optimizer / learning rate / scheduler / weight decay | 未提 | 待定，記錄實際值 |
-| batch size | 未提 | 受 24GB 限制；**直接影響 Eq.5 的 in-batch negatives**，必須報告 |
+| batch size | 未提 | 受單卡顯存限制（本機 **RTX 5090 32GB**，非先前寫的 24GB）；**直接影響 Eq.5 的 in-batch negatives**，必須報告。⚠ 32GB 上可容納的 batch size **尚未量測，UNVERIFIED** |
 | epochs / gradient accumulation | 未提 | 待定 |
 | `τ`（Eq.5、Eq.7a/7b）初值與是否可學 | 只說 "a temperature hyperparameter" | 待定 |
 | `λ`（Eq.6）初值 | 只說 learnable scalar | 待定 |
@@ -721,7 +742,7 @@ preposition 對齊 enum（無法映射者落到 "on"）
 | 17 | 「orthogonal = 正交投影」標成已解決 | 降為 U-03a，兩種投影都保留 | 🟠 |
 | 18 | 「size dimensions 只能是類別先驗」當成論文性質 | 那是**我們**加了 unit-sphere 正規化的後果，改成描述本實作 | 🟠 |
 | 19 | 「正規化座標會破壞等變性」 | 數學上不對。改成：**為忠實保留論文的 unnormalized 設定**而不做置中 | 🟠 |
-| 20 | SC-1 用 ±3pp 當門檻 | Qwen 也換掉了 46,052 筆標註（文字塔的訓練資料），Table 1 同樣受影響 → 改為如實報告差距 | 🟠 |
+| 20 | SC-1 用 ±3pp 當門檻 | 標註器也被換掉（實際產物：45,692 筆、`gemma-4-12B-it`；本列原文寫「Qwen…46,052 筆」，兩者於 2026-08-30 更正），文字塔的訓練資料因此不同，Table 1 同樣受影響 → 改為如實報告差距 | 🟠 |
 | 21 | `00_FINDINGS` 寫「以論文的 L=4」 | 論文只寫 "After $L$ layers"，沒給值 | 🟠 |
 
 ### 2026-08-15 第三輪（外部審查後）
@@ -1150,6 +1171,13 @@ Appendix C 的 `h⁰` 不變前提與 Table 1 註腳的引文都是原文；
 **46,052**（`lvis.json` 實際鍵數）、**1,467** 個 unique assetId、**12,000** 間房全部重新量過；
 U-01 有記論文「約 48,000」與 manifest 46,052 的差；
 兩份 UNKNOWN 登記表**各 38 筆、集合完全相同**；
+（**[2026-08-30 重測]** 這句在寫下時成立，之後失效過。實測那一天：本檔 §15 有 **39** 筆、
+`graph_spec.yaml` 有 **42** 筆，差的正是 **U-08c／U-08d／U-08e** —— 三個 id 被
+`README.md`／`graph_spec.yaml`／`node_registry.yaml`／`validation_plan.yaml` 四份文件引用，
+卻不在 §15 裡。**它們不是殘骸**：`graph_spec.yaml` 的 `risks_unknowns` 對三者都有完整條目，
+所以處置是把它們補進 §15，來源逐條取自 yaml，不是新編定義。補完後重測 **42 vs 42、集合完全相同**。
+會漏這麼久，是因為舊版檢查器的 U-id 樣式是 `[ab]?`，看不到 `c/d/e` 這三個後綴 ——
+**檢查器叫不出名字的 id，它就報不出那個 id 不見了，而失敗長得跟成功一模一樣**）；
 channel／edge／node／gate／偏離／Required Audit／cycle 的所有數字宣稱都對得上；
 `L2-LEAK`／`L2-PC-DISTRIBUTION` 的引用全部出現在「這條已不存在」的說明裡；
 Table 1 與 Table 3 對不上的那四個數字（11.4/11.3、13.5/13.8）在第 60 項有登記。

@@ -27,7 +27,7 @@
 
 - 論文 §2.5 Eq.(未編號)：`h_i^(0) = Concat(x_i, t_i)` —— 把 3D 座標 `x_i` 直接塞進節點特徵 `h`。
 - 論文 Appendix C 的證明前提：*"Assuming that `h^0` is **invariant** to SE(3) transformations on `x`"*。
-- 官方 EGNN 實作 [`egnn_clean.py:95-103`](/home/kyzen/egnn/models/egnn_clean/egnn_clean.py) 的 `forward(h, edge_index, coord, ...)`
+- 官方 EGNN 實作 [`egnn_clean.py:95-103`](/home/kyzen/upstream/egnn/models/egnn_clean/egnn_clean.py) 的 `forward(h, edge_index, coord, ...)`
   **刻意把 `h` 與 `coord` 分開兩個參數**，`h` 全程不含座標；座標只透過
   `coord2radial()`（`egnn_clean.py:84-93`）以 `||x_i - x_j||²` 這個**不變量**進入訊息。
 
@@ -67,7 +67,7 @@ Appendix C 的證明不成立之外，**它連 Eq.(2) 自己的型別都對不�
 
 ## F2. ULIP-2 的 embedding 維度是 **1280**，不是 512
 
-**證據**：[`ULIP_models.py`](/home/kyzen/ULIP/models/ULIP_models.py) `ULIP2_WITH_OPENCLIP.__init__`
+**證據**：[`ULIP_models.py`](/home/kyzen/upstream/ULIP/models/ULIP_models.py) `ULIP2_WITH_OPENCLIP.__init__`
 
 ```python
 self.tokenizer = open_clip.get_tokenizer('ViT-bigG-14')
@@ -87,11 +87,11 @@ self.pc_projection = nn.Parameter(torch.empty(kwargs.pc_feat_dims, 1280))
 
 ## F3. ULIP 現成的 loss 與 eval **都不能直接用**
 
-**loss**：[`models/losses.py:14-62`](/home/kyzen/ULIP/models/losses.py) `ULIPWithImageLoss`
+**loss**：[`models/losses.py:14-62`](/home/kyzen/upstream/ULIP/models/losses.py) `ULIPWithImageLoss`
 是**單塔 tri-modal**（pc↔text、pc↔image 四向 cross-entropy），
 不是 MetaFind Eq.(5)/(7a)/(7b) 的**雙塔 query↔gallery** 對比。
 
-**eval**：[`main.py:350-441`](/home/kyzen/ULIP/main.py) `test_zeroshot_3d_core` 做的是
+**eval**：[`main.py:350-441`](/home/kyzen/upstream/ULIP/main.py) `test_zeroshot_3d_core` 做的是
 **zero-shot 分類**：
 
 ```python
@@ -144,8 +144,13 @@ data/dataset_3d.py:544:from torch._six import string_classes
 ```
 scripts/pretrain_pointbert.sh:
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python -m torch.distributed.launch --nproc_per_node=8 ...
-本機: 1× NVIDIA GeForce RTX 4090, 24564 MiB
+本機: 1× NVIDIA GeForce RTX 4090, 24564 MiB     ← 前一台機器，量於 2026-08-15
 ```
+
+> ⚠ **[2026-08-30]** 上面那一行是**前一台機器**的量測，保留為紀錄。
+> **現在的機器實測是 `NVIDIA GeForce RTX 5090, 32,607 MiB`**（`nvidia-smi`，driver 595.84）。
+> 「8 卡 vs 1 卡」這個核心落差不受影響 —— 顯存 24→32 GB 換不到七張卡。
+> 但本節任何以 24GB 為前提的**可行性**推論，在 5090 上都**未重量，標 UNVERIFIED**。
 
 ULIP-2 用 open_clip **ViT-bigG-14**（~2.5B 參數）當 text/image backbone，
 其論文 §3.3 明文 **"freeze it during pre-training"**。
@@ -159,7 +164,8 @@ ULIP-2 用 open_clip **ViT-bigG-14**（~2.5B 參數）當 text/image backbone，
 > 這是 **ULIP-2 程式與它自己論文的落差**，不是「官方設計不凍結」。
 > 先前本文用這個落差論證「凍結是我們的偏離」，那個推論已撤回（見 U-34）。
 Eq.(5) 的分母 `Σ_{A' ∈ B}` 是 **in-batch negatives** —— 對比學習的檢索品質
-高度依賴 batch size，單卡 24GB 直接跑會把 batch 壓到遠低於論文設定。
+高度依賴 batch size，單卡直接跑會把 batch 壓到遠低於論文設定（**論文根本沒公佈 batch size**，見 U-22；
+「遠低於」是相對於上游 8×512 的 all-gather，見 D-10）。⚠ 32GB 上能容納多大的 batch **從未量測，UNVERIFIED**。
 
 **這是整個復現最大的風險。**
 
@@ -168,6 +174,15 @@ Eq.(5) 的分母 `Σ_{A' ∈ B}` 是 **in-batch negatives** —— 對比學習�
 ---
 
 ## F6. 磁碟：`/` 吃緊，資料改放 `$METAFIND_DATA` —— 但那是**共用碟**，風險未完全解除
+
+> 🔴 **[過期 2026-08-30 標記，內容保留不刪] 這一節分析的磁碟已經不是現在這台機器的磁碟。**
+> 當時的前提：`/` 是 3.6 T 的 LVM、用到 98%，資料放在 `/dev/sda1` 的 `$METAFIND_DATA`。
+> **現況實測（`df -h`、`readlink -f data`）**：
+> `/` 是 **`/dev/nvme0n1p2`，937 G，用到 66%**；`/dev/sda1` 是 **3.6 T、只用 14%** 的 SMR 碟；
+> 而 repo 的 `data` symlink 指向 **`/home/kyzen/metafind_data`，也就是那顆 NVMe**，不再是 `sda1`。
+> ⚠ 連帶：`CLAUDE.md` §9 寫的 `data -> /home/kyzen/data/MetaFind` **也已失效**（該路徑不存在）；
+> 那份檔不在本輪可改範圍，已上呈 MASTER。
+> 本節的吞吐量、容量與瓶頸結論**全部未在新硬體上重量，標 UNVERIFIED**。
 
 **證據**
 
@@ -249,7 +264,7 @@ placement constraints）」不同。
 
 ## F8. EGNN 的 `edges_in_d` 就是語意邊的插槽，但**維度會壓垮幾何訊號**
 
-**證據**：[`egnn_clean.py:22-26`](/home/kyzen/egnn/models/egnn_clean/egnn_clean.py)
+**證據**：[`egnn_clean.py:22-26`](/home/kyzen/upstream/egnn/models/egnn_clean/egnn_clean.py)
 
 ```python
 input_edge = input_nf * 2
@@ -278,6 +293,30 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 | 1280 | **1.14** |
 
 **加寬語意邊使幾何敏感度下降約 45 倍**，F8 的疑慮確實成立，而且可量化。
+
+> 🔴 **[過期 2026-08-30 標記，數字保留不刪]**
+> **上面這兩個數字現在不可重現，「約 45 倍」這個量級不得再被引用。**
+>
+> 1. **重測對不上。** 2026-08-28 依同一條路徑重跑 `two_mlp` 得到 **44.63 / 1.89**，
+>    不是 50.9 / 1.14。原數字來自某個沒有留下的更早版本或臨時執行。
+>    出處：`docs/METAFIND_NOTEBOOK.md`（見該檔 §9.13 一帶與 `:1298`）。
+> 2. **產生它的測試有缺陷。** `tests/test_essgnn.py` 的
+>    `for seed in range(6):` 迴圈裡 **`seed` 從頭到尾沒有被使用**；
+>    `geometric_sensitivity()` 沒有 seed 參數，內部的 `make_scene` 每次都
+>    `torch.manual_seed(0)`。**六次呼叫回傳位元相同的值** ——
+>    它宣稱量了六個種子，實際上把同一件事量了六次。
+> 3. **範圍不對。** 這組數字量的是 `two_mlp` 這一支；
+>    我們定案的架構家族是 **`appendix_shared_msg`**
+>    （`data/outputs/essgnn_arch_protocol.json`，hidden 128 / n_layers 4）。
+>    該配置下六 seed（**真的有傳 seed**）的比值中位數 **0.3066**、
+>    範圍 `[0.1349, 0.8591]`、**ratio > 1 的次數 0/6** ——
+>    **方向一致仍是壓制**，但幅度與 `two_mlp` 不同（同配置 `two_mlp` 中位數 0.1037）。
+>    ⚠ 不得寫成「壓制 3.3 倍」；離散度尚未歸因。
+>
+> **結論不變的部分**：「加寬語意邊會壓抑幾何訊號」這個**方向**在兩個架構家族都成立。
+> **失效的部分**：`50.9 / 1.14` 這兩個值，與由它們算出的「45 倍」。
+> 修法（重測兩個 F8 測試的 docstring 數字、給 `geometric_sensitivity()` 加 seed 並往下傳）
+> 屬 ESSGNN 區塊，不在本文件。
 
 一併排除掉一個錯誤的量法：我原本用「零掉語意邊後，兩個幾何不同的 layout 的
 `e_layout` 餘弦相似度」當判準，門檻設 0.9999。實測發現**幾何改變 cos=0.9999、
@@ -316,7 +355,7 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
   `Σ (Q x_i + g − Q x_j − g) · φ_x(m_ij) = Q Σ (x_i − x_j) · φ_x(m_ij)`
   把 `Q` 提到求和外面，**只有在 `φ_x` 是純量時才成立**。
   若 `f_x` 輸出 ℝ³ 且為逐元素相乘，旋轉不可交換，等變性當場失效。
-- 官方 EGNN [`egnn_clean.py:33`](/home/kyzen/egnn/models/egnn_clean/egnn_clean.py)：
+- 官方 EGNN [`egnn_clean.py:33`](/home/kyzen/upstream/egnn/models/egnn_clean/egnn_clean.py)：
   `layer = nn.Linear(hidden_nf, 1, bias=False)` —— **純量**。
 
 **結論**：§2.5 對 `f_x` 值域的宣告是錯的。照字面實作會直接毀掉論文的核心主張。
@@ -481,6 +520,15 @@ scale-normalised 的渲染圖 —— 它**不可能量到**真實尺寸，只能
 
 ## F22. 前處理是**磁碟綁死**，不是 CPU 也不是 GPU
 
+> 🔴 **[過期 2026-08-30 標記，內容保留不刪] 這一節分析的磁碟已經不是現在這台機器的磁碟。**
+> 當時的前提：`/` 是 3.6 T 的 LVM、用到 98%，資料放在 `/dev/sda1` 的 `$METAFIND_DATA`。
+> **現況實測（`df -h`、`readlink -f data`）**：
+> `/` 是 **`/dev/nvme0n1p2`，937 G，用到 66%**；`/dev/sda1` 是 **3.6 T、只用 14%** 的 SMR 碟；
+> 而 repo 的 `data` symlink 指向 **`/home/kyzen/metafind_data`，也就是那顆 NVMe**，不再是 `sda1`。
+> ⚠ 連帶：`CLAUDE.md` §9 寫的 `data -> /home/kyzen/data/MetaFind` **也已失效**（該路徑不存在）；
+> 那份檔不在本輪可改範圍，已上呈 MASTER。
+> 本節的吞吐量、容量與瓶頸結論**全部未在新硬體上重量，標 UNVERIFIED**。
+
 **實測 2026-08-15**：
 
 | | |
@@ -514,11 +562,20 @@ scale-normalised 的渲染圖 —— 它**不可能量到**真實尺寸，只能
 
 ## F23. 前四個節點的全量實測結果
 
+> 🔴 **[過期 2026-08-30 標記，數字保留不刪] `n04` 這一列是 pyrender 世代的產物，已被 Blender 重跑取代。**
+> 2026-08-23 起 n04 改用 OpenShape 的 Blender／Cycles 腳本（12 視角／512px／perspective／
+> transparent RGBA，`DL-024 A1/A2/A3`，USER_APPROVED），整個語料重渲染過。
+> **現行實數（`data/outputs/logs/renders_index.jsonl`）：46,024 筆**，不是 45,955。
+> 下游語料再經 n05 admission 收到 **45,692**（= 46,024 − 311 − 21，見 `splits.json` 的
+> `admitted_total`）。本節其餘關於「11 張全空白」「部分空白分佈」的細節同樣是 pyrender 世代的，
+> 保留為當時的證據，**不得當作現行渲染語料的統計**。
+> `n02` 與 `n03` 兩列未受影響（它們讀的是 manifest 的 46,052）。
+
 | 節點 | 完成 | 隔離 | 大小 |
 |---|---|---|---|
 | `n02_download` | 46,052 / 46,052 | 0 | 351 GB |
 | `n03_sample_pointclouds` | **46,052 / 46,052** | **0** | 5.6 GB |
-| `n04_render_views` | 45,955 / 46,052 | 97（**0.21%**） | 7.3 GB |
+| `n04_render_views` | ~~45,955 / 46,052~~ **（過期，pyrender 世代；現行 46,024）** | 97（**0.21%**） | 7.3 GB |
 
 G3 的隔離門檻是 2%，兩個節點都遠低於。
 
@@ -921,6 +978,18 @@ x 和 y 吻合到 4 公釐以內,**只有厚度是 7 mm vs 25 mm** ——
 
 ## F27. checkpoint 會不會塞爆磁碟，取決於一行 `torch.save` 怎麼寫
 
+> 🔴 **[過期 2026-08-30 標記，內容保留不刪] 這一節分析的磁碟已經不是現在這台機器的磁碟。**
+> 當時的前提：`/` 是 3.6 T 的 LVM、用到 98%，資料放在 `/dev/sda1` 的 `$METAFIND_DATA`。
+> **現況實測（`df -h`、`readlink -f data`）**：
+> `/` 是 **`/dev/nvme0n1p2`，937 G，用到 66%**；`/dev/sda1` 是 **3.6 T、只用 14%** 的 SMR 碟；
+> 而 repo 的 `data` symlink 指向 **`/home/kyzen/metafind_data`，也就是那顆 NVMe**，不再是 `sda1`。
+> ⚠ 連帶：`CLAUDE.md` §9 寫的 `data -> /home/kyzen/data/MetaFind` **也已失效**（該路徑不存在）；
+> 那份檔不在本輪可改範圍，已上呈 MASTER。
+> 本節的吞吐量、容量與瓶頸結論**全部未在新硬體上重量，標 UNVERIFIED**。
+
+> 另註：本節的 `46,052` 是 manifest 數。實際落地的 embedding／gallery 索引分母是
+> **45,692**（n05 admitted），估算值要照這個縮。
+
 由「空間夠不夠」這個問題推導出來的，**在 n10 寫出來之前先關掉**。
 
 剩下要產出的東西其實很小:
@@ -1115,7 +1184,20 @@ h_i^{l+1} = h_i + Σ φ_h(m_ij)                    (14)
 | h 更新 | `φ_h(h, m_i)` | `h + Σ φ_h(m_ij)` | `h + Σ f_h(...)` |
 | 正規化 `C` | ✅ | ❌ | ❌ |
 
-**實作依 2.5**（兩個獨立 MLP），記錄為選擇而非推導。
+~~**實作依 2.5**（兩個獨立 MLP），記錄為選擇而非推導。~~
+
+> 🔴 **[已更正 2026-08-30 —— 這句寫反了]**
+> 現行協定 `data/outputs/essgnn_arch_protocol.json` 是
+> **`architecture_family: "appendix_shared_msg"`**（`coord_feat: "current"`、
+> `distance: "squared"`、`use_io_projections: true`、hidden 128 / n_layers 4），
+> 也就是**附錄 C 的共用訊息版**，不是正文 2.5 的兩個獨立 MLP。
+> `metafind/models/essgnn.py:189-190` 的註解直接寫 `appendix_shared_msg ... <- primary`，
+> `ESSGNNConfig.from_protocol` 只接受 `appendix_shared_msg` 或 `sec25_two_mlp` 兩個值，
+> 而協定檔給的是前者。
+> 記為 **U-26 的判定：附錄 C 的 shared-message 版，標 `[INFERENCE]`，2.5 版留作對照假設**
+> （與 `README.md` 開頭 U registry 那段一致）。
+> 下面「三、逐項驗證程式」那張表裡的 `Eq. 3 f_x 吃 h^{l+1}` ✅「依 2.5」同樣過期：
+> `coord_feat` 現在是 `"current"`，`f_x` 吃的是**舊的** `h^l`。
 
 ### 三、逐項驗證程式（不是讀註解，是讀實作）
 
@@ -1178,10 +1260,18 @@ trained"），ULIP-2 是它的起點（§2.2 "both leveraging the ULIP-2 embeddi
 
 **現在的做法**，`train_scope` 三個等級：
 
-| 等級 | 訓練什麼 | 24GB 可行 | 定位 |
+> ⚠ **[2026-08-30] 這張表的可行性欄位是在 24GB 前提下寫的，前提已經不成立。**
+> 本機實測 `nvidia-smi`：**NVIDIA GeForce RTX 5090, 32,607 MiB**（driver 595.84）。
+> **但顯存變大不等於這些格子變成「可行」** —— 三個等級**沒有一個在 5090 上重量過**，
+> 所以下表每一格的可行性判斷一律標 **UNVERIFIED**，`full` 那格仍由 RA-3 量。
+> （`point_encoder+fuser` 有一次 25 epoch 的 ladder 執行紀錄，
+> 但 `data/outputs/ladder/e25_500w/stage1_ckpt.json` 與 `train_stage1.jsonl`
+> **都沒有記錄 GPU 型號或顯存**，所以連「那次跑在 5090 上」都無法從產物證實。）
+
+| 等級 | 訓練什麼 | 單卡可行（本機 RTX 5090 32GB） | 定位 |
 |---|---|---|---|
-| `fuser_only` | 只有 fusion 層 | ✅ | **Table 3 的 ablation 列** |
-| `point_encoder+fuser` | PointBERT (32.5M) + fusion + 投影 | ✅ | **目前選定的 `actual=frozen` 執行方式**（不是「論文必然如此」，見 U-34） |
+| `fuser_only` | 只有 fusion 層 | **UNVERIFIED**（24GB 下曾標 ✅） | **Table 3 的 ablation 列** |
+| `point_encoder+fuser` | PointBERT (32.5M) + fusion + 投影 | **UNVERIFIED**（24GB 下曾標 ✅） | **目前選定的 `actual=frozen` 執行方式**（不是「論文必然如此」，見 U-34） |
 | `full` | 再加 ViT-bigG-14 (2.5B) | ❓ **未量測** | `actual_clip_train_scope=trainable` 的執行對象，由 RA-3 量測 |
 
 **快取的範圍也跟著改**：

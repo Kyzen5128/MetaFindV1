@@ -14,7 +14,7 @@
 
 spec_version: "1.0"
 graph_id: "metafind-reproduction"
-title: "MetaFind paper reproduction (single RTX 4090, Qwen in place of GPT-4o)"
+title: "MetaFind paper reproduction (single RTX 4090, local open-weight models in place of GPT-4o: gemma-4-12B-it for asset annotation and semantic-edge sentences (D-2), gemma-4-12B-it for scene judging (D-8, model changed from Qwen2.5-VL by Kyzen 2026-08-30))"
 authored_at: "2026-08-15"
 
 classification:
@@ -25,9 +25,11 @@ classification:
 
   max_authority: "A1"
   max_authority_reason: >
-    No decision point lets a model choose the next node. Qwen appears four
-    times (asset annotation, semantic edges, scene judging, and I-Design's
-    scene planning under D-5) but each time only produces a payload written
+    No decision point lets a model choose the next node. A generative model
+    appears four times (asset annotation and semantic edges, both
+    gemma-4-12B-it under D-2; scene judging, gemma-4-12B-it under D-8; and
+    I-Design's scene planning, qwen2.5-7b-instruct under D-5) but each time
+    only produces a payload written
     into state; routing is always a deterministic predicate over state.
 
   execution_mode: "probabilistic"
@@ -38,16 +40,17 @@ classification:
   topology_class: "workflow"
   topology_class_reason: >
     Every fan-out has a statically enumerated destination set: 11 views,
-    7 modality conditions, 2 gallery protocols, 8 ablation variants.
+    7 modality conditions, 3 evaluation protocols (2 reported gallery
+    readings plus 1 unreported selection protocol), 8 ablation variants.
 
   nondeterminism_sources:
-    - {id: NS-1, source: "Qwen asset annotation", frozen_by: "written once into a versioned artifact; never re-called downstream"}
-    - {id: NS-2, source: "Qwen semantic relation sentences", frozen_by: "cached by a hash over both object descriptions plus prompt/model/encoder versions"}
-    - {id: NS-3, source: "Qwen scene judging", frozen_by: "greedy decoding, pinned prompt version, recorded model revision"}
+    - {id: NS-1, source: "gemma-4-12B-it asset annotation (D-2)", frozen_by: "written once into a versioned artifact; never re-called downstream"}
+    - {id: NS-2, source: "gemma-4-12B-it semantic relation sentences (D-2; semantic_edges_run.py imports annotate_run.MODEL_ID, so n05 and n08 share one model identity)", frozen_by: "cached by a hash over both object descriptions plus prompt/model/encoder versions"}
+    - {id: NS-3, source: "gemma-4-12B-it scene judging (D-8, NOT D-2; model changed from Qwen2.5-VL 2026-08-30)", frozen_by: "greedy decoding, pinned prompt version, recorded model revision"}
     - {id: NS-4, source: "GPU atomics in scatter_add_", frozen_by: "NOT removable; equivariance tests use a numeric tolerance"}
     - {id: NS-5, source: "training stochasticity (init, shuffling, dropout)", frozen_by: "fixed seeds; exact reproducibility not claimed"}
     - {id: NS-7, source: "I-Design scene planning with Qwen2.5-7B-Instruct (D-5)", frozen_by: "evaluation_scene_inputs persists prompt, prompt_sha256, room dimensions, object count, seed, planner model, I-Design revision and patch hashes before any retrieval runs against the scene"}
-    - {id: NS-6, source: "approximate nearest neighbour search", frozen_by: "ELIMINATED -- 46,052 x 1280 x 4B = 236 MB, exact inner product is affordable"}
+    - {id: NS-6, source: "approximate nearest neighbour search", frozen_by: "ELIMINATED -- the denominator is the largest GALLERY, which is B_full_gallery's 45,692 admitted assets (eval_protocols.json / splits.json admitted_total), not the 46,052-uid manifest: 45,692 x 1280 x 4B = 234 MB, exact inner product is affordable. Corrected 2026-08-30; the old figure used the manifest, which is never the gallery"}
 
 goal:
   statement: >
@@ -64,7 +67,7 @@ goal:
       measured_by: n21_compare_to_paper
       note: >
         An earlier draft required +/-3.0 pp. That is not a fair criterion here.
-        D-2 replaces GPT-4o with Qwen for the asset annotations, which are the
+        D-2 replaces GPT-4o with gemma-4-12B-it for the asset annotations, which are the
         text tower's training data, so Table 1 is affected too -- not just
         Table 2's judge. A cell outside 3 pp may reflect the annotation
         distribution rather than a reproduction failure, and the two cannot be
@@ -77,7 +80,7 @@ goal:
     - id: SC-3
       criterion: "Table 2: w/ESSGNN > w/o ESSGNN on all four dimensions, DIRECTION ONLY"
       measured_by: n21_compare_to_paper
-      note: "Absolute values are not comparable to the paper because the judge is Qwen, not GPT-4o (D-2)."
+      note: "Absolute values are not comparable to the paper because the judge is gemma-4-12B-it, not GPT-4o (D-8, not D-2: DL-005 split scene judging out of D-2). The judge was Qwen2.5-VL until Kyzen ruled all LLM roles to gemma on 2026-08-30; n17 had not run under either, so no result changes."
     - id: SC-4
       criterion: "Per-layer coordinate EQUIVARIANCE: ||x^(l+1)(Rx+T) - (R x^(l+1)(x) + T)||inf < 1e-4"
       measured_by: n14_equivariance_probe
@@ -126,21 +129,40 @@ boundary:
   deviations:
     # NOTE: D-1 is NOT here. It lives under conditional_deviations below,
     # because whether it is a deviation at all depends on U-34.
-    # SPLIT 2026-08-21. D-2 previously covered annotation AND scene judging with
-    # one substitute model. The annotation model changed (Qwen3.8-27B, user
-    # decision U-6) while the judge did not, so one id would now denote two
-    # different substitutions. Scene judging moved to D-8.
+    # SPLIT 2026-08-21 (DL-005). D-2 previously covered annotation AND scene
+    # judging with one substitute model. The annotation model changed while the
+    # judge did not, so one id would now denote two different substitutions.
+    # Scene judging moved to D-8 and is NOT D-2 anywhere.
+    # RE-POINTED 2026-08-24: the annotation model was Qwen3.8-27B under user
+    # decision U-6 (2026-08-21), then changed to gemma-4-12B-it by user order
+    # (all LLM roles to gemma). This spec still named the superseded model on
+    # 2026-08-30; corrected then against the artifacts, not against memory.
     - id: D-2
-      what: "Qwen3.8-27B replaces GPT-4o for ASSET ANNOTATION (n05)"
-      why: "user decision U-6, 2026-08-21. GPT-4o availability is UNRESOLVED, not established"
+      what: "gemma-4-12B-it replaces GPT-4o for ASSET ANNOTATION (n05) and for n08's semantic relation sentences"
+      why: >
+        user decision U-6, 2026-08-21, then RE-POINTED 2026-08-24 from
+        Qwen3.8-27B to gemma-4-12B-it by user order (all LLM roles to gemma).
+        GPT-4o availability is UNRESOLVED, not established.
+        [OBSERVED IMPLEMENTATION] annotate_run.py:84
+        MODEL_ID = "/home/kyzen/metafind_out/gemma-4-12B-it";
+        semantic_edges_run.py:85 imports that same MODEL_ID as LLM_MODEL_PATH,
+        so n05 and n08 cannot diverge on model identity.
       impact: >
-        Affects Table 1 primarily. The 45,952 asset annotations are the text
-        tower's training data, so Table 1's absolute values shift. SC-1 reports
+        Affects Table 1 primarily. The 45,692 asset annotations are the text
+        tower's training data, so Table 1's absolute values shift.
+        [OBSERVED DATA 2026-08-30, full census not a sample] 45,692 files under
+        data/outputs/annotations/ and 45,692 lines in
+        logs/annotations_index.jsonl; annotator_model is
+        "/home/kyzen/metafind_out/gemma-4-12B-it" in 45,692 of 45,692, with one
+        distinct value and zero rows missing the key. 45,692 is the ADMITTED
+        corpus (splits.json admitted_total), not the 46,052-uid manifest.
+        This impact line previously read "45,952", which is none of the three
+        corpus sizes the project holds. SC-1 reports
         the deviation rather than thresholding it. Annotation is additionally
         anchored on the Objaverse-LVIS ground-truth category, which is itself a
         recorded deviation from "the VLM generates the annotations".
     - id: D-8
-      what: "Qwen2.5-VL replaces GPT-4o for SCENE JUDGING (n17)"
+      what: "gemma-4-12B-it replaces GPT-4o for SCENE JUDGING (n17). Was Qwen2.5-VL until Kyzen 2026-08-30 ruled all LLM roles to gemma; n17 has never run, so nothing is invalidated"
       why: "project decision"
       impact: >
         Affects Table 2. The judge is not GPT-4o, so SC-3 keeps only directional
@@ -476,7 +498,7 @@ boundary:
     - {name: "HuggingFace SFXX/ulip", kind: model_provider, failure_semantics: "unavailable => FAILED, no substitute", trust: trusted, validated_by: "sha256 plus a behavioural check"}
     - {name: "Objaverse", kind: database, failure_semantics: "partial => admitted set shrinks; >2% missing fails G3", trust: trusted}
     - {name: "ProcTHOR-10K via prior", kind: database, failure_semantics: "unavailable => Tables 2/3 BLOCKED_EVIDENCE", trust: trusted}
-    - {name: "Qwen2.5-VL (local)", kind: model_provider, failure_semantics: "schema violation => repair loop; OOM => reduce batch and record", trust: untrusted_output, validated_by: "structured schema validation before entering state"}
+    - {name: "local open-weight LLM checkpoints: gemma-4-12B-it (D-2, n05/n08) and gemma-4-12B-it (D-8, n17; was Qwen2.5-VL until 2026-08-30)", kind: model_provider, failure_semantics: "schema violation => repair loop; OOM => reduce batch and record", trust: untrusted_output, validated_by: "structured schema validation before entering state"}
     - {name: "I-Design", kind: api, failure_semantics: "R-01 PARTIALLY MEASURED: installs and its first stage runs; five attempts with a 7B planner completed zero scenes, with no baseline for a normal rate. If unusable, Tables 2/3 => BLOCKED_EVIDENCE, not FAIL", trust: untrusted, revision: "7bc891c plus three MetaFind patches, two of which change behaviour"}
 
 # ---------------------------------------------------------------- state
@@ -512,7 +534,8 @@ state:
       lifetime: persistent
       note: >
         [ADDED] The frozen weights every stage runs on -- the ULIP-2
-        checkpoint, ViT-bigG-14, Qwen2.5-VL -- were not graph state at all.
+        checkpoint, ViT-bigG-14, gemma-4-12B-it (D-2) and Qwen2.5-VL (D-8)
+        -- were not graph state at all.
         n02 downloaded them, G1's criterion said "the ULIP-2 checkpoint passes
         a behavioural check, not merely a sha256", and G1 read no channel that
         could hold one. Every node that loads them reached outside the graph
@@ -1006,10 +1029,40 @@ state:
         without saying which the gallery is. An earlier draft locked a single integer and
         planned to back-solve it from the baselines' 98-99% PC-Only figure --
         impossible, since PC-Only uses a query embedding identical to its own
-        gallery entry, so self-retrieval approaches 100% at either size. Both
-        protocols now run:
-          A_test_gallery: query=test, gallery=test   (~9,210)
-          B_full_gallery: query=test, gallery=full   (46,052)
+        gallery entry, so self-retrieval approaches 100% at either size.
+        The earlier two-protocol list (A ~9,210 / B 46,052) is SUPERSEDED.
+        [OBSERVED DATA 2026-08-30, data/outputs/eval_protocols.json] THREE
+        protocols are materialised, not two, and the sizes are the ADMITTED
+        corpus, not the 46,052-uid manifest:
+          A_test_gallery   query=test    gallery=test      9,138  reported: true
+          B_full_gallery   query=test    gallery=full     45,692  reported: true
+          C_dev_selection  query=dev_val gallery=dev_val   4,569  reported: false
+        45,692 = 46,024 rendered (logs/renders_index.jsonl) minus 332 lost at
+        n05; splits.json admitted_total is 45,692, test 9,138 / train 36,554,
+        and inside train dev_train 31,985 / dev_val 4,569. Both sums close
+        exactly. The 332 decomposes as 311 + 21, and the source is
+        outputs/annotation_exclusions.json, decided_by Kyzen 2026-08-28,
+        git_commit 9e91457, verbatim decision
+        "這21個 跟 失敗的 311 全部刪掉 其他所有接受採用標註結果":
+          311  n05_quarantine, cards_ever_written false -- n05 never produced a
+               card that passed validation. Re-running is a no-op because the
+               seed is bound to the uid (annotate_run.py:1019), so the same 311
+               fail identically. 46,024 - 311 = 45,713 = corpus_before.
+           21  manual_review_rejected -- cards WERE produced, and Kyzen rejected
+               them on review: clip_score < 0.20, category_relation divergent,
+               and both label-duel phrasings scored LVIS over the model.
+               45,713 - 21 = 45,692 = corpus_after. Both groups list every uid;
+               the 21 carry their LVIS label, model label and both scores.
+        [CORRECTED 2026-08-30] This entry briefly said the split was "NOT
+        reproducible", from counting logs/quarantine_n05_annotate.jsonl: 640
+        records over 326 DISTINCT uids. That channel is append-only with
+        retries and is a DIFFERENT SET -- 311 is "never produced a valid card",
+        not "was quarantined at least once". 326 contradicts neither number.
+        The exclusions file, not the quarantine channel, is the authority here. C_dev_selection is the
+        checkpoint-selection protocol and carries reported: false -- it is not
+        a paper table and must never be reported as one. This note listed only
+        A and B until 2026-08-30, so a protocol that steers checkpoint
+        selection was undocumented while the artifact already defined it.
         [U-28] `layout_free_context` records what happens to Eq. 6's
         lambda * e_layout when Table 1 evaluates "MetaFind w/ ESSGNN" on
         Objaverse-LVIS, which has no scenes. Paper 3.2 acknowledges the
@@ -1677,7 +1730,7 @@ routing:
 static_fanouts:
   - {name: render_views, cardinality: 11, source: "paper 2.3", bound: 11}
   - {name: modality_conditions, cardinality: 7, source: "paper Table 1 columns", bound: 7}
-  - {name: eval_protocols, cardinality: 2, source: "U-09 -- both readings run", bound: 2}
+  - {name: eval_protocols, cardinality: 3, source: "U-09 -- both gallery readings run (A_test_gallery, B_full_gallery, both reported) plus C_dev_selection, the dev_val/dev_val checkpoint-selection protocol which is NOT reported. OBSERVED DATA data/outputs/eval_protocols.json 2026-08-30; this said 2 while the artifact held 3", bound: 3}
   - {name: headline_variants, cardinality: 2, source: "paper Table 1 last two rows", bound: 2}
   - {name: ablation_variants, cardinality: 8, source: "paper Table 3 has 10 rows: 1 is Full itself, 1 (w/o iterative retrieval) is inference-only, leaving 8 that require training", bound: 9}
   - {name: assets, cardinality: "len(asset_manifest)", source: "manifest, currently 46052", bound: 60000, over_bound_action: truncate_and_record}
@@ -1747,7 +1800,7 @@ execution_order:
     - {layer: 3, parallel_nodes: [], gates: [G1_sources_valid], est: "-"}
     - {layer: 4, parallel_nodes: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs], gates: [], est: "1-3 h"}
     - {layer: 5, parallel_nodes: [], gates: [G2_pc_sanity], est: "-"}
-    - {layer: 6, parallel_nodes: [n05_annotate, n08_semantic_edges, n07b_procthor_asset_modalities], gates: [], est: "1-2 days (Qwen over 46K assets) -- CRITICAL PATH. n07b is ~1.5K assets of AI2-THOR rendering and is not on it."}
+    - {layer: 6, parallel_nodes: [n05_annotate, n08_semantic_edges, n07b_procthor_asset_modalities], gates: [], est: "1-2 days (gemma-4-12B-it over the ~46K-asset manifest) -- CRITICAL PATH. n07b is ~1.5K assets of AI2-THOR rendering and is not on it."}
     - {layer: 6b, parallel_nodes: [n05b_resolve_stage1_encoding], gates: [], est: "human decision -- BLOCKS n06 until U-14, U-15 and U-34 are answered"}
     - {layer: 7, parallel_nodes: [n06_encode_text_image], gates: [], est: "2-4 h"}
     - {layer: 8, parallel_nodes: [n09_build_splits, n09c_build_scene_splits], gates: [], est: "<1 h"}
@@ -1770,7 +1823,7 @@ execution_order:
     - {layer: 19, parallel_nodes: [n21_compare_to_paper], gates: [], est: "<1 h"}
     - {layer: 20, parallel_nodes: [], gates: [G5_report_release], est: "-"}
     - {layer: 21, parallel_nodes: [n22_publish_report], gates: [], est: "<1 h"}
-  notes: "Critical path is layer 2 (GLB download) and layer 6 (Qwen annotation over 46,052 assets)."
+  notes: "Critical path is layer 2 (GLB download) and layer 6 (gemma-4-12B-it annotation over the 46,052-uid manifest; 45,692 were finally admitted)."
 
 # ---------------------------------------------------------------- risks
 # This list is the machine-readable UNKNOWN registry. G5_report_release checks
@@ -1797,7 +1850,7 @@ risks_unknowns:
   - {id: U-10, marked: UNKNOWN, blocking: false, item: "which IDesign aspect maps to Table 2's Scene Coherence", affects: "Table 2 column mapping", resolution: "record the assumed mapping", fallback: "n/a"}
   - {id: U-11, marked: UNKNOWN, blocking: false, item: "how an absent modality is represented -- paper 2.6 rules out zero-padding ('Rather than zero-padding, we apply masked embeddings') but does not say whether that is a learned mask token or a mask applied inside the fusion layer", affects: "every partial-modality query", resolution: "record our choice; the only paper-backed assertion is that it differs from zero-padding", fallback: "n/a"}
   - {id: U-12, marked: UNKNOWN, blocking: false, item: "how ProcTHOR metadata becomes the sentence behind t_i", affects: "ESSGNN node features", resolution: "record our template", fallback: "n/a"}
-  - {id: U-13, marked: UNKNOWN, blocking: false, item: "which fusion strategy the Full model uses. The paper gives TWO DIFFERENT candidate lists: 2.2 says 'a fusion layer (e.g., mean pooling, an MLP, or a Transformer-based module)' -- three -- while 2.4 says 'mean pooling, MLP, masked MLP, gated fusion, or Transformer-based fusion' -- five. Neither says which is MetaFind's. Table 3 rules out Mean (9.4) and MLPs (9.9) against Full (11.4), and the 'Padding missing modalities with 0' row (10.5) plus 3.4's 'Masked modality fusion outperformed zero-padding' show Full masks. That leaves masked MLP, gated and Transformer.", affects: "every Table 1 and Table 3 number", resolution: "primary = masked_mlp (implemented default in metafind/models/fusion.py); gated and transformer kept selectable and reported as alternatives", fallback: "n/a"}
+  - {id: U-13, marked: RESOLVED, blocking: false, item: "which fusion strategy the Full model uses. The paper gives TWO DIFFERENT candidate lists: 2.2 says 'a fusion layer (e.g., mean pooling, an MLP, or a Transformer-based module)' -- three -- while 2.4 says 'mean pooling, MLP, masked MLP, gated fusion, or Transformer-based fusion' -- five. Neither says which is MetaFind's. Table 3 rules out Mean (9.4) and MLPs (9.9) against Full (11.4), and the 'Padding missing modalities with 0' row (10.5) plus 3.4's 'Masked modality fusion outperformed zero-padding' show Full masks. That leaves masked MLP, gated and Transformer.", affects: "every Table 1 and Table 3 number", resolution: "SUPERSEDED. The elimination argument above is retained because it is sound, but it was never needed: the paper NAMES the choice.", decided: "primary = transformer. [PAPER FACT] 3experiments.tex:143, last paragraph of the Ablation Studies section, verbatim: 'while simple mean pooling offers computational efficiency, MLP and the final selected Transformer outperform others under partial modality conditions by dynamically reweighting available inputs'. [OBSERVED IMPLEMENTATION] metafind/models/fusion.py FusionConfig.kind defaults to \"transformer\"; the module docstring records the same correction. mean, mlp and masked_mlp stay implemented because Table 3 has rows for them; gated stays selectable. None of them is the default. [SPEC LAG] fusion.py was corrected 2026-08-23 and this registry entry still read UNKNOWN / masked_mlp on 2026-08-30 -- the code was right and the spec was stale, which is the direction that hides longest.", decided_at: '2026-08-23', decided_by: 'ESSGNN Engineer (fusion.py); registry entry corrected 2026-08-30', decision_basis: "The paper states it. This is the rare U-entry that closes on a PAPER FACT rather than a choice: 3experiments.tex:143 writes 'the final selected Transformer', naming MetaFind's own selection, and the ablation numbers this entry already cites are consistent with it (Mean 9.4 and MLPs 9.9 both below Full 11.4, and Full is the Transformer). The elimination chain in `item` above -- masking rules out zero-padding, Table 3 rules out mean and plain MLP -- narrowed the field to masked MLP, gated and Transformer, but it never had to pick among the three, because the paper had already picked. The entry stayed UNKNOWN for seven days after fusion.py was corrected, so the failure here was not analysis, it was that a resolved question kept its open marker in the registry that other documents read.", confidence: high, reopen_if: "the sentence at 3experiments.tex:143 is shown to describe a different table than Table 3, or MetaFind code names a different default", fallback: "n/a"}
   - {id: U-14, marked: UNKNOWN, blocking: false, item: "how 11 rendered views become one image embedding. Paper 2.3 says each asset is 'rendered from 11 orthogonal viewpoints' and never states the aggregation. It applies to the QUERY side too: 2.1 defines the query as containing 'images q_img', plural.", affects: "Image Only, T+I, I+PC and T+I+PC -- four of Table 1's seven conditions", resolution: "record the choice among {random single view per step, fixed view, mean of 11 embeddings, max, learned multi-view fusion}", fallback: "n/a"}
   - {id: U-15, marked: UNKNOWN, blocking: false, item: "how a structured annotation is serialised into the string the text encoder sees. Paper 2.3 gives the fields but no format.", affects: "every text embedding, hence Text Only, T+I, T+PC, T+I+PC", resolution: "record the exact template and pin it with a golden-string test", fallback: "n/a"}
   - {id: U-16, marked: UNKNOWN, blocking: false, item: "whether the query and gallery towers share backbone weights. Paper 2.4 says 'a dedicated query encoder' and 2.6 says 'Both query and gallery encoders are trained', but never states sharing.", affects: "parameter count, Stage 1 dynamics, and the PC-Only figure the paper itself calls out as the dual-tower signature", resolution: "record the choice among {shared backbone + separate fusion, fully separate copies, fully shared}", fallback: "n/a"}
@@ -1812,9 +1865,15 @@ risks_unknowns:
   # encoder; 01_GRAPH_SPEC.md:611 and 02_BUILD_STEPS.md:299 both still call it
   # UNKNOWN while this line and docs/graph/README.md:17 call it resolved; and
   # 01_GRAPH_SPEC.md:1123 required it to reach essgnn_arch_protocol BEFORE n13 was
-  # implemented -- n13 is 680 complete lines and the protocol has neither
-  # node_feat_dim nor edge_feat_dim. AWAITING USER.
-  - {id: U-20, marked: RESOLVED, blocking: false, item: "which encoder produces t_i. Paper 2.5 says only 'a text-derived feature t_i in R^d'. It names a frozen text encoder ('e.g., CLIP or BERT') for the semantic EDGE embeddings, not for t_i, and does not say the two are the same encoder.", affects: "ESSGNN node features and the width d", resolution: "record the choice and the resulting d", fallback: "n/a", decided: "SUPERSEDED 2026-08-28. The previous entry recorded laion/CLIP-ViT-B-32-laion2B-s34B-b79K at 512-d, decided 2026-08-16 by Claude. USER RULING 2026-08-27 (METAFIND_NOTEBOOK.md:937): OpenCLIP ViT-bigG-14, 1280-d, reached through ULIPBackbone -- the same object n06 uses -- because one project should not hold two text understandings. This pins t_i AND e_ij: semantic_edges_run.encode_sentences() serves both from one TEXT_ENCODER, so U-06 has no separate choice. The old entry's F8 argument was overruled, and its NUMBERS are additionally not reproducible: see METAFIND_NOTEBOOK.md 9.8. Re-measured 2026-08-28 with seeds actually passed, at the protocol config (appendix_shared_msg, hidden 128, 4 layers): widening 16 -> 1280 leaves geometric sensitivity at ratio median 0.3066, range [0.1349, 0.8591], 0/6 above 1 -- so F8 does apply here, about 3.3x suppression, weaker than two_mlp's ~10x but the same direction. NOT YET MACHINE-ENFORCED: node_feat_dim and edge_feat_dim are still absent from essgnn_arch_protocol.json, so nothing checks this at runtime -- the debt named at 01_GRAPH_SPEC.md:1123 item 201 is still open.", decided_at: '2026-08-27', decided_by: 'Kyzen (USER ruling; spec updated 2026-08-28 by MASTER)', decision_basis: "One text understanding across the project. Stage 1's 1280 is forced by the ULIP-2 checkpoint (ulip_backbone.py:90 EMBED_DIM = 1280), so matching it is the only way t_i, e_ij and the retrieval space share a space. 1280 is INFERENCE from that constant, not yet measured -- n08's first run must print emb.shape and confirm.", confidence: high}
+  # implemented -- n13 is 784 complete lines (MEASURED 2026-08-30,
+  # `wc -l metafind/train/stage2.py`; this said 680) and the protocol has
+  # neither node_feat_dim nor edge_feat_dim (VERIFIED 2026-08-30 against the
+  # artifact's actual key list, not against a remembered schema:
+  # essgnn_arch_protocol.json holds architecture_family, coord_feat,
+  # decided_at, decided_by, distance, hidden_dim, layer_sharing,
+  # mlp_structure, n_layers, pooling, status, use_io_projections -- twelve
+  # keys, and neither dim is among them). AWAITING USER.
+  - {id: U-20, marked: RESOLVED, blocking: false, item: "which encoder produces t_i. Paper 2.5 says only 'a text-derived feature t_i in R^d'. It names a frozen text encoder ('e.g., CLIP or BERT') for the semantic EDGE embeddings, not for t_i, and does not say the two are the same encoder.", affects: "ESSGNN node features and the width d", resolution: "record the choice and the resulting d", fallback: "n/a", decided: "SUPERSEDED 2026-08-28. The previous entry recorded laion/CLIP-ViT-B-32-laion2B-s34B-b79K at 512-d, decided 2026-08-16 by Claude. USER RULING 2026-08-27 (ANCHOR CORRECTED 2026-08-30: this cited METAFIND_NOTEBOOK.md:937, which does not contain the ruling -- that line discusses widening an existing guard's file coverage. The ruling's original text was not located in the repo; the notebook's section 10 U-20 row records it secondhand. Cited by section, never by line, because line numbers drift): OpenCLIP ViT-bigG-14, 1280-d, reached through ULIPBackbone -- the same object n06 uses -- because one project should not hold two text understandings. This pins t_i AND e_ij: semantic_edges_run.encode_sentences() serves both from one TEXT_ENCODER, so U-06 has no separate choice. The old entry's F8 argument was overruled, and its NUMBERS are additionally not reproducible: see METAFIND_NOTEBOOK.md 9.8. Re-measured 2026-08-28 with seeds actually passed, at the protocol config (appendix_shared_msg, hidden 128, 4 layers): widening 16 -> 1280 gives, over six seeds, ratio median 0.3066, range [0.1349, 0.8591], 0/6 above 1 -- direction is consistently SUPPRESSION; the dispersion is NOT attributed. [RETRACTED 2026-08-30] This entry previously read 'about 3.3x suppression'. A median is not a factor: the range's maximum is 6.4x its minimum, and that spread has no explanation yet (the ESSGNN Reviewer traced it to the RNG stream diverging after the first edge_feat_dim-dependent layer). The only wording this evidence supports is: six-seed median 0.3066, 0/6 exceptions, direction consistently suppression, dispersion unattributed. two_mlp under the same config sits at median 0.1037 -- we are lighter, same direction, not immune. NOT YET MACHINE-ENFORCED: node_feat_dim and edge_feat_dim are still absent from essgnn_arch_protocol.json, so nothing checks this at runtime -- the debt named at 01_GRAPH_SPEC.md:1123 item 201 is still open.", decided_at: '2026-08-27', decided_by: 'Kyzen (USER ruling; spec updated 2026-08-28 by MASTER)', decision_basis: "One text understanding across the project. Stage 1's 1280 is forced by the ULIP-2 checkpoint (ulip_backbone.py:90 EMBED_DIM = 1280), so matching it is the only way t_i, e_ij and the retrieval space share a space. 1280 is INFERENCE from that constant, not yet measured -- n08's first run must print emb.shape and confirm.", confidence: high}
   - {id: U-21, marked: RESOLVED, blocking: false, item: "where Algorithm 1's G_0 and {Q_1..Q_N} come from. The paper says two things that do not obviously agree: 3.1 states 'Scene-level layout-aware retrieval is conducted on ProcTHOR-10K', while 3.3 states the evaluation is 'on the scene generation pipeline of I-Design on a set of 200 randomly sampled scenes'. Reading A: 200 scenes sampled from ProcTHOR-10K and run through I-Design's pipeline. Reading B: 200 scenes generated by I-Design from text prompts, with ProcTHOR used only for Stage 2 training. Whichever holds, the graph had no channel for the evaluation input at all, and n16 was reading ProcTHOR houses -- which under Reading B is simply the wrong dataset, and under Reading A is still the wrong OBJECT, since Algorithm 1 needs a generation request rather than a finished layout.", affects: "all of Table 2 and Table 3's two scene columns", resolution: "n15b_resolve_composition_protocol picks a reading and records it; then n15c_prepare_eval_scenes; enforced by G7_composition_protocol", fallback: "none", decided: "Reading B. ProcTHOR is Stage 2 training data; I-Design generates Table 2's 200 scenes, their query list and their layout. G_0 holds only objects already placed.", decided_by: 'Kyzen (relayed GPT analysis, verified against paper text and our own I-Design wrapper)', decided_at: '2026-08-16', decision_basis: "3.3 names 'the scene generation pipeline of I-Design' explicitly, and VERIFIED against our own wrapper: tools/idesign_generate.py calls IDesign(no_of_objects, user_input, room_dimensions) -- a text prompt and room dimensions, with no interface that accepts a ProcTHOR house. Under Reading B, 3.1 and 3.3 stop conflicting because they describe different stages. 'randomly sampled scenes' leans slightly toward Reading A but never says sampled FROM ProcTHOR, and 200 sampled prompts or configurations parse equally well, so it cannot settle it. Future slots are NOT pre-loaded into G_0; doing so would empty 'update scene graph' of meaning. Reading A survives as a diagnostic -- ProcTHOR leave-one-out scene completion -- and is NOT reported as Table 2.", confidence: moderate, reopen_if: "MetaFind code or its authors describe a different Stage 2 target, gallery scope, placement owner or evaluation scene source."}
   - {id: U-22, marked: UNKNOWN, blocking: false, item: "training hyperparameters. The paper reports none: no optimizer, learning rate, batch size, epoch count, weight decay, scheduler, tau initialisation, lambda initialisation, ESSGNN depth L ('After L layers'), ESSGNN hidden width, or pooling type.", affects: "every trained number; without this list a mismatch cannot be attributed between architecture and recipe", resolution: "maintain the explicit table in 01_GRAPH_SPEC section 15; every value there is ours and is reported as such", fallback: "n/a"}
   - {id: U-27, marked: UNKNOWN, blocking: true, item: "I-Design's own inputs. Its API is IDesign(no_of_objects, user_input, room_dimensions); paper 3.3 says only '200 randomly sampled scenes' and gives no prompt list, no room dimensions and no object counts. MEASURED: I-Design cannot consume a ProcTHOR house at all -- there is no such entry point -- so U-21's Reading A is not executable as literally stated.", affects: "what the 200 evaluation scenes actually are, hence all of Table 2", resolution: "record the prompt list, room dimensions and object counts we use; they are ours, not the paper's", fallback: "n/a", gate: G7_composition_protocol, resolved_by_node: n15a_resolve_eval_scene_protocol, blocking_note: "Reclassified 2026-08-16. It was non-blocking while U-21 was open, because the scene source itself was undecided and a prompt list would have been premature. Once U-21 fixed Reading B, this became the ONLY thing standing between the graph and Table 2: I-Design takes (no_of_objects, user_input, room_dimensions), and no channel supplied any of them. Marking it non-blocking would have meant the 200 requests arrive by hand at the console with no record of what was run -- and under Reading B the prompts ARE the experiment, so an unrecorded prompt set is an unreproducible Table 2.", blocking_scope: "Table 2 / scene-composition branch ONLY. Data preprocessing, Stage 1 training and Stage 2 training are unaffected -- n07b processed all 1,467 ProcTHOR assets with U-27 open. G7_composition_protocol is where it bites, and nowhere earlier. Saying it blocks nothing is as wrong as saying it blocks everything.", do_not_rush: "The 200 prompts should be designed AFTER the training protocol settles -- a reproducible set with a stated room-type and object-count distribution. Picking 200 at random now would build Table 2 on an input nobody can reconstruct."}
@@ -1876,4 +1935,4 @@ risks_unknowns:
       question into a measurement.
     fallback: "Tables 2/3 => INSUFFICIENT_EVIDENCE"
   - {id: R-02, marked: RISK, item: "24 GB limits the trainable scope", affects: "D-1 and RA-3", resolution: "not resolvable on this hardware", fallback: "declare the scope actually trained"}
-  - {id: R-03, marked: RISK, item: "Qwen annotation quality is unmeasured", affects: "the text tower", resolution: "pilot then manual spot-check", fallback: "escalate model size"}
+  - {id: R-03, marked: RISK, item: "gemma-4-12B-it annotation quality is unmeasured", affects: "the text tower", resolution: "pilot then manual spot-check", fallback: "escalate model size"}

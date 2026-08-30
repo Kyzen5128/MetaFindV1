@@ -52,7 +52,8 @@ nodes:
     precondition: "n01 postcondition holds"
     postcondition: >
       manifest present with len(manifest) assets; >=98% of GLBs on disk;
-      ProcTHOR splits written; ULIP-2, ViT-bigG-14 and Qwen2.5-VL cached.
+      ProcTHOR splits written; ULIP-2, ViT-bigG-14, gemma-4-12B-it (D-2, the
+      n05/n08 model) and Qwen2.5-VL (D-8, the n17 judge) cached.
     deterministic: true
     idempotent: true
     idempotency_mechanism: read_before_write
@@ -216,8 +217,17 @@ nodes:
       reading, but the author may have meant "spread out" loosely. Orthographic
       is our default and is recorded per asset; both projections stay available,
       and the choice changes the image embedding distribution.
-      [UNKNOWN U-03] Camera placement is also unspecified; Fibonacci lattice by
-      default.
+      [UNKNOWN U-03] Camera placement is also unspecified. PRIMARY is an
+      equal-azimuth orbit, 11 views, delta-azimuth 360/11 = 32.7273 deg, at
+      the elevation U-03b fixes (20 deg) -- an UPSTREAM-INFORMED CHOICE from
+      ULIP-2's single-axis 12-view / 30-deg orbit, not paper truth.
+      fibonacci_sphere_11 is the VARIANT and was the previous primary; this
+      note still called it the default until 2026-08-30. The two are not
+      interchangeable: over 100 assets, silhouette coverage is
+      indistinguishable (0.1667 vs 0.1653) but mean inter-view similarity is
+      0.507 for the orbit against 0.442 for Fibonacci, differing by more than
+      0.05 on 53 of 100 assets. Read the U-03 registry entry in
+      graph_spec.yaml for the current value; do not read it here.
       [F13] Normalising to a unit sphere destroys absolute scale, so the
       annotator's size estimate is a category prior; true extents are recorded
       alongside so the estimate is auditable.
@@ -253,8 +263,16 @@ nodes:
       rollback: quarantine_forward
     subgraph: {spec_ref: SG1, failure_surface: transparent, internal_gate_blocks_parent: false}
     notes: >
-      [DEVIATION D-2] Qwen2.5-VL replaces GPT-4o. Recorded per asset as
-      annotator_model. An earlier draft offered a fallback to ULIP-2's shipped captions as the
+      [DEVIATION D-2] gemma-4-12B-it replaces GPT-4o. Recorded per asset as
+      annotator_model.
+      [OBSERVED DATA 2026-08-30, full census not a sample] All 45,692 admitted
+      annotations -- 45,692 files under data/outputs/annotations/ and 45,692
+      lines in logs/annotations_index.jsonl -- carry annotator_model
+      "/home/kyzen/metafind_out/gemma-4-12B-it". One distinct value, zero rows
+      missing the key. This note read "Qwen2.5-VL" until 2026-08-30: D-2 was
+      re-pointed to gemma on 2026-08-24 and the registry did not follow.
+      45,692 is the ADMITTED corpus (splits.json admitted_total), which is
+      NOT the 46,052-uid manifest and NOT the 46,024 renders. An earlier draft offered a fallback to ULIP-2's shipped captions as the
       cheap default; removed, because those lack placement constraints and using
       them turns the experiment into a different one. If ever used, the whole
       result is marked DEGRADED.
@@ -409,7 +427,14 @@ nodes:
       of the floor, or the floor plane fills the frame and slices the object.
       The working probe is tools/probes/thor_isolated_render_probe.py.
       Images follow n04's protocol exactly -- 11 orbital views, orthographic,
-      224x224, white background -- so the two sides are comparable. The point
+      224x224 -- so the two sides are comparable. The 11 is PAPER 2.3 and is
+      not in question here. The BACKGROUND is: this said "white background",
+      which D-11 inverted on 2026-08-23. n04 at RENDERER_VERSION 5+ renders
+      TRANSPARENT (openshape film_transparent=True, unanimous over 500 sampled
+      sidecars) and compositing happens once, at read time, to BLACK
+      (view_io.py BACKGROUND_RGB = (0, 0, 0)). "Follows n04 exactly" therefore
+      means transparent-then-black, and whatever n07b does must be checked
+      against that, not against this sentence. The point
       cloud is NOT n03's: a depth shell from those same views carries visible
       geometry only, and the provenance field exists so no reader can mistake
       the two.
@@ -498,9 +523,13 @@ nodes:
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
-      [RENAMED from G3_object_corpus] The old name promised more than the gate
-      checked. Scene-corpus validity is now checked by G6_stage2_ready, which
-      guards the spend that actually depends on it.
+      The name G3_object_corpus promised more than this gate checked, so
+      scene-corpus validity is checked by G6_stage2_ready, which guards the
+      spend that actually depends on it. (The "[RENAMED from G3_object_corpus]"
+      marker was removed 2026-08-30: G3_object_corpus still exists under that
+      name in validation_plan.yaml and in this file's own after_gates lists,
+      so the marker described a rename that did not happen and pointed a
+      reader at a nonexistent history.)
 
   - id: n09c_build_scene_splits
     role: compute
@@ -1105,8 +1134,15 @@ nodes:
       partial_failure_semantics: proceed_with_admitted
       rollback: quarantine_forward
     notes: >
-      [DEVIATION D-2] Qwen2.5-VL replaces GPT-4o, so Table 2's absolute values
-      are not comparable to the paper; only the direction survives (SC-3).
+      [DEVIATION D-8] gemma-4-12B-it replaces GPT-4o for SCENE JUDGING (was
+      Qwen2.5-VL; Kyzen ruled all LLM roles to gemma 2026-08-30, and n17 has
+      never run under either), so Table 2's
+      absolute values are not comparable to the paper; only the direction
+      survives (SC-3). The id is D-8, not D-2: DL-005 split scene judging out
+      of D-2 on 2026-08-21 precisely because the two substitutions stopped
+      being the same model, and D-2 has since moved again (to gemma-4-12B-it,
+      2026-08-24) while this judge did not. Reading D-2 here would attribute
+      Table 2 to the annotation model.
       [UNKNOWN U-10] IDesign's shipped evaluator grades 5 aspects on 1-10 while
       the paper reports 4 on 1-5, and the modified prompt was never published;
       which aspect maps to Scene Coherence is unclear.
@@ -1239,10 +1275,14 @@ nodes:
       rollback: N/A
     notes: >
       Criteria are enumerated in validation_plan.yaml, not here. This note used
-      to hard-code "RA-1/2/3" and "D-1..D-4", both of which went stale: there
-      are four Required Audits, and the deviations are D-2..D-6 with D-1 held
-      in boundary.conditional_deviations and EVALUATED rather than listed. A
-      hard-coded range in a second place is a second thing to forget.
+      to hard-code "RA-1/2/3" and "D-1..D-4", then "D-2..D-6"; both went stale.
+      A RANGE is the defect, not the endpoints -- it goes stale silently every
+      time a deviation is added, and it was stale again by 2026-08-30, when
+      the registered set was D-2, D-3, D-4, D-5, D-6, D-7, D-8, D-9, D-10,
+      D-11, D-12, D-13, D-14, with D-1 held in boundary.conditional_deviations
+      and EVALUATED rather than listed. That enumeration is a snapshot and is
+      not authority: graph_spec.yaml boundary.deviations is. A hard-coded
+      range in a second place is a second thing to forget.
 
   - id: n22_publish_report
     role: mutate

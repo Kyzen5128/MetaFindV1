@@ -14,8 +14,8 @@
 | 標記 | 意思 |
 |---|---|
 | **[論文]** | 原文明確規定，附引文 |
-| **[未定]** | 論文沒說，我們選了一個並記錄。U registry 共 42 項，其中 32 項 unresolved、10 項 resolved（U-08／08a／08b／08d／08e、U-18、U-20、U-21、U-34 於 2026-08-16；**U-26 於 2026-08-17**）。**先前四個會擋住 Stage 2／Table 2 的項目已全部判定，U-26 的 ESSGNN 架構也已選定（附錄的 shared-message 版，標為 `[INFERENCE]`，2.5 版留作對照假設）**；新增 **U-08c**（ProcTHOR 資產數四個數字互相矛盾，一律從安裝的 build 現場推導）|
-| **[偏離]** | 與論文不同，必須在報告聲明（**12 條 D-2…D-13**。條件式的 **D-1** 已於 2026-08-16 判定**不啟用**） |
+| **[未定]** | 論文沒說，我們選了一個並記錄。U registry 共 42 項，其中 31 項 unresolved、11 項 resolved（U-08／08a／08b／08d／08e、U-18、U-20、U-21、U-34 於 2026-08-16；**U-26 於 2026-08-17**；**U-13 於 2026-08-30 由 ESSGNN 側改標**）。**這三個數字不要用手數 —— 跑 `python tools/check_graph.py`，它逐項比對 `graph_spec.yaml`。****先前四個會擋住 Stage 2／Table 2 的項目已全部判定，U-26 的 ESSGNN 架構也已選定（附錄的 shared-message 版，標為 `[INFERENCE]`，2.5 版留作對照假設）**；新增 **U-08c**（ProcTHOR 資產數四個數字互相矛盾，一律從安裝的 build 現場推導）|
+| **[偏離]** | 與論文不同，必須在報告聲明（**13 條 D-2…D-14**，登記表連同條件式的 **D-1** 共 **D-1…D-14 十四筆**；D-1 已於 2026-08-16 判定**不啟用**）。**[已更正 2026-08-30]** 先前寫「12 條 D-2…D-13」，漏掉 D-14 |
 
 先前的草稿沒有分開，結果出現「我自己加的參數被當成論文真值」這種事。
 
@@ -114,18 +114,18 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 
 | | 內容 | 我們怎麼取得 |
 |---|---|---|
-| **Objaverse-LVIS** | manifest 實際 46,052 個資產（論文說「約 48,000」） | 下載 GLB **原始 mesh 並保留**；點雲與 11 視角渲染圖都從 mesh 產生 |
+| **Objaverse-LVIS** | manifest 實際 46,052 個資產（論文說「約 48,000」）。**三個數字各指不同東西**：manifest **46,052** → n04 實際渲染 **46,024** → n05 admitted 語料 **45,692** | 下載 GLB **原始 mesh 並保留**；點雲（46,052）與渲染圖（**n04 實際 12 視角**，論文陳述值是 11）都從 mesh 產生 |
 | **ProcTHOR-10K** | 10,000 train + 1,000 val + 1,000 test | JSONL |
 
 **不下載**：ULIP-2 預先取樣的點雲（185 GB）、ULIP-2 的渲染圖（474 GB，而且不是論文要的
 11 正交視角）、ShapeNet triplets（409 GB）。
 
-### 十二項偏離（D-2…D-13）＋一項條件式（D-1，已判定不啟用）
+### 十三項偏離（D-2…D-14）＋一項條件式（D-1，已判定不啟用）
 
 | id | 偏離 | 影響 |
 |---|---|---|
 | **D-1** *(條件式・**不啟用**)* | ViT-bigG-14 的 CLIP 側保持凍結。`active_if: paper_clip_train_scope == 'trainable' AND actual_clip_train_scope == 'frozen'`；實際兩者皆為 `frozen`，條件不成立 | **U-34 已於 2026-08-16 判定為 `frozen`，D-1 因此不啟用。** 理由不是「4090 塞不下所以偏離」，而是：MetaFind 明確建立於 ULIP-2，ULIP-2 §3.3 明文凍結 OpenCLIP，而 MetaFind 全文從未聲明改變此策略。§2.6「Both query and gallery encoders are trained」講的是**塔**（point encoder／projection／fuser 本來就在 optimizer 裡），§3.4「entire encoder」對比的是 fuser-only ablation，§2.4「gallery frozen after pretraining」與 §2.6 是 Stage 1／Stage 2 的界線，不是矛盾。**不得寫成「論文明文說 CLIP 凍結」** —— 論文沒有這句。若日後取得官方 code 或作者回覆證實 optimizer 更新到 OpenCLIP，重開 U-34 並啟用 D-1。 RA-3 仍照跑，量的是**另一個讀法**在本機是否可執行，只記錄不阻斷 |
-| **D-2** | Qwen3.8-27B 取代 GPT-4o（**資產標註 n05**）。使用者決定 U-6，2026-08-21 | **主要影響 Table 1** —— 45,952 筆標註是文字塔的訓練資料。SC-1 只報告差距、不設門檻。標註另錨定於 Objaverse-LVIS 真值類別，該錨定本身也是已記錄偏離。**GPT-4o 可用性為 UNRESOLVED，非已證實不可得** |
+| **D-2** | **`gemma-4-12B-it`** 取代 GPT-4o（**資產標註 n05**）。使用者決定 U-6，2026-08-21 | **主要影響 Table 1** —— **45,692 筆**標註是文字塔的訓練資料。**[已更正 2026-08-30]** 先前寫「Qwen3.8-27B／45,952 筆」：普查 `data/outputs/annotations/*.json` 共 **45,692** 筆，`annotator_model` **無一例外**是 `gemma-4-12B-it`（prompt_version 8 共 43,597、v9 共 2,095）。45,952 是 `annotation_provenance.json` 裡 `accepted_legacy_v3` 那個**族群**的計數，不是現行語料數，兩者不可互換。SC-1 只報告差距、不設門檻。標註另錨定於 Objaverse-LVIS 真值類別，該錨定本身也是已記錄偏離。**GPT-4o 可用性為 UNRESOLVED，非已證實不可得** |
 | **D-8** | Qwen2.5-VL 取代 GPT-4o（**場景評分 n17**）。2026-08-21 由 D-2 拆出 | **影響 Table 2**。裁判不是 GPT-4o，SC-3 僅保留方向性結論 |
 | **D-3** | 不重跑 6 個 baseline | 只能與論文公佈值比較，並註明協定不同 |
 | **D-4** | 不做人工評分 | Table 2 人工欄判 `INSUFFICIENT_EVIDENCE` |
@@ -134,7 +134,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | **D-7** | I-Design 的 **JSON-constrained decoding 未重現**。補充材料 §7：*"All agents utilize GPT-4's JSON mode to restrict outputs exclusively to valid JSON"*，而我們的 vLLM 沒開任何 guided decoding。**與 D-5 不同**——D-5 是誰回答，D-7 是回答受不受結構約束。Qwen 因此**可能吐出結構上不合法的 JSON，GPT-4 在那個模式下不可能**，那會落進 Engineer 的 schema 驗證重試迴圈。分開編號是因為兩者可獨立修復：開了 guided JSON 就能退掉 D-7，D-5 原封不動  影響同 D-5：Table 2 全部與 Table 3 場景欄；Table 1 不受影響 |
 | **D-9** | **n05 把 Objaverse-LVIS 真值類別餵給標註器當錨定身分**（`DL-007`），模型只能向下細化、不能橫向替換 | **論文是讓 VLM「產生」類別**（`2methdology.tex:28`、`neurips_2025.tex:100`、Figure 2 caption）。**餵標籤進去是departure，永遠不得寫成 paper-faithful。** 影響每一筆標註、每一個 Stage 1 文字向量、Table 1 每一個文字條件欄。**未解：`D0-010` 的證據稽核從未做過**，設計是靠批准通過的；`U-AB` 要求該稽核（ULIP2 `W-6`）必須在全量標註前完成 |
 | **D-10** | **Stage 1 對比負樣本只有單卡 batch**，上游是 8 卡 all-gather 的 512（`F-N10-1`） | UPSTREAM FACT：`upstream/ULIP models/losses.py:38-40` 呼叫 `all_gather_batch`。**梯度累積補不回來** —— 每個 micro-batch 仍各自形成對比矩陣。負樣本數是對比目標的一階項，是 Table 1 落差的候選解釋。實際值在 batch size 定下來後**量測**，不是選的 |
-| **D-11** | **n04 渲染背景為白色**，ULIP-2 官方渲染是黑色（`U-W`，USER 決定 2026-08-22） | 量測而非假設：對 ULIP-2 自己的 `image_feat`，全部 286 個重疊資產，白 R@1 **97.2%**／matched 0.9141／gap 0.3689，黑 95.8%／0.8783／0.3406，n=100 重現同號同量級。`S-5` 是本里程碑自選的判準，**判準不能贏的時候算、輸的時候不算**。影響 n04 語料與其所有影像向量；**不影響與論文的可比性**（論文未提背景） |
+| **D-11** | ~~**n04 渲染背景為白色**~~ →ct **實際是 `transparent_rgba`**（OpenShape `film_transparent=True`，逐筆 sidecar 的 `background` 欄）。ULIP-2 官方渲染是黑色（`U-W`，USER 決定 2026-08-22）。**[已更正 2026-08-30]** 白背景是 **pyrender 世代**的決定；2026-08-23 換成 OpenShape 的 Blender 腳本後背景變成透明 RGBA，本格與下面那筆白 vs 黑的量測**都是在被取代的渲染器上做的** | 量測而非假設：對 ULIP-2 自己的 `image_feat`，全部 286 個重疊資產，白 R@1 **97.2%**／matched 0.9141／gap 0.3689，黑 95.8%／0.8783／0.3406，n=100 重現同號同量級。`S-5` 是本里程碑自選的判準，**判準不能贏的時候算、輸的時候不算**。影響 n04 語料與其所有影像向量；**不影響與論文的可比性**（論文未提背景） |
 | **D-12** | **`COLOR_0` 從 `texture` 類別撤回**，牴觸 glTF 2.0（`R-12`） | glTF 2.0 定義 `COLOR_0` 為 base colour 的線性乘子，而 base colour = `baseColorFactor × baseColorTexture`，**涵蓋 texture 類**。全量測（n=37，該類與 ULIP 的完整重疊）：調變使 **37/37 變暗**，平均亮度 −0.2076，對 ULIP 自有點雲的 cosine 0.9005 → 0.8980。`SAMPLER_VERSION 6`，影響約 995 個資產的 rgb 通道。⚠️ **16/37 落在雜訊內**（37 次擲幣為 18.5±3），未做配對顯著性檢定；`R-12` 自己寫「變暗是確定的，『因此更差』不是」。此撤回**靠的是 `R-11` 的預設對齊上游規則，不是顯著量測**，而 `R-8` 已確立上游**根本沒有發布點雲上色程序** —— 只有產物，沒有行為可對齊。**永遠不得寫成「ULIP-2 就是這樣做的」** |
 | **D-13** | **語料 46,052，論文說「約 48,000」**（`U-01`，2026-08-22 登記） | **不可避免，不是選的** —— 可取得的 Objaverse-LVIS manifest 就是 46,052 個 uid，且**全部都成功解析**（GLB 覆蓋率 100.00%，兩向差集皆為 0）。論文那份 48K 拿不到。`paper-reproduction.md` §9 要求不可避免的差異也要登記。**影響每一個分母**：依論文 80/20 切分，少約 1,558 個訓練資產與約 390 個測試資產 —— 這**不只是評估集不同**，因為 ULIP-2 是在 Objaverse-LVIS 上「評估」，MetaFind 是在上面「訓練」（`2methdology.tex:75`、`3experiments.tex:24`，皆 PAPER FACT）。依 `O-2` 當成 Table 1 的限制帶著；登記不代表重開該決定。manifest sha256 已補記於 `graph_spec.yaml`（`U-01` 自己寫的 resolution 從來沒被執行過） |
 | **D-14** | **ESSGNN 用 `h⁰ = t_i`；論文 §2.5 字面是 `h_i^(0) = Concat(x_i, t_i)`**（`h0_mode="semantic"`，2026-08-22 登記） | 程式自己的註解就寫「**CONTRADICTS 2.5's literal**」。依 `C2` 採附錄 C 的前提，字面讀法保留為 `RA-1`。影響每個節點的初始狀態 → `e_layout` → Stage 2 → Table 2，而且它正是等變性測試拿來做負向注入的開關（`test_essgnn.py:138`）。**不是靜默風險**：`from_protocol` 不管協定寫什麼都強制它（Master 用敵意協定實測），兩個測試也在斷言。缺的只是登記。⚠️ `PRIMARY_INTERPRETATION` 另外三個值**不是偏離**，它們**遵循**論文：`coords_agg="sum"` 對應 `2methdology.tex:51-52` 的 `\sum`（偏離的是參考 EGNN 的 mean 預設，而依 `U-O` 論文有講就聽論文）、`edge_proj_dim=None`、`normalize_coord_diff=False`。**這三個「打開」才是偏離。** |
@@ -148,7 +148,7 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 |---|---|---|
 | **RA-1** | §2.5 的 `h⁰ = Concat(x,t)` vs Appendix C 的「`h⁰` 對 SE(3) 不變」前提 | **失敗** |
 | **RA-2** | §2.5 的 `f_x → ℝ³` vs 證明需要 `φ_x` 為純量才能提出 `Q` | **失敗** |
-| **RA-3** | **U-34 `trainable` 讀法的可行性稽核** —— `train_scope=full`（梯度真的到 ViT-bigG）在單卡 24GB 上跑不跑得動 | 跑不動只證明**那個讀法**在本機不可行，**不證明論文要求那個讀法**；凍結那條有 ULIP-2 §3.3 直接支持 |
+| **RA-3** | **U-34 `trainable` 讀法的可行性稽核** —— `train_scope=full`（梯度真的到 ViT-bigG）在**本機單卡 RTX 5090 32GB**（`nvidia-smi` 實測 32,607 MiB）上跑不跑得動。**[已更正 2026-08-30]** 先前寫 24GB，那是前一台機器；⚠ **顯存變大不等於可行** —— RA-3 在 5090 上**從未跑過**，本格結論 **UNVERIFIED** | 跑不動只證明**那個讀法**在本機不可行，**不證明論文要求那個讀法**；凍結那條有 ULIP-2 §3.3 直接支持 |
 | **RA-4** | §2.5／§3.4 宣稱 ESSGNN 解決 GAT 對 translation **與 scaling** 的敏感，但 SE(3) **不含縮放** | **量測，不預測** |
 
 **RA-4 是逐字重讀才發現的。** §2.5 的動機是
@@ -181,9 +181,16 @@ G1 來源有效 → G2 點雲健全 → G3 物件語料 → G4 gallery 凍結 �
 那個判準在檢驗一個論文沒有主張的命題，降為 `L2-PC-ULIP-REF` 診斷。
 **它不是因為過不了才降級 —— 它從來沒跑過。**
 
-### 四個阻斷級的未解項
+### 曾經阻斷級的四項 —— **四項都已於 2026-08-16 判定**
 
-**U-08a：Stage 2 的正樣本是哪一個 gallery 條目？**
+> ⚠ **[已更正 2026-08-30] 本節的標題先前是「四個阻斷級的未解項」，而 `graph_spec.yaml` 的
+> `risks_unknowns` 從 2026-08-16 起就把 U-08a／U-08b／U-18／U-21 四筆全部標成 `RESOLVED`。**
+> 也就是說這一節從那天起就在叫讀者去等一個已經做完的決定 —— 和 U-34 那次半途遷移同一族錯誤，
+> 只是換了詞彙（那次寫「取決於」，這次寫「阻斷級」）。
+> **下面的問題陳述保留不刪**，它們是判定為什麼必要的紀錄；判定結果見 `01_GRAPH_SPEC.md` §15
+> 對應四列，以及 `graph_spec.yaml` 的 `decided` / `decided_by` / `decision_basis` 欄。
+
+**U-08a：Stage 2 的正樣本是哪一個 gallery 條目？（已判定：Stage 2 用自己的 ProcTHOR gallery，正樣本 = 同一個 assetId）**
 
 Eq.7a/7b 需要一個 positive。目標是 **ProcTHOR 物件**，gallery 是 **Objaverse-LVIS**，
 而兩者的識別碼**實測交集為 0**：
@@ -196,11 +203,11 @@ Objaverse uid    : 867dfc95e96a4987...            46,052 個
 
 論文完全沒有提到這個對應關係。**沒有它，loss 的正樣本不存在。**
 
-**U-08b：目標物件的 text / image / point cloud 從哪來？**
+**U-08b：目標物件的 text / image / point cloud 從哪來？（已判定：AI2-THOR 隔離渲染 ＋ 深度外殼點雲，query 側可缺點雲）**
 ProcTHOR 只提供 metadata 與座標，沒有渲染圖也沒有點雲，所以 Eq.6 的三個模態沒有來源。
 
-**這兩個決定之前不要實作 Stage 2** —— 而且現在由 `G6_stage2_ready` 這道 gate
-強制，不靠自律。
+~~**這兩個決定之前不要實作 Stage 2**~~ —— **兩個決定都已做出（2026-08-16）**；
+`G6_stage2_ready` 這道 gate 仍在，改成驗證那個決定**有沒有被實作**，不靠自律。
 
 **U-18：Algorithm 1 第 7 行「放進場景、更新場景圖」到底產生什麼？**
 下一輪立刻要 `ESSGNN(G)`，需要新節點的 `t_i`、位置、朝向、尺度、物理邊、語意邊。
@@ -238,18 +245,34 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | **U-15** | 結構化標註怎麼序列化成 encoder 的輸入字串 | 只給欄位，沒給格式 |
 | **U-16** | query / gallery 兩塔是否共享權重 | 說「dedicated query encoder」、說兩者都訓練，但沒說共享關係 |
 
-### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 17 個**
+### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 19 個**
+
+> ⚠ **不要相信這張表，跑檢查器。**
+>
+> ```bash
+> python tools/check_graph.py     # 節點數、已實作數、測試函式數、U 登記表全部重算
+> grep -rn "^# IMPLEMENTS-NODE:" metafind/ tools/ setup/
+> ```
+>
+> 上面那兩個數字（31／19）是 `tools/check_graph.py` **會實測並比對**的，所以它們寫錯會紅；
+> 但**下面那張逐節點的表格沒有任何機器在看**，它只會安靜地過期。
+> 2026-08-30 這一輪就在裡面找到四處與檔案系統不符的敘述（見各列的「[已更正]」）。
+> **需要現況時以檢查器與 `git log` 為準，不要引用這張表的措辭。**
+>
+> 注：19 是 `# IMPLEMENTS-NODE:` **標記數**，不是相異節點數 ——
+> `n15_eval_retrieval` 有兩支程式（`metafind/eval/retrieval.py` 與 `run_retrieval.py`）
+> 各帶一個標記，所以相異節點是 **18** 個。檢查器數的是標記。
 
 規格完整不等於管線存在。這張表是為了讓讀者不會把前者讀成後者
 （第十九輪剛因為同一個理由修過 `L1-STAGE1-PROTOCOL-APPLIED` 的措辭）。
 
 | 節點 | 狀態 | 程式 |
 |---|---|---|
-| `n01_env_bootstrap` | **可執行** | `setup/01_storage.sh`、`02_conda_env.sh`、`03_verify_env.py`（10/10 通過，含 AI2-THOR headless 渲染與 procthor-10k 載入） |
+| `n01_env_bootstrap` | **可執行** | `setup/01_storage.sh`、`02_conda_env.sh`、`03_verify_env.py`（**11 項**，`grep -c "^def t_"` 實測；含 AI2-THOR headless 渲染與 procthor-10k 載入）。**[已更正 2026-08-30]** 先前寫「10/10 通過」——**項數就錯了，而且「通過」是上一次執行的結果、不是這一版程式的性質** |
 | `n02_download` | ✅ **完成** | `metafind/data/download.py`。46,052 個 GLB（351 GB）、0 失敗 |
 | `n03_sample_pointclouds` | ✅ **完成** | `metafind/data/pointclouds.py`。46,052 朵點雲（5.6 GB）、**0 隔離**；顏色對照官方 ULIP 雲平均差 0.0021；19 條測試 |
-| `n04_render_views` | ✅ **完成** | `metafind/data/renders.py`。45,955 個資產（7.3 GB）、**隔離率 0.21%**（G3 門檻 2%）；11 張視圖全相異且無空白；11 條測試 |
-| `n05_annotate` | **可執行** | `metafind/data/annotate.py`（schema／prompt，27 條測試）＋ `annotate_run.py`（Qwen2.5-VL 生成與 C1 修復迴圈）。全量尚未跑完 |
+| `n04_render_views` | ✅ **完成** | `metafind/data/renders.py`（編排）＋ `render_blender.py`（實際畫像素）。**46,024 個資產**（`logs/renders_index.jsonl` 實數）、**12 張視圖**、512px、perspective、transparent RGBA。**[已更正 2026-08-30]** 先前寫「45,955 個資產／11 張視圖」，那是 **pyrender 世代**的數字；2026-08-23 起改用 OpenShape 的 Blender 腳本並全部重渲染（`DL-024 A1/A2/A3`，USER_APPROVED）。⚠ sidecar 自報 `n_views_source: "USER decision 2026-08-23; DEVIATION from MetaFind's stated 11"` —— **產物自己說這是偏離，而偏離登記表裡沒有它的號碼；待 MASTER 編號，本文件不自行編 D-15** |
+| `n05_annotate` | ✅ **完成** | `metafind/data/annotate.py`（schema／prompt）＋ `annotate_run.py`（生成與 C1 修復迴圈）。**全量已完成：`data/outputs/annotations/` 共 45,692 筆**，標註器全部是 **`gemma-4-12B-it`**（prompt_version 8 共 43,597、v9 共 2,095）。**[已更正 2026-08-30]** 先前寫「Qwen2.5-VL」「全量尚未跑完」，兩句都與產物不符 |
 | `n07_scene_graphs` | ✅ **完成** | `metafind/data/scene_graphs.py`。12,000 間房、0 隔離、房間對應 100%；support 邊來自 ProcTHOR 的 children 樹，座標保留原始值；16 條測試，兩條負向注入實測會失敗 |
 | `n08_semantic_edges` | **可執行** | `metafind/data/semantic_edges.py`（key／prompt／驗證，30 條測試）＋ `semantic_edges_run.py`（Qwen 關係句 ＋ 凍結 CLIP 文字編碼器）。**實測 410 萬條語意邊只有 4,242 組唯一描述配對（快取命中 99.90%）**；三條負向注入實測會失敗。LLM 階段須等 n05 讓出 GPU |
 | `n09c_build_scene_splits` | ✅ **完成** | `metafind/data/scene_splits.py`。9,600 train／2,400 test（80/20，seed 20260816）、**洩漏 0**；13 條測試，負向注入實測會失敗。語意邊覆蓋率待 n08 |
@@ -259,10 +282,12 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | `n15a_resolve_eval_scene_protocol` | **只有規格** | U-27：Table 2 的 200 個 I-Design 請求，**仍需人決定** |
 | `n09_build_splits` | **可執行** | `metafind/data/splits.py`。物件 80/20 ＋ **U-09 的兩種評估協定並行**（gallery=test 與 gallery=full），gallery_size 由切分推導、不寫死；18 條測試 |
 | `n06_encode_text_image` | **可執行** | `metafind/data/encode_text_image.py`。凍結 bigG 編碼文字與 11 視角；**11 個 per-view 向量全部保留**（只存聚合後的會把 U-14 烤死在 46,052 個檔案裡）；token 數實測不假設 |
-| `n10_train_stage1` | **可執行** | `metafind/train/stage1.py`。凍結 CLIP 的向量走 n06 快取、**點雲即時編碼**（PointBERT 在 optimizer 裡，快取等於變成 fuser-only ablation）；checkpoint 只存 requires_grad 參數（F27）；17 條測試 |
+| `n10_train_stage1` | ✅ **已執行過** | `metafind/train/stage1.py`。**[已更正 2026-08-30]** 產物在 `data/outputs/ladder/`（e5 → e10 → e25 的輪數階梯，`e25_500w/stage1_ckpt.json` 記到 `epoch: 24`、`n_params_saved: 80,738,946`、`clip_train_scope: "frozen"`）與 `data/outputs/checkpoints/sweep_lr/lr7.50e-4_s20260830`（LR sweep 一組）。⚠ 那些 ckpt 記錄 `code_dirty: true`，且**沒有記錄 GPU 型號或顯存**，所以不能當成乾淨可重現的科學執行。凍結 CLIP 的向量走 n06 快取、**點雲即時編碼**（PointBERT 在 optimizer 裡，快取等於變成 fuser-only ablation）；checkpoint 只存 requires_grad 參數（F27）；17 條測試 |
 | `n11` ＋ `n12` ＋ `n11b` | **可執行** | `metafind/train/gallery_index.py`。三個節點同一支程式，因為它們是同一個操作套在不同語料上，而**不能漂移的正是編碼器** —— 拆開會有三份「載入、凍結、雜湊」，而那個雜湊就是重點。Stage 1 的 Objaverse 索引與 Stage 2 的 ProcTHOR 索引**永不合併** |
 | `n09b_resolve_stage2_protocol` | **可執行** | `metafind/models/resolve_stage2.py`。把 U-08a/b/d/e 與四個 ESSGNN 選擇寫成 n13 讀得到的形式，並在寫入前**用 `ESSGNNConfig.from_protocol` 驗一遍** —— 一個 Literal 打錯要在一秒內失敗，不是等 Stage 1 訓練完 |
-| 其餘 **十四個**節點 | **只有規格** | 無 |
+| `n15_eval_retrieval` | **可執行** | **[2026-08-30 新增 —— 這一列先前整個不存在]** `metafind/eval/retrieval.py` ＋ `metafind/eval/run_retrieval.py`，兩支各帶一個 `# IMPLEMENTS-NODE: n15_eval_retrieval` 標記。⚠ 檢查器目前對它報三條失敗：registry 宣告它寫 `retrieval_metrics`／`run_progress`／`cost_ledger`，而原始碼一個都沒提到 —— **宣告寫出、實際沒寫**，屬 registry／n15 的落差，已上呈 |
+| `n13_train_stage2` | **有程式、從未執行** | **[2026-08-30 新增]** `metafind/train/stage2.py` 存在且迴圈完整（樣本建構／batching／context graph／forward／Eq. 7-8／backward／checkpoint）。它**刻意不帶 `IMPLEMENTS-NODE` 標記**，因為標記是一個宣稱、而實作數是從它算出來的；程式自己的 docstring 就寫它需要 `stage1_ckpt` 與 `sem_edge_cache` 才跑得起來 |
+| 其餘 **十二個**節點 | **只有規格** | 無 |
 
 另有兩塊不對應任何節點、但已可執行：
 
@@ -272,9 +297,20 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | `setup/04_idesign_env.sh` ＋ `tools/idesign_generate.py` ＋ 三個 patch | I-Design 場景生成，R-01 的量測對象。**目前 0 個場景完成**（見 **F18**） |
 
 `metafind/models/`（`essgnn` / `dual_tower` / `fusion` / `losses` / `ulip_backbone` /
-`stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身 ——
-`n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer。
-492 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態（pytest 參數化後展開成 614 個 case），**沒有一條涵蓋任何節點的執行**。
+`stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身。
+
+> 🔴 **[已更正 2026-08-30] 先前這裡寫「`n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer」——
+> 兩個都有。** `metafind/train/stage1.py` 不只存在，還跑過 5→10→25 的輪數階梯與一組 LR sweep
+> （產物在 `data/outputs/ladder/` 與 `data/outputs/checkpoints/sweep_lr/`）；
+> `metafind/train/stage2.py` 也存在，迴圈完整但**從未執行**（缺 `stage1_ckpt` 與 `sem_edge_cache`）。
+> 這句話同時和本表 `n10_train_stage1` 那一列自相矛盾，**在同一份檔案裡**，
+> 而沒有任何檢查器在比對散文與表格。
+
+693 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、
+場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態，**沒有一條涵蓋任何節點的執行**。
+（693 = `tests/test_*.py` 裡 `^def test_` 的數量，由 `tools/check_graph.py` 實測並比對。）
+**[已更正 2026-08-30]** 先前寫「492 個測試函式…展開成 614 個 case」；492 已過期，
+而「614 個 case」是 pytest 參數化後的展開數、**本輪未重量，標 UNVERIFIED**。
 
 ---
 

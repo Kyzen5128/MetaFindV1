@@ -6,7 +6,7 @@
 > **三種東西必須分開，不可混為一談：**
 > **[論文]** 原文明確規定 ｜ **[未定]** 論文沒說，我們選了一個並記錄 ｜ **[偏離]** 與論文不同，必須在報告中聲明
 
-**正式偏離十二項（D-2…D-13）＋條件式一項（D-1）**，編號與 `README.md`、
+**正式偏離十三項（D-2…D-14）＋條件式一項（D-1，已判定不啟用）＝ 登記表共 D-1…D-14 十四筆**，編號與 `README.md`、
 `graph_spec.yaml` 一致，不得另編。D-1 放在 `boundary.conditional_deviations`，
 `active_if: paper_clip_train_scope == 'trainable' AND actual_clip_train_scope == 'frozen'`。
 
@@ -28,7 +28,7 @@
 | **D-7** | I-Design 的 **JSON-constrained decoding 未重現**。補充材料 §7：*"All agents utilize GPT-4's JSON mode to restrict outputs exclusively to valid JSON"*，而我們的 vLLM 沒開任何 guided decoding。**與 D-5 不同**——D-5 是誰回答，D-7 是回答受不受結構約束。Qwen 因此**可能吐出結構上不合法的 JSON，GPT-4 在那個模式下不可能**，那會落進 Engineer 的 schema 驗證重試迴圈。分開編號是因為兩者可獨立修復：開了 guided JSON 就能退掉 D-7，D-5 原封不動 |
 | **D-9** | **n05 以 Objaverse-LVIS 真值類別錨定標註身分**（`DL-007`）。論文是讓 VLM 產生類別，**不得寫成 paper-faithful**。`D0-010` 稽核未做，`U-AB` 要求先補完 |
 | **D-10** | **對比負樣本 = 單卡 batch**，上游 8 卡 all-gather 為 512（`F-N10-1`）。梯度累積補不回來 |
-| **D-11** | **渲染背景白色**，上游是黑色（`U-W`）。白在 `S-5` 上勝出 97.2% vs 95.8%，n=286 |
+| **D-11** | ~~**渲染背景白色**~~ → **實際 `transparent_rgba`**（sidecar `background` 欄）。上游是黑色（`U-W`）。白在 `S-5` 上勝出 97.2% vs 95.8%，n=286 —— **[已更正 2026-08-30] 那組量測是 pyrender 世代做的，2026-08-23 換 Blender 後背景已是透明 RGBA** |
 | **D-12** | **`COLOR_0` 從 `texture` 類撤回**，牴觸 glTF 2.0（`R-12`）。n=37 全部變暗，但 16/37 在雜訊內；靠的是 `R-11` 規則而非顯著量測 |
 | **D-13** | **語料 46,052 vs 論文「約 48,000」**（`U-01`）。不可避免，非選擇。依 80/20 少約 1,558 訓練／390 測試。當成 Table 1 限制帶著 |
 | **D-14** | **`h⁰ = t_i`，論文 §2.5 字面是 `Concat(x_i, t_i)`**（`h0_mode`）。依 `C2` 採附錄前提，字面讀法留作 `RA-1`。`PRIMARY_INTERPRETATION` 另三個值遵循論文，不是偏離 |
@@ -93,8 +93,13 @@ bash setup/02_conda_env.sh && conda activate MetaFind
 python setup/03_verify_env.py --full
 ```
 
-驗 9 項：torch/CUDA、compat shim、純 torch FPS、vendored EGNN 未被竄改、EGNN forward shape、
-SE(3) 等變性 smoke、determinism、儲存區與快取落點、ULIP-2 建模且 `pc_projection` 為 `(768, 1280)`。
+驗 **11** 項（`grep -c "^def t_" setup/03_verify_env.py`，2026-08-30 實測）：
+torch/CUDA、compat shim、純 torch FPS、vendored EGNN 未被竄改、EGNN forward shape、
+SE(3) 等變性 smoke、determinism、儲存區與快取落點、ULIP-2 建模且 `pc_projection` 為 `(768, 1280)`、
+**AI2-THOR CloudRendering 真的能無 X server 啟動並比對 build hash（`t_ai2thor`）**、
+**`prior` 載入 procthor-10k 且 revision 對得上 pin（`t_prior`）**。
+**[已更正 2026-08-30]** 先前寫「9 項」，漏掉最後兩項 —— 而那兩項正是 n07b 與整條
+Stage 2 目標模態分支的前置條件。
 
 **G1 的判準也包含 ProcTHOR 三個 split 齊全** —— 先前它的判準文字提到 ProcTHOR，
 但那條 channel 根本沒進 graph，所以 gate 看不到它：Objaverse 齊全而 ProcTHOR 不存在時會 PASS。
@@ -113,14 +118,18 @@ python -m metafind.data.download --only glbs        # 只抓 mesh（最慢，實
 | Objaverse-LVIS GLB | **實測 328 GB** | **保留不刪**，見下。先前寫 ~216 GB，那是下載前的估計，少報 52% |
 | ULIP-2 checkpoint | 384 MB | PointBERT／`pc_projection` 的**初始權重**（Stage 1 會繼續訓練它們），以及凍結的 CLIP 側 |
 | ViT-bigG-14 | 9.5 GB | ULIP-2 的 text/image 編碼器 |
-| Qwen2.5-VL-7B | 16.6 GB | 取代 GPT-4o |
+| `gemma-4-12B-it` | — | **實際的資產標註器**（n05）。**[已更正 2026-08-30]** 本列先前寫 `Qwen2.5-VL-7B / 16.6 GB`；45,692 筆標註產物的 `annotator_model` 全是 `gemma-4-12B-it`。Qwen2.5-VL 仍是 n17 場景評分（D-8）與 I-Design 規劃（D-5 用 `qwen2.5-7b-instruct`）的模型 |
 
 **GLB 不刪除。** 前一版設計「渲完就刪」是錯的：
 Algorithm 1 的 iterative composition 需要**真實幾何**才能放進場景，只有 embedding 不夠。
 （這**不是偏離** —— 論文沒說要刪，這只是一個工程決定。先前誤編為「偏離 D-1」，
 與 README／`graph_spec.yaml` 的 D-1 = ViT-bigG 凍結衝突，已更正。）
 
-**[偏離 D-2] Qwen3.8-27B 取代 GPT-4o**（§2.3 明寫 GPT-4o）。使用者決定 U-6，2026-08-21。
+**[偏離 D-2] `gemma-4-12B-it` 取代 GPT-4o**（§2.3 明寫 GPT-4o）。使用者決定 U-6，2026-08-21。
+**[已更正 2026-08-30]** 這裡先前寫 `Qwen3.8-27B`，`01_GRAPH_SPEC.md` 同一格寫 `Qwen2.5-VL`，
+兩份文件寫了兩個不同的名字，而**兩個都不是產物裡的那一個**。普查
+`data/outputs/annotations/*.json` 共 45,692 筆，`annotator_model` 無一例外
+是 `gemma-4-12B-it`（prompt_version 8 共 43,597 筆、v9 共 2,095 筆）。
 標註是文字塔的訓練資料，換標註器等於換文字分布 → 每筆標註記錄 `annotator_model`，
 報告中列為偏離。
 
@@ -148,7 +157,36 @@ point encoder，encoder 本來就能適應我們的取樣 —— 「和官方雲
 前處理必須完全複製 ULIP 的 `pc_norm`：質心置中、除以最大半徑。
 checkpoint 是在這樣的點雲上訓練的，餵原始座標不會報錯，只會讓每個 embedding 偏離分布。
 
-### Step 1.2　渲染 11 視角
+### Step 1.2　渲染視角
+
+> 🔴 **[2026-08-30 全面更正] 本節先前描述的渲染協定，沒有一項是 n04 實際跑的東西。**
+>
+> | 項目 | 本節先前寫 | **實際產出**（`metafind/data/render_blender.py` ＋ 逐筆 sidecar） |
+> |---|---|---|
+> | 視角數 | 11 | **12**（`N_VIEWS = 12`） |
+> | 相機擺位 | Fibonacci lattice | **`openshape_three_rings_of_four`** —— 三個極環各四個方位角（φ=60°/90°/120°，方位角交錯） |
+> | 投影 | orthographic | **perspective** |
+> | 解析度 | 224px | **512px** |
+> | 背景 | 白色 | **`transparent_rgba`**（OpenShape `film_transparent=True`） |
+>
+> 依據：`DL-024 A1/A2/A3`，**USER_APPROVED 2026-08-23**。渲染器改用 OpenShape 的
+> `render_single_glb.py`（Blender／Cycles），`camera_layout_source` 與 `projection_source`
+> 在每筆 sidecar 裡都自報是 `openshape_render_single_glb.py`。
+>
+> ⚠ **`renders.py` 裡還留著 `N_VIEWS = 11 / RESOLUTION = 224 / PROJECTION = "orthographic"`，
+> 但該檔自己註明它們是 RETIRED 的 pyrender 路徑**，live 路徑讀的是
+> `render_blender.N_VIEWS`（import 成 `LIVE_N_VIEWS`）。**看到 11 不代表跑了 11。**
+>
+> 🔴 **登記表缺口，未修：** sidecar 自己寫
+> `"n_views_source": "USER decision 2026-08-23; DEVIATION from MetaFind's stated 11"` ——
+> **產物自報這是一項偏離，而 `graph_spec.yaml` 的偏離登記表裡沒有它的號碼**（現有的是 D-1…D-14，
+> 沒有一筆講視角數；D-11 只講背景色）。本文件**不自行編 D-15**，
+> 依規則「編號與 `README.md`、`graph_spec.yaml` 一致，不得另編」。
+> **此缺口已上呈，待 MASTER 編號。**
+>
+> ⚠ **不要順手把全文的 11 都改掉。** `n07b_procthor_asset_modalities`（ProcTHOR 資產隔離渲染）
+> **實測就是 11 視角、224px、orthographic**，那邊的 11 是對的。
+> 論文陳述值也是 11，U-03／U-03a／U-04 的討論同樣必須保留 11 當比較基準。
 
 **[論文 §2.3]**
 > Each asset is rendered from **11 orthogonal viewpoints**
@@ -156,19 +194,21 @@ checkpoint 是在這樣的點雲上訓練的，餵原始座標不會報錯，只
 **[未定 U-03a]** 「orthogonal」不可能指 11 個互相正交的方向（三維最多 3 軸 6 向），
 所以**正交投影**是合理的讀法 —— 但論文並沒有寫 "orthographic camera"，作者也可能只是
 用詞不精確地指「分散的多視角」。**這不是已解決，是選擇**，而且它會改變 image embedding 的分布。
-兩種投影都保留，選擇記入每筆 sidecar。
+兩種投影都保留，選擇記入每筆 sidecar。**現行 n04 走的是 perspective**（見上表）。
 
 **[未定 U-03]** 相機擺位論文沒說。11 不對應任何標準配置（立方體 6 面、二十面體 12 頂點），
-ULIP 自己的慣例是 30 個方位角，也對不上。預設 Fibonacci lattice（任意 N 都近似均勻），
-軸對齊版本保留為選項，選擇記入每筆 sidecar。
+ULIP 自己的慣例是 30 個方位角，也對不上。**先前預設 Fibonacci lattice，2026-08-23 起
+改為 OpenShape 的三環各四視角**；`azimuth_orbit_directions` 與 `fibonacci_directions`
+仍留在 `renders.py` 供驗證工具重現舊佈局，**但不是 n04 的產出路徑**。
 
-**[未定 U-04]** 解析度論文沒說。用 224px 對齊 ULIP-2 慣例與 image tower 輸入。
+**[未定 U-04]** 解析度論文沒說。**先前用 224px 對齊 ULIP-2 慣例，現行 n04 是 512px**
+（OpenShape 渲染腳本的設定）；`n06` 送進 image tower 前才縮到 tower 的輸入尺寸。
 
-**[未定 U-14] 11 張圖怎麼變成一個 `e_image`，論文完全沒說。**
+**[未定 U-14] 多張圖怎麼變成一個 `e_image`，論文完全沒說。**
 Eq.6 只吃一個 `e_image`，但 §2.3 只說 render 11 views，中間的規則是空的：
 
 ```
-11 張渲染圖  →  ???  →  e_image (1280-d)
+12 張渲染圖（論文陳述 11；n04 實際 12，見本步驟開頭的更正）  →  ???  →  e_image (1280-d)
 ```
 
 候選：隨機取 1 張／固定取 1 張／11 個 embedding 平均／取 max／學一個 multi-view fusion。
@@ -179,7 +219,8 @@ Eq.6 只吃一個 `e_image`，但 §2.3 只說 render 11 views，中間的規則
 渲染前 mesh 置中、縮放到單位球，否則 image tower 學到的是**建模單位**而非形狀。
 代價是絕對尺度歸零（見 Step 1.3）。
 
-實測 31 ms/資產，46,052 個約 0.4 小時；瓶頸是下載不是渲染。
+~~實測 31 ms/資產，46,052 個約 0.4 小時；瓶頸是下載不是渲染。~~
+**[過期 2026-08-30]** 那是 **pyrender** 世代的時間，該路徑已退役。Blender／Cycles 世代的實測是 **3.234 s/資產**（`render_blender.py` 開頭的對照表），差三個數量級，**瓶頸自此是渲染不是下載**。實際完成 **46,024 / 46,052**。
 
 ### Step 1.3　結構化標註
 
@@ -371,10 +412,18 @@ ProcTHOR 分支的任何故障都會停掉一個不依賴它的訓練。兩條�
 **改為三個等級。第二個是本復現選定的判讀與主線執行方式。**
 MetaFind 未逐 module 明說誰訓練；本復現依其對 ULIP-2 的繼承關係，將 U-34 判讀為 `frozen`（2026-08-16，confidence: moderate）。第三個等級不是並列的另一種讀法，而是 RA-3 的 alternative 稽核對象：
 
-| 等級 | 訓練什麼 | 4090 可行 | 定位 |
+> ⚠ **[2026-08-30] 這張表的可行性欄位是在 24GB 前提下寫的，前提已經不成立。**
+> 本機實測 `nvidia-smi`：**NVIDIA GeForce RTX 5090, 32,607 MiB**（driver 595.84）。
+> **但顯存變大不等於這些格子變成「可行」** —— 三個等級**沒有一個在 5090 上重量過**，
+> 所以下表每一格的可行性判斷一律標 **UNVERIFIED**，`full` 那格仍由 RA-3 量。
+> （`point_encoder+fuser` 有一次 25 epoch 的 ladder 執行紀錄，
+> 但 `data/outputs/ladder/e25_500w/stage1_ckpt.json` 與 `train_stage1.jsonl`
+> **都沒有記錄 GPU 型號或顯存**，所以連「那次跑在 5090 上」都無法從產物證實。）
+
+| 等級 | 訓練什麼 | 單卡可行（本機 RTX 5090 32GB） | 定位 |
 |---|---|---|---|
-| `fuser_only` | 只有 fusion 層 | ✅ | **Table 3 的 ablation 列** |
-| `point_encoder+fuser` | PointBERT (32.5M) + fusion + 投影 | ✅ | **主線** |
+| `fuser_only` | 只有 fusion 層 | **UNVERIFIED**（24GB 下曾標 ✅） | **Table 3 的 ablation 列** |
+| `point_encoder+fuser` | PointBERT (32.5M) + fusion + 投影 | **UNVERIFIED**（24GB 下曾標 ✅） | **主線** |
 | `full` | 再加 ViT-bigG-14 (2.5B) | ❓ **未量測** | `actual=trainable` 的執行對象，由 **RA-3** 量測 |
 
 **[D-1 —— 條件式偏離，已判定不啟用]** ViT-bigG-14 的 text/image 端保持凍結。
@@ -519,7 +568,7 @@ Stage 1 的主線 `train_scope = point_encoder+fuser` **會訓練它**，所以�
 
 > **判定摘要**：Stage 2 使用**自己的 ProcTHOR gallery**，正樣本就是**同一個 assetId**，
 > 完全不需要 ProcTHOR→Objaverse 對應表。ProcTHOR 側的模態由 AI2-THOR **隔離渲染**產生
-> （與 n04 同協定），點雲為多視角深度外殼，query 側允許缺點雲。
+> （原文寫「與 n04 同協定」—— 🔴 **2026-08-30 起不再成立，見下方警告**），點雲為多視角深度外殼，query 側允許缺點雲。
 > 依據見 `graph_spec.yaml` 的 `U-08a`／`U-08b` `decision_basis`。
 
 論文從未定義 Stage 2 的訓練樣本怎麼從 ProcTHOR 建構。拆成三個缺口，
@@ -565,7 +614,23 @@ batch size 相同時每一步的負樣本數不變。1,467 是 Stage 2 可觀測
 
 **[更正 F24]** 先前這裡寫「ProcTHOR 沒有渲染圖也沒有點雲」。那對 JSONL 成立，
 對 ProcTHOR 不成立 —— 房子本來就是給 AI2-THOR 載入的，而 AI2-THOR 會渲染。
-實測可取得與 n04 同協定的 11 視角正交隔離渲染。
+實測可取得 11 視角正交隔離渲染（sidecar 實數：`n_views: 11`、`resolution: 224`、
+`projection: "orthographic"`）。
+
+> 🔴 **[2026-08-30 發現的 seam 缺口，未修，不屬本文件]「與 n04 同協定」已經不成立。**
+> `procthor_modalities.py` 從 `renders.py` **import** `N_VIEWS / RESOLUTION / PROJECTION /
+> ORBIT_ELEVATION_DEG`，並在自己的 docstring 寫
+> *"imported from `renders` rather than copied, so \"n04-compatible\" is enforced by
+> construction and a change to n04 cannot silently desynchronise this side"*。
+> **那個保證指向了錯的模組。** n04 的 live 路徑 2026-08-23 起改讀 `render_blender.py`
+> （12 視角／512px／perspective／transparent），而 `renders.py` 那三個常數自己標註為
+> **RETIRED**。import 照樣成功、值照樣是 11／224／orthographic，
+> **沒有任何東西會報錯** —— 這正是它宣稱不可能發生的那種靜默失步。
+>
+> **後果**：Stage 1 gallery（12 視角／512／perspective／transparent）與 Stage 2 ProcTHOR 側
+> （11 視角／224／orthographic／白底）走的是**同一個凍結 gallery encoder**，
+> 而兩邊的影像分布不是同一個協定產生的。屬 n04／n07b 的內部，**已上呈 MASTER 分派**，
+> 本輪不在文件端修掉它，只把它寫下來。
 
 唯一真缺口是點雲：n03 從完整 mesh 取樣（含被遮蔽面），這裡只能從 11 張深度圖
 反投影成**可見外殼**，而 gallery encoder 凍結、PointBERT 沒有機會適應這個位移。
@@ -616,18 +681,26 @@ ULIP 的 `test_zeroshot_3d_core` 做的是 zero-shot **分類**（`pc @ text_pro
 **[論文 §2.1]** > retrieves the asset $A^*$ from a **pre-encoded asset database** $\mathcal{A}$
 **[論文 §3.1]** > 80% training / 20% testing
 
-論文沒說檢索時的 gallery 是全部 46,052 還是只有 20% 測試集。差別是隨機命中率 5 倍。
+論文沒說檢索時的 gallery 是全部語料還是只有 20% 測試集。差別是隨機命中率 5 倍。
 
 **前一版打算「用 baseline PC-Only ≈ 98–99% 反推分母」—— 那是錯的。**
 PC-Only 是 query embedding 等於它自己的 gallery embedding，
-**無論 gallery 是 46K 還是 9.2K，自我檢索都會趨近 100%**，根本無法區分。
+**無論 gallery 是 45.7K 還是 9.1K，自我檢索都會趨近 100%**，根本無法區分。
 
-**改為兩個協定都跑，都報**：
+**[已更正 2026-08-30] 實際是三個協定，不是兩個**，分母是 n05 admitted 的
+**45,692**（＝ 46,024 − 311 − 21），不是 manifest 的 46,052。
+逐字取自 `data/outputs/eval_protocols.json`（OBSERVED DATA）：
 ```yaml
-protocol_A:  query = test split,  gallery = test split   (~9,210)
-protocol_B:  query = test split,  gallery = full         (46,052)
+A_test_gallery:   query = test,     gallery = test      (9,138)   reported: true
+B_full_gallery:   query = test,     gallery = full     (45,692)   reported: true
+C_dev_selection:  query = dev_val,  gallery = dev_val   (4,569)   reported: false
 ```
-產出 `R@1_A / R@5_A / R@1_B / R@5_B`，不再鎖成單一數字。
+`C_dev_selection` 只用於開發期選型、不進報告，但它**確實存在於協定檔並被讀取**；
+先前寫「兩個協定」等於在文件上把一條模型選擇路徑抹掉。
+切分實數（`data/outputs/splits.json`）：test 9,138 ／ train 36,554
+（dev_train 31,985 ／ dev_val 4,569）／ `admitted_total` 45,692。
+
+產出 `R@1_A / R@5_A / R@1_B / R@5_B`（C 不報），不再鎖成單一數字。
 
 **預期要看到的**：MetaFind 的 PC-Only（63–75）**低於** baseline（98–99）。
 那是正確的復現結果，不是失敗 —— 論文自己註腳解釋了原因。
@@ -822,7 +895,8 @@ IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Ta
 ## 主要未定項摘要
 
 > **這不是完整清單。** 權威登記表是 `01_GRAPH_SPEC.md` §15 與
-> `graph_spec.yaml` 的 `risks_unknowns`（目前 38 條，含 U-34／U-35）。
+> `graph_spec.yaml` 的 `risks_unknowns`（**2026-08-30 實測 42 條**，含 U-08c／U-08d／U-08e／U-34／U-35；
+> 先前寫「38 條」，那是 U-08c/d/e 補進 §15 之前的舊數）。
 > 本節只摘錄與建置步驟直接相關者。
 
 完整登記表在 `01_GRAPH_SPEC.md` §15，機器可讀版在 `graph_spec.yaml` 的 `risks_unknowns`；
@@ -839,8 +913,8 @@ IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Ta
 | U-06 | 語意邊要對哪些物件對；`e_ij` 寬度 | ESSGNN 輸入 |
 | U-07 | ProcTHOR 官方 split vs 論文 80/20 | Table 2/3 |
 | U-08 | Stage 2 樣本怎麼組（目標選擇、partial scene、負樣本） | Table 2/3 |
-| **U-08a** | **正樣本是哪一個 gallery 條目** —— ProcTHOR 與 Objaverse 識別碼交集為 0（**阻斷**） | Stage 2 全部 |
-| **U-08b** | **目標物件的 text/image/pc 從哪來** —— ProcTHOR 沒有渲染圖也沒有點雲（**阻斷**） | Stage 2 全部 |
+| **U-08a** | **正樣本是哪一個 gallery 條目** —— ProcTHOR 與 Objaverse 識別碼交集為 0。**[已更正 2026-08-30] 已於 2026-08-16 判定，不再擋任何東西**：Stage 2 用自己的 ProcTHOR gallery，正樣本 = 同一個 assetId | Stage 2 全部 |
+| **U-08b** | **目標物件的 text/image/pc 從哪來**。**[已更正 2026-08-30] 已於 2026-08-16 判定**：AI2-THOR 隔離渲染（F24 推翻了「ProcTHOR 沒有渲染圖」這個前提）＋ 深度外殼點雲，query 側可缺點雲 | Stage 2 全部 |
 | U-09 | Table 1 的 gallery 範圍**與 query 範圍** | Table 1 全部 |
 | U-10 | Table 2 的 Scene Coherence 對應 IDesign 哪個面向 | Table 2 |
 | U-11 | 缺席模態怎麼表示（論文只排除 zero-padding） | Table 1 部分模態欄 |
@@ -850,10 +924,10 @@ IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Ta
 | **U-15** | **標註怎麼序列化成 text encoder 的輸入字串** | **Table 1 四欄** |
 | **U-16** | **query / gallery 兩塔是否共享權重** | **Table 1 全部** |
 | U-17 | ESSGNN 用 `d` 還是 `d²`（§2.5 vs Appendix C） | 所有訓練結果 |
-| **U-18** | **Algorithm 1 放置後圖怎麼更新**（**阻斷**） | **Table 2 全部** |
+| **U-18** | **Algorithm 1 放置後圖怎麼更新**。**[已更正 2026-08-30] `graph_spec.yaml` 標為 RESOLVED（2026-08-16）**，本表先前仍寫「阻斷」 | **Table 2 全部** |
 | U-19 | 邊是有向還是無向 | ESSGNN message passing |
 | U-20 | ~~`t_i` 由哪個 encoder 產生~~ **已定 2026-08-27：ViT-bigG-14／1280** | ESSGNN 輸入與 `d`；**尚未進 `essgnn_arch_protocol`** |
-| **U-21** | **Algorithm 1 的 `G_0` 與 query list 從哪來**（**阻斷**） | **Table 2 全部** |
+| **U-21** | **Algorithm 1 的 `G_0` 與 query list 從哪來**。**[已更正 2026-08-30] `graph_spec.yaml` 標為 RESOLVED（2026-08-16）**，本表先前仍寫「阻斷」 | **Table 2 全部** |
 | U-22 | **訓練超參數論文一個都沒給** | 所有訓練結果 |
 | U-23 | 三個模態同時被遮罩時代表什麼（獨立 30% → 2.7% 的 query 全空） | Stage 1 訓練訊號 |
 | U-24 | `sim(·,·)` 從未定義 | 所有 loss 與排序 |

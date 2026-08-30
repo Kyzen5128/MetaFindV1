@@ -822,7 +822,12 @@ level_1:
     expected_on_injection: "an over-length annotation encodes with no record of the loss"
     verified_blocks: false
     note: >
-      MEASURED: CLIP ViT-B/32 truncates at 77 tokens SILENTLY, and the pinned
+      MEASURED: the pinned text encoder is OpenCLIP ViT-bigG-14 (U-20, and
+      ulip_backbone.py:90 EMBED_DIM = 1280), which truncates at 77 tokens
+      SILENTLY. This note said "CLIP ViT-B/32", the 512-d encoder U-20
+      SUPERSEDED on 2026-08-27 -- the 77-token budget happens to be the same
+      for both, so the number stayed right while the encoder named was wrong,
+      which is exactly the kind of agreement that hides. The pinned
       template puts the description first, so an overlong one does not lose
       itself -- it loses the TAIL, where placement_constraints lives. n05b caps
       description, category, materials and placement by CHARACTER count, which
@@ -1237,6 +1242,7 @@ level_3_gates:
     evidence: [L1-ENV-ULIP, L1-MANIFEST]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G1_sources_valid.yaml"
+    implemented: false
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
     on_fail: "Resume the download. Never lower the coverage threshold to pass."
     downstream_blocked: [n03_sample_pointclouds, n04_render_views, n07_scene_graphs]
@@ -1263,6 +1269,7 @@ level_3_gates:
     evidence: [L1-PC-SHAPE, L1-PC-NORM, L1-PC-RGB-SCALE, L1-PC-COLOUR-PROVENANCE, L2-PC-COLOUR-COVERAGE, L2-PC-SELF-CONSISTENT]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G2_pc_sanity.yaml"
+    implemented: false
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
     on_fail: "Fix the sampler. Never relax the thresholds to pass."
     downstream_blocked: [n09_build_splits, n10_train_stage1]
@@ -1275,9 +1282,11 @@ level_3_gates:
       encoder is free to adapt to our sampling. "Differs from ULIP's released
       cloud" therefore does not imply "reproduction invalid".
       The comparison is still worth having and is kept as L2-PC-ULIP-REF, a
-      diagnostic. It is NOT being demoted because it was failing -- it has never
-      been run, and the reference clouds are not on disk. It is being demoted
-      because it was testing the wrong claim. If the authors are found to state
+      diagnostic. It is being demoted because it was testing the wrong claim,
+      and for no other reason. (Removed 2026-08-30: this previously added "it
+      has never been run, and the reference clouds are not on disk". Both
+      clauses were retracted; neither is an argument for the demotion anyway,
+      so restating them here only reintroduced a withdrawn claim as support.) If the authors are found to state
       that MetaFind reuses ULIP's preprocessing, it goes back to being a gate.
 
   - gate_id: G3_object_corpus
@@ -1347,6 +1356,7 @@ level_3_gates:
       formal barrier in front of Stage 1.
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G3_object_corpus.yaml"
+    implemented: false
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
     on_fail: "Fix the pipeline and re-run. Do not widen the quarantine threshold."
     downstream_blocked: [n10_train_stage1, n13_train_stage2]
@@ -1372,6 +1382,7 @@ level_3_gates:
     evidence: [L2-GALLERY-SELF]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G4_gallery_freeze.yaml"
+    implemented: false
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
     on_fail: "Do NOT promote. Discard the staging index and rebuild; the promoted location stays untouched."
     downstream_blocked: [n12_promote_index, n15_eval_retrieval, n16_compose_scenes]
@@ -1458,6 +1469,7 @@ level_3_gates:
     evidence: [L1-STAGE2-POSITIVE-DEFINED, L1-STAGE2-SAMPLE-CONSTRUCTION, L1-STAGE2-QUERY-ENCODERS-FROZEN, L2-LEAK-SCENE]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G6_stage2_ready.yaml"
+    implemented: false
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
     on_fail: >
       Do NOT re-decide U-08a or U-08b -- they are resolved. Find which part of
@@ -1518,6 +1530,7 @@ level_3_gates:
     evidence: [L1-GATE-NORECORD]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G7_composition_protocol.yaml"
+    implemented: false
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
     on_fail: "Answer U-18 and U-21. Do not substitute ProcTHOR houses for I-Design scenes -- a house is a finished layout, not a generation request."
     downstream_blocked: [n15c_prepare_eval_scenes, n16_compose_scenes]
@@ -1559,6 +1572,7 @@ level_3_gates:
       of the report while G5 still passed. The gate now iterates the registry.
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G5_report_release.yaml"
+    implemented: false
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, is_terminal]
     on_fail: "Fill the gaps and re-run the aggregation. Publication waits."
     downstream_blocked: [n22_publish_report]
@@ -1598,6 +1612,7 @@ required_audits:
       requires."
     must_not_affect: [G3_object_corpus, G4_gallery_freeze, G5_report_release, SC-4, SC-5, SC-6]
     record_path: "outputs/logs/audits/RA1_h0_concat.yaml"
+    implemented: false
 
   - audit_id: RA-2
     record_kind: required_audit
@@ -1614,6 +1629,7 @@ required_audits:
       which requires a scalar. Our implementation uses the scalar form."
     must_not_affect: [G3_object_corpus, G4_gallery_freeze, G5_report_release, SC-4, SC-5, SC-6]
     record_path: "outputs/logs/audits/RA2_fx_range.yaml"
+    implemented: false
 
   - audit_id: RA-3
     record_kind: required_audit
@@ -1649,6 +1665,7 @@ required_audits:
       not what the paper says."
     must_not_affect: [G3_object_corpus, G4_gallery_freeze, G5_report_release, "other Table 3 rows"]
     record_path: "outputs/logs/audits/RA3_train_scope.yaml"
+    implemented: false
 
   - audit_id: RA-4
     record_kind: required_audit
@@ -1683,6 +1700,7 @@ required_audits:
       proof; any scale-related benefit is empirical only."
     must_not_affect: [G3_object_corpus, G4_gallery_freeze, G6_stage2_ready, G5_report_release, "SC-4", "SC-5", "SC-6"]
     record_path: "outputs/logs/audits/RA4_scale_sensitivity.yaml"
+    implemented: false
     note: >
       Found on a word-by-word re-reading of the paper, not by any structural
       check -- nothing in the graph was inconsistent, the paper was.
@@ -1697,9 +1715,23 @@ coverage_check:
   every_check_has_negative_injection: true
   no_existence_only_assertions: true
   open_items:
-    - item: "verified_blocks is false for all 75 checks"
+    - item: "verified_blocks is false for all 82 checks (64 L1 + 18 L2, COUNTED 2026-08-30 from this file; it said 75)"
       status: "BY DESIGN at specification time"
       action: "During implementation, flip each to true only after its negative injection has been observed to fail."
+    - item: "every record_path in this file carries implemented: false"
+      status: >
+        OBSERVED DATA 2026-08-30. All seven gates and all four Required Audits
+        declare a record_path under outputs/logs/gates/ or outputs/logs/audits/.
+        NEITHER DIRECTORY EXISTS: data/outputs/logs/gates and
+        data/outputs/logs/audits are both absent, and a repository-wide search
+        (find -L, because data/ is a symlink) finds no directory named gates or
+        audits and no G*_*.yaml or RA*_*.yaml record anywhere. Zero records have
+        ever been written. The declarations are a contract, not a description.
+      action: >
+        Flip implemented to true per gate/audit only when that record file has
+        actually been written by a run and its record_fields verified against
+        what landed on disk. A record_path with no implemented flag reads as a
+        working artifact to anyone who does not go look.
     - item: "I-Design's completion rate has no baseline"
       status: "R-01, PARTIALLY MEASURED 2026-08-15"
       action: >
