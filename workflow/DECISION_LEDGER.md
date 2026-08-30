@@ -1800,3 +1800,71 @@ script and never for the guard. **The override is reachable only from a human's 
 That is not a bug. It means an agent cannot talk itself past this guard, no matter how good its
 reasons sound. The correction is written and staged at
 `scratchpad/fix_dataroot.py`; it needs one human invocation.
+
+---
+
+## DL-040 — the `✅` for the LR sweep's remaining seven arms
+
+`USER_APPROVED` · 2026-08-30 · Kyzen
+
+**Verbatim, the whole message:**
+
+```
+✅
+8/19？
+```
+
+The `✅` arrived immediately after MASTER put two things to him and named which
+needed approval:
+
+```
+1  掃描 7 次要不要跑          你打 ✅ 我就開
+2  8/19 那個戳算不算逐項核可   這題卡住 Stage 2，不卡 Stage 1
+```
+
+`8/19？` is a question, not an answer, so **item 2 remains open.**
+
+### What this `✅` covers
+
+```
+the seven remaining arms of the LR sweep, in the order already shuffled with
+random.Random(20260830), which is not to be changed:
+
+  2  --lr 0.001   --seed 20260816 --repeat-index 0
+  3  --lr 0.0005  --seed 20260816 --repeat-index 0
+  4  --lr 0.00075 --seed 20260816 --repeat-index 0
+  5  --lr 0.001   --seed 20260830 --repeat-index 1
+  6  --lr 0.0005  --seed 20260830 --repeat-index 1
+  7  --lr 0.00025 --seed 20260830 --repeat-index 1
+  8  --lr 0.00025 --seed 20260816 --repeat-index 0
+
+each --phase dev --epochs 5 --preload, its own --out-dir under sweep_lr/
+~26 minutes each, ~3.0 hours total, one at a time on the single card
+```
+
+### What it does NOT cover
+
+```
+n15 on any protocol            never run; needs its own approval
+--phase final                  the real training run
+protocols A or B               the sealed test set; also needs --unseal
+n07c / n08 / anything Stage 2  a different block, and item 2 above is still open
+raising the power limit        standing prohibition, unchanged
+```
+
+**DL-034 still governs what these eight runs mean.** Kyzen ruled them a
+**measurement round, not a selection round**: they produce this project's first
+honest seed-to-seed dispersion and a rough position for each of four learning
+rates. **They do not produce "which LR wins."** Choosing the learning rate is a
+separate decision and a separate `✅`.
+
+### The gate that still applies before the first arm starts
+
+`DL-028` requires review before code runs, and the runner that executes these
+seven arms **is new code written after this `✅`**. The approval is for the
+experiment, not for an unreviewed script. The runner carries a deliberate
+refusal-by-default flag so that it cannot start by accident, and it goes to the
+Block Reviewer before it is used.
+
+**Recorded by MASTER, who received the `✅`, per `DL-031`: the role that
+receives it records it, with the verbatim message and what it covered.**
