@@ -2981,11 +2981,29 @@ exist there.
 down to. After it, 10-14 is the range this task lives in and WE are the outlier.**
 That inversion is the whole value of the document.
 
-### Where the defect entered — paper silence, filled and then forgotten
+### Where the defect entered — ~~paper silence~~, filled and then forgotten
+
+> **CORRECTED 2026-08-31, hours after filing, by INTEGRATOR. The heading and the
+> word "silence" below were MASTER's and they are wrong.**
+>
+> **The paper is not silent on this.** `3experiments.tex:24` speaks to it
+> directly: baselines' PC-only "reflects retrieval using **identical embeddings
+> for both query and gallery, leading to inflated accuracy**", and MetaFind's
+> dual tower is named as what avoids it.
+>
+> The paper identifies the exact mechanism AND names its cure. We have a real
+> dual tower -- `model.query` and `model.gallery`, separate parameters -- we feed
+> it identical inputs, and we get 96.42. **The paper's stated cure is implemented
+> and does not produce the paper's behaviour.**
+>
+> Verdict stays `IMPLEMENTATION CHOICE`. **The BASIS is `3experiments.tex:24`,
+> not silence.** INTEGRATOR's reason for refusing the wording is why it was worth
+> correcting: *"A month from now 'the paper was silent' is the sentence that gets
+> cited, and it is false."*
 
 `2methdology.tex:75` fixes the masking: each query modality independently masked
-at 30%. **It never says the surviving modality uses the gallery's identical
-cached vector.** That is silence. `metafind/eval/retrieval.py:14` filled it —
+at 30%. It never says the surviving modality uses the gallery's identical cached
+vector. `metafind/eval/retrieval.py:14` filled that gap --
 "a query built from a subset of that same asset" — and tagged the sentence
 `[PAPER 3experiments.tex:24]`, which only names the seven conditions.
 
@@ -3061,3 +3079,115 @@ Kyzen found it. Not from the artifacts — by refusing "the loss dropped fast th
 plateaued" and saying `你loss沒有掉啊`, then `完全不用模型，分數就已經是
 99~100%這不就他媽的有問題了嗎? 阿訓練要幹嘛?`. Every measurement in this entry
 descends from those two sentences.
+
+---
+
+## DL-051 — training grows the point encoder's norm 7x and flips its cross-modal cosine NEGATIVE. The loss cannot see it.
+
+`RECORDED` · 2026-08-31 · measured by the ULIP2 Block Engineer, verified by MASTER
+against `output/look/diag_modality_norms.json` and the source
+
+**This is the best mechanistic explanation yet for "trained is worse than
+untrained", and unlike everything in `DL-050` it is about the ARCHITECTURE, not
+the evaluation.**
+
+### The measurement — OBSERVED DATA, dev_val 4,569, checkpoint `e25_500w` (sha256 455d3492...)
+
+```
+                        released      trained     change
+pc  output norm            27.86       200.55     x7.2
+text                       37.13        37.13     frozen, unchanged
+image                      40.23        40.23     frozen, unchanged
+
+pc share of the fused mean's norm
+                           26.5%        72.2%
+
+mean paired cosine
+   text <-> pc             +0.346       -0.170    SIGN FLIP
+   image <-> pc            +0.470       -0.402    SIGN FLIP
+   text <-> image          +0.457       +0.457    both frozen, unchanged
+cos(mean-of-three, pc)      0.717        0.943
+```
+
+**After training, an asset's point-cloud embedding points AWAY from its own text
+and image embeddings.** That is the opposite of cross-modal alignment, and it is
+what Stage 1 exists to produce.
+
+The `text <-> image` row is the control: both encoders are frozen, and it does
+not move. So the flip is the point encoder moving, not measurement drift.
+
+### Why the loss cannot see it — OBSERVED IMPLEMENTATION
+
+```
+UPSTREAM ULIP   upstream/ULIP/models/losses.py:34-36
+                pc_embed    = F.normalize(...)
+                text_embed  = F.normalize(...)
+                image_embed = F.normalize(...)
+                every modality normalised BEFORE the contrastive loss
+
+OURS            grep normalize metafind/models/ulip_backbone.py  ->  nothing
+                three raw embeddings enter the fusion transformer at their
+                natural norms; only the FUSED OUTPUT is normalised, in
+                losses.py:166-167
+```
+
+**So the point encoder's norm is an unconstrained degree of freedom.** It can
+grow without bound because the loss only ever sees a unit-length fused vector.
+Inside the fusion, though, the transformer's mean-pooled readout is dominated by
+whichever token is largest — and at norm 200 against 37 and 40, that is pc, at
+72% of the total.
+
+### ⚠ This is NOT a straight "upstream does X and we do not"
+
+ULIP has **no fusion module**. It compares modalities pairwise, so normalising
+each one before the loss is the whole story there. MetaFind introduces a fusion
+that consumes the three embeddings as tokens, and **that is a new place where
+relative norm decides the outcome**. The paper does not say whether to normalise
+going in.
+
+So the honest statement is: *the fusion creates a norm sensitivity that upstream
+does not have, and nothing in our implementation or in the paper constrains it.*
+Classification `OBSERVED IMPLEMENTATION` for the measurement,
+`UNKNOWN` for what the paper intends.
+
+### What this explains, that nothing else did
+
+```
+text degrades under training, -10 to -28 pp across every LR arm
+   the fused output becomes mostly pc, and text is pushed anti-aligned to it
+trained scores below untrained, on BOTH protocols
+   PROD 0.9321 vs 0.9718; independent-observation 0.8335 vs 0.8986
+pc collapses at high LR, -33 to -39 pp
+   the same runaway, further along
+`hpo_r1/lr2.50e-4` selecting EPOCH 0 of 10
+   the damage starts in the first epoch and never reverses
+```
+
+The norm blow-up is also **late**: the ratio is ~1.0 at epoch 0 and 3.6-15.5 by
+epoch 24. So it compounds rather than appearing at once.
+
+### What it does NOT explain
+
+**The gap to the paper.** The paper's Table 1 is 13.8 on text; removing the
+`DL-050` leak takes us to 74.98 and this is a separate mechanism on top. Fixing
+the norm would plausibly stop training from being harmful. **It would not turn
+96 into 13.8.** Those are two different problems and this entry is only the
+second one.
+
+### A fourth candidate, surfaced during the first clean training run
+
+With the leak removed, in-batch query→gallery accuracy is **0.984 at step 100**.
+The contrastive task is still solved at batch 64, so there is almost no gradient
+left. Recorded because `acc_q2g` has been in the metrics stream all along and
+nobody had reason to read it until the leak was gone.
+
+This connects back to the earlier finding that **upstream's effective contrastive
+batch is 512** (`losses.py:38-40` all-gathers across 8 GPUs at 64 each) while
+ours is 64. Our loss never sees more than 63 negatives against a 4,569-way
+retrieval task. That is a ratified hyperparameter and NOT changed here.
+
+### Not acted on
+
+Architecture is Kyzen's decision, and the engineer who found this correctly
+refused to touch it. No normalisation was added, no fusion changed. **The
+measurement is the deliverable.**
