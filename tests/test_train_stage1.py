@@ -1099,3 +1099,234 @@ def test_a_frozen_modules_buffers_are_still_not_saved():
     assert trainable_state_dict(frozen) == {}, (
         "a frozen module contributed to the checkpoint; L1-CKPT-TRAINABLE-ONLY "
         "exists to keep the rebuildable half out")
+
+
+# --------------------------------------------------------------------------
+# The query side: a SECOND observation of the same asset.
+#
+# Stage 1 built one `embeds` dict and gave it to both towers
+# (`stage1.py`, training loop), so the query text was not merely equal to the
+# gallery's -- it was the same cached vector. dev_val text R@1 96.42 against
+# MetaFind's reported 13.8.
+#
+# [PAPER 3experiments.tex:24] is the basis and it is NOT paper silence: the
+# paper names "retrieval using identical embeddings for both query and gallery"
+# as an inflation mechanism and credits its dual-tower design as the cure. We
+# HAVE the dual tower and still score 96.42, so its stated mechanism does not
+# produce its stated behaviour.
+#
+# These tests pin the seam, not the score. The score is a separate question and
+# this change does not answer it: an independent caption moved text to 74.98,
+# still 5.4x the paper's number.
+# --------------------------------------------------------------------------
+
+def _pack(tmp_path, uids, *, text=True, pc=True, image=True, dim=8,
+          text_rows=None, pc_rows=None, pc_array_rows=None):
+    """A query_pack.json plus its arrays, with each arm switchable off.
+
+    `text_rows` / `pc_rows` override which uids a shard claims, so a test can
+    build the coverage hole that `require()` must refuse. `pc_array_rows`
+    overrides the ARRAY's row count independently of the manifest's uid list,
+    which is the positional-index mismatch that a killed build actually left on
+    disk on 2026-08-31.
+    """
+    import json as _json
+
+    pack_dir = tmp_path / "pack"
+    pack_dir.mkdir(exist_ok=True)
+    man = {"image": {"rule": "views[uid_seed(uid) % 12]"} if image else None,
+           "text": {"shards": []}, "pc": {"shards": []}}
+    if text:
+        rows = uids if text_rows is None else text_rows
+        # Distinct from the gallery's text (zeros in `_cache`) and distinct per
+        # asset, so "did the query get its own vector" is answerable by value.
+        arr = np.stack([np.full(dim, 100.0 + i) for i in range(len(rows))])
+        np.save(pack_dir / "t.npy", arr.astype(np.float16))
+        man["text"]["shards"] = [{"tag": "t", "array": str(pack_dir / "t.npy"),
+                                  "uid_order": list(rows), "refused": {}}]
+    if pc:
+        rows = uids if pc_rows is None else pc_rows
+        n = len(rows) if pc_array_rows is None else pc_array_rows
+        arr = np.stack([np.full((4, 6), 200.0 + i) for i in range(n)])
+        np.save(pack_dir / "p.npy", arr.astype(np.float32))
+        man["pc"]["shards"] = [{"tag": "p", "array": str(pack_dir / "p.npy"),
+                                "uid_order": list(rows), "refused": {}}]
+    path = pack_dir / "query_pack.json"
+    path.write_text(_json.dumps(man))
+    return path
+
+
+def _packed_dataset(monkeypatch, tmp_path, **packkw):
+    import metafind.train.stage1 as m
+
+    views, emb, pcs = _cache(tmp_path)
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", emb)
+    monkeypatch.setattr(m.paths, "POINTCLOUDS", pcs)
+    pack = m.QueryPack(_pack(tmp_path, ["u"], **packkw))
+    return m.Stage1Dataset(["u"], "mean", query_pack=pack), views, pack
+
+
+def test_no_pack_emits_no_query_keys(monkeypatch, tmp_path):
+    ds, _ = _dataset(monkeypatch, tmp_path, "mean")
+    assert not [k for k in ds[0] if k.startswith("q_")]
+
+
+def test_query_and_gallery_never_share_a_vector_for_the_same_asset(
+        monkeypatch, tmp_path):
+    """The whole point. Not `!=` on a score -- `!=` on the arrays themselves."""
+    ds, views, _ = _packed_dataset(monkeypatch, tmp_path)
+    item = ds[0]
+    for arm in ("text", "image", "pc"):
+        assert not np.array_equal(item[arm], item[f"q_{arm}"]), (
+            f"{arm}: the query got the gallery's own observation back")
+    # And specifically for text, the arm whose leak was measured at 96.42.
+    assert np.allclose(item["text"], 0.0), "gallery text moved"
+    assert np.allclose(item["q_text"], 100.0), "query text is not the pack's"
+
+
+def test_the_query_image_is_one_stored_view_chosen_by_uid_seed(
+        monkeypatch, tmp_path):
+    """Fixed per asset [MASTER ruling 2026-08-31], so it is re-derivable."""
+    import metafind.train.stage1 as m
+    from metafind.data.pointclouds import uid_seed
+
+    ds, views, _ = _packed_dataset(monkeypatch, tmp_path)
+    got = ds[0]["q_image"]
+    assert np.allclose(got, views[uid_seed("u") % 12])
+    assert not np.allclose(got, views.mean(axis=0)), "still the pooled vector"
+
+
+def test_the_gallery_image_ignores_the_views_matrix_entirely(
+        monkeypatch, tmp_path):
+    """The held-out view is provably absent from what the gallery READS.
+
+    [MASTER ruling 2026-08-31, option (a)] the gallery image stays n06's stored
+    12-view mean -- the `image` field -- and is never recomputed from `views`.
+    So perturbing `views` cannot move the gallery vector by a single bit, which
+    is what keeps `gallery_index.py` (which reads the same `image` field) in
+    agreement with this path and keeps the gallery precomputable
+    [PAPER 2methdology.tex:111].
+
+    ⚠ THIS IS NOT "the image leak is gone". The stored `image` IS the mean of
+    all twelve views, so the query's view is inside the gallery vector at weight
+    1/12 -- arithmetically, not by being read. Exact identity is removed; a
+    twelfth is not. Measured at raw CLIP level: excluding it instead would move
+    R@1 0.9562 -> 0.9054, five points, at the cost of a gallery that depends on
+    its query. The caveat is named here so this test cannot be cited as proof of
+    something it does not test.
+    """
+    import metafind.train.stage1 as m
+
+    views, emb, pcs = _cache(tmp_path)
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", emb)
+    monkeypatch.setattr(m.paths, "POINTCLOUDS", pcs)
+    pack = m.QueryPack(_pack(tmp_path, ["u"]))
+    before = m.Stage1Dataset(["u"], "mean", query_pack=pack)[0]["image"].copy()
+
+    k = m.QueryPack.view_index("u")
+    poisoned = views.copy()
+    poisoned[k] = 1e6
+    np.savez(emb / "u.npz", text=np.zeros(8),
+             image=views.mean(axis=0), views=poisoned)
+    after = m.Stage1Dataset(["u"], "mean", query_pack=pack)[0]["image"]
+
+    assert np.array_equal(before, after), "the gallery read the views matrix"
+    # and the query DID move, so the poisoning actually reached something
+    assert m.Stage1Dataset(["u"], "mean", query_pack=pack)[0]["q_image"][0] == 1e6
+
+
+def test_the_pc_arm_refuses_rather_than_reusing_the_canonical_cloud(
+        monkeypatch, tmp_path):
+    """A uid with no second sample must STOP the run, not fall back.
+
+    Falling back would put the query and the gallery on the same cloud for an
+    unrecorded subset -- the exact leak, reintroduced invisibly. 55 assets in
+    the train pool have no usable alternate caption and 14 have no second
+    caption at all, so the uncovered set is real.
+    """
+    import metafind.train.stage1 as m
+
+    views, emb, pcs = _cache(tmp_path)
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", emb)
+    monkeypatch.setattr(m.paths, "POINTCLOUDS", pcs)
+    pack = m.QueryPack(_pack(tmp_path, ["u"], pc_rows=["someone_else"]))
+    with pytest.raises(ValueError, match="Refusing"):
+        m.Stage1Dataset(["u"], "mean", query_pack=pack)
+
+
+def test_a_shard_whose_array_and_uid_list_disagree_is_refused(tmp_path):
+    """[FOUND 2026-08-31] A killed build left a 31,985-row array under a
+    manifest still describing the 8-asset smoke shard before it. Nothing raised:
+    the first eight uids were the same eight in the same order, so the pack
+    returned CORRECT clouds -- by coincidence of sort order. The uid list is a
+    POSITIONAL index into the array and nothing enforced the correspondence."""
+    import metafind.train.stage1 as m
+
+    with pytest.raises(ValueError, match="rows"):
+        m.QueryPack(_pack(tmp_path, ["u"], text=False, pc_array_rows=5))
+
+
+def test_the_selection_is_deterministic_across_processes():
+    """Re-derivable from the uid alone, so no manifest is needed to reproduce
+    it and no dataloader worker count can change it -- the failure the
+    `random_single_view` comment warns about."""
+    import subprocess
+    import sys
+
+    code = ("import sys; sys.path.insert(0, '.');"
+            "from metafind.train.stage1 import QueryPack;"
+            "print([QueryPack.view_index(u) for u in "
+            "['a','b','c','000074a334c541878360457c672b6c2e']])")
+    runs = {subprocess.run([sys.executable, "-c", code], capture_output=True,
+                           text=True, cwd=str(pathlib.Path(__file__).parents[1]),
+                           env={"PYTHONHASHSEED": s, "PATH": "/usr/bin:/bin"}
+                           ).stdout.strip()
+            for s in ("0", "1", "12345")}
+    assert len(runs) == 1, f"selection varied across processes: {runs}"
+    assert runs != {""}, "the subprocess produced nothing"
+
+
+def test_a_partial_pack_leaves_the_other_modalities_on_the_gallery(
+        monkeypatch, tmp_path):
+    """A text-only pack must not silently claim the image and pc arms.
+
+    The arm list is what enters `arm_config_hash`, so a partial pack has to be
+    RECORDED as partial. An arm the pack does not supply keeps the gallery's
+    observation, and that is visible in `pack.arms` rather than inferred.
+    """
+    import metafind.train.stage1 as m
+
+    views, emb, pcs = _cache(tmp_path)
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", emb)
+    monkeypatch.setattr(m.paths, "POINTCLOUDS", pcs)
+    pack = m.QueryPack(_pack(tmp_path, ["u"], pc=False, image=False))
+    assert pack.arms == ("text",)
+    item = m.Stage1Dataset(["u"], "mean", query_pack=pack)[0]
+    assert "q_text" in item and "q_image" not in item and "q_pc" not in item
+    assert pack.identity()["arms"] == ["text"]
+
+
+def test_the_query_construction_enters_the_arm_hash_only_when_present():
+    """Two runs differing in query construction must not share an arm hash --
+    and a run WITHOUT one must hash exactly as it did before the field existed,
+    or every arm already recorded stops being reproducible from its own digest.
+    """
+    from metafind.train.stage1 import arm_config_hash
+
+    values = {"optimizer": "adamw", "scheduler": "cosine", "seed": 1,
+              "learning_rate": 1e-4}
+    training = {"similarity": "cosine", "train_scope": "point_encoder_and_fuser",
+                "allow_all_masked": False, "_epoch_count": 5, "_lr_horizon": 5}
+    encoding = {"image_aggregation": "mean", "actual_clip_train_scope": "frozen"}
+
+    bare, bare_cfg = arm_config_hash(values, training, encoding, "dev")
+    again, _ = arm_config_hash(values, training, encoding, "dev",
+                               query_construction=None)
+    packed, packed_cfg = arm_config_hash(
+        values, training, encoding, "dev",
+        query_construction={"arms": ["text"], "manifest_sha256": "ab"})
+
+    assert bare == again, "passing None must not change the legacy digest"
+    assert "query_construction" not in bare_cfg
+    assert packed != bare, "two constructions shared one arm identity"
+    assert packed_cfg["query_construction"]["arms"] == ["text"]

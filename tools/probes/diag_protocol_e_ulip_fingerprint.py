@@ -367,6 +367,19 @@ def main() -> int:
         alt_rank.append(cands[0]["rank"])
     assert all(x != y for x, y in zip(alt_strings, canonical)), \
         "an alternate serialized to the canonical string"
+    # [ADDED 2026-08-31] The alternate never passes n06's `refuse_if_overlong`
+    # gate -- only the canonical does, which is why every admitted asset's
+    # canonical templated string fits CLIP's 77-token context by construction
+    # and the alternate need not. `serialize_annotation` caps the description in
+    # CHARACTERS (160), which does not bound tokens. MEASURED on dev_val:
+    # canonical 0/4,569 over budget, ALTERNATE 77/4,569 (max 83), silently
+    # truncated by the tokenizer. Counted rather than dropped -- dropping an
+    # asset would change the gallery size -- but no longer counted as zero.
+    from metafind.data.encode_text_image import true_token_count
+    n_over = {"canonical": int(sum(true_token_count(x) > 77 for x in canonical)),
+              "alternate": int(sum(true_token_count(x) > 77 for x in alt_strings))}
+    print(f"TEXT arm  strings over CLIP's 77-token context, silently "
+          f"truncated: {n_over}", flush=True)
     A_vec = encode_texts(backbone, alt_strings, "(Protocol E alternate)")
     # GATE: the harness must reproduce the CACHED canonical vector bit for bit,
     # or "the only difference is the description" is not true.
@@ -518,6 +531,7 @@ def main() -> int:
             "alternate_text_vectors_differing": n_txt_diff,
             "query_clouds_byte_identical_to_canonical": n_same,
             "mean_cos_query_pc_vs_canonical_pc": pc_cos,
+            "templated_strings_over_77_tokens_silently_truncated": n_over,
         },
         "n_assets": len(order), "batch_size": bs, "debug_limit": args.limit,
         "state": prov["state"], "checkpoint_sha256": model_hash,

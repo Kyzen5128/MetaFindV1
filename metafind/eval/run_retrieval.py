@@ -691,7 +691,7 @@ def _source_clause(gallery_source: str) -> str:
 
 
 def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
-                 device, batch_size):
+                 device, batch_size, query_pack=None):
     """Query embeddings per condition, plus gallery embeddings, plus the map.
 
     The gallery is encoded ONCE and shared by all seven conditions: the gallery
@@ -705,29 +705,42 @@ def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
     function rather than a habit of its caller. `run_protocol` is what passes
     None, and `test_a_reported_protocol_never_calls_the_gallery_encoder` is what
     holds it there.
+
+    ``query_pack`` reaches the QUERY dataset only. The gallery pass is
+    constructed with ``query_pack=None`` in the same expression that decides the
+    conditions, so the two cannot come apart: a gallery built from the query's
+    own observations is the leak this argument exists to remove, and it would
+    score beautifully. [MASTER ruling 2026-08-31, option (a)] the gallery image
+    stays the 12-view mean, so `gallery_index.py` and the promoted index that
+    backs every REPORTED protocol need no change and cannot diverge from this
+    path.
     """
     import torch
     from torch.utils.data import DataLoader
 
-    from metafind.train.stage1 import Stage1Dataset, collate, modules_in_eval
+    from metafind.train.stage1 import (Stage1Dataset, collate, modules_in_eval,
+                                       split_embeds)
 
     def embed(uids, conditions):
-        loader = DataLoader(Stage1Dataset(uids, aggregation), batch_size=batch_size,
+        # `conditions` is empty exactly on the gallery pass, so the pack is tied
+        # to the same condition that decides which tower runs. One expression,
+        # not two statements a later edit could separate.
+        pack = query_pack if conditions else None
+        loader = DataLoader(Stage1Dataset(uids, aggregation, query_pack=pack),
+                            batch_size=batch_size,
                             shuffle=False, collate_fn=collate, num_workers=4,
                             drop_last=False)
         gal, per_cond = [], {c: [] for c in conditions}
         with modules_in_eval(model, getattr(backbone, "model", None)), torch.no_grad():
             for i, batch in enumerate(loader):
-                embeds = {"text": batch["text"].to(device),
-                          "image": batch["image"].to(device),
-                          "pc": backbone.encode_pc(batch["pc"].to(device))}
-                n = embeds["text"].size(0)
+                query_embeds, gallery_embeds = split_embeds(batch, backbone, device)
+                n = gallery_embeds["text"].size(0)
                 if not conditions:
-                    gal.append(model.gallery(embeds).float().cpu())
+                    gal.append(model.gallery(gallery_embeds).float().cpu())
                 for cond in conditions:
                     mask = condition_mask(cond, n).to(device)
                     per_cond[cond].append(
-                        model.query(embeds, present=mask).float().cpu())
+                        model.query(query_embeds, present=mask).float().cpu())
                 if i % 20 == 0:
                     print(f"    batch {i}", flush=True)
         return gal, per_cond
@@ -887,7 +900,8 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
                  aggregation: str, device: str, batch_size: int,
                  control: str, seed: int, block: int,
                  untrained: bool = False,
-                 ckpt: dict | None = None) -> tuple[dict, list]:
+                 ckpt: dict | None = None,
+                 query_pack=None) -> tuple[dict, list]:
     """One protocol, seven conditions. Returns (core result, per-query rows).
 
     The gallery's SOURCE is decided here, from the protocol's own fields, not by
@@ -964,11 +978,11 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
             name, gallery_uids, ckpt or {}, backbone, model)
         # `None`, not `gallery_uids`: the gallery encoder is not called at all.
         queries, _ = encode_pools(backbone, model, query_uids, None,
-                                  aggregation, device, batch_size)
+                                  aggregation, device, batch_size, query_pack)
     else:
         queries, gallery = encode_pools(backbone, model, query_uids,
                                         gallery_uids, aggregation, device,
-                                        batch_size)
+                                        batch_size, query_pack)
 
     eff_targets, control_used = apply_control(control, targets,
                                               len(gallery_uids), seed)
@@ -1058,6 +1072,13 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
         # of `backbone.model` -- OpenCLIP ViT-bigG-14 included -- on every
         # development run, to produce a value nothing compares against.
         # `stage1_checkpoint_sha256` already identifies the weights there.
+        # Which observations the QUERY side used. `null` is the pre-2026-08-31
+        # construction, where the query read the gallery's own cached vectors --
+        # so a table without this field is not "unknown", it is that one, and a
+        # reader can tell the two apart without opening the checkpoint.
+        "query_construction": (query_pack.identity() if query_pack
+                               else {"arms": [], "note": "query reads the "
+                                     "gallery's own observations"}),
         "gallery_source": source,
         "gallery_index_uri": index_record["uri"] if index_record else None,
         "gallery_index_sha256": index_record["sha256"] if index_record else None,
@@ -1102,6 +1123,13 @@ def main() -> int:
                     help="directory for this evaluation's artifacts, relative "
                          "to data/outputs/eval. Default: a name built from the "
                          "checkpoint's arm hash and the control.")
+    ap.add_argument("--query-pack", default=None,
+                    help="query_pack.json from tools/make_query_pack.py: the "
+                         "query side then uses a SECOND observation of each "
+                         "asset (an alternate caption, one held-out view, a "
+                         "second point sample) instead of the gallery's own "
+                         "cached vectors. Omit for the pre-2026-08-31 "
+                         "construction. The gallery is unchanged either way.")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--block", type=int, default=4096,
@@ -1276,13 +1304,25 @@ def main() -> int:
                 "two independent draws, so one seed is one sample: run several "
                 "before reading a difference into it.")
 
+        # Built ONCE, before the protocol loop, so every protocol in one run
+        # shares one construction. Per-protocol packs would let two rows of the
+        # same table be produced by two different query constructions.
+        query_pack = None
+        if args.query_pack:
+            from metafind.train.stage1 import QueryPack
+
+            query_pack = QueryPack(args.query_pack)
+            print(f"query pack {query_pack.path} arms={list(query_pack.arms)} "
+                  f"sha256={query_pack.sha256[:12]}", flush=True)
+
         results = {}
         for name in wanted:
             print(f"\n=== {name} ===", flush=True)
             core, rows = run_protocol(
                 name, protocols[name], splits, backbone, model,
                 encoding["image_aggregation"], args.device, args.batch_size,
-                args.control, args.seed, args.block, untrained, ckpt)
+                args.control, args.seed, args.block, untrained, ckpt,
+                query_pack)
             # From the protocol's FIELDS, never its name. See protocol_caveat:
             # the name lookup that used to be here gave any protocol the
             # artifact adds the "never reported" caveat, printed beside a

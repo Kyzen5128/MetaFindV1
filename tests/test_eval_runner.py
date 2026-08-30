@@ -776,7 +776,12 @@ def test_the_untrained_run_loads_no_stage1_weights_and_says_so(tmp_path, monkeyp
     # drives `main`, and a swapped pair would send a reported protocol down the
     # untrained branch -- where it would encode its own gallery and say so in a
     # field nobody was looking at yet.
-    assert captured["tail"][-2:] == (True, {}), captured["tail"][-2:]
+    #
+    # Sliced from the END MINUS the query-pack argument added 2026-08-31, not
+    # `[-2:]`. The old slice broke loudly when a twelfth positional appeared,
+    # which is the right failure -- but it means this assertion is about a
+    # POSITION, so it is re-anchored deliberately rather than widened.
+    assert captured["tail"][-3:] == (True, {}, None), captured["tail"][-3:]
 
     # [REVIEWER MINOR-2] The gallery-provenance block reaches table1.json ON
     # DISK. `table1.json` drops `embedding_health` and the per-condition

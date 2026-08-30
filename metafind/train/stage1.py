@@ -186,6 +186,194 @@ def load_protocols() -> tuple[dict, dict, dict]:
     return encoding, training, hyperparameters
 
 
+# Arms a query pack can supply. `image` needs no array -- it is a rule over the
+# `views` matrix n06 already stores -- but it is named here anyway so that
+# "which arms are independent" is one list rather than three implicit branches.
+QUERY_ARMS = ("text", "image", "pc")
+
+
+class QueryPack:
+    """The QUERY side's own observations of each asset. Gallery untouched.
+
+    Stage 1 built ONE `embeds` dict and handed it to both towers, so the query
+    text was not merely equal to the gallery's text -- it was the same cached
+    vector. Measured dev_val text R@1 96.42 against MetaFind's reported 13.8.
+
+    [PAPER 3experiments.tex:24] is the basis, and it is NOT paper silence:
+    MetaFind writes that other models' "'PC only' performance reflects retrieval
+    using identical embeddings for both query and gallery, leading to inflated
+    accuracy", and credits its dual-tower design as the cure. We have a real
+    dual tower -- `model.query` and `model.gallery` are distinct -- and feeding
+    it identical inputs still gives 96.42, so the paper's stated mechanism is
+    implemented and does not produce the paper's behaviour. Supplying a second
+    observation is an IMPLEMENTATION CHOICE against that sentence.
+    [MASTER ruling 2026-08-31, amending DL-050, which recorded "paper silence".]
+
+    ⚠ This removes a MEASURED LEAK. It does not close the gap to Table 1, and
+    must never be described as doing so: an independent caption moved text
+    96.42 -> 74.98, still 5.4x the paper's 13.8, and the no-tower control scores
+    99.56 -- higher than the model. Gallery size is separately eliminated
+    (4,569 -> 9,138 costs 1.5-3.5 pp). Three candidate explanations are down and
+    the gap is not explained.
+
+    What each arm draws
+    --------------------
+        text   a non-canonical `description_candidates` entry, re-serialised
+               through the same template and encoded by the same frozen tower
+        image  ONE view, `views[uid_seed(uid) % 12]`
+        pc     a second independent 10,000-point sample of the same mesh
+
+    Fixed per asset, never per epoch [MASTER ruling 2026-08-31]: `uid_seed`
+    decides every draw, so a selection is re-derivable from the uid alone. Two
+    arms could not vary anyway -- a varying image draw makes the gallery
+    uncacheable and a varying pc draw multiplies a 7.7 GB artifact by the epoch
+    count -- and varying text alone would put a second research variable inside
+    a change whose single question is whether removing query/gallery identity
+    moves R@1.
+
+    ⚠ THE IMAGE ARM DOES NOT REMOVE THE WHOLE IMAGE LEAK. [MASTER ruling, option
+    (a)] The gallery image stays the 12-VIEW mean, so the query's view is still
+    inside it at weight 1/12. The alternative -- an 11-view mean excluding it --
+    was measured to buy 5 points at raw CLIP level (0.9562 -> 0.9054) and to
+    cost three things: [PAPER 2methdology.tex:111] "all gallery asset embeddings
+    are precomputed and cached" stops being true when the gallery vector depends
+    on which view the query drew; `gallery_index.py` builds every REPORTED
+    protocol's gallery from `cached["image"]`, so Table 1 A/B and the dev path
+    would silently diverge; and `gallery_index.gallery_encoder_sha256` hashes
+    PARAMETERS, so no gate could see the difference. Exact identity is removed;
+    a twelfth of the leak is not.
+
+    Refusal, never substitution
+    ----------------------------
+    `require()` fails at CONSTRUCTION, listing what is missing, rather than
+    letting `__getitem__` fall back to the canonical vector for an uncovered
+    uid. A silent fallback would restore the identity this class exists to
+    remove, for an unknown subset, with nothing downstream able to tell -- the
+    same defect class as a silently truncated caption. 55 assets in the train
+    pool have no alternate caption that fits CLIP's 77-token context and 14 have
+    no second candidate at all, so the uncovered set is real, not theoretical.
+    """
+
+    def __init__(self, manifest_path: str | Path) -> None:
+        self.path = Path(manifest_path)
+        if not self.path.exists():
+            raise FileNotFoundError(
+                f"{self.path} not found -- build it with tools/make_query_pack.py")
+        self.manifest = json.loads(self.path.read_text())
+        self.sha256 = hashlib.sha256(self.path.read_bytes()).hexdigest()
+        self.rows: dict[str, dict[str, tuple[int, int]]] = {}
+        self.arrays: dict[str, list] = {}
+        self.refused: dict[str, dict[str, str]] = {}
+        for arm in ("text", "pc"):
+            shards = (self.manifest.get(arm) or {}).get("shards") or []
+            if not shards:
+                continue
+            # mmap: the pc shards are 7.7 GB for dev_train alone, and a training
+            # run touches each row once per epoch. Reading them eagerly here
+            # would cost the memory whether or not --preload was asked for.
+            self.arrays[arm] = [np.load(sh["array"], mmap_mode="r") for sh in shards]
+            index, refused = {}, {}
+            for si, sh in enumerate(shards):
+                # [FOUND 2026-08-31, the hard way] A killed build left a 31,985-
+                # row array on disk under a manifest still describing the
+                # 8-asset smoke shard that preceded it. Nothing raised: the
+                # first eight uids happened to be the same eight, in the same
+                # order, so `vector()` returned CORRECT clouds -- correct by
+                # coincidence of sort order, and it would have gone on being
+                # correct until the day the pools differed. Rows and uids are a
+                # positional correspondence and nothing else enforced it.
+                rows = self.arrays[arm][si].shape[0]
+                if rows != len(sh["uid_order"]):
+                    raise ValueError(
+                        f"{self.path}: {arm!r} shard {sh.get('tag')!r} lists "
+                        f"{len(sh['uid_order']):,} uids but {sh['array']} has "
+                        f"{rows:,} rows. The uid order is a POSITIONAL index "
+                        "into that array, so a mismatch silently serves one "
+                        "asset's observation as another's. Rebuild the shard.")
+                for ri, uid in enumerate(sh["uid_order"]):
+                    index[uid] = (si, ri)
+                refused.update(sh.get("refused") or {})
+            self.rows[arm] = index
+            self.refused[arm] = refused
+        # `image` is a rule, so it is available for every asset with a `views`
+        # matrix and carries no index. It is active whenever the manifest
+        # declares it, which is what keeps "declared but never consumed" from
+        # being possible: an arm absent here does not silently fall back to the
+        # gallery vector, it simply is not claimed.
+        self.arms = tuple(a for a in QUERY_ARMS
+                          if a in self.arrays or (a == "image" and self.manifest.get("image")))
+        if not self.arms:
+            raise ValueError(f"{self.path} declares no usable query arm")
+
+    def require(self, uids: list[str]) -> None:
+        """Every uid must be covered by every active array-backed arm, or stop.
+
+        Reported per arm with the recorded refusal reason where there is one, so
+        the operator can tell "this asset has no usable alternate caption" from
+        "this shard was built for a different split".
+        """
+        for arm, index in self.rows.items():
+            missing = [u for u in uids if u not in index]
+            if not missing:
+                continue
+            why = [f"{u}: {self.refused.get(arm, {}).get(u, 'not in any shard')}"
+                   for u in missing[:3]]
+            raise ValueError(
+                f"query pack {self.path} covers {len(index):,} uids for the "
+                f"{arm!r} arm but {len(missing):,} of the {len(uids):,} "
+                f"requested are absent, e.g. {why}. Refusing: falling back to "
+                f"the canonical {arm} vector for these would put the query and "
+                "the gallery back on the same observation for an unrecorded "
+                "subset. Filter the pool, or rebuild the shard.")
+
+    def covered(self, uids: list[str]) -> tuple[list[str], list[str]]:
+        """Split a pool into (kept, dropped) WITHOUT relaxing `require`.
+
+        The two are deliberately separate. `require` is the GUARD and lives in
+        the callee: it refuses any pool handed to a dataset that the pack cannot
+        cover, and it stays a refusal. This is the POLICY and is called only
+        from an entry point that has the authority to change a pool and the
+        obligation to record it -- so a caller cannot quietly obtain a filtered
+        pool by calling the dataset, and the guard cannot be softened into a
+        warning by anyone who merely wants their run to start.
+
+        [MASTER ruling 2026-08-31] The 55 uncovered assets are DROPPED. Keeping
+        them would leave the query text equal to the gallery's for a silent
+        0.15% minority, inside the very run that exists to measure that
+        equality's removal -- a leak surviving in the experiment about the leak.
+        """
+        keep = [u for u in uids
+                if all(u in idx for idx in self.rows.values())]
+        return keep, [u for u in uids if u not in set(keep)]
+
+    def vector(self, arm: str, uid: str) -> np.ndarray:
+        si, ri = self.rows[arm][uid]
+        return np.asarray(self.arrays[arm][si][ri], dtype=np.float32)
+
+    @staticmethod
+    def view_index(uid: str) -> int:
+        """Which view the query takes. A rule over `uid_seed`, not a stored map.
+
+        `uid_seed` is already the project's per-asset seed (`pointclouds.py:128`)
+        and the pc arm derives from it too, so the image draw cannot drift out
+        of sync with a file that would have to be kept in step.
+        """
+        from metafind.data.pointclouds import uid_seed
+
+        return uid_seed(uid) % N_VIEWS_PER_ASSET
+
+    def identity(self) -> dict:
+        """What goes into the arm hash: which arms, and which bytes supplied them."""
+        return {"arms": list(self.arms), "manifest_sha256": self.sha256}
+
+
+# n06 writes 12 per asset (`encode_text_image.py`, `views (12, 1280)`); asserted
+# against the loaded matrix in `__getitem__` rather than trusted, because a
+# corpus re-rendered at a different view count would otherwise silently change
+# which view every query drew.
+N_VIEWS_PER_ASSET = 12
+
+
 class Stage1Dataset:
     """One admitted asset: cached text/image vectors plus a LIVE point cloud.
 
@@ -206,7 +394,8 @@ class Stage1Dataset:
     """
 
     def __init__(self, uids: list[str], aggregation: str,
-                 preload: bool = False) -> None:
+                 preload: bool = False,
+                 query_pack: "QueryPack | None" = None) -> None:
         if aggregation not in PRECOMPUTABLE_AGGREGATIONS + PER_VIEW_AGGREGATIONS:
             raise ValueError(
                 f"unknown image_aggregation {aggregation!r}; "
@@ -214,9 +403,57 @@ class Stage1Dataset:
         self.uids = uids
         self.aggregation = aggregation
         self.per_view = aggregation in PER_VIEW_AGGREGATIONS
+        # `query_pack=None` is the pre-2026-08-31 construction, byte for byte:
+        # no `q_*` key is emitted, `collate` produces the same three tensors,
+        # and every call site takes the `query is gallery` branch. That is what
+        # keeps `gallery_index.py`, `tools/measure_dtype_effect.py` and every
+        # existing arm hash unaffected by this change.
+        self.query_pack = query_pack
+        # Checked HERE, against this dataset's own uid list, not once by the
+        # caller: `encode_pools` builds two datasets over two different pools,
+        # and a pack covering only one of them would otherwise be discovered on
+        # the pool it covers and never on the pool it does not.
+        if query_pack is not None:
+            query_pack.require(uids)
         self.cache: dict[str, dict] | None = None
         if preload:
             self._preload()
+
+    def _needs_views(self) -> bool:
+        """`views` is 12x the pooled vector, so it is kept only when read."""
+        return self.per_view or (self.query_pack is not None
+                                 and "image" in self.query_pack.arms)
+
+    def _query_side(self, uid: str, entry: dict) -> dict:
+        """The `q_*` half of one item. Empty dict when query IS gallery.
+
+        Each arm falls back to the GALLERY's own vector only when that arm is
+        not active in the pack -- never when it is active and the asset is
+        missing, which `QueryPack.require` has already made impossible.
+        """
+        pack = self.query_pack
+        if pack is None:
+            return {}
+        out = {}
+        if "text" in pack.arms:
+            out["q_text"] = pack.vector("text", uid)
+        if "image" in pack.arms:
+            views = entry["views"]
+            if views.shape[0] != N_VIEWS_PER_ASSET:
+                raise ValueError(
+                    f"{uid} has {views.shape[0]} views, not {N_VIEWS_PER_ASSET}; "
+                    "the held-out index is taken modulo that count, so a "
+                    "re-rendered corpus would silently change which view every "
+                    "query drew.")
+            out["q_image"] = np.asarray(views[pack.view_index(uid)],
+                                        dtype=np.float32)
+        if "pc" in pack.arms:
+            out["q_pc"] = pack.vector("pc", uid)
+        # Arms the pack does not supply emit no key at all, so those modalities
+        # keep the gallery's observation. The active arm list travels into the
+        # checkpoint's arm hash, so a partial pack is recorded as partial rather
+        # than mistaken for a full one.
+        return out
 
     def _preload(self) -> None:
         """Read every asset once, up front, and keep it in RAM.
@@ -255,9 +492,10 @@ class Stage1Dataset:
             cloud = np.load(paths.POINTCLOUDS / f"{uid}.npz")
             entry = {"text": cached["text"].astype(np.float32),
                      "image": cached["image"].astype(np.float32)}
-            if self.per_view:
-                # Only kept under per-view sampling: `views` is 12x the size of
-                # the pooled vector, and under `mean` nothing ever reads it.
+            if self._needs_views():
+                # Kept under per-view sampling OR the query pack's image arm:
+                # `views` is 12x the size of the pooled vector, and under plain
+                # `mean` with no pack nothing ever reads it.
                 entry["views"] = cached["views"]
             xyz = cloud["xyz"].astype(np.float32)
             rgb = cloud["rgb"].astype(np.float32) if "rgb" in cloud else None
@@ -283,9 +521,12 @@ class Stage1Dataset:
             # Copies, not views: the collate stacks these and torch would
             # otherwise alias the cache. A training step that wrote through one
             # of these would corrupt the asset for every later epoch, silently.
-            return {"uid": uid, "text": e["text"].copy(),
+            item = {"uid": uid, "text": e["text"].copy(),
                     "image": np.asarray(image, dtype=np.float32).copy(),
                     "pc": e["pc"].copy()}
+            item.update({k: np.asarray(v, dtype=np.float32).copy()
+                         for k, v in self._query_side(uid, e).items()})
+            return item
         cached = np.load(paths.EMBEDDINGS / f"{uid}.npz")
         cloud = np.load(paths.POINTCLOUDS / f"{uid}.npz")
         xyz = cloud["xyz"].astype(np.float32)
@@ -323,23 +564,73 @@ class Stage1Dataset:
             image = views[random.randrange(views.shape[0])]
         else:
             image = cached["image"]
-        return {
+        item = {
             "uid": uid,
             "text": cached["text"].astype(np.float32),
             "image": image.astype(np.float32),
             "pc": pc,
         }
+        if self.query_pack is not None:
+            entry = {"views": cached["views"]} if self._needs_views() else {}
+            item.update({k: np.asarray(v, dtype=np.float32)
+                         for k, v in self._query_side(uid, entry).items()})
+        return item
 
 
 def collate(batch: list[dict]):
+    """Stack the gallery triple, and the query triple when there is one.
+
+    The `q_*` keys are emitted only by a dataset carrying a query pack, so a
+    batch either has all of its active query arms or none. Callers branch on
+    presence rather than on a flag, which is what stops a pack from being
+    configured and then not read -- there is no key to ignore.
+    """
     import torch
 
-    return {
+    out = {
         "uid": [b["uid"] for b in batch],
         "text": torch.from_numpy(np.stack([b["text"] for b in batch])),
         "image": torch.from_numpy(np.stack([b["image"] for b in batch])),
         "pc": torch.from_numpy(np.stack([b["pc"] for b in batch])),
     }
+    for key in ("q_text", "q_image", "q_pc"):
+        if key in batch[0]:
+            out[key] = torch.from_numpy(np.stack([b[key] for b in batch]))
+    return out
+
+
+def split_embeds(batch, backbone, device):
+    """One batch -> (query embeds, gallery embeds).
+
+    THE SEAM. Before 2026-08-31 all three call sites built a single `embeds`
+    dict and passed it to both towers, so every invariant about query/gallery
+    independence was supplied by the caller and guaranteed by nobody. It lives
+    in one function now so the trainer and the two evaluators cannot drift:
+    training on one construction and scoring on the other would make every
+    number uninterpretable, and nothing would have raised.
+
+    `gallery is query` by IDENTITY when no pack is present -- the same dict
+    object, not an equal one -- so the point encoder runs once and the
+    pre-2026-08-31 numerics are unchanged.
+
+    With a pc arm the point encoder necessarily runs TWICE per step: the query's
+    cloud is a different cloud. That is a real cost on the one encoder Stage 1
+    trains, and it is the price of the arm rather than an oversight.
+    """
+    pc = backbone.encode_pc(batch["pc"].to(device))
+    gallery = {"text": batch["text"].to(device),
+               "image": batch["image"].to(device),
+               "pc": pc}
+    if not any(k in batch for k in ("q_text", "q_image", "q_pc")):
+        return gallery, gallery
+    query = dict(gallery)
+    if "q_text" in batch:
+        query["text"] = batch["q_text"].to(device)
+    if "q_image" in batch:
+        query["image"] = batch["q_image"].to(device)
+    if "q_pc" in batch:
+        query["pc"] = backbone.encode_pc(batch["q_pc"].to(device))
+    return query, gallery
 
 
 def trainable_state_dict(module) -> dict:
@@ -740,7 +1031,7 @@ def flatten_condition_scores(scores: dict) -> dict:
 
 
 def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
-                     batch_size):
+                     batch_size, query_pack=None):
     """Mean R@1 / R@5 over the seven Table 1 conditions, on the dev-val gallery.
 
     Gallery is dev_val itself (`splits.build_eval_protocols`, protocol
@@ -820,7 +1111,12 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
     # to `stage1_hyperparameters.json` would change that artifact's hash, which
     # is a protocol change and not this node's to make. Recorded here so it is
     # not mistaken for a resolved value.
-    loader = DataLoader(Stage1Dataset(dev_val_uids, aggregation),
+    # The SAME pack the training loader was given. Selecting a checkpoint on the
+    # shared construction while training on the independent one would pick the
+    # epoch that best exploits a leak the run exists to remove, and the two
+    # numbers would look comparable. `main` passes one object to both.
+    loader = DataLoader(Stage1Dataset(dev_val_uids, aggregation,
+                                      query_pack=query_pack),
                         batch_size=batch_size, shuffle=False, collate_fn=collate,
                         num_workers=4, drop_last=False)
     per_condition_q = {c: [] for c in QUERY_CONDITIONS}
@@ -829,15 +1125,13 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
     # reaches, and the point encoder lives on the backbone. See `modules_in_eval`.
     with modules_in_eval(model, getattr(backbone, "model", None)), torch.no_grad():
         for batch in loader:
-            embeds = {"text": batch["text"].to(device),
-                      "image": batch["image"].to(device),
-                      "pc": backbone.encode_pc(batch["pc"].to(device))}
-            n = embeds["text"].size(0)
-            gallery.append(model.gallery(embeds).float().cpu())
+            query_embeds, gallery_embeds = split_embeds(batch, backbone, device)
+            n = gallery_embeds["text"].size(0)
+            gallery.append(model.gallery(gallery_embeds).float().cpu())
             for cond in QUERY_CONDITIONS:
                 mask = condition_mask(cond, n).to(device)
                 per_condition_q[cond].append(
-                    model.query(embeds, present=mask).float().cpu())
+                    model.query(query_embeds, present=mask).float().cpu())
 
     # The shared helper is also used by n15 and the dtype measurement harness.
     # Keeping the normalisation as well as the GEMM in NumPy float64 is what
@@ -948,7 +1242,8 @@ ENFORCED_SINGLETONS = {
 
 
 def arm_config_hash(values: dict, training: dict, encoding: dict,
-                    phase: str) -> tuple[str, dict]:
+                    phase: str, query_construction: dict | None = None
+                    ) -> tuple[str, dict]:
     """Identity of the EXPERIMENTAL CONDITION, and the resolved recipe behind it.
 
     [R-33 ratified by Kyzen; corrected twice by CODEX, 2026-08-30] The first
@@ -1011,6 +1306,17 @@ def arm_config_hash(values: dict, training: dict, encoding: dict,
         "phase": phase,
         "train_scope": training.get("train_scope", "point_encoder_and_fuser"),
     })
+    # ADDED ONLY WHEN NON-DEFAULT, and that asymmetry is deliberate. Which
+    # observation the query sees is unambiguously a TREATMENT -- it is the whole
+    # of this change -- so a run using a pack must not share an arm with one
+    # that does not. But adding the key unconditionally would alter the digest
+    # of every arm already run, for runs whose behaviour did not change: the
+    # over-inclusion failure this docstring already names, which "strips
+    # comparability from every arm already run". Absence therefore MEANS the
+    # pre-2026-08-31 shared construction, and means it for the runs that were
+    # recorded before the key existed as well as for new ones.
+    if query_construction:
+        resolved["query_construction"] = query_construction
     blob = json.dumps(resolved, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode()).hexdigest(), resolved
 
@@ -1300,6 +1606,11 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         # crash investigation now turns on, and it was invisible.
         "preload": training.get("_preload"),
         "num_workers": training.get("_num_workers"),
+        # `null` is the pre-2026-08-31 construction, where the query read the
+        # gallery's own cached vectors. Recorded on the checkpoint as well as in
+        # the arm hash so a loose .pt can still answer which construction
+        # trained it, without the arm dict to dereference.
+        "query_construction": training.get("_query_construction"),
         "train_scope": training.get("train_scope", "point_encoder_and_fuser"),
         "trainable_only": True,
         "n_params_saved": int(n_params),
@@ -1505,6 +1816,14 @@ def main() -> int:
     ap.add_argument("--repeat-index", type=int, default=None,
                     help="which repeat of this arm this run is. Recorded, never "
                          "hashed: repeats share an arm by definition.")
+    ap.add_argument("--query-pack", default=None,
+                    help="query_pack.json from tools/make_query_pack.py. The "
+                         "query side then trains on a SECOND observation of "
+                         "each asset (alternate caption, one held-out view, a "
+                         "second point sample) instead of the gallery's own "
+                         "cached vectors. Enters arm_config_hash. Omit for the "
+                         "pre-2026-08-31 construction; the gallery is unchanged "
+                         "either way.")
     ap.add_argument("--limit", type=int, help="assets, for a smoke run")
     ap.add_argument("--device", default="cuda")
     # [D-3] `dev` is the development phase: train on dev_train, score dev_val
@@ -1659,8 +1978,19 @@ def main() -> int:
     # `random_single_view` it WOULD, because `random` is seeded per worker; that
     # protocol is not in use and this flag must be re-examined before it is.
     workers = 0 if args.preload else 4
+    # ONE pack object for the training loader and the selection loader. Two
+    # constructions in one run -- train independent, select shared -- would
+    # choose the epoch that best exploits the leak, and nothing in the numbers
+    # would say so. `evaluate_dev_val` is handed this same object below.
+    query_pack = QueryPack(args.query_pack) if args.query_pack else None
+    if query_pack is not None:
+        print(f"query pack {query_pack.path}\n"
+              f"  arms {list(query_pack.arms)}  sha256 {query_pack.sha256[:12]}\n"
+              f"  gallery UNCHANGED (canonical text, 12-view mean, canonical pc)",
+              flush=True)
     loader = DataLoader(
-        Stage1Dataset(train_uids, encoding["image_aggregation"], preload=args.preload),
+        Stage1Dataset(train_uids, encoding["image_aggregation"],
+                      preload=args.preload, query_pack=query_pack),
         batch_size=values["batch_size"], shuffle=True, collate_fn=collate,
         num_workers=workers, drop_last=True, generator=generator)
 
@@ -1738,8 +2068,11 @@ def main() -> int:
         "tf32_matmul": bool(torch.backends.cuda.matmul.allow_tf32),
         "cudnn_tf32": bool(torch.backends.cudnn.allow_tf32),
     }
+    training["_query_construction"] = (query_pack.identity() if query_pack
+                                       else None)
     training["_arm_config_hash"], training["_arm_config"] = arm_config_hash(
-        values, training, encoding, args.phase)
+        values, training, encoding, args.phase,
+        query_construction=training["_query_construction"])
     # [CODEX E 2026-08-30] Stamped once, onto every later metrics row, so a loss
     # curve says which arm and seed produced it without a join.
     runlog.set_run_context(arm_config_hash=training["_arm_config_hash"],
@@ -1777,21 +2110,23 @@ def main() -> int:
         for epoch in range(epochs):
             model.train()
             for batch in loader:
-                text = batch["text"].to(args.device)
-                image = batch["image"].to(args.device)
-                pc = backbone.encode_pc(batch["pc"].to(args.device))
+                # [PAPER 2.6] masking is unchanged by the query pack: the pack
+                # decides WHICH observation each modality is, the mask decides
+                # WHETHER it is present. The two are independent and 2.6
+                # constrains only the second.
+                query_embeds, gallery_embeds = split_embeds(
+                    batch, backbone, args.device)
 
                 # [PAPER 2.6] each modality masked INDEPENDENTLY at 30%, on the
                 # query side only -- 2.6 also says the gallery encoder is
                 # trained to be modality-complete.
                 present = sample_modality_mask(
-                    text.size(0), p_mask=values["p_mask"],
+                    gallery_embeds["text"].size(0), p_mask=values["p_mask"],
                     allow_empty=training["allow_all_masked"],
                     device=args.device, generator=generator)
 
-                embeds = {"text": text, "image": image, "pc": pc}
-                q = model.query(embeds, present=present)
-                g = model.gallery(embeds)
+                q = model.query(query_embeds, present=present)
+                g = model.gallery(gallery_embeds)
 
                 out = loss_fn(q, g)
                 opt.zero_grad(set_to_none=True)
@@ -1864,7 +2199,7 @@ def main() -> int:
             if args.phase == "dev" and dev_val_uids:
                 scores = evaluate_dev_val(
                     backbone, model, dev_val_uids, encoding["image_aggregation"],
-                    args.device, values["batch_size"])
+                    args.device, values["batch_size"], query_pack)
                 runlog.train_metrics("stage1_dev_val", epoch=epoch, step=step,
                                      **{k: v for k, v in scores.items()
                                         if isinstance(v, (int, float))},

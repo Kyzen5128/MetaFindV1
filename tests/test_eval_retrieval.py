@@ -215,16 +215,25 @@ def write_promoted(tmp_path, monkeypatch, uids, vectors, encoder_sha,
     return record
 
 
-def fake_encode_pools(vectors_by_uid, queries, seen=None):
+def fake_encode_pools(vectors_by_uid, queries, seen=None, packs=None):
     """An `encode_pools` that never touches a file, a model or a GPU.
 
     `seen` collects the `gallery_uids` it was asked for, so a test can assert
-    that a reported protocol asked for NONE.
+    that a reported protocol asked for NONE. `packs` collects the `query_pack`,
+    so a test can assert the query construction reached the encoder.
+
+    The signature MIRRORS the real `encode_pools`, positionally. It is a double,
+    and a double whose parameters have drifted from the function it stands in
+    for stops testing that function -- it starts testing an older one, silently.
+    `query_pack` was added to the real signature on 2026-08-31 and this raised a
+    TypeError rather than passing, which is the behaviour worth keeping.
     """
     def encode(backbone, model, query_uids, gallery_uids, aggregation,
-               device, batch_size):
+               device, batch_size, query_pack=None):
         if seen is not None:
             seen.append(gallery_uids)
+        if packs is not None:
+            packs.append(query_pack)
         gallery = None if gallery_uids is None else normalize_for_scoring(
             np.stack([vectors_by_uid[u] for u in gallery_uids]))
         return ({c: normalize_for_scoring(queries) for c in QUERY_CONDITIONS},
@@ -682,3 +691,69 @@ def test_the_three_pool_refusals_still_fire_on_the_index_backed_path(
                                "gallery_split": "train", "reported": True},
                          orphan, None, None, "mean", "cpu", 4, "none", 0, 8,
                          False, ck)
+
+
+def test_the_query_pack_reaches_the_query_pass_and_never_the_gallery_pass(
+        monkeypatch, tmp_path):
+    """THE SEAM, asserted on the real `encode_pools`, not on a double.
+
+    A gallery built from the query's own second observation is the leak this
+    whole change removes, wearing the change's own clothes -- and it would score
+    beautifully. `encode_pools` decides the pack from the same expression that
+    decides the conditions, so the two cannot come apart; this pins that.
+
+    Also pins the ordering the pre-2026-08-31 code made impossible to get wrong
+    by accident and the new code makes possible: the gallery pass must construct
+    its dataset with `query_pack=None` even when the caller passed one.
+    """
+    import numpy as np
+    import torch
+
+    import metafind.eval.run_retrieval as rr
+    import metafind.train.stage1 as st
+
+    built = []
+
+    class FakeDataset:
+        def __init__(self, uids, aggregation, preload=False, query_pack=None):
+            built.append((tuple(uids), query_pack))
+            self.uids = list(uids)
+
+        def __len__(self):
+            return len(self.uids)
+
+        def __getitem__(self, i):
+            return {"uid": self.uids[i], "text": np.zeros(4, np.float32),
+                    "image": np.zeros(4, np.float32),
+                    "pc": np.zeros((2, 6), np.float32)}
+
+    class FakeBackbone:
+        model = None
+
+        def encode_pc(self, x):
+            return torch.zeros(x.shape[0], 4)
+
+    class FakeModel(torch.nn.Module):
+        # nn.Module because `modules_in_eval` walks `.modules()` to put the
+        # towers in eval -- a plain object silently would not have been put in
+        # eval either, so the base class is part of what is under test.
+        # ones, not zeros: `normalize_for_scoring` refuses a zero-norm
+        # embedding, and that refusal is a real guard worth not defeating.
+        def query(self, embeds, present=None):
+            return torch.ones(embeds["text"].shape[0], 4)
+
+        def gallery(self, embeds):
+            return torch.ones(embeds["text"].shape[0], 4)
+
+    monkeypatch.setattr(st, "Stage1Dataset", FakeDataset)
+    sentinel = object()
+    rr.encode_pools(FakeBackbone(), FakeModel(), ["q0", "q1"], ["g0", "g1"],
+                    "mean", "cpu", 2, sentinel)
+
+    by_uids = dict(built)
+    assert by_uids[("g0", "g1")] is None, (
+        "the gallery pass was given the query pack: its embeddings would come "
+        "from the query's own observation of each asset")
+    assert by_uids[("q0", "q1")] is sentinel, (
+        "the query pack never reached the query pass -- it would be configured "
+        "and silently unread, which is how the field became decorative before")
