@@ -2607,3 +2607,174 @@ and the gap is not explained.
 **The suspension stands, for a different reason than `DL-046` gave.** Not because
 the wiring is wrong, but because `full` cannot select and text is degrading, so a
 learning rate chosen now would be chosen on a diluted metric.
+
+---
+
+## DL-048 — Stage 1's final configuration is LOCKED. **Lifts `DL-047`'s suspension.**
+
+`USER_APPROVED` · 2026-08-30 · Kyzen
+
+**Verbatim:**
+
+```
+不要再 sweep、不要再改 Stage 1 架構,
+直接鎖 LR=2.5e-4、epochs=5、seed=20260816 完成 final training。
+```
+
+### The configuration
+
+```
+learning_rate   2.5e-4
+epochs          5
+lr_horizon      5
+seed            20260816
+phase           final
+batch_size      64
+p_mask          0.30
+```
+
+**Classification: `IMPLEMENTATION CHOICE`.** It is not claimed to be a MetaFind
+paper value and not claimed to be a ULIP-2 value. It is not claimed to be a
+global optimum: `2.5e-4` is the LOWEST rate in the sweep, so the ordering does
+not contain its own edge, and nothing below it was tried.
+
+### The evidence, re-verified before filing (OBSERVED DATA, 2026-08-30)
+
+Dev-selection mean R@1, read from each arm's own `stage1_best_ckpt.json`:
+
+```
+lr 2.50e-4   s20260816  0.976425   best epoch 4
+lr 2.50e-4   s20260830  0.977457   best epoch 4
+lr 5.00e-4   s20260816  0.956977   best epoch 4
+lr 5.00e-4   s20260830  0.958290   best epoch 4
+lr 7.50e-4   s20260816  0.940124   best epoch 4
+lr 7.50e-4   s20260830  0.944283   best epoch 4
+lr 1.00e-3   s20260816  0.931808   best epoch 4
+lr 1.00e-3   s20260830  0.927555   best epoch 4
+```
+
+**Every arm's best is `epoch 4`** — the fifth and last epoch, zero-indexed. No
+arm peaked early, so `epochs=5` is the horizon that was run, not a horizon that
+was selected. The ordering is monotone in the learning rate on both metrics.
+
+Protocol D re-scoring of the same eight checkpoints, mean of ALL SEVEN
+conditions, against the untrained baseline:
+
+```
+lr 2.50e-4  s20260830   0.9370
+lr 2.50e-4  s20260816   0.9357
+UNTRAINED   seed 1      0.9114
+lr 5.00e-4  s20260830   0.8975
+lr 5.00e-4  s20260816   0.8954
+lr 7.50e-4  s20260830   0.8661
+lr 7.50e-4  s20260816   0.8594
+lr 1.00e-3  s20260816   0.8392
+lr 1.00e-3  s20260830   0.8378
+```
+
+Mean of the three NON-ceiling conditions only (`text`, `image`, `pc`), which is
+where the four saturated cells stop diluting the comparison:
+
+```
+lr 2.50e-4  s20260830   0.8682     +4.54 pp over untrained
+lr 2.50e-4  s20260816   0.8650     +4.22 pp over untrained
+UNTRAINED   seed 1      0.8228
+```
+
+**`2.5e-4` is the only rate that beats not training at all, and it does so on
+both readings.** The three rates above it are worse than the untrained baseline
+on the seven-condition mean.
+
+`20260816` is used because it was specified in advance. It is NOT the
+better-scoring of the two seeds — `20260830` is, on both metrics. **Choosing the
+pre-specified seed over the winning one is the point.**
+
+### What this ruling accepts, stated so it is not discovered later
+
+**Text degrades under training and the ruling proceeds anyway.** Protocol D,
+`text` R@1: untrained `0.9044`; at `2.5e-4`, `0.7516` (s20260816) and `0.7586`
+(s20260830) — **−15.3 pp and −14.6 pp.** It gets worse at every higher rate,
+down to `0.4940` at `1e-3`.
+
+This remains the open finding `DL-047` filed. It is not resolved by this entry,
+it is not caused by this entry, and the final checkpoint will carry it.
+
+**`full` is still at the ceiling and still cannot select.** `1.0000` at three of
+four rates, `0.9996`–`0.9998` at the rest, `0.9961` untrained. Nothing about the
+locked configuration changes that, and no Table 1 conclusion may lean on that cell.
+
+### What is lifted
+
+`DL-047` suspended `--phase final`. **That suspension is lifted by the person who
+owns the decision.** Its stated reason — that a learning rate chosen on a diluted
+metric would not be trustworthy — is not refuted; it is overruled in favour of
+producing the project's Stage 1 artifact. The reason survives as a caveat on the
+result, not as a blocker on the run.
+
+### What is FROZEN and may not be edited while completing Stage 1
+
+```
+positive pair    same asset, query vs gallery
+query            three modalities, independent p=0.30 mask each
+gallery          complete text/image/pc, no mask
+backbone         shared ULIP-2
+towers           separate query/gallery fusion
+OpenCLIP         frozen
+trainable        PointBERT, projection, both fusion towers
+optimizer        AdamW, batch 64, temperature 0.5 fixed, cosine schedule
+dev selection    seven-condition mean R@1, R@5 as tie-break
+```
+
+### What stays UNKNOWN and no longer blocks
+
+```
+Table 1's gallery scope -- test-only (9,138) or full corpus (45,692)
+the paper's query construction and positive-pair definition
+MetaFind's real LR, epochs, optimizer, batch size
+```
+
+**These still prevent a claim of direct comparability with the paper's Table 1.**
+They no longer prevent this project's Stage 1 from being completed. Both halves
+of that sentence are load-bearing.
+
+### The three implementation gaps that must close BEFORE the final run
+
+Verified against the tree, 2026-08-30, not taken from a document:
+
+```
+G4_gallery_freeze   DOES NOT EXIST. No metafind/gates/ directory, no gate
+                    record writer anywhere in the repo. validation_plan.yaml
+                    has said `implemented: false` all along and it is correct.
+
+n12 promote         `--gate-passed` is an operator-supplied boolean. Promotion
+                    reads no gate record. A human flag currently stands in for
+                    the evidence the gate exists to produce.
+
+n15 eval            RE-ENCODES the gallery on every run. It never opens
+                    gallery_index.json. The promoted index has no consumer on
+                    the evaluation path.
+```
+
+One thing verified in the same pass and NOT a gap: `stage1_encoding_protocol`
+resolves `image_aggregation` to `mean`, and under `mean` `Stage1Dataset` returns
+`cached["image"]` byte for byte — the same array `gallery_index.py` reads. **So
+moving n15 onto the promoted index cannot move the numbers.** Checked before
+proposing the change, because a switch that silently re-defines the gallery
+vectors would be indistinguishable from a result.
+
+### Completion gate for "Stage 1 is done" — Kyzen's, recorded as given
+
+```
+final checkpoint exists, sha256 verified
+record shows phase=final, lr=2.5e-4, epochs=5, seed=20260816
+training pool is the full 80% train split
+no dev selection occurred in the final phase
+gallery index bound to the final checkpoint
+G4 actually PASSES
+promoted index bytes identical to the bytes G4 verified
+n15's reported A/B consume the promoted index
+A and B each record n_query / n_gallery
+every unknown and deviation survives into the result
+```
+
+**A finished process is not a finished experiment. This list is the difference.**
