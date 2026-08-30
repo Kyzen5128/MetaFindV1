@@ -1868,3 +1868,91 @@ Block Reviewer before it is used.
 
 **Recorded by MASTER, who received the `✅`, per `DL-031`: the role that
 receives it records it, with the verbatim message and what it covered.**
+
+---
+
+## DL-041 — the five ESSGNN architecture parameters are ratified, and one tension is recorded with them
+
+`USER_APPROVED` · 2026-08-30 · Kyzen
+
+**Verbatim:**
+
+```
+我記得這是✅的 他是討論出來的 由上游證據支持 下次跑前確認就好 先✅
+```
+
+Put to him as a named list, which is what `Rule 16` requires — a ratification has
+to point at specific parameters, not at a file:
+
+```
+hidden_dim            128
+n_layers                4
+pooling              mean
+layer_sharing  independent
+use_io_projections   true
+```
+
+### What is now settled
+
+**The five values above are `USER_APPROVED` as of 2026-08-30.**
+`essgnn_arch_protocol.json`'s `status: resolved` is legitimate from today. It was
+not legitimate on the strength of the 2026-08-19 stamp alone, and the two
+readings MASTER put to Kyzen — a per-parameter ratification versus a batch stamp
+written after C1 — are closed by this entry rather than by re-reading the stamp.
+
+**This also releases what was blocked on it.** `ESSGNN_DIM_REVIEW.md` §7's
+standing prohibition ("D_h does not move, no candidate enters the protocol, until
+Steps 1–4 are settled") has been satisfied, and the ESSGNN Block Engineer's
+handoff §11 item 3, which forwards that prohibition, should now be updated. He
+chose reading B deliberately because it was the conservative side, and said so;
+that judgement was correct at the time it was made.
+
+### A tension, recorded because it does not disappear by being approved
+
+Kyzen's stated basis is 「由上游證據支持」. **The upstream evidence in this
+repository does not point at two of these five values**, and that was itself a
+registered finding before today:
+
+```
+EGNN QM9        n_layers 7 · hidden 128 · readout torch.sum
+EGNN N-body     n_layers 4 · hidden  64
+ours            n_layers 4 · hidden 128 · pooling mean
+```
+
+`METAFIND_NOTEBOOK.md` §3.4 recorded that 4/128 takes one half from each of two
+different upstream experiments, and that MetaFind's own citation of EGNN names
+drug design, which is QM9. `docs/ESSGNN_DIM_REVIEW.md` §6 carries the same
+comparison.
+
+**This entry does not reopen the decision.** `DL-017` delegates these calls and
+Kyzen has made this one. It records that the values are a **USER DECISION**, and
+that describing them as upstream-supported would be wrong for `n_layers` and
+`pooling` specifically. **If Table 2 ever cites an upstream basis for the
+architecture, this is the paragraph that must be read first.**
+
+Classification: `hidden_dim`, `layer_sharing`, `use_io_projections` — USER
+DECISION, upstream-compatible. `n_layers`, `pooling` — **USER DECISION,
+upstream evidence points elsewhere.**
+
+### The condition Kyzen attached
+
+「下次跑前確認就好」 — **confirm before the next run that uses them.** That is a
+re-confirmation gate, not a re-decision: before n13 or anything else consumes
+`essgnn_arch_protocol.json`, the five values are put back to him, and he says
+whether they still stand. It does not need re-derivation and it does not reopen
+the argument.
+
+### Still open, and not covered by this `✅`
+
+```
+node_feat_dim / edge_feat_dim are STILL NOT KEYS of essgnn_arch_protocol.json.
+U-20 pinned 1280 on 2026-08-27 and nothing enforces it: an n08 that wrote a
+512-wide artifact would train without complaint. That debt is item 201 at
+01_GRAPH_SPEC.md:1123 and it is not what was approved here.
+```
+
+**And the artifact on disk is still 512-wide from the old encoder.**
+`procthor_node_embeddings.npz` is `(1467, 512)`, `text_encoder_version
+clip-vit-b32-laion2b-s34b-b79k`, written 2026-08-17 — before the 1280 ruling.
+**Nothing compares it against the ruling.** n08 has to re-run, and that needs
+GPU and its own `✅`.
