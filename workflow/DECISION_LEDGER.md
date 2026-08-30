@@ -2383,3 +2383,108 @@ UNCHANGED no learning rate may be selected from the sweep: it was scored on C.
 null model passes.** Re-scoring the eight checkpoints on D is the cheap next
 step — eight runs of roughly four minutes, nothing sealed — and it is the only
 way the learning-rate question gets an answer that means anything.
+
+---
+
+## DL-046 — 🔴 both towers are fed the same dict. We reproduced the baselines' failure mode, not MetaFind's method.
+
+`ESCALATED TO USER` · 2026-08-30 · MASTER, after Kyzen asked whether anyone had read ULIP-2's actual code
+
+**This is the root cause of every anomaly recorded in `DL-044` and `DL-045`.**
+
+### The paper names this exact failure, and names it as the baselines'
+
+`3experiments.tex:24`, verbatim:
+
+> since other models do not adopt a dual-tower design, their "PC only" performance
+> **reflects retrieval using identical embeddings for both query and gallery,
+> leading to inflated accuracy**. In contrast, our dual-tower framework introduces
+> more cross-modality retrieval, **which results in lower accuracy under the
+> "PC only"**.
+
+```
+baselines' PC-only, which the paper calls inflated   97.9 – 99.0
+MetaFind's PC-only, the dual tower working            75.1
+ours, protocol C                                      97.6
+ours, protocol D (8x gallery)                         91.8
+ours untrained, protocol C                            95.3
+```
+
+**We are sitting in the band the paper identifies as the artifact.** The paper's
+own number is 22 points BELOW the baselines because its dual tower makes the two
+sides differ. Ours does not differ.
+
+### The two lines
+
+`metafind/train/stage1.py:1752-1753`, the training step:
+
+```python
+q = model.query(embeds, present=present)
+g = model.gallery(embeds)
+```
+
+`stage1.py:791-793` builds **one** `embeds` dict. Both towers receive it. The
+same pattern is at `:795`/`:799` in `evaluate_dev_val`.
+
+`MetaFindDualTower.forward` at `dual_tower.py:359-366` takes `query_embeds` and
+`gallery_embeds` as **separate arguments**. The architecture supports two inputs.
+Nothing in Stage 1 ever passes two.
+
+**So the contrastive loss asks two fusion modules, fed identical input, to agree
+on row i.** The optimum is for them to become the same function, and then
+retrieval is the identity map. Every measurement today follows from that:
+
+```
+DL-044  full = 0.9989 untrained          two random fusions of one input already agree
+DL-044  four of seven cells unmoved       there is nothing for training to learn
+DL-045  gallery x8 changes nothing        the identity map does not care how many distractors
+DL-045  text degrades under training      training spends text structure buying agreement
+sweep   3 of 4 LRs worse than untrained   training can only move the towers apart
+```
+
+### What ULIP-2 actually does, since that is the question that led here
+
+`upstream/ULIP/models/losses.py:44-49` — every term has the point cloud on one
+side:
+
+```
+loss = (CE(pc->text) + CE(text->pc))/2 + (CE(pc->image) + CE(image->pc))/2
+```
+
+**There is no text-image term.** The point cloud moves; text and image are frozen
+anchors that never move relative to each other. It is a hub, not two towers.
+
+And `upstream/ULIP/main.py:350-410` — ULIP-2's evaluation is **zero-shot
+classification**, not instance retrieval: the gallery is the ~1,156 LVIS category
+label texts, and correct means the right CATEGORY. **Our task and ULIP-2's are
+not the same task**, so ULIP-2's recipe cannot be carried over unexamined, and
+`DL-010` (upstream is the reference where MetaFind is silent) does not reach this.
+
+### What is established, and what is not
+
+```
+ESTABLISHED   both towers receive one shared embeds dict, training and eval.
+              OBSERVED IMPLEMENTATION, stage1.py:1752-1753 and :791-799.
+ESTABLISHED   the architecture accepts two, dual_tower.py:359-366.
+ESTABLISHED   the paper names identical query/gallery embeddings as the
+              baselines' artifact and reports 75.1 against their 97.9-99.0.
+              PAPER FACT, 3experiments.tex:24 and Table 1.
+NOT ESTABLISHED  what MetaFind feeds each tower instead. The paper says the dual
+              tower "introduces more cross-modality retrieval" and does not
+              spell out the input construction. UNKNOWN.
+```
+
+### Why this stops here
+
+Changing what each tower is fed is **architecture and data flow**. It changes
+every Table 1 number, and it is the difference between reproducing MetaFind and
+reproducing the baselines it argues against.
+
+`.claude/rules/research-rigor.md` §2 lists architecture, dataset construction and
+evaluation protocol as stop-and-ask. `DL-043` moved execution to MASTER and left
+research decisions with Kyzen. **This is a research decision.**
+
+**Everything downstream is suspended**: no learning rate may be selected, no
+`--phase final`, no Table 1. The eight checkpoints and the re-scoring on D are
+not wasted — they are the measurement that found this — but none of them is a
+model of MetaFind.
