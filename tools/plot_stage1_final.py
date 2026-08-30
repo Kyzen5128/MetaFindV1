@@ -14,9 +14,17 @@ computes ``logits = (1/tau) * q @ g.T`` on L2-normalised rows, so every logit is
 bounded in ``[-2, +2]`` and the loss is bounded too:
 
     chance   all logits equal          -> ln(B)                        = 4.1589
-    floor    target +2, others -2      -> ln(1 + (B-1) * e^-4)         = 0.7674
+    bound    target +2, others -2      -> ln(1 + (B-1) * e^-4)         = 0.7674
 
-for B = 64. **The loss can never reach 0.** A reader who does not know that sees
+for B = 64. **The loss can never reach 0.**
+
+⚠ The lower line is an ABSOLUTE THEORETICAL BOUND, not an achievable training
+floor. [ULIP2 REVIEWER 2026-08-30] It is derived per-sample, and reaching it
+would need every asset's own positive at cos +1 while all 63 others sit at
+cos -1 -- SIMULTANEOUSLY FOR ALL 64 ROWS, which 64 embeddings in one shared
+space cannot satisfy. Calling it "the floor" invites the reading that 0.767 is
+a target the run is failing to approach. It is not; it is the value below which
+the arithmetic cannot go. A reader who does not know that sees
 2.4 and concludes the model is barely training; against the real range it is
 roughly two thirds of the way down. Both lines are computed from the run's own
 recorded `tau` and batch size, not hardcoded, so they follow a config change.
@@ -81,8 +89,13 @@ def main() -> int:
     chance = math.log(batch)
     floor = math.log(1.0 + (batch - 1) * math.exp(-2.0 * scale))
 
+    # [FIXED] `max(step) / epochs_seen` was wrong: the newest epoch is PARTIAL,
+    # so it divided a full-epoch count by a fractional epoch and drew the
+    # boundary lines in the wrong places (475 against a true 572). Derive it
+    # from the pool the run actually used, the way the DataLoader does.
+    n_train = 36554
+    steps_per_epoch = math.ceil(n_train / batch)
     epochs_seen = max(r["epoch"] for r in rows) + 1
-    steps_per_epoch = max(r["step"] for r in rows) / max(epochs_seen, 1)
 
     fig, ax = plt.subplots(4, 1, figsize=(11, 13), sharex=True)
     fig.suptitle(
@@ -98,7 +111,8 @@ def main() -> int:
     ax[0].axhline(floor, ls="--", lw=1.2, color="#2f7d4f")
     ax[0].text(x[0], chance, f"  chance = ln({batch}) = {chance:.3f}",
                va="bottom", fontsize=9, color="#c23b3b")
-    ax[0].text(x[0], floor, f"  floor at tau={tau} = {floor:.3f}  (loss CANNOT reach 0)",
+    ax[0].text(x[0], floor, f"  absolute theoretical lower bound at tau={tau} = "
+               f"{floor:.3f}  (NOT an achievable floor -- see docstring)",
                va="bottom", fontsize=9, color="#2f7d4f")
     ax[0].set_ylabel("InfoNCE loss")
     ax[0].set_ylim(0, chance * 1.08)
@@ -146,7 +160,8 @@ def main() -> int:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=140)
     print(f"{len(rows)} rows, {epochs_seen} epoch(s) so far -> {OUT}")
-    print(f"loss now {rows[-1]['loss']:.4f}   range [{floor:.3f} floor, {chance:.3f} chance]")
+    print(f"loss now {rows[-1]['loss']:.4f}   "
+          f"range [{floor:.3f} absolute bound, {chance:.3f} chance]")
     print(f"progress down the range: "
           f"{(chance - rows[-1]['loss']) / (chance - floor) * 100:.1f}%")
     return 0
