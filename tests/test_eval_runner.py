@@ -244,12 +244,18 @@ def test_full_is_train_plus_test_not_a_hardcoded_count():
 # ---------------------------------------------------------------- the controls
 
 def test_shuffling_the_targets_collapses_the_metric_to_chance():
-    """The measurement that turns the 1.0000 mechanism into a finding.
+    """The control does collapse to chance. That is ALL this test shows.
 
-    Every checkpoint reports `full` R@1 = 1.0000 against the paper's 0.517. A
-    mechanism is understood, but a mechanism being real does not make it the
-    only cause. If a metric does not collapse when each query is scored against
-    somebody else's asset, it was never measuring retrieval.
+    ⚠ [ULIP2 REVIEWER 2026-08-30, BLOCKER] This test used to be described as
+    "the measurement that turns the 1.0000 mechanism into a finding". It is not,
+    and this very fixture is why: `g = q.copy()` IS the "both towers see
+    identical input" defect, in its total form, and the control passes anyway.
+    The non-discrimination is asserted directly in
+    `test_the_shuffled_control_is_a_wiring_check_not_a_discriminator` below.
+
+    What survives: if the metric does NOT collapse when each query is scored
+    against somebody else's asset, it was never measuring retrieval. One
+    direction only.
     """
     rng = np.random.default_rng(2)
     q = unit(rng, 300, 8)
@@ -431,3 +437,323 @@ def test_score_streaming_accepts_what_normalize_for_scoring_produces():
     g = normalize_for_scoring(rng.normal(size=(40, 32)))
     q = normalize_for_scoring(rng.normal(size=(5, 32)))
     assert n15.score_streaming(q, g, np.arange(5), block=8)["rank"].shape == (5,)
+
+
+def test_the_shuffled_control_is_a_wiring_check_not_a_discriminator():
+    """[ULIP2 REVIEWER 2026-08-30, BLOCKER] The green light that is not a result.
+
+    `apply_control` claimed `shuffle_targets` tests the "both towers see
+    identical input" hypothesis. Both halves are asserted here so the claim
+    cannot come back as prose.
+
+    HALF 1 -- no discriminative power. The fixture is the defect at full
+    strength: the query stack and the gallery stack are the same array, so every
+    query's own row is its exact argmax. Real R@1 = 1.0, shuffled R@1 ~ 1/n.
+    The control passes hardest precisely when the defect is total, because
+    permuting the target column moves the answer to a random column whatever
+    produced the similarity.
+
+    HALF 2 -- what it CAN detect. The rank must actually depend on which column
+    is named as the target. When it did not -- `own` from a row-wise product,
+    the comparisons from a GEMM, `higher` and `tied` both 0 -- the shuffled run
+    scored identically to the real one, and that is the bug this control caught.
+    """
+    rng = np.random.default_rng(21)
+    q = unit(rng, 200, 12)
+    g = q.copy()                        # the defect, literally: identical input
+    true_t = np.arange(200)
+    shuffled, _ = n15.apply_control("shuffle_targets", true_t, 200, seed=3)
+
+    real = (n15.score_streaming(q, g, true_t, block=32)["rank"] == 1).mean()
+    ctrl = (n15.score_streaming(q, g, shuffled, block=32)["rank"] == 1).mean()
+    assert real == 1.0
+    assert ctrl < 0.05, (
+        "if this ever fails the control has become discriminative and the "
+        "docstring in apply_control has to be rewritten as a measurement")
+
+    # HALF 2: the rank is a function of the target column, per query, not a
+    # constant the shuffle cannot move.
+    ranks_real = n15.score_streaming(q, g, true_t, block=32)["rank"]
+    ranks_ctrl = n15.score_streaming(q, g, shuffled, block=32)["rank"]
+    assert not np.array_equal(ranks_real, ranks_ctrl), (
+        "the shuffled and unshuffled ranks are identical -- the rank arithmetic "
+        "does not depend on `targets`, which is the one defect class this "
+        "control exists to catch")
+
+    # And the docstring must keep saying so. Whitespace-normalised, so a
+    # rewrap cannot silently disarm the assertion.
+    doc = " ".join(n15.apply_control.__doc__.split())
+    assert "WIRING CHECK, not a discriminator" in doc
+    assert "CANNOT detect (no discriminative power, all three)" in doc
+
+
+def test_off_target_entropy_excludes_the_target_like_its_name_says():
+    """[ULIP2 REVIEWER 2026-08-30, MINOR] The mask that covered one of two sums.
+
+    `off_sum` / `off_sq` read the masked block; the entropy accumulators read
+    the UNMASKED `sim`. So `off_target_std` excluded the answer and
+    `off_target_entropy` -- same prefix, same comment, adjacent lines -- did not.
+
+    The reference is the entropy of the softmax over the off-target columns
+    only, computed the slow explicit way.
+    """
+    rng = np.random.default_rng(5)
+    q, g = unit(rng, 5, 9), unit(rng, 17, 9)
+    t = rng.integers(0, 17, size=5)
+    r = n15.score_streaming(q, g, t, block=3)
+    sim = q @ g.T
+
+    def entropy(x):
+        m = x.max()
+        z = np.exp(x - m).sum()
+        return np.log(z) + m - (x * np.exp(x - m)).sum() / z
+
+    excl = np.array([entropy(np.delete(sim[i], t[i])) for i in range(5)])
+    incl = np.array([entropy(sim[i]) for i in range(5)])
+    assert np.allclose(r["off_target_entropy"], excl, atol=1e-12)
+    # The two references must actually differ, or the test could not fail.
+    assert not np.allclose(excl, incl, atol=1e-6)
+
+
+def test_a_one_entry_gallery_does_not_take_the_log_of_zero():
+    """Masking the target out of Z means a 1-row gallery has an EMPTY Z.
+
+    `off_target_std` already clamps the same degenerate case with
+    `max(n_off, 1)`. Without the matching clamp the entropy is -inf plus a
+    RuntimeWarning, and `float(-inf)` is `-Infinity` in the sidecar, which is
+    not valid JSON.
+    """
+    g = np.array([[1.0, 0.0]])
+    with np.errstate(all="raise"):
+        r = n15.score_streaming(g.copy(), g, np.array([0]), block=4)
+    assert np.isfinite(r["off_target_entropy"][0])
+
+
+# ------------------------------------------------ the caveat comes from a field
+
+def test_the_caveat_is_read_from_reported_not_from_the_protocol_name():
+    """[ULIP2 REVIEWER 2026-08-30, MAJOR] The name lookup this module forbids.
+
+    `main` chose the caveat with
+    `{"A_test_gallery": ..., "B_full_gallery": ...}.get(name, <development>)`,
+    twelve lines from the docstring that says protocols are read and never
+    named. A protocol the artifact adds -- the expected case, not an exotic one
+    -- got "selects checkpoints, never reported" printed beside a number that is
+    reported.
+
+    `reported` had no consumer on the evaluation path at all before this. The
+    only reader in the repo was a `print` in `splits.py`, which writes the file.
+    """
+    splits = {"train": ["t1", "t2", "t3"], "test": ["x", "y"], "dev_val": ["t1"]}
+    unseen = {"query_split": "test", "gallery_split": "full", "reported": True}
+    cav = n15.protocol_caveat(unseen, splits)
+    assert "never reported" not in cav
+    assert "[U-09]" in cav
+    # the distractor count is COUNTED, not a literal carried forward
+    assert "3 training assets" in cav
+
+    dev = {"query_split": "dev_val", "gallery_split": "dev_val", "reported": False}
+    assert "never reported" in n15.protocol_caveat(dev, splits)
+
+    # A reported protocol whose gallery holds no training assets says so by
+    # omission rather than by printing "0 training assets".
+    a_like = {"query_split": "test", "gallery_split": "test", "reported": True}
+    assert "training assets" not in n15.protocol_caveat(a_like, splits)
+    assert "this project's assumption" in n15.protocol_caveat(a_like, splits)
+
+
+def test_a_protocol_with_no_reported_field_is_treated_as_not_reported():
+    """Absence is not `true`. `.get("reported", False)`, deliberately.
+
+    An artifact written by an older `splits.py` has no `reported` key, and
+    defaulting a missing key to "reported" would attach a paper caveat to a
+    number nobody claims is a paper number.
+    """
+    splits = {"train": ["a"], "test": ["b"], "dev_val": ["a"]}
+    assert "never reported" in n15.protocol_caveat(
+        {"query_split": "test", "gallery_split": "test"}, splits)
+
+
+# ------------------------------------------- a pool that cannot be scored
+
+def test_a_duplicated_gallery_uid_is_refused_not_counted():
+    """[ULIP2 REVIEWER 2026-08-30, MINOR] It was reported and then scored anyway.
+
+    `col = {u: i for i, u in enumerate(gallery_uids)}` keeps the LAST index of a
+    repeated uid. The earlier copy is then a gallery row bit-identical to the
+    target it duplicates, so it ties with it -- and ties count against the model
+    -- so that query's rank is 2 or worse for a reason that has nothing to do
+    with the model. R@1 was depressed by a data defect whose only trace was an
+    integer field.
+    """
+    splits = {"train": [], "test": ["a", "b", "a"], "dev_val": ["a"]}
+    proto = {"query_split": "test", "gallery_split": "test"}
+    with pytest.raises(ValueError, match="duplicate uid"):
+        n15.run_protocol("dup", proto, splits, None, None, "mean", "cpu", 4,
+                         "none", 0, 8)
+
+
+def test_an_empty_pool_is_refused_rather_than_written_out_as_zero():
+    """[ULIP2 REVIEWER 2026-08-30, MINOR] "Nothing measured" was written as 0.0.
+
+    `R@1: float((ranks <= 1).mean()) if ranks.size else 0.0` produced a complete,
+    normal-looking Table 1 row for a protocol with no queries.
+    `stage1.evaluate_dev_val` returns `{}` on an empty pool for exactly this
+    reason -- to keep "no measurement" distinguishable from "a measurement of
+    zero". n15 wrote out the indistinguishable version.
+    """
+    splits = {"train": [], "test": [], "dev_val": ["a"]}
+    with pytest.raises(ValueError, match="empty pool has no"):
+        n15.run_protocol("empty_q", {"query_split": "test",
+                                     "gallery_split": "dev_val"},
+                         splits, None, None, "mean", "cpu", 4, "none", 0, 8)
+    with pytest.raises(ValueError, match="empty pool has no"):
+        n15.run_protocol("empty_g", {"query_split": "dev_val",
+                                     "gallery_split": "test"},
+                         splits, None, None, "mean", "cpu", 4, "none", 0, 8)
+
+
+# ------------------------------------------------- the untrained control exists
+
+def test_the_untrained_control_is_a_code_path_not_a_docstring_suggestion(monkeypatch):
+    """[ULIP2 REVIEWER 2026-08-30, MAJOR] "needs no code" was not runnable.
+
+    `apply_control` said the initialisation control needed no code: point
+    `--ckpt-record` at an untrained checkpoint. But `main` calls
+    `load_checkpoint_record`, which verifies the record's sha256 against the
+    weights, then calls `load_stage1_checkpoint` unconditionally -- and no tool
+    in this repo produces an untrained checkpoint to point at. The control was
+    unreachable.
+
+    Both guards fire before any import of torch, the backbone or the trainer, so
+    this test costs nothing and touches no GPU.
+    """
+    import sys
+    base = ["run_retrieval", "--protocol", "C_dev_selection"]
+
+    monkeypatch.setattr(sys, "argv", base + ["--ckpt-record", "none"])
+    with pytest.raises(SystemExit, match="needs --init-seed"):
+        n15.main()
+
+    monkeypatch.setattr(sys, "argv", base + ["--init-seed", "0"])
+    with pytest.raises(SystemExit, match="only has meaning"):
+        n15.main()
+
+
+def test_untrained_does_not_mean_unpretrained():
+    """The sentence this control turns on, pinned so it cannot be trimmed.
+
+    Under `--ckpt-record none` only the two fusion towers are random. The point
+    encoder is still ULIP-2's pretrained PointBERT plus `pc_projection`
+    (`ulip_backbone.py` loads them from the ULIP-2 checkpoint regardless), and
+    text/image still go through pretrained OpenCLIP ViT-bigG-14. Reporting this
+    run as "an untrained model" one step wider than that is the error the run
+    exists to avoid.
+    """
+    import inspect
+    src = inspect.getsource(n15.main)
+    assert "NOT a zero-pretraining baseline" in src
+    assert "ULIP-2's pretrained PointBERT" in src
+
+
+def test_the_untrained_run_loads_no_stage1_weights_and_says_so(tmp_path, monkeypatch):
+    """The whole of MAJOR-1, end to end through `main`, with no GPU and no encode.
+
+    `apply_control` used to say the initialisation control "needs no code". It
+    needed code: `main` called `load_checkpoint_record` -- which verifies a
+    sha256 against real weights -- and then `load_stage1_checkpoint`
+    unconditionally, and nothing in this repo produces an untrained checkpoint
+    to point either of them at.
+
+    Asserted here, in order: neither loader is reached; the towers are drawn from
+    `--init-seed`; the provenance says `ckpt_record: none`, `untrained: true`
+    and the seed; the caveat says "untrained" WITHOUT saying "unpretrained"; and
+    the output directory name carries the word.
+
+    Everything expensive is stubbed. The point of the test is the CONTROL FLOW
+    of `main`, which is where the defect was.
+    """
+    import sys
+    import torch
+    from metafind import paths, runlog
+    from metafind.train import gallery_index, stage1
+    from metafind.models import ulip_backbone
+
+    (tmp_path / "logs").mkdir()
+    monkeypatch.setattr(paths, "OUTPUTS", tmp_path)
+    monkeypatch.setattr(paths, "LOGS", tmp_path / "logs")
+    (tmp_path / "eval_protocols.json").write_text(json.dumps(
+        {"C_dev_selection": {"query_split": "dev_val",
+                             "gallery_split": "dev_val", "reported": False}}))
+    (tmp_path / "splits.json").write_text(json.dumps(
+        {"object": {"train": ["t"], "test": ["x"], "dev_val": ["d"]}}))
+
+    called = []
+    # Returns a plausible record, so a regression is caught by the `called`
+    # assertion below rather than by an incidental crash.
+    monkeypatch.setattr(gallery_index, "load_checkpoint_record",
+                        lambda *a, **k: (called.append("record"),
+                                         {"uri": "/nonexistent.pt"})[1])
+    monkeypatch.setattr(stage1, "load_stage1_checkpoint",
+                        lambda *a, **k: called.append("weights"))
+    monkeypatch.setattr(stage1, "load_protocols",
+                        lambda *a, **k: ({"image_aggregation": "mean"}, {}, {}))
+    monkeypatch.setattr(ulip_backbone, "ULIPBackbone", lambda cfg: object())
+
+    drawn = []
+
+    def fake_build_model(encoding, training, hyperparameters):
+        # Whatever the seed produced, captured through the SAME global RNG the
+        # real `build_model` draws its Linear weights from.
+        drawn.append(torch.rand(3).tolist())
+
+        class M:
+            def to(self, device):
+                return self
+        return M(), object()
+
+    monkeypatch.setattr(stage1, "build_model", fake_build_model)
+
+    captured = {}
+
+    def fake_run_protocol(name, protocol, splits, *a, **k):
+        captured["splits"] = splits
+        return ({"protocol": name, "n_query": 1, "n_gallery": 1,
+                 "conditions": {"full": {"R@1": 0.0, "R@5": 0.0,
+                                         "diagnostics": {"signed_target_margin": {}}}},
+                 "embedding_health": {}}, [])
+
+    monkeypatch.setattr(n15, "run_protocol", fake_run_protocol)
+
+    monkeypatch.setattr(sys, "argv", ["run_retrieval", "--ckpt-record", "none",
+                                      "--init-seed", "1234", "--device", "cpu"])
+    assert n15.main() == 0
+
+    assert called == [], (
+        f"the untrained path reached {called} -- it must read no checkpoint "
+        "record and load no Stage 1 weights")
+
+    out = next((tmp_path / "eval").iterdir())
+    assert "untrained" in out.name and "seed1234" in out.name, out.name
+
+    prov = json.loads((out / "table1.json").read_text())["provenance"]
+    assert prov["ckpt_record"] == "none"
+    assert prov["untrained"] is True
+    assert prov["init_seed"] == 1234
+    assert all(v is None for v in prov["checkpoint"].values()), prov["checkpoint"]
+
+    cav = prov["untrained_caveat"]
+    assert "UNTRAINED" in cav
+    assert "NOT a zero-pretraining baseline" in cav
+    assert "ULIP-2" in cav and "OpenCLIP" in cav
+
+    # The seed reaches the RNG that draws the towers, and a different seed draws
+    # differently -- otherwise --init-seed would be provenance for nothing.
+    torch.manual_seed(1234)
+    assert drawn[0] == torch.rand(3).tolist()
+    torch.manual_seed(4321)
+    assert drawn[0] != torch.rand(3).tolist()
+
+    # And the caveat for a `reported: false` protocol still came from the field.
+    proto = json.loads((out / "table1.json").read_text())["protocols"]
+    assert "never reported" in proto["C_dev_selection"]["caveat"]

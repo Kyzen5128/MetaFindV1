@@ -251,12 +251,21 @@ def score_streaming(query: np.ndarray, gallery: np.ndarray,
         # `blk` carries -inf at the target column, so the answer cannot inflate
         # its own spread statistics. The target's contribution is removed from
         # the counts instead (`n_off` below is ng - 1).
+        #
+        # [ULIP2 REVIEWER 2026-08-30, MINOR] The entropy accumulators read `sim`
+        # -- UNMASKED -- while the std accumulators read `masked`. So
+        # `off_target_std` excluded the answer and `off_target_entropy` did not,
+        # under a name and a comment that both said it did. Both now read the
+        # masked block: exp(-inf) is exactly 0.0, which drops the target from Z
+        # with no branch, and `masked` is 0.0 at that column so the x*e^x term
+        # contributes 0.0 there rather than the -inf * 0.0 = nan that `blk`
+        # would give.
         masked = np.where(np.isfinite(blk), blk, 0.0)
         off_sum += masked.sum(axis=1)
         off_sq += (masked ** 2).sum(axis=1)
-        ex = np.exp(sim - _SHIFT)
+        ex = np.exp(blk - _SHIFT)
         exp_sum += ex.sum(axis=1)
-        xexp_sum += (sim * ex).sum(axis=1)
+        xexp_sum += (masked * ex).sum(axis=1)
         del full, sim, blk, ex, masked
 
     # Ties count AGAINST the model, as `rank_of_target` does. Both counts are
@@ -266,7 +275,12 @@ def score_streaming(query: np.ndarray, gallery: np.ndarray,
     off_mean = off_sum / max(n_off, 1)
     off_var = np.maximum(off_sq / max(n_off, 1) - off_mean ** 2, 0.0)
     # H = logZ - (sum x e^x)/Z, with the constant shift folded back in.
-    logZ = np.log(exp_sum) + _SHIFT
+    # The clamp matters now that the target is masked out of Z: a one-entry
+    # gallery has NO off-target column, so exp_sum is exactly 0 and an unclamped
+    # log would emit -inf plus a RuntimeWarning. The same `max(n_off, 1)` clamp
+    # two lines up already makes `off_target_std` meaningless-but-finite there;
+    # this keeps the pair consistent rather than adding a second convention.
+    logZ = np.log(np.maximum(exp_sum, 1e-300)) + _SHIFT
     entropy = logZ - xexp_sum / np.maximum(exp_sum, 1e-300)
 
     return {
@@ -412,6 +426,47 @@ def check_seal(protocol_name: str, protocol: dict, unsealed: bool) -> bool:
     return touches_test
 
 
+def protocol_caveat(protocol: dict, splits: dict) -> str:
+    """What a reader has to be told about this protocol's number -- FROM FIELDS.
+
+    [ULIP2 REVIEWER 2026-08-30, MAJOR] This was a
+    ``{"A_test_gallery": ..., "B_full_gallery": ...}.get(name, <development>)``
+    lookup in `main`, i.e. the module's own opening rule ("Protocols are read,
+    never named") broken twelve lines from where the artifact is read. The cost
+    is not stylistic: a protocol the artifact adds gets the *development* caveat
+    -- "selects checkpoints, never reported" -- printed next to a number that is
+    reported. A wrong caveat is worse than no caveat, because it is read.
+
+    `reported` is the field that decides it, and until this function existed it
+    had **no consumer anywhere on the evaluation path**: the only reader in the
+    repo is a `print` in `splits.py`, which is the file that writes it.
+
+    The two clauses that used to be hardcoded per name are derived instead:
+
+    * "query = test is this project's assumption" from ``query_split == "test"``
+    * the distractor count by intersecting the resolved gallery with `train`,
+      so the "36,554" that used to be a literal here is counted. `resolve_split`'s
+      own docstring lists three files still carrying stale corpus counts in
+      prose; this is how a fourth is not created.
+
+    [U-09] is unconditional on a reported protocol: the paper does not state its
+    gallery for any of them.
+    """
+    if not protocol.get("reported", False):
+        return ("development protocol -- eval_protocols.json marks it "
+                "reported: false; it selects checkpoints and is never reported")
+    parts = ["the paper does not state its gallery [U-09]"]
+    if protocol.get("query_split") == "test":
+        parts.append("query = test is this project's assumption")
+    train = set(splits.get("train", ()))
+    distractors = sum(1 for u in resolve_split(splits, protocol["gallery_split"])
+                      if u in train)
+    if distractors:
+        parts.append(f"the gallery contains {distractors:,} training assets "
+                     "as distractors")
+    return "; ".join(parts)
+
+
 def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
                  device, batch_size):
     """Query embeddings per condition, plus gallery embeddings, plus the map.
@@ -471,6 +526,28 @@ def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
 
         ⚠ This is a precision change, not a definition change. Nothing about how
         a rank is counted differs; the same arithmetic is done with more bits.
+
+        ⚠ **`output/look/dtype_effect.json` is STALE. Do not cite it.**
+        [ULIP2 REVIEWER 2026-08-30, MINOR] OBSERVED DATA, 2026-08-30: it is
+        byte-identical to `output/look/dtype_effect_prehelper.json`
+        (sha256 0a1223c5..., both from run_id 1788026953-186207-187e52,
+        code_revision bdc7b8d3) -- the output of `tools/measure_dtype_effect.py`
+        BEFORE it gained a baseline, so it compares the two rescorings with each
+        other and nothing else. Its verdict field reads "2 cell(s) differ -- this
+        IS a decision", which contradicts every docstring that cites it.
+
+        The correct conclusion is in **`output/look/dtype_effect_helper.json`**
+        (sha256 e73fe4fc..., run_id 1788027667-208636-5b450e, code_revision
+        554d23cf), which compares each dtype against the RECORDED run
+        (`baseline_record: data/outputs/ladder/e25_500w/stage1_best_ckpt.json`)
+        and reports `bit_exact_agreement_with_baseline: {float32: 6,
+        float64: 7}`. The two files are not in conflict: they answer different
+        questions, and the stale one answers the question nobody asked. The
+        deltas are identical in both -- `image+pc` R@1 0.9879623550 vs
+        0.9877434887, one query in 4,569.
+
+        `stage1.evaluate_dev_val`'s docstring cites the same stale filename and
+        is in the Stage 1 import closure, so it is NOT edited from here.
         """
         import torch
         return normalize_for_scoring(torch.cat(chunks).numpy())
@@ -483,36 +560,70 @@ def apply_control(control: str, targets: np.ndarray, n_gallery: int,
     """Negative controls. Without one, a high score proves nothing.
 
     [CODEX + ULIP2 REVIEWER 2026-08-30] Every checkpoint this project holds
-    reports `full` R@1 = 1.0000 while the paper reports 0.517. A mechanism for
-    that is understood -- `p_mask` leaves all three modalities present in 0.7^3 =
-    34.3% of steps, and with `GalleryTower` calling its fusion without `present`,
-    both towers then see bit-identical input -- but a mechanism being real does
-    not make it the only cause. That is an `INFERENCE`, and these turn it into a
-    measurement:
+    reports `full` R@1 = 1.0000 while the paper reports 0.517.
 
     ``shuffle_targets``
-        Each query is scored against somebody else's asset. A retrieval metric
-        must collapse to chance (~1/n_gallery). If it does not, the number was
-        never measuring retrieval.
+        Each query is scored against somebody else's asset. **This is a WIRING
+        CHECK, not a discriminator between explanations.** See the section
+        below: its green light is not a conclusion, and it must still be run.
 
     ``none``
         The real measurement.
 
+    What `shuffle_targets` can and cannot detect
+    --------------------------------------------
+    [ULIP2 REVIEWER 2026-08-30, BLOCKER] This docstring used to claim
+    `shuffle_targets` tests the "both towers see identical input" hypothesis. It
+    does not, and the refutation was already sitting in this module's own test
+    file: `test_shuffling_the_targets_collapses_the_metric_to_chance` builds
+    ``g = q.copy()`` -- literally two towers seeing identical input, real
+    R@1 = 1.0 -- and the control scores below 0.05. **Green.** The control passes
+    hardest exactly when the defect it was said to test is total.
+
+    The reason is arithmetic, not luck. When q_i is close to g_i, permuting the
+    target column moves the target from the argmax to a random column, so the
+    rank goes to O(n_gallery) and R@1 to ~1/n_gallery **whatever produced the
+    similarity**. A model that is genuinely good, a model whose towers are the
+    same function, and a model whose queries are all identical to their own
+    gallery rows all give the same answer here.
+
+    * **CAN detect:** that the rank arithmetic depends on which column is the
+      target. This repo has shipped a bug of exactly that shape once -- when
+      `own` came from a row-wise product and the comparisons from a GEMM,
+      `higher` and `tied` were both 0, the rank did not depend on `targets` at
+      all, and the shuffled run scored identically to the real one. That is what
+      the control caught, and it is worth keeping for.
+    * **CANNOT detect (no discriminative power, all three):**
+      "both towers see identical input" -- shown above; "the embedding space has
+      collapsed" -- a collapsed gallery ranks last both shuffled and unshuffled,
+      so both cells read 0.0 and neither is informative about the other; "the
+      task is saturated at this gallery size" -- chance is 1/n_gallery in both
+      the saturated and the honest case, so the control cannot tell a gallery
+      that is too small from one that is not.
+
+    ⚠ Run it anyway. A failing `shuffle_targets` is decisive (the metric is not
+    retrieval); a passing one is only the absence of that one defect.
+
     **Candidate explanations for `full` R@1 = 1.0000, and their status:**
 
     * **float32 rounding inflates it** -- **ELIMINATED 2026-08-30.** Rescoring
-      `e25_500w` in float64 gives `full` = 1.000000000, bit-exact
-      (`output/look/dtype_effect.json`). Closed by measurement, not argument.
-      The first candidate for this cell to be actually closed.
-    * **Both towers see identical input** -- `INFERENCE`. The mechanism is
-      confirmed in code (p_mask leaves all three modalities present in
-      0.7^3 = 34.3% of steps, and GalleryTower calls its fusion without
-      `present`), but a mechanism being real does not make it the only cause.
-      `shuffle_targets` tests it.
+      `e25_500w` in float64 gives `full` = 1.000000000, bit-exact.
+      ⚠ The evidence is `output/look/dtype_effect_helper.json`, NOT
+      `output/look/dtype_effect.json` -- see the note in `norm()` above.
+    * **Both towers see identical input** -- `INFERENCE`, and **still open**.
+      The mechanism is confirmed in code (p_mask leaves all three modalities
+      present in 0.7^3 = 34.3% of steps, and GalleryTower calls its fusion
+      without `present`), but a mechanism being real does not make it the only
+      cause. Nothing in this module tests it; `shuffle_targets` does not.
     * **The embedding space has collapsed** -- open. `embedding_health`'s
       uncentred effective rank addresses it; not yet run on a real checkpoint.
     * **The task is saturated at this gallery size** -- open. Needs protocol A
       or B, where the gallery is 2x and 10x larger.
+    * **Stage 1 training is not what produced it** -- addressable with
+      ``--ckpt-record none`` (see `main`), which scores the two fusion towers at
+      random initialisation. This is the one control here with discriminative
+      power against the first candidate, which is why it stopped being a
+      docstring suggestion and became a code path.
 
     ⚠ **`exclude_target` was specified and is NOT implemented, deliberately.**
     Removing the answer and asking what is retrieved instead is already measured
@@ -522,10 +633,6 @@ def apply_control(control: str, targets: np.ndarray, n_gallery: int,
     whose target does not exist -- a probe that cannot return a positive, which
     is the defect class this project has now hit six times. If the intent was
     something else, say what, and it gets built.
-
-    The third control the Reviewer named -- scoring an INITIALISATION checkpoint
-    -- needs no code: point `--ckpt-record` at an untrained checkpoint. If
-    `full` is near 1.0 there, training did not cause it.
     """
     if control == "none":
         return targets, "none"
@@ -546,7 +653,45 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
     query_uids = resolve_split(splits, protocol["query_split"])
     gallery_uids = resolve_split(splits, protocol["gallery_split"])
 
+    # [ULIP2 REVIEWER 2026-08-30, MINOR] An empty pool used to WRITE A TABLE.
+    # `R@1: float((ranks <= 1).mean()) if ranks.size else 0.0` turned "there was
+    # nothing to score" into a reported 0.0000, in a file whose whole purpose is
+    # to be read as a result. `stage1.evaluate_dev_val:770` returns `{}` on an
+    # empty pool precisely to keep "no measurement" distinguishable from "a
+    # measurement of zero"; n15 wrote out the indistinguishable version instead.
+    # Refusing is the n15 equivalent: this node's output is Table 1, and there
+    # is no honest Table 1 row for a protocol with no queries.
+    if not query_uids or not gallery_uids:
+        raise ValueError(
+            f"{name} resolves to {len(query_uids):,} queries and "
+            f"{len(gallery_uids):,} gallery entries "
+            f"(query_split={protocol['query_split']!r}, "
+            f"gallery_split={protocol['gallery_split']!r}). An empty pool has no "
+            "R@1: reporting 0.0000 for it would put 'nothing was measured' and "
+            "'the model got everything wrong' in the same cell.")
+
+    # [ULIP2 REVIEWER 2026-08-30, MINOR] A duplicated gallery uid was COUNTED
+    # AND ALLOWED. `col` is a dict comprehension, so it keeps the LAST index of a
+    # repeated uid -- and the earlier copy is then a gallery row bit-identical to
+    # the target, which ties with it, which counts against the model (ties count
+    # against, by design). So R@1 is depressed by exactly the duplicated queries
+    # and the only trace is an integer in a field nobody diffs. Refuse: the
+    # gallery comes from `splits.json`, so a duplicate there is a corpus defect
+    # to fix at the source, not a condition to score under.
     dupes = len(gallery_uids) - len(set(gallery_uids))
+    if dupes:
+        seen, repeated = set(), []
+        for u in gallery_uids:
+            if u in seen and u not in repeated:
+                repeated.append(u)
+            seen.add(u)
+        raise ValueError(
+            f"{name}'s gallery ({protocol['gallery_split']!r}) has {dupes:,} "
+            f"duplicate uid(s), e.g. {repeated[:3]}. Each duplicate is a row "
+            "bit-identical to some query's target, so it ties with that target "
+            "and -- ties counting against the model -- pushes its rank to 2 or "
+            "worse. R@1 would be depressed by a data defect and nothing in the "
+            "metric would say so. Fix splits.json.")
     col = {u: i for i, u in enumerate(gallery_uids)}
     missing = [u for u in query_uids if u not in col]
     if missing:
@@ -573,8 +718,13 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
         r = score_streaming(q, gallery, eff_targets, block=block)
         ranks = r["rank"]
         conditions[cond] = {
-            "R@1": float((ranks <= 1).mean()) if ranks.size else 0.0,
-            "R@5": float((ranks <= 5).mean()) if ranks.size else 0.0,
+            # No `if ranks.size else 0.0` fallback any more. `ranks.size ==
+            # len(query_uids)`, and an empty query pool is refused at the top of
+            # this function -- that raise is where the property now lives. The
+            # fallback was the thing that let "nothing was measured" be written
+            # out as the number 0.0.
+            "R@1": float((ranks <= 1).mean()),
+            "R@5": float((ranks <= 5).mean()),
             "hits@1": int((ranks <= 1).sum()),
             "hits@5": int((ranks <= 5).sum()),
             "n_query": int(len(query_uids)),
@@ -626,6 +776,9 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
         "gallery_split": protocol["gallery_split"],
         "n_query": len(query_uids),
         "n_gallery": len(gallery_uids),
+        # Always 0 now -- a non-zero value raises above. Kept in the artifact
+        # because a reader of table1.json can then see that the check RAN, and
+        # because removing a field changes the schema of a file other nodes read.
         "duplicate_gallery_uids": dupes,
         "control": control_used,
         "conditions": conditions,
@@ -640,7 +793,11 @@ def main() -> int:
     ap.add_argument("--ckpt-record", default=None,
                     help="Stage 1 checkpoint record. Defaults to the canonical "
                          "stage1_ckpt.json. Its sha256 is verified against the "
-                         "weights before anything is encoded.")
+                         "weights before anything is encoded. Pass the literal "
+                         "'none' for the UNTRAINED control: no record is read "
+                         "and no Stage 1 weights are loaded, so the two fusion "
+                         "towers stay at random initialisation. --init-seed is "
+                         "then required.")
     ap.add_argument("--protocol", action="append", default=None,
                     help="protocol key from eval_protocols.json; repeatable. "
                          "Default: every protocol the artifact defines.")
@@ -649,8 +806,12 @@ def main() -> int:
                          "Required for a reported result; never for development.")
     ap.add_argument("--control", default="none",
                     choices=("none", "shuffle_targets"),
-                    help="negative control. shuffle_targets must collapse to "
-                         "chance; if it does not, the metric is not retrieval.")
+                    help="negative control. shuffle_targets is a WIRING CHECK: "
+                         "a failure is decisive (the metric is not retrieval), "
+                         "a pass discriminates between none of the standing "
+                         "explanations for R@1 = 1.0000. See apply_control. "
+                         "For a control with discriminative power use "
+                         "--ckpt-record none.")
     ap.add_argument("--out-dir", default=None,
                     help="directory for this evaluation's artifacts, relative "
                          "to data/outputs/eval. Default: a name built from the "
@@ -662,7 +823,29 @@ def main() -> int:
                          "is never materialised: protocol B is 2.9e9 scores.")
     ap.add_argument("--seed", type=int, default=20260830,
                     help="only used by --control shuffle_targets.")
+    ap.add_argument("--init-seed", type=int, default=None,
+                    help="torch seed for the RANDOM INITIALISATION of the two "
+                         "fusion towers. Required with --ckpt-record none, and "
+                         "meaningless without it. No default on purpose: the "
+                         "towers are two independent draws, so a single "
+                         "untrained run can be luck, and the seed has to be a "
+                         "stated condition rather than a hidden one. Run "
+                         "several.")
     args = ap.parse_args()
+
+    untrained = args.ckpt_record == "none"
+    if untrained and args.init_seed is None:
+        raise SystemExit(
+            "--ckpt-record none needs --init-seed. The result depends on which "
+            "random draw the towers got; without the seed on record the run "
+            "cannot be repeated and a single number cannot be told from luck. "
+            "Run at least three seeds before reading anything into it.")
+    if not untrained and args.init_seed is not None:
+        raise SystemExit(
+            "--init-seed only has meaning with --ckpt-record none. With a real "
+            "checkpoint every trainable weight is overwritten by "
+            "load_stage1_checkpoint, so the seed would appear in the "
+            "provenance of a run it did not affect.")
 
     from metafind.train.gallery_index import load_checkpoint_record
     from metafind.train.stage1 import (build_model, load_protocols as
@@ -686,12 +869,54 @@ def main() -> int:
     # Verified before a single asset is encoded: the record is a CLAIM about a
     # file, and an evaluation attributed to the wrong checkpoint is worse than
     # no evaluation.
-    ckpt = load_checkpoint_record(args.ckpt_record)
+    #
+    # ⚠ `--ckpt-record none` is the ONE path that skips this, and it skips
+    # `load_stage1_checkpoint` with it. There is nothing to verify: no record is
+    # read and no trained bytes are loaded. Everything the record would have
+    # supplied is written as null rather than invented, and `untrained: true`
+    # plus `init_seed` say why.
+    ckpt = {} if untrained else load_checkpoint_record(args.ckpt_record)
     seals = {n: check_seal(n, protocols[n], args.unseal) for n in wanted}
 
-    arm = ckpt.get("arm_config_hash", "unknown")[:12]
+    # ---- where these paths actually land (checked 2026-08-30, so the next
+    # reader does not check it again) ----
+    # There is ONE outputs tree, not two. `data` is a symlink and so is one
+    # directory inside it:
+    #     data                     -> /home/kyzen/metafind_data
+    #     data/outputs/checkpoints -> /home/kyzen/metafind_out/checkpoints
+    # `findmnt -T` puts BOTH roots on /dev/nvme0n1p2 (ext4). So a path written
+    # `data/outputs/checkpoints/...` and one written
+    # `/home/kyzen/metafind_out/checkpoints/...` are the same bytes, and a
+    # reviewer quoting either is quoting the same file. This was mistaken for
+    # two divergent trees once. `find` does NOT follow a symlinked start point
+    # and returns the empty set silently: use `find -L`.
+    #
+    # [ULIP2 REVIEWER 2026-08-30, MINOR] The canonical
+    # `data/outputs/checkpoints/stage1_ckpt.json` -- OBSERVED DATA, read
+    # 2026-08-30 -- carries NONE of `arm_config_hash`,
+    # `base_hyperparameter_sha256`, `runtime_source_sha256` or
+    # `checkpoint_schema`. It has `config_hash` instead, which is a different
+    # field with a different definition, so it is deliberately NOT substituted
+    # here. Consequences, both intended:
+    #
+    #   * the provenance block records four nulls. That is correct: the record
+    #     does not know its arm, and writing "unknown" as if it were a value, or
+    #     silently reusing `config_hash`, would put a false identity in a file
+    #     whose purpose is identity.
+    #   * the default out-dir becomes `unknown_ep24_none`. The word `unknown` is
+    #     load-bearing -- ⚠ **an evaluation in a directory named `unknown_*` has
+    #     no arm identity**, so it cannot be compared with an arm from the sweep,
+    #     which does write `arm_config_hash`. Give `--out-dir` a name that says
+    #     what was scored, or point `--ckpt-record` at a sweep record.
+    #
+    # The artifact is NOT edited to fix this: a checkpoint record is written by
+    # the run that produced the checkpoint, and back-filling identity fields
+    # after the fact invents the very provenance they exist to carry.
+    arm = ("untrained" if untrained
+           else ckpt.get("arm_config_hash", "unknown")[:12])
+    suffix = f"_seed{args.init_seed}" if untrained else ""
     out = paths.OUTPUTS / "eval" / (
-        args.out_dir or f"{arm}_ep{ckpt.get('epoch')}_{args.control}")
+        args.out_dir or f"{arm}{suffix}_ep{ckpt.get('epoch')}_{args.control}")
     if out.exists() and any(out.iterdir()):
         raise SystemExit(
             f"refusing to start: {out} is not empty. Give --out-dir a fresh "
@@ -708,9 +933,18 @@ def main() -> int:
     with runlog.run_progress(NODE):
         backbone = ULIPBackbone(BackboneConfig(device=args.device,
                                                train_scope="point_encoder_and_fuser"))
+        if untrained:
+            # Seeded HERE, immediately before `build_model`, because that call is
+            # what draws the towers' weights out of the global torch RNG. The
+            # backbone above is loaded from a file and draws nothing, so its
+            # position relative to this line does not matter -- stated because
+            # "seed at the top of main" is the habit that makes it matter later.
+            import torch
+            torch.manual_seed(args.init_seed)
         model, loss_fn = build_model(encoding, training, hyperparameters)
         model.to(args.device)
-        load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]))
+        if not untrained:
+            load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]))
 
         provenance = {
             "run_id": runlog.run_id(),
@@ -726,7 +960,35 @@ def main() -> int:
             "control": args.control,
             "unsealed": bool(args.unseal),
             "device": args.device,
+            "ckpt_record": "none" if untrained else str(
+                args.ckpt_record or paths.CHECKPOINTS / "stage1_ckpt.json"),
+            "untrained": untrained,
+            "init_seed": args.init_seed,
         }
+        if untrained:
+            # ⚠ The single sentence this whole control turns on. "Untrained"
+            # here means NO STAGE 1 TRAINING. It does not mean "no pretraining",
+            # and stating it one step wider is the error this run exists to
+            # avoid making.
+            #
+            # OBSERVED IMPLEMENTATION (`models/ulip_backbone.py:52-53`, 348-367):
+            # the ULIP-2 checkpoint supplies `point_encoder` (226 tensors),
+            # `pc_projection` and `logit_scale`, and `ULIPBackbone.__init__`
+            # loads them regardless of this flag. Text and image go through the
+            # same pretrained OpenCLIP ViT-bigG-14. So of everything that
+            # produces an embedding on this run, ONLY the two fusion towers are
+            # random.
+            provenance["untrained_caveat"] = (
+                "Stage 1 is UNTRAINED: no checkpoint record was read and no "
+                "Stage 1 weights were loaded, so both fusion towers are at "
+                "random initialisation from torch seed "
+                f"{args.init_seed}. This is NOT a zero-pretraining baseline -- "
+                "the point encoder still carries ULIP-2's pretrained PointBERT "
+                "and pc_projection, and text/image still go through pretrained "
+                "OpenCLIP ViT-bigG-14. Any score here is what the pretrained "
+                "encoders plus two random fusions achieve. The two towers are "
+                "two independent draws, so one seed is one sample: run several "
+                "before reading a difference into it.")
 
         results = {}
         for name in wanted:
@@ -735,15 +997,11 @@ def main() -> int:
                 name, protocols[name], splits, backbone, model,
                 encoding["image_aggregation"], args.device, args.batch_size,
                 args.control, args.seed, args.block)
-            # Both labels stated, symmetrically, so neither protocol looks like the
-            # trustworthy one by omission.
-            core["caveat"] = {
-                "A_test_gallery": "the paper does not state its gallery [U-09]; "
-                                  "query = test is this project's assumption",
-                "B_full_gallery": "the gallery contains the 36,554 training assets "
-                                  "as distractors; the paper does not state its "
-                                  "gallery [U-09]",
-            }.get(name, "development protocol -- selects checkpoints, never reported")
+            # From the protocol's FIELDS, never its name. See protocol_caveat:
+            # the name lookup that used to be here gave any protocol the
+            # artifact adds the "never reported" caveat, printed beside a
+            # reported number.
+            core["caveat"] = protocol_caveat(protocols[name], splits)
             core["sealed_split_read"] = seals[name]
             results[name] = core
 
