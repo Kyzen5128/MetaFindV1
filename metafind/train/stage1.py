@@ -1925,6 +1925,28 @@ def main() -> int:
     else:
         train_uids = splits["train"]
         dev_val_uids = []
+    # Built HERE, before `--limit` and before `_pools`, because it CHANGES THE
+    # POOL and the recorded digests have to describe what actually ran.
+    query_pack = QueryPack(args.query_pack) if args.query_pack else None
+    dropped = {"train": [], "selection": []}
+    if query_pack is not None:
+        print(f"query pack {query_pack.path}\n"
+              f"  arms {list(query_pack.arms)}  sha256 {query_pack.sha256[:12]}\n"
+              f"  gallery UNCHANGED (canonical text, 12-view mean, canonical pc)",
+              flush=True)
+        # [MASTER ruling 2026-08-31] Assets with no second observation are
+        # DROPPED, not carried with the gallery's own vector. `require` below
+        # still refuses -- this is the one place allowed to change a pool, and
+        # it records the uids rather than a count.
+        train_uids, dropped["train"] = query_pack.covered(train_uids)
+        dev_val_uids, dropped["selection"] = query_pack.covered(dev_val_uids)
+        n = len(dropped["train"]) + len(dropped["selection"])
+        if n:
+            print(f"  DROPPED {n} asset(s) with no second observation "
+                  f"({len(dropped['train'])} train, "
+                  f"{len(dropped['selection'])} selection). This run is NOT "
+                  f"pool-comparable to any arm without a query pack.", flush=True)
+
     if args.limit:
         train_uids = train_uids[: args.limit]
         # A smoke run keeps the gallery the same size as the query pool it is
@@ -1978,16 +2000,10 @@ def main() -> int:
     # `random_single_view` it WOULD, because `random` is seeded per worker; that
     # protocol is not in use and this flag must be re-examined before it is.
     workers = 0 if args.preload else 4
-    # ONE pack object for the training loader and the selection loader. Two
-    # constructions in one run -- train independent, select shared -- would
-    # choose the epoch that best exploits the leak, and nothing in the numbers
-    # would say so. `evaluate_dev_val` is handed this same object below.
-    query_pack = QueryPack(args.query_pack) if args.query_pack else None
-    if query_pack is not None:
-        print(f"query pack {query_pack.path}\n"
-              f"  arms {list(query_pack.arms)}  sha256 {query_pack.sha256[:12]}\n"
-              f"  gallery UNCHANGED (canonical text, 12-view mean, canonical pc)",
-              flush=True)
+    # ONE pack object for the training loader and the selection loader (built
+    # above, with the pools). Two constructions in one run -- train independent,
+    # select shared -- would choose the epoch that best exploits the leak, and
+    # nothing in the numbers would say so. `evaluate_dev_val` gets this object.
     loader = DataLoader(
         Stage1Dataset(train_uids, encoding["image_aggregation"],
                       preload=args.preload, query_pack=query_pack),
@@ -2049,6 +2065,21 @@ def main() -> int:
     # [CODEX MAJOR 4] Computed AFTER --limit and AFTER the phase chose the
     # pools, so the digests describe what this run actually iterated.
     training["_pools"] = pool_provenance(train_uids, dev_val_uids)
+    # BY UID, not as a count [MASTER ruling 2026-08-31]. A count tells a later
+    # reader that something was removed; the uids tell them WHICH, which is what
+    # it takes to reconstruct the pool or to check whether two runs dropped the
+    # same assets. And the comparability statement is written down rather than
+    # left for someone to infer from a digest mismatch they were not expecting.
+    if query_pack is not None:
+        training["_pools"]["dropped_uncovered"] = dropped
+        training["_pools"]["pool_comparable_to_packless_arms"] = not (
+            dropped["train"] or dropped["selection"])
+        training["_pools"]["pool_note"] = (
+            f"{len(dropped['train'])} train and {len(dropped['selection'])} "
+            "selection asset(s) were dropped for having no second observation, "
+            "so train_uid_set_sha256 DIFFERS from every arm run without a query "
+            "pack. The difference is intended and this run is not pool-"
+            "comparable to those arms.")
     print("  digesting input contents...", flush=True)
     training["_pools"]["train_content"] = input_content_digest(train_uids)
     if dev_val_uids:

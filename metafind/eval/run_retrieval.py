@@ -911,6 +911,19 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
     query_uids = resolve_split(splits, protocol["query_split"])
     gallery_uids = resolve_split(splits, protocol["gallery_split"])
 
+    # [MASTER ruling 2026-08-31] Assets with no second observation are dropped
+    # from the QUERY pool only. The GALLERY keeps every uid, so the denominator
+    # -- the thing an R@1 is a fraction of -- is unchanged and this protocol
+    # stays comparable to the same protocol without a pack on that axis. What
+    # changes is `n_query`, which is recorded below.
+    dropped_queries = []
+    if query_pack is not None:
+        query_uids, dropped_queries = query_pack.covered(query_uids)
+        if dropped_queries:
+            print(f"  {len(dropped_queries)} query asset(s) dropped: no second "
+                  f"observation. Gallery unchanged at {len(gallery_uids):,}.",
+                  flush=True)
+
     # [ULIP2 REVIEWER 2026-08-30, MINOR] An empty pool used to WRITE A TABLE.
     # `R@1: float((ranks <= 1).mean()) if ranks.size else 0.0` turned "there was
     # nothing to score" into a reported 0.0000, in a file whose whole purpose is
@@ -1076,6 +1089,9 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
         # construction, where the query read the gallery's own cached vectors --
         # so a table without this field is not "unknown", it is that one, and a
         # reader can tell the two apart without opening the checkpoint.
+        # BY UID. A count says something was removed; the uids say which, which
+        # is what it takes to check whether two runs dropped the same assets.
+        "dropped_query_uids": dropped_queries,
         "query_construction": (query_pack.identity() if query_pack
                                else {"arms": [], "note": "query reads the "
                                      "gallery's own observations"}),

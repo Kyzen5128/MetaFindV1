@@ -1330,3 +1330,31 @@ def test_the_query_construction_enters_the_arm_hash_only_when_present():
     assert "query_construction" not in bare_cfg
     assert packed != bare, "two constructions shared one arm identity"
     assert packed_cfg["query_construction"]["arms"] == ["text"]
+
+
+def test_covered_splits_the_pool_without_softening_the_guard(
+        monkeypatch, tmp_path):
+    """[MASTER ruling 2026-08-31] The 55 uncovered assets are dropped.
+
+    Two separate things, and keeping them separate is the point. `covered()` is
+    the POLICY and only an entry point calls it -- the one place with authority
+    to change a pool and the obligation to record which uids went. `require()`
+    is the GUARD and stays a refusal, so no caller can obtain a filtered pool by
+    going through the dataset, and nobody who just wants their run to start can
+    turn the guard into a warning.
+    """
+    import metafind.train.stage1 as m
+
+    views, emb, pcs = _cache(tmp_path)
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", emb)
+    monkeypatch.setattr(m.paths, "POINTCLOUDS", pcs)
+    pack = m.QueryPack(_pack(tmp_path, ["u"], text_rows=["u"], pc_rows=["u"]))
+
+    kept, dropped = pack.covered(["u", "no_second_look"])
+    assert kept == ["u"] and dropped == ["no_second_look"]
+
+    # the guard is untouched by the policy existing
+    with pytest.raises(ValueError, match="Refusing"):
+        m.Stage1Dataset(["u", "no_second_look"], "mean", query_pack=pack)
+    # and the kept pool passes it
+    assert len(m.Stage1Dataset(kept, "mean", query_pack=pack)) == 1
