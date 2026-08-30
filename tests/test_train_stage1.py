@@ -723,6 +723,142 @@ def test_the_final_phase_cannot_score_dev_val():
 
 
 # --------------------------------------------------------------------------
+# [ULIP2 ENGINEER 2026-08-30, approved by Kyzen] The seven per-condition recalls
+# were COMPUTED every epoch and then dropped on the floor: `evaluate_dev_val`
+# fills `out[cond] = recall_at_k(...)` and the call site filtered `scores` to
+# scalars, which a dict is not. Every recorded run carries `mean_R@1` and no way
+# to see which of Table 1's seven cells moved -- while `DL-047`'s open finding is
+# that `text` degrades under training and `DL-044` measured four of the seven at
+# their ceiling. Logging only, zero extra computation, selection rule untouched.
+def _synthetic_scores(n=40, seed=0):
+    """`evaluate_dev_val`'s exact return shape, built by its own `recall_at_k`."""
+    import numpy as np
+    from metafind.eval.retrieval import QUERY_CONDITIONS, recall_at_k
+
+    rng = np.random.default_rng(seed)
+    scores = {c: recall_at_k(rng.standard_normal((n, n)), np.arange(n), ks=(1, 5))
+              for c in QUERY_CONDITIONS}
+    scores["mean_R@1"] = float(np.mean([scores[c]["R@1"] for c in QUERY_CONDITIONS]))
+    scores["mean_R@5"] = float(np.mean([scores[c]["R@5"] for c in QUERY_CONDITIONS]))
+    scores["n_gallery"] = n
+    return scores
+
+
+def test_every_condition_and_every_k_survives_the_flatten():
+    """All seven of Table 1's conditions, both k, none silently dropped.
+
+    Driven off `QUERY_CONDITIONS` and off the metric keys `recall_at_k` actually
+    returned, not off a hardcoded list of fourteen names -- a test that enumerates
+    the same fourteen strings the code enumerates only proves they were typed
+    twice.
+    """
+    from metafind.eval.retrieval import QUERY_CONDITIONS
+    from metafind.train.stage1 import flatten_condition_scores
+
+    scores = _synthetic_scores()
+    flat = flatten_condition_scores(scores)
+
+    expected = {f"cond_{c}_{m}": scores[c][m]
+                for c in QUERY_CONDITIONS
+                for m in scores[c] if m.startswith("R@")}
+    assert len(expected) == 14, "the fixture is not the seven-by-two it claims"
+    assert flat == expected, (
+        f"missing {sorted(set(expected) - set(flat))}, "
+        f"unexpected {sorted(set(flat) - set(expected))}")
+
+
+def test_the_flattened_names_cannot_be_confused_with_the_aggregate():
+    """`mean_R@1` is the SELECTION metric and the seven are its components. A
+    plotter matching `*_R@1` must not sweep the aggregate in with the parts, and
+    a reader must not read `mean` as an eighth condition."""
+    from metafind.train.stage1 import flatten_condition_scores
+
+    scores = _synthetic_scores()
+    flat = flatten_condition_scores(scores)
+    assert not set(flat) & set(scores), "a flattened name overwrites a score key"
+    assert all(k.startswith("cond_") for k in flat)
+    assert not any(k.startswith("cond_") for k in ("mean_R@1", "mean_R@5", "n_gallery"))
+
+
+def test_the_per_condition_denominators_are_not_flattened_seven_times():
+    """`recall_at_k` puts `n_query` and `n_gallery` in all seven dicts with the
+    same value the row already carries once. Seven more copies are noise, not
+    denominators."""
+    from metafind.train.stage1 import flatten_condition_scores
+
+    flat = flatten_condition_scores(_synthetic_scores())
+    assert not [k for k in flat if "n_query" in k or "n_gallery" in k]
+
+
+def test_the_flattened_row_survives_the_json_the_runlog_writes():
+    """The keys carry `@` and `+`. "Reaches the runlog" is a claim about the file
+    on disk, not about a dict in memory, so this goes through `train_metrics`."""
+    import json
+
+    from metafind import runlog
+    from metafind.train.stage1 import flatten_condition_scores
+
+    scores = _synthetic_scores()
+    row = {k: v for k, v in scores.items() if isinstance(v, (int, float))}
+    row.update(flatten_condition_scores(scores))
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        original = runlog.paths.LOGS
+        runlog.paths.LOGS = pathlib.Path(d)
+        try:
+            runlog.train_metrics("unit_test_flatten", epoch=0, step=0, **row)
+            written = json.loads(
+                (pathlib.Path(d) / "train_unit_test_flatten.jsonl").read_text())
+        finally:
+            runlog.paths.LOGS = original
+
+    for key, value in row.items():
+        assert written[key] == value, f"{key} did not survive the round trip"
+    assert written["cond_text+pc_R@5"] == scores["text+pc"]["R@5"]
+
+
+def test_the_selection_key_is_still_the_mean_and_only_the_mean():
+    """[D-3] The flatten is LOGGING. If it ever reached the selection key, the
+    checkpoint policy would have changed silently under a logging change --
+    which is the exact failure shape this file exists to catch. Read from the
+    AST because entering main() needs a GPU and a 9.5 GB backbone."""
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    tree = ast.parse((repo / "metafind" / "train" / "stage1.py").read_text())
+
+    keys = [n for n in ast.walk(tree)
+            if isinstance(n, ast.Assign) and len(n.targets) == 1
+            and isinstance(n.targets[0], ast.Name) and n.targets[0].id == "key"]
+    assert len(keys) == 1, f"{len(keys)} assignments to `key`, expected exactly 1"
+    assert (ast.unparse(keys[0].value).replace('"', "'")
+            == "(scores['mean_R@1'], scores['mean_R@5'])"), (
+        f"the selection key is now {ast.unparse(keys[0].value)}; D-3 is "
+        "mean_R@1 with mean_R@5 as tie-break and nothing else")
+
+    # ... and the tie-break rule it feeds is still strict, so a tie keeps the
+    # earlier epoch. Asserted here too because the two are one decision.
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "better_checkpoint")
+    assert "candidate > incumbent" in ast.unparse(fn)
+
+
+def test_the_flatten_actually_reaches_the_metrics_call():
+    """A helper nothing calls is a helper that logs nothing. The dropped values
+    were dropped at the CALL SITE, so that is where this has to be checked."""
+    repo = pathlib.Path(__file__).resolve().parents[1]
+    tree = ast.parse((repo / "metafind" / "train" / "stage1.py").read_text())
+
+    calls = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Call)
+             and ast.unparse(n.func).endswith("train_metrics")
+             and n.args and getattr(n.args[0], "value", None) == "stage1_dev_val"]
+    assert len(calls) == 1, f"{len(calls)} dev-val train_metrics calls, expected 1"
+    unpacked = [ast.unparse(kw.value) for kw in calls[0].keywords if kw.arg is None]
+    assert any("flatten_condition_scores" in u for u in unpacked), (
+        f"the dev-val metrics row does not unpack the flatten; it unpacks {unpacked}")
+
+
+# --------------------------------------------------------------------------
 # [MASTER 2026-08-28, REJECT] `evaluate_dev_val` called `model.eval()` and left
 # the BACKBONE in train mode. Stage 1's scope is `point_encoder_and_fuser` and
 # `ulip_backbone.py:235` puts the point encoder into train(), whose stack holds

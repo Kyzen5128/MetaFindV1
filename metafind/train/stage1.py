@@ -698,6 +698,47 @@ def better_checkpoint(candidate: tuple[float, float],
     return incumbent is None or candidate > incumbent
 
 
+def flatten_condition_scores(scores: dict) -> dict:
+    """The seven per-condition recalls as flat scalars, for the runlog.
+
+    [ULIP2 ENGINEER 2026-08-30, approved by Kyzen] `evaluate_dev_val` computes
+    `recall_at_k` for all seven Table 1 conditions and the caller then THREW
+    THEM AWAY: `runlog.train_metrics` filtered `scores` to `isinstance(v, (int,
+    float))`, and `out[cond]` is a dict. So every run recorded to date carries
+    `mean_R@1` and no way to see which condition produced it.
+
+    That is not cosmetic. `DL-047`'s open finding is that `text` R@1 DEGRADES
+    under training (-15.3 pp at lr 2.5e-4 on protocol D) while the seven-
+    condition mean rises, because the mean is diluted by four cells at their
+    ceiling (`DL-044`: an untrained model scores `full` R@1 = 0.9989). A metric
+    that hides its own components cannot show that.
+
+    ZERO extra computation -- the values already exist in `scores`. Nothing
+    about the evaluator, the gallery, `ks=(1, 5)`, the ranking or the selection
+    rule is touched by this function; `key` in the training loop still reads
+    `mean_R@1` and `mean_R@5` and nothing else.
+
+    A function rather than a comprehension inline at the call site, for the
+    reason `better_checkpoint` above gives: inside `main()` the only way to
+    test it is to train.
+
+    Naming: `cond_` prefix so that neither a prefix nor a suffix match can
+    confuse a condition with the aggregate -- `mean_R@1` does not begin with
+    `cond_`, and it is the only other key ending in `R@1`. The middle segment is
+    the `QUERY_CONDITIONS` key verbatim, `+` included, so `cond_text+pc_R@5`
+    names one cell of Table 1 and cannot name any other.
+
+    `recall_at_k` also puts `n_query` and `n_gallery` in all seven dicts; they
+    are NOT flattened. Every one carries the value the row already holds once as
+    top-level `n_gallery`, so seven more copies would be noise, not denominators.
+    The `R@` test is on the metric key, so a future `ks` follows automatically
+    rather than raising KeyError at the end of epoch 0 of an eight-hour run.
+    """
+    return {f"cond_{cond}_{metric}": value
+            for cond, per_k in scores.items() if isinstance(per_k, dict)
+            for metric, value in per_k.items() if metric.startswith("R@")}
+
+
 def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
                      batch_size):
     """Mean R@1 / R@5 over the seven Table 1 conditions, on the dev-val gallery.
@@ -1826,7 +1867,8 @@ def main() -> int:
                     args.device, values["batch_size"])
                 runlog.train_metrics("stage1_dev_val", epoch=epoch, step=step,
                                      **{k: v for k, v in scores.items()
-                                        if isinstance(v, (int, float))})
+                                        if isinstance(v, (int, float))},
+                                     **flatten_condition_scores(scores))
                 print(f"  epoch {epoch} dev-val: mean R@1 {scores['mean_R@1']:.4f}  "
                       f"mean R@5 {scores['mean_R@5']:.4f}  "
                       f"gallery {scores['n_gallery']:,}", flush=True)
