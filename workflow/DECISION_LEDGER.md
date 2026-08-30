@@ -2757,10 +2757,38 @@ n15 eval            RE-ENCODES the gallery on every run. It never opens
 
 One thing verified in the same pass and NOT a gap: `stage1_encoding_protocol`
 resolves `image_aggregation` to `mean`, and under `mean` `Stage1Dataset` returns
-`cached["image"]` byte for byte — the same array `gallery_index.py` reads. **So
-moving n15 onto the promoted index cannot move the numbers.** Checked before
-proposing the change, because a switch that silently re-defines the gallery
-vectors would be indistinguishable from a result.
+`cached["image"]` byte for byte — the same array `gallery_index.py` reads.
+~~So moving n15 onto the promoted index cannot move the numbers.~~ Checked
+before proposing the change, because a switch that silently re-defines the
+gallery vectors would be indistinguishable from a result.
+
+> **⚠ CORRECTED 2026-08-30, same day, by the ULIP2 Block Reviewer (MAJOR-3).
+> The struck sentence was MASTER's and it was an overstatement.**
+>
+> What is measured is that the two paths receive **byte-identical INPUTS** —
+> confirmed on 200 sampled real uids, all three arrays, zero mismatches. That
+> does not establish that they produce identical **OUTPUTS**: `gallery_index`
+> encodes one asset at a time and `encode_pools` encodes in batches of 64, and
+> a different batch shape can select a different BLAS kernel. That is the same
+> class of difference `run_retrieval.block_plan` exists for, and it changed a
+> reported diagnostic in 143 of 400 measured trials there.
+>
+> **Output equality is `UNVERIFIED` and stays so until a real index exists.**
+> `run_retrieval.py`'s own docstring says exactly this; the struck sentence
+> licensed ignoring it, and two authoritative project documents were in direct
+> conflict with nothing marking it.
+>
+> **The live consequence, which is why this is not a wording fix.** The
+> untrained control (`--ckpt-record none`) scores A and B through
+> `untrained_direct_encode` at batch 64. The trained run scores A and B through
+> `promoted_index`, built one asset at a time. **A trained-vs-untrained
+> comparison on A or B therefore carries an uncontrolled encode-path difference**
+> unless that is measured first. The code discloses it in `gallery_source`; the
+> struck sentence was the thing telling a reader not to look.
+>
+> Kyzen caught the same overstatement in the work order before either engineer
+> acted on it. It was corrected to both engineers and left standing here. **A
+> retraction that reaches the workers and not the record is not a retraction.**
 
 ### Completion gate for "Stage 1 is done" — Kyzen's, recorded as given
 

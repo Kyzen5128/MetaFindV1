@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import time
@@ -189,14 +190,20 @@ def verified_index(record: dict, source: str) -> tuple[list[str], np.ndarray]:
         raise FileNotFoundError(
             f"{source} names {uri}, which does not exist. The record and its "
             "vectors have been separated.")
-    actual = hashlib.sha256(uri.read_bytes()).hexdigest()
+    # ONE read. Hashing `uri.read_bytes()` and then handing `uri` to np.load is
+    # two opens of one path, and the docstring above promises the bytes hashed
+    # are the bytes returned -- a promise the caller cannot keep and the callee
+    # was not enforcing. The window is small and the failure is silent, which is
+    # the combination this repository keeps being bitten by.
+    raw = uri.read_bytes()
+    actual = hashlib.sha256(raw).hexdigest()
     if actual != record["sha256"]:
         raise ValueError(
             f"{uri} hashes to {actual[:16]}... but {source} records "
             f"{record['sha256'][:16]}.... These are not the verified vectors.")
 
     try:
-        npz = np.load(uri)
+        npz = np.load(io.BytesIO(raw))
         ids = [str(x) for x in npz["ids"]]
         embeddings = npz["embeddings"]
     except Exception as exc:  # noqa: BLE001 -- any read failure is unreadable

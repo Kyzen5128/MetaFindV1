@@ -722,6 +722,18 @@ def test_the_untrained_run_loads_no_stage1_weights_and_says_so(tmp_path, monkeyp
         return ({"protocol": name, "n_query": 1, "n_gallery": 1,
                  "conditions": {"full": {"R@1": 0.0, "R@5": 0.0,
                                          "diagnostics": {"signed_target_margin": {}}}},
+                 # The gallery-provenance block. Returned here so the
+                 # assertion below is about the table1.json PROJECTION -- the
+                 # only thing standing between run_protocol's result and the
+                 # file -- rather than about run_protocol, which
+                 # test_eval_retrieval.py already covers.
+                 "gallery_source": "promoted_index",
+                 "gallery_index_uri": "/tmp/gi.npz",
+                 "gallery_index_sha256": "1" * 64,
+                 "gallery_encoder_sha256": "2" * 64,
+                 "stage1_checkpoint_sha256": "3" * 64,
+                 "gate_record_uri": "/tmp/G4_gallery_freeze.yaml",
+                 "gate_record_sha256": "4" * 64,
                  "embedding_health": {}}, [])
 
     monkeypatch.setattr(n15, "run_protocol", fake_run_protocol)
@@ -765,3 +777,21 @@ def test_the_untrained_run_loads_no_stage1_weights_and_says_so(tmp_path, monkeyp
     # untrained branch -- where it would encode its own gallery and say so in a
     # field nobody was looking at yet.
     assert captured["tail"][-2:] == (True, {}), captured["tail"][-2:]
+
+    # [REVIEWER MINOR-2] The gallery-provenance block reaches table1.json ON
+    # DISK. `table1.json` drops `embedding_health` and the per-condition
+    # `diagnostics`; every other key rides through, and a reader of the
+    # reported artifact can name the index AND the verdict that cleared it
+    # without opening `gallery_index.json` by hand.
+    cell = proto["C_dev_selection"]
+    assert cell["gallery_source"] == "promoted_index"
+    assert cell["gallery_index_uri"] == "/tmp/gi.npz"
+    assert cell["gallery_index_sha256"] == "1" * 64
+    assert cell["gallery_encoder_sha256"] == "2" * 64
+    assert cell["stage1_checkpoint_sha256"] == "3" * 64
+    assert cell["gate_record_uri"] == "/tmp/G4_gallery_freeze.yaml"
+    assert cell["gate_record_sha256"] == "4" * 64
+    # and the projection really does drop what it is supposed to drop, or the
+    # assertions above would pass for a projection that drops nothing
+    assert "embedding_health" not in cell
+    assert "diagnostics" not in cell["conditions"]["full"]

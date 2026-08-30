@@ -499,6 +499,8 @@ def gallery_from_promoted_index(name: str, gallery_uids: list[str], ckpt: dict,
       checking it AGREES
     * the live gallery encoder does not hash to the record's
       `gallery_encoder_sha256`
+    * the record NAMES NO GATE RECORD -- see the guard below for exactly how
+      much and how little that proves
     * a uid this protocol's gallery needs is absent from the index
 
     ⚠ **ROW ORDER.** `gallery_index.main` writes `sorted(train + test)`;
@@ -562,6 +564,36 @@ def gallery_from_promoted_index(name: str, gallery_uids: list[str], ckpt: dict,
             f"stage1_checkpoint_sha256 {record['stage1_checkpoint_sha256'][:16]}"
             ".... The registry key and the record disagree about which "
             "checkpoint built this index.")
+
+    # [REVIEWER MINOR-2] n15 used to accept ANY registry entry whose bytes
+    # hashed correctly, whether or not a G4 PASS had ever existed for it.
+    # `promote()` is the only sanctioned writer of the registry and cannot
+    # reach its write without a terminal G4 record saying PASS -- but that
+    # check fired at PROMOTION time, and this read happens later, against a
+    # JSON file on a shared volume that nothing makes immutable. A hand-added
+    # key with a matching `sha256` satisfies every other check in this
+    # function. So this is not a duplicate of promotion's check; at read time
+    # it is the only check of this property anywhere.
+    #
+    # ⚠ WHAT THIS PROVES, EXACTLY: that the entry NAMES a gate record. Not
+    # that the gate passed, and not that the named record exists or says so --
+    # someone editing the registry can type a hex string as easily as a
+    # digest. Do not upgrade this sentence.
+    #
+    # ponytail: presence only. The real read-time enforcement is to open
+    # `gate_record_uri`, hash it against `gate_record_sha256` and require
+    # verdict == PASS and gate_id == G4_gallery_freeze. Not done here because
+    # it makes n15 a SECOND parser of G4's record format, which is the failure
+    # the single-loader ruling exists to prevent. Upgrade path: a
+    # `verified_gate_record()` in `metafind/gates/`, called from here.
+    if not record.get("gate_record_sha256"):
+        raise ValueError(
+            f"the promoted index for {name} names no gate record "
+            "(gate_record_sha256 is absent or empty), so nothing in it says "
+            "which G4 verdict cleared these vectors. `promote()` writes that "
+            "field on every entry it publishes, so an entry without it was "
+            "not written by promotion. Refusing: a reported Table 1 number "
+            "must be able to name the verdict that cleared its gallery.")
 
     live = gallery_encoder_sha256(backbone, model)
     if live != record["gallery_encoder_sha256"]:
@@ -1009,10 +1041,16 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
         # because removing a field changes the schema of a file other nodes read.
         "duplicate_gallery_uids": dupes,
         "control": control_used,
-        # ⚠ The five fields that make "was this number index-backed?"
-        # answerable without reading provenance prose. `gallery_source` is one
-        # of `GALLERY_SOURCES` and is never null; the other four are null
-        # exactly when there is no index and no checkpoint behind them.
+        # ⚠ The fields that make "was this number index-backed, and what
+        # cleared it?" answerable without a manual join back through
+        # `gallery_index.json`. `gallery_source` is one of `GALLERY_SOURCES`
+        # and is never null; the rest are null exactly when there is no index
+        # and no checkpoint behind them.
+        #
+        # [REVIEWER MINOR-2] `gate_record_uri` / `gate_record_sha256` had no
+        # consumer at all: `promote()` wrote them and nothing read them, so a
+        # reported number could not name the verdict that cleared its gallery
+        # without a human opening the registry.
         #
         # `gallery_encoder_sha256` is the RECORD's, and it is only non-null on
         # the promoted path. IMPLEMENTATION CHOICE, stated rather than left to
@@ -1026,6 +1064,9 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
         "gallery_encoder_sha256": (index_record["gallery_encoder_sha256"]
                                    if index_record else None),
         "stage1_checkpoint_sha256": (ckpt or {}).get("sha256"),
+        "gate_record_uri": index_record["gate_record_uri"] if index_record else None,
+        "gate_record_sha256": (index_record["gate_record_sha256"]
+                               if index_record else None),
         "conditions": conditions,
         "embedding_health": embedding_health(gallery),
     }

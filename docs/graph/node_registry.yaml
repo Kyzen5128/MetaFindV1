@@ -729,7 +729,12 @@ nodes:
     role: mutate
     purpose: "Encode every admitted asset with the frozen gallery tower into a staging index."
     decomposition_rationale: [N6_side_effects, N5_gate_point]
-    reads: [stage1_ckpt, pointclouds, post_stage1_embeddings, asset_manifest, stage1_protocol, stage1_encoding_protocol, pretrained_weights]
+    reads: [stage1_ckpt, pointclouds, post_stage1_embeddings, splits, stage1_protocol, stage1_encoding_protocol, pretrained_weights]
+    reads_note: >
+      [CORRECTED 2026-08-30] `asset_manifest` -> `splits`. `gallery_index.main`
+      builds its id list from `splits.json` object train+test and never opens the
+      manifest. This is where G4's wrong read set came from: it was copied from
+      here.
     writes: [gallery_index_staging, run_progress, cost_ledger]
     postcondition: "Staging index has the checkpoint's embedding width and len(admitted) rows"
     deterministic: false
@@ -751,8 +756,18 @@ nodes:
     role: evaluate
     purpose: "Stop a bad index from becoming the shared immutable artifact."
     decomposition_rationale: [N5_gate_point]
-    reads: [gallery_index_staging, asset_manifest]
+    reads: [gallery_index_staging, splits, stage1_ckpt]
     writes: [gate_records, run_progress]
+    reads_note: >
+      [CORRECTED 2026-08-30] This said [gallery_index_staging, asset_manifest],
+      copied from n11, and the code opens neither manifest. G4 opens the staging
+      record, `splits` (for len(admitted)) and the Stage 1 checkpoint record plus
+      its weights bytes (for the gallery width). The criterion's first clause --
+      "index width equals the checkpoint's embedding width" -- was UNSATISFIABLE
+      from the declared read set, because no stage1_ckpt edge reached this gate.
+      Nothing caught it: check_graph skips channel names with no underscore, so
+      `splits` could never be flagged, and the criterion says "the checkpoint's"
+      in prose rather than naming the channel.
     postcondition: "gate_record with is_terminal=true"
     deterministic: true
     idempotent: true

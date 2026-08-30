@@ -291,7 +291,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 | `n10_train_stage1` | ✅ **已執行過** | `metafind/train/stage1.py`。**[已更正 2026-08-30]** 產物在 `data/outputs/ladder/`（e5 → e10 → e25 的輪數階梯，`e25_500w/stage1_ckpt.json` 記到 `epoch: 24`、`n_params_saved: 80,738,946`、`clip_train_scope: "frozen"`）與 `data/outputs/checkpoints/sweep_lr/lr7.50e-4_s20260830`（LR sweep 一組）。⚠ 那些 ckpt 記錄 `code_dirty: true`，且**沒有記錄 GPU 型號或顯存**，所以不能當成乾淨可重現的科學執行。凍結 CLIP 的向量走 n06 快取、**點雲即時編碼**（PointBERT 在 optimizer 裡，快取等於變成 fuser-only ablation）；checkpoint 只存 requires_grad 參數（F27）；17 條測試 |
 | `n11` ＋ `n12` ＋ `n11b` | **可執行** | `metafind/train/gallery_index.py`。三個節點同一支程式，因為它們是同一個操作套在不同語料上，而**不能漂移的正是編碼器** —— 拆開會有三份「載入、凍結、雜湊」，而那個雜湊就是重點。Stage 1 的 Objaverse 索引與 Stage 2 的 ProcTHOR 索引**永不合併** |
 | `n09b_resolve_stage2_protocol` | **可執行** | `metafind/models/resolve_stage2.py`。把 U-08a/b/d/e 與四個 ESSGNN 選擇寫成 n13 讀得到的形式，並在寫入前**用 `ESSGNNConfig.from_protocol` 驗一遍** —— 一個 Literal 打錯要在一秒內失敗，不是等 Stage 1 訓練完 |
-| `n15_eval_retrieval` | **可執行** | **[2026-08-30 新增 —— 這一列先前整個不存在]** `metafind/eval/retrieval.py` ＋ `metafind/eval/run_retrieval.py`，兩支各帶一個 `# IMPLEMENTS-NODE: n15_eval_retrieval` 標記。⚠ 檢查器目前對它報三條失敗：registry 宣告它寫 `retrieval_metrics`／`run_progress`／`cost_ledger`，而原始碼一個都沒提到 —— **宣告寫出、實際沒寫**，屬 registry／n15 的落差，已上呈 |
+| `n15_eval_retrieval` | **可執行** | **[2026-08-30 新增 —— 這一列先前整個不存在]** `metafind/eval/retrieval.py` ＋ `metafind/eval/run_retrieval.py`，兩支各帶一個 `# IMPLEMENTS-NODE: n15_eval_retrieval` 標記。**[已更正 2026-08-30 稍晚]** 先前這一列寫「檢查器目前對它報三條失敗」（registry 宣告它寫 `retrieval_metrics`／`run_progress`／`cost_ledger`，原始碼一個都沒提到）。**那三條當時是真的，現在一條都沒有** —— n15 那一輪把三個 channel 都寫出來了，檢查器實測 `all pass`。這一列是同一天寫的、同一天就過期的，**敘述沒有跟著程式改** |
 | `n13_train_stage2` | **有程式、從未執行** | **[2026-08-30 新增]** `metafind/train/stage2.py` 存在且迴圈完整（樣本建構／batching／context graph／forward／Eq. 7-8／backward／checkpoint）。它**刻意不帶 `IMPLEMENTS-NODE` 標記**，因為標記是一個宣稱、而實作數是從它算出來的；程式自己的 docstring 就寫它需要 `stage1_ckpt` 與 `sem_edge_cache` 才跑得起來 |
 | 其餘 **十二個**節點 | **只有規格** | 無 |
 
@@ -312,9 +312,9 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 > 這句話同時和本表 `n10_train_stage1` 那一列自相矛盾，**在同一份檔案裡**，
 > 而沒有任何檢查器在比對散文與表格。
 
-758 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、
+760 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、
 場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態，**沒有一條涵蓋任何節點的執行**。
-（758 = `tests/test_*.py` 裡 `^def test_` 的數量，由 `tools/check_graph.py` 實測並比對。）
+（760 = `tests/test_*.py` 裡 `^def test_` 的數量，由 `tools/check_graph.py` 實測並比對。）
 **[已更正 2026-08-30]** 先前寫「492 個測試函式…展開成 614 個 case」；492 已過期，
 而「614 個 case」是 pytest 參數化後的展開數、**本輪未重量，標 UNVERIFIED**。
 

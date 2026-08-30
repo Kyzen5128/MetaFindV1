@@ -191,17 +191,24 @@ def encoder_pair(seed: int = 0):
 
 
 def write_promoted(tmp_path, monkeypatch, uids, vectors, encoder_sha,
-                   key_sha=CKPT_SHA, record_sha=None):
+                   key_sha=CKPT_SHA, record_sha=None, gate=True):
     """A promoted registry and its .npz, written by the REAL producer.
 
     `gallery_index.build_index` is what n11 calls, so the fixture cannot drift
     from the format the loader expects -- which is the whole failure this file
     is about.
+
+    `gate=False` omits `gate_record_uri` / `gate_record_sha256`, which
+    `promote()` writes on every entry it publishes. An entry without them was
+    not written by promotion.
     """
     record = gallery_index.build_index(
         np.asarray(vectors, dtype=np.float32), list(uids), tmp_path / "gi.npz")
     record["stage1_checkpoint_sha256"] = record_sha or key_sha
     record["gallery_encoder_sha256"] = encoder_sha
+    if gate:
+        record["gate_record_uri"] = str(tmp_path / "G4_gallery_freeze.yaml")
+        record["gate_record_sha256"] = "d" * 64
     registry = tmp_path / "gallery_index.json"
     registry.write_text(json.dumps({key_sha: record}))
     monkeypatch.setattr(gallery_index, "PROMOTED_PATH", registry)
@@ -552,13 +559,16 @@ def test_a_development_protocol_keeps_the_direct_encode_and_says_so_in_a_field(
     assert "not index-backed" in caveat
 
 
-def test_every_result_carries_the_five_gallery_provenance_fields(
+def test_every_result_carries_the_gallery_provenance_fields(
         tmp_path, monkeypatch):
     """The field set is fixed, and `gallery_source` is never null.
 
-    A result missing one of these cannot answer "was this number index-backed?"
-    without someone reading provenance prose, which is how a C number gets
-    reported as a Table 1 number.
+    A result missing one of these cannot answer "was this number index-backed,
+    and what cleared it?" without someone opening `gallery_index.json` by hand
+    -- which is how a C number gets reported as a Table 1 number.
+
+    ⚠ No count in this test's name. It said "five" and the reviewer's MINOR-2
+    made it six, so the name would have been a number that rots.
     """
     pair = encoder_pair()
     enc = gallery_index.gallery_encoder_sha256(pair, pair)
@@ -576,11 +586,50 @@ def test_every_result_carries_the_five_gallery_provenance_fields(
     assert core["gallery_index_sha256"] == record["sha256"]
     assert core["gallery_encoder_sha256"] == enc
     assert core["stage1_checkpoint_sha256"] == CKPT_SHA
-    # and it survives the table1.json projection, which drops only
-    # embedding_health and the per-condition diagnostics
+    # [REVIEWER MINOR-2] the verdict that cleared this gallery, named in the
+    # result rather than reachable only by joining back through the registry
+    assert core["gate_record_uri"] == record["gate_record_uri"]
+    assert core["gate_record_sha256"] == record["gate_record_sha256"]
     assert all(k in core for k in (
         "gallery_source", "gallery_index_uri", "gallery_index_sha256",
-        "gallery_encoder_sha256", "stage1_checkpoint_sha256"))
+        "gallery_encoder_sha256", "stage1_checkpoint_sha256",
+        "gate_record_uri", "gate_record_sha256"))
+
+
+def test_a_promoted_entry_that_names_no_gate_record_is_refused(
+        tmp_path, monkeypatch):
+    """[REVIEWER MINOR-2] n15 accepted any entry whose bytes hashed correctly.
+
+    `promote()` cannot reach its write without a terminal G4 record saying
+    PASS -- but that fired at PROMOTION time, and this read happens later
+    against a JSON file nothing makes immutable. A hand-added key with a
+    matching `sha256` satisfies every other check in
+    `gallery_from_promoted_index`, which is exactly what this fixture is.
+
+    ⚠ WHAT THIS PINS: that the entry NAMES a gate record. NOT that the gate
+    passed, and not that the named record exists or says so. If this test is
+    ever strengthened to open the gate record, the guard's own comment about
+    presence-versus-verification has to be rewritten with it.
+    """
+    pair = encoder_pair()
+    enc = gallery_index.gallery_encoder_sha256(pair, pair)
+    write_promoted(tmp_path, monkeypatch, ORDER_UIDS,
+                   [ONE_HOT[u] for u in ORDER_UIDS], enc, gate=False)
+    monkeypatch.setattr(n15, "encode_pools", fake_encode_pools(ONE_HOT, None))
+    with pytest.raises(ValueError, match="names no gate record"):
+        n15.run_protocol("B", REPORTED_FULL, ORDER_SPLITS, pair, pair, "mean",
+                         "cpu", 4, "none", 0, 3, False, {"sha256": CKPT_SHA})
+
+    # An empty string is not a name either: `.get(...)` alone would pass it.
+    write_promoted(tmp_path, monkeypatch, ORDER_UIDS,
+                   [ONE_HOT[u] for u in ORDER_UIDS], enc, gate=False)
+    reg = tmp_path / "gallery_index.json"
+    entry = json.loads(reg.read_text())
+    entry[CKPT_SHA]["gate_record_sha256"] = ""
+    reg.write_text(json.dumps(entry))
+    with pytest.raises(ValueError, match="names no gate record"):
+        n15.run_protocol("B", REPORTED_FULL, ORDER_SPLITS, pair, pair, "mean",
+                         "cpu", 4, "none", 0, 3, False, {"sha256": CKPT_SHA})
 
 
 def test_the_gallery_source_comes_from_reported_not_from_the_protocol_name():

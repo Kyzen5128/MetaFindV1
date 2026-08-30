@@ -507,7 +507,7 @@ state:
     - name: asset_manifest
       type: "map[uid -> source_path]"
       writers: [n02_download]
-      readers: [G1_sources_valid, G3_object_corpus, G4_gallery_freeze, n03_sample_pointclouds, n04_render_views, n09_build_splits, n09b_resolve_stage2_protocol, n11_gallery_index_staging, n22_publish_report]
+      readers: [G1_sources_valid, G3_object_corpus, n03_sample_pointclouds, n04_render_views, n09_build_splits, n09b_resolve_stage2_protocol, n22_publish_report]
       merge: write_once
       lifetime: persistent
       note: >
@@ -983,7 +983,7 @@ state:
     - name: splits
       type: "{object: {train, test}}"
       writers: [n09_build_splits]
-      readers: [G3_object_corpus, n10_train_stage1, n15_eval_retrieval, n18_train_ablations, n19_eval_ablations]
+      readers: [G3_object_corpus, G4_gallery_freeze, n10_train_stage1, n11_gallery_index_staging, n15_eval_retrieval, n18_train_ablations, n19_eval_ablations]
       merge: write_once
       lifetime: persistent
       note: >
@@ -1092,7 +1092,7 @@ state:
         `n_params_saved` travels with it so the claim is checkable rather than
         asserted by a filename.
       writers: [n10_train_stage1]
-      readers: [G6_stage2_ready, n10b_post_stage1_encode, n11_gallery_index_staging, n11b_stage2_gallery_index, n13_train_stage2, n18_train_ablations]
+      readers: [G4_gallery_freeze, G6_stage2_ready, n10b_post_stage1_encode, n11_gallery_index_staging, n11b_stage2_gallery_index, n13_train_stage2, n18_train_ablations]
       merge: write_once
       lifetime: persistent
 
@@ -1450,7 +1450,7 @@ edges:
   - {id: e14b, from: n10_train_stage1, to: n10b_post_stage1_encode, kind: data, guard: "", join_group: default, carries: [stage1_ckpt, stage1_encoding_protocol, stage1_protocol, text_image_embeddings, renders, objaverse_annotations], rationale: "n10b needs the final encoders AND both possible sources: under actual=frozen it passes n06's cache through, under actual=trainable it re-encodes from renders and annotations."}
   - {id: e15, from: n10_train_stage1, to: n11_gallery_index_staging, kind: data, guard: "", join_group: ckpt, carries: [stage1_ckpt]}
   - {id: e15b, from: n10b_post_stage1_encode, to: n11_gallery_index_staging, kind: data, guard: "", join_group: embeddings, carries: [post_stage1_embeddings]}
-  - {id: e16, from: n11_gallery_index_staging, to: G4_gallery_freeze, kind: data, guard: "", join_group: default, carries: [gallery_index_staging, asset_manifest]}
+  - {id: e16, from: n11_gallery_index_staging, to: G4_gallery_freeze, kind: data, guard: "", join_group: default, carries: [gallery_index_staging, splits, stage1_ckpt], rationale: "G4 reads splits for len(admitted) and the checkpoint record plus its weights bytes for the gallery width. Carried asset_manifest until 2026-08-30, which the gate never opens -- so its width clause had no checkpoint to compare against on any edge."}
   - {id: e17, from: G4_gallery_freeze, to: n12_promote_index, kind: data, guard: "verdict == PASS", join_group: default, carries: [gallery_index_staging]}
   - id: e18
     from: n10_train_stage1
@@ -1730,7 +1730,7 @@ routing:
 static_fanouts:
   - {name: render_views, cardinality: 11, source: "paper 2.3", bound: 11}
   - {name: modality_conditions, cardinality: 7, source: "paper Table 1 columns", bound: 7}
-  - {name: eval_protocols, cardinality: 3, source: "U-09 -- both gallery readings run (A_test_gallery, B_full_gallery, both reported) plus C_dev_selection, the dev_val/dev_val checkpoint-selection protocol which is NOT reported. OBSERVED DATA data/outputs/eval_protocols.json 2026-08-30; this said 2 while the artifact held 3", bound: 3}
+  - {name: eval_protocols, cardinality: 4, source: "U-09 -- both gallery readings run (A_test_gallery, B_full_gallery, both reported) plus C_dev_selection (dev_val/dev_val checkpoint selection, NOT reported) plus D_dev_val_vs_train (NOT reported). OBSERVED DATA data/outputs/eval_protocols.json re-read 2026-08-30 18:2x: the artifact holds FOUR keys. This entry said 2, was corrected to 3 the same day citing itself as OBSERVED DATA, and was STILL wrong -- D_dev_val_vs_train was already in the file. n15 runs every protocol the artifact defines by default, so the cardinality is whatever the artifact holds; check_graph reads no data file and cannot catch this one.", bound: 4}
   - {name: headline_variants, cardinality: 2, source: "paper Table 1 last two rows", bound: 2}
   - {name: ablation_variants, cardinality: 8, source: "paper Table 3 has 10 rows: 1 is Full itself, 1 (w/o iterative retrieval) is inference-only, leaving 8 that require training", bound: 9}
   - {name: assets, cardinality: "len(asset_manifest)", source: "manifest, currently 46052", bound: 60000, over_bound_action: truncate_and_record}

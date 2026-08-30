@@ -34,6 +34,18 @@ one arithmetic path. Ranks are NOT used: ``rank`` counts ties against the
 model, which is right for a retrieval metric and wrong for an identity check --
 a legally tied index would fail it.
 
+What the id and count clauses are NOT evidence of
+-------------------------------------------------
+`len(admitted)` is derived from `splits.json` object train+test -- **the same
+artifact `gallery_index.main` built its id list from**. So "index count equals
+len(admitted)", the uniqueness clause and the set-equality clause compare n11's
+output against n11's own input: they detect an n11 bug, a dropped or duplicated
+or misnamed row, and NOT a wrong corpus. A `splits.json` naming the wrong assets
+produces an index that agrees with it and a G4 that PASSES. `G3_object_corpus`
+is the gate that judges the corpus. This one judges the encode. Recorded in
+every record as `observed.corpus_note`, because the clause reads much wider than
+it is.
+
 What this criterion CANNOT see
 ------------------------------
 **This criterion cannot detect a collapsed index** -- a fully collapsed gallery
@@ -112,11 +124,27 @@ ROW_ORDER_NOTE = (
 )
 
 COLLAPSE_NOTE = (
-    "This criterion cannot detect a collapsed index -- a fully collapsed "
-    "gallery satisfies it in every trial, because every vector ties for the "
-    "maximum. The [CORRECTED] change to validation_plan.yaml bought tie-safety "
-    "and paid in collapse-blindness. effective_rank is recorded here for that "
-    "reason and is NOT a pass condition."
+    "This criterion cannot detect a collapsed index: every vector ties for the "
+    "maximum, so the target is in the argmax tie set. MEASURED 2026-08-30, and "
+    "the bound is the measurement, not a proof -- 120 trials over 3 shapes "
+    "(d=8/ng=30, d=1280/ng=999, d=1280/ng=4569), 0 of 120 failed. It is NOT "
+    "analytically guaranteed: retrieval.rank_of_target records identical GEMM "
+    "columns differing by one ULP in 61 of 400 collapsed galleries, in a toy "
+    "regime (small d, unnormalised). At that rate a collapsed index could fail "
+    "this criterion by ACCIDENT, which is not the same as being detected. The "
+    "[CORRECTED] change to validation_plan.yaml bought tie-safety and paid in "
+    "collapse-blindness. effective_rank is recorded for that reason and is NOT "
+    "a pass condition."
+)
+
+CORPUS_NOTE = (
+    "The id and count clauses compare n11's OUTPUT against n11's own INPUT. "
+    "len(admitted) is derived from splits.json object train+test, which is the "
+    "same artifact gallery_index.main built its id list from, so a mismatch "
+    "means an n11 bug -- a dropped, duplicated or misnamed row -- and NOT a "
+    "wrong corpus. If splits.json itself names the wrong assets, the index "
+    "will agree with it and this gate will PASS. G3_object_corpus is the gate "
+    "that judges the corpus; this one judges the encode."
 )
 
 
@@ -507,6 +535,8 @@ def run(staging_path: Path | None = None, splits_path: Path | None = None,
             # inventing a rule.
             observed["ids_are_sorted"] = bool(ids == sorted(ids))
             observed["ids_sorted_note"] = ROW_ORDER_NOTE
+            # What the four clauses above are and are not evidence of.
+            observed["corpus_note"] = CORPUS_NOTE
 
         # ---- 6. no NaN, no Inf, no zero vectors ---------------------------
         if embeddings is not None:

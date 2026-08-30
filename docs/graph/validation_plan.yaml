@@ -1114,9 +1114,27 @@ level_2:
       argmax tie set.
     method: "exact inner product self-retrieval, compared as sim[target] == sim.max()"
     tolerance: exact
-    sample: full
-    negative_injection: "shuffle the index id mapping"
-    expected_on_injection: "the target's score stops being the maximum and the index is not promoted"
+    sample: "1000 gallery vectors, drawn with splits.split_seed and pinned in the gate record by sample_uid_sequence_sha256"
+    negative_injection: "shuffle the index id mapping -- [REFUTED 2026-08-30: THIS CONTROL DOES NOT FIRE]"
+    expected_on_injection: >
+      [REFUTED 2026-08-30. The injected index PASSES.] This said "the target's
+      score stops being the maximum and the index is not promoted". It does not.
+      The criterion scores each gallery ROW against ITSELF, so shuffling ids
+      against rows leaves every similarity bit-identical and every target still
+      tied for the maximum. Held as a NAMED TEST rather than a comment:
+      tests/test_gallery_freeze_gate.py::test_the_declared_negative_injection_does_not_fire
+      asserts PASS, and goes red the day someone strengthens the criterion so
+      the injection does fire.
+      Detecting a row/id misalignment needs a reference OUTSIDE the index --
+      re-encoding a sampled asset with the checkpoint and comparing it against
+      the row its id claims -- which this criterion does not specify and the
+      gate does not do. G4 records `observed.ids_are_sorted` so the shuffle is
+      at least VISIBLE in the artifact; that is not a pass condition and it is
+      not a substitute for a control that fires.
+      This entry is the SINGLE item in G4's `evidence:` list, which is why the
+      refutation is filed here and not only under the gate: a reader who runs
+      the declared injection, sees PASS, and finds no marking here concludes
+      either that the gate is broken or that the control fired.
     verified_blocks: false
     cited_by_gate: G4_gallery_freeze
     note: >
@@ -1382,6 +1400,20 @@ level_3_gates:
     evidence: [L2-GALLERY-SELF]
     rc_contract: {PASS: 0, FAIL: 2, BLOCKED_EVIDENCE: 3, INVALIDATED: 4}
     record_path: "outputs/logs/gates/G4_gallery_freeze.yaml"
+    history_path: "outputs/logs/gates/G4_gallery_freeze.history.yaml"
+    history_note: >
+      `record_path` holds the CURRENT terminal record, in the shape
+      `record_fields` describes, and is what n12 reads. `history_path` holds
+      every record ever written -- PASS, FAIL and BLOCKED_EVIDENCE alike -- as
+      the `list[gate_record]` that graph_spec.yaml declares the gate-records
+      channel to be, with `merge: append, lifetime: persistent`.
+      (Channel named with a hyphen on purpose: check 8 blobs every field of this
+      entry and would read the bare token as the CRITERION demanding a channel
+      G4 does not read. G4 writes it.) The two documents describe
+      this channel differently and both files are written so that neither is
+      overruled. Without the history, a FAIL followed by a repaired re-run PASS
+      destroyed the FAIL, and the run nobody needs a record of is the one that
+      survived.
     implemented: true
     implementation: "metafind/gates/g4_gallery_freeze.py"
     record_fields: [gate_id, gate_class, scope, record_kind, criterion, inputs, observed, verdict, rc, timestamp, code_revision, code_dirty, runtime_source_sha256, runtime_source_status, is_terminal, index_uri, index_sha256, staging_record_sha256, stage1_checkpoint_sha256, gallery_encoder_sha256, expected_uid_set_sha256, sample_uid_sequence_sha256]

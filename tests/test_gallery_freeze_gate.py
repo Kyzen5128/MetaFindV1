@@ -115,20 +115,48 @@ def test_a_healthy_index_passes(tmp_path):
 
 
 def test_the_record_carries_every_declared_field(tmp_path):
-    """The declared schema, not a subset of it that happened to be written."""
+    """The DECLARED schema, read from the spec, not a list copied beside it.
+
+    This used to hardcode 20 field names while `record_fields` declared 22, so
+    `code_dirty` and `runtime_source_status` were emitted and asserted nowhere:
+    a drift that would have been discovered by someone wondering why a field
+    they were told to expect was missing. `record_fields` had no automated
+    consumer at all. It has one now, and the assertion cannot fall behind the
+    declaration because it IS the declaration.
+    """
     fx = _fixture(tmp_path, _healthy(), _ids())
     _run(fx)
     rec = yaml.safe_load(fx["record"].read_text())
-    for field in ("gate_id", "gate_class", "scope", "record_kind", "criterion",
-                  "inputs", "observed", "verdict", "rc", "timestamp",
-                  "code_revision", "is_terminal", "index_uri", "index_sha256",
-                  "staging_record_sha256", "stage1_checkpoint_sha256",
-                  "gallery_encoder_sha256", "expected_uid_set_sha256",
-                  "sample_uid_sequence_sha256", "runtime_source_sha256"):
-        assert field in rec, f"the gate record has no {field!r}"
+    declared = g4.spec()["record_fields"]
+    assert len(declared) >= 20, "record_fields shrank; is this the right entry?"
+    missing = [f for f in declared if f not in rec]
+    assert not missing, f"declared in record_fields, never written: {missing}"
+    # The other direction too: a field written and never declared is the same
+    # drift facing the other way, and it is the direction a writer creates.
+    undeclared = [k for k in rec if k not in declared]
+    assert not undeclared, f"written but not in record_fields: {undeclared}"
     assert rec["criterion"], "the criterion was not quoted from the spec"
     assert rec["index_sha256"] == hashlib.sha256(
         fx["index"].read_bytes()).hexdigest()
+
+
+def test_the_spec_entry_agrees_with_the_module(tmp_path):
+    """`implemented: true` with no implementation, or a record_path nothing writes.
+
+    Three claims in `validation_plan.yaml` that nothing was checking. The paths
+    are declared relative to the data root and resolved here against the same
+    root the gate writes to, so a rename on either side goes red.
+    """
+    from metafind import paths
+
+    entry = g4.spec()
+    assert entry["implemented"] is True
+    impl = paths.REPO / entry["implementation"]
+    assert impl.exists(), f"{entry['implementation']} does not exist"
+    assert impl.samefile(Path(g4.__file__)), "implementation names another file"
+    assert str(g4.RECORD_PATH.relative_to(paths.DATA)) == entry["record_path"]
+    assert str(g4.history_path(g4.RECORD_PATH).relative_to(paths.DATA)) == \
+        entry["history_path"]
 
 
 def test_the_sample_is_fixed_and_its_sequence_is_digested(tmp_path):
