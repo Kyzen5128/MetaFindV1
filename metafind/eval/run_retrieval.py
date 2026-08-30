@@ -2,6 +2,10 @@
 
 # IMPLEMENTS-NODE: n15_eval_retrieval
 
+Writes ``retrieval_metrics`` (``table1.json``; ``diagnostics.json`` is the
+separate diagnostic artifact, not this channel), ``run_progress`` and
+``cost_ledger``.
+
 `metafind/eval/retrieval.py` has been the SCORER since the graph was written.
 Nothing ever called it. `eval_protocols.json` has carried ``reported: true`` on
 `A_test_gallery` and `B_full_gallery` for months and **no program reads that
@@ -53,6 +57,8 @@ from metafind.eval.retrieval import (
 )
 
 __all__ = ["ProtocolResult", "score_streaming", "load_protocols", "main"]
+
+NODE = "n15_eval_retrieval"
 
 # Cosine similarity is bounded above by 1, so the softmax shift needed for a
 # stable exp() is a constant rather than a streaming max. One less pass.
@@ -693,70 +699,93 @@ def main() -> int:
             "the one it replaced.")
     out.mkdir(parents=True, exist_ok=True)
 
-    backbone = ULIPBackbone(BackboneConfig(device=args.device,
-                                           train_scope="point_encoder_and_fuser"))
-    model, loss_fn = build_model(encoding, training, hyperparameters)
-    model.to(args.device)
-    load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]))
+    # [FIX 2026-08-30] n15 was the only implemented node that wrote neither
+    # `run_progress` nor `cost_ledger`, though the registry declares both and
+    # `graph_spec.yaml` lists them under `writers: [ALL_NODES]`. The record is
+    # not decoration: a protocol-B pass is the longest single node in the
+    # graph, and one that died left nothing behind saying it had ever started.
+    started = time.time()
+    with runlog.run_progress(NODE):
+        backbone = ULIPBackbone(BackboneConfig(device=args.device,
+                                               train_scope="point_encoder_and_fuser"))
+        model, loss_fn = build_model(encoding, training, hyperparameters)
+        model.to(args.device)
+        load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]))
 
-    provenance = {
-        "run_id": runlog.run_id(),
-        "code_revision": runlog.code_revision(),
-        "code_dirty": runlog.code_dirty(),
-        "runtime_source_sha256": runlog.runtime_source_sha256(),
-        "runtime_source_status": runlog.runtime_source_status(),
-        "started_at": time.time(),
-        "checkpoint": {k: ckpt.get(k) for k in
-                       ("uri", "sha256", "epoch", "run_id", "seed",
-                        "arm_config_hash", "base_hyperparameter_sha256",
-                        "code_revision", "checkpoint_schema")},
-        "control": args.control,
-        "unsealed": bool(args.unseal),
-        "device": args.device,
-    }
+        provenance = {
+            "run_id": runlog.run_id(),
+            "code_revision": runlog.code_revision(),
+            "code_dirty": runlog.code_dirty(),
+            "runtime_source_sha256": runlog.runtime_source_sha256(),
+            "runtime_source_status": runlog.runtime_source_status(),
+            "started_at": time.time(),
+            "checkpoint": {k: ckpt.get(k) for k in
+                           ("uri", "sha256", "epoch", "run_id", "seed",
+                            "arm_config_hash", "base_hyperparameter_sha256",
+                            "code_revision", "checkpoint_schema")},
+            "control": args.control,
+            "unsealed": bool(args.unseal),
+            "device": args.device,
+        }
 
-    results = {}
-    for name in wanted:
-        print(f"\n=== {name} ===", flush=True)
-        core, rows = run_protocol(
-            name, protocols[name], splits, backbone, model,
-            encoding["image_aggregation"], args.device, args.batch_size,
-            args.control, args.seed, args.block)
-        # Both labels stated, symmetrically, so neither protocol looks like the
-        # trustworthy one by omission.
-        core["caveat"] = {
-            "A_test_gallery": "the paper does not state its gallery [U-09]; "
-                              "query = test is this project's assumption",
-            "B_full_gallery": "the gallery contains the 36,554 training assets "
-                              "as distractors; the paper does not state its "
-                              "gallery [U-09]",
-        }.get(name, "development protocol -- selects checkpoints, never reported")
-        core["sealed_split_read"] = seals[name]
-        results[name] = core
+        results = {}
+        for name in wanted:
+            print(f"\n=== {name} ===", flush=True)
+            core, rows = run_protocol(
+                name, protocols[name], splits, backbone, model,
+                encoding["image_aggregation"], args.device, args.batch_size,
+                args.control, args.seed, args.block)
+            # Both labels stated, symmetrically, so neither protocol looks like the
+            # trustworthy one by omission.
+            core["caveat"] = {
+                "A_test_gallery": "the paper does not state its gallery [U-09]; "
+                                  "query = test is this project's assumption",
+                "B_full_gallery": "the gallery contains the 36,554 training assets "
+                                  "as distractors; the paper does not state its "
+                                  "gallery [U-09]",
+            }.get(name, "development protocol -- selects checkpoints, never reported")
+            core["sealed_split_read"] = seals[name]
+            results[name] = core
 
-        with (out / f"per_query_{name}.jsonl").open("w") as fh:
-            for row in rows:
-                fh.write(json.dumps(row) + "\n")
-        for cond, cell in core["conditions"].items():
-            print(f"  {cond:12s} R@1 {cell['R@1']:.4f}  R@5 {cell['R@5']:.4f}  "
-                  f"margin p5 "
-                  f"{cell['diagnostics']['signed_target_margin'].get('p5', 0):+.4f}",
-                  flush=True)
+            with (out / f"per_query_{name}.jsonl").open("w") as fh:
+                for row in rows:
+                    fh.write(json.dumps(row) + "\n")
+            for cond, cell in core["conditions"].items():
+                print(f"  {cond:12s} R@1 {cell['R@1']:.4f}  R@5 {cell['R@5']:.4f}  "
+                      f"margin p5 "
+                      f"{cell['diagnostics']['signed_target_margin'].get('p5', 0):+.4f}",
+                      flush=True)
 
-    # Two artifacts, not one. [ULIP2 REVIEWER 2026-08-30] An aggregator that
-    # finds `signed_target_margin` beside `R@1` will eventually report one as
-    # the other.
-    table = {"provenance": provenance,
-             "protocols": {n: {k: v for k, v in r.items()
-                               if k != "embedding_health"}
-                           for n, r in results.items()}}
-    for r in table["protocols"].values():
-        for cell in r["conditions"].values():
-            cell.pop("diagnostics", None)
-    (out / "table1.json").write_text(json.dumps(table, indent=1))
-    (out / "diagnostics.json").write_text(json.dumps(
-        {"provenance": provenance, "protocols": results}, indent=1))
-    print(f"\nwrote {out}/table1.json and diagnostics.json", flush=True)
+        # Two artifacts, not one. [ULIP2 REVIEWER 2026-08-30] An aggregator that
+        # finds `signed_target_margin` beside `R@1` will eventually report one as
+        # the other. `table1.json` is the `retrieval_metrics` channel n20 and
+        # n21 read; `diagnostics.json` is not that channel and no aggregator
+        # should key off it.
+        table = {"provenance": provenance,
+                 "protocols": {n: {k: v for k, v in r.items()
+                                   if k != "embedding_health"}
+                               for n, r in results.items()}}
+        for r in table["protocols"].values():
+            for cell in r["conditions"].values():
+                cell.pop("diagnostics", None)
+        (out / "table1.json").write_text(json.dumps(table, indent=1))
+        (out / "diagnostics.json").write_text(json.dumps(
+            {"provenance": provenance, "protocols": results}, indent=1))
+        print(f"\nwrote {out}/table1.json and diagnostics.json", flush=True)
+
+    # `cost_ledger` merges by numeric_add, so a re-run of one protocol adds to
+    # the total rather than replacing it. Comparisons, not just wallclock: the
+    # cost of this node is set by gallery size x conditions, and protocol B is
+    # three orders of magnitude bigger than protocol C at the same wallclock
+    # budget per query.
+    runlog.cost_ledger(
+        wallclock_s=round(time.time() - started, 1),
+        protocols_run=len(results),
+        queries_scored=sum(r["n_query"] * len(r["conditions"])
+                           for r in results.values()),
+        gallery_comparisons=sum(r["n_query"] * r["n_gallery"] * len(r["conditions"])
+                                for r in results.values()),
+    )
     return 0
 
 

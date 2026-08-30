@@ -391,6 +391,14 @@ check("root README deviation ids", listed == dev_ids | cond_ids,
 # declared-but-not-executed defect the spec reviews kept finding one level up.
 # Only nodes carrying an IMPLEMENTS-NODE marker are checked -- a node with no
 # code cannot be accused of not writing anything.
+#
+# BUG FIX 2026-08-30: this was `impl_src[nid] = body`, which keeps ONE file per
+# node. n15 is implemented across two -- `eval/retrieval.py` (the scorer) and
+# `eval/run_retrieval.py` (the runner that writes the artifacts) -- so the
+# channel check ran against whichever of them `rglob` yielded last and ignored
+# the other entirely. Filesystem order decided what got checked. Concatenating
+# is the semantics the check above already claims: the NODE must reference the
+# channel, and a node is all of its files.
 impl_src = {}
 for d in ("metafind", "tools", "setup"):
     for f in (DOCS.parents[1] / d).rglob("*"):
@@ -398,7 +406,7 @@ for d in ("metafind", "tools", "setup"):
             continue
         body = f.read_text(errors="replace")
         for nid in re.findall(r"^# IMPLEMENTS-NODE: (\S+)$", body, re.M):
-            impl_src[nid] = body
+            impl_src[nid] = impl_src.get(nid, "") + body
 for nid, body in impl_src.items():
     if nid not in nodes:
         continue
