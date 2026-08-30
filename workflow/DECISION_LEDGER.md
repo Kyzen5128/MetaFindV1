@@ -2488,3 +2488,122 @@ research decisions with Kyzen. **This is a research decision.**
 `--phase final`, no Table 1. The eight checkpoints and the re-scoring on D are
 not wasted — they are the measurement that found this — but none of them is a
 model of MetaFind.
+
+---
+
+## DL-047 — 🔴 `DL-046` is RETRACTED. The wiring is correct; I did not read what `present` does.
+
+`RECORDED` · 2026-08-30 · external review, relayed by Kyzen · verified by MASTER before accepting
+
+**`DL-046` claimed both towers are fed identical input and that Stage 1 therefore
+reproduces the baselines' artifact. The first half is false, and the second does
+not follow.**
+
+### What I checked, and what I did not
+
+I read `stage1.py:1752-1753`:
+
+```python
+q = model.query(embeds, present=present)
+g = model.gallery(embeds)
+```
+
+saw one `embeds` dict on both lines, and stopped. **I never opened `present`.**
+
+`fusion.py:198`:
+
+```python
+fill = torch.zeros_like(e) if self.cfg.zero_pad else self.mask_tokens[i].expand_as(e)
+cols.append(torch.where(keep, e, fill))
+```
+
+**The query's absent modalities are replaced by learned mask tokens.** The dict is
+shared because the positive pair is the same asset — which the paper requires —
+but the effective inputs differ:
+
+```
+query    QueryFusion(mask_text, mask_image, pc_i)       partial modalities
+gallery  GalleryFusion(text_i,  image_i,   pc_i)        always complete
+```
+
+**That is cross-modality retrieval, and it is what `2methdology.tex:14` and `:73`
+describe.** The paper's own contrast with the baselines — query and gallery from
+identical embeddings — does not apply to this code.
+
+### The error, named
+
+**I inferred a data flow from two lines and did not open the third.** The
+argument name `present` was right there and I treated it as decoration. Every
+downstream claim in `DL-046` inherited that.
+
+**It is the same shape as the `find` without `-L` and the `[ab]?` regex: I built
+a window, then reported what the window showed as what is there.** Third time
+today, and this one reached a root-cause claim that stopped the whole stage.
+
+### What survives from `DL-046`, narrowed
+
+```
+SURVIVES   in the `full` condition the mask is all-True, so query and gallery
+           DO receive identical input there, and two fusions trained to agree
+           make that cell trivial. full = 0.9989 untrained is still explained.
+SURVIVES   full is unusable as a selection metric. Eight checkpoints, four
+           learning rates: 0.9996-1.0000 throughout.
+SURVIVES   every measurement in DL-044 and DL-045. The numbers were correct;
+           the cause I assigned them was not.
+RETRACTED  "both towers are fed the same input"          -- false in general
+RETRACTED  "we reproduced the baselines' failure mode"   -- does not follow
+RETRACTED  "the optimum is for the two fusions to become the same function"
+           -- they are asked to agree only on the 34.3% of steps where all
+           three modalities survive the mask
+```
+
+### Also corrected: my sweep conclusion was stale
+
+I reported "all learning rates score worse than untrained" from 6 of 8 arms. All
+eight have since finished:
+
+```
+untrained (1 init seed)   three-cell 0.8228   text 0.9044   full 0.9961
+lr 2.5e-4                 0.8650-0.8682       0.7516-0.7586  1.0000
+lr 5e-4                   0.7828-0.7868       0.6437-0.6500  1.0000
+lr 7.5e-4                 0.7087-0.7209       0.5424-0.5450  0.9996-1.0000
+lr 1e-3                   0.6629-0.6678       0.4940-0.5340  0.9998
+```
+
+**`2.5e-4` is above the untrained baseline by roughly 4.2-4.5 pp.** I reported
+the opposite because the two `2.5e-4` arms had not finished. **A partial run is
+not a result, and I read one as one.**
+
+⚠ The untrained protocol-D baseline is **one init seed**. It is not a precise
+reference and must not be quoted as one until there are at least three.
+
+### The text degradation is a SEPARATE defect, not a consequence
+
+The review's argument, which I accept: at `2.5e-4` image and pc rise while text
+falls. A single identity-collapse would not produce that modality-specific
+split. Text-only is 6.3% of masked samples against full's 34.3%, and selection is
+diluted by four ceiling cells, so a checkpoint can be chosen while text collapses.
+
+**This stays open as its own finding.**
+
+### What is actually unknown
+
+```
+Table 1's gallery scope -- test-only or full corpus. The paper does not say.
+The paper's query/gallery pairing and query construction.
+MetaFind's real LR, epochs, optimizer, batch size.
+ULIP-2's released checkpoint's pretraining LR -- upstream contradicts itself:
+  main.py default 3e-3; the PointBERT yaml says 5e-4 in an optimizer block the
+  pretraining path does not read. Our 5e-4 is THIS project's choice, and calling
+  it a ULIP-2 fact would be wrong.
+```
+
+### Standing
+
+**Stage 1's paper-to-code trunk is Verified, not broken.** The verdict is
+`PARTIALLY VERIFIED`: the mechanism matches the paper, Table 1 is not reproduced,
+and the gap is not explained.
+
+**The suspension stands, for a different reason than `DL-046` gave.** Not because
+the wiring is wrong, but because `full` cannot select and text is degrading, so a
+learning rate chosen now would be chosen on a diluted metric.
