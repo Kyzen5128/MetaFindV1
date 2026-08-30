@@ -2919,3 +2919,145 @@ in it after step 1 costs 40 minutes; discovering it after step 3 costs 20 hours.
 **Neither was a training fault. Both were the instrument.** The first would have
 hidden a finish; the second manufactured one. Fixed by capturing the real PID
 once and polling `kill -0` on that number.
+
+---
+
+## DL-050 — the evaluation was solvable without a model, and Kyzen found it by asking why the loss was flat
+
+`RECORDED` · 2026-08-31 · MASTER, from measurements by the ULIP2 Block Engineer,
+audited by GPT and Codex, external anchor supplied by Kyzen
+
+**This entry supersedes the framing of `DL-044` through `DL-049`.** Those entries
+kept asking why training would not improve a metric. The metric was the problem.
+
+### The single sentence
+
+**Our query's text IS the gallery's text — the same cached vector — and the same
+holds for image and point cloud. The task can be solved by matching a vector to
+itself, and it is.**
+
+### Measured, all on dev_val (4,569), all reproducible from `output/look/`
+
+```
+no fusion tower at all, raw ULIP embeddings only
+   text 0.9956   image 0.9877   pc 0.9897   full 1.0000
+with the untrained fusion towers
+   text 0.9642   image 0.9103   pc 0.9452   full 0.9994
+```
+
+**Stripping the model raises the score and widens the margin by 2.1-4.5x.** The
+towers are a random contraction on a task already solved before they run.
+
+```
+remove the query's own modality from the gallery
+   text 0.9642 -> 0.3971    image 0.9103 -> 0.5029    pc 0.9452 -> 0.5666
+swap in an independent caption (2x2, quality confound excluded: A/A = 0.9609)
+   text 0.9642 -> 0.7497
+```
+
+**All three modalities carry a 38-57 pp self-match.** Not a text problem.
+
+### The external anchor, which turned one number into a field consensus
+
+`docs/paper/跨模態增強模型嵌入與檢索架構_完稿.docx` — NKUST master's thesis,
+October 2025, "CAMERA" — runs ULIP-2 on text→3D retrieval, Table 4:
+
+```
+Parts2Words  RR@1 12.72     TriCoLo  RR@1 10.25
+ULIP         RR@1  3.23     ULIP-2   RR@1 13.50
+```
+
+```
+CAMERA's ULIP-2   13.50
+MetaFind Table 1  13.80
+ours              96.42
+```
+
+Its §279 states the query text and the corpus text come from different sources,
+and the Text2Shape-family galleries hold shapes, not text, so text→text does not
+exist there.
+
+**Before this, MetaFind's 13.8 was an unexplained outlier we kept trying to reach
+down to. After it, 10-14 is the range this task lives in and WE are the outlier.**
+That inversion is the whole value of the document.
+
+### Where the defect entered — paper silence, filled and then forgotten
+
+`2methdology.tex:75` fixes the masking: each query modality independently masked
+at 30%. **It never says the surviving modality uses the gallery's identical
+cached vector.** That is silence. `metafind/eval/retrieval.py:14` filled it —
+"a query built from a subset of that same asset" — and tagged the sentence
+`[PAPER 3experiments.tex:24]`, which only names the seven conditions.
+
+**An IMPLEMENTATION CHOICE was written in the shape of a PAPER FACT**, which is
+exactly what `.claude/rules/research-rigor.md` §1 forbids, and it then propagated
+into every number this project has produced.
+
+### Two hypotheses tested and REFUTED, recorded so they are not re-run
+
+**The fusion is near-identity.** Refuted. `cos(raw, fused)` untrained is
+0.40-0.53, and the no-fusion control scores HIGHER than the towers — they
+degrade, not relay.
+
+**Training learned the pass-through shortcut.** Kyzen's hypothesis, and the
+measurement went against it: on `e25_500w`, `cos(raw, fused)` FALLS with training
+(text .4994→.3313, image .5333→.2996) while the norm ratio explodes .63-.84 →
+3.64-15.47. OpenCLIP is frozen for text and image, so that half is clean.
+**What survives is narrower and still stands: the objective ADMITS a
+same-modality shortcut and cannot uniquely identify cross-modal alignment.**
+"This model converged to it" is UNVERIFIED and now has evidence against it.
+
+### A logic error of MASTER's, corrected by GPT
+
+MASTER computed a multi-positive ceiling — category-only 43.0% R@1 — and argued
+that because the paper's 13.8% is BELOW it, short queries cannot explain the
+paper's number. **Backwards.** A ceiling of 43% permits every value below it,
+13.8% included. The formula (`#groups / N`) is right; the inference was an upper
+bound used as a lower bound. It excludes nothing.
+
+### The fix, and why it is a CHOICE and not a DEVIATION
+
+```
+              now                     after
+query text    canonical description   an alternate candidate
+query image   the 12-view mean        one held-out view
+query pc      the canonical sample    a second independent sample
+
+gallery       UNCHANGED, modality-complete
+masking       UNCHANGED, 30% independent
+loss          UNCHANGED
+architecture  UNCHANGED
+```
+
+The paper constrains the masking, not the observation identity. Refilling that
+silence with "another observation of the same asset" is an `IMPLEMENTATION
+CHOICE`, and it is compatible with the paper's own text.
+
+**Trainer and evaluator change together.** Training on one construction and
+evaluating on the other is a train/test mismatch.
+
+### What is NOT settled, and must not be quietly closed
+
+```
+U-09 gallery size. Every number here is dev_val's 4,569. The paper's candidate
+     pool is unstated and could be 9,138 or 45,692. NOT measured. It is an
+     independent confound and a score change after this fix cannot be attributed
+     without it.
+Whether the paper's authors did this. Unknowable -- they are not being contacted,
+     the arXiv has only v1, and the OpenReview thread (forum uGDNHlslgO, read in
+     full) contains no reviewer question about the query construction.
+Our Transformer fusion -- residual plus token-mean readout -- is an unstated
+     implementation choice that may AMPLIFY a shortcut the paper also has.
+     Codex's reading, and MASTER's too.
+```
+
+### What the whole day cost, and who found it
+
+**Eight sweep arms, a 100-epoch run, three retracted conclusions, and roughly
+eleven GPU hours were spent tuning a learning rate on an instrument that scores
+99% with the model deleted.**
+
+Kyzen found it. Not from the artifacts — by refusing "the loss dropped fast then
+plateaued" and saying `你loss沒有掉啊`, then `完全不用模型，分數就已經是
+99~100%這不就他媽的有問題了嗎? 阿訓練要幹嘛?`. Every measurement in this entry
+descends from those two sentences.
