@@ -2099,3 +2099,86 @@ something. **The ULIP2 Block Reviewer's full handoff could not be written at all
 because MASTER had broken the write guard an hour earlier and its fail-closed
 branch was refusing every write in the repository.** A finding that lives in a
 window dies with the window, and on 2026-08-29 this machine hard-reset nine times.
+
+---
+
+## DL-043 — the `✅` token is withdrawn. **Supersedes `DL-031`, amends `DL-030`.**
+
+`USER_APPROVED` · 2026-08-30 · Kyzen
+
+**Verbatim:**
+
+```
+把✅規則拔掉啦 反正規則是需要做決策由你跟我來討論 我要清楚知道決策內容 你去執行 懂
+```
+
+### What `DL-031` was, and why it existed
+
+`DL-031` (Kyzen, 2026-08-24) made `✅` the only approval token. Its own entry
+records what it was written to stop: within hours of `DL-030`, the ULIP2 Block
+Reviewer asked whether a completed run had been authorised, **because he feared
+his own review PASS had been read as the authorisation.** MASTER could not
+answer. Approval was being inferred from ordinary conversation.
+
+**That entry is not deleted and its reasoning is not wrong. It is superseded by
+the person who wrote it.**
+
+### What replaces it
+
+```
+DECISION  discussed between Kyzen and MASTER
+          Kyzen must clearly know what is being decided
+EXECUTION MASTER's, without a token
+```
+
+The gate moves from **a symbol** to **his understanding**. That is a higher bar
+on MASTER, not a lower one: under `DL-031` the obligation was to collect a
+character. Now the obligation is that Kyzen actually knows what he agreed to.
+
+### The failure this reopens, named so it is not rediscovered
+
+**Without a token, "he seemed to agree" becomes approval again.** That is
+precisely what `DL-031` was written to stop, and removing the token does not
+remove the failure mode. So the replacement is a form, not a feeling:
+
+Before anything expensive, irreversible, or outward-facing, MASTER states, in
+this shape, in Kyzen's register:
+
+```
+要決定什麼      one sentence
+代價            time, GPU, what it consumes
+它關掉了什麼    what this forecloses, and what stays open
+我建議          MASTER's recommendation and why
+```
+
+**His reply is the approval — a reply that engages with the decision. Silence is
+not. A change of subject is not. Enthusiasm about something else is not.**
+The exchange is recorded verbatim in this ledger, both halves, as `DL-031`
+already required of whoever received an approval.
+
+### What does not change
+
+```
+DL-028   code is reviewed before it runs
+DL-030   the detailed report before a run -- the report survives; the
+         separate token afterwards does not
+the power limit stays where Kyzen set it
+research decisions are still his: architecture, hyperparameters, data,
+         evaluation protocol
+Stage 2 is untouched by this entry
+```
+
+**And `DL-017` still holds**: he delegates specified calls to the blocks. This
+entry widens execution, not authority over research.
+
+### Scope of what he has already delegated under this rule
+
+`Stage 1 不用等我同意了 你自己判斷 我該怎麼做都講好了` (2026-08-30) hands MASTER
+the execution of Stage 1: sequencing, when to run, when to stop. **Stage 2 was
+not included and neither was the power limit.**
+
+### One consequence MASTER must not exploit
+
+The old rule let MASTER say "I have no `✅`, so I cannot". **That excuse is gone.**
+Under this entry, not knowing whether Kyzen would agree is a reason to go and ask
+him clearly — not a reason to wait, and not a reason to proceed quietly.
