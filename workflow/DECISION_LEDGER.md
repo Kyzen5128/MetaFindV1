@@ -2806,3 +2806,116 @@ every unknown and deviation survives into the result
 ```
 
 **A finished process is not a finished experiment. This list is the difference.**
+
+---
+
+## DL-049 — 5 epochs was a pilot, not a run. **Supersedes `DL-048`'s `epochs=5` and the 5→10→25 ladder.**
+
+`USER_APPROVED` · 2026-08-30 · Kyzen
+
+**Verbatim:**
+
+```
+5只是測試 100 250都要跑啊 不要跑5 10 25 沒意義 現在給我停掉 先做完PointBERT
+```
+
+And, on the follow-up plan, `做`.
+
+### What changed
+
+```
+DL-048   epochs 5, single run, then Table 1
+DL-049   epochs 100, then epochs 250. Both are runs. Both get a Table 1.
+         The 5→10→25 ladder is withdrawn as uninformative.
+```
+
+`DL-048`'s other locks are UNTOUCHED: `lr 2.5e-4`, `seed 20260816`, `phase final`,
+`batch 64`, `p_mask 0.30`, and every frozen research semantic.
+
+### The evidence that says he is right, which MASTER had and under-weighted
+
+Read from the eight sweep arms' own `stage1_best_ckpt.json`, OBSERVED DATA:
+
+```
+lr 2.50e-4  s20260816   best epoch 4      lr 7.50e-4  s20260816   best epoch 4
+lr 2.50e-4  s20260830   best epoch 4      lr 7.50e-4  s20260830   best epoch 4
+lr 5.00e-4  s20260816   best epoch 4      lr 1.00e-3  s20260816   best epoch 4
+lr 5.00e-4  s20260830   best epoch 4      lr 1.00e-3  s20260830   best epoch 4
+```
+
+**Every arm's best is the LAST epoch it ran. Eight out of eight.** A converged
+run has some arms peaking early and declining; none did. So `epochs=5` is not
+where the model stopped improving — it is where the budget ran out.
+
+**This was in `DL-048` already**, phrased as "no arm peaked early, so `epochs=5`
+is the horizon that was run, not a horizon that was selected". That sentence is
+the observation. **It was written as reassurance and it is the opposite: the
+same fact says the model was still learning when it was cut off.** MASTER filed
+the evidence and drew the comfortable reading from it.
+
+### What was stopped, and what survives
+
+```
+KILLED    the gallery-index build for the 5-epoch checkpoint, at 24,000/45,692.
+          No partial artifact on disk: `build_index` writes to `.part.npz` and
+          renames, so an interrupted build leaves nothing. Verified -- no
+          `gallery_index*` of any kind exists.
+KEPT      the 5-epoch final checkpoint and its record, as a control.
+          sha256 a1e56b30..., code_revision 979b0ba, code_dirty FALSE.
+NEVER RAN G4, promotion, and the reported A/B. Nothing downstream was
+          contaminated by the 5-epoch model, because nothing downstream ran.
+```
+
+### Running now
+
+```
+python -m metafind.train.stage1 --phase final --epochs 100 --preload \
+       --lr 2.5e-4 --seed 20260816 \
+       --out-dir stage1_final/e100_lr2.50e-4_s20260816
+```
+
+`--lr-horizon` is not passed and defaults to `epochs` (`stage1.py:1664`), so the
+cosine schedule runs over 100 epochs rather than completing at 5 and idling at
+`lr_end`. Checked before launching, because that failure would have been
+invisible in the log.
+
+### ⚠ An open risk, raised at launch and NOT resolved
+
+**`lr 2.5e-4` was selected on a five-epoch horizon.** At 100 epochs the same
+number produces a completely different schedule: the high-learning-rate phase is
+twenty times longer before the cosine brings it down. The selection experiment
+and the run it is now being used for are not the same experiment.
+
+Classification: `IMPLEMENTATION CHOICE`, and its supporting evidence covers a
+horizon it is no longer being used at. Raised to Kyzen at launch; he did not
+change it, so `2.5e-4` stands. **Recorded here so that a Table 1 from the
+100- or 250-epoch model is not read as having a tuned learning rate behind it.**
+
+### Sequence agreed
+
+```
+1  100-epoch training                              ~8 h    RUNNING
+2  index -> G4 -> promote -> A/B on that model     ~40 min
+3  250-epoch training                              ~20 h
+4  index -> G4 -> promote -> A/B on that model     ~40 min
+```
+
+Step 2 is deliberate and Kyzen approved it explicitly. **The whole evaluation
+chain has never run end to end** — G4, promotion and the reported A/B were all
+written today and have only ever seen synthetic fixtures. Discovering a defect
+in it after step 1 costs 40 minutes; discovering it after step 3 costs 20 hours.
+
+### Two monitors MASTER wrote wrong today, recorded because both were silent failures
+
+```
+1  `while pgrep -f "metafind.train.stage1 --phase final"` -- the watcher's OWN
+   command line contains that string, so pgrep matched itself and the loop could
+   never exit. It would have waited forever and reported nothing.
+2  `P=$(pgrep -f ... | tail -1)` resolved to a process that vanished, so the
+   watcher reported "training exited" 90 seconds after launch, while training
+   was in fact healthy at 100% GPU.
+```
+
+**Neither was a training fault. Both were the instrument.** The first would have
+hidden a finish; the second manufactured one. Fixed by capturing the real PID
+once and polling `kill -0` on that number.
