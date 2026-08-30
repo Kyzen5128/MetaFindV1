@@ -235,6 +235,33 @@ def build_eval_protocols(train: list[str], test: list[str],
             "layout_free_context": "omitted",
             "reported": False,
         }
+        # [DL-044] C cannot tell a trained model from an untrained one. Measured
+        # 2026-08-30: random fusion towers over the pretrained encoders score
+        # full R@1 = 0.9989 on C, against 1.0000 trained, and four of seven
+        # conditions move by less than a point. A protocol that a null model
+        # passes is not measuring what it names.
+        #
+        # D is the cheapest way to ask whether that survives a larger gallery:
+        # same 4,569 queries, gallery grown 8x to the whole training pool. If
+        # the null still scores near 1.0 here, gallery size is not the cause and
+        # the task itself is the problem; if it collapses, C was simply too
+        # small and A/B may still be sound.
+        #
+        # It reads NOTHING sealed. `dev_val` is a subset of `train`
+        # (asserted below in `split_dev`), so the query's own asset is in the
+        # gallery, and `check_seal` looks for "test" or "full" in the splits
+        # used -- ("dev_val", "train") is neither, so no --unseal.
+        #
+        # `reported: False` for the same reason as C, and one more: its gallery
+        # is the training pool, so every candidate is an asset the model was
+        # fitted on. It is a diagnostic, never a result.
+        protocols["D_dev_val_vs_train"] = {
+            "query_split": "dev_val",
+            "gallery_split": "train",
+            "gallery_size": len(train),
+            "layout_free_context": "omitted",
+            "reported": False,
+        }
     return protocols
 
 

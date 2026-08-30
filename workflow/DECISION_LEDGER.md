@@ -2301,3 +2301,85 @@ today.
 **Eight GPU runs, roughly three and a half hours, were spent comparing settings on
 an instrument that had never been checked against a null.** The check cost three
 minutes.
+
+---
+
+## DL-045 — protocol D: gallery size is not the cause, and training's real effect is visible for the first time
+
+`RECORDED` · 2026-08-30 · MASTER, under Kyzen's Stage 1 delegation · GPU, ~8 min, nothing sealed touched
+
+`DL-044` left one candidate standing: that `full = 1.0000` is an artifact of
+protocol C's 4,569-asset gallery. **It is not.**
+
+### Protocol D, added at its producer
+
+`splits.build_eval_protocols` now emits `D_dev_val_vs_train`: the same 4,569
+dev-val queries against the whole 36,554-asset training pool, an 8x gallery.
+`eval_protocols.json` was regenerated from the existing `splits.json` — no
+re-split, no GPU — and the three existing protocols were compared field by field
+first and are unchanged. **It reads nothing sealed**: `dev_val` is a subset of
+`train`, and `check_seal` looks for `test` or `full`, which `("dev_val","train")`
+is not. `reported: false`, for C's reason and one more — every candidate in its
+gallery is an asset the model was fitted on.
+
+### Result
+
+```
+condition     untrained C   untrained D   trained D   training adds   paper
+text            0.9729        0.9044       0.7586      -14.6 pp       0.138
+image           0.9041        0.7308       0.9278      +19.7 pp       0.117
+pc              0.9532        0.8332       0.9181       +8.5 pp       0.751
+text+image      0.9974        0.9866       0.9912       +0.5 pp       0.172
+text+pc         0.9998        0.9969       0.9998       +0.3 pp       0.445
+image+pc        0.9869        0.9315       0.9637       +3.2 pp       0.458
+full            0.9989        0.9961       1.0000       +0.4 pp       0.517
+```
+
+### What this settles
+
+**Gallery size is not the cause.** Growing the gallery eight-fold moves the
+untrained `full` from 0.9989 to 0.9961 — **0.28 pp**. The last of `DL-044`'s
+candidate explanations is eliminated by measurement, the second hypothesis this
+project has closed that way.
+
+**The four multi-modal cells are saturated for a null model at both gallery
+sizes.** `text+pc` is 0.9969 untrained. Whatever those cells measure, it is
+available before any Stage 1 training happens.
+
+**The three single-modality cells do separate, and this is the first honest
+measurement of what Stage 1 training is worth**: +4.54 pp on their mean, at 8x
+gallery. On protocol C the same comparison gave +0.6 pp. **C was too small to
+show it; D is not.**
+
+### The finding nobody was looking for
+
+**`text` gets worse with training, at both gallery sizes, and the damage grows
+with the gallery: −7.1 pp at C, −14.6 pp at D.** It is the only condition that
+moves down, and it moves down consistently across two protocols and two
+checkpoints. **This is not noise and it has never been reported.**
+
+It is also the condition where the paper is weakest (0.138), so a reproduction
+that quietly degrades text retrieval would still look superficially plausible
+against Table 1.
+
+**Not yet explained.** One reading is that the shared-input mechanism from
+`DL-044` gives `text` a free ride at initialisation, which training then spends;
+another is that the text tower is being actively damaged. Distinguishing them
+needs the per-epoch trace, which `MINOR-2`'s unapplied patch would restore going
+forward and which no existing run can supply.
+
+### Standing after this entry
+
+```
+CLOSED    full = 1.0000 is structural, not learned, and not a gallery-size artifact
+CLOSED    protocol C cannot separate a trained model from an untrained one
+OPEN      why `text` degrades under training, and by more as the gallery grows
+OPEN      whether A and B behave like D; neither has ever run
+UNCHANGED no Table 1 number may be quoted from C or D. Both are reported: false.
+UNCHANGED no learning rate may be selected from the sweep: it was scored on C.
+```
+
+**The sweep's ranking is now known to have been measured on a protocol that a
+null model passes.** Re-scoring the eight checkpoints on D is the cheap next
+step — eight runs of roughly four minutes, nothing sealed — and it is the only
+way the learning-rate question gets an answer that means anything.
