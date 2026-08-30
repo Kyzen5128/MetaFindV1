@@ -2182,3 +2182,122 @@ not included and neither was the power limit.**
 The old rule let MASTER say "I have no `✅`, so I cannot". **That excuse is gone.**
 Under this entry, not knowing whether Kyzen would agree is a reason to go and ask
 him clearly — not a reason to wait, and not a reason to proceed quietly.
+
+---
+
+## DL-044 — an untrained model scores 0.999 on `full`. The evaluation is not measuring retrieval.
+
+`RECORDED` · 2026-08-30 · MASTER, executed under Kyzen's Stage 1 delegation · GPU, ~3 min
+
+**The control the ULIP2 Block Reviewer named as the minimum before Table 1 could
+leave has now been run.** Its result closes the `full = 1.0000` question and opens
+a larger one.
+
+### What was run
+
+```
+python -m metafind.eval.run_retrieval --protocol C_dev_selection \
+       --ckpt-record none --init-seed {1,2,3}
+```
+
+No Stage 1 checkpoint. Both fusion towers at random initialisation. The point
+encoder still carries ULIP-2's pretrained PointBERT and pc_projection; text and
+image still go through pretrained OpenCLIP ViT-bigG-14. **This is an
+untrained baseline, not an unpretrained one**, and the artifacts say so in their
+own provenance.
+
+### The result
+
+```
+condition     untrained s1   s2       s3       best trained   training adds   paper
+text            0.9729    0.9593   0.9604      0.8932        -7.10 pp        0.138
+image           0.9041    0.9184   0.9085      0.9816        +7.13 pp        0.117
+pc              0.9532    0.9475   0.9350      0.9759        +3.07 pp        0.751
+text+image      0.9974    0.9982   0.9974      0.9980        +0.04 pp        0.172
+text+pc         0.9998    0.9998   0.9998      0.9998         0.00 pp        0.445
+image+pc        0.9869    0.9851   0.9866      0.9937        +0.74 pp        0.458
+full            0.9989    0.9998   0.9996      1.0000        +0.06 pp        0.517
+```
+
+**`full = 1.0000` is not a property of the trained model.** An untrained one
+reaches 0.9989 on the same protocol. Training moves that cell by 0.06 pp.
+
+`text+pc` is identical to four decimal places, trained or not. `text+image` moves
+0.04 pp. **On four of seven conditions, Stage 1 training is indistinguishable
+from doing nothing.** On `text` it is 7.10 pp *worse* than doing nothing.
+
+### What this does to the LR sweep, which finished 25 minutes earlier
+
+Every arm, three-cell mean, against the untrained baseline of 0.9399:
+
+```
+lr 0.001      0.8461     -9.38 pp
+lr 0.00075    0.8732     -6.67 pp
+lr 0.0005     0.9075     -3.24 pp
+lr 0.00025    0.9493     +0.94 pp
+```
+
+**Three of four learning rates make the model worse than not training it.** The
+fourth beats it by 0.94 pp — below `DL-033`'s δ of 1.0 pp, and below the
+untrained baseline's own seed-to-seed spread of 0.88 pp.
+
+The sweep's clean monotone ordering — lower learning rate, better score — reads
+as **how little damage the training does**, not how well the model retrieves.
+And the best value sits at the edge of the range tested: 0.00025 is the lowest
+learning rate in the sweep, so the ordering does not contain its own optimum.
+
+### The seed-to-seed dispersion this round was meant to produce
+
+```
+lr 0.001      1.02 pp
+lr 0.00075    0.85 pp
+lr 0.0005     0.38 pp
+lr 0.00025    0.19 pp
+untrained     0.88 pp   (three draws of the fusion towers)
+```
+
+**It is not one number. It depends on the learning rate**, by a factor of five
+across the range, and the dispersion of the untrained baseline is larger than the
+gap the best arm earns. `DL-034` called this batch a measurement round and not a
+selection round. That was right, and it is now clear why: **there is nothing here
+to select between.**
+
+### What is now established, and what is not
+
+```
+ESTABLISHED   protocol C cannot separate a trained model from an untrained one
+              on four of seven conditions.  OBSERVED DATA, three seeds.
+ESTABLISHED   `full = 1.0000` is structural, not learned.  The DL-033 debt is
+              DISCHARGED -- and the answer is worse than the debt.
+NOT ESTABLISHED  whether protocols A and B separate them. Both have larger
+              galleries and neither has ever run.
+NOT ESTABLISHED  why the pretrained encoders alone solve this task. The obvious
+              reading is that query and gallery are the same 4,569 assets and
+              a pretrained encoder already places each asset nearest itself,
+              but that is INFERENCE and has not been measured.
+NOT ESTABLISHED  whether any of this survives at gallery 45,692.
+```
+
+### What must not happen next
+
+**No Table 1 number may be quoted from protocol C.** It was already marked
+`reported: false`, for a different reason, and that marking is now load-bearing.
+
+**No learning rate may be selected from this sweep.** Selecting the best of four
+arms that are mostly worse than no training at all would be choosing the least
+harmful setting and reporting it as the best model.
+
+**`--phase final` must not run yet.** It would consume hours to produce a model
+whose measured advantage over random initialisation is smaller than the noise.
+
+### The instrument was measured before the object, and only just in time
+
+The reviewer's sentence was: *"if `full` is already near 1.0000 at initialisation,
+that cell is not measuring the model — and `shuffle_targets` will never tell you
+so."* Both halves held. The control that existed would have passed. The control
+that could discriminate was documented as needing no code and had none until
+today.
+
+**Eight GPU runs, roughly three and a half hours, were spent comparing settings on
+an instrument that had never been checked against a null.** The check cost three
+minutes.
