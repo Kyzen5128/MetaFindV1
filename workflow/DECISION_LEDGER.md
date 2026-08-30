@@ -1956,3 +1956,146 @@ U-20 pinned 1280 on 2026-08-27 and nothing enforces it: an n08 that wrote a
 clip-vit-b32-laion2b-s34b-b79k`, written 2026-08-17 — before the 1280 ruling.
 **Nothing compares it against the ruling.** n08 has to re-run, and that needs
 GPU and its own `✅`.
+
+---
+
+## DL-042 — findings that existed only in conversation, filed
+
+`RECORDED` · 2026-08-30 · collected by MASTER from the ULIP2 Block Reviewer, the
+ESSGNN Block Reviewer and INTEGRATOR, each asked what they had said and never
+written down
+
+**None of these was discovered today. All of them were known, by somebody, and
+none was in a file.** They are filed together because that is the finding: the
+project's memory has been the conversation windows, and a window is not storage.
+
+### From the ULIP2 Block Reviewer — seven, grepped against `REVIEW.md` first
+
+**① The paper's shape and ours are inverted. This is the one that matters.**
+
+```
+paper   pc 75.1  >  full 51.7     adding modalities HURTS a point-cloud query
+ours    pc 0.897 <  full 1.000    adding modalities saturates
+paper Table 1 (w/o ESSGNN) seven-condition mean R@1 = 37.11%
+ours, protocol C                                    93-96%
+grep "37.11" REVIEW.md → 0
+```
+
+**Not a tuning gap. The direction is opposite.** A gap invites "train longer";
+an inversion says something upstream of the number is different.
+
+**His own caveat, kept:** the present comparison crosses different gallery sizes
+and is not legitimate on its own. It has to be redone once the two real
+protocols have run.
+
+**② Why `evaluate_dev_val`'s `targets = np.arange(...)` is sound.** The loader is
+`shuffle=False`, `drop_last=False`, single pass, so query row *i* and gallery row
+*i* are the same asset. He verified it. Never written down — and it is the
+premise the whole dev-val number rests on.
+
+**③ One query sits on a knife edge in `image+pc`.**
+
+```
+recorded (torch f32)  0.987743489
+numpy f32             0.987962355
+numpy f64             0.987743489
+difference 0.000218866 = exactly 1/4569
+```
+
+One query flips with the arithmetic library. Only in
+`output/look/dtype_effect_helper.json`, which is gitignored per `DL-036`.
+
+**④ `reported` in `eval_protocols.json` conflates two states** — "intended for the
+report" and "has actually run". A and B carry `true` and have never executed. He
+proposed renaming it `reportable`; it touches `tests/test_splits.py`.
+
+**⑤ His own fix for protocol B's contamination label, which was not recorded.**
+Do **not** touch `reported`: `reported: true` is U-09's deliberate bracket and
+`retrieval.py:19-27` holds that reasoning; overturning it discards the argument.
+Add a field instead — `gallery_contains_train_split: true`. What is missing is
+the label, not the decision.
+
+**⑥ `CLAUDE.md` §9's data root was stale.** Corrected 2026-08-30.
+
+**⑦ The 46,052 list.** Superseded the same day by the finding that three corpus
+sizes exist and each is right about something different; see the `NUMBERS` commit.
+
+### From the ESSGNN Block Reviewer
+
+He never read `ESSGNN_DIM_REVIEW.md` — **he refused**, because the message
+ordering it said in its own text that the freeze was not lifted, and reading
+3,200 lines against six rules is review work wearing the clothes of reading.
+MASTER accepted the refusal.
+
+**So the document's "external review rejected eighteen items" was not him**, and
+the other twelve are not recoverable from his window. He handed over six that a
+previous MASTER had listed as its own errors:
+
+```
+1  v2 named Candidate D "Appendix-consistent" and then wrote EGNN's phi_h
+2  v2 proposed reopening the architecture family, against Rule 13 and a
+   USER-backed U-26
+3  v2 said the paper pins d at 1280 -- it had silently added "Pooling preserves
+   width", and Pooling is not named
+4  v2 labelled "BERT-base 768" a PAPER FACT; the paper says only "e.g. CLIP or BERT"
+5  v2 argued from dimension share (edge 83%) that edges overwhelm geometry
+6  it inferred from EGNN's in_edge_nf = 0/2 that edges should be narrow -- Type C,
+   which yields no architectural principle
+```
+
+**Item 5's current wording is his, and it is the sharpest thing in the set:**
+
+> `m_ij = phi_e(cat[h_i, h_j, radial, e_ij])` is a concat into an MLP. The first
+> Linear holds an independent weight block per slice: a 512-wide slice can be
+> learned to zero, a 1-wide slice can dominate the output. **Width is capacity,
+> not influence.** And `2methdology.tex:54`'s `f_h: R^(2d+1+e) -> R^d` names `d`
+> and `e` separately — the paper never asks that they be comparable.
+
+Filed at `workflow/FINDINGS_20260827_CAPTURE.md` §5b; MASTER verified it is there.
+
+**On F-A (phi_e missing EGNN's trailing Swish): nobody ever sent it to him.** The
+handoff's "not attacked by the Reviewer" is accurate, not an omission. He added
+the point that matters: `essgnn_arch_protocol.json`'s `mlp_structure:
+linear_silu_linear` **guards the code against drifting away from its present
+shape — not against being unlike upstream.** So "the protocol covers it" is false
+for this finding: the protocol guards the very thing under question.
+
+### From INTEGRATOR — on hold throughout, so his findings had nowhere to go
+
+```
+A  A document holding both an old and a new version, with nothing marking which
+   is current. Strikethrough is invisible to grep and in a long table. Three
+   people were misled by it in two days, including INTEGRATOR twice.
+
+B  A superseded measurement left in place, unmarked: METAFIND_NOTEBOOK.md:1481's
+   ratio 2.99 is single-seed at a config we do not run, while :1296 and :1342 are
+   six seeds at the config we do. One document, one number, two opposite
+   directions. ⚠ He originally judged :1481 the correct one and has withdrawn that.
+
+C  Identity assembled from parts that were each true at different times: socket
+   read now, name and ref carried over from the previous round. The composite
+   identity never existed. He did it once and was caught by a bounced message;
+   the ULIP2 Reviewer did an isomorphic one the same day, quoting his own summary
+   as somebody else's words. The error is not in the content but in whether two
+   parts belong to the same moment -- and every existing check looks only at content.
+
+D  e5's artifacts were overwritten by e10, leaving only per-epoch totals.
+   Against `.claude/rules/experiments.md` §10. Already lost; only a re-run recovers
+   it, and that needs GPU and a ✅.
+
+E  The semantic-edge LLM has no deviation number. DL-005 split D-2 into D-2 and
+   D-8 and it belongs to neither. ⚠ Kyzen ruled all LLM roles to gemma on
+   2026-08-30, which settles the model; **the missing deviation id is a separate
+   gap and is still open.**
+```
+
+**He also corrected the seam number MASTER used, and the attribution of the
+four-variant framing — both recorded against `DL-035`.**
+
+### The thing all three have in common
+
+Each was asked "what did you say that never got written down", and each had
+something. **The ULIP2 Block Reviewer's full handoff could not be written at all,
+because MASTER had broken the write guard an hour earlier and its fail-closed
+branch was refusing every write in the repository.** A finding that lives in a
+window dies with the window, and on 2026-08-29 this machine hard-reset nine times.
