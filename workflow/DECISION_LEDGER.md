@@ -3595,3 +3595,113 @@ Neither fix is a paper fact -- MetaFind states no batch size anywhere:
 (A) remove the pc shortcut with an independent query cloud, blocked at 32.38 GB
 of 32.6 GB; (B) raise the effective batch toward upstream's 512, which on one GPU
 means GradCache, since gradient accumulation cannot supply in-batch negatives.
+
+---
+
+## DL-055 -- OpenShape read end to end. The evaluation chain closes, and the unfreeze lead is now contradicted by three upstream sources.
+
+Date 2026-08-31. Kyzen ordered a verbatim re-read of `docs/paper/ulip1_source/`
+and `docs/paper/ulip2_source/`, then approved following the chain into OpenShape.
+Read in full: ULIP-1 `main.tex` 1124 lines; ULIP-2 `main.tex` 1474 lines plus
+`appendix.tex` (`sec/*.tex` are unused CVPR boilerplate, not `\input`);
+OpenShape `sections/*.tex` and `tables/*.tex`; and the official code in
+`/home/kyzen/upstream/ULIP` and `/home/kyzen/upstream/OpenShape`.
+
+### The chain, resolved
+
+`PAPER FACT` ULIP-2 defines no evaluation of its own. Three sentences delegate it:
+`main.tex:704` "same dataset setup and preparation protocols used in ULIP and
+OpenShape"; `:711` "same evaluation metrics used in ULIP: top-1 and top-5";
+`:718` "same procedure as in ULIP and OpenShape". There is no fourth sentence.
+
+`PAPER FACT` ULIP-1 `main.tex:381` holds the definition: "zero-shot 3D
+classification is conducted by measuring distances between the 3D features of an
+object and the text features of category candidates. The category that introduces
+the smallest distance is selected... There is no finetuning stage involved. We
+keep using the same prompt strategy as it is during pre-training." The prompt
+strategy is `main.tex:244`: 63 CLIP-style prompts plus one
+`a point cloud model of [WORD]`, and `:249` averages them, `h_S = Avg(f_S(S_i))`.
+
+`OBSERVED IMPLEMENTATION` upstream `ULIP/main.py:363-405` executes exactly that:
+load 64 templates (`data/templates.json`, `modelnet40_64` and `shapenet_64`, both
+64 entries); take the candidate names (`labels.json`, or for Objaverse the LVIS
+`all_keys`, 1,156 entries); format each name into all 64 templates; encode,
+normalise, mean, normalise again; then cosine against the normalised pc feature
+and take top-1/top-5. The official Objaverse-LVIS script
+`scripts/test_ulip2_pointbert_objaverse_lvis.sh` does not pass
+`--validate_dataset_prompt`, so it runs on the `main.py:41` default
+`modelnet40_64` -- the ModelNet40 template set is used on Objaverse-LVIS.
+
+`PAPER FACT` OpenShape supplies the benchmark and its own evaluation detail:
+Objaverse-LVIS is 46,832 shapes over 1,156 LVIS categories
+(`sections/experiments.tex`), input 10,000 sampled points with colour;
+ModelNet40 is the 2,468-shape test split, 10,000 points without colour;
+ScanObjectNN is **OBJ_ONLY, 581 test shapes**, 2,048 points -- not the hardest
+set ULIP-1 reports. Two upstream papers ULIP-2 says it follows use different
+ScanObjectNN splits.
+
+### Retrieval: three papers, zero metrics
+
+`PAPER FACT` ULIP-1 `main.tex:877` "we qualitatively show the potential" --
+Caltech101 photos against ~2.5k ModelNet40 clouds, Figure 3, no number.
+ULIP-2 contains the string "retriev" zero times. OpenShape's
+`sections/experiments.tex` §4.4 retrieves "by calculating the cosine similarity
+between input embedding(s) and 3D shape embeddings and performing kNN" and shows
+Figures 5-7 plus two supplementary figures -- again no metric and no table.
+
+**No upstream retrieval protocol exists to inherit.** MetaFind's Table 1 is its
+own construction. Reverse-engineering its baseline row against upstream numbers
+is not possible in principle, not merely unfinished.
+
+### The same checkpoint, the same benchmark, two harnesses, 2.4x apart
+
+`PAPER FACT` ULIP-2 `main.tex:430` reports ULIP/Point-BERT/ShapeNet on
+Objaverse-LVIS as **2.6 / 8.1**, and on ModelNet40 as 60.4 / 84.0.
+`PAPER FACT` OpenShape `tables/zero-shot.tex` reports the same official ULIP
+checkpoint on Objaverse-LVIS as **6.2 / 17.9**, and on ModelNet40 as 60.4 / 84.4.
+
+ModelNet40 top-1 agrees to the digit (60.4) -- both groups inherited ULIP's own
+label list and 64 templates there. Objaverse-LVIS, the benchmark OpenShape
+invented, differs by 2.4x. A published, two-sided demonstration that the harness,
+not the weights, can move a number by more than a factor of two.
+
+`OBSERVED IMPLEMENTATION` a likely mechanism sits in OpenShape's own repo. It
+ships two LVIS category-feature extractors: `src/extract_lvis_feat.py` encodes
+`[name]` -- one bare category name, no template, no averaging -- while
+`src/extract_lvis_feat_ulip.py` builds 64 templated prompts and does
+normalise-mean-normalise for the retrained ULIP baseline. The paper
+(`sections/method.tex`) states templates are applied "to both training texts and
+test-time category names". `src/configs/train.yaml:63` loads a third filename,
+`meta_data/lvis_cat_name_pt_feat.npy`, shipped inside `meta_data.zip` and not
+present locally. `UNKNOWN` which extractor produced the released 46.8; the `_pt_`
+in the filename and the paper text both point at the templated one, but this was
+not verified against the artifact.
+
+### The unfreeze lead from DL-054 is contradicted and downgraded
+
+DL-054 recorded, as `INFERENCE, NOT ESTABLISHED`, that unfreezing CLIP was the
+only hypothesis explaining the 2.7x text / 6.5x image / 1.2x pc pattern at once.
+Three upstream sources now speak against it, two of which had not been read:
+
+1. `UPSTREAM FACT` ULIP-1 §3.2 (published): catastrophic forgetting at 52.5K
+   assets; alpha set to 0 and both CLIP encoders frozen for the whole run.
+2. `OBSERVED` ULIP-1 `main.tex:1068-1090`, a table the authors **commented out**
+   of the published paper: "Ablation study on unfreezing image & text encoders",
+   ModelNet40 hard set -- freeze=no gives top-1 **0.0**, top-5 **1.0**; freeze=yes
+   gives 37.1 / 66.3. Not a PAPER FACT: it never appeared in the published paper.
+   It is the authors' own recorded result in their own source file.
+3. `UPSTREAM FACT` OpenShape `sections/supplementary.tex`, "Fine-tuning CLIP Text
+   and Image Encoders?": they unfroze and finetuned the CLIP text encoder for one
+   epoch, saw "no noticeable improvement on the benchmarks", and observed it
+   "could potentially undermine the generalization capabilities of CLIP". They
+   froze for the entire process.
+
+Unfreezing does not produce a mild degradation that would leave text at 37.8 and
+image at 75.8. Where it has been measured upstream it produces collapse (0.0) or
+nothing (no improvement). The hypothesis does not fit the pattern it was invented
+to explain, and the LoRA arm it implied is no longer the first thing to run.
+
+MetaFind's own text still positions itself against freezing
+(`2methdology.tex:32`) and Tab. 3 still shows 8.7 vs 11.4. That tension is
+unresolved and stays open; what changed is that the reproduction-side inference
+built on it is now contradicted by upstream measurement.
