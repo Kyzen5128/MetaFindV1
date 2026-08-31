@@ -4091,3 +4091,74 @@ whose modalities describe a different asset than the target.
    stated 11).
 3. Four of the eight baseline rows -- SCA3D, Uni3DL, Uni3D, OmniBind -- remain
    uncloned and unread.
+
+---
+
+## DL-061 -- OpenReview. Kyzen was right: the baselines were run, not copied. And no reviewer checked Table 1.
+
+Date 2026-09-01. Kyzen supplied the full OpenReview discussion for submission
+5609 (NeurIPS 2025 poster, accepted). I could not fetch it -- the API returns
+`ChallengeRequiredError` 403. Four reviews, four rebuttals, decision.
+
+### Kyzen was right and my framing was wrong
+
+`PAPER FACT` Author Final Remarks: "We ensured fair comparisons by **adhering to
+the strongest official settings of all available open-source baselines**."
+
+The baseline rows were run by the authors, each under that baseline's own
+official configuration. My DL-057/DL-060 framing -- "either one pipeline or
+copied" -- was a false pair, and the copied branch is now closed by the authors'
+own statement. Withdrawn.
+
+This also reframes the text cell. Under ULIP's *official* setting the text input
+is its 64-template prompt ensemble over a **category name**, not a description.
+Our L1 rung is exactly that and measures **1.24** against their 0.1 -- same order
+of magnitude, where our L3 description measures 20.61. So the text gap is an
+input difference, not a defect: they ran each baseline as its authors intended,
+and we feed a GPT-4o serialisation.
+
+### Confirmations that settle open items
+
+`PAPER FACT` **tau = 0.5**: "We used a temperature value of 0.5 ... following
+commonly used defaults in prior works. We did not perform dedicated tuning."
+Matches our config; it is a default, not a tuned value.
+
+`PAPER FACT` **11 views**, third independent statement: "we extend the rendering
+pipeline to 11 views per object (compared to 4 in prior work)". Our 12 remains a
+DEVIATION (DL-059).
+
+`PAPER FACT` **The gallery is modality-complete for MetaFind.** Reviewer ZhAY
+asked why the gallery needs all three when the point cloud carries the geometry;
+the authors answered that point clouds "lack high-level semantic cues such as
+typical usage, real-world scale, and functional context", so image and text are
+included. This does not disturb the baseline-row analysis: the baselines are
+single-tower, and for ULIP an asset's embedding IS its point-cloud embedding,
+which is what the paper's own "identical embeddings for both query and gallery"
+sentence requires.
+
+`PAPER FACT` **The ESSGNN R@1 drop is a fusion-head distribution shift**, and
+"using the stage-one fusion layer yields results identical to the 'w/o ESSGNN'
+variant". So Table 1's two MetaFind rows differ only by which fusion head is used
+at inference.
+
+`OBSERVED` **No code was released.** Reviewer ZhAY: "Hope you plan to publish the
+code as well so that the community can benefit from an additional baseline."
+
+### What the review process did NOT check
+
+None of the four reviewers raised Table 1's baseline numbers. Nobody asked why
+text-only is 0.1, why every modality combination scores below its best single
+component, or why `full` falls below `pc`. Reviewer GpRz -- the only one to rate
+clarity as "fair" -- states plainly: "Math/other details were not carefully
+checked." Confidences were 3, 2, 4 and (cY7o) unread in the supplied excerpt.
+
+`INFERENCE` The row was therefore never independently verified by anyone. That
+does not make it wrong, and I am not claiming it is. It does mean the DL-060
+result stands unopposed: mean pooling over a point-cloud gallery cannot turn
+pc 97.9 and text 0.1 into text+pc 33.9, measured across five text variants, and
+nothing in the review record explains how it was obtained.
+
+`UNKNOWN` remains: what the baselines' "strongest official settings" did to the
+multi-modality conditions. Each baseline having its own text pipeline explains
+the single-modality cells; it does not explain the descent, because the descent
+is a property of averaging, not of the inputs.
