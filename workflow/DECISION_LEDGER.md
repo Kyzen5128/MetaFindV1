@@ -4503,3 +4503,65 @@ image comparison (47.14 vs 45.67 on the 12-view mean).
 
 No stage of the data pipeline explains the Table 1 gap. Every one of them is
 level with or ahead of upstream's own published data.
+
+---
+
+## DL-066 -- Loss 2.39 is arithmetic, not a stall. Measured the one term that decides it: mean negative cosine is 0.0007.
+
+Date 2026-09-01. Kyzen relayed an analysis arguing that at batch 64 with a fixed
+tau = 0.5, an InfoNCE loss near 2.3 is what a model that already ranks every
+positive first looks like, and asked whether it had actually been measured.
+
+Partly. DL-054 recorded the geometric bound, and that arithmetic was right. But
+the **mean negative cosine was never measured**, and it is the term that decides
+whether the loss sits on the floor or above it. `diag_trained_fusion_identity`
+had recorded only the HARDEST negative, at 0.82-0.83, which is far from the 0
+the argument assumes -- so the claim was not yet supported by our own numbers.
+
+`tools/probes/loss_anatomy.py`, 40 batches of 64 from dev_val, checkpoint
+`sweep_lr/lr2.50e-4_s20260830`:
+
+```
+  chance (all logits equal)                 4.1589
+  floor if negatives sit at cosine 0        2.2540
+  floor at the geometric minimum -1/(B-1)   2.2257
+
+  condition      pos   mean neg  hardest  margin    loss   above floor
+  text        0.9170    0.0007   0.5389  0.3781  2.4532      0.2276
+  image       0.9610    0.0008   0.5447  0.4163  2.3734      0.1477
+  pc          0.9644   -0.0004   0.5430  0.4214  2.3648      0.1391
+  text+image  0.9819    0.0008   0.5432  0.4387  2.3349      0.1092
+  text+pc     0.9911   -0.0001   0.5414  0.4497  2.3166      0.0909
+  image+pc    0.9840   -0.0000   0.5417  0.4423  2.3296      0.1040
+  full        0.9982    0.0001   0.5411  0.4570  2.3040      0.0783
+```
+
+`OBSERVED DATA` **Mean negative cosine is 0.0007** -- the negatives really are
+orthogonal, so the `negatives at cosine 0` idealisation is the right model of
+this batch and the 2.2540 figure is the operative bound. Positives run 0.917 to
+0.998. `full` sits **0.078** above the true geometric floor with a positive
+cosine of 0.9982.
+
+The confirmed reading: the objective is finished. With tau fixed at 0.5 the
+softmax cannot sharpen further, so cross-entropy cannot fall even though the
+ranking is already correct. **Loss is a dead instrument for this configuration**
+and "the loss plateaued" was never evidence of a training failure.
+
+⚠ Reconciling the two hardest-negative numbers, which look contradictory:
+`diag_trained_fusion_identity` reports 0.82-0.83 and this reports 0.54. Both are
+right. That probe took the hardest negative over the whole 4,569-asset dev_val;
+this one takes it over the 63 others in a batch. Hardest-of-4568 is necessarily
+higher than hardest-of-63. Neither number should be quoted without its pool.
+
+⚠ `tau` stays at 0.5. `3experiments.tex:15` states it and the rebuttal confirms
+it was an untuned default. Lowering it to 0.07 would make the loss curve look
+far better and would no longer be the paper's objective.
+
+### What this does and does not resolve
+
+It closes "why does the loss stop at 2.39", which had been an open item since
+DL-054. It does not touch the Table 1 gap: a positive cosine of 0.9982 on the
+`full` condition means query and gallery produce near-identical vectors from the
+same inputs, which is the construction DL-063 measured at 90.4 R@1 with random
+weights. The loss is at its floor because the task is easy, and the task is easy
+for the reason already recorded.
