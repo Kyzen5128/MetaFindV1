@@ -3705,3 +3705,82 @@ MetaFind's own text still positions itself against freezing
 (`2methdology.tex:32`) and Tab. 3 still shows 8.7 vs 11.4. That tension is
 unresolved and stays open; what changed is that the reproduction-side inference
 built on it is now contradicted by upstream measurement.
+
+---
+
+## DL-056 -- CAMERA's own evaluator, run on our corpus: the released ULIP-2 backbone, untrained, already beats MetaFind's reported trained text row.
+
+Date 2026-08-31. Kyzen supplied CAMERA's `evaluate.py`, their 2025-08-12 working
+note (the PDF carrying Table 4's numbers verbatim), and a forensic read of their
+`main.py`. He then asked where the protocol comes from, and told me to run it.
+
+### Provenance of the protocol
+
+`UPSTREAM FACT` The metric triple RR@1 / RR@5 / NDCG@5 for text-shape retrieval
+is the **Text2Shape** lineage (Chen et al., 3DV 2018): ShapeNet chair + table,
+~1.4K models, ~7.4K human captions, ~5 per shape. It reaches CAMERA through
+**TriCoLo** (WACV 2024) and **Parts2Words** (CVPR 2023), both of which report on
+the Text2Shape test split.
+
+`OBSERVED` CAMERA's Table 4 mixes three sources in one table:
+Parts2Words 12.72/32.98/23.13 and TriCoLo 10.25/29.07/19.85 are copied from those
+papers (Text2Shape test, 1,434 shapes); the "Ulip-2" row 13.50/39.69/26.89 is
+their own run on **14,966 ShapeNet chair/table**, and the forensics established
+that checkpoint is `ULIP_PointBERT` -- ULIP-1, 8192 xyz -- not ULIP-2. Three
+pools, three datasets, two model generations, one comparison table.
+
+`OBSERVED` The six-way retrieval is CAMERA's own code (`main.py:716`); upstream
+ULIP has nothing like it. It runs each epoch against `train_dataset` with
+`whole=True`, so train and test are merged into a 14,966 closed set.
+
+⚠ **A caveat I wrote and withdrew the same hour.** The first draft of
+`tools/probes/camera_six_way.py` recorded CAMERA as having ~5 positives per query
+(75,361 captions / 15,033 models) and called our single-positive setting
+"stricter". Wrong: their loader emits ONE row per object with a randomly drawn
+caption, so `obj2idxs` holds one index per object and the best-rank-over-
+positives code is a no-op. Their RR@1 is single-positive instance retrieval,
+exactly like ours, and 13.50 IS directly comparable. The correction is a named
+block in the probe, not a silent edit.
+
+### The measurement
+
+`tools/probes/camera_six_way.py`, released ULIP-2 (`ULIP2_PointBERT_Colored`,
+10k xyzrgb, OpenCLIP ViT-bigG), **no Stage 1 weights**, our 45,692-asset corpus,
+cached text and 12-view-mean image vectors, all three L2-normalised. Pool matched
+to CAMERA's 14,966 by a seeded subsample alongside the full corpus.
+Modality norms came out 37.06 / 40.23 / 27.65, matching `diag_modality_norms`.
+
+```
+R@1, pool 14,966          CAMERA (ULIP-1)   ours (released ULIP-2)
+  S2T  pc -> text                9.60              40.15
+  T2S  text -> pc               13.50              32.51
+  S2I  pc -> image              33.73              83.12
+  I2S  image -> pc              41.48              65.64
+NDCG@5
+  T2S                           26.89              47.94
+```
+
+Every cell higher, T2S by 2.4x. Expected direction -- ViT-bigG against SLIP
+ViT-B, 10k coloured points against 8192 xyz, and our generated descriptions
+against Text2Shape's human captions -- but it is now measured rather than
+assumed, under their protocol rather than ours.
+
+### What this does to MetaFind's Table 1
+
+```
+                                        text-only R@1     pool
+MetaFind Tab.1, ULIP row                     0.1          48K
+MetaFind Tab.1, MetaFind w/o ESSGNN         13.8          48K
+ours, released ULIP-2, ZERO training        20.61         45,692
+```
+
+`OBSERVED DATA` The backbone we start from, with no MetaFind training of any
+kind, already scores above MetaFind's reported trained text row on a pool of
+comparable size. Any account of Table 1 has to survive that.
+
+It also constrains the baseline row. A plain text-to-pointcloud retrieval with a
+descriptive caption gives 20.61, not 0.1 -- 206x apart. Our own text ladder gives
+1.24 for a bare category name against the same pc-only gallery, which is the same
+order as 0.1. `INFERENCE`: MetaFind's baseline text is a category name or similar
+short label, not a description. That is one of the knobs in the pending grid, and
+it now has a measured bracket around it: 1.24 at L1, 20.61 at full description.
