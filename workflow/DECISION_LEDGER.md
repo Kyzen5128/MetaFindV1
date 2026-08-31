@@ -4005,3 +4005,89 @@ Text2Shape's paper is also unread (its code is read).
    training, against the paper's trained 13.8.
 3. `OBSERVED DATA` no evaluation configuration reproduces the baseline row's
    descent (DL-057).
+
+---
+
+## DL-060 -- Built the baseline as described and ran it. Mean pooling CANNOT produce Table 1's baseline row, and that is now arithmetic rather than argument.
+
+Date 2026-09-01. Kyzen: "it cannot be copied -- build what they built and run it,
+then you will know." Built, run, and it settles the question the other way: the
+described construction is not sufficient, and the shortfall is provable.
+
+### Step 1 -- break the self-match, which DL-057 could not
+
+`tools/probes/baseline_independent_query.py`. Query point cloud is a second
+independent 10,000-point surface sample of the same mesh (seed offset 1000003,
+same sampler, same `pc_norm`); query image is one held-out view; gallery keeps
+the canonical vectors. Released ULIP-2, no Stage 1 weights. 4,569 dev_val
+queries against the full 45,692 gallery.
+
+`OBSERVED DATA` The gate: `cos(query pc, gallery pc)` = **0.9445 mean, 0.9489
+median, 0.8604 at p1, 0.7979 min**. A resample is a real perturbation, not a
+rounding difference -- so this construction CAN move the pc cell, and it does:
+
+```
+                 this run    paper ULIP
+  pc               95.23        97.9      <- closest match achieved all session
+  text             20.70         0.1
+  image            39.16         0.1
+  text+pc          93.24        33.9
+  image+pc         92.89        22.6
+  full             89.91         6.4
+```
+
+The pc cell lands. The descent still does not happen.
+
+### Step 2 -- the impossibility, measured
+
+If the paper's text scores 0.1 alone, does a text vector that bad drag `text+pc`
+from 97.9 to 33.9? Substituted progressively worse text against the real pc query
+and the real gallery:
+
+```
+  text variant            text only    text+pc
+  -- pc alone --                        100.00
+  real text                   20.70      99.74
+  shuffled text                0.02      99.47   <- text as bad as the paper's
+  random gaussian              0.00      99.98
+  constant (text mean)         0.00     100.00
+```
+
+`OBSERVED DATA` A text embedding scoring **0.02** -- the paper's own baseline
+level -- leaves `text+pc` at **99.47**. It cannot reach 33.9.
+
+The reason is structural, not tuning. A vector that retrieves nothing contributes
+a nearly constant score to every gallery entry, so averaging it in shifts all
+scores together and leaves the ranking essentially intact. Mean pooling cannot
+destroy a signal by adding a useless one to it.
+
+### What this forecloses
+
+Both gallery choices are now dead:
+
+- **gallery = point cloud.** Forced by the paper's own sentence that PC-only uses
+  "identical embeddings for both query and gallery". Then pc 97.9 and text 0.1
+  together force text+pc near 97, measured above. The paper says 33.9.
+- **gallery = mean of three.** Then the `full` query, also the mean of three,
+  matches itself and scores ~100. The paper says 6.4.
+
+`INFERENCE` No mean-pooling construction over any single fixed gallery produces
+the row's shape. Something beyond "a simple mean pooling layer ... to retrieve
+from a pre-encoded gallery" (`3experiments.tex`) is required, and the paper does
+not say what. This is a gap in the description, not a demonstration that the
+numbers are wrong -- we cannot see their pipeline. But the described method,
+built and run, gives different numbers, and that is now measured on five text
+variants rather than reasoned about.
+
+`UNKNOWN` What the missing ingredient is. Candidates not yet tested: a learned
+rather than arithmetic "mean pooling layer"; a per-condition gallery; a query
+whose modalities describe a different asset than the target.
+
+### Standing, unchanged
+
+1. ULIP-2 reproduces exactly (50.576 vs 50.6) -- DL-053.
+2. Two of our own deviations found, both in the image path -- DL-058 (12-view
+   mean vs upstream's single sampled view) and DL-059 (12 renders vs the paper's
+   stated 11).
+3. Four of the eight baseline rows -- SCA3D, Uni3DL, Uni3D, OmniBind -- remain
+   uncloned and unread.
