@@ -3784,3 +3784,79 @@ descriptive caption gives 20.61, not 0.1 -- 206x apart. Our own text ladder give
 order as 0.1. `INFERENCE`: MetaFind's baseline text is a category name or similar
 short label, not a description. That is one of the knobs in the pending grid, and
 it now has a measured bracket around it: 1.24 at L1, 20.61 at full description.
+
+---
+
+## DL-057 -- 24 evaluation configurations, and none of them produces Table 1's baseline row. The blocker is not on the evaluation side.
+
+Date 2026-08-31. `tools/probes/table1_baseline_grid.py`, released ULIP-2 with no
+Stage 1 weights, 9,138 test queries, gallery = the point-cloud embedding.
+Grid: pooling (raw mean | normalise-then-mean) x text (L1 category name | L2 bare
+description | L3 full serialisation) x image (12-view mean | one held-out view) x
+pool (45,692 | 9,138). Scored against the paper's ULIP row on the four cells that
+separate configurations: `pc`, `text+pc`, `image+pc`, `full`.
+
+### One thing the grid DOES fix
+
+`pc_is_max` is True in all 24. With a point-cloud gallery our ordering matches
+the paper's -- pc highest, everything else below. This corrects a reading from
+earlier today: the inverted ordering (full above pc) was a property of our
+*fused* gallery, not of our data. The gallery choice alone restores the shape.
+
+### Everything else refuses to move
+
+```
+                     paper ULIP     grid range over all 24
+  pc                    97.9         100.0  (every configuration)
+  text+pc               33.9         99.8 - 100.0
+  image+pc              22.6         99.4 - 100.0
+  full                   6.4         97.5 -  99.9
+```
+
+Total absolute error on those eight numbers stays between 420.7 and 424.2 across
+the whole grid -- a spread of 3.5 points out of ~423. The knobs do essentially
+nothing to the cells that matter.
+
+The two cells the knobs DO move are the modality-only ones, and they bracket the
+paper rather than reaching it:
+
+```
+  text     paper 0.1   ours: L1 1.2 | L3 19.9 | L2 25.0   (full pool)
+  image    paper 0.1   ours: single view 41.4 | 12-view mean 52.7
+```
+
+L1 (a bare category name) is the only cell in the grid within an order of
+magnitude of the paper's baseline text. Nothing brings image within 400x.
+
+### What this forces
+
+`OBSERVED DATA` The descent 97.9 -> 33.9 -> 22.6 -> 6.4 cannot be produced by any
+combination of pooling rule, text richness, image construction or pool size,
+given a query point cloud that IS the gallery's point cloud. The reason is
+arithmetic rather than tuning: that self-match is cosine 1.0000, and halving it
+against a second modality still leaves it far ahead of every other asset. Mean
+pooling cannot destroy a signal that starts at exactly 1.
+
+`INFERENCE` The necessary condition is therefore that the baseline's query point
+cloud is not its gallery entry. But the three-arm query pack -- a genuine second
+sampling at seed offset 1000003 -- cost `pc` only 0.8 points (DL-055 measurement,
+94.66 -> 93.83). A resample is nowhere near enough. Whatever separates their
+query from their gallery is larger than a resample: a different point budget, a
+different normalisation, a cloud derived from renders rather than the mesh, or a
+gallery that is not a raw point-cloud embedding at all.
+
+`UNKNOWN` Which of those it is. The paper states none of them.
+
+### Status of the two open mechanisms
+
+1. `OBSERVED` **pc norm degeneracy** -- training grows the point embedding's norm
+   from 27.9 to 200.5 while the frozen text and image stay at 37 and 40; the
+   fusion takes raw vectors and reads out an unweighted mean, so pc swamps the
+   other two in both towers. Explains why every query of ours containing a point
+   cloud saturates. Does NOT explain text-only, where no point cloud appears.
+2. `OBSERVED DATA` **text-only is high before any training at all** -- the
+   released backbone gives 20.61 against the paper's trained 13.8 (DL-056). No
+   training-side account can explain a gap that exists at initialisation.
+
+These are two independent gaps. Neither is closed, and this grid closes off the
+evaluation-side explanation for the first one.
