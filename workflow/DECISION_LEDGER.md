@@ -4254,3 +4254,94 @@ any number from this probe may be compared to upstream's.
   text tokens         VERIFIED   no truncation; 2.2% at the ceiling
   probe vs upstream   OPEN       0.95 unexplained on the pc reference
 ```
+
+---
+
+## DL-063 -- `train_scope` was recorded and never executed. Ran `fuser_only` for the first time: freezing the backbone changes almost nothing, and the pc-norm hypothesis is dead.
+
+Date 2026-09-01. Kyzen: "沒訓練骨幹 你有試試看嗎?" -- no, and it turned out we
+could not have.
+
+### The bug: two hardcodes, 73 runs, never exercised
+
+`OBSERVED IMPLEMENTATION` Every one of the 73 Stage 1 checkpoints on disk
+records `train_scope: point_encoder_and_fuser`. `fuser_only` had never run once,
+and could not have: both ends hardcoded the value they were supposed to read.
+
+```
+  metafind/train/stage1.py:1989       ULIPBackbone(BackboneConfig(train_scope="point_encoder_and_fuser"))
+  metafind/eval/run_retrieval.py:1264 same literal
+```
+
+Codex flagged the trainer half on 2026-08-30 and the response was an
+`ENFORCED_SINGLETONS` refusal -- correct at the time, since the branch genuinely
+was not implemented. Implementing it was two lines: read the resolved scope in
+the trainer, read the recorded scope in the evaluator. `ULIPBackbone.
+_apply_train_scope` already handled all three, and both
+`named_trainable_parameters()` and `trainable_state_dict()` key off
+`requires_grad`, so the optimizer and the checkpoint follow with no further
+branch. Added `--train-scope` alongside `--lr`/`--seed`; unlike `--seed` it DOES
+enter `arm_config_hash`, because a different set of trainable parameters is a
+different treatment. `full` stays refused -- ViT-bigG's AdamW state is ~30 GB
+against a 32.6 GB card, so it would write its recipe and die mid-epoch.
+
+The evaluator half only surfaced because a `fuser_only` checkpoint's
+`backbone_trainable_state` is correctly EMPTY, and
+`load_stage1_checkpoint` refuses any trainable parameter its section does not
+cover -- 221 of them, against a backbone built as if the point encoder had
+trained.
+
+Verification that the scope now bites: optimizer 20 + 32 parameters against
+102 + 171, and `backbone_trainable_state` holds 0 tensors against 221.
+
+### The result, and it kills my own hypothesis
+
+Protocol D, 4,569 dev_val queries against 36,554, R@1, everything identical
+except which parameters train:
+
+```
+                          text  image    pc   T+I  T+PC  I+PC   full
+  untrained (random)      90.4   73.1  83.3  98.7  99.7  93.1   99.6
+  point_encoder_and_fuser 75.9   92.8  91.8  99.1 100.0  96.4  100.0
+  fuser_only              76.1   93.5  94.3  99.5  99.9  97.3  100.0
+  paper, w/o ESSGNN       13.8   11.7  75.1  17.2  44.5  45.8   51.7
+```
+
+`OBSERVED DATA` **Freezing the backbone moves nothing.** text 76.1 vs 75.9,
+image 93.5 vs 92.8, pc 94.3 vs 91.8, every combination within 1.0.
+
+⚠ **DL-062's pc-norm account is therefore not the cause and is withdrawn as an
+explanation of the high scores.** The measurement stands -- training does grow
+PointBERT's output norm 27.9 -> 200.5 against frozen 37 / 40 -- and under
+`fuser_only` that growth is structurally impossible, since the backbone has zero
+trainable parameters. The numbers did not move. So the norm growth is a
+by-product, not the mechanism.
+
+### What the mechanism is
+
+`OBSERVED DATA` A **randomly initialised** fusion tower scores **90.4** on
+text-only against 36,554 candidates, on dev_val assets it never trained on. That
+number cannot come from learning; it comes from the construction:
+
+```
+  gallery = fusion_g(text, image, pc)   contains the query's own text vector
+  query   = fusion_q(text)              is that vector
+```
+
+A random transformer with LayerNorm and residuals is close to identity plus
+noise, so query ~ t and gallery ~ (t+i+p)/3, and the inner product carries a
+t.t = 1 term no other asset has.
+
+`PAPER FACT` and this is the uncomfortable part: `2methdology.tex:75` describes
+the same construction. "each asset has full modality inputs (text, images, and
+point clouds). We introduce stochastic modality masking ... each modality in the
+query has a 30% probability of being independently masked." The query is the
+gallery's own observations with some masked. **Our construction is faithful.**
+
+⚠ An earlier note in this session called the shared observation "our leak" and
+proposed a second observation as the fix. Withdrawn: under the paper's own
+description that would be a DEVIATION, not a correction.
+
+`UNKNOWN` How the same construction yields 13.8. Training scope is now ruled
+out; evaluation configuration was ruled out in DL-057; a second observation
+moves it only to 30.8 (DL-055).

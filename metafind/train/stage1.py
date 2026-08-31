@@ -1221,14 +1221,19 @@ ENFORCED_SINGLETONS = {
     },
     "training": {
         "similarity": "cosine",  # normalize + matmul, no other branch exists
-        # [CODEX BLOCKER 2026-08-30] `stage1.py:1324` hardcodes
-        # `train_scope="point_encoder_and_fuser"` when it builds the backbone.
-        # The value was hashed into the arm and ignored by the trainer, so a
-        # protocol declaring `fuser_only` produced a checkpoint whose recorded
-        # recipe named an ablation the run did not perform. Table 3's
-        # "Train fuser only" row is a REAL ablation that this repository does
-        # not implement -- refusing says so; hashing it pretended otherwise.
-        "train_scope": "point_encoder_and_fuser",
+        # [CODEX BLOCKER 2026-08-30, RESOLVED 2026-09-01] The trainer used to
+        # hardcode `train_scope="point_encoder_and_fuser"` when building the
+        # backbone, so the protocol value was hashed into the arm and then
+        # ignored -- a checkpoint could name an ablation the run did not
+        # perform. Refusing was the right response to that. The trainer now
+        # READS the resolved scope (see `scope = training.get(...)` before
+        # `ULIPBackbone(...)`), so `fuser_only` and `point_encoder_and_fuser`
+        # both do what they say and the singleton is lifted for them.
+        #
+        # `full` stays refused, and not for tidiness: it unfreezes ViT-bigG-14,
+        # whose AdamW state alone is ~30 GB against a 32.6 GB card. RA-3 records
+        # the attempt. Allowing it here would let a run start and die mid-epoch
+        # having already written its recipe.
     },
     "encoding": {
         # [CODEX BLOCKER 2026-08-30] Stage 1 consumes text and image embeddings
@@ -1288,6 +1293,18 @@ def arm_config_hash(values: dict, training: dict, encoding: dict,
                     f"{only!r} only and does not branch on it. Running would "
                     f"record a recipe that did not happen. Implement the branch "
                     f"or correct the protocol.")
+
+    # Not a singleton -- two of the three scopes now run -- but `full` must not
+    # start. It unfreezes ViT-bigG-14, whose AdamW state alone is about 30 GB
+    # against a 32.6 GB card, so the run would write its recipe and then die
+    # partway through an epoch. Refusing before the first batch is the honest
+    # failure. See RA-3 for the measurement.
+    if training.get("train_scope") == "full":
+        raise UnsupportedProtocol(
+            "training.train_scope is 'full', which unfreezes ViT-bigG-14. Its "
+            "optimizer state alone is ~30 GB against a 32.6 GB card (RA-3), so "
+            "the run would fail mid-epoch after recording its recipe. Use "
+            "'fuser_only' or 'point_encoder_and_fuser'.")
 
     resolved = {k: v for k, v in values.items() if k not in ARM_EXCLUDED}
     # Underscore-prefixed keys are THIS RUN's facts riding on the protocol dict
@@ -1804,6 +1821,21 @@ def main() -> int:
                     help="override the seed for this run. NOT part of "
                          "arm_config_hash -- two seeds are repeats of one "
                          "treatment, not two experiments.")
+    # [Kyzen 2026-09-01] Which parameters train was reachable only by editing
+    # the training protocol, so all 73 runs to date used the recorded
+    # `point_encoder_and_fuser` and `fuser_only` was never once exercised. It is
+    # Table 3's "Train fuser only" row (8.7 against the full setting's 11.4) and
+    # it is also the only scope under which PointBERT's output norm cannot move
+    # -- measured 27.9 -> 200.5 after training, against text and image frozen at
+    # 37 and 40, which is what lets the point cloud dominate the unweighted
+    # readout. UNLIKE --seed this DOES enter arm_config_hash, because a
+    # different set of trainable parameters is a different treatment.
+    ap.add_argument("--train-scope", default=None,
+                    choices=("fuser_only", "point_encoder_and_fuser", "full"),
+                    help="override the training protocol's train_scope for this "
+                         "run. The artifact is not modified; the effective value "
+                         "is what enters arm_config_hash and the checkpoint "
+                         "record. `full` also unfreezes ViT-bigG-14.")
     ap.add_argument("--out-dir", default=None,
                     help="directory for this run's checkpoints, RELATIVE to "
                          "data/outputs/checkpoints. Omit and the run writes the "
@@ -1856,6 +1888,12 @@ def main() -> int:
         values["learning_rate"] = args.lr
     if args.seed is not None:
         values["seed"] = args.seed
+    # `training` is the in-memory protocol dict; the file on disk is untouched.
+    # Both places that read the scope -- `resolved["train_scope"]` (which feeds
+    # arm_config_hash) and the checkpoint record -- take it from here, so
+    # overriding once is enough and cannot leave the two disagreeing.
+    if args.train_scope is not None:
+        training["train_scope"] = args.train_scope
     # [CODEX F 2026-08-30] No arbitrary upper bound -- a ceiling on lr would be
     # an invented hyperparameter. These three are internal consistency: a
     # non-finite base rate poisons the whole cosine array, and a base below
@@ -1964,8 +2002,19 @@ def main() -> int:
     # gradients -- so this keeps the ratified hyperparameter instead of halving
     # it. Off on CPU, where there is no memory pressure and the recompute is
     # pure cost. See BackboneConfig.grad_checkpointing.
+    # [FIXED 2026-09-01] This was the literal `"point_encoder_and_fuser"`, which
+    # is the bug the CODEX BLOCKER above describes: the protocol's `train_scope`
+    # was hashed into the arm and then ignored here, so a protocol declaring
+    # `fuser_only` would have produced a checkpoint whose recorded recipe named
+    # an ablation the run did not perform. Reading the resolved value is what
+    # makes the recorded recipe true, and it is what implements Table 3's
+    # "Train fuser only" row. `ULIPBackbone._apply_train_scope` already handles
+    # all three scopes; nothing downstream needs a branch because
+    # `named_trainable_parameters()` and `trainable_state_dict()` both key off
+    # `requires_grad`, so the optimizer and the checkpoint follow automatically.
+    scope = training.get("train_scope", "point_encoder_and_fuser")
     backbone = ULIPBackbone(BackboneConfig(device=args.device,
-                                           train_scope="point_encoder_and_fuser",
+                                           train_scope=scope,
                                            grad_checkpointing=args.device.startswith("cuda")))
     model, loss_fn = build_model(encoding, training, hyperparameters)
     model.to(args.device)

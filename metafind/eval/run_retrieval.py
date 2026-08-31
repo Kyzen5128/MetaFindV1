@@ -1261,8 +1261,18 @@ def main() -> int:
     # graph, and one that died left nothing behind saying it had ever started.
     started = time.time()
     with runlog.run_progress(NODE):
+        # [FIXED 2026-09-01] This was the literal `"point_encoder_and_fuser"`,
+        # the same hardcode the trainer carried. It decides which parameters
+        # come back with `requires_grad`, and `load_stage1_checkpoint` refuses
+        # any trainable parameter its section does not cover -- so a
+        # `fuser_only` checkpoint, whose `backbone_trainable_state` is correctly
+        # empty, failed to load against a backbone built as if the point encoder
+        # had trained. The scope the run actually used is on the record, so read
+        # it. An untrained control has no record and keeps the default; nothing
+        # is restored into it anyway.
+        scope = (ckpt or {}).get("train_scope", "point_encoder_and_fuser")
         backbone = ULIPBackbone(BackboneConfig(device=args.device,
-                                               train_scope="point_encoder_and_fuser"))
+                                               train_scope=scope))
         if untrained:
             # Seeded HERE, immediately before `build_model`, because that call is
             # what draws the towers' weights out of the global torch RNG. The
