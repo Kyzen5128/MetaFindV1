@@ -4430,3 +4430,76 @@ carries all four by construction.
 
 ⚠ Sample is one shard's overlap (1,224), not the corpus. Re-run against the full
 download before quoting these as corpus figures.
+
+---
+
+## DL-065 -- n04 verified against ULIP-2's own renders. Same twelve cameras, our index order rotated 180 degrees, no consequence.
+
+Date 2026-09-01. `tools/probes/render_vs_ulip2.py`, 1,224 assets both sides
+hold. Their `image_feat` is already encoded by OpenCLIP ViT-bigG and ours comes
+from the n06 sidecars, so the encoder cannot be the difference.
+
+### The 12x12 says the cameras are the same and the order is not
+
+`OBSERVED DATA` Mean cosine between their view i and our view j, over 1,224
+assets. Every row's maximum sits off the diagonal, and it sits in the same place
+every time:
+
+```
+  their view  0  1  2  3  4  5  6  7  8  9 10 11
+  our view    2  3  0  1  6  7  4  5 10 11  8  9
+```
+
+Matched pairs score 0.82-0.86; unmatched 0.70-0.80. The separation is clean, so
+the pairing is real rather than noise.
+
+That permutation is not arbitrary. Against `render_blender.py:103`'s azimuths:
+
+```
+  their 0 = 30 deg   our 2 = 210 deg      180 apart
+  their 1 = 120      our 3 = 300          180
+  their 4 = 60       our 6 = 240          180
+  their 8 = 0        our 10 = 180         180
+```
+
+**Every view is 180 degrees rotated in azimuth**, a single global offset rather
+than twelve unrelated differences.
+
+`INFERENCE` And it changes nothing, because each ring's azimuth set is closed
+under that rotation: {30,120,210,300} + 180 = {210,300,30,120}, the same four
+angles. So the SET of twelve cameras is identical to OpenShape's; only which
+index holds which camera differs. A 12-view mean is unaffected, and a uniform
+single-view draw is unaffected in distribution. It would matter only to code
+that assumes view k means the same camera on both sides -- which is exactly what
+this probe assumed, and why the permutation had to be measured rather than
+asserted.
+
+### The weak bottom ring is theirs, confirmed on their own data
+
+```
+  ring                theirs   ours
+  0-3   phi 60         45.22   47.67
+  4-7   phi 90         42.36   44.73
+  8-11  phi 120        32.62   34.38
+```
+
+`OBSERVED DATA` The same 10-13 point drop on the bottom ring appears in ULIP-2's
+own renders. DL-062 attributed it to OpenShape's camera layout from reading
+`render_single_glb.py:172`; it is now measured in upstream's published output.
+Not our defect.
+
+Ours runs about 2 points higher on all three rings, consistent with DL-064's
+image comparison (47.14 vs 45.67 on the 12-view mean).
+
+### Pipeline status after four stages
+
+```
+  n02 download    46,052 GLB of LVIS's 46,207
+  n03 pointcloud  VERIFIED -- per-asset match, and interchangeable (DL-064)
+  n04 render      VERIFIED -- identical camera set, 180 deg index rotation
+  n05 annotate    ours scores 65.8 text->pc against their best 50.8 (DL-064)
+  n06 encode      VERIFIED -- image 48.70 zero-shot, no text truncation (DL-062)
+```
+
+No stage of the data pipeline explains the Table 1 gap. Every one of them is
+level with or ahead of upstream's own published data.
