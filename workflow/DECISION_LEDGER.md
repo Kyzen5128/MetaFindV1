@@ -3860,3 +3860,72 @@ gallery that is not a raw point-cloud embedding at all.
 
 These are two independent gaps. Neither is closed, and this grid closes off the
 evaluation-side explanation for the first one.
+
+---
+
+## DL-058 -- FOUND ONE. Our image modality is a 12-view MEAN. All three upstream sources sample ONE view.
+
+Date 2026-08-31. Kyzen: "text I can accept, richer descriptions. But point cloud
+and image not lining up is strange, that has to be fixed" -- then "same method,
+numbers this far apart, something must be written wrong."
+
+He was right about the image cell, and the defect is ours.
+
+### The requirement, verbatim from all three upstream sources
+
+`UPSTREAM FACT` ULIP-2 `main.tex:612`: "randomly sample its 2D rendered image
+**I ~ render(O)**" -- one draw per iteration, feeding `f_I = E_I(I)`.
+
+`UPSTREAM FACT` ULIP-1 `main.tex:236`: "During each iteration of pre-training, we
+**randomly select one image or depth map** from each CAD model's 60 rendered
+candidates as I_i".
+
+`UPSTREAM FACT` OpenShape `sections/method.tex:36`: "During each pretraining
+iteration, we **randomly sample one rendered image or thumbnail** for each shape".
+
+Three papers, three independent statements, one image each. None of them averages
+views into a single vector.
+
+### What we actually store
+
+`OBSERVED IMPLEMENTATION` `metafind/data/encode_text_image.py`, [U-14]: the
+canonical `image` vector in every one of the 45,692 sidecars is the **mean of the
+12 view embeddings** (`aggregation: "mean"` travels in each record). All twelve
+per-view vectors are also stored, so no re-encode is needed to change this.
+
+MetaFind's own text does not license the mean either: `2methdology.tex` says only
+that each modality is "independently encoded using the ULIP-2 backbone". The mean
+is our decision, recorded as U-14, and it contradicts every upstream source.
+
+### What it is worth, measured
+
+```
+image-only R@1, released ULIP-2, pc gallery      45,692 pool
+  12-view mean                                      52.7
+  one held-out view                                 41.4      -11.3
+
+image-only R@1, trained dual tower, protocol D   36,554 gallery
+  12-view mean (no pack)                            77.3
+  one held-out view (3-arm pack)                    56.7      -20.6
+```
+
+A mean over 12 renders is a multi-view shape descriptor, not a photograph. It is
+close to the point cloud by construction, which is exactly why the cell Kyzen
+flagged reads high.
+
+There is a second, sharper problem with it in the dual-tower setting: the
+gallery's 12-view mean **contains the query's single view at weight 1/12**. The
+query is literally a component of the thing it is scored against. The query
+pack's own manifest records this as "option (a)" and it was never resolved.
+
+### Classification and what it does not do
+
+This is a `DEVIATION` from `UPSTREAM FACT`, introduced by us, now measured. It
+does not close the gap: 41.4 against the paper's ULIP baseline 0.1 is still 414x,
+and 56.7 against MetaFind's own 11.7 is still 4.8x. The pc cell is untouched by
+it. But it is the first thing found that is (a) definitely wrong against a
+primary source, (b) in the exact cell under suspicion, and (c) ours to fix.
+
+**Not yet changed.** Switching the canonical image to a single sampled view moves
+every image-bearing number in Table 1 and would invalidate the existing Stage 1
+checkpoints for comparison. Kyzen's decision.
