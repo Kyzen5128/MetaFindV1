@@ -3191,3 +3191,162 @@ retrieval task. That is a ratified hyperparameter and NOT changed here.
 Architecture is Kyzen's decision, and the engineer who found this correctly
 refused to touch it. No normalisation was added, no fusion changed. **The
 measurement is the deliverable.**
+
+---
+
+## DL-052 — the ULIP-2 backbone reproduces its published number EXACTLY. The 96% was never the backbone; it was the gallery size and the query text.
+
+`RECORDED` · 2026-08-31 · measured by MASTER against
+`output/look/ulip2_calibration.json`, `data/outputs/eval/qpack_ti_best_AB_nopack/`,
+`data/outputs/eval/ladder_L{1,2}_*_B/`
+
+**Every retrieval figure this project had produced was measured by tools that had
+never scored a case whose answer was known in advance.** `grep baseline
+metafind/eval/*.py` returned comments and no code. So when our number disagreed
+with the paper's by 4x, nothing in the repository could say whether the backbone,
+the scorer, the UID pairing or the fusion towers was responsible. Two published
+numbers now say.
+
+### GATE — ULIP-2 zero-shot classification, Objaverse-LVIS, n = 45,692
+
+`UPSTREAM FACT` target: ULIP-2 CVPR'24 Tab. 1, the row
+`Point-BERT | Objaverse + ShapeNet | ULIP-2`
+(`docs/paper/ulip2_source/main.tex:443`) — which is the row our released
+checkpoint belongs to.
+
+```
+              ours    that row    the no-LVIS row
+top-1         50.6        50.6              46.3
+top-5         78.9        79.1              75.0
+```
+
+Recipe copied, not reinvented: 1,156 `all_keys` classes, the 64
+`modelnet40_64` templates that `upstream/ULIP/main.py:41` defaults to and
+`scripts/test_ulip2_pointbert_objaverse_lvis.sh` does not override, each prompt
+L2'd, meaned, L2'd again (`main.py:377-380`).
+
+**`OBSERVED DATA`. The point-cloud sampler, `pc_norm`, the colour channel, the
+`yaw180_about_y@ulip2_frame` correction, the PointBERT load and the OpenCLIP
+tokenizer are all correct.** This is the first published number this project has
+reproduced.
+
+### What that retires
+
+A standing proposal to retrain a clean `no-LVIS` ULIP-2 from scratch (744,860
+assets, days-to-weeks of GPU) on the theory that our checkpoint's pretraining
+pool contaminated the evaluation. The contamination is REAL and stays recorded
+as a `DEVIATION` — our checkpoint did see every LVIS asset. But the arithmetic
+does not support it as the main term: ULIP-2's own clean-vs-contaminated gap is
+**4.3 points of classification** (46.3 vs 50.6), and memorisation worth 4.3
+points does not buy the 512x we were trying to explain. **`NOT ACTED ON`** —
+pricing the cheap causes first was the whole point.
+
+### CAUSE 1 — gallery size. `U-09`, and it is worth 29 points.
+
+Raw ULIP-2, no towers, gallery = the pc embedding alone
+(`PAPER FACT 3experiments.tex:24`), query = full text serialization:
+
+```
+gallery  4,569 (dev_val)     51.2 %
+gallery 45,692 (corpus)      22.3 %
+```
+
+Every dev-selection number this project has looked at was measured at 4,569.
+The paper's own gallery is still unstated, but a 10x pool costs 29 pp, so
+**dev-val numbers were never comparable to Table 1 and should not have been read
+as if they were.**
+
+### CAUSE 2 — query text richness. Worth up to 37.6 points, and it is the big one.
+
+Same trained checkpoint, protocol B (query = test 9,138, gallery = the promoted
+index of 45,692), ONLY the query text swapped
+(`tools/probes/make_text_ladder_packs.py`):
+
+```
+query text is...                          text R@1
+L1  the class name, 64-template ensemble     0.20 %
+L2  the annotation's `description` alone    35.35 %
+L3  the full serialization  (what we use)   37.77 %
+
+MetaFind Tab. 1, w/o ESSGNN                 13.80 %
+ULIP baseline row, same table                0.10 %
+```
+
+**189x, on one model, from the query text alone.** The paper's 13.8 sits between
+L1 and L2; its ULIP baseline's 0.1 sits on L1. Our 37.8 is L3.
+
+`UNKNOWN`: **the paper never states what text its query carries.** ULIP-2
+pretrains on a BLIP-2 caption of a single view (`ulip2 main.tex:616`) — short and
+generic. Ours is a GPT-4o structured description with colour, pattern, material
+and "roughly 12.1 by 9.4 by 3.5 centimetres". Against 45,692 candidates that is
+close to a fingerprint.
+
+Note also L2 > L3 by 2.4 pp: the dimension-and-material tail is not a
+fingerprint, it is noise.
+
+### CAUSE 3 — image observation. Small on the raw encoder, LARGE once it is held out.
+
+```
+raw ULIP-2, gallery 4,569
+  query image = views[0]     (IS inside the gallery's 12-view mean)   78.9 %
+  query image = 12-view mean (IS the gallery's own vector)            81.3 %
+                                                              difference  2.4 pp
+
+trained model, protocol B, gallery 45,692
+  query image = 12-view mean (the gallery's own vector)               75.8 %
+  query image = one HELD-OUT view                                     54.5 %
+                                                              difference 21.4 pp
+```
+
+**The 2.4 and the 21.4 are the same experiment with one thing changed: whether
+the query's view is inside the gallery's mean.** Sharing the observation is worth
+21 pp. That is the cleanest measurement yet of the effect Kyzen has been pointing
+at since "查詢文字 ≠ 資料庫文字 這重點啊".
+
+### The shape inversion, which is the finding underneath the numbers
+
+Trained model, protocol B, ranked:
+
+```
+paper   pc 75.1 > full 51.7 > I+PC 45.8 > T+PC 44.5 > T+I 17.2 > text 13.8 > image 11.7
+ours    full 99.6 > T+PC 99.1 > I+PC 96.7 > pc 93.7 > T+I 87.4 > image 75.8 > text 37.8
+```
+
+**In the paper, pc-only BEATS full. In ours, full beats pc-only.** That is
+qualitative, not a matter of degree. It follows from causes 1-3: the paper's text
+and image are near-useless alone (13.8, 11.7), so adding them to a strong pc query
+dilutes it (75.1 -> 51.7); ours are strong (37.8, 75.8), so adding them helps
+(93.7 -> 99.6). One mechanism, both directions.
+
+### Caveat on the L1/L2 runs — a confound, stated rather than buried
+
+`QueryPack` applies the image arm as a RULE (`views[uid_seed(uid) % 12]`), not as
+an array, so it fires whenever the `image` key is present at all — which it was in
+both ladder packs, despite their empty `shards`. **The L1/L2 multimodal cells
+therefore also swapped the image to a held-out view and are NOT comparable to the
+no-pack row.** The `text`-only cells do not read the image and are clean; the
+ladder above is only ever quoted from those.
+
+### Fixed on the way, and it is not cosmetic
+
+`metafind/gates/g4_gallery_freeze.py:211-222`. `torch.load(..., weights_only=True)`
+began refusing every checkpoint written after schema 4 added `metadata`, whose
+`hardware` block stores torch's own version as a `TorchVersion` rather than a
+`str`. **G4 reported `BLOCKED_EVIDENCE` on a perfectly good index**, which is a
+gate failing open in the direction of a false alarm. Fixed by allowlisting that
+one class — NOT by dropping to `weights_only=False`, which is the property that
+lets a gate read an untrusted checkpoint at all.
+
+### What is still not explained
+
+`L2 35.35` against the paper's `13.80` at the same gallery. Query text richness
+and gallery size together take 96 to 37.8 and a plain description to 35.4; the
+last 2.6x is open. Candidates not yet priced: the paper's own gallery size
+(`U-09`), whether MetaFind fine-tunes the text and image encoders
+(`2methdology.tex:32` contrasts itself with "freezing pretrained text and image
+encoders"; Tab. 3 "Train fuser only" 8.7 vs 11.4), 11 views vs our 12, and the
+`DL-051` norm runaway.
+
+**Nothing here licenses "the reproduction is correct".** It licenses exactly two
+statements: the backbone reproduces its published number, and the 512x gap was
+experimental conditions rather than a defect.

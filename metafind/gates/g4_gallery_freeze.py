@@ -211,6 +211,18 @@ def checkpoint_embedding_dim(weights_uri: Path) -> int:
     """
     import torch
 
+    # [FIXED 2026-08-31] `weights_only=True` began refusing checkpoints written
+    # after schema 4 added `metadata`, whose `hardware` block stores torch's own
+    # version as a `TorchVersion` rather than a `str`. The refusal reached this
+    # gate as BLOCKED_EVIDENCE on a perfectly good index.
+    #
+    # Allowlisting that one class is the fix, NOT `weights_only=False`: the flag
+    # is the reason a gate may read an untrusted checkpoint at all, and dropping
+    # it to unpickle a version string would trade the gate's own safety property
+    # for a field it does not even read. `TorchVersion` is a `str` subclass from
+    # torch itself and carries no `__reduce__` of its own.
+    torch.serialization.add_safe_globals([torch.torch_version.TorchVersion])
+
     try:
         state = torch.load(Path(weights_uri), map_location="cpu",
                            weights_only=True, mmap=True)["tower_trainable_state"]
