@@ -91,11 +91,30 @@ def main() -> int:
 
     # [FIXED] `max(step) / epochs_seen` was wrong: the newest epoch is PARTIAL,
     # so it divided a full-epoch count by a fractional epoch and drew the
-    # boundary lines in the wrong places (475 against a true 572). Derive it
-    # from the pool the run actually used, the way the DataLoader does.
-    n_train = 36554
-    steps_per_epoch = math.ceil(n_train / batch)
+    # boundary lines in the wrong places (475 against a true 572).
+    #
+    # [FIXED AGAIN 2026-08-31] The replacement hardcoded `n_train = 36554`, and
+    # a query-pack run drops the assets with no second observation -- 36,499 for
+    # the two-arm pack. It also used `ceil`, while the loader is built with
+    # `drop_last`, so a partial final batch is discarded rather than run. Both
+    # errors moved the boundaries. Recover the true value from the log instead:
+    # the first step of epoch e IS e * steps_per_epoch, so the smallest step
+    # carrying epoch 1 divided by 1 gives it exactly, with no pool size assumed.
     epochs_seen = max(r["epoch"] for r in rows) + 1
+    firsts = {}
+    for r in rows:
+        firsts.setdefault(r["epoch"], r["step"])
+    #
+    # `firsts[e]` is the first LOGGED step of epoch e, and logging is periodic,
+    # so it overshoots the true boundary by up to one log interval:
+    #     e * S  <=  firsts[e]  <  e * S + interval
+    # Dividing by e shrinks that error, so take the MINIMUM over epochs -- the
+    # tightest upper bound available. Using epoch 1 alone put 580 against a true
+    # 570, and drew every boundary line ten steps late.
+    if len(firsts) > 1:
+        steps_per_epoch = min(firsts[e] / e for e in firsts if e > 0)
+    else:
+        steps_per_epoch = float("nan")   # one epoch so far: nothing to divide
 
     fig, ax = plt.subplots(4, 1, figsize=(11, 13), sharex=True)
     fig.suptitle(

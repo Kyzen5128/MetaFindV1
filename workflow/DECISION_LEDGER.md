@@ -3350,3 +3350,248 @@ encoders"; Tab. 3 "Train fuser only" 8.7 vs 11.4), 11 views vs our 12, and the
 **Nothing here licenses "the reproduction is correct".** It licenses exactly two
 statements: the backbone reproduces its published number, and the 512x gap was
 experimental conditions rather than a defect.
+
+---
+
+## DL-053 — the ULIP-2 layer is CLOSED. Upstream's own unmodified code, on our point clouds, returns the published 50.6.
+
+`CLOSED` · 2026-08-31 · MASTER, against `/home/kyzen/upstream/ULIP_run` (upstream
+@95d480f, `git status` clean) and `output/look/fps_sensitivity.json`
+
+**Every remaining discrepancy is now inside MetaFind's own retrieval protocol.
+Nothing further should be spent on ULIP-2, FPS, the compatibility shims, or the
+prompt evaluator.**
+
+### The gold test, and it is a primary-source one
+
+`bash scripts/test_ulip2_pointbert_objaverse_lvis.sh <our checkpoint>`, run from
+a clean clone with no source file edited, over our own 45,692 point clouds:
+
+```
+                                          top-1     top-5
+ULIP-2 CVPR'24 Tab.1 (our ckpt's row)      50.6      79.1
+upstream's unmodified code, our clouds     50.576    78.931
+our own pipeline                           50.6      78.9
+```
+
+Top-1 lands on the published figure; top-5 is 0.17 pp under. That validates, in
+one number, the sampler, `pc_norm`, the colour channel, the
+`yaw180_about_y@ulip2_frame` correction, the checkpoint load, the tokenizer and
+the 64-template prompt ensemble.
+
+`UPSTREAM FACT`: ULIP-2 §4.2-4.3 says "We adopt the same evaluation metrics used
+in ULIP" and "We follow the same procedure as in ULIP and OpenShape", and the
+official code makes it literal -- `test_zeroshot_3d` and `test_zeroshot_3d_ulip2`
+both end in the same `test_zeroshot_3d_core`. So the protocol we matched is the
+authors' own, not a reconstruction.
+
+### What it cost to run upstream unmodified, and what that cost proves
+
+Four environment shims, no ULIP source edited (`git status` shows no `M`):
+
+```
+torch/_six.py           dataset_3d.py:544; read only by the TRAINING collate
+knn_cuda (fail-closed)  dvae.py:9 builds KNN(k=4) and never calls it; the stub
+                        raises, so a completed run IS the proof of zero calls
+sitecustomize.py        torch.load's weights_only allowlist. The plain form is a
+                        NO-OP: registering the object keys it under
+                        `numpy._core.multiarray.scalar` while the 2023 pickle
+                        asks for `numpy.core.multiarray.scalar`. The
+                        (callable, name) form is required.
+compat/pointnet2_ops-sm120.patch
+                        two hardcoded `TORCH_CUDA_ARCH_LIST` lines deleted
+                        (setup.py:19 and pointnet2_ops/pointnet2_utils.py:23).
+                        They pin arch <= sm_75 and override the caller, so the
+                        build could not target sm_120 at all. No .cu/.cpp touched.
+```
+
+`DEVIATION, unavoidable`: upstream's README specifies python 3.7.15 / torch
+1.10.1 / cudatoolkit 11.3. RTX 5090 is sm_120 and CUDA 11.3 tops out at sm_86,
+so that stack cannot run on this machine. Used 3.11 / 2.11.0+cu128 / nvcc 12.8.
+
+### FPS: the one shim that touches a number, measured and dismissed
+
+`misc.fps` is replaced by a pure-torch greedy FPS. Perturb its only free
+parameter -- the seed index -- and the published number does not move, even
+though the chosen centres change completely (max coordinate difference 1.74 on a
+unit-radius cloud):
+
+```
+seed index 0 (ours = pointnet2's)   top-1 50.61   top-5 78.96
+seed index 5000                     top-1 50.64   top-5 78.89
+random per cloud                    top-1 50.90   top-5 78.89
+```
+
+0.29 pp across the sweep. Kernel-level tie-breaking cannot matter if a different
+centre set does not.
+
+### The distinction that kept sending us the wrong way
+
+ULIP defines ONE quantitative evaluation and it is not retrieval:
+
+* `PAPER FACT` ULIP §4.3: zero-shot 3D classification -- pc feature against
+  category text prototypes, no fine-tuning, same prompt strategy as pretraining.
+* `PAPER FACT` ULIP §4.7: image -> point cloud retrieval exists but is
+  **qualitative only** -- Caltech101 images against ~2.5k ModelNet40 clouds,
+  a top-5 figure, no metric, no ground-truth pairing.
+* ULIP-2: the string "retriev" does not appear in the paper at all.
+
+**So MetaFind's seven-cell ULIP row is MetaFind's own adaptation, not an
+upstream benchmark.** There is no official instance-retrieval protocol to
+inherit, which is why no configuration we tried reproduces it and why CAMERA's
+Table 4 mixes four different protocols.
+
+### One normalisation question is answered, one is not
+
+`UPSTREAM FACT`, `main.py:377-380`: the prompt ensemble is
+`L2(mean(L2(t_1)..L2(t_K)))`, and the pc side is `L2(P)`, similarity `P @ T.T`.
+Not UNKNOWN -- the official code fixes it, and we match it.
+
+`UNKNOWN`, still: whether MetaFind's CROSS-MODAL mean over text/image/pc is
+taken raw or over unit vectors. The prompt-ensemble recipe is a same-modality
+operation and does not transfer. Measured either way: 0.7 pp, so it is open but
+not load-bearing.
+
+### CAMERA is withdrawn as an anchor
+
+Its Table 4 was inspected on the machine that holds the code:
+Parts2Words 12.72 and TriCoLo 10.25 are copied from the Parts2Words paper
+(Text2Shape, 1,434-shape gallery); ULIP 3.23 is an unlogged local run on
+ShapeNet-55 chair/table (14,966 objects); and the only exact `13.506` in any log
+is an IKEA run with a **733** gallery. Every checkpoint in that workspace records
+`args.model = ULIP_PointBERT` -- ULIP-1, 8192 points, 512-d. No
+`ULIP2_PointBERT_Colored` checkpoint exists there.
+
+**Statements of the form "CAMERA's ULIP-2 gets 13.50, MetaFind's gets 0.1, so
+they differ by 135x" were made repeatedly in this session and are RETRACTED.**
+That 13.50 is neither ULIP-2 nor a comparable gallery. The surviving external
+anchors are ULIP-2's own 50.6 (reproduced) and CLIP-GS's 5.6 image->3D at ~10-20K
+(with the caveat that its point clouds are sampled from Gaussian splats, which
+is out of distribution for ULIP-2).
+
+---
+
+## DL-054 — the contamination question, and a lead on the last gap that reads the pattern rather than one cell
+
+`RECORDED` · 2026-08-31 · MASTER, against `output/look/contamination_holdout.json`
+and `output/look/u11_absent_slots.json`
+
+### Contamination: bounded, not measured
+
+`ProcTHOR/AI2-THOR` is a Unity asset library, not Objaverse and not ShapeNet, so
+ULIP-2 has not seen it. 1,439 of its assets carry both a cloud and 11 renders.
+
+```
+image -> pc, gallery 1,439 in every row        multi-view mean   single view
+  Objaverse, real colour   (SEEN)                    89.23           88.95
+  Objaverse, flat grey     (SEEN)                    79.29           75.96
+  ProcTHOR, flat grey      (UNSEEN)                  23.35           17.65
+
+  colour effect   +9.94 pp
+  seen vs unseen  -55.94 pp
+```
+
+`UPPER BOUND, NOT A MEASUREMENT`: a ProcTHOR cloud is a visible depth shell, an
+Objaverse cloud is full mesh surface. That domain gap is inside the 55.94 and
+cannot be removed without re-sampling 45,692 clouds as shells.
+
+⚠ **An earlier argument in this session was wrong and is corrected here.**
+Contamination was dismissed on the grounds that ULIP-2's own clean-vs-contaminated
+gap is 4.3 points (46.3 vs 50.6). That gap is CLASSIFICATION, where ~40 assets
+share a label and memorising one instance buys almost nothing. INSTANCE retrieval
+must pick this asset out of 45,691 others, which is exactly what memorising a
+(render, cloud) pair buys. The 4.3 does not transfer.
+
+`UPSTREAM FACT`: ULIP-1 §4.5 hits the same problem and solves it by SUBSETTING
+rather than retraining -- Medium removes ModelNet40 categories whose names appear
+in the pretraining list, Hard also removes synonyms ("cup" vs "mug"), and the
+Hard-set result is used to argue the gains are "not caused by pre-training the
+model on exact/similar categories". That trick does not transfer to instance
+retrieval, where the unit is the asset and every LVIS asset is in the pool.
+
+### U-11: a 13-point lever, pointing the wrong way
+
+`include_absent_slots` decides whether an absent modality's mask token joins the
+pooled readout. Flipped at inference on the trained checkpoint, promoted index,
+gallery 45,692:
+
+```
+condition     True (ours)   False    delta    paper
+text             37.77      50.71   +12.95     13.8
+image            75.82      82.79    +6.97     11.7
+pc               93.70      94.69    +1.00     75.1
+text+image       87.37      83.30    -4.07     17.2
+full             99.61      99.61    +0.00     51.7
+```
+
+`full` at exactly +0.00 is the built-in control: with all three slots present the
+flag is a no-op by construction, and it is. So the deltas above are the flag and
+nothing else.
+
+The lever is real and large, and OUR setting is already the side closer to the
+paper. It does not explain the remaining gap; flipping it widens it. It stays a
+registered UNKNOWN because 13 pp is not "doesn't matter", and settling it
+properly needs a training arm -- this was an inference-time flip on a model
+trained under True, so it bounds sensitivity, it is not the counterfactual.
+
+### The lead: read the PATTERN across modalities, not any single cell
+
+```
+              ours   paper   ratio    what we do
+  text        37.8    13.8    2.7x    CLIP frozen
+  image       75.8    11.7    6.5x    CLIP frozen
+  pc          93.7    75.1    1.2x    trained
+```
+
+**The two modalities we freeze are off by 2.7x and 6.5x; the one we train is off
+by 1.2x.** That is not the shape of a scorer bug -- it is the shape of a training
+scope difference.
+
+`UPSTREAM FACT` ULIP-1 §3.2: "if we update CLIP's image and text encoders,
+catastrophic forgetting will emerge due to our limited data size... Therefore we
+freeze the weights of f_S and f_I during the entire pre-training". ULIP-1 froze
+them at 52.5K assets, for that stated reason.
+
+`PAPER` MetaFind `2methdology.tex:32` positions itself against exactly that:
+"While prior works typically align 3D encoders to a fixed CLIP embedding space by
+FREEZING pretrained text and image encoders, our MetaFind framework adopts a more
+flexible dual-tower design." And Tab. 3 reports "Train fuser only" 8.7 against
+11.4 for the full setting, explained as "full encoder fine-tuning yields better
+performance by allowing EARLIER LAYERS to adapt".
+
+`INFERENCE, NOT ESTABLISHED`: if MetaFind unfreezes CLIP over 48K assets, it runs
+into the forgetting ULIP-1 documents; degraded text and image encoders would
+produce low text and image cells while leaving pc -- trained on both sides --
+closest. That is the only hypothesis so far that explains all three ratios at
+once. The paper never states it outright; the evidence is the contrast sentence
+plus 8.7 vs 11.4.
+
+Testing it needs a training arm with `clip_train_scope` other than `frozen`, and
+ViT-bigG's AdamW state alone is ~30 GB against a 32.6 GB card, so it needs LoRA
+or partial unfreezing. NOT RUN. Kyzen's decision.
+
+### Why training does not improve, settled by arithmetic rather than by tuning
+
+`acc_q2g` sits at 0.95-0.97 from step 1 and loss plateaus after epoch 1 (2.6452 →
+2.4989 → 2.3879 by epoch 42 of a 250-epoch run, oscillating). Two causes:
+
+1. `p_mask` 0.30 independent per modality, so pc is present in 70% of queries --
+   and a pc query IS its gallery entry, cosine 1.0000000000, margin 0.2152. Those
+   rows are free.
+2. Batch 64 means 63 negatives. Our text scores 37.8% against 45,691 candidates;
+   against 63 it is near-perfect.
+
+And the floor is geometric, not optimisational: for B unit vectors the mean
+pairwise cosine cannot fall below -1/(B-1), so at B=64 the best achievable loss
+at tau=0.5 is 2.2257 against our measured 2.39. **We are 0.16 from a bound that
+more epochs cannot cross.**
+
+⚠ An earlier guess that tau=0.5 is "too soft to give gradient" is WRONG and is
+withdrawn. Computed: pushing negatives from cos 0 to -0.2 lowers the loss by
+0.3497 at tau=0.5 and by 0.0000 at ULIP-2's converged tau=0.0206. The sharp
+temperature is the one that saturates.
+
+Neither fix is a paper fact -- MetaFind states no batch size anywhere:
+(A) remove the pc shortcut with an independent query cloud, blocked at 32.38 GB
+of 32.6 GB; (B) raise the effective batch toward upstream's 512, which on one GPU
+means GradCache, since gradient accumulation cannot supply in-batch negatives.

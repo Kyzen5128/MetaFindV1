@@ -1,0 +1,28 @@
+COMPATIBILITY PATCH ONLY
+Reason: upstream hardcodes compute capability <= 7.5 and overrides the
+        caller's TORCH_CUDA_ARCH_LIST. sm_37 was removed in CUDA 12 and
+        sm_120 (RTX 5090 / Blackwell) is absent, so the build cannot
+        target this machine's GPU at all.
+Scope:  build metadata only. No .cu or .cpp source modified.
+Upstream: github.com/erikwijmans/Pointnet2_PyTorch @ b5ceb6d9ca0467ea34beb81023f96ee82228f626
+
+--- /tmp/setup.py.orig	2026-08-31 19:48:13.631273676 +0800
++++ pointnet2_ops_lib/setup.py	2026-08-31 19:48:13.633134388 +0800
+@@ -16,7 +16,6 @@
+ 
+ exec(open(osp.join("pointnet2_ops", "_version.py")).read())
+ 
+-os.environ["TORCH_CUDA_ARCH_LIST"] = "3.7+PTX;5.0;6.0;6.1;6.2;7.0;7.5"
+ setup(
+     name="pointnet2_ops",
+     version=__version__,
+--- /tmp/utils.py.orig	2026-08-31 19:48:13.632221063 +0800
++++ pointnet2_ops_lib/pointnet2_ops/pointnet2_utils.py	2026-08-31 19:48:13.633997281 +0800
+@@ -20,7 +20,6 @@
+     )
+     _ext_headers = glob.glob(osp.join(_ext_src_root, "include", "*"))
+ 
+-    os.environ["TORCH_CUDA_ARCH_LIST"] = "3.7+PTX;5.0;6.0;6.1;6.2;7.0;7.5"
+     _ext = load(
+         "_ext",
+         sources=_ext_sources,
