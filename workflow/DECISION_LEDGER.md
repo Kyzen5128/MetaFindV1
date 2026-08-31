@@ -4345,3 +4345,88 @@ description that would be a DEVIATION, not a correction.
 `UNKNOWN` How the same construction yields 13.8. Training scope is now ruled
 out; evaluation configuration was ruled out in DL-057; a second observation
 moves it only to 30.8 (DL-055).
+
+---
+
+## DL-064 -- Ours against ULIP-2's own published data. Point clouds tie, our renders are slightly ahead, our text is 15 points ahead of the best of theirs.
+
+Date 2026-09-01. Kyzen: point cloud, render, annotation, encoding are all done --
+whose is better? Measurable now: `SFXX/ulip`'s `ULIP-2/objaverse_lvis` publishes
+the preprocessed Objaverse-LVIS that upstream's 50.6 was run on. Downloading
+(160 shards, 185 GB, ~8 MB/s); shard `000-000` is complete and extracted, giving
+**1,224 assets both sides hold**.
+
+### What is actually in their file
+
+`OBSERVED DATA` Each `.npy` is a dict carrying OpenShape's schema, which settles
+the provenance question -- ULIP-2's Objaverse data IS OpenShape's preprocessing:
+
+```
+  xyz (10000,3) f16     rgb (10000,3) f16      image_feat (12,1280) f32
+  thumbnail_feat (1280,)
+  text            Objaverse's `name`, GPT-4 filtered
+  blip_caption    BLIP on the thumbnail
+  msft_caption    Azure vision on the same thumbnail
+  retrieval_text  captions of LAION-5B nearest neighbours (14 for this asset)
+  every *_feat carries both `original` and `prompt_avg` (the 64-template mean)
+```
+
+Two things fall out immediately. **`image_feat` is 12 views, not 11** -- so the
+paper's "11" has no counterpart in the data ULIP-2 ships. And the images are
+FEATURES only: no PNG, so their data cannot feed a VLM annotator.
+
+### Point clouds: equivalent, checked per asset
+
+`OBSERVED DATA` Same uid, side by side: 10,000 points both, farthest point at
+radius 1.0000 both, colour in 0-1 both, per-asset colour ranges agreeing to the
+third decimal (0.010/0.902 against 0.012/0.898). The residual is which points
+the sampler drew, not how the cloud was built. Combined with upstream's own code
+scoring 50.5756 on our clouds, the point-cloud stage is closed.
+
+### The measured comparison, 1,224 overlapping assets
+
+Zero-shot LVIS classification, 1,156 prototypes built by upstream's own recipe,
+one encoder, only the classified vector varies:
+
+```
+                                    acc1    acc5
+  point cloud, ULIP-2 official     48.86   78.68
+  point cloud, ours                49.10   77.94
+  image 12-view mean, ULIP-2       45.67   74.51
+  image 12-view mean, ours         47.14   76.63
+```
+
+Text -> point-cloud R@1 inside the 1,224 pool, both sides' text scored against
+BOTH galleries so the text is the only variable:
+
+```
+                              their pc   our pc
+  object name (`text`)          30.47    30.39
+  BLIP caption                  49.35    48.53
+  Azure caption                 50.82    50.33
+  LAION retrieved               24.10    25.00
+  our GPT annotation            65.52    65.77
+```
+
+### What it says
+
+`OBSERVED DATA` **Our data is not worse; on two of three it is slightly better.**
+Point clouds tie within noise (49.10 vs 48.86). Our renders beat theirs by 1.5
+points at acc1 and 2.1 at acc5. Our text beats the best of their four sources by
+**15 points** (65.8 vs 50.8) and the bare object name by 35.
+
+`OBSERVED DATA` Swapping the gallery between their clouds and ours moves nothing
+-- 30.47 vs 30.39, 65.52 vs 65.77. The two point-cloud sets are interchangeable
+for this task.
+
+`INFERENCE` The high Table 1 numbers are therefore not a data-quality defect. If
+anything the data pushes them further up: text spans 24.1 to 65.8 on one task,
+one gallery, one encoder -- a 2.7x range from the text alone -- and ours sits at
+the top of it. This is consistent with `2methdology.tex:28`, which is where
+MetaFind's own contribution lies: "object category, size dimensions, materials,
+and placement constraints". Scanning 300 of their assets, all four of their text
+sources carry placement in **0/300** and a `made of` clause in **2/300**; ours
+carries all four by construction.
+
+⚠ Sample is one shard's overlap (1,224), not the corpus. Re-run against the full
+download before quoting these as corpus figures.
