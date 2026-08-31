@@ -1,0 +1,51 @@
+\section{Introduction}
+\label{intro}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=1.0\linewidth]{figure/fig_1_pre_final.pdf}
+    \caption{Our proposed TeGA (Text-guided Geometric Augmentation) assigns text guidance and a generative text-to-3D model for high-efficient dataset expansion which dramatically augments limited real data. Although we employ existing methods (\textit{e.g.,} Point-E) and simple tricks within text prompting, the proposal performs enough noteworthy results that 3D dataset with add synthetic data with TeGA outperforms ShapeNet trained model on e.g., Objaverse-LVIS, ModenNet-40 and ScanObjectNN under the setting of zero-shot 3D classification.
+    % Althoguh we employ existing methods (e.g., Point-E) and simple tricks within text prompting, the proposal performs enoughly noteworthy results that using only \tbd{5\%} real 3D data with \tbd{95\%} synthetic 3D data with TeGA outperforms \tbd{100\%} real 3D data on e.g., Objaverse-LVIS and ModenNet-40 under the setting of zero-shot 3D classification.
+    }
+    \label{fig1}
+\end{figure}
+
+Zero-shot recognition models have made remarkable progress leveraging paired image-text data.  
+In particular, CLIP~\cite{radford2021learning} has shown the strong potential such models offer for zero-shot open-vocabulary image classification. Highly accurate zero-shot recognition models are increasingly applied in industrial applications too, such as robotics, manufacturing, and autonomous driving. Yet, this progress is so far mostly limited to the 2D domain. We argue that multi-modal representation learning that leverages not only images and text but also 3D data is critical for zero-shot 3d classification tasks.
+
+One of the reasons for the success of vision-language models such as CLIP lies in the vast scale of training data utilized. These range from 400 million~\cite{radford2021learning} to several billions of image-text pairs collected from the Web~\cite{schuhmann2022laion}. 
+However, collecting 3D data is much more challenging and costly due to the scarcity of high-quality 3D data on the Web. This is because the primary approaches require capturing 3D data in real-world environments with LiDAR or manually creating CAD models.
+Consequently, zero-shot recognition in 3D vision has lagged behind progress in 2D vision, and the limited availability of 3D datasets remains a bottleneck issue. 
+% To address this challenge, the main direction of recent research tends to lift feature representations from a large-scale pre-trained visual language model to open-world 3D understanding in the limited 3D dataset~\cite{gao2024sculpting,xue2024ulip,zeng2023clip2}.
+% However, despite these efforts, the key bottleneck remains the limited availability of 3D-text paired data.
+To address this challenge, recent research on zero-shot 3D classification mainly focuses on distilling knowledge from a large-scale pre-trained visual language model.
+However, despite these efforts, the knowledge distillation does not fundamentally fix the issue of the limited availability of 3D data.
+
+
+% To address this challenge, recent studies achieve image-text-3D training by vision-language model's knowledge in limited 3D dataset~\cite{xue2024ulip, gao2024sculpting, zeng2023clip2}. In this way, existing approaches have mainly focused on improving training strategies. However, we suspect that the performance improvements from the training strategy only will soon reach a plateau as smaller 3D datasets compared to 2D vision.
+
+To this end, we propose to use recent text-to-3D generative models. 
+These can produce highly realistic 3D synthetic data that are almost indistinguishable from the training data~\cite{liu2023zero,poole2022dreamfusion,lin2023magic3d,jun2023shap,nichol2022point}.
+% To this end, we propose to use recent text-to-3D generative models. These can produce highly realistic synthetic data that are almost indistinguishable from the training data. 
+This remarkable evolution of the text-to-3D model simply begs the question: Can synthetic 3D data generated from text-to-3D models be used as expanding limited 3D training datasets? % TODO
+
+% This raises the research question: To what extent can synthetic data serve as an effective substitute for real data in zero-shot 3D recognition? 
+% We find that by successfully generating new synthetic data for training, the challenges associated with 3D datasets can be alleviated, thereby enhancing the performance of zero-shot 3D recognition models.
+
+This paper thus proposes a dataset expansion method for zero-shot 3D recognition called \textbf{Te}xt-guided \textbf{G}eometric \textbf{A}ugmentation (\textbf{TeGA}). 
+% The proposed TeGA enables reducing the cost of collecting massive 3D data and manual labeling, and in limited 3D real data conditions. 
+The proposed TeGA expands the training language-image-3D dataset for models that perform knowledge distillation from visual language models and enables reducing the costs associated with 3D data collection and annotation.
+Specifically, we automatically generate synthetic 3D data and rendered images using an off-the-shelf text-to-3D model (\textit{e.g.,} Point-E~\cite{nichol2022point}) and use the latent space of the generative model to generate diverse geometric shapes with the same semantic content based on text prompts. 
+Furthermore, TeGA also introduces a consistency filtering strategy to remove noisy data that does not match the text prompt, \textit{i.e.,} misalignment between language, images, and 3D data. 
+% With this filtering strategy, TeGA generates a large amount of 3D samples, enabling fixing the issue of the limited availability of 3D data.
+
+To verify the effectiveness of TeGA, we train MixCon3D~\cite{gao2024sculpting} with ShapeNet and the synthetic dataset generated by TeGA and perform experiments on three representative zero-shot 3D classification datasets, Objaverse-LVIS~\cite{deitke2023objaverse}, ScanObjectNN~\cite{uy2019revisiting} and ModelNet40~\cite{wu20153d}
+% Experiments verified the effectiveness of TeGA on three representative zero-shot 3D classification datasets, Objaverse-LVIS~\cite{deitke2023objaverse}, ScanObjectNN~\cite{uy2019revisiting} and ModelNet40~\cite{wu20153d}. 
+As a result, we show that TeGA improves performance in zero-shot 3D classification across three benchmark datasets. Specifically, TeGA achieves 12.4\% on Objaverse-LVIS, 51.1\% on ModelNet40, 73.3\% on ScanObjectNN, and  as shown in Figure~\ref{fig1}.
+These results suggest that combining real and synthetic data improves the generalisation of visual models. We also found that consistency filtering plays important roles in learning. Our contributions in this paper are as follows:
+
+\begin{itemize}
+    \item We introduce TeGA, a method for dataset expansion that leverages text-guided generative models to tackle the problem of 3D data scarcity. TeGA enables us to automatically generate synthetic language-image-3D data tailored to specific semantics category of original 3D dataset by introducing text-guided prompt and consistency filtering.
+    \item TeGA enhances zero-shot 3D classification by expanding existing datasets with synthetic 3D data generated from a generative model, addressing the challenges of data scarcity in 3D vision tasks.
+\end{itemize}
+

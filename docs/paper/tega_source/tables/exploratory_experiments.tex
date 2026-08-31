@@ -1,0 +1,63 @@
+\begin{table*}[t]
+\begin{tabular}{ccc}
+
+\begin{minipage}[t]{0.32\hsize}
+\begin{center}
+ \caption{Effect of pormpt augmentation.}
+ \vspace{-10pt}
+ \scalebox{0.87}{
+ \begin{tabular}{l|cccc} 
+ \toprule[0.8pt]
+    \multirow{2}*{Prompt type} & O-LVIS & S-Object & M40 \\
+    & Top1 & Top1 & Top1 \\
+ \midrule[0.5pt]
+     Category & -- & -- & -- \\
+     Caption & -- & -- & -- \\
+ \bottomrule[0.8pt]
+  \end{tabular}
+\label{tab:prompt_augmentation}
+ }
+\end{center}
+\end{minipage}
+ \begin{minipage}[t]{0.36\hsize}
+\caption{Effect of consistency filtering.} 
+ \vspace{-19pt}
+ \begin{center}
+\scalebox{0.87}{
+ \begin{tabular}{l|cccc} 
+ \toprule[0.8pt]
+    \multirow{2}*{Filtering} & O-LVIS & S-Object & M40 \\
+    & Top1 & Top1 & Top1 \\
+ \midrule[0.5pt]
+      w/o filtering  & -- & -- & -- \\
+     w/ filtering & -- & -- & -- \\
+ \bottomrule[0.8pt]
+ \end{tabular}
+\label{tab:data_representation}
+   }
+\end{center}
+  \end{minipage}
+
+\begin{minipage}[t]{0.29\hsize}
+  \caption{Effect of guidance scale.}
+   \vspace{-20pt}
+\begin{center}
+\scalebox{0.87}{
+ \begin{tabular}{l|cccc} 
+ \toprule[0.8pt]
+    \multirow{2}*{Value} & O-LVIS & S-Object & M40 \\
+    & Top1 & Top1 & Top1 \\
+ \midrule[0.5pt]
+     0.3  & -- & -- & -- \\
+     3.0 & -- & -- & -- \\
+     30 & -- & -- & -- \\
+ \bottomrule[0.8pt]
+ \end{tabular}
+\label{tab:effect_of_loss}
+  }
+\end{center}
+  \end{minipage}
+     \end{tabular}
+
+\vspace{-10pt}
+\end{table*}

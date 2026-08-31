@@ -1,0 +1,218 @@
+\begin{thebibliography}{42}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Bar(2004)]{bar2004visual}
+Moshe Bar.
+\newblock Visual objects in context.
+\newblock \emph{Nature Reviews Neuroscience}, 5\penalty0 (8):\penalty0 617--629, 2004.
+
+\bibitem[Bernardini et~al.(1999)Bernardini, Mittleman, Rushmeier, Silva, and Taubin]{bernardini1999ball}
+Fausto Bernardini, Joshua Mittleman, Holly Rushmeier, Claudio Silva, and Gabriel Taubin.
+\newblock The ball-pivoting algorithm for surface reconstruction.
+\newblock \emph{IEEE Transactions on Visualization and Computer Graphics}, 5\penalty0 (4):\penalty0 349--359, 1999.
+
+\bibitem[Chang et~al.(2015)Chang, Funkhouser, Guibas, Hanrahan, Huang, Li, Savarese, Savva, Song, Su, et~al.]{chang2015shapenet}
+Angel~X Chang, Thomas Funkhouser, Leonidas Guibas, Pat Hanrahan, Qixing Huang, Zimo Li, Silvio Savarese, Manolis Savva, Shuran Song, Hao Su, et~al.
+\newblock Shapenet: An information-rich 3d model repository.
+\newblock \emph{arXiv preprint arXiv:1512.03012}, 2015.
+
+\bibitem[Chen et~al.(2023)Chen, Chen, Jiao, and Jia]{chen2023fantasia3d}
+Rui Chen, Yongwei Chen, Ningxin Jiao, and Kui Jia.
+\newblock Fantasia3d: Disentangling geometry and appearance for high-quality text-to-3d content creation.
+\newblock In \emph{Proceedings of the IEEE/CVF international conference on computer vision}, pages 22246--22256, 2023.
+
+\bibitem[Cherti et~al.(2023)Cherti, Beaumont, Wightman, Wortsman, Ilharco, Gordon, Schuhmann, Schmidt, and Jitsev]{cherti2023reproducible}
+Mehdi Cherti, Romain Beaumont, Ross Wightman, Mitchell Wortsman, Gabriel Ilharco, Cade Gordon, Christoph Schuhmann, Ludwig Schmidt, and Jenia Jitsev.
+\newblock Reproducible scaling laws for contrastive language-image learning.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition}, pages 2818--2829, 2023.
+
+\bibitem[Collins et~al.(2022)Collins, Goel, Deng, Luthra, Xu, Gundogdu, Zhang, Vicente, Dideriksen, Arora, et~al.]{collins2022abo}
+Jasmine Collins, Shubham Goel, Kenan Deng, Achleshwar Luthra, Leon Xu, Erhan Gundogdu, Xi Zhang, Tomas F~Yago Vicente, Thomas Dideriksen, Himanshu Arora, et~al.
+\newblock Abo: Dataset and benchmarks for real-world 3d object understanding.
+\newblock In \emph{Proceedings of the IEEE/CVF conference on computer vision and pattern recognition}, pages 21126--21136, 2022.
+
+\bibitem[Deitke et~al.(2023)Deitke, Schwenk, Salvador, Weihs, Michel, VanderBilt, Schmidt, Ehsani, Kembhavi, and Farhadi]{deitke2023objaverse}
+Matt Deitke, Dustin Schwenk, Jordi Salvador, Luca Weihs, Oscar Michel, Eli VanderBilt, Ludwig Schmidt, Kiana Ehsani, Aniruddha Kembhavi, and Ali Farhadi.
+\newblock Objaverse: A universe of annotated 3d objects.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition(CVPR)}, pages 13142--13153, 2023.
+
+\bibitem[Deitke et~al.(2024)Deitke, Liu, Wallingford, Ngo, Michel, Kusupati, Fan, Laforte, Voleti, Gadre, et~al.]{deitke2024objaverse}
+Matt Deitke, Ruoshi Liu, Matthew Wallingford, Huong Ngo, Oscar Michel, Aditya Kusupati, Alan Fan, Christian Laforte, Vikram Voleti, Samir~Yitzhak Gadre, et~al.
+\newblock Objaverse-xl: A universe of 10m+ 3d objects.
+\newblock \emph{Advances in Neural Information Processing Systems}, 36, 2024.
+
+\bibitem[Fu et~al.(2021)Fu, Jia, Gao, Gong, Zhao, Maybank, and Tao]{fu20213d}
+Huan Fu, Rongfei Jia, Lin Gao, Mingming Gong, Binqiang Zhao, Steve Maybank, and Dacheng Tao.
+\newblock 3d-future: 3d furniture shape with texture.
+\newblock \emph{International Journal of Computer Vision}, 129:\penalty0 3313--3337, 2021.
+
+\bibitem[Gao et~al.(2024)Gao, Wang, Zheng, Xie, and Zhou]{gao2024sculpting}
+Yipeng Gao, Zeyu Wang, Wei-Shi Zheng, Cihang Xie, and Yuyin Zhou.
+\newblock Sculpting holistic 3d representation in contrastive language-image-3d pre-training.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition(CVPR)}, pages 22998--23008, 2024.
+
+\bibitem[Goodfellow et~al.(2020)Goodfellow, Pouget-Abadie, Mirza, Xu, Warde-Farley, Ozair, Courville, and Bengio]{goodfellow2020generative}
+Ian Goodfellow, Jean Pouget-Abadie, Mehdi Mirza, Bing Xu, David Warde-Farley, Sherjil Ozair, Aaron Courville, and Yoshua Bengio.
+\newblock Generative adversarial networks.
+\newblock \emph{Communications of the ACM}, 63\penalty0 (11):\penalty0 139--144, 2020.
+
+\bibitem[He et~al.(2023)He, Bai, Lin, Zhao, Hu, Sheng, Yi, Li, and Liu]{he2023t}
+Yuze He, Yushi Bai, Matthieu Lin, Wang Zhao, Yubin Hu, Jenny Sheng, Ran Yi, Juanzi Li, and Yong-Jin Liu.
+\newblock T3 bench: Benchmarking current progress in text-to-3d generation.
+\newblock \emph{arXiv preprint arXiv:2310.02977}, 2023.
+
+\bibitem[Hegde et~al.(2023)Hegde, Valanarasu, and Patel]{hegde2023clip}
+Deepti Hegde, Jeya Maria~Jose Valanarasu, and Vishal Patel.
+\newblock Clip goes 3d: Leveraging prompt tuning for language grounded 3d recognition.
+\newblock In \emph{Proceedings of the IEEE/CVF International Conference on Computer Vision(CVPR)}, pages 2028--2038, 2023.
+
+\bibitem[Huang et~al.(2023)Huang, Dong, Yang, Huang, Lau, Ouyang, and Zuo]{huang2023clip2point}
+Tianyu Huang, Bowen Dong, Yunhan Yang, Xiaoshui Huang, Rynson~WH Lau, Wanli Ouyang, and Wangmeng Zuo.
+\newblock Clip2point: Transfer clip to point cloud classification with image-depth pre-training.
+\newblock In \emph{Proceedings of the IEEE/CVF International Conference on Computer Vision(CVPR)}, pages 22157--22167, 2023.
+
+\bibitem[Isola(2022)]{isola2022when}
+Phillip Isola.
+\newblock When faking your data actually helps -- learning vision from {GAN}s, {NeRF}s, and noise, 2022.
+\newblock BMVC Keynote talk.
+
+\bibitem[Jun and Nichol(2023)]{jun2023shap}
+Heewoo Jun and Alex Nichol.
+\newblock Shap-e: Generating conditional 3d implicit functions.
+\newblock \emph{arXiv preprint arXiv:2305.02463}, 2023.
+
+\bibitem[Kiani et~al.(2007)Kiani, Esteky, Mirpour, and Tanaka]{kiani2007object}
+Roozbeh Kiani, Hossein Esteky, Koorosh Mirpour, and Keiji Tanaka.
+\newblock Object category structure in response patterns of neuronal population in monkey inferior temporal cortex.
+\newblock \emph{Journal of neurophysiology}, 97\penalty0 (6):\penalty0 4296--4309, 2007.
+
+\bibitem[Kingma(2013)]{kingma2013auto}
+Diederik~P Kingma.
+\newblock Auto-encoding variational bayes.
+\newblock \emph{arXiv preprint arXiv:1312.6114}, 2013.
+
+\bibitem[Li et~al.(2023)Li, Li, Savarese, and Hoi]{li2023blip}
+Junnan Li, Dongxu Li, Silvio Savarese, and Steven Hoi.
+\newblock Blip-2: Bootstrapping language-image pre-training with frozen image encoders and large language models.
+\newblock In \emph{International conference on machine learning}, pages 19730--19742. PMLR, 2023.
+
+\bibitem[Lin et~al.(2023)Lin, Gao, Tang, Takikawa, Zeng, Huang, Kreis, Fidler, Liu, and Lin]{lin2023magic3d}
+Chen-Hsuan Lin, Jun Gao, Luming Tang, Towaki Takikawa, Xiaohui Zeng, Xun Huang, Karsten Kreis, Sanja Fidler, Ming-Yu Liu, and Tsung-Yi Lin.
+\newblock Magic3d: High-resolution text-to-3d content creation.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition}, pages 300--309, 2023.
+
+\bibitem[Liu et~al.(2024)Liu, Shi, Kuang, Zhu, Li, Han, Cai, Porikli, and Su]{liu2024openshape}
+Minghua Liu, Ruoxi Shi, Kaiming Kuang, Yinhao Zhu, Xuanlin Li, Shizhong Han, Hong Cai, Fatih Porikli, and Hao Su.
+\newblock Openshape: Scaling up 3d shape representation towards open-world understanding.
+\newblock \emph{Advances in Neural Information Processing Systems}, 36, 2024.
+
+\bibitem[Liu et~al.(2023)Liu, Wu, Van~Hoorick, Tokmakov, Zakharov, and Vondrick]{liu2023zero}
+Ruoshi Liu, Rundi Wu, Basile Van~Hoorick, Pavel Tokmakov, Sergey Zakharov, and Carl Vondrick.
+\newblock Zero-1-to-3: Zero-shot one image to 3d object.
+\newblock In \emph{Proceedings of the IEEE/CVF international conference on computer vision}, pages 9298--9309, 2023.
+
+\bibitem[Loshchilov(2017)]{loshchilov2017decoupled}
+I Loshchilov.
+\newblock Decoupled weight decay regularization.
+\newblock \emph{arXiv preprint arXiv:1711.05101}, 2017.
+
+\bibitem[Loshchilov and Hutter(2016)]{loshchilov2016sgdr}
+Ilya Loshchilov and Frank Hutter.
+\newblock Sgdr: Stochastic gradient descent with warm restarts.
+\newblock \emph{arXiv preprint arXiv:1608.03983}, 2016.
+
+\bibitem[Nichol et~al.(2021)Nichol, Dhariwal, Ramesh, Shyam, Mishkin, McGrew, Sutskever, and Chen]{nichol2021glide}
+Alex Nichol, Prafulla Dhariwal, Aditya Ramesh, Pranav Shyam, Pamela Mishkin, Bob McGrew, Ilya Sutskever, and Mark Chen.
+\newblock Glide: Towards photorealistic image generation and editing with text-guided diffusion models.
+\newblock \emph{arXiv preprint arXiv:2112.10741}, 2021.
+
+\bibitem[Nichol et~al.(2022)Nichol, Jun, Dhariwal, Mishkin, and Chen]{nichol2022point}
+Alex Nichol, Heewoo Jun, Prafulla Dhariwal, Pamela Mishkin, and Mark Chen.
+\newblock Point-e: A system for generating 3d point clouds from complex prompts.
+\newblock \emph{arXiv preprint arXiv:2212.08751}, 2022.
+
+\bibitem[Oquab et~al.(2023)Oquab, Darcet, Moutakanni, Vo, Szafraniec, Khalidov, Fernandez, Haziza, Massa, El-Nouby, et~al.]{oquab2023dinov2}
+Maxime Oquab, Timothee Darcet, Theo Moutakanni, Huy Vo, Marc Szafraniec, Vasil Khalidov, Pierre Fernandez, Daniel Haziza, Francisco Massa, Alaaeldin El-Nouby, et~al.
+\newblock Dinov2: Learning robust visual features without supervision.
+\newblock \emph{arXiv preprint arXiv:2304.07193}, 2023.
+
+\bibitem[Poole et~al.(2022)Poole, Jain, Barron, and Mildenhall]{poole2022dreamfusion}
+Ben Poole, Ajay Jain, Jonathan~T Barron, and Ben Mildenhall.
+\newblock Dreamfusion: Text-to-3d using 2d diffusion.
+\newblock \emph{arXiv preprint arXiv:2209.14988}, 2022.
+
+\bibitem[Qi et~al.(2023)Qi, Dong, Fan, Ge, Zhang, Ma, and Yi]{qi2023contrast}
+Zekun Qi, Runpei Dong, Guofan Fan, Zheng Ge, Xiangyu Zhang, Kaisheng Ma, and Li Yi.
+\newblock Contrast with reconstruct: Contrastive 3d representation learning guided by generative pretraining.
+\newblock In \emph{International Conference on Machine Learning(ICML)}, pages 28223--28243. PMLR, 2023.
+
+\bibitem[Radford et~al.(2021)Radford, Kim, Hallacy, Ramesh, Goh, Agarwal, Sastry, Askell, Mishkin, Clark, et~al.]{radford2021learning}
+Alec Radford, Jong~Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et~al.
+\newblock Learning transferable visual models from natural language supervision.
+\newblock In \emph{International conference on machine learning(ICML)}, pages 8748--8763. PMLR, 2021.
+
+\bibitem[Rombach et~al.(2022)Rombach, Blattmann, Lorenz, Esser, and Ommer]{rombach2022high}
+Robin Rombach, Andreas Blattmann, Dominik Lorenz, Patrick Esser, and Bjorn Ommer.
+\newblock High-resolution image synthesis with latent diffusion models.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition(CVPR)}, pages 10684--10695, 2022.
+
+\bibitem[Saharia et~al.(2022)Saharia, Chan, Saxena, Li, Whang, Denton, Ghasemipour, Gontijo~Lopes, Karagol~Ayan, Salimans, et~al.]{saharia2022photorealistic}
+Chitwan Saharia, William Chan, Saurabh Saxena, Lala Li, Jay Whang, Emily~L Denton, Kamyar Ghasemipour, Raphael Gontijo~Lopes, Burcu Karagol~Ayan, Tim Salimans, et~al.
+\newblock Photorealistic text-to-image diffusion models with deep language understanding.
+\newblock \emph{Advances in neural information processing systems}, 35:\penalty0 36479--36494, 2022.
+
+\bibitem[Sariyildiz et~al.(2023)Sariyildiz, Alahari, Larlus, and Kalantidis]{sariyildiz2023fake}
+Mert~Bulent Sariyildiz, Karteek Alahari, Diane Larlus, and Yannis Kalantidis.
+\newblock Fake it till you make it: Learning transferable representations from synthetic imagenet clones.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition}, pages 8011--8021, 2023.
+
+\bibitem[Schuhmann et~al.(2022)Schuhmann, Beaumont, Vencu, Gordon, Wightman, Cherti, Coombes, Katta, Mullis, Wortsman, et~al.]{schuhmann2022laion}
+Christoph Schuhmann, Romain Beaumont, Richard Vencu, Cade Gordon, Ross Wightman, Mehdi Cherti, Theo Coombes, Aarush Katta, Clayton Mullis, Mitchell Wortsman, et~al.
+\newblock Laion-5b: An open large-scale dataset for training next generation image-text models.
+\newblock \emph{Advances in Neural Information Processing Systems}, 35:\penalty0 25278--25294, 2022.
+
+\bibitem[Tian et~al.(2024{\natexlab{a}})Tian, Fan, Chen, Katabi, Krishnan, and Isola]{tian2024learning}
+Yonglong Tian, Lijie Fan, Kaifeng Chen, Dina Katabi, Dilip Krishnan, and Phillip Isola.
+\newblock Learning vision from models rivals learning vision from data.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition(CVPR)}, pages 15887--15898, 2024{\natexlab{a}}.
+
+\bibitem[Tian et~al.(2024{\natexlab{b}})Tian, Fan, Isola, Chang, and Krishnan]{tian2024stablerep}
+Yonglong Tian, Lijie Fan, Phillip Isola, Huiwen Chang, and Dilip Krishnan.
+\newblock Stablerep: Synthetic images from text-to-image models make strong visual representation learners.
+\newblock \emph{Advances in Neural Information Processing Systems}, 36, 2024{\natexlab{b}}.
+
+\bibitem[Tsalicoglou et~al.(2024)Tsalicoglou, Manhardt, Tonioni, Niemeyer, and Tombari]{tsalicoglou2024textmesh}
+Christina Tsalicoglou, Fabian Manhardt, Alessio Tonioni, Michael Niemeyer, and Federico Tombari.
+\newblock Textmesh: Generation of realistic 3d meshes from text prompts.
+\newblock In \emph{2024 International Conference on 3D Vision (3DV)}, pages 1554--1563. IEEE, 2024.
+
+\bibitem[Uy et~al.(2019)Uy, Pham, Hua, Nguyen, and Yeung]{uy2019revisiting}
+Mikaela~Angelina Uy, Quang-Hieu Pham, Binh-Son Hua, Thanh Nguyen, and Sai-Kit Yeung.
+\newblock Revisiting point cloud classification: A new benchmark dataset and classification model on real-world data.
+\newblock In \emph{Proceedings of the IEEE/CVF International Conference on computer vision(CVPR)}, pages 1588--1597, 2019.
+
+\bibitem[Wang et~al.(2024)Wang, Lu, Wang, Bao, Li, Su, and Zhu]{wang2024prolificdreamer}
+Zhengyi Wang, Cheng Lu, Yikai Wang, Fan Bao, Chongxuan Li, Hang Su, and Jun Zhu.
+\newblock Prolificdreamer: High-fidelity and diverse text-to-3d generation with variational score distillation.
+\newblock \emph{Advances in Neural Information Processing Systems}, 36, 2024.
+
+\bibitem[Wu et~al.(2015)Wu, Song, Khosla, Yu, Zhang, Tang, and Xiao]{wu20153d}
+Zhirong Wu, Shuran Song, Aditya Khosla, Fisher Yu, Linguang Zhang, Xiaoou Tang, and Jianxiong Xiao.
+\newblock 3d shapenets: A deep representation for volumetric shapes.
+\newblock In \emph{Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition(CVPR)}, pages 1912--1920, 2015.
+
+\bibitem[Xue et~al.(2024)Xue, Yu, Zhang, Panagopoulou, Li, Martin-Martjn, Wu, Xiong, Xu, Niebles, et~al.]{xue2024ulip}
+Le Xue, Ning Yu, Shu Zhang, Artemis Panagopoulou, Junnan Li, Roberto Martin-Martjn, Jiajun Wu, Caiming Xiong, Ran Xu, Juan~Carlos Niebles, et~al.
+\newblock Ulip-2: Towards scalable multimodal pre-training for 3d understanding.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition(CVPR)}, pages 27091--27101, 2024.
+
+\bibitem[Zhou et~al.(2023)Zhou, Wang, Ma, Liu, Huang, and Wang]{zhou2023uni3d}
+Junsheng Zhou, Jinsheng Wang, Baorui Ma, Yu-Shen Liu, Tiejun Huang, and Xinlong Wang.
+\newblock Uni3d: Exploring unified 3d representation at scale.
+\newblock \emph{arXiv preprint arXiv:2310.06773}, 2023.
+
+\end{thebibliography}

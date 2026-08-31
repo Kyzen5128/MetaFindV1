@@ -1,0 +1,31 @@
+
+\newcommand{\cmark}{\checkmark} % ✓
+\newcommand{\xmark}{\textbf{\ding{55}}} % ✗
+
+\begin{table}[t]
+    \centering
+    \adjustbox{width=0.8\linewidth}{
+    \begin{tabular}{@{}ccc|c@{}}
+        \toprule
+        \multirow{2}*{Text-PC} & \multirow{2}*{Image-PC} & \multirow{2}*{Text-3D} & ModelNet-40 \\ 
+        \cmidrule(l){4-4}
+        & & & Top1 \\ 
+        \midrule
+        \cmark & \xmark & \xmark & 56.3 \\
+        % & 52.9 & 78.7 & 86.5 \\ % 197
+        % \xmark & \cmark & \cmark & \xmark & 38.4 & 38.5 & 61.6 & 73.4 \\ % 1 163
+        \xmark & \cmark & \xmark & 35.9 \\
+        % & 36.4 & 54.6 & 65.2 \\ % 2 131
+        \xmark & \xmark & \cmark & 0.4 \\
+        % & 5.0 & 7.6 & 12.5 \\ % 
+        \xmark & \cmark & \cmark & 60.3 \\
+        % & 60.6 & 79.3 & 87.1 \\ % 3 165
+        \cmark & \cmark & \xmark & 42.2 \\
+        % & 39.8 & 62.0 & 73.3 \\ % 4 144
+        \cmark & \cmark & \cmark & \textbf{73.3} \\
+        % & \textbf{68.7} & \textbf{88.8} & \textbf{93.6} \\ 
+        \bottomrule
+    \end{tabular}}
+    \caption{Comparison of the final accuracy achieved when MixCon3D's contrastive learning is limited.  A check mark indicates an active contrastive learning setting, while a cross mark denotes an inactive setting. }
+    \label{tab:multi-modal}
+\end{table}

@@ -1,0 +1,87 @@
+\begin{table*}[t]
+\scriptsize
+  \setlength{\tabcolsep}{1.8pt}
+  \centering
+   \caption{
+   Comparison with zero-shot 3D classification performance on three representative benchmark datasets. 
+   % Our method indicates 'Sinthify3D' which added syntetic trining data into exsiting ShapeNet.
+   Best scores at MixCon3D are shown in underlined bold.
+     }
+  \vspace{-10pt}
+  \adjustbox{width=\textwidth}{
+    \begin{tabular}{l|c|cccc|cccc|cccc}
+    \toprule[0.8pt]
+    \multirow{2}[1]{1.0cm}{Method} & \multirow{2}[1]{*}{\begin{tabular}[c]{@{}c}Training  data\end{tabular}}  & \multicolumn{4}{c|}{Objaverse-LVIS} & \multicolumn{4}{c|}{ScanObjectNN} & \multicolumn{4}{c}{ModelNet40} \\          
+    &  & Top1  & Top1-C & Top3  & Top5  & Top1 & Top1-C & Top3  & Top5  & Top1 & Top1-C & Top3  & Top5 \\
+    \midrule[0.5pt]
+    % ReCon~\cite{qi2023contrast} & \multirow{5}[2]{*}{ShapeNet} & 1.1 & - & 2.7 & 3.7 & 42.3 & - & 62.5 & 75.6 & 61.2 & - & 73.9 & 78.1 \\
+    % CG3D~\cite{hegde2023clip} &   & 5.0 & - & 9.5 & 11.6 & 42.5 & - & 57.3 & 60.8 & 48.7 & - & 60.7 & 66.5 \\
+    % CLIP2Point~\cite{huang2023clip2point} & & 2.7 & - & 5.8 & 7.9 & 25.5 & - & 44.6 & 59.4 & 49.5 & - & 71.3 & 81.2 \\
+    % ULIP~\cite{xue2024ulip} & & 6.2 & - & 13.6 & 17.9 & 51.5 & - & 71.1 & 80.2 & 60.4 & - & 79.0 & 84.4 \\
+    % OpenShape~\cite{liu2024openshape}  & & 10.8 & - & 20.2 & 25.0 & 51.3 & - & 69.4 & 78.4 & 70.3 & - & 86.9 & 91.3 \\
+    % \midrule[0.5pt]
+    % MixCon3D~\cite{} & & 22.3 & 16.2 & 37.5 & 44.3 & 52.6 & 52.1 & 69.9 & 78.7 & 72.6 & 68.2 & 87.1 & 91.3 \\
+    MixCon3D & ShapeNet & 9.4 & 5.7 & 16.7 & 20.4 & 46.5 & 41.6 & 67.9 & 79.6 & 64.6 & 60.3 & 83.0 & 87.1 \\ 
+    % MixCon3D \textbf{(Ours)} & ShapeNet + Sinthify3D & \textbf{11.1} & \textbf{7.1} & \textbf{20.6} & \textbf{25.5} & 45.4 & 42.7 & 64.5 & 74.4 & \textbf{73.4} & \textbf{69.1} & \textbf{86.8} & \textbf{91.4} \\
+    MixCon3D \textbf{(Ours)} & ShapeNet + TeGA & \textbf{12.4} & \textbf{10.8} & \textbf{22.0} & \textbf{27.4} & \textbf{51.1} & \textbf{49.5} & \textbf{69.7} & \textbf{80.2} & \textbf{73.3} & \textbf{68.7} & \textbf{88.8} & \textbf{93.6} \\
+    \bottomrule[0.8pt]
+    % \bottomrule[0.8pt]
+    \end{tabular}}
+  \label{tab:zero_shot_main_results}
+  \vspace{-10pt}
+\end{table*}
+
+% \tdb{TODO: torimi mixcon3d umeru}
+% \begin{table*}[t]
+% \scriptsize
+%   \setlength{\tabcolsep}{1.8pt}
+%   \centering
+%    \caption{Comparison with state-of-the-art methods on three representative zero-shot 3D reognition benchmarks. ``Top1-C" means the top-1 class average accuracy. ``Encoder" denotes the point cloud encoder used in the framework. 
+%      "*" denotes the results we reproduce in public OpenShape datasets by corresponding methods.}
+%   \vspace{-10pt}
+%   \adjustbox{width=\textwidth}{
+%     \begin{tabular}{l|c|cc|cc|cc|cc}
+%     \toprule
+%     \multirow{3}[1]{1.0cm}{Method} & \multirow{3}[1]{*}{\begin{tabular}[c]{@{}c}Training  data\end{tabular}}  & \multicolumn{4}{c|}{Objaverse-LVIS} & \multicolumn{2}{c|}{ScanObjectNN} & \multicolumn{2}{c}{ModelNet40} \\    
+%     & & \multicolumn{2}{c|}{point cloud} & \multicolumn{2}{c|}{merge} & \multicolumn{2}{c|}{point cloud} & \multicolumn{2}{c}{point cloud} \\
+%     &  & Top1  & Top5 & Top1  & Top5 & Top1  & Top5  & Top1  & Top5 \\
+%     \midrule
+%     ReCon~\cite{qi2023contrast} & \multirow{5}[2]{*}{ShapeNet} & - & - & 1.1 & 3.7 & 42.3 & 75.6 & 61.2 & 78.1 \\
+%     CG3D~\cite{hegde2023clip} &   & - & - & 5.0 & 11.6 & 42.5 & 60.8 & 48.7 & 66.5 \\
+%     CLIP2Point~\cite{huang2023clip2point} & & - & - & 2.7 & 7.9 & 25.5 & 59.4 & 49.5 & 81.2 \\
+%     ULIP~\cite{xue2024ulip} & & - & - & 6.2 & 17.9 & 51.5 & 80.2 & 60.4 & 84.4 \\
+%     OpenShape~\cite{liu2024openshape}  & & - & - & 10.8 & 25.0 & 51.3 & 78.4 & 70.3 & 91.3 \\
+%     MixCon3D & & - & - & 22.3 & 44.3 & 52.6 & 78.7 & 72.6 & 91.3 \\
+%     MixCon3D* & & 9.4 & 20.4 & 38.9 & 65.1 & 47.0 & 79.6 & 64.6 & 87.1 \\
+%     MixCon3D \textbf{(Ours)} & ShapeNet + Point-E & 11.2 & 25.4 & \tbd{35.4} & \tbd{61.8} & \tbd{47.1} & \tbd{72.7} & \tbd{73.4} & \tbd{91.4} \\
+%     \bottomrule
+%     \end{tabular}}
+%   \label{tab:zero_shot_main_results}
+% \end{table*}
+
+% \begin{table*}[t]
+% \scriptsize
+%   \setlength{\tabcolsep}{1.8pt}
+%   \centering
+%    \caption{Comparison with state-of-the-art methods on three representative zero-shot 3D reognition benchmarks. ``Top1-C" means the top-1 class average accuracy. ``Encoder" denotes the point cloud encoder used in the framework. 
+%      "*" denotes the results we reproduce in public OpenShape datasets by corresponding methods.}
+%   \vspace{-10pt}
+%   \adjustbox{width=\textwidth}{
+%     \begin{tabular}{l|c|cc|cc|cc}
+%     \toprule
+%     \multirow{3}[1]{1.0cm}{Method} & \multirow{3}[1]{*}{\begin{tabular}[c]{@{}c}Training  data\end{tabular}}  & \multicolumn{2}{c|}{Objaverse-LVIS} & \multicolumn{2}{c|}{ScanObjectNN} & \multicolumn{2}{c}{ModelNet40} \\    
+%     % & & \multicolumn{2}{c|}{point cloud} & \multicolumn{2}{c|}{merge} & \multicolumn{2}{c|}{point cloud} & \multicolumn{2}{c}{point cloud} \\
+%     &  & Top1 & Top5 & Top1  & Top5  & Top1  & Top5 \\
+%     \midrule
+%     ReCon~\cite{qi2023contrast} & \multirow{5}[2]{*}{ShapeNet} & 1.1 & 3.7 & 42.3 & 75.6 & 61.2 & 78.1 \\
+%     CG3D~\cite{hegde2023clip} & & 5.0 & 11.6 & 42.5 & 60.8 & 48.7 & 66.5 \\
+%     CLIP2Point~\cite{huang2023clip2point} & & 2.7 & 7.9 & 25.5 & 59.4 & 49.5 & 81.2 \\
+%     ULIP~\cite{xue2024ulip} & & 6.2 & 17.9 & 51.5 & 80.2 & 60.4 & 84.4 \\
+%     OpenShape~\cite{liu2024openshape}  & & 10.8 & 25.0 & 51.3 & 78.4 & 70.3 & 91.3 \\
+%     MixCon3D & & - & - & 52.6 & 78.7 & 72.6 & 91.3 \\
+%     MixCon3D* & & 9.4 & 20.4 & 47.0 & 79.6 & 64.6 & 87.1 \\
+%     MixCon3D \textbf{(Ours)} & ShapeNet + Point-E & 11.2 & 25.4 & \tbd{47.1} & \tbd{72.7} & \tbd{73.4} & \tbd{91.4} \\
+%     \bottomrule
+%     \end{tabular}}
+%   \label{tab:zero_shot_main_results}
+% \end{table*}

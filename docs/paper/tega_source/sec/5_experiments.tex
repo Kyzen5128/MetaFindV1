@@ -1,0 +1,107 @@
+
+% \begin{figure}[tb]
+%     \centering
+%     \includegraphics[width=\linewidth]{figure/fig4_v1_otsuka.png}
+%     \caption{
+%     \kt{\
+%     Comparison of Data Before and After Filtering. The upper shows samples which passed filter, while the lower shows samples which filtered out. The filter detects samples with missing parts or those that are entirely unrelated to the intended data.
+%     }}
+%     \label{fig:enter-label}
+%     \vspace{-10pt}
+% \end{figure}
+
+% \input{tables/exploratory_experiments}
+\input{tables/tab_noise_filtering}
+
+\section{Experiments}
+In this section, we evaluate the effectiveness of the proposed TeGA in zero-shot 3D classification. Section~\ref{sec:experimental_setup} first introduces our experimental setup, followed by Section~\ref{sec:exploratory_experiments}, which presents the results of the exploratory experiments. Additionally, Section~\ref{sec:comparison} discusses the main experimental results in comparison with our baseline and previous zero-shot 3D classification models. Finally, Section~\ref{sec:ablation_study} analyzes the key components of TeGA.
+
+\subsection{Experimental Setup} 
+\label{sec:experimental_setup} 
+\noindent{\textbf{Training Dataset.}} 
+% In this paper, we conduct validation experiments using ShapeNet as the baseline of real dataset. 
+Recent research has achieved high performance in zero-shot 3D classification using a 3D dataset that integrates four sources: ShapeNet~\cite{chang2015shapenet}, 3D-FUTURE~\cite{fu20213d}, ABO~\cite{collins2022abo}, and Objaverse~\cite{deitke2023objaverse}. 
+However, our main goal is not to outperform state-of-the-art methods, but to test whether synthetic 3D data generated from text-to-3D models can serve as a training dataset expansion. For this reason, we use ShapeNet as a baseline in this paper.
+
+\noindent{\textbf{Zero-Shot 3D Classification.}} 
+Zero-shot 3D classification is the task of classifying objects of unseen categories that are not included in the training data. Following the experimental setup of MixCon3D, we use ModelNet40~\cite{wu20153d}, ScanObjectNN~\cite{uy2019revisiting}, and Objaverse-LVIS~\cite{deitke2023objaverse} as evaluation 3D datasets. ModelNet40 is a CAD dataset containing 12,311 samples of 40 categories, including chairs and tables. ScanObjectNN is captured from real-world environments using RGBD sensors and contains 2,902 samples of 15 categories. Objaverse-LVIS is a relatively large dataset with a collection of 1,156 categories, comprising a total of 46,206 samples.
+
+\noindent{\textbf{Implementation Details.}}
+We used eight Nvidia H100 GPUs with a batch size of 1,024. Other settings followed the default configurations of MixCon3D. We also employed PointBERT as the point cloud encoder in MixCon3D. 
+We trained the model for 200 epochs with the AdamW optimizer~\cite{loshchilov2017decoupled}, a warmup epoch of 10, and a cosine learning rate decay schedule~\cite{loshchilov2016sgdr}. 
+The base learning rate was set to 1e-3, based on the linear learning rate scaling rule: $lr=base\_lr \times \text{batchsize}/256$. 
+The Text Encoder and the Image Encoder are frozen using OpenCLIP ViT-bigG-14~\cite{cherti2023reproducible}, and, as in Liu et al.~\cite{liu2024openshape}, simple layers are added afterward to optimize the model.
+% Following Liu et al. OpenCLIP ViT-bigG-14 was adopted as the pretrained CLIP model. 
+For dataset generation, we used five Nvidia TITAN RTX GPUs. The generation parameters followed the default settings of Point-E: the output point cloud size was 4,096, the guidance scale $\omega$ was set to [3.0, 0.0], and 50 diffusion steps were performed to obtain the final output.
+
+\input{tables/tab_guidance_scale}
+\subsection{Exploratory Experiments} 
+\label{sec:exploratory_experiments}
+\input{tables/tab_main_comparison_results}
+This section analyzes the effect of key parameters in TeGA. Specifically, we conducted two exploratory experiments: (i) consistency filtering and (ii) guidance scale on Point-E. For each exploratory experimental baseline, we evaluated the performance of MixCon3D with a combined dataset of 10,000 synthetic data samples and ShapeNet.
+
+\noindent{\textbf{Consistency Filtering (see Table~\ref{tab:noise_filtering}).}} 
+The consistency filtering of the proposed TeGA is an important process because it removes the unaligned data from the generated data that adversely affects training. To verify the effectiveness of TeGA, we conducted a comparative experiment under two scenarios: one with consistency filtering applied and one without it. For this experiment, we use two versions of our synthetic dataset: one filtered by TeGA and one unfiltered, and combine each with the ShapeNet dataset. Then, these combined datasets are used for training. 
+In Table~\ref{tab:noise_filtering}, we compare the Top1 accuracy with and without consistency filtering on Objaverse-LVIS, ScanObjectNN, and ModelNet40. The results show that the concatenated dataset with consistency filtering outperforms the unfiltered one by 0.4\% points on Objaverse-LVIS and 3.3\% points on ScanObjectNN, while it decreases 2.1\% points on ModelNet40. These results indicate that the proposed consistency filtering of TeGA provides effective synthetic training for zero-shot 3D classification. 
+% For ScanObjectNN, the accuracy significantly improves when filtering is applied compared to when it is not. 
+% This suggests that ScanObjectNN is highly sensitive to noisy data.
+
+
+\noindent{\textbf{Effect of Guidance Scale of Point-E (see Table~\ref{tab:guidance_scale}).}} 
+The guidance scale of Point-E is a critical parameter that controls the fidelity of the 3D model to the input text prompt. With a high guidance scale, the 3D model adheres more closely to the text prompt, though this reduces the diversity of geometric shapes. 
+Conversely, a low guidance scale results in a 3D model that is less aligned with the text prompt but exhibits greater geometric diversity. 
+Referring to the fact that the default guidance scale in Point-E is set to 3.0, this experiment evaluates varying guidance scale in \{0.3, 3.0, 30\}.
+
+In Table~\ref{tab:noise_filtering}, we compare the Top1 accuracy with each guidance scale on Objaverse-LVIS, ScanObjectNN, and ModelNet40. 
+Experimental results show that the guidance scale of 3.0 gives the best performance. 
+When the guidance scale is set to 0.3, the generated point cloud is expected to have minimal reliance on the input text, leading to weaker alignment between modalities. Conversely, at a guidance scale of 30, the point cloud strongly reflects the input text; however, since all samples are generated using the same text, this likely results in a loss of diversity. This trade-off between alignment and diversity suggests that the highest accuracy is achieved with the standard guidance scale of 3.0.
+% Increasing the guidance scale does not improve learning due to reduced geometric diversity, while decreasing the guidance scale by 3.0 weakens the alignment between geometry and textual prompts. These results suggest that a guidance scale of 3.0 is an optimal parameter for generating the 55 categories included in ShapeNet. The lower performance observed at the guidance scales of 0.3 and 30 reflects the trade-off between quality and diversity. 
+% with optimal parameters providing more effective training when used as training data.
+
+
+\subsection{Comparison with Conventional Methods} 
+\label{sec:comparison} 
+In Table~\ref{tab:zero_shot_main_results}, we compare the zero-shot 3D classification results of MixCon3D. One model is trained with both ShapeNet and the synthetic dataset generated by TeGA, and the other is solely trained with ShapeNet. We generate a synthetic dataset with the same number of samples as ShapeNet. 
+As a result, our proposed method effectively doubles the amount of training data compared to the original ShapeNet.
+Table~\ref{tab:zero_shot_main_results} shows that our approach outperforms the baseline MixCon3D, which was trained solely on the original ShapeNet, across all benchmark datasets and evaluation metrics. Specifically, our method demonstrates substantial improvements, achieving gains of 3.0\% on Objaverse-LVIS, 4.4\% on ScanObjectNN, and 8.8\% on ModelNet40 in zero-shot performance.
+These results clearly demonstrate that TeGA is an effective method for dataset expansion in zero-shot 3D classification, even when using synthetic 3D data. Furthermore, the ability to scale the dataset while maintaining or improving model performance opens up new possibilities for addressing data scarcity in 3D vision tasks.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.85\linewidth]{figure/confusion_matrix2.pdf}
+    \vspace{-10pt}
+    \caption{Confusion matrics when varying PE/SP. When  the proportion of real data decreases, the model's predictions increasingly skew towards desk and display, leading to an overall deterioration in prediction accuracy.}
+    \label{fig:confusion_matrix}
+    \vspace{-10pt}
+\end{figure*}
+
+\input{tables/tab_real-synthetic_ratio}
+
+\subsection{Ablation Studies} 
+\label{sec:ablation_study} 
+This section analyzes the factors that contribute to performance improvements in dataset expansion using TeGA. Specifically, we investigate (i) the mixing ratio of synthetic 3D data and (ii) the scalability of synthetic 3D data.
+
+\noindent{\textbf{Mixing ratio of synthetic 3D data (see Table~\ref{tab:real_synthetic_ratio} and Figure~\ref{fig:confusion_matrix}).}} In this experiment, we investigate whether synthetic data can serve as a substitute for real data. While keeping the total number of samples the same as the original ShapeNet, we replace a portion of the real data with synthetic data generated by TeGA.
+% We also explore the potential of synthetic datasets by testing various replacement ratios. 
+% Let the replacement ratio of synthetic data be denoted as Point-E (PE) / ShapeNet (SN)-\% in this experiment.
+Table~\ref{tab:real_synthetic_ratio} presents the Top1 performance in zero-shot 3D classification with varying proportions of synthetic 3D data. Surprisingly, it shows that the best performance is achieved when 25\% of the original ShapeNet is replaced with synthetic 3D data, with a performance improvement over using ShapeNet alone. However, as the proportion of synthetic 3D data increases beyond 25\%, performance gradually deteriorates; when only synthetic data is used, training fails and classification performance significantly drops. This decline is likely due to the learning strategy of MixCon3D, which extracts knowledge from CLIP models, making it difficult for the model to learn from the synthetic 3D data generated by Point-E due to domain gaps.
+
+We also analyze why the model fails to learn when trained solely on synthetic data. In this experiment, we construct a mixture matrix at PE / SN = \{0, 25, 100\}, where real 3D data is progressively replaced by synthetic 3D data, to examine how the model misclassifies. As shown in Figure 4, for PE / SN = \{0, 25, 100\}, the categories predicted by the model exhibit similar trends. However, when PE/SN = 100, i.e., when the model is trained on synthetic 3D data, the predicted labels are biased towards desk or display.
+
+% \tbd{change "real:synthetic" on figure 4}
+% \kt{
+% \noindent{\textbf{Synthetic Data Representation.}} 
+% This experiment examines the extent to which the similarity between synthetic data and ShapeNet data contributes to learning performance. Specifically, we combine ShapeNet with Fractal-Noise which generated using PC Fractal-DB~\cite{yamada2022point}, as same as generated dataset by Point-E with using class labels of ShapeNet.
+% The point clouds of Fractal-Noise undergo the same preprocessing as those from Point-E.
+
+% Table~\ref{tab:semantics_vs_fractal} shows the results. Unlike the results with the combined Point-E and ShapeNet data, the model trained on the dataset combining Fractal DB and ShapeNet shows a performance decline. This indicates that a certain level of similarity between synthetic and real data is necessary for effective integration and learning.}
+
+% \input{tables/tab_pointe_vs_fractals}
+
+\input{tables/tab_scaling_point-e}
+
+\noindent{\textbf{Scalability of synthetic 3D data.}} 
+In this experiment, we examine how scaling the amount of synthetic data added to ShapeNet influences the performance of MixCon3D. Specifically, we assess performance changes when Point-E generated data is scaled to 0.1x, 1x and 2x the original ShapeNet data. The scaling is based on ShapeNet's default dataset size of 53,470.
+Table~\ref{tab:scaling_data} presents the Top1 performance with varying the amount of generated data. It shows that scaling plays a critical role in MixCon3D's training and that synthetic data effectively contributes to this scaling. According to these results, accuracy improves with the addition of scaled synthetic data for Objaverse-LVIS and ModelNet40. In contrast, the accuracy decreases with scaling for ScanObjectNN. This decline is likely due to ScanObjectNN's scores being more sensitive to noise.
+% }
+% \input{tables/tab_pointe_vs_fractals}

@@ -1,0 +1,119 @@
+\section{Problem Setting and Preliminary}
+Inspired by the effectiveness of synthetic data as training data in 2D, we propose leveraging synthetic data as a solution to the scarcity of 3D data by using it to augment datasets. Specifically, we propose the method TeGA, that utilizes generative text-to-3D models to create datasets for language-image-3D pretraining.
+Therefore, in this section, 
+% we address the core challenges of diverse and text-guided synthetic 3D data generation for zero-shot 3D classification. 
+we introduce the proposed TeGA as a synthetic dataset expansion method, capable of learning rich geometric representations to enhance zero-shot recognition model generalization. 
+Finally, we outline the formulation of a language-image-3D learning method, aiming to learn feature spaces for embedding alignment across three different modalities.
+
+\noindent{\textbf{Problem Setting.}}
+% The scarcity of 3D datasets has become a significant bottleneck in the advancement of open-world 3D understanding due to the high cost of collection and annotation. This limitation is critical in zero-shot 3D recognition, where a zero-shot recognition model generalises to unseen classes not included in the training data. 
+% This issue becomes even more pronounced in datasets for language-image-3D training, as it not only involves the challenges of 3D data collection and annotation costs but also requires ensuring alignment across three modalities.
+% To tackle this issue, we present a synthetic dataset expansion method called TeGA that generates synthetic language-image-3D data from text prompts using text-to-3D models. This approach is simple yet effective in expanding existing datasets and enhances classification performance in zero-shot scenarios, all while reducing limitations on scarce real datasets.
+% Zero-shot 3D classification requires the ability to generalize to unseen classes. Generally, training for zero-shot classification demands a large amount of data. However, the availability of 3D data is limited due to challenges such as data collection and annotation, and this makes it difficult to construct large-scale 3D datasets comparable to those in other modalities. 
+% Recently, synthetic dataset expansion has achieved notable performance improvements. We consider that dataset expansion can effectively address the issue of 3D data scarcity, and  we present a synthetic dataset expansion method.
+% Additionally, recent advancements in zero-shot 3D classification tasks have shown that leveraging knowledge distillation from models trained on other modalities, such as CLIP, can mitigate the issue of data scarcity and improve performance. Inspired by this, we focus on synthetic dataset expansion, designed to be adaptable for training across the three modalities of language, image, and 3D.
+Zero-shot tasks generally demand large datasets to generalize to unseen classes~\cite{radford2021learning}, yet, in zero-shot 3D classification, the cost of collecting and annotating 3D data is a significant bottleneck and the performance of the models remains low~\cite{liu2024openshape, zhou2023uni3d, gao2024sculpting}. 
+Recently, synthetic dataset expansion has achieved notable performance improvements in several fields~\cite{isola2022when, sariyildiz2023fake}.
+% Moreover, recent approaches in zero-shot 3D classification perform language-image-3d pretraining to utilize knowledge distillation from models like CLIP, and improve performance under limited data conditions. 
+Moreover, recent approaches in zero-shot 3D classification have demonstrated that pretraining on language-image-3D data enables knowledge distillation from models pretrained on other modalities, thereby improving performance under limited data conditions~\cite{qi2023contrast, hegde2023clip, huang2023clip2point, xue2024ulip, liu2024openshape}.
+We consider these findings critical for improving the accuracy of zero-shot 3D classification. Hence, we present a multi-modal synthetic dataset expansion method called TeGA that generates synthetic language-image-3D data from text prompts using text-to-3D models. 
+
+To frame the zero-shot 3D classification, we provide an overview of the dataset setup. We begin by training a model $f(\theta)$ to handle multiple types of visual inputs from a source dataset $D_{o} = \{(x_i^I, x_i^T, x_i^P)\}_{i=1}^{n_o}$, which consists of image ($x_{i}^I$), text ($x_{i}^T$), and 3D point cloud ($x_{i}^P$) modalities. The goal of this task is to classify $N$ semantic classes in a target dataset $D_{t} = \{(x_j^I, x_j^T, x_j^P)\}_{j=1}^{n_t}$.
+Here, $n_o$ and $n_t$ indicate the number of samples, emphasizing the model's ability to generalize to previously unknown classes.
+% , where $y_j \in \{1, \dots, N\}$ denotes the class label and includes unseen classes absent from the source data $D_{o}$. Here, $n_o$ and $n_t$ indicate the number of samples, emphasizing the model's ability to generalize to previously unknown classes.
+
+The core of dataset expansion lies in extending the source dataset with a synthetic dataset, where $D_{s} = \{(x_k^I, x_k^T, x_k^P)\}_{k=1}^{n_s}$, to enhance the model $f(\theta)$'s ability to generalize on unseen category shapes. The key to the task is to design $D_{s}$ to strengthen the adaptability of $f(\theta)$ to new concepts. The construction of this extended dataset, $D_{o} \cup D_{s}$, enriches the model's ability to recognize unseen category shapes.
+
+\noindent{\textbf{Text-to-3D Models as Dataset Generator.}}
+Cognitive science suggests that people use past experience to recognize unfamiliar objects~\cite{bar2004visual, kiani2007object}. For example, children use memories of other toys to imagine new ways to play with a new toy. 
+This is a fundamental insight for the use of generative models as training data. The use of synthetic data generated from generative models for zero-shot recognition is very similar to the process by which humans recognize new concepts of objects from previous knowledge.
+Recent advancements in text-to-3D models enable the generation of realistic 3D synthetic data that is both rich and semantically meaningful~\cite{nichol2022point, poole2022dreamfusion, lin2023magic3d, chen2023fantasia3d}. Unlike traditional generative models such as GANs~\cite{goodfellow2020generative} and VAEs~\cite{kingma2013auto}, text-to-3D models accept direct text prompts, allowing for user-specified, scenario-driven 3D shape generation. Therefore, this paper aims to improve the generalization ability of the model $f(\theta)$ by constructing a synthetic dataset through a text-to-3D model for dataset expansion.
+
+% We use the Point-E as a text-to-3D model, which takes a text input and outputs a point cloud. Specifically, Point-E operates in three steps: (i) generating a synthetic view from the text, (ii) generating a coarse point cloud (1,024 points) conditioned on the synthetic view, (iii) producing a fine point cloud (4,096 points) conditioned on the coarse point cloud and the synthetic view.
+% In the generation of a synthetic view from the text, Point-E uses finetuned GLIDE as a text-to-image generation model; GLIDE takes a text prompt and generates a text-aligned image.
+% Underlying this text-to-image model is a diffusion model, where GLIDE guides the text-aligned image generation by introducing classifier guidance. Here, guided sampling in the guided diffusion model is formulated as follows.
+% In the generation of a coarse point cloud and production of a fine point cloud, Point-E uses a permutation invariant diffusion model.
+% For simplicity, this paper represents the generator of Point-E as follows.
+
+Inspired by the recent success of synthetic data training using generative models based on diffusion models, we adopt a diffusion-based generative model as our text-to-3D model. Generally, text-to-3D models based on diffusion models can be simply represented as follows:
+
+\begin{equation}
+\label{eq:gtheta}
+P = G_{\theta} \bigl(T, \omega \bigr).
+\end{equation}
+
+where $G_{\theta} \bigl( \cdot \bigr)$ represents the generator that inputs text $T$ and outputs a point cloud $T$, and $\omega$ represents the guidance scale that is used to adjust how strongly the input text is reflected in the point cloud generation process.
+In this paper, we utilize a generative text-to-3D model $G_{\theta}(\cdot)$ as generating a point cloud $x_i^P$ from a text $x_i^T$.
+
+% \begin{align*}
+% I_{t-1} &= \frac{1}{\sqrt{\alpha_t}} \left( I_t - \frac{1 - \alpha_t}{\sqrt{1 - \bar{\alpha}_t}} \tilde{\epsilon}_{\theta}(I_t, t, c) \right) + \sigma_t \epsilon_t \\
+% \bar{\alpha}_t &= \prod_{i=1}^{t} \alpha_i, \quad \epsilon_t \sim \mathcal{N}(0, \mathbf{I}) \\
+% \tilde{\epsilon}_{\theta}(I_t, t, c) &= (1 + w) \epsilon_{\theta}(I_t, t, c) - w \epsilon_{\theta}(I_t, t, \varnothing) \\
+% P_{\text{low},t-1} &= \frac{1}{\sqrt{\alpha_t}} \left( P_{\text{low},t} - \frac{1 - \alpha_t}{\sqrt{1 - \bar{\alpha}_t}} \tilde{\epsilon}_{\theta}(P_{\text{low},t}, t, I_t) \right) + \sigma_t \epsilon_t \\
+% \tilde{\epsilon}_{\theta}(P_{\text{low},t}, t, I_t) &= (1 + w) \epsilon_{\theta}(P_{\text{low},t}, t, I_t) - w \epsilon_{\theta}(P_{\text{low},t}, t, \varnothing)
+% \end{align*}
+
+% \begin{equation}
+% I_{t-1} &= \frac{1}{\sqrt{\alpha_t}} \left( I_t - \frac{1 - \alpha_t}{\sqrt{1 - \bar{\alpha}_t}} \tilde{\epsilon}_{\theta}(I_t, t, c) \right) + \sigma_t \epsilon_t
+% \end{equation}
+% where $I_{t}$ represents the image state at time $t$, and $c$ indicates the condition vector obtained from the text prompt. The scaling factor $\alpha_{t}$ adjusts the noise level at each time $t$, while the cumulative scale $\bar{\alpha}_t = \prod_{i=1}^{t} \alpha_i$ represents the effect of past steps.
+% The conditional noise prediction $\tilde{\epsilon}_{\theta}(I_t, t, c)$ also predicts the noise component based on the condition $c$. The prediction is defined as follows:
+
+% \begin{equation}
+% \tilde{\epsilon}_{\theta}(I_t, t, c) &= (1 + w) \epsilon_{\theta}(I_t, t, c) - w \epsilon_{\theta}(I_t, t, \varnothing)
+% \label{eq:example}
+% \end{equation}
+
+% Here, the guidance coefficient $w$ reinforces the influence of condition $c$ and improves the consistency with the text. The random noise term $\sigma_t \epsilon_t$ also follows a Gaussian distribution $\mathcal{N}(0, \mathbf{I})$, giving diversity to the generation process.
+
+% In addition, for the generation of a point cloud from the image, Point-E generates a point cloud $P$ generated from the previous image $I$. In this case, the image acts as a guide and provides the conditioning information that shapes the point cloud that is generated. A conditional diffusion model is used in this process, where the reverse diffusion step gradually refines the point cloud on the basis of the conditioning image. The reverse diffusion step for the point cloud is shown as:
+
+% \begin{equation}
+% P_{t-1} &= \frac{1}{\sqrt{\alpha_t}} \left( P_{t} - \frac{1 - \alpha_t}{\sqrt{1 - \bar{\alpha}_t}} \tilde{\epsilon}_{\theta}(P_{t}, t, I_t) \right) + \sigma_t \epsilon_t
+% \end{equation}
+
+% In this formulation, $P_t$ denotes the state of the point cloud at time step $t$, and $I_t$ is the conditioning image. The scaling factor $\alpha_t$ controls the noise level at time $t$, while the conditional noise prediction function $\tilde{\epsilon}_{\theta}(P_t, t, I_t)$ predicts the noise based on the point cloud state $P_t$, time $t$, and the image $I_t$.
+% The conditional noise prediction $\tilde{\epsilon}_{\theta}(P_t, t, I_t)$ is defined as:
+
+% \begin{equation}
+% \tilde{\epsilon}_{\theta}(P_{t}, t, I_t) &= (1 + w) \epsilon_{\theta}(P_{t}, t, I_t) - w \epsilon_{\theta}(P_{t}, t, \varnothing)
+% \end{equation}
+% where $w$ is the guidance scale that adjusts the influence of the conditioning image $I_t$ on the noise prediction. The term $\epsilon_{\theta}(P_{t}, t, \varnothing)$ represents the unconditional noise prediction, which allows the model to maintain flexibility in the generated point cloud structure.
+% This setup allows the image $I_t$ to guide the spatial arrangement of points in the point cloud, aligning the generated structure with the visual cues in the image. The random noise term $\sigma_t \epsilon_t$, sampled from a Gaussian distribution $\mathcal{N}(0, \mathbf{I})$, ensures diversity in the generation process while gradually decreasing the noise level as the process progresses.
+% Figure~\ref{fig:enter-label_fig2} shows examples of synthetic and real 3D data generated by Point-E. The real 3D data is a sample from Objaverse-LVIS. Figure~\ref{fig:enter-label_fig2} shows that the synthetic 3D data generated by Point-E outputs a 3D shape that matches the input text. On the other hand, there are cases where even the smallest details of the 3D shape are not generated accurately. For example, the synthetic 3D data generated by Point-E has difficulty in generating even the spokes of a bicycle.
+
+\begin{figure}[tb]
+    \centering
+    \includegraphics[width=\linewidth]{figure/fig3_v3_otsuka.pdf}
+    \caption{
+    \kt{
+    % Comparison between Real Data and Synthetic Data. The first row represents Real Data, while the second row shows Synthetic Data generated by Point-E. Comparing the red boxes between the Real Data and Synthetic Data for each class reveals that the Real Data captures finer details. On the other hand, the Synthetic Data still allows for intuitive recognition of objects such as bicycles, chairs, and beds by human observers.
+    A visualization of synthetic 3D data generated from real 3D data and Point-E. Synthetic 3D data shows that it is more difficult to generate detailed geometrical detail compared to real data.
+    }}
+    \label{fig:enter-label_fig2}
+    \vspace{-10pt}
+\end{figure}
+
+
+\noindent{\textbf{Language-Image-3D Contrastive Learning.}}
+The goal of language-image-3D contrastive learning is to align the 3D embeddings with the rich, pre-trained feature spaces of images and text to facilitate the classification of 3D data including unseen classes. This facilitation enables language-image-3D contrastive learning to mitigate the impact of the 3D data scarcity problem. In fact, models leveraging language-image-3D contrastive learning outperform models trained with only text and 3D data in zero-shot 3D classification.
+Given the typically limited 3D datasets, a practical approach is to leverage CLIP's knowledge as a shared embedding space. In this setup, we freeze CLIP's image and text encoders and align the 3D point cloud encoder to this shared space using contrastive learning. For a triplet of image, text, and point cloud $(x_i^I, x_i^T, x_i^P)$, the contrastive objective maximizes similarity within the shared embedding space as follows:
+\begin{align}
+L_{\text{All}} = -\frac{1}{2N} \sum_{i=1}^N \sum_{(A, B) \in \mathcal{S}} &\left( \log \frac{\exp(h_i^A \cdot h_i^B / \tau)}{\sum_j \exp(h_i^A \cdot h_j^B / \tau)} \right. \nonumber \\
+&\left. + \log \frac{\exp(h_i^B \cdot h_i^A / \tau)}{\sum_j \exp(h_i^B \cdot h_j^A / \tau)} \right)
+\end{align}
+where $\mathcal{S}=\{(I,T), (P,I), (P,T)\}$ represents the pairs across modalities; in other words, $(I,T)$ denotes the image-text pair, $(P,I)$ the point cloud-image pair, and $(P,T)$ the point cloud-text pair. In addition, the normalized features are defined as $h_i^A = g_A(f_A(x_i^A)) / \| g_A(f_A(x_i^A)) \|$, where $f_A$ and $g_A$ denote the encoder and learnable projection head for each modality $A$. Similarly, $h_j^B$ is defined for modality $B$, with $(A, B) \in \mathcal{S}$ representing pairs across image, text, and point cloud modalities. 
+The temperature parameter $\tau$ is a learnable parameter. It controls the strength of the penalty for samples with high similarity. Through this contrastive objective, we enable 3D shapes to align within CLIP's embedding space, facilitating a coherent language-image-3D representation.
+
+
+\begin{figure}[tb]
+    \centering
+    \includegraphics[width=\linewidth]{figure/fig4_v1_otsuka.pdf}
+    \caption{
+    \kt{\
+    A visualization of consistency filtering. The upper shows samples which passed filter; the lower shows samples which filtered out. 
+    Our filtering can detect error cases while generation process.
+    }}
+    \label{fig:filtering_result}
+    \vspace{-10pt}
+\end{figure}

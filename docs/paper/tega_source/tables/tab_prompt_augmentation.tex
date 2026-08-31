@@ -1,0 +1,19 @@
+\begin{table}[t]
+  \centering
+  \setlength{\tabcolsep}{7pt}
+  \caption{Effect of prompt augmentation. 
+  We report results on ModelNet40 (M40), Objaverse-LVIS (O-LVIS) and ScanObjectNN (S-Object).}  
+  \vspace{-10pt}
+  \resizebox{0.98\linewidth}{!}{
+  \begin{tabular}{l|cccccccc}
+    \toprule
+    \multirow{2}*{Prompt} & M40 & O-LVIS & S-Object \\
+    & Top1 & Top1 & Top1\\
+    \midrule
+    category & -- & -- & -- \\
+    GPT-4 caption & -- & -- & -- \\
+    % category + ** & -- & -- & -- \\
+    \bottomrule
+  \end{tabular}}
+  \label{tab:prompt_augmentation}
+\end{table}

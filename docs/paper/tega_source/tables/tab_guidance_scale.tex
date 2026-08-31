@@ -1,0 +1,40 @@
+\begin{table}[t]
+  \centering
+  \setlength{\tabcolsep}{7pt}
+  % \caption{Effect of guidance scale}  
+  \caption{Accuracy when varying Guidance scale.}
+  \vspace{-10pt}
+  \resizebox{0.85\linewidth}{!}{
+  \begin{tabular}{c|cccccccc}
+    \toprule
+    \multirow{2}*{Guidance scale} & O-LVIS & S-Object & M40 \\
+    & Top1 & Top1 & Top1\\
+    \midrule
+    0.3 & 11.4 & 44.8 & 70.5 \\
+    3.0 & \textbf{11.5} & 46.6 & \textbf{71.1} \\
+    30 & 10.3 & \textbf{48.3} & 69.7 \\
+    \bottomrule
+  \end{tabular}}
+  \label{tab:guidance_scale}
+  \vspace{-10pt}
+\end{table}
+
+% \begin{table}[t]
+%   \centering
+%   \setlength{\tabcolsep}{7pt}
+%   \caption{Effect of guidance scale}  
+%   \vspace{-10pt}
+%   \resizebox{\linewidth}{!}{
+%   \begin{tabular}{c|cccccccc}
+%     \toprule
+%     \multirow{2}*{Guidance scale} & Objaverse-LVIS & ScanObjectNN & ModelNet40 \\
+%     & Top1 & Top1 & Top1\\
+%     \midrule
+%     0.3 & 11.4 & 44.8 & 70.5 \\
+%     3.0 & \textbf{11.5} & 46.6 & \textbf{71.1} \\
+%     30 & 10.3 & \textbf{48.3} & 69.7 \\
+%     \bottomrule
+%   \end{tabular}}
+%   \label{tab:guidance_scale}
+%   \vspace{-10pt}
+% \end{table}

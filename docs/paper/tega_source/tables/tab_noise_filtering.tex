@@ -1,0 +1,38 @@
+\begin{table}[t]
+  \centering
+  \setlength{\tabcolsep}{7pt}
+  % \caption{Effect of filtering.}  
+  \caption{Accuracy with and without filtering.}
+  \vspace{-10pt}
+  \resizebox{0.99\linewidth}{!}{
+  \begin{tabular}{c|cccccccc}
+    \toprule[0.8pt]
+    \multirow{2}*{Filtering} & O-LVIS & S-Object & M40 \\
+    & Top1 & Top1 & Top1 \\
+    \midrule[0.5pt]
+    w / o  filtering  & 11.1 & 45.4 & \textbf{73.4} \\
+    w / filtering & \textbf{11.5} & \textbf{48.7} & 71.3 \\
+    \bottomrule[0.8pt]
+  \end{tabular}}
+  \label{tab:noise_filtering}
+  \vspace{-10pt}
+\end{table}
+
+% \begin{table}[t]
+%   \centering
+%   \setlength{\tabcolsep}{7pt}
+%   \caption{Effect of consistency filtering.}  
+%   \vspace{-10pt}
+%   \resizebox{0.98\linewidth}{!}{
+%   \begin{tabular}{l|cccccccc}
+%     \toprule[0.8pt]
+%     \multirow{2}*{Consistency filtering} & Objaverse-LVIS & ScanObjectNN & Modelnet40 \\
+%     & Top1 & Top1 & Top1 \\
+%     \midrule[0.5pt]
+%     w / o  filtering  & 11.1 & 45.4 & 73.4 \\
+%     w / filtering & 10.0 & \textbf{48.7} & 68.8 \\
+%     \bottomrule[0.8pt]
+%   \end{tabular}}
+%   \label{tab:noise_filtering}
+%   \vspace{-10pt}
+% \end{table}

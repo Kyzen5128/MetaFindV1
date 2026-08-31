@@ -1,0 +1,45 @@
+\begin{table*}[ht] % table* は twocolumn 用
+    \centering
+    \begin{tabular}{@{}p{2.5cm}p{12cm}@{}}
+        \toprule
+        \textbf{Prompt} & 
+         You are an assessment expert responsible for prompt-prediction pairs. Your task is to score the prediction according to the following requirements:\newline
+         1. Evaluate the recall, or how well the prediction covers the information in the prompt. If the prediction contains information that does not appear in the prompt, it should not be considered as bad.\newline
+        2. Assign a score between 1 and 5, with 5 being the highest. Do not provide a complete answer; give the score in the format: 3\newline
+        3. add points if the prediction and prompt are conceptually close (e.g. similar in appearance). (e.g., bike and bycicle and table and chair are close)\newline
+        4. since the prompt is at the word level, it is inevitable that some detailed information is missing, so exclude it from the point deduction. \newline \newline
+        prompt: car\newline
+        prediction: A 3D rendering of a car with a pink and white exterior and a pink interior with red streaks\\
+        \midrule
+        \textbf{Answer:} &
+        5 \\
+        \midrule
+        \textbf{Word matching} &
+        5 \\
+        \midrule
+        \textbf{Total} &
+        10 (safe) \\
+        % \midrule
+        % & Reply with the format of ``index\#class\#short reason (no more than 10 words)". \\
+        % \midrule
+        % \textbf{Examples:} & \\
+        % Input: This is a 3D object model of a cartoon white truck. \newline
+        % Output: 7\#car\#Closest match to "car" in categories. \newline
+
+        % Input: A green leaf in a flower pot. \newline
+        % Output: 26\#plant\#The primary subject "leaf" directly indicates a plant. \newline
+
+        % Input: It’s difficult to determine the exact type of this object due to insufficient details. But it seems to be like a piece of furniture. \newline
+        % Output: 33\#table\#Randomly select one kind of furniture from the list. \newline
+
+        % Input: I cannot determine the specific type of the object without additional information or context. \newline
+        % Output: -1\#NA\#Cannot infer. \\
+        % \midrule
+        % & Now analyze the following: \newline
+        % Input: \{model\_output\} \newline
+        % Output: \\
+        \bottomrule
+    \end{tabular}
+    \caption{The process of consistency filtering in TeGA. Captions and prompts are evaluated by GPT-4 and by word-matching. Both of evaluation are judged to be high.}
+    \label{tab:prompt_examples_success}
+\end{table*}

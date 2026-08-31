@@ -1,0 +1,192 @@
+% CVPR 2025 Paper Template; see https://github.com/cvpr-org/author-kit
+\documentclass[10pt,twocolumn,letterpaper]{article}
+
+\pdfoutput=1
+
+\usepackage{graphicx}
+% \usepackage[dvipdfmx]{color}
+\usepackage[pdftex]{color}
+\usepackage{tabularx}
+\usepackage{adjustbox}
+\usepackage{multirow}
+\usepackage{comment}
+\usepackage{array}
+\usepackage{pifont} 
+\usepackage{longtable}
+\usepackage{authblk}
+\renewcommand\Authands{, } % "and" をスペースに置き換え
+% \renewcommand\AB@authsep{ } % 著者間のカンマをスペースに置き換え
+
+%%%%%%%%% PAPER TYPE  - PLEASE UPDATE FOR FINAL VERSION
+\usepackage{cvpr}              % To produce the CAMERA-READY version
+% \usepackage[review]{cvpr}      % To produce the REVIEW version
+% \usepackage[pagenumbers]{cvpr} % To force page numbers, e.g. for an arXiv version
+
+% Import additional packages in the preamble file, before hyperref
+\input{preamble}
+
+% It is strongly recommended to use hyperref, especially for the review version.
+% hyperref with option pagebackref eases the reviewers' job.
+% Please disable hyperref *only* if you encounter grave issues, 
+% e.g. with the file validation for the camera-ready version.
+%
+% If you comment hyperref and then uncomment it, you should delete *.aux before re-running LaTeX.
+% (Or just hit 'q' on the first LaTeX run, let it finish, and you should be clear).
+\definecolor{cvprblue}{rgb}{0.21,0.49,0.74}
+\usepackage[pagebackref,colorlinks,allcolors=cvprblue]{hyperref}
+\newcommand{\ry}[1]{{\color{blue}{#1}}}
+\newcommand{\hk}[1]{{\color{violet}{#1}}}
+\newcommand{\tbd}[1]{{\color{magenta}{#1}}}
+\newcommand{\kt}[1]{{\color{black}{#1}}}
+\newcommand{\od}[1]{{\color{pink}{#1}}}
+% \newcommand{\ry}[1]{{\color{black}{#1}}}
+% \newcommand{\tbd}[1]{{\color{black}{#1}}}
+% \newcommand{\od}[1]{{\color{black}{#1}}}
+
+%%%%%%%%% PAPER ID  - PLEASE UPDATE
+\def\paperID{2148} % *** Enter the Paper ID here
+\def\confName{CVPR}
+\def\confYear{2025}
+
+%%%%%%%%% TITLE - PLEASE UPDATE
+\title{
+% \ry{Synthify3D: Scalable Geometric Learning via Synthetic Augmentation}
+% \ry{Scalable Geometric Learning via Generative Models as Synthetic Augmentation}\\
+% \hk{Zero-shot 3D Recognition with Text-guided Geometric Augmentation}\\
+% \hk{Dataset Expansion with Text-guided Geometric Augmentation}\\
+% \hk{Zero-shot Text-Image-3D Training with Text-guided Geometric Augmentation}
+Text-guided Synthetic Geometric Augmentation for Zero-shot 3D Understanding
+}
+
+%%%%%%%%% AUTHORS - PLEASE UPDATE
+% \author{Kohei Torimi $^{1, 2}$\\
+% % Keio University, AIST\\
+% % ktorimi@aoki-medialab.jp\\
+% % {\tt\small ktorimi@aoki-medialab.jp}
+% % For a paper whose authors are all at the same institution,
+% % omit the following lines up until the closing ``}''.
+% % Additional authors and addresses can be added with ``\and'',
+% % just like the second author.
+% % To save space, use either the email address or home page, not both
+% \and
+% Ryosuke Yamada $^{2,3}$\\
+% % University of Tsukuba, AIST\\
+% % First line of institution2 address\\
+% % {\tt\small ryosuke.yamada@aist.go.jp}
+% \and
+% Daichi Otsuka $^4$\\
+% % Al Lab\\
+% % {\tt\small ootsuka.da@aist.go.jp}
+% \and
+% Kensho Hara $^2$\\
+% % National Institute of Advanced Industrial Science and Technology (AIST)\\
+% % AIST\\
+% % {\tt\small kensho.hara@aist.go.jp}
+% \and
+% Yuki M Asano $^5$\\
+% % University of Technology Nuremberg\\
+% % {\tt\small y.m.asano@uva.nl}
+% \and
+% Hirokatsu Kataoka $^{2,6}$\\
+% % National Institute of Advanced Industrial Science and Technology (AIST)\\
+% % AIST\\
+% % {\tt\small hirokatsu.kataoka@aist.go.jp}
+% \and
+% Yoshimitsu Aoki $^1$\\
+% % Keio University\\
+% % {\tt\small aoki@elec.keio.ac.jp}\\
+% {$^1$ Keio University} \quad \\
+% {$^2$ National Institute of Advanced Industrial Science and Technology (AIST)}\quad \\
+% {$^3$ University of Tsukuba}\quad \\
+% {$^4$ TICO-AIST Cooperative Research Laboratory for Advanced Logistics (ALlab)}\quad \\
+% {$^5$ University of Technology Nuremberg}\quad \\
+% {$^6$ University of Oxford}\quad \\
+% {\tt\small {kohei.torimi, yorsuke.yamada, ootsuka.da, hensho.hara}@aist.go.jp, y.m.asano@uva.nl, hirokatsu.kataoka@aist.go.jp, aoki@elec.keio.ac.jp}
+% }
+\author[1,2]{Kohei Torimi}
+\author[2,3]{Ryosuke Yamada}
+\author[4]{Daichi Otsuka}
+\author[2]{Kensho Hara}
+\author[5]{\newline Yuki M. Asano}
+\author[2,6]{Hirokatsu Kataoka}
+\author[1]{Yoshimitsu Aoki}
+
+\affil[1]{Keio University}
+\affil[2]{National Institute of Advanced Industrial Science and Technology (AIST)}
+\affil[3]{University of Tsukuba}
+\affil[4]{TICO-AIST Cooperative Research Laboratory for Advanced Logistics (ALlab)}
+\affil[5]{University of Technology Nuremberg}
+\affil[6]{University of Oxford}
+
+\affil[ ]{\tt\small{\{kohei.torimi, ryosuke.yamada, ootsuka.da, kensho.hara\}@aist.go.jp},}
+\affil[ ]{\tt\small{yuki.asano@utn.de, hirokatsu.kataoka@aist.go.jp, aoki@elec.keio.ac.jp}}
+
+
+\begin{comment}
+---Keywords---
+- Dataset Augmentation
+- Dataset Expansion
+- Dataset Enrichment
+- 3D Generative Pre-training
+- Visual-Geometric-Language Synthetic Dataset Augmentation
+- Multimodal learning
+- Language-Image-3D
+- Visual-Geometric-Language
+- Language-Visual-Geometric
+- Guided Imagination ( https://github.com/Vanint/DatasetExpansion )
+- 流れ：Text Prompt Augmentation -> Text-to-3D -> 3D-to-2D -> Dataset Expansion
+- 'Text-guided Geometric Augmentation (TeGA: ティガー)'
+- Multimodal Pre-training
+- Image-3DPoint-Text (Pre-)training
+- Sculpting Holistic 3D Representation in Contrastive Language-Image-3D Pre-training (MixCon3D)
+- Multiple Viewpoint / 3D Point Cloud / Language
+- Geometric Learning
+- Geometric Dataset Expansion
+
+---Title---
+- Text-guided Geometric Augmentation for Zero-shot 3D Model Understanding
+- Zero-shot 3D Recognition with Text-guided Geometric Augmentation
+- Dataset Expansion with Text-guided Geometric Augmentation
+- Zero-shot Language-Image-3D Training with Text-guided Geometric Augmentation
+
+---Method name---
+- Text-guided Geometric Augmentation (TeGA: ティガー)
+- 
+- 
+
+
+\end{comment}
+\begin{document}
+\maketitle
+\input{sec/0_abstract}  
+\input{sec/1_intro}
+\input{sec/2_related_work}
+\input{sec/3_background}
+\input{sec/4_method}
+\input{sec/5_experiments}
+\input{sec/6_conclusion}
+
+{
+    \small
+    \bibliographystyle{ieeenat_fullname}
+    \bibliography{main}
+}
+
+\clearpage
+
+\appendix
+% appendix
+\setcounter{section}{0}
+\setcounter{table}{0}
+\setcounter{figure}{0}
+\renewcommand{\thesection}{\Alph{section}}
+\renewcommand{\thetable}{\Alph{table}}
+\renewcommand{\thefigure}{\Alph{figure}}
+
+\input{appendix/0_appendix}
+
+
+% WARNING: do not forget to delete the supplementary pages from your submission 
+% \input{sec/X_suppl}
+
+\end{document}

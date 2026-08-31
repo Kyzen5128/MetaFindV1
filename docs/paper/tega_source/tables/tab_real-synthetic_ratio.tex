@@ -1,0 +1,27 @@
+\begin{table}[t]
+  \centering
+  \setlength{\tabcolsep}{7pt}
+  \caption{Ablation studies of the balance of real and synthetic data. 
+  We denote the replacement ratio of ShapeNet with synthetic data as Point-E (PE) / ShapeNet (SN)-\%.
+  } 
+  \vspace{-10pt}
+  \resizebox{0.7\linewidth}{!}{
+  \begin{tabular}{c|cccccccc}
+    \toprule
+    \multirow{2}*{PE/SN-\%} & O-LVIS & S-Object & M40 \\
+    & Top1 & Top1 & Top1\\
+    \midrule 
+    0 & 9.01 & 50.3 & 63.7\\
+    \midrule[0.5pt]
+    25 & 9.47 & 47.4 & 67.7\\
+    50 & 8.93 & 43.8 & 67.6 \\
+    % 75 & 4.32 & 38.5 & 53.6  \\
+    % 85 & 3.7 & 35.0 & 46.0 \\
+    % 95 & 0.6 & 23.9 & 23.0 \\
+    % 99 & 0.3 & 18.4 & 14.2 \\
+    100 & 0.3 & 14.0 & 9.4 \\
+    \bottomrule
+  \end{tabular}}
+  \label{tab:real_synthetic_ratio}
+  \vspace{-10pt}
+\end{table}
