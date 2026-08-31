@@ -3929,3 +3929,79 @@ primary source, (b) in the exact cell under suspicion, and (c) ours to fix.
 **Not yet changed.** Switching the canonical image to a single sampled view moves
 every image-bearing number in Table 1 and would invalidate the existing Stage 1
 checkpoints for comparison. Kyzen's decision.
+
+---
+
+## DL-059 -- Audit status. Second image deviation (11 vs 12 views), and an honest list of what is still unexamined.
+
+Date 2026-08-31. Kyzen: "report when you have checked everything", and "I have
+not changed any code at all -- why can ULIP-2's numbers still not be reproduced?"
+
+### The premise needs correcting: ULIP-2's numbers ARE reproduced
+
+`OBSERVED DATA` (DL-053, commit d1745a6):
+
+```
+ULIP-2 CVPR'24 Tab.1, our checkpoint's row      50.6   / 79.1
+upstream's own unmodified code, our clouds      50.576 / 78.931
+our own pipeline                                50.6   / 78.9
+```
+
+Upstream's tree is `git status` clean; only environment shims were added, never
+program logic. The ULIP-2 layer reproduces to 0.02 of a point and is closed.
+
+What does not reproduce is **MetaFind's Table 1**, and that is a different task
+on the same dataset: ULIP-2 publishes zero-shot *classification* against 1,156
+category names, MetaFind publishes *instance retrieval* over 48K assets in seven
+modality combinations. There is no upstream counterpart to the second, so
+reproducing the first constrains it only through the shared backbone.
+
+The distinction also answers the second half. Upstream ULIP-2's code is untouched.
+The deviations found so far are in OUR data pipeline -- decisions upstream makes
+differently, in files upstream does not own.
+
+### Second deviation, same cell as DL-058
+
+`PAPER FACT` MetaFind `2methdology.tex:28`: "Each asset is rendered from **11
+orthogonal viewpoints** and annotated using GPT-4o." Restated in
+`neurips_2025.tex:100`: "each rendered from **11 views**".
+
+`OBSERVED IMPLEMENTATION` `render_blender.py:88` renders **12**, as three polar
+rings of four (`VIEW_DIRECTIONS`, phi 60/90/120). Every sidecar carries 12 view
+vectors, verified by counting `views.shape[0]` over 300 assets: all 12.
+
+This was already known -- `renders.py:99-106` keeps `N_VIEWS = 11` explicitly as
+"MetaFind's stated number ... the reference the DEVIATION is measured against" --
+but it is live, unfixed, and it sits in the image cell now under suspicion,
+alongside DL-058's mean-of-views.
+
+`UNKNOWN` whether "11 orthogonal viewpoints" means 11 mutually perpendicular
+directions (geometrically impossible for 11) or an orthographic projection.
+Our `PROJECTION = "orthographic"` (U-03a) takes the second reading; the first
+would be a different layout. The paper says nothing more.
+
+### What has actually been read and cloned
+
+Cloned and read: `upstream/ULIP` (official), `upstream/ULIP_run` (the untouched
+copy that produced 50.576), `upstream/OpenShape`, `upstream/text2shape`,
+`upstream/egnn`, `upstream/IDesign`.
+
+Papers read verbatim: MetaFind (all `.tex`), ULIP-1 (`main.tex`, 1124 lines),
+ULIP-2 (`main.tex` 1474 lines + `appendix.tex`), OpenShape (all `sections/` and
+`tables/`), Point-BERT source. CAMERA's thesis, working note and evaluator.
+
+**Not examined, and it matters.** MetaFind's Table 1 has eight baseline rows.
+Only ULIP and OpenShape have been looked at. **SCA3D, Uni3DL, Uni3D and OmniBind
+are uncloned and unread** -- four of the eight. Their pc column clusters at
+98.1-99.0 and their text column at 0.6-6.9, and no account of the table is
+complete without checking whether those numbers are reproducible or copied.
+Text2Shape's paper is also unread (its code is read).
+
+### Standing gaps, unchanged by this entry
+
+1. `OBSERVED` pc-norm degeneracy: 27.9 -> 200.5 after training against frozen
+   37 / 40, fusion takes raw vectors and reads out an unweighted mean.
+2. `OBSERVED DATA` text-only is 20.61 with the released backbone and zero
+   training, against the paper's trained 13.8.
+3. `OBSERVED DATA` no evaluation configuration reproduces the baseline row's
+   descent (DL-057).
