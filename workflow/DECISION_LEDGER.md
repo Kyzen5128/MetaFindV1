@@ -4162,3 +4162,95 @@ nothing in the review record explains how it was obtained.
 multi-modality conditions. Each baseline having its own text pipeline explains
 the single-modality cells; it does not explain the descent, because the descent
 is a property of averaging, not of the inputs.
+
+---
+
+## DL-062 -- The other half of ULIP-2. The image encoder works, the camera layout is OpenShape's exactly, and our pc probe is 0.95 short of upstream.
+
+Date 2026-09-01. Kyzen: finish ULIP-2 itself before touching anything
+MetaFind-side. He was right that it was not finished, and I was wrong to call it
+closed in DL-053.
+
+### What 50.576 never tested
+
+`test_zeroshot_3d_core` loads point clouds and category names. **It never calls
+`encode_image`.** So DL-053 verified the point-cloud half and the category-name
+half of the text tower, and said nothing about our renders, our image
+preprocessing, or ULIP-2's image encoder. "The ULIP-2 layer is CLOSED" was a
+claim about half the layer. Withdrawn and replaced by this entry.
+
+### The image half, measured
+
+`tools/probes/ulip2_image_half.py`: the identical zero-shot classification with
+the image embedding substituted for the point cloud, against the same 1,156
+Objaverse-LVIS prototypes built by upstream's own recipe. Released ULIP-2, no
+Stage 1 weights, all 45,692 assets, every one carrying an LVIS label.
+
+```
+                        acc1      acc5
+  image, 12-view mean   48.7044   77.2827
+  image, single view    43.3752   68.7451
+  pc, this probe        49.6214   77.9699
+  chance                 0.0865
+```
+
+`OBSERVED DATA` The image path is healthy: 48.70 against a 0.087 chance level,
+within a point of the point cloud. Renders, preprocessing and `encode_image` all
+work. Nothing here is broken.
+
+### The per-view structure, and who owns it
+
+```
+  ring          views      acc1                       mean
+  phi 60 above   0-3   46.13 46.49 49.28 51.69       48.4
+  phi 90 level   4-7   44.75 43.51 48.89 47.23       46.1
+  phi 120 below  8-11  31.75 36.63 31.74 40.23       35.1
+```
+
+The bottom ring is **13.3 points** below the top ring -- four consecutive views,
+not noise. Looking up at an object from underneath is simply a poor view.
+
+`UPSTREAM FACT` **This layout is not ours.** OpenShape's official renderer,
+`vendor/openshape/render_single_glb.py:172`, lists exactly:
+
+```python
+views = [[pi/3,   pi/6],   [pi/3,   pi/6*4],  [pi/3,   pi/6*7],  [pi/3,   pi/6*10],
+         [pi/2,   pi/6*2], [pi/2,   pi/6*5],  [pi/2,   pi/6*8],  [pi/2,   pi/6*11],
+         [pi/3*2, 0],      [pi/3*2, pi/2],    [pi/3*2, pi],      [pi/3*2, pi/2*3]]
+```
+
+pi/3 = 60, pi/2 = 90, 2pi/3 = 120 degrees. Three rings of four, staggered in
+azimuth -- degree for degree what `render_blender.py:103` renders. Our camera
+layout matches OpenShape's official one exactly and is NOT a deviation. The weak
+bottom ring is upstream's design choice, shared by every model in that lineage.
+
+### The text side
+
+`OBSERVED DATA` Token lengths over the corpus: mean 68.7, max 77, **1,003 of
+45,692 (2.2%) sit at exactly 77**, zero flagged truncated. That is not a silent
+truncation -- `encode_text_image.py:107 true_token_count` counts unpadded and
+untruncated, and [P-4] refuses an overlong description rather than encoding a
+degraded one. 77 means exactly at the ceiling, with zero headroom.
+
+### An open 0.95 I am not explaining away
+
+`UNKNOWN` This probe's pc reference is **49.6214**, upstream's own run on the
+same clouds is **50.5756**. Same encoder, same checkpoint, same corpus, same
+1,156 prototypes, both fp32 (`BackboneConfig.dtype = torch.float32`; upstream's
+autocast is in `train`, not in `test_zeroshot_3d_core`).
+
+The remaining difference is the loading path: this probe reads
+`POINTCLOUDS/*.npz` and concatenates xyz with rgb directly, while upstream's
+`objaverse_lvis_colored` loader does its own preparation before `encode_pc`.
+0.95 points is small but it is real and unexplained, and it bounds how precisely
+any number from this probe may be compared to upstream's.
+
+### Status of the ULIP-2 layer, corrected
+
+```
+  pc -> text          VERIFIED   50.576 vs published 50.6
+  image -> text       VERIFIED   48.70, healthy, chance is 0.087
+  camera layout       VERIFIED   identical to OpenShape's official renderer
+  text tokens         VERIFIED   no truncation; 2.2% at the ceiling
+  probe vs upstream   OPEN       0.95 unexplained on the pc reference
+```
