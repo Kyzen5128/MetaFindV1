@@ -5130,3 +5130,166 @@ naturally present in the protocol), and the zero-parameter raw-mean control at
 99.56 (how much retrieval exists without learned fusion).
 
 ---
+
+## DL-071 -- Codex rules CHANGE on the alignment. Queue reordered, two more errors of mine, and the paper sentence I had been misreading.
+
+Date 2026-09-01. I put the whole plan and my own error log to the Codex on
+CAMERA's machine as one document and asked for `agree / change / stop`. He
+returned **CHANGE**, with three corrections. All three are adopted. Nothing
+here is a new measurement; it is the agreed protocol, recorded before the runs
+it governs, which is the point of writing it down first.
+
+### The paper sentence I had been applying to the wrong model
+
+`PAPER FACT` `3experiments.tex:24`, verbatim:
+
+> since **other models** do not adopt a dual-tower design, **their** "PC only"
+> performance reflects retrieval using identical embeddings for both query and
+> gallery, leading to inflated accuracy. **In contrast, our dual-tower
+> framework** introduces more cross-modality retrieval, which results in lower
+> accuracy under the "PC only".
+
+I had been citing that sentence as evidence about MetaFind's own gallery. It is
+about the BASELINES, and MetaFind is explicitly contrasted with them. Codex
+flagged it; I opened the file rather than accepting it, and he is right.
+
+Read correctly it says something stronger than what I was using it for. The
+authors state that their numbers are LOW **because** query and gallery
+embeddings differ, and that a model where they coincide has INFLATED accuracy.
+Our `stage1.py:625` returns the same dict object to both towers, so our
+implementation is the inflated case the paper is naming, from its own text.
+That is independent support for the defect, from the paper rather than from
+our controls.
+
+### U2, revised wording
+
+The previous entry's wording nearly erased the preprocessing pipeline. Restored:
+
+```
+Asset preprocessing:
+    point cloud  -> ULIP-2 PC embedding
+    renders      -> ULIP-2 image embeddings
+    descriptions -> ULIP-2 text embeddings
+    gallery tower/fuser -> one cached asset embedding
+
+Evaluation:
+    available query modalities -> query tower/fuser
+    cosine(query embedding, cached asset embeddings)
+```
+
+`AGREED WORDING, Codex 2026-09-01, superseding DL-070's:`
+
+> Under a controlled reconstruction, MetaFind's reported text-only result is
+> numerically closer to our PC-derived and gallery-text-masked ablations than
+> to our current literal modality-complete reconstruction. However, the paper
+> explicitly requires preprocessing each asset with all available modalities
+> and caching a gallery embedding. Therefore the numerical agreement supports a
+> PC-dominant-gallery hypothesis but does not establish that MetaFind used a
+> pure-PC gallery. The unresolved discrepancy may arise from the unpublished
+> gallery fuser, modality aggregation, query/gallery observations, split, or
+> evaluator.
+
+Arm naming is fixed and A may never take C's place as the faithful reading
+merely because 16.41 sits nearer 13.8 than 36.70 does:
+
+```
+A   PC-derived gallery embedding       ablation
+B   raw multimodal mean                zero-parameter control
+C   trained modality-complete gallery  literal MetaFind reconstruction
+C2  trained gallery, text masked       ablation
+```
+
+And the terminology that keeps being lost: `PC-input embedding != unimodal
+representation`. ULIP-2 trains the point encoder through `P<->I` and `P<->T`
+against frozen image and text encoders, so `f_P` is a tri-modally ALIGNED 3D
+representation. What ULIP-2 does not define is an inference-time
+`F(text, image, pc)`; that operator is MetaFind's addition.
+
+### E1 is renamed, because its three arms are not the same kind of disjoint
+
+`CORRECTION, Codex's, accepted.` I had been calling all three arms
+observation-disjoint. They are not:
+
+```
+text   another output of the same generator from the same visual evidence
+image  genuinely view-disjoint
+pc     another sample from the same complete mesh
+```
+
+Only the image arm withholds raw visual evidence. The text arm is a
+same-evidence paraphrase test; the pc arm is a sampling-robustness test.
+Renamed to **alternate-observation / sampling-disjoint sensitivity benchmark**,
+and each arm is reported with its correlation to what the gallery holds
+(text 0.85, pc 0.944) so nobody reads "independent" as "uncorrelated".
+
+E2 remains the only genuinely self-match-free, task-aligned benchmark. If a
+genuinely independent pc query is ever needed, it must be a partial view-derived
+cloud or a simulated scan, not another full-mesh resample.
+
+### The queue, as ruled
+
+```
+0  freeze E1/E2 protocols          no GPU, before any Stage 2 result is seen:
+                                   UID manifest, captions, views, sampling
+                                   seeds, metrics, E2a constraints and
+                                   thresholds, candidate-pool construction,
+                                   output schemas
+1  Stage 2                         critical path: five paper claims have never
+                                   executed and E2 depends on it. Smoke first.
+2  E2a                             programmatic scene replacement, frozen defs
+3  test-split pc pack              DEFERRED, not cancelled. Worth an hour
+                                   eventually; not worth delaying Stage 2 for a
+                                   0.9-point effect at cosine 0.944
+4  D1, eleven-view re-annotation    LAST and conditional. 80 GPU-hours for 0.82
+                                   points does not precede the untested half of
+                                   the method
+```
+
+Stage 2's smoke must verify these seven directly, not by reading the config:
+
+```
+gallery parameters frozen
+ULIP-2 backbone frozen
+intended query fusion parameters updated
+ESSGNN receives gradients
+lambda receives gradients
+30% scene dropout actually sampled
+bidirectional loss contains both directions
+```
+
+### Two more retractions, and an amendment
+
+`RETRACTION, mine, #16.` I applied "PC-only uses identical query/gallery
+embeddings" to MetaFind. The sentence refers to the other baseline models;
+MetaFind is explicitly contrasted with them and specifies a modality-complete
+gallery. Verified above against `3experiments.tex:24`.
+
+`RETRACTION, mine, #17.` I said ULIP-2 has no tri-modal gallery or
+representation. The PC embedding IS tri-modally aligned through `P<->I` and
+`P<->T`. Only the explicit inference-time gallery fusion `F(text, image, pc)`
+is absent from ULIP-2 and added by MetaFind.
+
+`AMENDMENT to DL-070's retraction of the triangulation.` The withdrawal went
+one step too far and threw away valid evidence with the invalid inference.
+Corrected form:
+
+> 13.16 / 19.75 / 13.8 do not identify a gallery mechanism across different
+> corpora and checkpoints. CAMERA's 13.16 remains useful DIRECTIONAL evidence
+> that ULIP-aligned text-to-3D instance retrieval is operating in the expected
+> numerical regime.
+
+Four of the seventeen retractions -- the fusion-ordering claim, the
+input-preservation claim, the triangulation, and the additive R@1
+decomposition -- are one failure repeated: reading a number as a mechanism
+before checking whether the construction could have produced it.
+
+### Status
+
+`APPROVED` U1 shared backbone. `AMENDED` U2 wording and E1 terminology.
+`FROZEN NEXT` E1/E2 protocols. `RUNNING` Stage 2 gallery index over the 1,439
+ProcTHOR assets with a point cloud, built from `stage1_best` sha `00f591a0`,
+the same checkpoint the promoted object index and every reported number use.
+No stop was issued. Codex's evidence: ULIP-2 v4 3.3, MetaFind 2.2 / 2.4 / 2.6 /
+3.2, the CAMERA evaluator, and the A/B/C/C2 results.
+
+---
