@@ -4565,3 +4565,200 @@ DL-054. It does not touch the Table 1 gap: a positive cosine of 0.9982 on the
 same inputs, which is the construction DL-063 measured at 90.4 R@1 with random
 weights. The loss is at its floor because the task is easy, and the task is easy
 for the reason already recorded.
+
+## DL-067 -- The construction scores 99.56 with zero parameters. Text form and text length priced. Upstream's caption file read.
+
+Date 2026-09-01. Kyzen, on being shown the fuser_only curves: "Stage 1 already
+has a problem", then "go and check what the MetaFind paper says", then "you
+downloaded the official one, go and look at how they do it".
+
+Nothing in `metafind/` was modified by this entry. Five probes, all read-only.
+
+### 1. The decisive number: a model that does not exist scores 99.56
+
+`diag_untrained_fusion_identity` carries a zero-parameter control -- no fusion,
+no module, no training, the mean of the present raw ULIP vectors scored against
+the mean of all three. Run for the first time against the frozen-backbone
+checkpoint (`fuser_only_lr2.50e-4_s20260830`, sha 0e88a85b), dev_val 4,569:
+
+```
+condition   paper   zero-parameter control   trained
+text         13.8            99.56            89.36
+image        11.7            98.77            98.64
+pc           75.1            98.97            98.84
+full         51.7           100.00           100.00
+```
+
+`full` is 1.0000 because query and gallery are the SAME EXPRESSION -- both are
+mean(text, image, pc) over one asset's one `.npz`. That is an identity, not a
+result. The other six cells are its diluted form: the target's own vector sits
+inside the target's own gallery entry.
+
+`OBSERVED DATA` The trained text cell (89.36) is BELOW the parameter-free
+control (99.56). Training is not adding score; it is slightly disturbing an
+identity that was already there.
+
+This is the mechanism MetaFind's own text names. `3experiments.tex`, on why its
+pc column is 75.1 while every baseline sits at 98:
+
+> since other models do not adopt a dual-tower design, their "PC only"
+> performance reflects retrieval using **identical embeddings for both query
+> and gallery, leading to inflated accuracy**
+
+Our pc column is 94.3. We are on the side the paper calls inflated.
+
+`4. A third `train_scope` hardcode was found in the probe itself and fixed
+(commit 253b3fb), after `stage1.py` and `run_retrieval.py` earlier the same day.
+
+### 2. Breaking the text identity is worth ~73 points. It does not touch `full`.
+
+`query_gallery_text_split` (commit 0bb5af8). ULIP-2's shards carry four
+independent descriptions per asset; ours makes five. Query text against gallery
+text, 5x5, image and pc held fixed at ULIP-2's own published values, 1,930
+overlapping assets:
+
+```
+text R@1        name    blip    msft  retriev    ours
+name          [94.87]  27.93   29.74   22.18   25.60
+blip           39.22  [93.21]  54.92   39.95   49.12
+retrieval      21.24   22.90   23.52  [90.36]  23.32
+ours           60.73   66.11   71.76   59.12  [99.95]
+paper 13.8
+```
+
+Diagonal is what we run today. Off-diagonal is the same construction with the
+identity removed, and it lands at 21-30 for the short upstream sources against
+the paper's 13.8 -- on a pool of 1,930 against the paper's ~9,600, so the true
+figure would be lower still. **The text column is accounted for.**
+
+`full` is not:
+
+```
+full R@1: diagonal 100.00 exactly, off-diagonal 97.82 to 99.64, paper 51.7
+```
+
+Changing the text cannot rescue `full` because image and point cloud remain
+shared. `baseline_independent_query` already showed a resampled cloud and a
+held-out view do not break those either (cos 0.944, full 89.91). Whatever
+MetaFind does, it separates the towers on all three modalities.
+
+### 3. The 3.13 attributed to Figure 2's format was our float precision
+
+`RETRACTION.` DL-058's companion probe `two_deviations` priced "Figure 2's JSON
+instead of our prose" at 3.13 against 22.50 and read nineteen points into the
+FORMAT. That arm serialised our stored numbers, which are unrounded --
+`"width": 431.67550125357195`, `"volume": 25958663.00227903`. On a 77-token
+budget two of those spend the context before `description` begins. It measured
+our precision, not the paper's string.
+
+`PAPER FACT` Figure 2 (`data-preprocess.png`) prints round numbers: width 30,
+length 30, height 40, volume 36000, mass 2.5.
+
+Rebuilt at that precision (`fig2_text_form`, commit 448597b), 9,138 test queries
+against the pc embedding of all 45,692, released encoder:
+
+```
+arm                 tokens   truncated     R@1     R@5
+prod_prose            68.7        2.1%   19.88   43.16
+fig2_json_raw         77.0      100.0%    2.83   10.04
+fig2_json_rounded     77.0      100.0%    8.09   21.49
+paper                                     13.8
+```
+
+Rounding recovers 5.26 of the points the precision cost and does NOT stop the
+truncation: JSON spends its budget on syntax, so both JSON arms are cut for all
+9,138. The paper's 13.8 is bracketed, 8.09 < 13.8 < 19.88, and neither form
+reaches it. `prod_prose` 19.88 / 43.16 reproduces `table1_baseline_grid`'s text
+cell to the digit, so the protocol is the same.
+
+`IMPLEMENTATION CHOICE` Reading Figure 2's round numbers as a rounding RULE. The
+figure shows one example and states none.
+`UNKNOWN` Whether MetaFind encodes the JSON at all. `2methdology.tex:28` says
+GPT-4o produces the annotations and says nothing about what string is encoded.
+
+### 4. Upstream encodes 5 to 11 tokens. We encode 69.
+
+`upstream_text_length` (commit 180aa75), 1,930 overlapping assets:
+
+```
+source              chars   tokens median   at the 77 limit
+name                   14               5             0.0%
+msft_caption           30               8             0.0%
+blip_caption           38              11             0.0%
+retrieval_text         34              11             0.4%
+ours (description)    230              51             0.2%
+ours (prose, live)    276              69             2.0%
+```
+
+`'BMA000'` / `'a white cabinet with a door'` against 276 characters of ours.
+Six to fourteen times longer. This is the same axis from the other side: we sit
+at 69 and clip 2% of the corpus outright, upstream never approaches the limit.
+
+It also explains section 2's off-diagonal. A 69-token description names one
+asset; a 5-token `'BMA000'` does not, so the identity survives a caption swap
+for us (59-72) and not for them (21-30).
+
+### 5. What upstream's caption file actually contains
+
+`UPSTREAM FACT` The tri-modal training loader is NOT in the released repo.
+`salesforce/ULIP` at `95d480f`, git-clean: **zero occurrences of "blip"** in any
+`.py`, `.sh`, `.yaml` or `.json`. `ShapeNet.__getitem__` builds its caption from
+`synset_id_map[...]['name']` (`dataset_3d.py:422-424`), which is ULIP-1's
+metadata approach; `Objaverse_Lvis_Colored.__getitem__` returns
+`(data, label, name)` with no image and no text -- an evaluation loader. The
+only ULIP-2 scripts are `test_ulip2_pointbert_{modelnet40,objaverse_lvis}.sh`.
+
+The DATA is published, in a directory we had not looked at. `SFXX/ulip` holds
+`ULIP-2/objaverse_lvis` (160 shards, 185 GB, OpenShape-format EVALUATION data --
+the one being downloaded) and separately `ULIP_Objaverse_Triplets/`
+(`merged_data.json` 6.7 GB, `render_images_resized_224` 474 GB) which is the
+TRAINING material.
+
+`OBSERVED DATA` read by HTTP range request, no full download.
+`merged_data.json` maps one rendered view to a list of captions:
+
+```
+".../8c59a88047f043deb66e8d99db53c44b/004.png": [ 10 strings ],
+".../8c59a88047f043deb66e8d99db53c44b/009.png": [ 10 strings ],
+```
+
+43,045 of 43,048 sampled entries carry exactly 10, which matches
+`ULIP2 4.1` verbatim: 10 BLIP-2 descriptions per rendered image, CLIP-ranked,
+top-1 kept. Captions are 9 words median, 30 maximum.
+
+`OBSERVED DATA, PARTIAL` Sampling four 20 MB windows at 0%, 25%, 50% and 90% of
+the 6.7 GB file, the view indices present are **3, 4, 5, 6, 9, 10** and never 0,
+1, 2, 7, 8 or 11. Counts: views 3/4/9 at ~28,7xx each, views 5/6/10 at ~9,55x
+each. So roughly **three captioned views per object, not twelve**, with one
+region of the file using {3,4,9} and another {5,6,10}. This is 1.2% of the file
+read at four widely separated offsets with a consistent result -- strong, not
+exhaustive. Confirming it requires the full 6.7 GB.
+
+`ULIP2 4.1` says 12 images are rendered. It does not say all 12 are captioned,
+and the released file suggests they are not.
+
+### Where the Table 1 gap now stands, priced
+
+```
+query and gallery read one asset's one .npz          ~73   unresolved
+text length / form (69 tokens vs upstream's 5-11)  12-19   measured, unresolved
+image: 12-view mean vs a single view                2.55   measured, small
+```
+
+`RETRACTION.` DL-058 called the 12-view mean "FOUND ONE". Priced on the full
+45,692 gallery it is 54.75 against 52.20 -- **2.55 points**, against a 43-point
+gap on that cell. It is a real deviation and it is not the cause.
+
+### Kyzen's standing plan, recorded
+
+Run MetaFind's own construction on ULIP-2's published dataset once the 160
+shards finish, as a controlled comparison, rather than continuing to reason
+about which side differs. Download is live: 48/160 shards, 52 GB of 185 GB.
+
+### Not examined, carried forward from DL-059 unchanged
+
+SCA3D, Uni3DL, Uni3D and OmniBind remain uncloned and unread -- four of Table
+1's eight baseline rows. Text2Shape's paper is unread. Stage 2 has never been
+run. Table 3's ten ablations have none run.
+
+---
