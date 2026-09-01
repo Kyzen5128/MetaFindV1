@@ -4862,3 +4862,110 @@ training loop, a checkpoint format that carries two backbone states, and a
 re-run of every Stage 1 arm. It is not a small change and it is not started.
 
 ---
+
+## DL-069 -- Codex's pc-gallery reading: half confirmed in upstream CODE, and refuted as a full account by a weight sweep.
+
+Date 2026-09-01. Codex proposed a sixth reading of Table 1: the single-tower
+baseline rows are scored against a POINT-CLOUD-ONLY gallery, and the descent
+97.9 -> 33.9 -> 22.6 -> 6.4 is a multimodal query being dragged off it.
+
+### The half that upstream code confirms
+
+`UPSTREAM FACT` `upstream/IDesign/retrieve.py` is the ONLY asset-retrieval
+implementation in the entire cloned lineage -- ULIP, ULIP_run, OpenShape, CLIP,
+SLIP, text2shape, tricolo, Parts2Words, IDesign. Every `retrieval`-matching hit
+in ULIP is a k-nearest-neighbour comment in a PointNeXt backbone; OpenShape's
+are renderers and a Minkowski resnet. And `3experiments.tex` says MetaFind's
+scene experiment runs on I-Design's pipeline, so this is the code the authors
+were working from.
+
+What it does (`retrieve.py:55-70, 94-113`):
+
+```python
+deser = torch.load(hf_hub_download("OpenShape/openshape-objaverse-embeddings",
+                                   "objaverse.pt", ...))
+us, feats = deser['us'], deser['feats']          # ~800K Objaverse assets
+
+text = "A high-poly " + obj['new_object_id'] + \
+       f" with {material} material and in {style} style, high quality"
+enc = clip_model.get_text_features(**tn).float().cpu()   # OpenCLIP ViT-bigG
+
+sims.append(F.normalize(enc) @ F.normalize(chunk.float(), dim=-1).T)
+```
+
+Three properties, all against what we build:
+
+1. `OBSERVED IMPLEMENTATION` The gallery is OpenShape's released per-asset
+   embedding, loaded beside `openshape.load_pc_encoder`. **Codex's reading of
+   the gallery is supported by code, not only by the numbers.**
+2. The query is a SHORT TEMPLATED SENTENCE -- roughly fifteen tokens, naming a
+   class, a material and a style. It is never the target asset's own caption.
+   Ours is a 69-token GPT-4o description of that specific asset.
+3. The pool is the whole of Objaverse, ~800K, with `sim_th=0.1` and a
+   face-count / animation-count filter. Ours is 9,138 or 45,692.
+
+`INFERENCE` that `feats` is point-cloud-only: strongly indicated by the
+`load_pc_encoder` pairing and by the demo being text-to-3D, not verified by
+reading OpenShape's builder, which is not in the repo.
+
+### The half a measurement refutes
+
+The reading was already implemented. `table1_baseline_grid` swept 24
+configurations of "pc-only gallery, mean-pooled query", 9,138 against 45,692,
+and its lowest `full` over all 24 was **97.47** against the paper's 6.4.
+
+`pc_gallery_weight_sweep` then gave the mechanism its best shot by opening the
+one parameter the grid fixed -- how much text and image weigh against the cloud,
+every modality unit-normalised so alpha is the only scale:
+
+```
+alpha      pc   text+pc   image+pc    full
+paper    97.9      33.9       22.6     6.4
+ 1.00   100.0      99.9       99.9    99.3
+ 5.00   100.0      75.2       88.8    74.9
+20.00   100.0      33.6       65.8    54.1
+40.00   100.0      26.1       59.7    49.9
+```
+
+`text+pc` crosses 33.9 at alpha 19.7. `image+pc` never reaches 22.6 and `full`
+never reaches 6.4; they asymptote near 59.7 and 49.9. As alpha goes to infinity
+the query becomes pure text+image, which scores ~42.7 here -- still far above
+the paper's 6.4, so mean-pooling cannot get there from these embeddings at any
+weight.
+
+And the ORDERING is inverted at every alpha. The paper has
+`full < image+pc < text+pc`; the sweep has `text+pc < full < image+pc`
+throughout. A scale cannot swap two cells' order.
+
+`CONCLUSION` The gallery half of Codex's reading is upstream-supported and is
+adopted. The descent half is refuted as a scale effect: something other than
+mean-pooling weight produces the paper's ordering.
+
+### What this promotes instead
+
+The query CONTENT, not the gallery definition, is now the leading candidate.
+I-Design's query is a generic templated sentence about a class; the paper's
+baseline text column is 0.1, which is chance on 9,138 and which we already
+reproduce at **0.2** with a category-name query. A query that names a class
+cannot pick one of fifty chairs, and that is a property of the string, not of
+the gallery.
+
+### Codex's other findings, adopted
+
+`Option 5 deprioritised.` Codex checked the four unread baselines: SCA3D's
+released code does Parts2Words text-shape only, Uni3DL still says code to be
+released, and neither Uni3D nor OmniBind ships MetaFind's seven-condition
+wrapper. That wrapper is the authors' own and is not published.
+
+`U-16 reopened, not resolved.` Kyzen ruled reading A on the grounds that
+"the gallery encoder is frozen after pretraining, while the query encoder
+remains flexible" cannot hold under one parameter set. Codex's counter: a
+FROZEN SHARED ULIP-2 with two independent fusion heads satisfies the same
+sentence, with frozen/flexible referring to the fusion. That is a valid third
+reading and it does weaken the structural argument. Both are recorded; neither
+is being spent on.
+
+`NeurIPS proceedings page carries Paper and Bibtex only` -- no supplementary
+evaluator, no code. Reported by Codex, consistent with our own search.
+
+---
