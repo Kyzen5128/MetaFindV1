@@ -4969,3 +4969,164 @@ is being spent on.
 evaluator, no code. Reported by Codex, consistent with our own search.
 
 ---
+
+## DL-070 -- The gallery bake-off. MetaFind's 13.8 is consistent with a PC-dominant gallery and inconsistent with our literal modality-complete one.
+
+Date 2026-09-01. Worked with the Codex on CAMERA's machine across several
+rounds; both of us changed position, and both changes are recorded here rather
+than only the conclusion.
+
+### What each of us withdrew
+
+`RETRACTION, mine.` "A modality-complete fused gallery should give our 76.1, so
+MetaFind's 13.8 cannot come from one." A learned non-linear fusion is free to
+be pc-dominant, and `gallery_geometry` had ALREADY measured ours at centred
+cosine 0.801 to pc against 0.454 text. I had the counterexample in hand and did
+not recognise it.
+
+`RETRACTION, mine.` The three-number triangulation -- CAMERA 13.16, ours 19.75,
+MetaFind 13.8 -- was offered as mechanism. Three corpora, three checkpoints,
+three protocols; 19.75 against 13.8 is 43% relative. Not evidence on its own.
+
+`RETRACTION, mine.` U-16's reasoning. "Both encoders frozen in Stage 2, so
+sharing is unobservable" is wrong: two separately trained then frozen encoders
+still differ. The real evidence is Figure 1, which literally prints
+**`ULIP-2 (Shared)`** on the box both towers point into. Conclusion unchanged,
+grounds replaced.
+
+`RETRACTION, mine.` "`fully_separate` builds the same model, therefore the
+backbone is not separated." The backbone is not inside `DualTower` at all, so
+comparing tower modules proves nothing about it. The config option is still
+unimplemented -- `stage1.py` builds one `ULIPBackbone` and never passes
+`tower_sharing` to it -- but the runtime test I ran did not show that.
+
+`RETRACTION, mine.` "Precomputed implies mean." Canonical view, first view, max,
+attention pooling, per-view indices and CLIP-best-view all precompute.
+`2methdology.tex:111` rules out choosing a gallery view per query, nothing more.
+
+`RETRACTION, Codex's.` "ULIP-2 itself has no tri-modal gallery." He withdrew
+this as conflating two things: ULIP-2 trains the point encoder against FROZEN
+image and text encoders, so a gallery of `f_P` alone is not "pure geometry" but
+a **PC-input, tri-modally aligned** representation. What ULIP-2 does not define
+is an inference-time `Fusion(f_T, f_I, f_P)`; that operator is MetaFind's
+addition.
+
+`RETRACTION, Codex's.` "CAMERA's 13.16 next to MetaFind's 13.8 is a
+coincidence." With the architecture read correctly, CAMERA's construction IS
+the ordinary way this backbone retrieves, and 0.64 of a point apart is
+supporting evidence for the retrieval direction. Not identification of the
+gallery.
+
+### The bake-off
+
+Identical query, identical 9,132 test uids, identical 45,692 pool, identical
+checkpoint (`qpack_ti_lr2.50e-04_s20260816`). Only the gallery differs, and
+every arm is run twice on the query side.
+
+```
+gallery                          same caption      independent caption
+                                 R@1     MRR        R@1     MRR
+A  pure pc                     16.41   26.67      16.38   26.38
+B  raw mean(T,I,P)             94.05   96.00      60.30   70.33
+C  trained fuser               36.70   48.30      27.49   38.93
+C2 trained fuser, text masked  17.93   28.47      17.52   28.00
+MetaFind text-only             13.80
+CAMERA T2S                     13.16
+chance                        0.00219
+```
+
+Codex's pre-registered rule was: if C lands near 13.8 and C2 barely moves, the
+fuser is pc-dominant; if A lands near 13.8 and C is clearly higher, Table 1
+probably used a pure-PC gallery. **A = 16.41, C = 36.70. The second branch.**
+
+Two things in that table were not predicted and are what make it decisive.
+
+**A and C2 do not move when the caption is swapped.** 16.41/16.38 and
+17.93/17.52. A gallery with no text slot has nothing for the query's text to
+match, so the shortcut is not reduced there, it is ABSENT. That is a
+structural check, not a numerical one.
+
+**C2 lands on A.** Masking text out of the trained gallery reproduces the
+pure-pc gallery to within 1.5 points. The trained fuser's gallery, minus its
+text slot, IS the point-cloud gallery -- which is exactly what Codex's corrected
+architecture reading predicts.
+
+### The 2x2, decomposed correctly
+
+`CORRECTION.` The previous entry wrote `66.88 - 25.20 = 41.68 genuine
+cross-modal`. R@1 is nonlinear; that is performance under an intervention, not
+a separable component. And "the text slot accounts for 9.2" was wrong: 9.21 is
+the caption-swap effect WITH the text slot present. Codex's decomposition:
+
+```
+                     same    indep    diff
+  text slot present  36.70   27.49    9.21
+  text slot masked   17.93   17.52    0.41
+
+  caption-overlap interaction   (36.70-27.49) - (17.93-17.52) =  8.80
+  text slot, same caption        36.70 - 17.93               = 18.77
+  text slot, independent caption 27.49 - 17.52               =  9.97
+```
+
+So the text slot is worth about ten points even against an independent caption,
+and roughly another nine come from the two sides sharing a caption.
+
+### Identity oracle
+
+`OBSERVED DATA` A deliberate `q = g` arm on the promoted index: R@1
+**100.0000%**, 9,138 queries against 45,692, **zero tied queries**. Ranking and
+UID bookkeeping are calibrated. This is kept separate from the protocol's own
+`full` same-record cell, which is also 100.00 but for a reason that belongs to
+the protocol rather than to the instrument.
+
+### What may and may not be claimed
+
+`AGREED WORDING, Codex 2026-09-01:`
+
+> Under a controlled reconstruction with identical queries, test UIDs,
+> candidate pool and checkpoint, MetaFind's reported text-only result is
+> quantitatively consistent with a PC-input or strongly PC-dominant gallery,
+> but inconsistent with our literal modality-complete implementation. Because
+> the paper explicitly specifies a modality-complete gallery and no evaluator
+> is available, we cannot determine whether the discrepancy comes from the
+> unpublished gallery construction, the query/gallery observations, the fusion
+> implementation or the evaluation pipeline.
+
+Arm A is to be labelled **"ULIP-2 PC-input gallery ablation and best numerical
+reconstruction hypothesis"**, never "the MetaFind implementation". The paper
+says modality-complete; choosing A because it matches the number would be the
+post-hoc selection this project keeps warning itself about.
+
+`The contradiction is itself the result.` What best explains 13.8 and what the
+paper says it implemented are not the same construction, and that is reportable.
+
+### Evaluation tracks, agreed
+
+```
+R    literal fidelity, reported PER CONDITION with its own leakage audit.
+     text-only has headroom (36.70) and can compare implementations, but
+     carries an 8.80-point overlap interaction, so it is not a sole basis for
+     an extension claim. The full-modality cell is saturated and is a
+     self-match diagnostic, not a headline.
+E1   observation-disjoint instance retrieval. Exact UID stays the positive;
+     query and gallery must not share a raw observation. Primary benchmark for
+     method comparison, pre-registered, not chosen by resolution.
+E2a  programmatic scene-replacement validity on ProcTHOR: category/function,
+     support relation, bounding-box fit, no collision, affordance. Multiple
+     positives, no annotation needed. Success@K / Recall@K / mAP@K.
+E2b  graded relevance on top, thresholds fixed BEFORE comparison, with
+     sensitivity bands. Gemma may label materials and style as a secondary
+     signal; it must not be the sole source of qrels, since the retrieval model
+     consumes similar text and the benchmark would be circular.
+```
+
+`Resolution is an eligibility test, not an objective.` Choose the protocol from
+the intended retrieval construct, then check it resolves. Do not select
+whichever protocol gives the largest gain.
+
+`Upper controls, three and kept distinct:` the deliberate `q = g` identity
+oracle (instrument calibration), the literal full same-record cell (leakage
+naturally present in the protocol), and the zero-parameter raw-mean control at
+99.56 (how much retrieval exists without learned fusion).
+
+---
