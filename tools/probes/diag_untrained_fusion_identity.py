@@ -145,14 +145,18 @@ from initialisation noise; the output carries the spread next to every delta so
 that check cannot be skipped. `delta_exceeds_seed_spread` is a coarse guard, not
 a significance test.
 
-⚠ THE PC ROW'S INPUT IS NOT THE SAME VECTOR IN THE TWO RUNS.
-`train_scope` is `point_encoder_and_fuser`, so a Stage 1 checkpoint restores a
-FINE-TUNED PointBERT as well as the towers. The checkpoint is therefore loaded
-BEFORE `collect_inputs`, and the trained run's `raw["pc"]` is the trained point
-encoder's output. That is the correct comparison for pass-through -- each tower
-is measured against ITS OWN input -- but it means the pc delta mixes "the tower
-relays more" with "the tower's input moved". `text` and `image` do not have this
-problem: OpenCLIP is frozen and both runs read the identical cached vectors.
+⚠ THE PC ROW'S INPUT MAY NOT BE THE SAME VECTOR IN THE TWO RUNS.
+`train_scope` is a property of the CHECKPOINT, not a constant, and it is read
+back from the checkpoint here rather than assumed. Under
+`point_encoder_and_fuser` a Stage 1 checkpoint restores a FINE-TUNED PointBERT
+as well as the towers, so the checkpoint is loaded BEFORE `collect_inputs` and
+the trained run's `raw["pc"]` is the trained point encoder's output. That is the
+correct comparison for pass-through -- each tower is measured against ITS OWN
+input -- but it means the pc delta mixes "the tower relays more" with "the
+tower's input moved". Under `fuser_only` the backbone is frozen, so that
+confound is absent and the pc row is directly comparable. `text` and `image`
+never have the problem: OpenCLIP is frozen and both runs read the identical
+cached vectors.
 """
 from __future__ import annotations
 
@@ -295,14 +299,24 @@ def main() -> int:
           f"{'checkpoint' if trained else f'seeds {seeds}'} · batch {bs}",
           flush=True)
 
+    # The checkpoint stores only its TRAINABLE parameters, so a backbone built
+    # with the wrong scope has a different trainable set and the load is
+    # rejected. Read the scope back rather than assuming one.
+    scope = "point_encoder_and_fuser"
+    if trained:
+        scope = torch.load(Path(args.state), map_location="cpu",
+                           weights_only=False).get("train_scope", scope)
+        print(f"checkpoint train_scope = {scope}", flush=True)
     backbone = ULIPBackbone(BackboneConfig(device=args.device,
-                                           train_scope="point_encoder_and_fuser"))
+                                           train_scope=scope))
     model_t, ckpt_sha = None, None
     if trained:
-        # BEFORE `collect_inputs`. `train_scope` is `point_encoder_and_fuser`,
-        # so the checkpoint restores a fine-tuned PointBERT as well as the two
-        # towers. Collecting inputs first would measure trained towers against
-        # RELEASED-encoder point clouds -- a comparison of two different models.
+        # BEFORE `collect_inputs`. Under `point_encoder_and_fuser` the
+        # checkpoint restores a fine-tuned PointBERT as well as the two towers,
+        # and collecting inputs first would measure trained towers against
+        # RELEASED-encoder point clouds -- a comparison of two different
+        # models. Under `fuser_only` the order does not matter; loading first
+        # is correct either way.
         from metafind.train.stage1 import (build_model,
                                            load_stage1_checkpoint)
         model_t, loss_fn = build_model(encoding, training, hyper)
@@ -502,6 +516,7 @@ def main() -> int:
                             "noise; `delta_exceeds_seed_spread` is a coarse "
                             "guard, not a significance test"),
         },
+        "train_scope": scope,
         "pc_row_caveat": (
             "train_scope is point_encoder_and_fuser, so the checkpoint restores "
             "a fine-tuned PointBERT and the trained run's raw pc input is not "
@@ -509,7 +524,11 @@ def main() -> int:
             "which is the right comparison for pass-through, but the pc delta "
             "mixes 'the tower relays more' with 'the tower's input moved'. text "
             "and image are free of this: OpenCLIP is frozen and both runs read "
-            "the identical cached vectors."),
+            "the identical cached vectors."
+            if scope == "point_encoder_and_fuser" else
+            f"train_scope is {scope}, so the backbone is frozen and both runs "
+            "read the identical cached pc vectors. The pc delta is a clean "
+            "measurement of the tower, with no input-moved confound."),
         "control_no_fusion": control,
         "delta_vs_untrained": delta,
         "per_seed": per_seed,
