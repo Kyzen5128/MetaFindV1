@@ -106,28 +106,70 @@ def main() -> int:
     print(f"\n{'來源':<26s}{'R@1':>7s}{'R@5':>7s}{'目標排名中位':>13s}"
           f"{'正例 cos':>10s}{'最難負例':>10s}{'邊際':>9s}")
 
+    hits = {}
+
     def score(name, Q):
+        """[Codex 2026-09-01] frac(margin > 0) is reported beside R@1 as a
+        SELF-CHECK: with margin = positive - max_negative the two must agree,
+        and a disagreement would mean the rank or the negative exclusion is
+        wrong rather than the model."""
         q = n(torch.from_numpy(np.stack(Q)).to(dev))
         s = q @ G.t()
         own = s.gather(1, tgt.unsqueeze(1)).squeeze(1)
         rank = (s > own.unsqueeze(1)).sum(1) + 1
         hard = s.scatter(1, tgt.unsqueeze(1), -2.0).max(1).values
+        marg = own - hard
         m = len(uids)
+        hits[name] = (rank == 1).cpu().numpy()
+        qs = [0.05, 0.25, 0.5, 0.75, 0.95]
         r = {"R@1": round((rank == 1).sum().item() / m * 100, 2),
              "R@5": round((rank <= 5).sum().item() / m * 100, 2),
              "median_target_rank": int(rank.median()),
              "positive_cos": round(float(own.mean()), 4),
              "hardest_negative_cos": round(float(hard.mean()), 4),
-             "top1_margin": round(float((own - hard).mean()), 4)}
+             "top1_margin": round(float(marg.mean()), 4),
+             "margin_pct": {f"p{int(x*100):02d}": round(
+                 float(marg.quantile(x)), 4) for x in qs},
+             "frac_margin_gt_0": round(float((marg > 0).float().mean()) * 100, 2)}
         res["arms"][name] = r
         print(f"{name:<26s}{r['R@1']:7.2f}{r['R@5']:7.2f}"
               f"{r['median_target_rank']:13d}{r['positive_cos']:10.4f}"
-              f"{r['hardest_negative_cos']:10.4f}{r['top1_margin']:9.4f}")
+              f"{r['hardest_negative_cos']:10.4f}{r['top1_margin']:9.4f}"
+              f"{r['frac_margin_gt_0']:12.2f}")
         return r
 
     score("我們的 render", ours)
     score("ULIP-2 官方 render", theirs)
     score("我們的 render, 打亂", [ours[i] for i in perm])
+
+    print(f"\n邊際分位數 (positive - 最難負例):")
+    for k in ("我們的 render", "ULIP-2 官方 render"):
+        print(f"  {k:<22s}" + "  ".join(
+            f"{a}={b:+.4f}" for a, b in res["arms"][k]["margin_pct"].items()))
+
+    # [Codex] 217 paired samples: 3.7 points is not obviously significant.
+    a, b = hits["我們的 render"], hits["ULIP-2 官方 render"]
+    b01 = int((a & ~b).sum())
+    b10 = int((~a & b).sum())
+    if b01 + b10:
+        chi = (abs(b01 - b10) - 1) ** 2 / (b01 + b10)
+        from math import erfc, sqrt
+        pval = erfc(sqrt(chi / 2))
+    else:
+        chi, pval = 0.0, 1.0
+    res["mcnemar"] = {"ours_only": b01, "theirs_only": b10,
+                      "chi2_cc": round(chi, 3), "p": round(pval, 4)}
+    print(f"\nMcNemar 配對檢定 (n={len(uids)}): 只有我們對 {b01}，只有他們對 "
+          f"{b10}，chi2 {chi:.3f}, p {pval:.4f}  "
+          f"-> {'不顯著' if pval > 0.05 else '顯著'}")
+
+    ch1, ch5 = 100.0 / len(corpus), 500.0 / len(corpus)
+    res["chance"] = {"R@1": round(ch1, 5), "R@5": round(ch5, 5),
+                     "paper_image_R1_over_chance": round(0.1 / ch1, 1),
+                     "paper_image_R5_over_chance": round(1.3 / ch5, 1)}
+    print(f"\n此池子的隨機期望 R@1 {ch1:.5f}%  R@5 {ch5:.5f}%")
+    print(f"論文 ULIP image 0.1 / 1.3 = 隨機的 {0.1/ch1:.0f} 倍 / {1.3/ch5:.0f} 倍"
+          " -- 是極弱訊號，不是完全打亂")
 
     a, b = res["arms"]["我們的 render"], res["arms"]["ULIP-2 官方 render"]
     if min(a["R@1"], b["R@1"]) > 25:
