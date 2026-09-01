@@ -4762,3 +4762,103 @@ SCA3D, Uni3DL, Uni3D and OmniBind remain uncloned and unread -- four of Table
 run. Table 3's ten ablations have none run.
 
 ---
+
+## DL-068 -- U-16 ruled: reading A, two ULIP-2 encoders. And `fully_separate` turns out to be a label with no implementation.
+
+Date 2026-09-01. Kyzen, ruling on U-16 after being shown that the paper offers
+two readings of "separate encoders":
+
+> 如果硬選 A 或 B：是 A。 [...] 兩塔應該由同一個 ULIP-2 checkpoint 初始化，
+> 但之後是兩份可獨立更新的參數。
+
+### The ruling
+
+`RULING, Kyzen 2026-09-01.` U-16 resolves to **A**: two ULIP-2 encoders, both
+initialised from the same checkpoint, thereafter independently updatable.
+
+```
+Query tower:    its own ULIP-2  ->  query fusion   -> (Stage 2: + ESSGNN)
+Gallery tower:  its own ULIP-2  ->  gallery fusion -> precomputed, fixed
+```
+
+The grounds, all `PAPER FACT`:
+
+* `2methdology.tex:34` "a dual-tower architecture with **separate encoders** for
+  the query and gallery"
+* `2methdology.tex:10` defines distinct `f_query` and `f_gallery`
+* `2methdology.tex:75` "**both** query and gallery encoders are trained"
+* `2methdology.tex:34` "The gallery encoder is modality-complete and **frozen
+  after pretraining, while the query encoder remains flexible**"
+
+The last one is the load-bearing sentence and it is a structural argument, not a
+preference: under B the two towers are one parameter set, so "gallery frozen"
+and "query flexible" cannot both hold. B is ruled out by a sentence, not by
+taste.
+
+`Kyzen's own reservation, recorded as given:` the paper never writes
+`share_weights=False`, so no text proves two objects exist in the author's
+PyTorch. The argument is from what the freezing schedule requires, and it is
+recorded as a reading, not as a transcription.
+
+Stage 2 does not discriminate between the readings and is unchanged either way:
+`3experiments.tex` says MetaFind froze **both** encoders in Stage 2 and updated
+only ESSGNN and the fusion.
+
+### The code cannot currently do A. Measured, not read.
+
+`OBSERVED IMPLEMENTATION` `dual_tower.py:57-61` documents three readings:
+
+```
+shared_backbone_separate_fusion  one ULIP backbone, two fusion modules
+fully_shared                     one backbone, ONE fusion module, tied
+fully_separate                   two backbones, two fusion modules
+```
+
+Built at runtime, all three, and compared by parameter-tensor identity:
+
+```
+sharing                          query    gallery   shared tensors  fusion_tied
+shared_backbone_separate_fusion  23.63M   23.63M          0            False
+fully_separate                   23.63M   23.63M          0            False
+fully_shared                     23.63M   23.63M         26            True
+```
+
+`fully_separate` and `shared_backbone_separate_fusion` produce **the same model**.
+Same parameter count, same zero shared tensors, same top-level modules. The
+only thing that differs between them anywhere is the string written into the
+config.
+
+The reason is structural: `dual_tower.py` never touches a backbone. It imports
+`essgnn` and `fusion` and nothing else; "backbone" appears in that file only in
+comments. The ULIP backbone is built in `stage1.py`, **once**, at line 2016, and
+`tower_sharing` appears in `stage1.py` twice -- both times passing the string
+into `DualTowerConfig`, never into a backbone decision.
+
+So `fully_separate` is the third `train_scope` of the day: a registry entry that
+records an option nothing executes. `train_scope` was found this morning
+(DL-063) and fixed in three places; this is the same defect class in the
+neighbouring field, and it was invisible for the same reason -- the config
+faithfully recorded a choice the code had no branch for.
+
+### What A actually separates, and what it does not
+
+`OBSERVED IMPLEMENTATION` OpenCLIP is frozen (`encoding.actual_clip_train_scope:
+frozen`) and the text and image vectors come from n06's cached sidecars. Both
+towers read the SAME cached vector for those two modalities, and a second
+backbone does not change that -- there is no second OpenCLIP to diverge.
+
+A therefore separates the **point cloud path only**: a second PointBERT that
+starts identical to the first and diverges under training.
+
+That is precisely the modality measured to be unbreakable by every other means
+-- two independent 10,000-point samples of one mesh encode at cosine 0.944
+(`baseline_independent_query`), and the query pack's pc arm moved pc 94.7 ->
+93.8, 0.9 of a point. Whether two diverging encoders do what a second sample
+could not is an open question and is **measurable before anything is retrained**:
+load one checkpoint into two backbones, perturb one, and score.
+
+`UNRESOLVED, needs Kyzen:` implementing A means a second PointBERT in the
+training loop, a checkpoint format that carries two backbone states, and a
+re-run of every Stage 1 arm. It is not a small change and it is not started.
+
+---
