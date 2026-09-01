@@ -6,9 +6,12 @@ the original W&B run rather than from memory. The three that change this
 experiment:
 
   POOL      14,966 = `shapenet-55/train.txt` + `test.txt`, kept if the
-            (taxonomy, model) pair appears in `captions.tablechair.csv`. Not
-            the official Text2Shape split, not `processed_captions_*.p`, and
-            the number counts OBJECTS.
+            (taxonomy, model) PAIR appears in `captions.tablechair.csv`
+            (`dataset_3d.py:376`). Matching on model_id alone gives 14,986 --
+            20 objects whose CSV taxonomy reads 04379243 while ShapeNet files
+            them under 02933112 (10), 03001627 (8), 03636649 (1), 04460130 (1).
+            Not the official Text2Shape split, not `processed_captions_*.p`,
+            and the number counts OBJECTS.
   ROWS      ONE ROW PER OBJECT. `ShapeNet.__getitem__` returns one object with
             `random.choice(captions_of_this_object)`, so N = 14,966 for all
             three feature matrices. B built 7,414 caption rows with each object
@@ -108,9 +111,14 @@ def main() -> int:
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
-    caps: dict[str, list[str]] = collections.defaultdict(list)
+    # [FIXED, CAMERA's Codex 2026-09-01] Keyed on the (taxonomy, model) PAIR,
+    # which is what `dataset_3d.py:376` matches on. Keying on model_id alone
+    # kept 20 extra objects whose CSV taxonomy says 04379243 while ShapeNet
+    # files them under 02933112 (10), 03001627 (8), 03636649 (1), 04460130 (1)
+    # -- 14,986 instead of 14,966. Pair matching reproduces their pool exactly.
+    caps: dict[tuple[str, str], list[str]] = collections.defaultdict(list)
     for r in csv.DictReader(CSVP.open(encoding="utf-8", errors="replace")):
-        caps[r["modelId"]].append(r["description"])
+        caps[(r["topLevelSynsetId"], r["modelId"])].append(r["description"])
     ids = []
     for f in ("train.txt", "test.txt"):
         ids += [l.strip() for l in (SN / f).read_text().splitlines() if l.strip()]
@@ -118,8 +126,8 @@ def main() -> int:
     keys, seen = [], set()
     for x in ids:
         stem = x[:-4] if x.endswith(".npy") else x
-        mid = stem.split("-", 1)[1]
-        if mid in caps and stem not in seen and (pcdir / f"{stem}.npy").exists():
+        key = tuple(stem.split("-", 1))
+        if key in caps and stem not in seen and (pcdir / f"{stem}.npy").exists():
             seen.add(stem)
             keys.append(stem)
     print(f"pool {len(keys):,}   (CAMERA log: 14,966; delta "
@@ -168,7 +176,7 @@ def main() -> int:
             pick = random.choice(cands) if cands else None
             imgs.append(tf(Image.open(pick).convert("RGB")) if pick
                         else torch.zeros(3, 224, 224))
-            cap = random.choice(caps[stem.split("-", 1)[1]])
+            cap = random.choice(caps[tuple(stem.split("-", 1))])
             texts.append(tok(cap))
             meta.append((os.path.basename(pick) if pick else "", cap))
         chosen += meta

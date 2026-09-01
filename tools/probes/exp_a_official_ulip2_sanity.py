@@ -159,8 +159,35 @@ def main() -> int:
     os.makedirs("./outputs/exp_a_sanity", exist_ok=True)
     print("\n$ python " + " ".join(sys.argv[1:]) + "\n", flush=True)
 
+    # Upstream's final line is `print('0-shot * Acc@1 {top1.avg:.3f} ...')`
+    # -- a missing f prefix at main.py:118 -- so it prints literal braces and
+    # the FINAL count over all 1428 batches never reaches stdout. Reading the
+    # running average at 1420 was the previous workaround and Codex was right
+    # to reject it.
+    #
+    # `test_zeroshot_3d_core` builds `AverageMeter('Acc@1')` and
+    # `AverageMeter('Acc@5')` and returns `{'acc1': top1.avg, 'acc5': top5.avg}`.
+    # Registering every AverageMeter as it is constructed lets the final `.avg`
+    # be read after the run, over all 1428 batches, without touching what
+    # upstream computes.
+    # main.py guards its entry with `if __name__ == '__main__'`, so loading it
+    # under any other run_name gives the namespace WITHOUT executing the run.
+    # `test_zeroshot_3d_ulip2(args)` is then called directly and its return
+    # value -- {'acc1': top1.avg, 'acc5': top5.avg} over all 1428 batches --
+    # is kept. Nothing upstream computes differently; only the number stops
+    # being thrown away.
+    import argparse as _ap
+    g = runpy.run_path("main.py", run_name="__metafind_probe__")
+    parser = _ap.ArgumentParser("ULIP", parents=[g["get_args_parser"]()])
+    ua = parser.parse_args(sys.argv[1:])
+    os.makedirs(ua.output_dir, exist_ok=True)
+
     t0 = time.time()
-    g = runpy.run_path("main.py", run_name="__main__")
+    results = g["test_zeroshot_3d_ulip2"](ua)
+    captured["final"] = {"acc1": round(float(results["acc1"]), 4),
+                         "acc5": round(float(results["acc5"]), 4),
+                         "source": "test_zeroshot_3d_ulip2 return value, "
+                                   "all 1428 batches"}
     prov["seconds"] = round(time.time() - t0, 1)
     prov.update(captured)
 

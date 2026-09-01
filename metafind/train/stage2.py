@@ -672,7 +672,23 @@ def main() -> int:
     # checkpoint; load_stage1_checkpoint checks coverage per module, so their
     # absence from a Stage 1 file is not mistaken for a dropped tensor.
     load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]),
-                           new_prefixes=("query.layout_encoder", "layout_weight"))
+                           # [BUG FIX 2026-09-02] "layout_weight", not
+                           # "query.layout_weight". The parameter is registered
+                           # on the QUERY tower (dual_tower.py:207), so its name
+                           # is `query.layout_weight`, and the coverage gate
+                           # matches with `startswith` -- which the short form
+                           # never satisfies. Every Stage 2 run would have died
+                           # on this line with "does not cover 1 trainable
+                           # parameter(s)". It survived because Stage 2 has
+                           # never executed: found the first time the seven-check
+                           # smoke reached the restore.
+                           #
+                           # `freeze_for_stage2` uses `endswith("layout_weight")`
+                           # for the same parameter, which is why the two never
+                           # disagreed in review -- they are different tests of
+                           # the same name and only one of them was wrong.
+                           new_prefixes=("query.layout_encoder",
+                                         "query.layout_weight"))
     model.to(args.device)
     loss_fn.to(args.device)
     grads = freeze_for_stage2(model, backbone)

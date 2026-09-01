@@ -137,7 +137,7 @@ def main() -> int:
         init_temperature=values["init_temperature"],
         max_logit_scale=values["max_logit_scale"]))
     load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]),
-                           new_prefixes=("query.layout_encoder", "layout_weight"))
+                           new_prefixes=("query.layout_encoder", "query.layout_weight"))
     model.to(args.device)
     loss_fn.to(args.device)
     freeze_for_stage2(model, backbone)
@@ -224,7 +224,7 @@ def main() -> int:
         "names": lam,
         "grad_norm": {n: grad_norm[n] for n in lam},
         "moved": {n: moved[n] for n in lam},
-        "value_after": {n: float(p) for n, p in model.named_parameters() if n in lam},
+        "value_after": {n: float(p.detach()) for n, p in model.named_parameters() if n in lam},
         "expected": use_layout,
         "pass": (bool(lam) and all(grad_norm[n] not in (None, 0.0) for n in lam))
                 if use_layout else not lam}
@@ -265,19 +265,22 @@ def main() -> int:
     print(f"\n{'檢查':<26s}{'結果':>8s}   細節")
     for k in order:
         c = R["checks"][k]
+        # lambdas, not a dict of f-strings: a dict literal evaluates EVERY
+        # branch, so printing the gallery row used to read `is_frozen` off the
+        # gallery check and die. The checks themselves had all passed.
         det = {
-            "1_gallery_frozen": f"{c['n']} tensors, {c['n_moved']} moved",
-            "2_backbone_frozen": f"is_frozen={c['is_frozen']}, "
-                                 f"{c['trainable_backbone_tensors']} trainable",
-            "3_query_fusion_updated": f"{c['n_moved']}/{c['n']} moved, "
-                                      f"max {c['max_move']:.3e}",
-            "4_essgnn_gradients": f"{c['n_with_grad']}/{c['n']} have grad",
-            "5_lambda_gradient": f"{c['grad_norm']} -> {c['value_after']}",
-            "6_scene_dropout": f"rate {c['observed_rate']:.4f} over "
-                               f"{c['draws']:,}, one draw per batch",
-            "7_bidirectional": f"q2g {c['loss_q2g']}  g2q {c['loss_g2q']}  "
-                               f"tau {c['tau']}",
-        }[k]
+            "1_gallery_frozen": lambda: f"{c['n']} tensors, {c['n_moved']} moved",
+            "2_backbone_frozen": lambda: f"is_frozen={c['is_frozen']}, "
+                                         f"{c['trainable_backbone_tensors']} trainable",
+            "3_query_fusion_updated": lambda: f"{c['n_moved']}/{c['n']} moved, "
+                                              f"max {c['max_move']:.3e}",
+            "4_essgnn_gradients": lambda: f"{c['n_with_grad']}/{c['n']} have grad",
+            "5_lambda_gradient": lambda: f"{c['grad_norm']} -> {c['value_after']}",
+            "6_scene_dropout": lambda: f"rate {c['observed_rate']:.4f} over "
+                                       f"{c['draws']:,}, one draw per batch",
+            "7_bidirectional": lambda: f"q2g {c['loss_q2g']}  g2q {c['loss_g2q']}  "
+                                       f"tau {c['tau']}",
+        }[k]()
         print(f"{k:<26s}{'PASS' if c['pass'] else 'FAIL':>8s}   {det}")
 
     R["all_pass"] = all(R["checks"][k]["pass"] for k in order)
