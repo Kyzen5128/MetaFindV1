@@ -5785,3 +5785,29 @@ so deleting it is a free 55 GB, but it is Kyzen's call.
 NVMe went from 71% to 69% used, 282 GB free. Nothing was deleted.
 
 ---
+
+## DL-082 -- 87 GB freed on the NVMe: the extracted ULIP-2 reference, two unused model caches, the shard scratch
+
+Date 2026-09-02. Kyzen: 「/dev/nvme0n1p2 快不夠了」then「outputs/reference/ulip_npy
+是官方 ULIP-2 shard 解壓出來的刪掉」and「若忘記了 或是不需要檔案直接刪掉沒關係
+反正確保這次重做該做的都要做到就好」.
+
+Deleted, each after checking it is recoverable or unused:
+
+| what | size | why it is safe |
+|---|---|---|
+| `outputs/reference/ulip_npy` | 55 G | 199,974 released ULIP-2 records in 40 chunks of 5,000. Three uids sampled at random from three different chunks were each located inside the official archives (`000-024`, `000-002`, `000-032`), so the chunking was ours and every record came from the 160 intact `tar.gz` at `/mnt/data1/kyzen/ulip2_objaverse_lvis` (173 G). Only 12,076 of them are in the LVIS list. No live code path reads it; `tools/remeasure_color0_texture.py` takes the directory as an argument. A restore note is left at `outputs/reference/DELETED_ulip_npy.md` |
+| scratchpad `ulip2_shards`, `ulip2_renders`, `ulip2_shard0`, `their_renders`, `ulip2_pc_embed.npz` | 14 G | session scratch: the same archives, extracted again for the side-by-side probes. Those probes have run and their reports are in the archive |
+| `hf-cache/models--Qwen--Qwen2.5-7B-Instruct` | 7.9 G | annotation was re-pointed at gemma on 2026-08-24 and no code names this model; `download.fetch_qwen` re-fetches on demand |
+| `hf-cache/models--laion--CLIP-ViT-B-32-...` | 1.2 G | the node/edge text encoder moved to ViT-bigG-14 on Kyzen's 2026-08-27 ruling; the only mention left is a comment saying it used to be this |
+| stale `/tmp` extractions | 0.7 G | |
+
+Kept: gemma-4-12B-it (23 G, the annotator), ViT-bigG-14 (9.5 G, the backbone's
+text and image towers), clip-vit-large-patch14 (3.2 G, `describe_rank`'s
+caption ranker -- deliberately NOT the retrieval encoder).
+
+NVMe 71% -> 62% used, 346 GB free. The two remaining large trees are the
+Objaverse GLB source (328 G, needed for the re-render) and `renders/` (71 G),
+which the eleven-view re-render overwrites in place.
+
+---
