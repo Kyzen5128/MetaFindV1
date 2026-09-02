@@ -5811,3 +5811,33 @@ Objaverse GLB source (328 G, needed for the re-render) and `renders/` (71 G),
 which the eleven-view re-render overwrites in place.
 
 ---
+
+## DL-083 -- Another 24 GB: a duplicate HuggingFace cache, the finished ULIP evaluation's clouds, the pip cache
+
+Date 2026-09-02. Kyzen: 「objaverse不要刪 真的沒有其他檔案了???」-- so the 328 GB
+of GLBs stays on the NVMe (it is byte-identical to the copy on the secondary
+disk: 46,052 files, 351,390,772,200 bytes on each side, zero size mismatches,
+verified over every file, not sampled). An exhaustive walk of the disk then
+found three more things:
+
+| deleted | size | why it was safe |
+|---|---|---|
+| `~/.cache/huggingface` | 12 G | a SECOND HuggingFace cache holding the same ViT-bigG-14 blob as the project's own -- same content-addressed name `db71bd27...`, same 10,158,382,892 bytes, different inode, so two real copies. It is the default location, written before `paths.setup_env()` started setting `HF_HOME`. Replaced by a symlink to the project cache, so anything that does NOT set `HF_HOME` still resolves; verified the model file opens through both paths |
+| `upstream/ULIP_run/data` | 11 G | 46,052 `.npy` holding only `xyz`/`rgb` (10000,3), the clouds ULIP's official zero-shot evaluation loads. That evaluation has run: 50.5647 / 78.9285 against the paper's 50.6 / 79.1. Regenerable from the official shards on the secondary disk; a note is left at `upstream/ULIP_run/DATA_DELETED.md` |
+| `~/.cache/pip` | 1.8 G | package cache |
+
+NVMe 62% -> 59%, 369 GB free. Running total for the day: 22 GB archived to the
+secondary disk, 111 GB deleted, and 260 GB free became 369 GB.
+
+`NOT TOUCHED, and why`
+* `datasets/objaverse-lvis` 328 G -- Kyzen said keep it. It is the re-render's
+  input and reading it from the NVMe is 3 ms per asset against 31 ms from the
+  secondary disk (measured), about twenty minutes over the corpus.
+* `renders/` 71 G -- the eleven-view re-render overwrites it in place.
+* `miniconda3/envs/ulip` 13.9 G -- the environment the official ULIP-2 check
+  ran in. Deleting it saves 13.9 G and costs a CUDA-dependency rebuild if that
+  check is ever repeated. Kyzen's call.
+* gemma 23 G, ViT-bigG 9.5 G, clip-vit-large 3.2 G, Blender 2 G, the point
+  clouds 5.7 G -- all live inputs.
+
+---
