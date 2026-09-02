@@ -71,9 +71,17 @@ and this protocol does not claim it does.
 ```
 caption choice   the lowest-rank candidate with rank >= 1, deterministic,
                  no sampling
-view index k     k = crc32(uid) mod n_views, deterministic per uid
+view index k     k = uid_seed(uid) mod n_views, deterministic per uid
 pc resample seed 20260901, one draw per uid, farthest-point as in n03
 ```
+
+`AMENDED 2026-09-02, before any E1 number exists.` The view rule was written
+here as `crc32(uid) mod n_views` while the query pack the trained checkpoints
+already use draws `uid_seed(uid) mod n_views` (`stage1.py`, `QueryPack.view_index`,
+with `uid_seed` from `metafind/data/pointclouds.py`). Two rules for one draw
+would have let a query see a view the gallery still averaged in. The property
+that matters is "deterministic per uid"; both have it, so the rule the
+checkpoints were trained with wins and the other is withdrawn.
 
 ### 1.4 Controls, all three run every time
 

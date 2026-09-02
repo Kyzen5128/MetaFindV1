@@ -4,6 +4,7 @@
 **狀態：條件通過，尚未 final。** 外部審查提出 3 項 P0，我逐條核對一手來源後**全部確認成立**，已在本版修正（MF-14 錯標、20% test 早停污染、U-16 推論過度），另補 5 個新登記沉默點（§9.5）、修正 1 個事實錯誤（n05 標註模型不是 GPT-4o，是 gemma-4-12B-it，見 §2.3）。**v3.1 同日追補**：Kyzen 指出我沒照 standing rule 走完（MetaFind 找不到 → 查 ULIP-2 官方**程式碼** → 再問人），我上一輪只 grep 論文就宣告「無源」。回查 `upstream/ULIP` 後，epochs（250）、不早停、取 best checkpoint、驗證資料不得取自最終回報 split，**四條上游都有明確答案，已全部採用**；同時查出 lr 是上游自己打架（論文 1e-3 vs 官方腳本明傳 3e-3，§10 #11 新登記）。**v3.2 再追補**：Kyzen 質疑「真的找不到嗎」，回頭把上游全部翻完，結論是**我上一輪標的「上游答不了」也是錯的**。OpenShape 訓練迴圈（`src/train.py:190-201`）提供了不需要任何 held-out 資料的 checkpoint 選擇依據（in-batch contrastive accuracy）＋每 epoch 存 latest／定期快照，**§10 #3 因此撤回上呈**。同時查出兩個事實錯誤：**PointBERT 深度是 18 不是 12**（yaml 的 live 區塊＋checkpoint 實測 18 blocks），以及 lr 有四個候選、其中 5e-4 是唯一針對 PointBERT 這個量級（實測 32.5M）給的值。**只剩 §10 #11（lr）一題需要拍板**，因為那是上游彼此分歧、不是沉默。
 **v3.3**：Kyzen 再指出「EGNN 也一樣」，確實如此。ESSGNN 的層數與 pooling 我同樣只讀論文公式就標成「我們自己選」，回查 EGNN 官方 repo 後發現：**層數 4 是 N-body 的值、QM9 是 7**；**pooling 官方 readout 是 sum 不是 mean**；而 MetaFind 引 EGNN 的脈絡明寫 drug design＝QM9。兩處建議改，見 §3.4 對照表。
 流程教訓已寫成常駐規則 `.claude/rules/upstream-lookup.md`（四步查完才准上呈，含五次失敗紀錄）。
+**v4 2026-09-02**：**§12 是現行定案**——主要錯誤（兩塔讀同一筆紀錄）、架構每一塊的論文／上游／現況對照、資料實測數量、整條流程、今天改了哪些檔案、以及六題等 Kyzen 拍板。前面章節與 §12 衝突處以 §12 為準（§12.7 列了被取代的句子）。
 目的：MetaFind（arXiv 2510.04057, NeurIPS 2025 格式, 作者 Pan/Lu/Liu）的**每一個技術細節**——
 架構、張量維度、公式、資料格式、訓練配方、評估協定、已知矛盾、每個開放決策與其預設方案——
 一次寫清楚，讓實作規劃不再返工。這份文件交 GPT 外部審查。
@@ -1606,3 +1607,150 @@ decided_at  2026-08-19T13:17:25
    部落格/論壇/記憶不算；
 5. 找出本文件沒登記的論文沉默點（對照你自己讀的原文）。
 回覆格式：逐條「同意／反對＋出處／補充」。
+
+
+---
+
+## 12. 2026-09-02 重新設計定案：架構、資料流、訓練、評估，一次寫清楚（v4）
+
+> 這一節是**現行版本**。它與前面章節衝突時，以這一節為準；被它取代的舊句子，我在對應處加了「→ 見 §12」。
+> 這一節不用內部編號講事情。每一項都寫「論文怎麼說 / 上游怎麼做 / 我們現在怎麼做 / 證據」。
+> 標籤沿用 §0：`PAPER` 論文明文、`UPSTREAM` 上游明文、`IMPL` 現況程式碼、`DATA` 實測、`CHOICE` 我們選的、`DEV` 故意偏離、`UNKNOWN` 沒證據。
+
+### 12.1 主要錯誤是什麼（一段話）
+
+**兩座塔讀同一份資料。** Stage 1 訓練時，查詢塔和畫廊塔拿到的是**同一個資產的同一組快取向量**（同一份文字向量、同一張 12 視角平均圖向量、同一顆點雲）。畫廊向量裡就裝著查詢自己的向量，所以「找回自己」這題不用學就會：一個**零參數**的對照（直接把原始向量平均起來去比）在 dev 池上 R@1 = **99.56**，而我們訓練出來的模型是 **89.36**，比不學還低。訓練沒有壞、資料沒有壞、評估器沒有壞——**題目壞了**。
+
+論文自己說了這件事的另一半（`3experiments.tex:24`，逐字）：「since **other models** do not adopt a dual-tower design, **their** "PC only" performance reflects retrieval using identical embeddings for both query and gallery, leading to **inflated** accuracy」——別人的模型因為兩邊 embedding 相同所以分數**灌水**；MetaFind 的雙塔正是為了不這樣。我們的程式碼（`metafind/train/stage1.py` 的 `split_embeds`，沒給 query pack 時 `return gallery, gallery`）把 MetaFind 做成了論文說的那種灌水情形。這句話我之前一直套錯對象（拿來推論 MetaFind 的畫廊是什麼），Codex 指出後我開檔對過，他對。
+
+**這個錯誤影響的範圍**：所有「查詢與畫廊同一筆紀錄」的協定分數（dev 池 76.1、正式協定 37.8 那些）都不能拿來跟論文比、也不能拿來做改良的基準。它**不影響**：ULIP-2 骨幹（官方程式碼重現 50.5647/78.9285 對論文 50.6/79.1）、點雲、渲染、標註、80/20 切分、遮罩機制、mask token、評估器排名與指標算法（全部獨立驗過，見 Notion 診斷頁）。
+
+**修法**：查詢側改讀**第二份觀測**——文字換一句候選描述、圖片只拿一個被畫廊排除的視角、點雲重新取樣一份——畫廊保持原本那一筆。機制（query pack）已經存在，訓練池的文字與點雲手臂已經做好；**缺的是測試池那份點雲（約 1 小時 GPU）**，以及真正用三隻手臂跑一次 Stage 1（Kyzen 拍板）。今天把「查詢讀哪一份」做成**必填的宣告**（見 12.5），從此不能再靜默回到同一筆紀錄。
+
+### 12.2 架構定案（每一塊寫清楚）
+
+```
+                    ┌──────────── ULIP-2 骨幹（一份，兩塔共用）────────────┐
+                    │ 文字：OpenCLIP ViT-bigG-14 text，1280 維，凍結         │
+                    │ 圖片：OpenCLIP ViT-bigG-14 image，1280 維，凍結        │
+                    │ 點雲：Point-BERT 深度 18 / 10,000 點 xyz+rgb / 32.5M   │
+                    │       Stage 1 訓練、Stage 2 凍結；pc_projection 768→1280│
+                    └─────────────────────────────────────────────────────┘
+   畫廊塔（離線一次算完、Stage 1 訓完就凍結）           查詢塔（線上）
+   {e_text, e_img, e_pc} 三個都必須在                    任意子集；缺的放 learned mask token
+        │                                                     │
+   Gallery Fusion（Transformer，獨立參數）              Query Fusion（Transformer，獨立參數）
+        │                                                     │  + λ · e_layout（Stage 2 才有）
+   e_gallery（快取進 index）                             e_query
+                              cosine → top-1 → 擺進場景 → 場景圖多一個節點 → 下一件
+```
+
+| 元件 | 論文 | 上游 | 我們現在 | 證據 / 狀態 |
+|---|---|---|---|---|
+| 骨幹是一份還是兩份 | 正文 §2.5「separate encoders for the query and gallery」；**Figure 1 卻標 `ULIP-2 (Shared)`、只畫一個骨幹方塊**；§3.2「freezing **both encoders** in Stage-2」 | ULIP-2 本身只有一組編碼器 | **一份骨幹、兩份 Fusion**（`shared_backbone_separate_fusion`） | `PAPER` 自打架。Kyzen 2026-09-01 曾裁「兩份」；Codex 與我隔天都建議回到「一份」，理由是 Figure 1 白紙黑字。**等你改判**（12.6 第 1 題）。「兩份骨幹」在 `stage1.py` 沒有實作（config 會建第二份 BackboneConfig，但 main 只建一個骨幹），今天改成**明確拒跑**而不是靜默跑成一份 |
+| 文字／圖片編碼器凍結 | 論文沒寫每個模組凍不凍 | ULIP-2 §3.3 明寫 CLIP 凍結；ULIP-1 解凍 → zero-shot 從 37.1 掉到 0.0 | 凍結 | `UPSTREAM`；Kyzen 已核可 |
+| 點雲編碼器 | §2.7「both query and gallery encoders are trained」；Table 3「Train fuser only」8.7 < 11.4 | ULIP-2 訓 Point-BERT | Stage 1 訓（`point_encoder_and_fuser`）、Stage 2 凍 | `PAPER` + `IMPL`；`fuser_only` 是 Table 3 那行的消融 |
+| Fusion 種類 | §2.5 列五種；§3.4「the final selected **Transformer**」 | — | Transformer：2 層、8 頭、ffn 2048、norm_first；三個模態 slot 各加一個可學位置向量；輸出取三個 slot 的平均 | 種類是 `PAPER`；層數／頭數論文沒有數字 → `CHOICE` |
+| 缺席模態 | §2.7「Rather than zero-padding, we apply masked embeddings」；Table 3 補零 10.5 < 11.4 | — | 每個模態一個 learned mask token（std 0.02）；缺席 slot 仍參與注意力與平均 | `PAPER`（不補零）；「缺席 slot 是否參與」論文沒說 → `CHOICE` |
+| Stage 1 遮罩 | §2.7 每個查詢模態**獨立** 30% 遮罩 | — | 每筆樣本、每模態獨立抽，p=0.3；三個全被遮（2.7%）照字面允許 | `PAPER`；逐行對過 |
+| 畫廊圖片聚合 | 「pre-encoded independently … into a fixed vector」 | ULIP-2 每視角各自訓練 | 12 視角向量取**平均** | `CHOICE`（論文沒說怎麼把多視角變一支向量）；leave-one-view-out 敏感度已量：查詢那張視角是否在平均裡值 10.09 分 |
+| Stage 1 損失 | Eq. 5 單向 InfoNCE（查詢→畫廊）；τ=0.5「for all experiments」 | ULIP-2 用可學 τ 初值 0.07 | 單向、τ=0.5 固定、cosine | `PAPER`；`sim` 取 cosine 是 `CHOICE`（論文只寫 similarity function） |
+| Stage 2 查詢 | Eq. 6 `e_query = Fusion(...) + λ·e_layout`，λ 可學 | — | 同；λ 初值 1.0 | `PAPER`；初值 `CHOICE` |
+| 場景 dropout | §2.7「omitted in 30% of **batches**」 | — | 每個 batch 抽一次，整批同值；實測 20,000 次抽樣率 0.2972 | `PAPER`；已用 smoke 驗證機制（不是只看設定檔） |
+| Stage 2 凍結 | §2.7「Only the query-side fusion layer and the ESSGNN module are updated」；§3.2「freezing both encoders」 | — | 骨幹凍、畫廊塔凍、只有 query fusion + ESSGNN + λ 動 | `PAPER`；smoke 實測：畫廊 26 個張量 0 個動、query fusion 26/26 動、ESSGNN 48/53 有梯度（5 個是最後一層座標頭，本來就沒有損失路徑）、λ 有梯度 |
+| Stage 2 損失 | Eq. 7/8 雙向平均 | — | 雙向、平均 | `PAPER`；smoke 兩個方向都有值 |
+| ESSGNN 家族 | §2.6 的 Eq. 2/3（兩個 MLP 各讀原始 tuple）與附錄 Eq. 10-14（先算 m_ij 再分給 φ_x、φ_h）**不一樣** | EGNN 就是附錄那種 | 主線用**附錄版**；§2.6 版留著當競爭假設 | `PAPER` 自打架；Kyzen 2026-08-17 裁附錄版 |
+| φ_x 輸出 | §2.6 寫 → R³ | EGNN 是純量 | 純量（否則附錄自己的等變證明不成立） | Kyzen 裁 PAPER-AMBIGUOUS，取純量 |
+| 節點初始特徵 | §2.6 寫 Concat(x_i, t_i) | EGNN 只把座標當 x，不塞進 h | h⁰ = t_i（座標另走 x 通道） | 附錄證明的前提就是 h⁰ 不含絕對座標；Concat 版會壞等變（有測試） |
+| 距離 | §2.6 `‖·‖₂`；附錄 `‖·‖²` | EGNN 平方 | 平方 | 兩者都等變；**待你拍板**（12.6） |
+| MLP 形狀 | 「approximated using MLPs」 | EGNN 附錄：φ_e Linear→Swish→Linear→**Swish**；φ_x Linear→Swish→Linear(無 bias)；φ_h Linear→Swish→Linear+殘差 | 現況全部 Linear→SiLU→Linear（殘差在 MLP 外面，照 MetaFind Eq. 14）；**今天加了 `egnn_appendix` 選項**（φ_e 尾端多一個 SiLU、φ_x 最後一層無 bias） | `UPSTREAM` 候選；**待你拍板**（12.6） |
+| 層數 L / 隱藏寬度 / pooling | 論文只寫「After L layers」與「Pooling」，沒有數字 | EGNN QM9：**7 層、128 寬、sum-pooling**；N-body：4 層、64 寬 | 4 層、128、mean | 4 是 N-body 的值、QM9 是 7；MetaFind 引 EGNN 的脈絡是 drug design＝QM9。**待你拍板**（12.6） |
+| 節點文字 t_i 與邊 e_ij 的編碼器 | 邊：「frozen text encoder (e.g., CLIP or BERT)」；節點：沒寫 | — | 兩者都用同一個 ViT-bigG-14 text（1280 維）；ESSGNN 內部投影到 128 | Kyzen 2026-08-27 核可（一致性） |
+| 語意邊 | LLM 對物件對產生關係句 → 凍結文字編碼器 | — | gemma-4-12B-it 產句（論文用的 LLM 沒指名）；**2026-09-02 做完 4,242 個相異物件對、0 個失敗**；缺關係的邊放 learned token，不補零 | `PAPER` 機制；LLM 是 `CHOICE`（Kyzen：全部改 gemma） |
+| 等變性 | Eq. 4 / 附錄證明 | EGNN 附錄 | 旋轉＋平移測試通過（兩個家族都有） | `IMPL` 驗過 |
+
+### 12.3 資料定案（數量全部是今天實測）
+
+| 項目 | 論文 | 我們 | 狀態 |
+|---|---|---|---|
+| Objaverse-LVIS 資產數 | 「approximately 48,000」/「48K」 | 官方 LVIS 清單 `datasets/objaverse-lvis/lvis.json` 有 **46,052** 個 uid（`DATA`，今天數的）；我們的點雲正好 46,052；渲染 46,024；標註 45,692 → 語料 **45,692**（三者交集） | 48K **從官方清單做不出來**；能追回的最多是 46,052 − 45,692 = **360 件**（0.8%），是 28 件渲染失敗＋332 件標註失敗。要不要補這 360 件是你的決定；補了也到不了 48K |
+| 視角數 | **11** orthogonal views | **12**（OpenShape 官方相機佈局：三圈極角 60/90/120°、每圈 4 個方位角） | `DEV`；你已裁「要改」。改法是**標註重跑**（gemma 看 11 張），80 小時 GPU；Codex 建議排最後，因為量過只值 0.82 分 |
+| 標註模型 | GPT-4o | gemma-4-12B-it | `DEV`；你裁定 |
+| 文字形式 | 「rich textual descriptions detailing attributes such as category, size dimensions, materials, and placement constraints」 | 一句話模板：描述＋類別＋材質＋三邊尺寸＋擺放；超過 CLIP 77 token 拒收不截斷 | `PAPER`（欄位要涵蓋）；模板是 `CHOICE`。你之前說「text 本來就是要句子，我沒做錯」——對，論文那句講的是內容要含哪些資訊，不是 JSON 格式 |
+| 切分 | 兩個資料集都 80/20 | 物件 36,554 / 9,138（seed 20260816，重算過互斥）；房子 9,600 / 2,400 | `PAPER` |
+| ProcTHOR | >10,000 間房、>3,000 資產、「comprehensive semantic metadata」 | 12,000 間房；資產 1,467（1,439 有點雲，28 件透明材質深度拍不到）；**metadata 實測只有類別名**（`material` 欄 100% 空），節點文字現況是「a alarm clock」這種 93 個相異字串 | `DATA`；論文說的 metadata 名不副實，已登記為偏離。節點文字重生（用 11 張圖丟 gemma）你已核可、尚未跑 |
+| ProcTHOR 點雲 | — | 多視角深度殼（depth shell）10,000 點，編碼時才做 pc_norm、RGB 填灰 | `CHOICE`（ProcTHOR 沒 mesh 管線） |
+
+### 12.4 訓練與評估流程（現在整條長什麼樣）
+
+```
+前處理  點雲(46,052) ─┐
+        渲染(46,024) ─┼→ 交集 45,692 → 標註(gemma) → 文字向量、12 視角向量（凍結編碼器，可快取）
+        標註(45,692) ─┘                                  點雲每步現算（Point-BERT 在訓）
+        query pack：訓練池的第二份觀測（文字 36,499 / 點雲 36,554 個 uid）；測試池尚未建
+
+Stage 1 python -m metafind.train.stage1 --phase dev --query-observation {same_record|second_observation} [--query-pack …]
+        dev：在 80% 訓練池內再切 dev_train / dev_val，每輪算 dev_val 的七條件平均 R@1 選 checkpoint
+        final：設定鎖死、用整個 80% 從頭訓、不中途選、最後才第一次開 20% test
+        → stage1_best.pt（骨幹 point encoder + 兩份 fusion + 損失的 τ）
+
+索引    gallery_index stage1 → 45,692 件的畫廊向量 → 閘門驗證 → promote（測試用）
+        gallery_index stage2 → 1,439 件 ProcTHOR 畫廊向量 **＋今天起連三個原始模態向量一起存**
+
+Stage 2 前置：語意邊 4,242 句（已做）、節點向量 1,467（已做）、場景圖 12,000（已做）
+        python -m metafind.train.stage2 --hyperparameters <配方檔> [--stage1-ckpt-record …]
+        每筆樣本 = 一間房拿掉一個物件；查詢 = 那個物件的三模態向量（從索引查表）+ λ·ESSGNN(剩下的房間)
+        正例 = 那個物件自己；同一批內不重複資產；場景 dropout 每批抽一次 30%
+        → stage2_<variant>.pt（只存動過的參數）
+
+評估    R   論文七條件，逐條件報、每條件附自匹配洩漏審計
+        E1  替代觀測（文字換句 0.85、圖片換視角、點雲重取樣 0.944）— 已凍結
+        E2a 程式化場景替換（拿掉一件、五個硬約束判正例）— 已凍結
+        E2b 分級相關性 — 門檻先定
+        三個對照組每次都跑：q=g 恆等（必須 100.00、零平手）、UID 打亂（中位排名 ≈ 22,846）、零參數
+```
+
+### 12.5 今天改了哪裡（每一處都能在 git diff 看到）
+
+| 檔案 | 改了什麼 | 為什麼 | 怎麼驗 |
+|---|---|---|---|
+| `metafind/train/stage2.py` | 還原 checkpoint 時宣告的新參數名寫成 `layout_weight`，實際叫 `query.layout_weight`，比對用前綴 → **永遠對不上，Stage 2 一次都沒跑到過**。改正 | 是 bug | seven-check smoke 跑到底 |
+| `metafind/train/stage2.py` | 訓練配方（lr、wd、batch、epochs、seed、τ、dropout）以前**靜默**從 Stage 1 的檔讀。現在 `--hyperparameters` **必填**，路徑與 sha256 寫進 checkpoint 紀錄；傳 Stage 1 那份也可以，但紀錄會標「這是 Stage 1 的檔」 | 論文沒給 Stage 2 配方；不能讓它看起來像決定過 | 紀錄裡有 `hyperparameters_are_stage1_artifact` |
+| `metafind/train/stage2.py` | 目標物件的文字／圖片／點雲向量以前**每一步重新編碼**（每筆 11 張圖過 ViT-bigG，一輪要好幾天）。骨幹在 Stage 2 全凍，這三個數字整場不變 → 改成從 Stage 2 索引**查表** | 同骨幹、同輸入、同 eval 模式，數值一模一樣；沒有科學改變，只是不再算一樣的東西 | 舊索引沒有這三個陣列會**拒跑**並叫你重建，不會偷偷退回重算 |
+| `metafind/train/gallery_index.py` | Stage 2 索引除了融合後的畫廊向量，**連三個原始模態向量一起存**；紀錄多一欄說明存了哪些 | 上一列需要 | 重建索引 1,439 件；sha256 更新 |
+| `metafind/train/stage1.py` | `--query-observation {same_record, second_observation}` **必填**；跟 `--query-pack` 有無互相檢查；寫進紀錄 | 12.1 那個錯誤以後不能再靜默發生 | 少給就不跑；給錯組合就不跑 |
+| `metafind/train/stage1.py` | 協定寫「兩份骨幹」時**明確拒跑**（以前會靜默跑成一份、紀錄寫另一個名字） | 你裁過「兩份」但程式沒實作；不能記 A 跑 B | SystemExit 帶說明 |
+| `metafind/models/essgnn.py`、`resolve_stage2.py` | `mlp_structure` 從「只是描述程式長什麼樣的字串」變成**真的設定**，兩種形狀都能跑（現況 / EGNN 附錄） | 你要拍板前得兩種都跑得了 | 162 個模型測試通過 |
+| `tools/sweep_lr.sh` | 補上 `--query-observation same_record` | 它沒用 query pack，宣告成實話 | — |
+| `tools/probes/stage2_smoke_seven_checks.py` | 新增：七項檢查**看張量有沒有動**，不看設定檔 | Codex 要求 | 七項全過（`output/look/stage2_smoke_seven_checks.json`） |
+| `workflow/EVAL_PROTOCOL_FROZEN.md` | 圖片視角規則改回 `uid_seed(uid) % 12`（我昨天寫成 crc32，跟已訓 checkpoint 用的 pack 規則不同） | 一個抽樣兩條規則會讓查詢看到畫廊還平均著的那張 | 改在任何 E1 數字出現之前 |
+| `docs/paper/egnn_source/` | 下載 arXiv v3 HTML 與 markdown | 你要的 | — |
+| 資料 | 語意邊 4,242 句（gemma，0 失敗）；Stage 2 索引 1,439 件 | Stage 2 前置 | log 在 `data/outputs/logs/` |
+
+### 12.6 要你拍板的（每一題兩個選項、我的建議、選了會怎樣）
+
+1. **骨幹一份還是兩份**
+   　甲 一份共用（Figure 1 明標 Shared；程式現況；Codex 與我建議）　乙 兩份（你 09-01 的裁決；正文「separate encoders」；要多實作一個 Point-BERT 路徑）
+   　→ 建議甲。選乙我就把第二份骨幹接進 `stage1.py`（checkpoint 多一個區塊、optimizer 多一組參數）。
+
+2. **ESSGNN 七個欄位**（你 08-27 裁定它們都沒有逐項核可，但磁碟上的協定檔還寫 `resolved`，Stage 2 smoke 就是用那份跑的）
+   　層數 4 → **7**？ pooling mean → **sum**？ 隱藏寬 128（QM9 同）　MLP 形狀 → **egnn_appendix**？　距離平方（附錄＋EGNN）　輸入輸出投影 開　層間不共享
+   　→ 建議：層數 7、pooling sum、egnn_appendix（三個都是 EGNN 在 QM9 的做法，MetaFind 引 EGNN 就是引 QM9 那條線）；其餘維持。你點頭我就改協定檔並重跑 smoke。
+
+3. **Stage 2 配方**
+   　甲 先沿用 Stage 1 的（AdamW、lr 5e-4、wd 0.1、batch 64），epochs 走 5→10→25 階梯　乙 你另外指定
+   　→ 建議甲，紀錄會標「沿用」。
+
+4. **主線訓練的查詢觀測**
+   　甲 `second_observation` 三隻手臂全開（文字換句、單視角、點雲重取樣）　乙 `same_record`（只做論文字面重現，不做改良基準）
+   　→ 建議甲；需要先建**測試池**的 query pack（約 1 小時 GPU）才能在 test 上量 E1。
+
+5. **11 視角重標註**：80 小時 GPU。→ 建議排在 Stage 2 與 E2a 之後。
+6. **補回 360 件**（渲染失敗 28 ＋ 標註失敗 332）：→ 建議先不補；補了到不了 48K，且會改變語料使前後結果不可比。
+
+### 12.7 前面章節被這一節取代的句子
+
+- §2.5「U-16 狀態：維持現行 CHOICE」— 現況是**待你改判**（12.6 第 1 題）。
+- §2.3「11/12 視角」— 12 是 `DEV`，你已裁「要改」，排程見 12.6 第 5 題。
+- §10 已拍板表「tower_sharing ✅」— 見 12.6 第 1 題。
+- §10 ESSGNN 五個參數「Kyzen 核可 B」— 現況：磁碟協定檔仍寫 `resolved`，與 B 的結論衝突，見 12.6 第 2 題。

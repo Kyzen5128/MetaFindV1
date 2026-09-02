@@ -51,11 +51,14 @@ def test_every_field_from_protocol_requires_is_present():
 
 
 def test_mlp_structure_is_checked_against_the_code_not_just_recorded():
-    """[U-35] ESSGNNConfig has no such field, so the string describes the code.
-    A recorded value nothing reads is how U-14 and U-11 were being decided by
-    dataclass defaults before n05b existed."""
+    """mlp_structure is an ESSGNNConfig field with a fixed vocabulary; a value
+    the code cannot build must be refused here, hours before Stage 2 would
+    find out."""
     with pytest.raises(ValueError):
         assert_matches_code({**ARCH_DECISIONS, "mlp_structure": "linear_relu_linear"})
+    # both real readings survive the round trip
+    for shape in ("linear_silu_linear", "egnn_appendix"):
+        assert_matches_code({**ARCH_DECISIONS, "mlp_structure": shape})
 
 
 # --- the decisions themselves ---------------------------------------------

@@ -269,45 +269,32 @@ def _edge_key(a: str, b: str, text_map: dict) -> str:
                      meta["llm_model"], meta["text_encoder_version"])
 
 
-def encode_query(model, backbone, graph: dict, target_index: int, asset_id: str,
+def encode_query(model, graph: dict, target_index: int, asset_id: str,
                  drop_layout: bool, device: str, data: "Stage2Data"):
     """One leave-one-out query: the target's modalities plus its scene context.
 
     The target is removed from the graph here and nowhere else, so the removal
-    cannot be skipped by a caller. [U-08d] Leaving it in would let ESSGNN read
-    the answer off its own input; the loss would fall and nothing downstream
-    would distinguish that from learning.
+    cannot be skipped by a caller. Leaving it in would let ESSGNN read the
+    answer off its own input; the loss would fall and nothing downstream would
+    distinguish that from learning.
+
+    The target's three modality vectors are LOOKED UP, not re-encoded. Stage 2
+    freezes the whole ULIP-2 backbone (paper section 2.7: only the query-side
+    fusion layer and the ESSGNN are updated), so the text / image / point-cloud
+    vector of a given asset is a constant for the whole run. They are read from
+    the Stage 2 gallery index, which the same frozen backbone wrote; see
+    ``load_asset_modality_vectors``. Re-encoding them per step -- eleven
+    ViT-bigG image forwards per sample -- was what put one epoch at days.
     """
     import torch
-    from PIL import Image
 
-    # [BUG FIX 2026-08-28] `prepare_depth_shell` is used at the bottom of this
-    # function and was imported only inside `main()`, i.e. as one of main's
-    # LOCAL names -- so calling encode_query raised NameError. Second instance
-    # of one pattern, not a second accident: a module-level function reading a
-    # name that exists only in main's scope. The other was
-    # `load_stage1_checkpoint` (ec1f996).
-    #
-    # Imported here rather than at module level to match `torch` and `PIL`
-    # above: this module is imported by tooling that must not pay for torch.
-    # SWEPT for a third: of the nine names main() imports and the module does
-    # not, `prepare_depth_shell` was the only one read by any other top-level
-    # function. `torch` is also main-only but every reader imports it itself.
-    from metafind.models.ulip_backbone import prepare_depth_shell
-
-    rec = data.modalities[asset_id]
-    with torch.no_grad():
-        # The query encoders are frozen in Stage 2 (2.6); only the fuser and
-        # the ESSGNN move, so these three cost no graph.
-        text = backbone.encode_text([rec["text"]])
-        views = backbone.encode_image(torch.stack([
-            backbone.preprocess(Image.open(v).convert("RGB"))
-            for v in rec["view_paths"]]))
-        image = views.mean(dim=0, keepdim=True)
-        # [P0-4] same normalisation as the Stage 2 gallery -- query and gallery
-        # must see one input distribution or the retrieval compares two spaces.
-        cloud = np.load(rec["pointcloud_uri"])["xyz"].astype(np.float32)
-        pc_vec = backbone.encode_pc(torch.from_numpy(prepare_depth_shell(cloud)))
+    if data.asset_vectors is None:
+        raise ValueError("Stage2Data.asset_vectors is not set; load them with "
+                         "load_asset_modality_vectors(gallery_index) first")
+    vec = data.asset_vectors[asset_id]
+    text = torch.from_numpy(vec["text"]).to(device).unsqueeze(0)
+    image = torch.from_numpy(vec["image"]).to(device).unsqueeze(0)
+    pc_vec = torch.from_numpy(vec["pc"]).to(device).unsqueeze(0)
 
     layout = None
     # `layout_encoder is None` is the "w/o Layout Context" row, and it is a
@@ -354,6 +341,9 @@ class Stage2Data:
     def __init__(self, device: str) -> None:
         import numpy as np
 
+        # Filled by main from the Stage 2 gallery index: asset_id -> the frozen
+        # backbone's text / image / pc vectors. See load_asset_modality_vectors.
+        self.asset_vectors: dict[str, dict[str, np.ndarray]] | None = None
         self.modalities = {}
         for path in sorted(paths.PROCTHOR_MODALITIES.glob("*.json")):
             rec = json.loads(path.read_text())
@@ -408,6 +398,33 @@ class Stage2Data:
         return {h: json.loads((paths.SCENE_GRAPHS / f"{h}.json").read_text())
                 for h in house_ids
                 if (paths.SCENE_GRAPHS / f"{h}.json").exists()}
+
+
+def load_asset_modality_vectors(gallery_index) -> dict[str, dict[str, np.ndarray]]:
+    """The frozen backbone's text / image / point-cloud vector for every gallery asset.
+
+    Read from the Stage 2 gallery index, which stores them beside the fused
+    gallery vector (see ``gallery_index.build_index``'s ``extra``). They come
+    from the same frozen ULIP-2 backbone, the same inputs and the same eval
+    mode as the fused vector, so for the query side they are exactly the
+    numbers ``encode_query`` used to recompute per step.
+
+    An index built before the arrays were stored is refused rather than
+    silently re-encoded: the only encoder that could re-encode is the one this
+    function exists to stop running per step, and a refusal names the fix
+    (rebuild the index) instead of hiding a days-long slowdown.
+    """
+    missing = [k for k in ("text", "image", "pc") if k not in gallery_index.files]
+    if missing:
+        raise ValueError(
+            f"the Stage 2 gallery index has no raw modality arrays {missing}. "
+            "It was built before they were stored; rebuild it with "
+            "`python -m metafind.train.gallery_index stage2 ...`.")
+    ids = gallery_index["ids"].tolist()
+    return {a: {"text": gallery_index["text"][i],
+                "image": gallery_index["image"][i],
+                "pc": gallery_index["pc"][i]}
+            for i, a in enumerate(ids)}
 
 
 def trainable_state_dict(model) -> dict:
@@ -560,6 +577,20 @@ def main() -> int:
     ap.add_argument("--stage1-ckpt-record", default=None,
                     help="Stage 1 checkpoint record to initialise from. "
                          "Defaults to the canonical stage1_ckpt.json.")
+    # Stage 2's training recipe (optimizer, learning rate, weight decay, batch
+    # size, epochs, seed, temperature, scene dropout) used to be read from the
+    # STAGE 1 hyperparameter artifact without anyone saying so: the paper gives
+    # no Stage 2 recipe, and inheriting Stage 1's silently made it look decided.
+    # It must now be named on the command line. Passing Stage 1's file is
+    # allowed -- that is the current, undecided fallback -- but the record then
+    # says so, and the choice is visible in the launch command.
+    ap.add_argument("--hyperparameters", required=True,
+                    help="JSON with a `values` block (same schema as "
+                         "stage1_hyperparameters.json) giving Stage 2's optimizer, "
+                         "learning_rate, weight_decay, batch_size, epochs, seed, "
+                         "init_temperature, learnable_temperature, max_logit_scale "
+                         "and optionally scene_dropout (paper: 0.30). Its path and "
+                         "sha256 go into the checkpoint record.")
     args = ap.parse_args()
 
     import torch
@@ -576,9 +607,26 @@ def main() -> int:
     from metafind.models.ulip_backbone import (
         BackboneConfig, ULIPBackbone, prepare_depth_shell)
 
-    encoding, training, hyperparameters = load_protocols()
+    # Stage 1's encoding and training protocols still decide the fusion
+    # architecture Stage 2 restores into; only the RECIPE comes from the file
+    # named on the command line.
+    encoding, training, _stage1_hyperparameters = load_protocols()
     stage2, edge_proto, arch_proto = load_stage2_protocols()
+    hp_path = Path(args.hyperparameters)
+    hyperparameters = json.loads(hp_path.read_text())
+    if "values" not in hyperparameters:
+        raise ValueError(f"{hp_path} has no `values` block")
     values = hyperparameters["values"]
+    for key in ("optimizer", "learning_rate", "weight_decay", "batch_size",
+                "epochs", "seed", "init_temperature", "learnable_temperature",
+                "max_logit_scale"):
+        if key not in values:
+            raise ValueError(f"{hp_path} values block is missing {key!r}")
+    hp_sha256 = hashlib.sha256(hp_path.read_bytes()).hexdigest()
+    hp_is_stage1 = hp_sha256 == _stage1_hyperparameters.get("sha256")
+    print(f"hyperparameters {hp_path}  sha256 {hp_sha256[:12]}"
+          + ("  (this is the STAGE 1 artifact: Stage 2 recipe not yet decided, "
+             "inheriting Stage 1's values)" if hp_is_stage1 else ""), flush=True)
 
     positive_map = json.loads((paths.OUTPUTS / "stage2_positive_map.json").read_text())
     index_record = json.loads((paths.OUTPUTS / "stage2_gallery_index.json").read_text())
@@ -631,6 +679,7 @@ def main() -> int:
         train_houses = train_houses[: args.limit_houses]
 
     data = Stage2Data(args.device)
+    data.asset_vectors = load_asset_modality_vectors(gallery_index)
     eligible = set(positive_map) & set(id_to_row) & set(data.modalities)
     samples = enumerate_samples(train_houses, eligible)
     if not samples:
@@ -733,7 +782,7 @@ def main() -> int:
                 for idx in batch:
                     house_id, target_index, asset_id = samples[idx]
                     graph = graphs[house_id]
-                    q = encode_query(model, backbone, graph, target_index,
+                    q = encode_query(model, graph, target_index,
                                      asset_id, drop, args.device, data)
                     queries.append(q)
                     positives.append(gallery_vecs[id_to_row[asset_id]])
@@ -772,6 +821,25 @@ def main() -> int:
                 "variant_id": args.variant,
                 "uri": str(CKPT_DIR / f"stage2_{args.variant}.pt"),
                 "trainable_only": True,
+                # What this run actually trained with, so a later reader does
+                # not have to guess which artifact supplied the recipe.
+                "stage1_checkpoint_sha256": ckpt["sha256"],
+                "gallery_index_sha256": index_record["sha256"],
+                "hyperparameters_uri": str(hp_path),
+                "hyperparameters_sha256": hp_sha256,
+                "hyperparameters_are_stage1_artifact": hp_is_stage1,
+                "effective_values": {
+                    "learning_rate": values["learning_rate"],
+                    "weight_decay": values["weight_decay"],
+                    "batch_size": values["batch_size"],
+                    "epochs": epochs,
+                    "seed": seed,
+                    "scene_dropout": stage2_dropout,
+                    "init_temperature": values["init_temperature"],
+                    "learnable_temperature": values["learnable_temperature"],
+                },
+                "samples_per_epoch": len(samples),
+                "train_houses": len(train_houses),
                 "n_params_saved": sum(
                     v.numel() for m in (model, loss_fn)
                     for v in trainable_state_dict(m).values()),

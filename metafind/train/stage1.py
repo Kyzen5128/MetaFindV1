@@ -1856,6 +1856,28 @@ def main() -> int:
                          "cached vectors. Enters arm_config_hash. Omit for the "
                          "pre-2026-08-31 construction; the gallery is unchanged "
                          "either way.")
+    # Which observation the QUERY side trains on is a research axis, and it
+    # used to be decided by whether --query-pack happened to be present: no
+    # pack, and both towers silently read the same cached vectors of the same
+    # asset (the identity that let a zero-parameter control score 99.56). It
+    # must now be declared, and the declaration is checked against what the
+    # dataset will actually feed:
+    #   same_record         both towers read the asset's own canonical text,
+    #                       12-view mean image and canonical point cloud. This
+    #                       is the paper's literal Stage 1 (section 2.7: one
+    #                       full-modality record per asset, masking only).
+    #                       Reproduction runs only; the self-match leak is
+    #                       audited, not hidden.
+    #   second_observation  the query side reads a second observation of each
+    #                       asset from --query-pack (another caption, one
+    #                       held-out view, a second point sample) while the
+    #                       gallery keeps the canonical record. Required for
+    #                       every run whose numbers will be compared.
+    ap.add_argument("--query-observation", required=True,
+                    choices=("same_record", "second_observation"),
+                    help="what the query tower sees during training; "
+                         "second_observation requires --query-pack, "
+                         "same_record forbids it. Recorded in the checkpoint.")
     ap.add_argument("--limit", type=int, help="assets, for a smoke run")
     ap.add_argument("--device", default="cuda")
     # [D-3] `dev` is the development phase: train on dev_train, score dev_val
@@ -1879,6 +1901,20 @@ def main() -> int:
     from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
 
     encoding, training, hyperparameters = load_protocols()
+    # Two ULIP-2 backbones (one per tower) is a registered protocol value that
+    # this trainer does not implement: stage1_config builds a second
+    # BackboneConfig for it, but main below constructs ONE ULIPBackbone and
+    # routes both towers' point clouds through it. Until the second backbone
+    # is wired in, a protocol asking for it must stop here, not train the
+    # shared reading under the other name.
+    if training["tower_sharing"] == "fully_separate":
+        raise SystemExit(
+            "stage1_protocol.tower_sharing = 'fully_separate' asks for two "
+            "ULIP-2 backbones, and this trainer builds one. The run would "
+            "silently train the shared-backbone reading and record the other. "
+            "Either set tower_sharing to 'shared_backbone_separate_fusion' "
+            "(Figure 1 prints 'ULIP-2 (Shared)'), or implement the second "
+            "backbone first.")
     # A COPY. `hyperparameters` stays exactly as loaded so its recorded sha256
     # keeps describing the file on disk; the overrides below apply to this run's
     # working values only. Mutating in place would leave the artifact's digest
@@ -1966,6 +2002,23 @@ def main() -> int:
     # Built HERE, before `--limit` and before `_pools`, because it CHANGES THE
     # POOL and the recorded digests have to describe what actually ran.
     query_pack = QueryPack(args.query_pack) if args.query_pack else None
+    # The declared observation and the dataset's construction must agree, or
+    # the checkpoint would record one thing and the towers would have seen
+    # another. Checked before any data is loaded.
+    if args.query_observation == "second_observation" and query_pack is None:
+        raise SystemExit("--query-observation second_observation needs "
+                         "--query-pack; without one the query tower reads the "
+                         "gallery's own record.")
+    if args.query_observation == "same_record" and query_pack is not None:
+        raise SystemExit("--query-observation same_record was declared but "
+                         "--query-pack was given; the query tower would read "
+                         "a second observation. Declare second_observation "
+                         "or drop the pack.")
+    if args.query_observation == "same_record":
+        print("query observation: SAME RECORD on both towers (paper-literal "
+              "Stage 1; the query text/image/pc are the gallery's own cached "
+              "vectors, so the self-match leak is present and must be "
+              "audited, not compared).", flush=True)
     dropped = {"train": [], "selection": []}
     if query_pack is not None:
         print(f"query pack {query_pack.path}\n"
@@ -2150,6 +2203,7 @@ def main() -> int:
     }
     training["_query_construction"] = (query_pack.identity() if query_pack
                                        else None)
+    training["_query_observation"] = args.query_observation
     training["_arm_config_hash"], training["_arm_config"] = arm_config_hash(
         values, training, encoding, args.phase,
         query_construction=training["_query_construction"])

@@ -141,10 +141,23 @@ def _write(path: Path, obj, dump=json.dump) -> None:
     tmp.replace(path)
 
 
-def build_index(embeddings: np.ndarray, ids: list[str], out: Path) -> dict:
-    """Write the vectors and return the record that describes them."""
+def build_index(embeddings: np.ndarray, ids: list[str], out: Path,
+                extra: dict[str, np.ndarray] | None = None) -> dict:
+    """Write the vectors and return the record that describes them.
+
+    ``extra`` holds further per-asset arrays stored beside ``embeddings`` in
+    the same file, row-aligned with ``ids``. The Stage 2 index uses it to keep
+    the three raw modality vectors (text, image, point cloud) that the frozen
+    ULIP-2 backbone produced for each asset, so that Stage 2 training can look
+    them up instead of re-running the frozen encoders on every step.
+    """
     tmp = out.with_suffix(".part.npz")
-    np.savez_compressed(tmp, ids=np.array(ids), embeddings=embeddings.astype(np.float32))
+    arrays = {k: np.asarray(v, dtype=np.float32) for k, v in (extra or {}).items()}
+    for k, v in arrays.items():
+        if v.shape[0] != len(ids):
+            raise ValueError(f"extra array {k!r} has {v.shape[0]} rows for {len(ids)} ids")
+    np.savez_compressed(tmp, ids=np.array(ids),
+                        embeddings=embeddings.astype(np.float32), **arrays)
     tmp.replace(out)
     return {
         "uri": str(out),
@@ -521,6 +534,14 @@ def main() -> int:
             if args.limit:
                 mods = mods[: args.limit]
             ids, vectors, excluded = [], [], []
+            # The three raw modality vectors are kept beside the fused gallery
+            # vector. Stage 2 freezes the whole ULIP-2 backbone, so for every
+            # asset these three numbers never change again; recomputing them
+            # per training step (11 ViT-bigG image forwards per sample) was
+            # what made one Stage 2 epoch cost days. Same backbone, same
+            # inputs, same eval mode as the fused vector below, so a lookup
+            # returns exactly what the per-step encode used to return.
+            raw = {"text": [], "image": [], "pc": []}
             for path in mods:
                 rec = json.loads(path.read_text())
                 if rec["pointcloud_uri"] is None:
@@ -544,15 +565,23 @@ def main() -> int:
                     vectors.append(model.gallery(
                         {"text": text_vec, "image": image_vec, "pc": pc_vec}
                     )[0].cpu().numpy())
+                    raw["text"].append(text_vec[0].float().cpu().numpy())
+                    raw["image"].append(image_vec[0].float().cpu().numpy())
+                    raw["pc"].append(pc_vec[0].float().cpu().numpy())
                 ids.append(rec["asset_id"])
                 if len(ids) % 200 == 0:
                     print(f"  [{len(ids):5d}/{len(mods)}]", flush=True)
 
             record = build_index(
                 np.stack(vectors), ids,
-                paths.OUTPUTS / f"stage2_gallery_{ckpt_record['sha256'][:16]}.npz")
+                paths.OUTPUTS / f"stage2_gallery_{ckpt_record['sha256'][:16]}.npz",
+                extra={k: np.stack(v) for k, v in raw.items()})
             record.update({
                 "asset_ids": ids,
+                # Names the extra arrays so a reader can tell an index that
+                # carries the raw modality vectors from one built before they
+                # were stored, instead of finding out with a KeyError.
+                "raw_modality_arrays": sorted(raw),
                 "embedding_dim": record["dim"],
                 "n_assets": record["count"],
                 "gallery_encoder_sha256": encoder_sha,

@@ -517,7 +517,7 @@ def test_from_protocol_is_the_supported_construction_path():
     proto = dict(status="resolved", architecture_family="sec25_two_mlp",
                  use_io_projections=False, distance="euclidean",
                  coord_feat="current", layer_sharing="shared", pooling="sum",
-                 hidden_dim=32, n_layers=2)
+                 hidden_dim=32, n_layers=2, mlp_structure="egnn_appendix")
     cfg = ESSGNNConfig.from_protocol(proto, node_feat_dim=32, edge_feat_dim=32, out_dim=32)
     for k, v in proto.items():
         if k not in ("status", "architecture_family"):

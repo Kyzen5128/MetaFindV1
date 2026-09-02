@@ -105,6 +105,19 @@ Pool = Literal["mean", "sum", "max"]
 # [C1 / U-26] The two ESSGNNs MetaFind describes. Not a style choice -- different
 # parameter counts, different gradient paths, different functions.
 ArchFamily = Literal["appendix_shared_msg", "sec25_two_mlp"]
+# The shape of the message MLPs. MetaFind says only "approximated using MLPs";
+# EGNN's appendix (docs/paper/egnn_source/sections/appendix.tex, "Implementation
+# details") gives the upstream shapes. Both are runnable so the choice is a
+# protocol value, not a dataclass default:
+#   linear_silu_linear   every MLP is Linear -> SiLU -> Linear (what this file
+#                        always built; recorded, never decided)
+#   egnn_appendix        the edge MLP (phi_e / the message) ends with a second
+#                        SiLU, and the coordinate MLP's last Linear has no bias,
+#                        exactly as EGNN's phi_e and phi_x. phi_h stays
+#                        Linear -> SiLU -> Linear with the residual OUTSIDE,
+#                        because MetaFind's own Eq. 14 writes h_i + sum phi_h(m_ij)
+#                        and that differs from EGNN's node update.
+MlpStructure = Literal["linear_silu_linear", "egnn_appendix"]
 
 
 @dataclass
@@ -218,6 +231,9 @@ class ESSGNNConfig:
     # whether F11 holds: with independent layers the final coordinate head has
     # no loss path, with sharing it still receives gradient from layers 1..L-1.
     layer_sharing: LayerSharing = "independent"
+    # See MlpStructure above. A protocol value; the default only names what the
+    # code built before the option existed.
+    mlp_structure: MlpStructure = "linear_silu_linear"
     coords_agg: Agg = "sum"
     edge_proj_dim: int | None = None
     pooling: Pool = "mean"
@@ -255,7 +271,7 @@ class ESSGNNConfig:
             )
         required = {"architecture_family", "use_io_projections", "distance",
                     "coord_feat", "layer_sharing", "pooling", "hidden_dim",
-                    "n_layers"}
+                    "n_layers", "mlp_structure"}
         if missing := required - protocol.keys():
             raise ValueError(f"essgnn_arch_protocol is missing {sorted(missing)}")
         # [C1 / U-26] Both families are implemented now. A null still means the
@@ -280,6 +296,7 @@ class ESSGNNConfig:
             pooling=protocol["pooling"],
             hidden_dim=protocol["hidden_dim"],
             n_layers=protocol["n_layers"],
+            mlp_structure=protocol["mlp_structure"],
             **PRIMARY_INTERPRETATION,
         )
 
@@ -301,33 +318,41 @@ PRIMARY_INTERPRETATION = {
 }
 
 
-def _mlp(in_dim: int, hidden: int, out_dim: int) -> nn.Sequential:
-    """One 2-layer MLP shape, used for BOTH f_h and f_x. [U-35]
+def _mlp(in_dim: int, hidden: int, out_dim: int, *,
+         trailing_act: bool = False, out_bias: bool = True) -> nn.Sequential:
+    """One 2-layer MLP: Linear -> SiLU -> Linear [-> SiLU].
 
     Paper 2.5 says only "approximated using MLPs" -- no depth, no activation,
-    nothing about whether the output carries one. This shape was never a
+    nothing about whether the output carries one. The plain shape was never a
     decision; it is what this helper happened to be.
 
     EGNN's Appendix C specifies THREE different shapes:
 
         phi_e   Linear -> Swish -> Linear -> Swish   (activation on the output)
-        phi_x   Linear -> Swish -> Linear            (none)
+        phi_x   Linear -> Swish -> Linear            (last Linear has no bias
+                                                      in the reference code,
+                                                      vendor/egnn_clean.py:65)
         phi_h   Linear -> Swish -> Linear, + h_i     (residual)
 
-    SiLU and Swish are the same function, so `f_x` below matches EGNN's phi_x
-    exactly and `f_h` matches none of them -- it is missing both the trailing
-    activation and the residual. That difference is now U-35 and is recorded in
-    essgnn_arch_protocol.mlp_structure, which G6 requires. EGNN's appendix
-    supplies the VARIANT LIST, not the answer: a dependency paper cannot fill
-    in what MetaFind leaves unsaid.
+    SiLU and Swish are the same function. ``trailing_act`` and ``out_bias``
+    let ESSGNNConfig.mlp_structure = "egnn_appendix" build phi_e and phi_x as
+    EGNN does; phi_h keeps the plain shape under both settings because MetaFind
+    writes its residual OUTSIDE the MLP (Eq. 2 and Appendix C Eq. 14 are both
+    `h_i + sum(...)`), so an internal residual would double it.
 
-    Note MetaFind writes the residual OUTSIDE f_h (Eq. 2 and Appendix C Eq. 14
-    are both `h_i + sum(...)`), so f_h having no internal residual is correct
-    for this paper even though EGNN's phi_h has one.
+    EGNN's appendix supplies the candidate shapes, not the answer: which one
+    MetaFind ran is unstated, so the choice lives in essgnn_arch_protocol.
     """
-    return nn.Sequential(
-        nn.Linear(in_dim, hidden), nn.SiLU(), nn.Linear(hidden, out_dim)
-    )
+    layers: list[nn.Module] = [nn.Linear(in_dim, hidden), nn.SiLU(),
+                               nn.Linear(hidden, out_dim, bias=out_bias)]
+    if trailing_act:
+        layers.append(nn.SiLU())
+    return nn.Sequential(*layers)
+
+
+def _last_linear(mlp: nn.Sequential) -> nn.Linear:
+    """The output Linear of an ``_mlp``, whether or not an activation follows it."""
+    return next(m for m in reversed(mlp) if isinstance(m, nn.Linear))
 
 
 class ESSGCL(nn.Module):
@@ -341,15 +366,19 @@ class ESSGCL(nn.Module):
         super().__init__()
         self.cfg = cfg
         h = cfg.hidden_dim
-        # f_h : R^(2d + 1 + e) -> R^d   (Eq. 2)
+        egnn = cfg.mlp_structure == "egnn_appendix"
+        # f_h : R^(2d + 1 + e) -> R^d   (Eq. 2). Its output is added to h with
+        # the residual outside, so it carries no trailing activation under
+        # either mlp_structure.
         self.f_h = _mlp(2 * h + 1 + edge_dim, h, h)
         # f_x : R^(2d + 1 + e) -> R     (Eq. 3, corrected to scalar per Eq. 13)
-        self.f_x = _mlp(2 * h + 1 + edge_dim, h, 1)
+        self.f_x = _mlp(2 * h + 1 + edge_dim, h, 1, out_bias=not egnn)
         # Small init keeps the initial coordinate update near identity; large
         # random displacements at step 0 make the equivariance error numerically
         # meaningless before any training has happened.
-        nn.init.xavier_uniform_(self.f_x[-1].weight, gain=0.001)
-        nn.init.zeros_(self.f_x[-1].bias)
+        nn.init.xavier_uniform_(_last_linear(self.f_x).weight, gain=0.001)
+        if _last_linear(self.f_x).bias is not None:
+            nn.init.zeros_(_last_linear(self.f_x).bias)
 
     def forward(
         self, h: Tensor, x: Tensor, edge_index: Tensor, edge_attr: Tensor
@@ -438,17 +467,21 @@ class ESSGCLShared(nn.Module):
         super().__init__()
         self.cfg = cfg
         h = cfg.hidden_dim
-        # phi_e : R^(2d + 1 + e) -> R^d   (Eq. 10)
-        self.phi_e = _mlp(2 * h + 1 + edge_dim, h, h)
-        # phi_x : R^d -> R                (Eq. 13, scalar per the proof)
-        self.phi_x = _mlp(h, h, 1)
-        # phi_h : R^d -> R^d              (Eq. 14)
+        egnn = cfg.mlp_structure == "egnn_appendix"
+        # phi_e : R^(2d + 1 + e) -> R^d   (Eq. 10). Under egnn_appendix the
+        # message ends with a SiLU, as EGNN's edge MLP does.
+        self.phi_e = _mlp(2 * h + 1 + edge_dim, h, h, trailing_act=egnn)
+        # phi_x : R^d -> R                (Eq. 13, scalar per the proof).
+        # Under egnn_appendix the output Linear has no bias, as EGNN's coord MLP.
+        self.phi_x = _mlp(h, h, 1, out_bias=not egnn)
+        # phi_h : R^d -> R^d              (Eq. 14), residual outside, both settings
         self.phi_h = _mlp(h, h, h)
         # Same reason as the two-MLP layer: a large random coordinate update at
         # step 0 makes the equivariance error numerically meaningless before any
         # training has happened.
-        nn.init.xavier_uniform_(self.phi_x[-1].weight, gain=0.001)
-        nn.init.zeros_(self.phi_x[-1].bias)
+        nn.init.xavier_uniform_(_last_linear(self.phi_x).weight, gain=0.001)
+        if _last_linear(self.phi_x).bias is not None:
+            nn.init.zeros_(_last_linear(self.phi_x).bias)
 
     def forward(
         self, h: Tensor, x: Tensor, edge_index: Tensor, edge_attr: Tensor

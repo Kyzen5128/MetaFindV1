@@ -215,7 +215,7 @@ def assert_matches_code(arch: dict) -> None:
     # undecided and a missing field would then go unreported until Stage 2.
     required = {"architecture_family", "use_io_projections", "distance",
                 "coord_feat", "layer_sharing", "pooling", "hidden_dim",
-                "n_layers"}
+                "n_layers", "mlp_structure"}
     if missing := required - arch.keys():
         raise ValueError(f"essgnn_arch_protocol is missing {sorted(missing)}")
 
@@ -242,29 +242,26 @@ def assert_matches_code(arch: dict) -> None:
             {**arch, "status": "resolved"},
             node_feat_dim=1280, edge_feat_dim=1280, out_dim=1280)
         for field in ("distance", "coord_feat", "layer_sharing", "pooling",
-                      "hidden_dim", "n_layers", "use_io_projections"):
+                      "hidden_dim", "n_layers", "use_io_projections",
+                      "mlp_structure"):
             if getattr(cfg, field) != arch[field]:
                 raise ValueError(
                     f"essgnn_arch_protocol.{field} = {arch[field]!r} did not "
                     f"survive ESSGNNConfig, which holds {getattr(cfg, field)!r}"
                 )
-    # [U-35] mlp_structure has no config field, so the string describes the
-    # code. Assert the description is still true, and refuse any other value --
-    # recording one essgnn.py does not implement is worse than recording none.
+    # mlp_structure is now a real ESSGNNConfig field (the vocabulary check
+    # above refuses values essgnn.py cannot build). What remains to assert is
+    # that the code still implements the shapes the names promise: both
+    # readings are built by `_mlp`, whose SiLU and optional trailing
+    # activation are the whole difference between them.
     import inspect
 
     src = inspect.getsource(mod)
-    if arch["mlp_structure"] != "linear_silu_linear":
-        raise ValueError(
-            f"mlp_structure = {arch['mlp_structure']!r}, but essgnn.py builds "
-            "one Linear-SiLU-Linear per MLP and has no field to configure "
-            "anything else"
-        )
-    if "nn.SiLU()" not in src:
-        raise ValueError(
-            "mlp_structure says linear_silu_linear but essgnn.py no longer "
-            "builds SiLU MLPs"
-        )
+    for needle in ("nn.SiLU()", "trailing_act", "out_bias"):
+        if needle not in src:
+            raise ValueError(
+                f"essgnn.py no longer contains {needle!r}; the mlp_structure "
+                "vocabulary describes shapes the code does not build")
 
 
 def _write(path: Path, obj) -> None:

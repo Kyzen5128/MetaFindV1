@@ -78,6 +78,9 @@ def main() -> int:
     ap.add_argument("--dropout-draws", type=int, default=20000,
                     help="draws for the scene-dropout rate check")
     ap.add_argument("--stage1-ckpt-record", default=None)
+    ap.add_argument("--hyperparameters", required=True,
+                    help="the recipe file Stage 2 will be launched with; the "
+                         "Stage 1 artifact is accepted and recorded as such")
     args = ap.parse_args()
 
     from metafind.models.losses import ContrastiveConfig, MetaFindContrastiveLoss
@@ -85,14 +88,18 @@ def main() -> int:
     from metafind.train.stage1 import load_stage1_checkpoint
     from metafind.train.stage2 import (Stage2Data, build_stage2_model,
                                        encode_query, enumerate_samples,
-                                       freeze_for_stage2, load_stage2_protocols,
+                                       freeze_for_stage2,
+                                       load_asset_modality_vectors,
+                                       load_stage2_protocols,
                                        load_variant, unique_positive_batches,
                                        verify_recorded_artifact)
     from metafind.train.stage1 import load_protocols
 
-    encoding, training, hyperparameters = load_protocols()
+    encoding, training, stage1_hp = load_protocols()
     _stage2, _edge, arch_proto = load_stage2_protocols()
-    values = hyperparameters["values"]
+    hp_path = Path(args.hyperparameters)
+    values = json.loads(hp_path.read_text())["values"]
+    hp_sha = hashlib.sha256(hp_path.read_bytes()).hexdigest()
 
     positive_map = json.loads((paths.OUTPUTS / "stage2_positive_map.json").read_text())
     index_record = json.loads((paths.OUTPUTS / "stage2_gallery_index.json").read_text())
@@ -112,6 +119,7 @@ def main() -> int:
     train_houses = scene_splits["train_houses"][: args.houses]
 
     data = Stage2Data(args.device)
+    data.asset_vectors = load_asset_modality_vectors(gallery_index)
     eligible = set(positive_map) & set(id_to_row) & set(data.modalities)
     samples = enumerate_samples(train_houses, eligible)
     if not samples:
@@ -146,6 +154,8 @@ def main() -> int:
          "checkpoint": ckpt["uri"], "checkpoint_sha256": ckpt["sha256"],
          "gallery_index": str(index_path),
          "gallery_index_sha256": index_record["sha256"],
+         "hyperparameters": str(hp_path), "hyperparameters_sha256": hp_sha,
+         "hyperparameters_are_stage1_artifact": hp_sha == stage1_hp.get("sha256"),
          "n_gallery": len(id_to_row), "n_samples": len(samples),
          "seed": seed, "checks": {}}
 
@@ -176,7 +186,7 @@ def main() -> int:
     queries, positives = [], []
     for idx in batch:
         house_id, target_index, asset_id = samples[idx]
-        queries.append(encode_query(model, backbone, graphs[house_id],
+        queries.append(encode_query(model, graphs[house_id],
                                     target_index, asset_id, drop,
                                     args.device, data))
         positives.append(gallery_vecs[id_to_row[asset_id]])

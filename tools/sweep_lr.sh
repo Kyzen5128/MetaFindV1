@@ -108,6 +108,7 @@ for a in "${ARMS[@]}"; do
     else
         say "=== arm $N/8: lr $LR  seed $SEED  repeat_index $RI  -> sweep_lr/$TAG ==="
         $PY -m metafind.train.stage1 --phase dev --epochs 5 --preload \
+            --query-observation same_record \
             --lr "$LR" --seed "$SEED" --repeat-index "$RI" \
             --out-dir "sweep_lr/$TAG" >> "$LOGS/sweep_arm$N.log" 2>&1 \
             || die "arm $N exited $? -- read $LOGS/sweep_arm$N.log"
