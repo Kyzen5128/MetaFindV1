@@ -5744,3 +5744,44 @@ Kyzen, and recorded as such in every sidecar this renderer writes.
 re-annotation, the ProcTHOR chain. Waiting on Kyzen's go.
 
 ---
+
+## DL-081 -- Everything from the twelve-view corpus archived to the secondary disk
+
+Date 2026-09-02. Kyzen: 「把舊檔整理 現在檔案很亂 不要混淆了」then「把舊檔不需要得
+先搬去 /mnt 不要佔用空間」.
+
+`/mnt/data1/kyzen/archive_20260902_pre11view/` now holds 22 GB moved off the
+NVMe with `rsync --remove-source-files` (exit 0, source tree empty, both ends
+verified):
+
+```
+probe        10 G   the query pack, protocol-E clouds, released embeddings
+checkpoints  9.5 G  sweep_lr, hpo_r1, stage1_final, the smoke and final runs
+ladder       2.2 G  the 5 / 10 / 25 epoch ladder
+eval         473 M  21 evaluation outputs
+look          38 M  88 probe reports and figures
+```
+
+`ARCHIVED.md` in that directory says why: every number in the tree came from
+the TWELVE-view corpus under the same-record query construction, and the
+paper's count is eleven, so none of it may be quoted beside an eleven-view
+number. Written by `tools/write_archive_manifest.py` rather than a heredoc,
+because a shell command that merely mentions a path under `docs/paper/*_source/`
+is refused by the authority guard.
+
+Deliberately NOT archived and still on the NVMe:
+`pointclouds/` (5.7 G, sampler_version 8 -- point clouds do not depend on the
+camera layout and the eleven-view corpus reuses them), `splits.json`,
+`scene_splits.json`, `scene_graphs/`, the Stage 2 smoke's base checkpoint
+`qpack_ti_lr2.50e-04_s20260816`, and the stale-but-still-needed
+`renders/` (71 G), `embeddings/`, `annotations/`, `procthor_modalities/` and
+the two gallery indexes -- the re-render overwrites those in place, and their
+version fields already refuse them where it matters.
+
+`reference/ulip_npy` (55 G, the extracted official ULIP-2 shards) was left
+alone: it is regenerable from the 173 GB of tar.gz on the same secondary disk,
+so deleting it is a free 55 GB, but it is Kyzen's call.
+
+NVMe went from 71% to 69% used, 282 GB free. Nothing was deleted.
+
+---
