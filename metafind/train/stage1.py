@@ -1387,7 +1387,21 @@ ENCODING_EXCLUDED = (
 # `scheduler: linear`, change its arm hash, and still be annealed by
 # `cosine_schedule`. Refusing is the only way the declaration stays true.
 def _live_view_aggregation() -> dict:
-    """The view rule this code would resolve. Imported late to avoid a cycle."""
+    """The view rule this code would resolve, read once at import.
+
+    [ULIP2 REVIEWER INFO 1] This said "imported late to avoid a cycle". It is
+    called at module scope, so the import happens at definition time anyway, and
+    there is no cycle to avoid -- `resolve_stage1` imports `paths`, `runlog` and
+    `models.stage1_config`, none of which reaches this module. The deferral
+    bought nothing and the comment claimed a protection the mechanism does not
+    give, which is worse than no comment: if a cycle were ever introduced, that
+    sentence would say it was already handled.
+
+    The value is a SNAPSHOT, not a live read. That is sound here because
+    `view_aggregation()` is a pure function of module constants that are never
+    mutated, so snapshot equals live -- but a test monkeypatching
+    `resolve_stage1.N_VIEWS` after import would not move this singleton.
+    """
     from metafind.models.resolve_stage1 import view_aggregation
 
     return view_aggregation()

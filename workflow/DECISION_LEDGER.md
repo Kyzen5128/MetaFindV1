@@ -5973,3 +5973,127 @@ statement about a corpus rendered under a different protocol, and making it lie
 would be worse than leaving it loud.
 
 ---
+
+## DL-087 -- Phases 1 to 5 done on the existing corpus. Stage 1 runs, and three review rounds are what made it true.
+
+Date 2026-09-03. Kyzen: 「把剛剛給你的指令全部完成喔 我先睡了 你們審過就好 完成他」
+-- complete the protocol document's work, the reviewers settle it among
+themselves, report when it is all done.
+
+**Where it landed.** `5f64023` plus the post-smoke fixes. 1,023 tests pass.
+Stage 1 executed on the GPU at 2026-09-03 01:47: 128 assets, one epoch,
+`code_revision 5f64023`, `code_dirty false`, checkpoint written under a
+`.smoke128` suffix so the canonical one was untouched. The log signature matched
+what the reviewer predicted before it ran -- zero `train_stage1` rows, because
+two steps never reach the `step % 20` gate, and exactly one `stage1_dev_val`
+row, whose absence they had named as the real failure. R@1 0.9821 over a gallery
+of 128 is a wiring check and not a score, and is recorded as one.
+
+**What phases 1 to 5 actually needed, against what was expected.** The largest
+finding was an absence of work: §七 demands every view encoded separately and
+forbids keeping only the mean, and every one of the 45,692 embedding files
+already carried `views (12, 1280)` beside the pooled vector. Single-view,
+held-out-view and disjoint-subset arms can be cut from what exists. Nothing on
+the Objaverse side needed re-encoding.
+
+**The defect that stopped Stage 1, stated correctly.** `check_embedding_sidecars`
+compared each sidecar's self-reported `n_views` against a constant compiled into
+the trainer. The corpus says 12, the constant said 11, and `main()` exited over
+the whole corpus while the cache and the protocol agreed with each other. The
+view count is a protocol value; `protocol_n_views` refuses a protocol that does
+not record one rather than defaulting, which is how the constant arrived. My
+first description of this -- "Stage 1 cannot read the corpus" -- was too wide,
+and two auditors entering from different doors corrected it: the dataset and the
+model are fine on twelve views, and what refused was one preflight comparing the
+wrong thing.
+
+**`admitted_uids` walked the exclusion ledger as a uid map.** It is a metadata
+dict, so nine of its own keys were subtracted and none of the 332 uids under
+`groups.*.uids`. The corpus count was right by luck -- those assets have no
+annotation sidecar -- and the property the docstring claims, that the ledger is
+the authority, was gone. It now parses 332 against the ledger's stated 332 and
+against each group's own count, and `filter_ladder()` prints §六's before /
+removed / after so the prose claim that the ledger removes nothing further is
+measured rather than asserted.
+
+**`same_record` is dissolved.** `positive_policy: same_uid` is Eq. 5;
+whether the two towers see the same observation is UNRESOLVED, and one token
+could not say which a run had chosen. `metafind/data/observation.py` carries the
+vocabulary; the policies this cache cannot serve are refused with the reason
+rather than degraded to the canonical observation. The old flag still stands and
+still stamps `same_record` into every checkpoint, because replacing it means
+putting an observation block in the protocol artifact and choosing its contents
+decides 問題 4. Both vocabularies now say so in the file.
+
+**The manifest.** §四's constraint -- one asset UID is one row, views and
+captions as child records -- is enforceable now: the verifier fails if a gallery
+file repeats a uid, which is the expansion that inflates a retrieval score with
+nothing looking wrong. It also makes visible what the sidecars could not be
+asked: 111 assets have fewer than five caption candidates and 20 have exactly
+one, and 253 admitted assets carry a degraded render with 47 of the anomalies
+inside the sealed test split. Those are flagged and kept, because removing them
+would decide something that is Kyzen's.
+
+**Three review rounds, and what each was for.** Round one returned two
+blockers. `run_retrieval` still called `QueryPack` with one argument, so the node
+that produces Table 1 would have raised after loading the backbone -- a pack
+could be trained with and not scored with, the split that `QueryPack`'s own
+docstring exists to prevent. And the frozen-recipe test had not been answered:
+`view_aggregation` is a TREATMENT, because two runs differing in which views are
+pooled saw different image vectors.
+
+Round two returned one major that was mine and not the code's. I reported HEAD
+as `2aa767f` and committed twice more during the review, so the evidence was
+attached to a tree nobody would run -- the same shape they had refused to
+certify in round one, reproduced while writing the note asking them to trust the
+fix. Recorded as a memory, not just a fix: freeze the tree, quote the hash,
+commit nothing until the verdict.
+
+Round three passed and found the residue in my own repair. Binding
+`view_aggregation` in `load_protocol` and in the trainer's singletons compares
+the ARTIFACT against the module CONSTANTS; neither compared the constants
+against the ARITHMETIC. Setting `POST_NORMALIZE = True` and re-resolving left
+both guards green while `aggregate()` returned a bare mean -- a recorded recipe
+that did not happen, two lines away. `aggregate()` now refuses a block declaring
+behaviour it does not implement, so a future value has to arrive with an
+implementation and not only with a record. Their sentence is worth keeping: the
+labels were accurate, and **a correct label is not a control**.
+
+**One claim narrowed.** I wrote that `positive_policy` had gained a real
+consumer. It had not: `collate` does not read `POSITIVE_POLICIES` and would
+behave identically if that tuple said something else. What has an enforcer is
+the invariant the policy rests on. The guard is unchanged -- enforcing
+unconditionally is the safe direction -- but the wider sentence would have
+hidden that the declaration is still uncontrolled.
+
+**Two of my own numbers were wrong and both were the loose one.** I expected
+552,624 image rows from the render DIRECTORY count when the right multiplicand
+is the index count of 46,024, because the 28 assets n04 lost have a directory
+created before the failure. And my first render-anomaly criterion counted only
+blank or dark views, giving 244 where the audit's broader criterion gives 253.
+Corrected toward the audit, not the other way.
+
+**ProcTHOR.** Three docstrings that would mislead the next reader are corrected:
+the model is gemma and not Qwen, n08 has run twice and the 4,242 sentences on
+disk are the gemma run's, and the import that claimed to keep this side
+n04-compatible binds it to constants `renders.py` itself calls retired. The
+node-text repair is written, dry-run only, and refuses to apply: its self-check
+asserts the refusal, so the day someone deletes the guard the test fails instead
+of the corpus. Its dry run reproduces the audit exactly -- 146 of 1,467 assets
+change, 613 pairs need a new LLM call.
+
+**Nothing on §十九's forbidden list was done.** No re-render, no full
+annotation, no ProcTHOR rendering, no deleted twelfth view, no overwritten raw
+data, no deleted cache, no hardcoded observation policy, no gallery scope fixed
+to either side, no fixed point-cloud embedding in place of trainable PointBERT,
+no self-generated semantic edges, and no self-chosen pooling or lambda.
+
+**Four decisions remain Kyzen's**, and none of them blocked this work: the
+lambda and pooling conflict between his DL-077 ruling and the protocol
+document's UNRESOLVED; the 253 degraded admitted assets; the mask tokens sitting
+in the weight-decayed group, where a full run leaves them indistinguishable from
+initialisation at about two percent of a real modality vector; and whether to
+repair the ProcTHOR node text at all, since its construction is itself
+unresolved.
+
+---

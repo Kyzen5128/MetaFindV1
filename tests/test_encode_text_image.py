@@ -773,3 +773,42 @@ def test_an_edited_view_aggregation_block_is_refused(monkeypatch, tmp_path):
     write_protocol(monkeypatch, tmp_path, protocol(view_aggregation=None))
     with pytest.raises(ValueError, match="view_aggregation"):
         load_protocol()
+
+
+def test_aggregate_refuses_a_block_it_cannot_honour():
+    """[ULIP2 REVIEWER MINOR 1, round 3] The exploit that survived the first fix.
+
+    Both earlier guards compare the ARTIFACT against the module CONSTANTS.
+    Neither compared the constants against the ARITHMETIC, so setting
+    `POST_NORMALIZE = True` and re-running n05b left artifact and constants in
+    agreement, both guards green, the arm hash moved, and the checkpoint
+    recording a post-normalised pooling while `aggregate` returned a bare mean.
+    Two lines, and the record was false.
+
+    `aggregate` now refuses a block declaring behaviour it does not implement,
+    so a future value has to arrive with an implementation rather than only
+    with a record.
+    """
+    import numpy as np
+
+    from metafind.data.encode_text_image import aggregate
+    from metafind.models.resolve_stage1 import view_aggregation
+
+    v = np.arange(24, dtype=np.float32).reshape(12, 2)
+    live = view_aggregation()
+    # The live block must PASS, or a guard that refuses everything would also
+    # look green, and the pooled value must be unchanged by passing it.
+    assert np.allclose(aggregate(v, "mean", live), aggregate(v, "mean"))
+
+    for field, wrong, why in (
+            ("pre_normalize_each_view", True, "pre_normalize_each_view"),
+            ("post_normalize", True, "post_normalize"),
+            ("view_selection_policy", "first_eleven", "view_selection_policy")):
+        bad = dict(live)
+        bad[field] = wrong
+        with pytest.raises(ValueError, match=why):
+            aggregate(v, "mean", bad)
+
+    # `None` keeps the old two-argument behaviour, so every existing caller and
+    # every probe is unaffected.
+    assert np.allclose(aggregate(v, "mean", None), v.mean(axis=0))

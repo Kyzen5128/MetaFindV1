@@ -659,3 +659,38 @@ def test_the_pointcloud_digest_comes_from_bytes_not_from_the_sidecars_claim(
         "changing the cloud must change the digest")
     assert after["n_pointcloud_sidecar_mismatch"] == 1, (
         "the sidecar's stale claim must be reported, not silently trusted")
+
+
+def test_an_edited_view_aggregation_is_refused_by_the_trainer():
+    """[ULIP2 REVIEWER MINOR 2, round 3] The n10 singleton had no firing test.
+
+    `_encoding()` above carries no `view_aggregation` key, so every `_arm()`
+    call in this file takes `ENFORCED_SINGLETONS`' absent-field path, and the
+    only test touching the comparison reads the live artifact -- which proves
+    the check does not SPURIOUSLY raise and proves nothing about it firing.
+    That is the same shape as the reviewer's own MINOR 5 one round earlier: a
+    guard whose only support is that the data happens to match it.
+
+    The n06 twin is covered at `test_an_edited_view_aggregation_block_is_refused`.
+    This is its counterpart on the node that CONSUMES the cache and RECORDS the
+    recipe, which is where a false record would actually be written.
+    """
+    from metafind.models.resolve_stage1 import view_aggregation
+    from metafind.train.stage1 import UnsupportedProtocol, arm_config_hash
+
+    live = view_aggregation()
+    # The live block passes. Without this half, a check that raised on
+    # everything would also look green.
+    arm_config_hash(_values(), _training(), _encoding(view_aggregation=live),
+                    phase="dev")
+
+    for field, wrong in (("post_normalize", True),
+                         ("pre_normalize_each_view", True),
+                         ("view_selection_policy", "first_eleven"),
+                         ("n_views", 11),
+                         ("aggregation_version", 2)):
+        bad = dict(live)
+        bad[field] = wrong
+        with pytest.raises(UnsupportedProtocol, match="view_aggregation"):
+            arm_config_hash(_values(), _training(),
+                            _encoding(view_aggregation=bad), phase="dev")

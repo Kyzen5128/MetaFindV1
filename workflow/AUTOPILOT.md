@@ -73,10 +73,14 @@ PHASE 4  Dataset API                              ✅ 完成 metafind/data/obser
          positive_policy 同 UID ＋ 逐模態的 query / gallery 觀測政策
          gallery_test / gallery_full 本來就支援
 
-PHASE 5  Stage 1 正確性測試                       ◐ 大部分已由稽核結清
+PHASE 5  Stage 1 正確性測試                       ✅ 完成
          PointBERT 收到梯度、文字影像凍結、loss 單向、遮罩 30% 獨立、
          全遮 2.7%、遮罩非補零 —— 全部實測過（PHASE1_AUDIT B 段）
-         剩下：在 GPU 上跑一次小規模 end-to-end，證明整條路走得通
+         2026-09-03 01:47 在 GPU 上跑完 128 件 1 輪，code_revision 5f64023、
+         code_dirty False。訊號與審查員事前預測完全一致：
+         train_stage1 0 列（2 步，step%20 不會觸發）、dev_val 1 列
+         （0 列才是真的壞掉）。R@1 0.9821，gallery 128 —— 這是接線檢查，不是成績。
+         正式 checkpoint 沒被動到（.smoke128 後綴）
 
 PHASE 6  評估敏感度   ← 下一步，需要 Kyzen 放行
 PHASE 7  決定哪些協定值得重訓
@@ -115,5 +119,5 @@ ULIP2 Reviewer 第一輪回 CHANGES REQUIRED（BLOCKER 2），已全部修好並
 改了協定        stage1_encoding_protocol.json   多了 view_aggregation
                 stage2/essgnn protocol          只改 decided_by，數值沒動
 沒有動          渲染、標註、點雲、checkpoint、任何 embedding
-測試            1,019 通過
+測試            1,023 通過
 ```

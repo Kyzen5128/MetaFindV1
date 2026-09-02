@@ -34,7 +34,7 @@ QUERY SIDE, INDEPENDENT ON ALL THREE
   text   a NON-canonical `description_candidates` entry (rank >= 1),
          re-serialised through the production template and encoded by the same
          frozen tower. Assets with no second candidate are dropped and counted.
-  image  ONE view, `views[uid_seed(uid) % 12]`, against a gallery built from
+  image  ONE view, `views[uid_seed(uid) % n_views]`, against a gallery built from
          the 12-view mean -- so the query's own view is inside its own gallery
          entry at weight 1/12. That residue is measured, not assumed:
          `image_arm_anatomy` priced it at 10.09 points.
@@ -230,7 +230,7 @@ def main() -> int:
            "dropped_no_alternate_caption": len(dropped),
            "seed": args.seed,
            "query_text": "non-canonical description_candidate, rank>=1",
-           "query_image": "single view, uid_seed(uid) % 12",
+           "query_image": f"single view, uid_seed(uid) % {_n_views}",
            "query_pc": qpc_src,
            "gallery": "pure target modality, no fusion",
            "results": {}}

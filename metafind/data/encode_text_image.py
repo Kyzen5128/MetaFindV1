@@ -379,10 +379,14 @@ def load_protocol() -> dict:
         raise ValueError(
             f"stage1_encoding_protocol records view_aggregation "
             f"{protocol.get('view_aggregation')!r}, but this code would produce "
-            f"{expected_va!r}. Every field in that block describes what "
-            "`aggregate()` actually does, so a difference means either the "
-            "artifact was hand-edited or the code changed without re-resolving. "
-            "Re-run n05b_resolve_stage1_encoding; do not edit the artifact."
+            f"{expected_va!r}. This compares the ARTIFACT against the module "
+            "constants, so a difference means either the artifact was "
+            "hand-edited or the code changed without re-resolving. Re-run "
+            "n05b_resolve_stage1_encoding; do not edit the artifact.\n"
+            "It does NOT by itself prove the constants describe what "
+            "`aggregate()` does -- that is enforced separately, inside "
+            "`aggregate`, which refuses a block declaring behaviour it does "
+            "not implement."
         )
     return protocol
 
@@ -426,13 +430,53 @@ class Encoder:
         return int((self.backbone.tokenizer([text])[0] != 0).sum())
 
 
-def aggregate(views: np.ndarray, rule: str) -> np.ndarray:
+def aggregate(views: np.ndarray, rule: str, block: dict | None = None) -> np.ndarray:
     """[U-14, L1-IMAGE-AGGREGATION] The rule n05b resolved, applied here.
 
     `mean` on the raw embeddings rather than on L2-normalised ones: the tower
     normalises at comparison time, and normalising twice would weight every view
     equally regardless of how confidently the encoder placed it.
+
+    [ULIP2 REVIEWER MINOR 1, round 3] `block` is the whole `view_aggregation`
+    record, and passing it is what makes this function's own guarantee true.
+
+    Both existing guards -- `load_protocol` here and `ENFORCED_SINGLETONS` in
+    the trainer -- compare the ARTIFACT against the module CONSTANTS. Neither
+    compared the constants against the ARITHMETIC, so the exploit survived one
+    step over: set `POST_NORMALIZE = True`, re-run n05b, and the artifact agrees
+    with the constants, both guards stay green, the arm hash moves, and the
+    checkpoint records a post-normalised pooling while this function returns a
+    bare mean. Two lines, both guards green, a recorded recipe that did not run.
+
+    `n_views` was already enforced against reality -- n06 stamps
+    `int(view_vecs.shape[0])` into every sidecar and the trainer compares the
+    protocol's count to it. `method` rides on `image_aggregation`. The four that
+    were bound to nothing are refused below, each named, so a future value has
+    to arrive with an implementation rather than only with a record.
     """
+    if block is not None:
+        unimplemented = []
+        if block.get("pre_normalize_each_view"):
+            unimplemented.append(
+                "pre_normalize_each_view=True: this function means over RAW "
+                "vectors; normalising each view first is a different protocol "
+                "(§五 says so explicitly) and is not implemented here")
+        if block.get("post_normalize"):
+            unimplemented.append(
+                "post_normalize=True: nothing normalises the pooled vector, "
+                "and the vectors already on disk are unnormalised means "
+                "(measured at cosine 1.0 against mean(raw), PHASE1 Q18)")
+        if block.get("view_selection_policy", "all") != "all":
+            unimplemented.append(
+                f"view_selection_policy={block.get('view_selection_policy')!r}: "
+                "this function pools every row it is handed and has no "
+                "selection step; selection lives in the observation policy "
+                "(metafind/data/observation.py), not here")
+        if unimplemented:
+            raise ValueError(
+                "view_aggregation declares behaviour aggregate() does not "
+                "implement, so a run would record a pooling rule that did not "
+                "happen:\n  " + "\n  ".join(unimplemented))
     if rule == "mean":
         return views.mean(axis=0)
     if rule == "max":
@@ -552,7 +596,8 @@ def main() -> int:
 
                 text_vec = enc.encode_text(text)
                 view_vecs = enc.encode_views(renders[uid]["view_paths"])
-                pooled = aggregate(view_vecs, protocol["image_aggregation"])
+                pooled = aggregate(view_vecs, protocol["image_aggregation"],
+                                   protocol.get("view_aggregation"))
 
                 npz = paths.EMBEDDINGS / f"{uid}.npz"
                 tmp = paths.EMBEDDINGS / f"{uid}.part.npz"
