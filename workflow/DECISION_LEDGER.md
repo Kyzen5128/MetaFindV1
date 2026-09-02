@@ -5861,3 +5861,66 @@ F-2 The plan in DL-076 / `DATA_PLAN_PAPER_FIRST.md` §二 put n06 (encode) befor
 **Authorization of the run.** Kyzen approved the strict re-render (DL-079, 3甲) and the layout (2甲), and today asked for automatic progression. On the 2026-08-29 precedent (「每個階段做完自動去審 設定個監控自動去看 我希望我起床後看到訓練結果」, `tools/chain_overnight.sh`), MASTER reads today's 「做完自動下一步」 as the release for the chain in `AUTOPILOT.md` §四 through annotation rung 1, and NOT beyond it: rung 2, the full n05, n06, ProcTHOR and Stage 1 wait for his eyes on the pilot renders and the 100 annotations. The DL-030 eight items are in `AUTOPILOT.md` §五. The chain starts only after both block reviews and Codex return PASS on the code it runs, which leaves Kyzen a window of roughly an hour to say 停. `CLASSIFICATION` INFERENCE about Kyzen's intent, stated so he can correct it.
 
 ---
+
+## DL-085 -- The GPU/Codex reproduction protocol supersedes the redo plan. No 46K re-render. `same_record` is split. Three repo contradictions recorded.
+
+Date 2026-09-03. Kyzen pasted a complete protocol document assembled from GPT and
+Codex and instructed: read it, reply, and lay out the flow. Stored verbatim at
+`workflow/REPRODUCTION_PROTOCOL_20260903.md`. It supersedes
+`DATA_PLAN_PAPER_FIRST.md` and the execution order in `AUTOPILOT.md`, and it is
+this project's execution spec, not a scientific authority: the paper, the
+upstream sources and the artifacts on disk still outrank it (the project instructions' authority hierarchy §3).
+
+**What changes.**
+
+* A fifth evidence label enters the project: `AUTHOR EVIDENCE / MAINLINE`, for
+  what the rebuttal and Figure 1 support but the paper's body does not settle.
+  The shared ULIP-2 backbone is now labelled that, not PAPER FACT.
+* `same_record` is dissolved. `positive_policy = same_uid` is the PAPER FACT;
+  whether query and gallery see the SAME observation is UNRESOLVED, and the two
+  must never again travel under one token. DL-072's query-observation ruling is
+  re-expressed in these terms rather than retracted.
+* **The 46,024-asset re-render is postponed**, and DL-079's 3甲 with it. The
+  exact camera protocol is UNRESOLVED, so rendering now would freeze a guess.
+  The twelve views on disk are kept, indexed per view, and encoded per view; the
+  choice of which views a run uses moves to runtime.
+* View aggregation, image-only observation, Table 1's gallery scope, lambda's
+  initial value and ESSGNN's pooling are all UNRESOLVED. The evaluator must
+  support `gallery_test` and `gallery_full` side by side and print the candidate
+  count every time.
+* Stage 1 keeps modality masking; Stage 2 keeps scene dropout only. Stage 1's
+  loss stays one-directional, Stage 2's bidirectional. PointBERT stays trainable
+  and its embedding may never be served from a cache on the training path.
+
+**Three places where this repo contradicts the spec, recorded as 附錄 A of that
+file and given to the auditors to verify rather than believe.**
+
+A-1 `RENDERER_VERSION 7` / `N_VIEWS 11` / `N_VIEWS_PER_ASSET 11` are written
+into the code while every artifact on disk carries twelve
+(`stage1.py:395`, asserted at `:463`; embedding `views` is `(12, 1280)`,
+sidecar `n_views 12`, render sidecar `renderer_version 6`). Measured by MASTER.
+Stage 1 therefore cannot read the existing corpus and `is_complete` calls all
+46,024 renders stale. With the re-render postponed, the view count has to become
+data-driven; that is a migration item, not a change to make silently.
+
+A-2 An uncommitted change had `render_asset` delete every existing
+`view_*.png` before moving the new set in. §十九 of the spec forbids deleting
+the twelfth view. **Reverted**; the patch is kept at
+`scratchpad/uncommitted_view11_deletion_20260903.patch`. It was never committed,
+never tested and never reviewed.
+
+A-3 `resolve_stage2.py` carries `pooling: "normalised_sum"` and
+`init_lambda: 9.0`, and `stage2_protocol.json`'s `decided_by` credits Kyzen with
+9.0. The spec calls both UNRESOLVED and forbids deciding them ourselves; the
+ledger records that Kyzen ruled 0.1 (DL-077) and that 9.0 was derived from one
+measurement with his veto pending (DL-078). **Two authorities conflict and
+MASTER does not choose.** Left explicit for Kyzen. Independently of the
+conflict, `decided_by` states a ruling that did not happen and must be corrected.
+
+**Dispatched, all read-only, PHASE 1 of the spec's §十八:** the ULIP2 engineer on
+the Objaverse data (questions 1-15, 18, 19), the integrator on the code
+(16, 17, 20-28), the ESSGNN engineer on ProcTHOR (29-32). MASTER answers the
+migration questions (33-40) once they return. Nothing in §十九's forbidden list
+has been started.
+
+---
