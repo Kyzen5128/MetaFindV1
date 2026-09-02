@@ -5507,3 +5507,55 @@ Questions 1, 2, 4, 5, 6, 7 remain open; he asked for each to be explained in
 plain words before deciding, which is done in the same reply.
 
 ---
+
+## DL-075 -- Kyzen rules on four of the seven questions; ESSGNN takes EGNN's QM9 values; Stage 1's epoch target is 250 after a 10-epoch check
+
+Date 2026-09-02. Replies to notebook section 12.6, verbatim where it matters.
+
+**Question 2, ESSGNN fields -- APPROVED** 「可以 先按照你的評估去設計」. The
+resolver's ARCH_DECISIONS now carry: n_layers 7 (was 4), pooling sum (was
+mean), mlp_structure egnn_appendix (was linear_silu_linear); hidden_dim 128,
+distance squared, use_io_projections true, layer_sharing independent
+unchanged. All three changed values are UPSTREAM FACTS from EGNN's QM9
+configuration, adopted with his approval; the paper states none of them.
+The four protocol artifacts are re-materialised with his stamp, and the
+Stage 2 smoke is re-run on the new architecture (result recorded below when
+it lands).
+
+**Question 3, epochs -- RULED** 「stage 1若沒問題了 從測個10沒問題會下降後 目標要跟
+ulip2論文一樣至少接近250」. Stage 1: a 10-epoch check first (loss must fall,
+dev-val must improve over the untrained backbone); if it does, the target
+epoch count is ULIP-2's 250 (`upstream/ULIP/main.py:47`, default 250, not
+overridden by the pretrain script; already the artifact's max_epochs). The
+Stage 2 recipe stays as approved in DL-074.
+
+**Question 5, eleven-view re-annotation -- APPROVED** 「ok」: pilot ladder
+(about 100 assets for prompt QA, then about 1,000 for a token / field /
+hallucination audit, then a test-subset retrieval pilot) before the full
+45,692; the same pass emits the canonical, paraphrase, single-view and short
+captions, and the single-view caption's separate image call is costed
+separately.
+
+**Question 6, ProcTHOR rendering -- APPROVED** 「ok」: re-render the 1,467
+ProcTHOR assets to match the Objaverse protocol the Stage 1 towers were
+trained on (12 views, 512 px, perspective camera, black composite). The
+current 11-view / 224 px / orthographic / white renders were made with
+retired constants. Order of the downstream chain, since each step reads the
+previous: re-render -> ProcTHOR asset captions (gemma from the new renders;
+approved 2026-08-27, never run) -> object text (with the corrected splitter
+and article) -> semantic edges -> node embeddings -> Stage 2 gallery index.
+
+**Question 1, backbone -- still open.** He asked for ULIP-2's own architecture
+to be checked before deciding; answered in the reply: ULIP-2 has exactly one
+point encoder and uses it for both sides of its own zero-shot evaluation.
+
+**Question 4, query observation -- still open.** He asked whether a
+one-view query means a one-in-twelve guess, and whether ULIP-2 trains that
+way. Answered in the reply: one row per asset, the query is not choosing a
+view; and ULIP-2 section 3.3 trains on ONE random view per step with that
+view's own caption. Sent to Codex for confirmation as he requested.
+
+**Question 7, node text -- explained**, no decision needed; it rides on
+question 6's chain.
+
+---

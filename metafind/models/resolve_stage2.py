@@ -134,16 +134,27 @@ ARCH_DECISIONS = {
     # ran. Switching families means switching this back.
     "coord_feat": "current",
     "layer_sharing": "independent",
-    "pooling": "mean",
+    # [Kyzen 2026-09-02, notebook section 12.6 item 2: 「可以 先按照你的評估去設計」]
+    # Three values change to EGNN's QM9 configuration, the task MetaFind's
+    # own citation of EGNN points at (drug design). The paper gives none of
+    # these numbers; each is an UPSTREAM FACT adopted with his approval, not
+    # a paper fact:
+    #   pooling        sum   EGNN's QM9 readout is sum-pooling
+    #                        (egnn appendix "Implementation details for QM9";
+    #                        repo qm9/models.py:83 torch.sum). Was mean.
+    #   n_layers       7     EGNN's QM9 depth (main_qm9.py:34). The previous
+    #                        4 was the N-body default, a different task.
+    #   mlp_structure  egnn_appendix  phi_e ends with a Swish and phi_x's last
+    #                        Linear has no bias, as EGNN's appendix specifies;
+    #                        phi_h keeps MetaFind's Eq. 14 form (residual
+    #                        outside). Was linear_silu_linear, which had been
+    #                        recorded as "what the code happened to build".
+    # hidden_dim 128 already equals QM9's; distance, projections and
+    # layer_sharing are unchanged.
+    "pooling": "sum",
     "hidden_dim": 128,
-    "n_layers": 4,
-    # [U-35] Recorded because G6 requires it and the report must state it,
-    # but ESSGNNConfig has no such field: metafind/models/essgnn.py builds one
-    # Linear-SiLU-Linear for every MLP. So this string DESCRIBES the code
-    # rather than configuring it, and _assert_matches_code below checks the
-    # two have not drifted -- a recorded value nothing reads is how U-14 and
-    # U-11 were being decided by dataclass defaults before n05b existed.
-    "mlp_structure": "linear_silu_linear",
+    "n_layers": 7,
+    "mlp_structure": "egnn_appendix",
 }
 
 
