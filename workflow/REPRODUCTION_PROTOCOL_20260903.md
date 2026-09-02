@@ -1039,9 +1039,24 @@ semantic-edge LLM relation gen → PAPER FACT
 `stage1.N_VIEWS_PER_ASSET = 11`（`metafind/train/stage1.py:395`，於 `:463` 對載入的
 `views` 矩陣做斷言）。磁碟上實測：render sidecar `renderer_version = 6`、12 views；
 embedding npz `views` shape `(12, 1280)`、sidecar `n_views = 12`。
-後果：**Stage 1 現在無法讀取現有語料**，`renders.is_complete` 也會判定全部 46,024 筆過期。
+後果：`renders.is_complete` 判定全部 46,024 筆過期。
 本文件問題 2 判定 exact camera protocol 為 UNRESOLVED、問題 3 禁止現在重渲，
 因此這組寫死的常數與本文件直接牴觸。屬於問題 40 的 migration 項目。
+
+**［更正 2026-09-03 晚，MASTER。上面原本寫「Stage 1 現在無法讀取現有語料」，那句話太寬。］**
+兩位稽核者從不同入口各測一半，合起來才是實情：
+
+* **Stage 1 的資料集與模型在 12 視角語料上完全正常。** 在 `image_aggregation: "mean"`
+  且沒有 query pack 的設定下，資料項根本沒有 `views` 這個鍵，
+  `:463` 的斷言位於 `_query_side` 內而該函式立刻回傳空字典，**永遠不會被觸發**。
+  Integrator 今天在 CPU 上實跑了一次完整的前向加反向，成功。
+* **擋住的是 `main()` 的一道前置檢查。** `check_embedding_sidecars`（`stage1.py:1466`，
+  由 `main()` 在 `:2272` 呼叫）把 `str(N_VIEWS_PER_ASSET)` 也就是 `"11"` 放進要比對的字典，
+  拿去比 sidecar 記錄的 `"12"`，抽 200 筆全部不合，`SystemExit`。
+
+正確的表述是：**不是「讀不了語料」，而是「一道守衛拿編譯期常數去比資料自己記錄的值」。**
+修法因此很小，而且正好是本文件 §三 要的形狀：讓視角數成為協定值與執行時的選擇。
+詳見 `workflow/PHASE1_AUDIT_20260903.md` 的 B 段與 D 段。
 
 **A-2　工作區有一段未 commit 的修改會刪掉第 12 張圖。**
 `metafind/data/render_blender.py`，`render_asset` 在搬入新圖前 `unlink` 掉

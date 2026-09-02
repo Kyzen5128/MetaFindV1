@@ -8,9 +8,9 @@
 | 段 | 題目 | 負責 | 狀態 |
 |---|---|---|---|
 | A | 1–15、18、19　Objaverse 資料 | ULIP2 Engineer | **完成，見下** |
-| B | 16、17、20–28　程式碼 | Integrator | 進行中 |
+| B | 16、17、20–28　程式碼 | Integrator | **完成，見下** |
 | C | 29–32　ProcTHOR | ESSGNN Engineer | **完成，見下** |
-| D | 33–40　migration | MASTER | 等 A、B |
+| D | 33–40　migration | MASTER | **完成，見下** |
 
 證據標籤：協定**設定**用規格 §一 的四類；**量測**用專案原有的
 `OBSERVED DATA` / `OBSERVED IMPLEMENTATION`。一個量測不是一個設定，兩套標籤不混用。
@@ -654,3 +654,543 @@ renders.is_complete -> complete=0   STALE=46024
 * **沒有打開任何一張 PNG。** 空白／暗／相異的計數是 sidecar 自己記錄的量測，不是重新量像素。
 * 沒有解壓 ULIP-2 官方 shard 去重新驗證每筆的視角數。
 * 「可用」是本專案的定義；MetaFind 自己的可用概念是否相同，無法從論文回答，維持 UNRESOLVED。
+
+---
+
+# B　程式碼（第 16、17、20–28 題）
+
+全部在 CPU 上實測，沒有動 GPU、沒有訓練、沒有寫入任何檔案。
+每個數字都是跑出來的，不是讀旗標讀來的。
+
+## Q16　`same_record` 在現行程式裡是什麼意思
+
+**它只有一個意思：同一份觀測。不是同一個 UID。**［OBSERVED IMPLEMENTATION］
+
+`same_record` 只是 `--query-observation` 的一個選項（`stage1.py:1955-1959`），
+全 repo 只出現六次（五次在 `stage1.py`、一次在測試），**不在任何協定產物裡**。
+
+兩道守衛（`stage1.py:2094-2102`）讓它與「有沒有 query pack」完全等價：
+沒有 pack 卻宣告 `second_observation` 會被拒；有 pack 卻宣告 `same_record` 也會被拒。
+沒有 pack 時，`split_embeds`（`:623-654`）在 `:646` 直接 `return gallery, gallery`
+——**同一個字典物件**，不是內容相等的兩個。實測 `query_embeds is gallery_embeds → True`。
+
+**「同一個 UID」這半邊不在這個字裡，也不在任何字裡。** 它是結構性的：
+每個 uid 一個資料項、`collate` 依序堆疊、損失用 `labels = torch.arange(B)`
+（`losses.py:179`）。**正確，而且由建構保證，但沒有任何東西斷言它。**
+這正是規格 §四／§十一 要求拆開的那兩件事——其中一半已經是分開的，
+但是靠意外而不是靠設計：**沒有一個 `positive_policy` 欄位可以讀。**
+
+## Q17　Query 與 Gallery 的觀測建構
+
+在磁碟上已解析的協定下（`image_aggregation: "mean"`，且**live tree 上沒有任何 query pack**）：
+
+| 模態 | Gallery 塔收到 | Query 塔收到（`same_record`） |
+|---|---|---|
+| 文字 | `embeddings/{uid}.npz["text"]`，fp16→fp32，1280 維。每個 uid 一句正典描述，離線用凍結的 ViT-bigG-14 編碼 | **同一個張量** |
+| 影像 | `embeddings/{uid}.npz["image"]` ＝ **12 張逐視角特徵的未正規化平均** | **同一個張量** |
+| 點雲 | `pointclouds/{uid}.npz` → `(10000, 6)` xyz+rgb，寫檔時就 `pc_norm` 過 → **每一步即時**過 `backbone.encode_pc` | **同一個張量，共用一次 `encode_pc` 呼叫** |
+
+實測形狀：`text (1280,)`、`image (1280,)`、`pc (10000, 6)`；批次 4 → `pc (4,10000,6)`。
+
+**規格 §三 D 的一個重要事實：Stage 1 從頭到尾沒有呼叫過 `encode_text` 或 `encode_image`。**
+兩座塔的文字與影像輸入都是離線快取讀取。實測 `requires_grad = False`，沒有 autograd 圖。
+
+`second_observation` 這條路**今天跑不起來**：`data/outputs/_probe/query_pack/` 是空的，
+包已在 9/2 搬到 `/mnt/data1`。
+
+## Q20　Stage 1 的最佳化器參數分組
+
+［OBSERVED IMPLEMENTATION，在 CPU 上用磁碟上已解析的協定實際建起來數的］
+
+```
+交給 weight_decay_groups 的具名候選：273
+ 群 0：102 個張量  80,610,176 參數  lr 5e-4  weight_decay 0.1  betas (0.9,0.98)
+ 群 1：171 個張量     127,488 參數  lr 5e-4  weight_decay 0.0
+
+ 群 0  point_encoder 81 / 32,425,856 · pc_projection 1 / 983,040
+       query.fusion 10 / 23,600,640 · gallery.fusion 10 / 23,600,640
+ 群 1  point_encoder 139 / 73,216 · query.fusion 16 / 27,136 · gallery.fusion 16 / 27,136
+
+ 273 個張量，依 id 去重也是 273（沒有重複）
+ 最佳化器裡有凍結參數嗎：沒有
+ 可訓練但漏掉沒進最佳化器的：0 個
+```
+
+* **全部只有一個學習率。** 沒有逐模組的 lr。`stage1.py:2364-2366` 每一步把 `lr_now`
+  寫進**每一個**參數群，所以兩群的 lr 永遠不可能分岔。
+* 分群規則是上游逐字照抄的名稱判準。稽核者數過：**零個排錯**。
+* `loss_trainable_state` 是空的：`learnable_temperature: false`，
+  所以 `logit_scale` 是 buffer 不是 Parameter，τ 固定 0.5。
+* **後果**：`mask_tokens` 與 `modality_pos` 是 `(3, 1280)`，`ndim ≥ 2`，
+  所以它們落在**權重衰減 0.1 那一群**。見發現 M-3。
+
+## Q21–Q24　誰在訓練、誰凍結　［全部實測］
+
+| | 張量數 | 可訓練 | 參數量 | 模式 |
+|---|---|---|---|---|
+| PointBERT（`point_encoder`） | 220 | **220（100%）** | 32,499,072 | `train`，DropPath 0.1 生效 |
+| `pc_projection` | 1 | 1 | 983,040 | — |
+| OpenCLIP 文字 transformer | 384 | **0** | 629,678,080 | `eval` |
+| OpenCLIP `token_embedding` | 1 | **0** | 63,242,240 | `eval` |
+| OpenCLIP 視覺塔 | 584 | **0** | 1,844,907,264 | `eval` |
+
+文字與影像編碼器有**兩道**獨立屏障：`requires_grad = False`，
+而且 `encode_image` / `encode_text` 另外包在 `torch.no_grad()` 裡
+（除非 `train_scope="full"`，而 `arm_config_hash` 會拒絕那個值）。
+再加上第三道：**Stage 1 根本沒叫過它們。**
+
+## Q22　PointBERT 到底有沒有收到梯度：**有，而且驗了兩次**
+
+稽核者先照指示查既有證據：
+
+| 來源 | 結果 |
+|---|---|
+| `tools/probes/` | **沒有定論。** 只有 Stage 2 的煙霧測試提到梯度，沒測 Stage 1 的 PointBERT |
+| `tests/` | `test_grad_checkpointing.py` 確實反向穿過真的 PointBERT 區塊，但用的是合成的 `out.sum()` 損失，不是 Stage 1 的損失路徑；`test_backbone_scope.py` 用假的替身。**兩個都不算** |
+| `output/look/` | 空的，只有 README |
+| **封存的量測** | **有定論。** `/mnt/data1/…/look/diag_modality_norms.json`［OBSERVED DATA］ |
+
+```
+未載入 checkpoint 的編碼器   text 37.130943640239366  image 40.22924563018678  pc  27.860065006689254
+訓練過的（ladder/e25_500w）  text 37.130943640239366  image 40.22924563018678  pc 200.5473794034238
+```
+
+文字與影像**到小數第十五位完全相同**，點雲的範數是 7.2 倍。點雲那條路上有東西動了。
+
+稽核者接著自己讀 checkpoint 排除「只有投影層動」的可能：
+
+```
+point_encoder 的浮點張量：224 / 224 全部與 ULIP-2 原版不同
+最大絕對差 0.4444，最大相對差 0.6845
+pc_projection 也動了（最大絕對差 0.0232）
+另存了 6 個 BatchNorm 的 buffer
+```
+
+最後在**現行程式**上實跑一次前向加反向（CPU、批次 2、真實呼叫序列、不做最佳化步、不寫檔）：
+
+```
+loss 0.439766
+ point_encoder（PointBERT）  220 張量  220 有梯度  220 非零  梯度範數 0.640508
+ pc_projection                 1         1          1        梯度範數 0.232075
+ OpenCLIP 文字 transformer   384         0          0        梯度範數 0
+ OpenCLIP 視覺塔             584         0          0        梯度範數 0
+ query.fusion                 26        26         26        梯度範數 0.771813
+ gallery.fusion               26        26         25        梯度範數 0.619367
+ query.fusion.mask_tokens      1         1          1        梯度範數 0.122201
+ gallery.fusion.mask_tokens    1         1          0        梯度範數 0        ← 見 m-4
+```
+
+**規格 §十五 與 PHASE 5 要求的「證明 PointBERT 真的收到梯度」，今天結清，而且沒用到 GPU。**
+
+## Q25　Fusion_Q 與 Fusion_G 是不是不同的參數物件
+
+**是不同的。舊的 `Q-BUILDMODEL` 缺陷已經關閉——但不是在你會去看的那個地方。**
+
+```
+id(model.query.fusion)   = 136177021763536
+id(model.gallery.fusion) = 136177021762960
+query.fusion IS gallery.fusion : False
+model.fusion_is_tied()         : False
+有共用的參數張量嗎             : 沒有（26 對 26，id 集合交集為空）
+query.fusion.cfg IS gallery.fusion.cfg : True   ← 同一個「設定」物件
+```
+
+`stage1.build_model`（`:1858-1861`）**仍然把同一個 `FusionConfig` 物件傳給兩座塔**，
+那正是舊缺陷的字面形狀。它今天無害，是因為兩座塔各自呼叫 `ModalityFusion(cfg)`，
+從一份設定建出兩套獨立參數。
+
+訓練好的 checkpoint 也獨立證實了：`tower_trainable_state` 有 26 個 `query.*` ＋
+26 個 `gallery.*`，而兩邊的 `mask_tokens` 逐列餘弦是 0.044 / −0.053 / 0.050，
+統計上正交——兩次獨立初始化、各自訓練。
+
+**但這是「現在是對的，沒有東西保證它」那一類。** `fusion_is_tied()` 存在而且是個好檢查，
+可是 `build_model` 從來沒呼叫它，Stage 1 路徑上也沒有任何斷言說
+「在 `shared_backbone_separate_fusion` 之下不得綁定」。
+
+## Q26　共享的 ULIP 骨幹實際上怎麼實作
+
+**三種不同機制，只有一種是模組共享。**
+
+1. **點編碼器——靠物件identity共享。** `stage1.main` 只建**一個** `ULIPBackbone`（`:2155`）。
+   `MetaFindDualTower` **裡面根本沒有骨幹**，只有 fusion 模組。
+   `split_embeds` 呼叫一次 `encode_pc`，把同一個輸出張量交給兩座塔。
+   **共享不是某個設定值被遵守，而是第二個物件不存在。**
+2. **文字／影像——靠快取identity共享，不是模組identity。** Stage 1 裡兩座塔都沒跑 CLIP，
+   讀的是同一個 `.npz`。「同一個空間」這個性質成立是因為**同一個檔案**，不是同一個模組。
+3. **`tower_sharing` 只管 fusion。** `shared_backbone_separate_fusion` 與 `fully_separate`
+   產生**完全相同**的 fusion 結構；這個欄位對骨幹只是名義上的。
+   `stage1.py:1989-1996` 直接**拒絕** `fully_separate`——那個拒絕是這個欄位沒有變成謊言的唯一原因。
+
+磁碟上 `stage1_protocol.json` 的 `tower_sharing` 是 `shared_backbone_separate_fusion`，
+與規格 問題 1 的 `AUTHOR EVIDENCE / MAINLINE` 相符。
+
+**checkpoint 怎麼存**（從 `stage1_best.pt` 讀出）：
+
+```
+backbone_trainable_state  227 張量 = 226 個 point_encoder.* ＋ pc_projection（33,483,394 參數）＋ 6 個 BN buffer
+tower_trainable_state      52 張量 = 26 個 query.fusion.* ＋ 26 個 gallery.fusion.*（47,255,552 參數）
+loss_trainable_state        0 張量
+open_clip                  不存——從釘住的 OpenCLIP 權重重建
+```
+
+共享骨幹**只出現一次**，沒有塔的前綴。checkpoint 的 sha256 與紀錄完全相符。
+
+## Q27　Stage 1 的損失是不是只有 q→g：**是**
+
+```
+bidirectional=False -> 鍵 ['acc_q2g', 'loss', 'loss_q2g', 'temperature']
+  out["loss"] IS out["loss_q2g"]  : True   ← 同一個 Python 張量物件
+  沒有 loss_g2q，沒有 acc_g2q
+bidirectional=True  -> loss == 0.5*(loss_q2g + loss_g2q) : True
+  同樣的輸入：1.761543（Stage 1）對 1.763730（雙向）
+logit_scale 是 buffer 不是 Parameter : True     τ = 0.5
+```
+
+`build_model` 把 `bidirectional=False` 寫死（`:1870`），沒有任何協定產物能覆蓋。
+`losses.py:188-191` 在建構 g→q 分支之前就回傳了，所以連轉置的 logits 都不存在。
+與規格 §三 G 的 PAPER FACT 及本專案附錄 B 對 Eq. 5 的核對一致。
+
+## Q28　遮罩實作
+
+**獨立、p = 0.3——實測 200 萬次抽樣，種子 20260816：**
+
+```
+P(遮住 text)  = 0.30030      P(遮住 image) = 0.29972      P(遮住 pc) = 0.30045
+P(三個全遮)   = 0.02699      理論 0.30³ = 0.02700
+P(一個都不遮) = 0.34270      理論 0.70³ = 0.34300
+P(text 且 image) = 0.09004   P(text 且 pc) = 0.09005   P(image 且 pc) = 0.09007   獨立 → 0.09000
+allow_empty=False -> P(全遮) = 0.00000
+```
+
+**兩兩獨立與三方獨立都成立，2.7% 與 0.3³ 到小數第四位相符。**
+`allow_all_masked: true`，所以全遮是允許的，沒有條件重抽，與規格 §三 F 主線相符。
+
+**遮住的模態怎麼表示：**
+
+```
+mask_tokens 是 nn.Parameter，形狀 (3, D)，requires_grad True，非零
+被遮的欄位 == mask_tokens[i]     True
+整列全遮 == mask_tokens          True（輸出有限，沒有 NaN）
+沒被遮的欄位 == 真實向量          True
+zero_pad=True -> 被遮欄位是零     True（Table 3 的消融，正確地分開）
+```
+
+**只遮 query。** `stage1.py:2354-2355` 只把 `present` 傳給 query 塔；
+`GalleryTower.forward` 在任一模態缺席時**直接拋錯**。
+**模態完整性是被呼叫端強制的，不是呼叫端供應的。這是對的形狀。**
+
+**但是見 M-3。**
+
+## 附錄 A-1 的裁決（本節與 A 段的裁決合併後的最終版）
+
+**兩位稽核者各對一半，而且不衝突——他們測的是不同的入口。**
+
+* **Integrator 從 `Stage1Dataset` 直接建，繞過了 `main()`。** 在
+  `image_aggregation: "mean"` 且沒有 query pack 的設定下，
+  資料項的鍵是 `['image', 'pc', 'text', 'uid']`——**根本沒有 `views`**。
+  所以那個 11 視角的斷言（`:463`）永遠不會被觸發，而且它位於 `_query_side` 內，
+  在沒有 pack 時該函式立刻回傳空字典。**模型與資料集在 12 視角語料上完全正常，
+  今天實測跑完了一次前向加反向。**
+* **ULIP2 稽核者走的是 `main()`。** `main()` 在 `:2272` 呼叫
+  `check_embedding_sidecars`，而該函式（`:1466-1481`）把
+  **`str(N_VIEWS_PER_ASSET)` 也就是 `"11"`** 放進要比對的字典，
+  拿去比 sidecar 記的 `"12"`。抽 200 個，**200 個全部不合**，`SystemExit`。
+
+MASTER 自己開檔確認了這一點（`stage1.py:1480`）：
+
+```python
+want = {"text_serialization": str(encoding["text_serialization"]),
+        "aggregation":       str(encoding["image_aggregation"]),
+        "encoder_version":   str(ENCODER_VERSION),
+        "n_views":           str(N_VIEWS_PER_ASSET)}   # ← 編譯期常數，不是協定值
+```
+
+**最終表述，取代 `REPRODUCTION_PROTOCOL_20260903.md` 附錄 A-1 的措辭：**
+
+> Stage 1 的**資料集與模型**在現有 12 視角語料上完全可用。
+> 擋住的是 `main()` 的一道前置檢查，它拿**編譯期常數**去比**資料自己記錄的值**。
+> 另外 `renders.is_complete` 判定 46,024 筆全部過期，那個判定**本身是真的**
+> （語料確實是在另一個協定下渲染的），只是我們並不打算依它行動。
+> 所以這不是「讀不了語料」，而是「一道守衛拿錯了比較對象」。
+
+一個與修法有關的上游事實［UPSTREAM FACT］：上游的相機清單是寫死的十二筆、三圈各四，
+傳 `--num_images 11` 會取**前十一筆**（兩整圈加第三圈的四分之三），是不對稱的一組。
+**所以「直接丟掉第十二張」不等於一個像樣的 11 視角協定。**
+
+## 附錄 A-3 的裁決：**成立，兩個值都是活的**
+
+稽核者追到消費端而不是相信檔案：
+
+```
+stage2_protocol.json["init_lambda"] = 9.0
+  -> stage2.py:797-798（缺鍵就拋錯）-> build_model(..., init_lambda=...) :805
+  -> DualTowerConfig.init_lambda -> QueryTower.layout_weight = nn.Parameter(9.0)
+  -> Eq. 6 的 fused + λ·layout                                          【活的】
+
+essgnn_arch_protocol.json["pooling"] = "normalised_sum"
+  -> ESSGNNConfig.from_protocol（essgnn.py:303）-> 讀出分支 essgnn.py:657-672   【活的】
+```
+
+衝突照列，**稽核者不裁，MASTER 也不裁**：
+
+| 來源 | 說法 |
+|---|---|
+| `REPRODUCTION_PROTOCOL_20260903.md` 問題 8 | λ 初值 **UNRESOLVED**、pooling **UNRESOLVED**；§十九 禁止自行決定 |
+| 帳本 DL-077 item 8 | Kyzen 裁 甲：pooling = 正規化總和，**λ 初值 0.1** |
+| 帳本 DL-078 | 9.0 ＝ 0.1 × 量到的融合查詢範數 91.4，**「Kyzen 可否決」** |
+| `resolve_stage2.py` ＋ 兩個 JSON | `init_lambda: 9.0`、`pooling: "normalised_sum"` |
+| 兩個 JSON 的 `decided_by` | 「Kyzen（2026-09-02，item 8：pooling normalised_sum；**init_lambda 9.0** ＝ 0.1 × 量到的 91.4）」 |
+
+**`decided_by` 記載了一件沒有發生過的裁決。** Kyzen 裁的是 0.1。
+pooling **確實**是他裁的，那一半歸屬正確。
+
+## 程式碼段的發現
+
+**M-1（重大，接縫）　有一整層讀協定建模型的程式碼，訓練時完全沒有經過。**
+`stage1_config.py:275-413` 的 `Stage1RuntimeConfig.from_protocols`
+**只有兩個測試檔在用**。真正的訓練器在 `stage1.build_model` 裡自己建設定。
+那一層裡以下全部是訓練路徑上的死碼：`gallery_backbone`（給 `fully_separate` 用的第二個骨幹設定）、
+`sample_present_mask`、`may_use_cached_text_image`、`cache_layout`、`d1_is_active`、`exceeds_paper`，
+以及它自己那條 `train_scope = "full" if actual_scope == "trainable"` 規則（`:367`）——
+那是對同一個問題的**另一種**解析，與 live 路徑在 `stage1.py:2154` 用的不同。
+**這是本專案典型失敗模式的字面重現：一層協定解析寫好了、測試全綠、而 live 路徑不讀它。**
+今天沒出事，只因為 `stage1.py:1989` 用手寫的方式拒絕了 `fully_separate`。
+
+**M-2（重大，接縫）　query pack 記下來的取圖規則與實際執行的規則已經不一致。**
+`tools/make_query_pack.py` 把 `"rule": "views[uid_seed(uid) % 12]"` 寫進清單；
+`QueryPack.view_index`（`stage1.py:352-362`）實際執行的是 `% N_VIEWS_PER_ASSET` 也就是 **% 11**。
+那個字串會進 `QueryPack.identity()` 再進 `arm_config_hash`，
+**於是實驗臂的雜湊會描述一個這次執行從未做過的抽樣。**
+`make_query_pack.held_out_view` 是死碼（定義了、從未呼叫）。
+
+**［補充，稽核者後續實測，證據等級從 OBSERVED IMPLEMENTATION 升為 OBSERVED DATA］**
+這不是「重建才會出事」的假設——**封存起來的兩份清單白紙黑字已經記錯了**：
+
+```
+/mnt/data1/kyzen/archive_20260902_pre11view/probe/query_pack/query_pack.json
+/mnt/data1/kyzen/archive_20260902_pre11view/probe/query_pack/query_pack_textimage.json
+  image   {"rule": "views[uid_seed(uid) % 12]", ...}
+  gallery "UNCHANGED: canonical text, 12-view mean image, canonical pc"
+```
+
+把任一份 pack 從封存拿回來、用今天的程式跑，產生的實驗臂雜湊會描述一次沒有發生過的抽樣。
+**同一次檢查還關掉了一個原本列為「沒有驗證」的項目，並確認它是一個真的缺口**：
+兩份清單裡**沒有任何一個分片紀錄帶 `ulip2_ckpt_sha`**（文字與點雲分片全是 `False`）。
+陣列位元組有被雜湊進實驗臂，所以 query 側與 gallery 側的文字編碼器若分岔，
+系統會**偵測**到但永遠不會**指名**是編碼器換了。
+順帶通過一項一致性檢查：`query_pack_textimage.json` 的點雲分片是 0，
+與 `stage1_best_ckpt.json` 記的 `arms: ["text", "image"]` 相符。
+
+**M-3（重大，ULIP2）　可學的遮罩向量被放進權重衰減 0.1 那一組，訓練完等於沒學。**
+`mask_tokens` 是 `(3, 1280)`，`ndim ≥ 2`，所以與注意力權重矩陣同組。訓練好的 checkpoint 實測：
+
+```
+初始化的期望值：std 0.02、維度 1280 -> 每列範數 0.7155
+query.fusion.mask_tokens   逐列範數 [0.7209, 0.7358, 0.7074]  std 0.02017
+gallery.fusion.mask_tokens 逐列範數 [0.6977, 0.7381, 0.6823]  std 0.01975
+```
+
+**跑完一整輪訓練之後，遮罩向量與它剛初始化時無法區分。**
+再對照封存的量測：遮罩向量的範數除以真實模態向量的範數＝
+**0.0194（文字）／0.0183（影像）／0.0123（點雲）**。
+
+論文說「用遮罩嵌入**而不是**補零」；名義上實作了，數值上那個替身只有真實向量的約 2%。
+**最佳化器正在把論文明講的機制，拉向論文自己說比較差的那個消融。而且沒有任何東西記錄這件事。**
+這是 Kyzen 的裁量，不是工程師的。
+
+**m-4（次要）** `gallery.fusion.mask_tokens`（3,840 個參數）在最佳化器裡，
+但**梯度恆為零**（實測），因為 gallery 從來不被遮。
+checkpoint 裡的死重量，而且如果哪天有人把 gallery 也走遮罩路徑，它會安靜地變成活的。
+
+**m-5（次要，接縫）** `stage1_protocol.json` **沒有 `train_scope` 這個鍵**。
+live 的值來自 `stage1.py:2154` 的 `.get(..., "point_encoder_and_fuser")` 預設，
+然後被寫進 `arm_config_hash` 與 checkpoint 紀錄，**彷彿它是解析出來的**。
+行為正確；來源宣稱有一個沒有任何產物記錄的決定。
+
+**m-6（次要）** `ulip_backbone.py:234-236` 為了取回 `self.preprocess`，
+第二次呼叫 `open_clip.create_model_and_transforms("ViT-bigG-14", pretrained=None)`，
+**每次建骨幹都配置一個完整的、隨機初始化的 25 億參數模型**
+（日誌會出現「No pretrained weights loaded … Model initialized randomly」）。
+Stage 1 路徑上用不到，但那是真的記憶體與每一份日誌裡的一句誤導。
+
+**i-7（提示）** `renders.py:99-100` 的註解寫 `render_blender.N_VIEWS`「(12)」，實際是 11。
+
+**i-8（提示，好消息，值得釘住）** 找到四個真正由**被呼叫端**保證的性質，
+而它們本來都很容易寫成「由呼叫端供應的前提」：
+`GalleryTower.forward` 拒絕缺席的模態；每次存檔都跑
+`assert_checkpoint_covers_optimizer`；`load_stage1_checkpoint` 逐模組檢查涵蓋率；
+`QueryPack.require` 是拒絕而不是回退。**其餘的程式應該照這個形狀寫。**
+
+**i-9（提示）** 程式裡沒有 `positive_policy` 這個字。同 UID 配對是結構性的、正確的、
+而且沒有任何東西斷言它。**如果 §四 的 `positive_policy: same_uid` 變成一個設定欄位，
+它必須要有消費端，否則第一天就會變成 M-1 那種死碼。**
+
+## 程式碼段沒有驗證的
+
+* **5e-4 / 5 輪的主線配方從來沒有在這份程式上完整跑完過。** 所有檢查過的 checkpoint
+  都是 12 視角語料上 lr 2.5e-4 的實驗臂。梯度證明是一次前向反向，不是一次訓練。
+* `second_observation` 沒有被執行過（沒有 pack）。M-2 是讀原始碼得到的，不是跑出來的。
+* query pack 文字臂的編碼器身分：分片紀錄沒有存 `ulip2_ckpt_sha`，
+  所以差異會被**偵測**到但不會被**指名**。
+* `ULIP2_PointBERT_Colored` 裡的 ViT-bigG-14 是否載入真實預訓練權重（對 Stage 1 無關，對重建 n06 有關）。
+* `fully_shared` 沒有被建起來過。
+
+---
+
+# D　Migration（第 33–40 題）　MASTER
+
+以下是 MASTER 綜合三段稽核後的答案。**沒有任何一項已經執行。**
+規格 §二十一 說要等 Kyzen 看完 audit 才批准，所以這一段是提案。
+
+## Q33 / Q34　建議修改哪些檔案，各改什麼
+
+依「不可逆程度」由低到高排列。**第 1 到 4 項不動任何資料，只讓程式與磁碟上的事實對齊。**
+
+| # | 檔案 | 改什麼 | 為什麼 | 分類 |
+|---|---|---|---|---|
+| 1 | `metafind/train/stage1.py:1480` | `check_embedding_sidecars` 的 `n_views` 改成比對**編碼協定記錄的值**，不是 `N_VIEWS_PER_ASSET` 這個編譯期常數 | 這是唯一擋住 Stage 1 的東西。守衛的用途是「快取與協定不一致就拒絕」，而視角數是協定值不是程式常數 | bug fix |
+| 2 | `data/outputs/stage1_encoding_protocol.json` | 加入規格 §五 要求的完整 `view_aggregation` 區塊：`selected_view_ids [0..11]`、`pre_normalize_each_view false`、`method mean`、`post_normalize false`、`n_views 12`、`aggregation_version` | 這四個欄位描述的是**現在磁碟上已經發生的事**，只是從來沒被寫下來。規格明說 `method: mean` 一個欄位不夠 | 記錄既有行為 |
+| 3 | `metafind/train/stage1.py:395` 及三個消費端 | `N_VIEWS_PER_ASSET` 從模組常數改成從協定／sidecar 讀 | 讓「用哪些視角」成為執行時決定，正是規格 §三 要的 | implementation choice |
+| 4 | `metafind/data/splits.py:322-329` | 排除名單改讀 `groups.*.uids` | 現在扣掉的是九個非 uid 字串，說明字串宣稱的安全性質不存在 | bug fix |
+| 5 | `data/outputs/stage2_protocol.json`、`essgnn_arch_protocol.json` | `decided_by` 改為：pooling 歸 Kyzen（DL-077），`init_lambda 9.0` 歸「由量測推導、待 Kyzen 裁示」 | 現在記載了一件沒發生的裁決 | 來源更正 |
+| 6 | `metafind/models/stage1_config.py` 或 `stage1.py` | 二選一：讓 `build_model` 真的走 `Stage1RuntimeConfig`，或把該層明確標記為非訓練路徑 | M-1：一整層綠的測試在測一條沒人走的路 | 接縫修復 |
+| 7 | `tools/make_query_pack.py:92,108,412` | 取圖規則字串與實際執行對齊；刪掉或接上 `held_out_view` 死碼 | M-2：重建 pack 的那一刻雜湊就會說謊 | bug fix（PHASE 4 再做） |
+| 8 | `metafind/data/renders.py:99`、`semantic_edges.py:11,97`、`render_blender` 文件字串 | 更正過期註解（12 vs 11、Qwen vs gemma、「n08 還沒跑」） | 讀者會據此下錯結論 | 文件 |
+
+**沒有列進來、而且刻意不動的**：`render_blender.py` 的 11 視角相機補丁與 `RENDERER_VERSION 7`。
+規格說相機協定 UNRESOLVED、現在不重渲，所以那段程式描述的是一個**尚未執行也未獲批准**的協定。
+留著不動是誠實的：語料是 v6，程式知道自己會產生 v7，兩者不同是事實。
+`is_complete` 回報全部過期**也是真的**，只要沒有人去跑 n04 就不會有事。
+
+## Q35　Migration 策略
+
+**三個波次，每一波都可獨立回退。**
+
+```
+波次一（純程式，不碰資料）        上面第 1、2、3、4、5、8 項
+  → 跑 pytest 全套
+  → Stage 1 --limit 128 --epochs 1 煙霧（要 Kyzen 放行 GPU）
+  → 通過即代表：Stage 1 可在現有 12 視角語料上訓練
+
+波次二（建清單，只讀既有產物）    規格 §四 的 manifest
+  → assets / images / captions / pointclouds 四張表，1 UID = 1 列
+  → 過濾與隔離紀錄、切分清單與 SHA256
+  → 純 CPU，不重算任何特徵
+
+波次三（Dataset API）             規格 §十一
+  → positive_policy: same_uid（並且要有消費端，否則就是 M-1 重演）
+  → query_observation / gallery_observation 逐模態政策
+  → view selector 與 view_aggregation 設定
+  → gallery_test / gallery_full（**兩者已經支援**，只需接上新的觀測政策）
+```
+
+**波次二與波次三不需要重算任何特徵**，這是這次盤點最大的發現，見 Q39。
+
+## Q36　向後相容
+
+* 第 1、3 項改完之後，**現有的 45,692 份向量檔全部繼續有效**。
+  改的是比對的對象，不是資料。
+* 第 2 項是**新增**協定欄位。舊的 arm 雜湊會改變，所以新舊 run 的雜湊不可直接比對——
+  這是對的，因為協定確實變了（多記了四個欄位）。**既有 checkpoint 不受影響。**
+* 第 4 項會讓 `admitted_uids()` 真的開始扣 uid。**今天結果不變**（那 332 個本來就沒標註檔），
+  所以 45,692 這個數字不動，切分不動。
+* 第 5 項只改字串，不改任何數值。
+
+## Q37　對既有 checkpoint 的影響
+
+**沒有影響。** `stage1_best.pt`（第 24 輪、`train_scope point_encoder_and_fuser`、
+80,738,946 個可訓練參數、以 dev_val R@1 0.9321 選出）不會失效。
+
+但要記住兩件**已經存在**的限制，與這次遷移無關：
+
+* 它的紀錄帶 `code_dirty: true`，所以它**不精確對應**任何一個 commit。
+* 它是在 12 視角語料、`same_record` 觀測、lr 2.5e-4 下訓練的。
+  規格 §十六 說得很清楚：換觀測、換視角政策這些是**訓練期**的改動，
+  拿同一顆 checkpoint 換評估設定只能叫 inference sensitivity，不能當成換過訓練協定。
+
+## Q38　對既有特徵快取的影響
+
+**全部保留，沒有一個需要作廢。**
+
+| 快取 | 影響 |
+|---|---|
+| `embeddings/*.npz`（45,692） | **不作廢。** 它已經同時存了 `views (12,1280)`（逐視角）與 `image (1280,)`（平均） |
+| `pointclouds/*.npz`（46,052） | 不作廢 |
+| `gallery_index_…npz`（45,692） | 不作廢。但它**沒有 L2 正規化**（範數 53.9–112.1），評估時要確認相似度計算有處理 |
+| ProcTHOR 的四個 | 不受 Objaverse 端影響 |
+
+規格 §十 要求每個 cache 帶 `valid_for_train_scope`。現在沒有這個欄位——建議在波次二補上，
+標成 `[point_encoder_and_fuser, fuser_only]`，因為文字／影像凍結的前提只在這兩個 scope 下成立。
+
+## Q39　需要重新計算的項目：**幾乎沒有**
+
+**這是這次盤點最重要的結論。**
+
+規格 §七 要求「12 張各自獨立 encode，逐視角特徵可以 cache，禁止只保存平均」。
+
+**這件事已經做完了。** 每一份 `embeddings/{uid}.npz` 都同時帶：
+
+```
+views  (12, 1280) float16   ← 12 張逐視角特徵，全部在
+image  (1280,)    float16   ← 未正規化的平均，另存
+text   (1280,)    float16
+```
+
+45,692 份全部如此，零例外（全表頭掃描）。
+**所以 PHASE 3 的「12-view frozen image features」不需要跑，它在磁碟上已經存在。**
+單視角、留出視角、不相交子集這些實驗，全部可以從現有檔案直接切，不必重新編碼。
+
+真正需要重算的只有兩項，而且都不在 Objaverse 端：
+
+| 項目 | 什麼時候需要 | 成本 |
+|---|---|---|
+| ProcTHOR 節點文字 ＋ 語意邊（**必須綁一起**） | 只有在決定要修那 146 個字串時 | 613 次 LLM 呼叫，約 4 分鐘 GPU，加約 1 分鐘重新編碼 |
+| 原始／來源點雲層（規格 §九 要兩層，我們只有一層） | 只有在 Kyzen 要求補齊時 | 整個 n03 對 351 GB 的 GLB 重跑 |
+
+**絕對不要只跑其中一半的 ProcTHOR：** 只重跑文字不重跑邊，
+會讓 11.56% 的邊安靜地變成「查無資料」，程式不報錯，Table 2/3 全錯。
+
+## Q40　逐項估算
+
+| 項目 | CPU | GPU | 硬碟 | 時間 |
+|---|---|---|---|---|
+| 波次一，第 1–5、8 項（純程式） | 單核 | 無 | 0 | 改動數十分鐘，pytest 約 3 分 |
+| Stage 1 煙霧（`--limit 128 --epochs 1`） | 少 | **需要**，載 9.5 GB 骨幹 | 約 330 MB checkpoint | 約 5–10 分 |
+| 波次二 manifest（§四四張表） | 單核掃 46,052 個 sidecar | 無 | 約 50–100 MB JSON | 約 10–20 分 |
+| 波次三 Dataset API（§十一） | — | 無 | 0 | 純實作 |
+| 修 ProcTHOR 節點文字 ＋ 邊 | 少 | **需要**，載 gemma 23 GB | 覆寫約 21 MB | 約 5 分（613 對）＋ 模型載入 |
+| 補原始點雲層（§九） | 重，46,052 個 GLB | 可能需要 | **新增數十 GB** | 數小時 |
+| Stage 1 正式訓練（若批准） | — | **需要** | 每個 arm 約 330 MB | 依輪數，先前 25 輪的階梯有紀錄可查 |
+
+**Objaverse 的 46K 重渲不在這張表上，因為規格禁止。** 若日後解除，成本是先前估的約 43 小時。
+
+## 需要 Kyzen 裁示的四件事
+
+**一、λ 初值 9.0 與 ESSGNN 的 normalised_sum。** 兩個權威衝突：
+你 9/2 裁了 pooling 與 λ=0.1，新規格說兩者都 UNRESOLVED 且禁止自行決定，
+而程式裡跑的是推導出來的 9.0。**MASTER 不選。**
+（`decided_by` 那句假的歸屬，無論你怎麼裁都要改。）
+
+**二、253 個渲染壞掉的已收錄資產**，其中 11 個幾乎全空白，47 個異常落在封存的測試集裡。
+它們現在是正式的檢索候選，影像特徵是從空白畫面算出來的。
+選項：留著並在報告裡寫明；或移入隔離並記為語料變更（會改變 45,692 這個數字與切分）。
+
+**三、遮罩向量在權重衰減組裡（M-3）。** 訓練完之後它與初始化無法區分，
+只有真實向量的約 2%。論文說「遮罩嵌入而不是補零」，我們名義上做到、數值上接近補零。
+選項：移出衰減組（形狀上更接近論文意圖）；或維持現狀並在報告裡記錄這個量測。
+
+**四、ProcTHOR 節點文字要不要修。** 修＝4 分鐘 GPU，但必須與語意邊綁在一起做。
+不修＝磁碟上永遠是 `a c d` / `a t v stand` / `a apple` 這種字串。
+規格說節點文字建構本身是 UNRESOLVED，所以這也可能等到那題有結論再一起做。
+
+## MASTER 對規格 §二十 的自我評估
+
+四十題全部有答案，其中三十二題由三位稽核者實測，八題（33–40）由 MASTER 綜合。
+**沒有任何一題是靠推測填的。** 沒有答案的地方都寫成 UNRESOLVED 或「沒有驗證」。
+
+規格 §十九 的禁止清單，逐項確認**全部沒有做**：
+沒有 46K 重渲、沒有全量標註、沒有 ProcTHOR 全渲、沒有刪第 12 張、
+沒有只留平均（本來就沒有）、沒有覆寫原始資料、沒有刪任何 cache、
+沒有把觀測政策寫死、沒有把 gallery 範圍固定成任何一邊、
+沒有用固定點雲向量取代可訓練的 PointBERT、沒有自行產生語意邊、
+沒有自行決定 pooling 或 λ 初值。
