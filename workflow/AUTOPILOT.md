@@ -53,42 +53,67 @@ engineer、reviewer 都不准派 Codex，也不准把「Codex 過了」寫進任
 - 每一行事件都會叫醒 MASTER；MASTER 讀完就做下一步，不等人催
 - 到人工關卡：`PushNotification` 通知 Kyzen 一句話，並把要看的東西放 `output/look/`
 
-## 四、接下來的流程（十一視角語料）
+## 四、目前的流程（2026-09-03 起，依 `REPRODUCTION_PROTOCOL_20260903.md`）
 
-**⏸ 全停中（Kyzen 2026-09-02 晚：「先全停 codex 跟 gpt有其他建議」）。**
-下面是停之前的隊列，等他帶 Codex／GPT 的建議回來再定。沒有他的話不准重開。
-
-```
-[停在這]  ulip2-engineer   只做完了「清掉舊第 12 張圖」的程式碼（未 commit、未測試、未審）
-                           chain script、試渲檢查器、兩個 uid 檔都還沒寫（撞到額度上限死掉）
-          ulip2-reviewer   撞到額度上限死掉，沒有結論
-          essgnn-reviewer  跑完了：CHANGES REQUIRED，BLOCKER 0 / MAJOR 3
-[重開後]  MASTER commit → nohup 開 chain → 掛 Monitor
-[chain] 0 前檢查（GPU 空、版本 7、11 視角、硬碟夠）
-        1 試渲 6 件 → 檢查 sidecar 與相機 → 拼圖放 output/look/eleven_view_pilot/
-        2 全語料重渲 46,052 件（估 ~43 小時，3.36 秒/件）→ 檢查數量與隔離率
-        3 標註第一階 100 件（gemma，寫到 bakeoff arm，不碰語料）→ 放 output/look/
-        停 ← 這裡要 Kyzen 的眼睛（他 8/24 定的：跑完他全審，標記的我修）
-[之後]  標註第二階 1,000 → 全語料標註（~80 h）→ n06 編碼（~2–3 h）→ ProcTHOR 同協定
-        → query pack → Stage 1 十輪檢查 → 250 輪
-```
-
-**順序修正**：早上的計畫把「n06 編碼」排在「重新標註」前面，錯了。n06 看到任何一筆
-標註的 `image_identity` 跟渲染不同就整個停（rc 3）；重渲後 45,692 筆全部都會不同。
-所以一定是 渲染 → 標註 → 編碼。已改 `workflow/DATA_PLAN_PAPER_FIRST.md`。
-
-## 五、這條 chain 會動到什麼（DL-030 要求的八項）
+**十一視角重渲已取消排程。** 規格 問題 3 判定：相機協定 UNRESOLVED，現在重渲等於把猜測
+固化，若之後猜錯要全部重跑。所以改成**用現有的 12 視角語料把系統做對**。
+§四 到 §五 原本那條重渲 chain 作廢，不要照它跑。
 
 ```
-階段        n04 重渲 → n05 第一階
-指令        nohup bash tools/chain_eleven_view.sh > data/outputs/logs/chain_eleven_view.log 2>&1 &
-寫到哪      data/outputs/renders/<uid>/view_00..10.png ＋ renders/<uid>.json（原地覆蓋）
-            data/outputs/bakeoff/eleven_view_r1/（100 筆標註）
-            output/look/eleven_view_pilot/、output/look/eleven_view_annot_r1/
-多大        約 65 GB（十一張 × 46,052），取代現有 71 GB
-多久        試渲 ~2 分；全渲 ~43 小時；標註第一階 ~15 分
-覆蓋／刪除  舊的十二視角渲染（版本 6）被原地覆蓋；每個資產目錄裡多出來的 view_11.png 會被刪
-            舊十二視角的所有下游產物已在 9/2 搬到 /mnt（DL-081）
-錯了能重跑  能。GLB 在 NVMe 與 /mnt 各一份（46,052 件位元組相同）；版本 6 的程式在 git
-沒驗證的    相機到底拍出什麼樣，要試渲後用眼睛看（output/look/eleven_view_pilot/）
+PHASE 1  現況盤點（唯讀）                         ✅ 完成 workflow/PHASE1_AUDIT_20260903.md
+         四十題全部有答案，三十二題由三位稽核者實測
+
+PHASE 2  資料清單 / provenance                    ✅ 完成 tools/build_dataset_manifest.py
+         一個 UID 一列，圖片與描述當子紀錄，一個特徵都沒重算
+
+PHASE 3  可逆前處理                               ✅ 本來就完成
+         12 張逐視角特徵早就存在每個 embeddings/*.npz 的 `views (12,1280)` 裡
+
+PHASE 4  Dataset API                              ✅ 完成 metafind/data/observation.py
+         positive_policy 同 UID ＋ 逐模態的 query / gallery 觀測政策
+         gallery_test / gallery_full 本來就支援
+
+PHASE 5  Stage 1 正確性測試                       ◐ 大部分已由稽核結清
+         PointBERT 收到梯度、文字影像凍結、loss 單向、遮罩 30% 獨立、
+         全遮 2.7%、遮罩非補零 —— 全部實測過（PHASE1_AUDIT B 段）
+         剩下：在 GPU 上跑一次小規模 end-to-end，證明整條路走得通
+
+PHASE 6  評估敏感度   ← 下一步，需要 Kyzen 放行
+PHASE 7  決定哪些協定值得重訓
+PHASE 8  才決定昂貴的資料重製（重渲、全量標註）
+```
+
+## 五、目前擋在哪
+
+**等 reviewer 放行 GPU。** 規則是兩個 block 的 reviewer 審過才能開跑；
+ULIP2 Reviewer 第一輪回 CHANGES REQUIRED（BLOCKER 2），已全部修好並送二審。
+
+**四件事等 Kyzen 裁，都不擋現在的實作：**
+
+```
+一  λ 初值 9.0 與 ESSGNN pooling —— 兩個權威衝突，MASTER 不選
+    （帳本 DL-077 你裁 0.1；新規格說兩者 UNRESOLVED 且禁止自行決定）
+    protocol 上那句假的歸屬已改掉，數值沒動
+二  253 個渲染壞掉的已收錄資產（11 個近乎全黑，47 個在封存測試集）
+    現在標記起來留著，因為規格 §六 要的就是「不得靜默丟棄」
+三  遮罩向量在權重衰減組裡，訓練完與初始化無法區分，只有真實向量的 2%
+四  ProcTHOR 節點文字要不要修（工具寫好了，dry run 過了，沒跑）
+```
+
+## 六、這一輪動到什麼
+
+```
+改了程式        metafind/train/stage1.py       視角數改成讀協定
+                metafind/data/splits.py         排除名單真的讀 uid ＋ 過濾階梯
+                metafind/models/resolve_stage1.py  完整的 view_aggregation 區塊
+                metafind/data/encode_text_image.py 整個區塊對照程式重新驗證
+                metafind/eval/run_retrieval.py  QueryPack 少一個參數（reviewer 抓到）
+                metafind/data/observation.py    新，觀測政策
+新工具          tools/build_dataset_manifest.py
+                tools/repair_procthor_node_text.py（不跑）
+新產物          data/outputs/manifest/          十個檔，重算 0 個特徵
+改了協定        stage1_encoding_protocol.json   多了 view_aggregation
+                stage2/essgnn protocol          只改 decided_by，數值沒動
+沒有動          渲染、標註、點雲、checkpoint、任何 embedding
+測試            1,019 通過
 ```
