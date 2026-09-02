@@ -777,11 +777,13 @@ def test_the_untrained_run_loads_no_stage1_weights_and_says_so(tmp_path, monkeyp
     # untrained branch -- where it would encode its own gallery and say so in a
     # field nobody was looking at yet.
     #
-    # Sliced from the END MINUS the query-pack argument added 2026-08-31, not
-    # `[-2:]`. The old slice broke loudly when a twelfth positional appeared,
-    # which is the right failure -- but it means this assertion is about a
-    # POSITION, so it is re-anchored deliberately rather than widened.
-    assert captured["tail"][-3:] == (True, {}, None), captured["tail"][-3:]
+    # Sliced from the END MINUS the two arguments added after this test:
+    # the query pack (2026-08-31) and the degraded-render exclusion set
+    # (2026-09-03). It broke loudly both times, which is the right failure --
+    # this assertion is about a POSITION, so each new positional gets the slice
+    # re-anchored ON PURPOSE rather than the assertion widened to `[-1:]`, which
+    # would stop noticing.
+    assert captured["tail"][-4:] == (True, {}, None, None), captured["tail"][-4:]
 
     # [REVIEWER MINOR-2] The gallery-provenance block reaches table1.json ON
     # DISK. `table1.json` drops `embedding_health` and the per-condition

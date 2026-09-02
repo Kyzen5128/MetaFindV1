@@ -413,6 +413,46 @@ def resolve_split(splits: dict, name: str) -> list[str]:
     return list(splits[name])
 
 
+def degraded_render_uids() -> set[str]:
+    """Assets whose own render sidecar reports an anomaly, from the manifest.
+
+    [MASTER DECISION 2026-09-03, under Kyzen's delegation. The corpus is NOT
+    changed.]
+
+    253 admitted assets carry a degraded render -- 11 effectively blank, and 47
+    of the anomalies sit inside the sealed test split. Their image vectors were
+    computed from those frames, and they are live gallery candidates.
+
+    Two ways to handle that, and only one is reversible. Removing them changes
+    the corpus from 45,692, which changes the 80/20 partition, which invalidates
+    every archived `train_uid_set_sha256` and every number measured so far --
+    for an effect nobody has measured yet. Keeping them and making them
+    FILTERABLE AT EVALUATION turns the question into a sensitivity axis, which
+    is what §十六 is for: run the protocol twice and report the difference,
+    instead of deciding it in advance.
+
+    So the corpus keeps them, `filters.json` flags them, and this is the
+    evaluator's opt-in exclusion. `--exclude-degraded-renders` records the count
+    in the result, so a filtered number can never be mistaken for an unfiltered
+    one.
+    """
+    import json
+
+    m = paths.OUTPUTS / "manifest" / "assets.jsonl"
+    if not m.exists():
+        raise SystemExit(
+            f"--exclude-degraded-renders needs {m}, which does not exist. "
+            "Build it with `python tools/build_dataset_manifest.py`.")
+    out = set()
+    for line in m.read_text().splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if row.get("admitted") and row.get("render_anomaly"):
+            out.add(row["uid"])
+    return out
+
+
 def _splits_identity() -> dict:
     """Which split file a table was scored under: bytes, seeds, admitted count.
 
@@ -922,7 +962,8 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
                  control: str, seed: int, block: int,
                  untrained: bool = False,
                  ckpt: dict | None = None,
-                 query_pack=None) -> tuple[dict, list]:
+                 query_pack=None,
+                 exclude_uids: set | None = None) -> tuple[dict, list]:
     """One protocol, seven conditions. Returns (core result, per-query rows).
 
     The gallery's SOURCE is decided here, from the protocol's own fields, not by
@@ -931,6 +972,20 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
     """
     query_uids = resolve_split(splits, protocol["query_split"])
     gallery_uids = resolve_split(splits, protocol["gallery_split"])
+
+    # BOTH sides, unlike the query-pack drop below. A degraded asset left in the
+    # gallery is still a candidate every other query can be scored against, so
+    # excluding it from the query pool alone would measure something in between
+    # and call it either.
+    n_excluded_q = n_excluded_g = 0
+    if exclude_uids:
+        n_excluded_q = sum(1 for u in query_uids if u in exclude_uids)
+        n_excluded_g = sum(1 for u in gallery_uids if u in exclude_uids)
+        query_uids = [u for u in query_uids if u not in exclude_uids]
+        gallery_uids = [u for u in gallery_uids if u not in exclude_uids]
+        print(f"  degraded-render exclusion: {n_excluded_q} from the query pool, "
+              f"{n_excluded_g} from the gallery. This number is NOT comparable "
+              "with an unfiltered run of the same protocol.", flush=True)
 
     # [MASTER ruling 2026-08-31] Assets with no second observation are dropped
     # from the QUERY pool only. The GALLERY keeps every uid, so the denominator
@@ -1048,6 +1103,11 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
             "hits@5": int((ranks <= 5).sum()),
             "n_query": int(len(query_uids)),
             "n_gallery": int(len(gallery_uids)),
+            # Always present, so an unfiltered run says 0 rather than saying
+            # nothing -- an absent field reads as "not applicable", and here it
+            # would read as "not filtered" on a run that was.
+            "degraded_renders_excluded": {"query": int(n_excluded_q),
+                                          "gallery": int(n_excluded_g)},
             "error_count": int((ranks > 1).sum()),
         }
         for i in range(len(query_uids)):
@@ -1185,6 +1245,13 @@ def main() -> int:
                          "second point sample) instead of the gallery's own "
                          "cached vectors. Omit for the pre-2026-08-31 "
                          "construction. The gallery is unchanged either way.")
+    ap.add_argument("--exclude-degraded-renders", action="store_true",
+                    help="drop the 253 admitted assets whose render sidecar "
+                         "reports blank, dark or fewer-distinct-than-listed "
+                         "views, from BOTH the query and the gallery. Off by "
+                         "default: the corpus keeps them and this is a "
+                         "sensitivity axis, not a corpus decision. The count "
+                         "is recorded in the result.")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--block", type=int, default=4096,
@@ -1397,6 +1464,13 @@ def main() -> int:
             print(f"query pack {query_pack.path} arms={list(query_pack.arms)} "
                   f"sha256={query_pack.sha256[:12]}", flush=True)
 
+        exclude_uids = (degraded_render_uids()
+                        if args.exclude_degraded_renders else None)
+        if exclude_uids:
+            print(f"excluding {len(exclude_uids):,} assets with a degraded "
+                  "render [MASTER 2026-09-03; the corpus is unchanged, this is "
+                  "an evaluation-time sensitivity axis]", flush=True)
+
         results = {}
         for name in wanted:
             print(f"\n=== {name} ===", flush=True)
@@ -1404,7 +1478,7 @@ def main() -> int:
                 name, protocols[name], splits, backbone, model,
                 encoding["image_aggregation"], args.device, args.batch_size,
                 args.control, args.seed, args.block, untrained, ckpt,
-                query_pack)
+                query_pack, exclude_uids)
             # From the protocol's FIELDS, never its name. See protocol_caveat:
             # the name lookup that used to be here gave any protocol the
             # artifact adds the "never reported" caveat, printed beside a

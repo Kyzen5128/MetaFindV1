@@ -81,7 +81,44 @@ BEST_CKPT_PATH = paths.CHECKPOINTS / "stage1_best.pt"
 BEST_CKPT_RECORD = paths.CHECKPOINTS / "stage1_best_ckpt.json"
 
 
-def weight_decay_groups(named, weight_decay: float) -> list[dict]:
+# The learned stand-ins for an ABSENT input: the per-modality mask token and the
+# modality position embedding. Matched by name because upstream's predicate
+# cannot see them -- it sorts by `ndim`, and these are (3, D), so they land
+# beside the attention weight matrices.
+#
+# [MASTER DECISION 2026-09-03, under Kyzen's explicit delegation. INFERENCE,
+# not a paper fact, and reversible by one protocol value.]
+#
+# What upstream's rule is FOR: separating weight matrices, which want decay,
+# from biases and normalisation scales, which do not. A mask token is neither.
+# It is the vector the fusion layer reads WHERE A REAL MODALITY VECTOR WOULD
+# HAVE BEEN, so it belongs to the input side of that distinction, not the
+# weight side.
+#
+# What the measurement says. In `stage1_best.pt`, after a full run, the mask
+# tokens' row norms are 0.7209 / 0.7358 / 0.7074 against an initialisation
+# expectation of 0.7155 -- indistinguishable from where they started, while
+# they demonstrably receive gradient (grad_norm 0.122 measured). The decay pull
+# and the gradient pull are in balance and the token is held at its init.
+# Against real modality vectors of norm ~37, the stand-in sits at about 2%.
+#
+# Why that matters and is not merely aesthetic. `2methdology.tex:75` is a PAPER
+# FACT: "Rather than zero-padding, we apply masked embeddings". Table 3 reports
+# zero-padding as the WORSE arm. A stand-in pinned at 2% of a real vector is
+# numerically much nearer zero-padding than a real embedding, so decaying it
+# walks the paper's stated mechanism toward the ablation the paper contrasts
+# itself against -- and nothing recorded that it was happening.
+#
+# What is NOT claimed. The paper says nothing about the norm of a mask
+# embedding, so "it should be larger" is an INFERENCE from the mechanism's
+# purpose, not a requirement. That is exactly why the old behaviour stays
+# runnable: `decay_mask_tokens: true` reproduces it, so the difference is an
+# experiment rather than a belief.
+_IS_STANDIN = __import__("re").compile(r"(^|\.)(mask_tokens|modality_pos)$")
+
+
+def weight_decay_groups(named, weight_decay: float, *,
+                        decay_mask_tokens: bool = False) -> list[dict]:
     """Two optimizer groups; the rule reads the parameter NAME.
 
     [UPSTREAM-OFFICIAL-IMPL upstream/ULIP/main.py:129-135] verbatim predicate:
@@ -105,6 +142,8 @@ def weight_decay_groups(named, weight_decay: float) -> list[dict]:
         if not p.requires_grad:
             continue
         if p.ndim < 2 or "bias" in n or "ln" in n or "bn" in n:
+            p_non_wd.append(p)
+        elif decay_mask_tokens is False and _IS_STANDIN.search(n):
             p_non_wd.append(p)
         else:
             p_wd.append(p)
@@ -1687,6 +1726,47 @@ def check_embedding_sidecars(uids: list[str], encoding: dict) -> None:
             "this protocol, or restore the protocol the cache was built under.")
 
 
+# The official ULIP-2 release, by content. [KYZEN RULING 2026-09-03, verbatim:
+# 「不要先用我們之前已經 fine-tune 過、改過 protocol 的 checkpoint 當主
+# reproduction 起點」and「第一條乾淨主線應該從官方 ULIP-2 權重開始」.]
+#
+# Stage 1 already behaved this way -- `load_stage1_checkpoint` is called by
+# Stage 2, the evaluator, the gallery index and the probes, and never by
+# `stage1.main` -- so there was no path by which a fine-tuned checkpoint could
+# become a Stage 1 initialiser. That is correct BY THE ABSENCE OF A CALL,
+# which is exactly the kind of property that survives until someone adds a
+# `--resume` flag for a good reason and nobody notices what it changed.
+#
+# So the ruling is written down as a value the run checks against itself. It is
+# also the cleanest anchor available: this file reproduced the official
+# zero-shot numbers to 50.5647 / 78.9285 (DL-069), so its behaviour is known
+# independently of anything we trained.
+OFFICIAL_ULIP2_SHA256 = (
+    "a4b5ed9799d5841a1646e0fb7d24cb8dcdd3b3e6fab2e2575de2531f71274adb")
+
+
+def assert_official_initialiser(prov: dict, allow_other: bool) -> None:
+    """Refuse a Stage 1 run whose backbone did not start from the release.
+
+    `allow_other` is the escape hatch for the continuity test and the ablations
+    Kyzen named -- a run from one of our own checkpoints is a legitimate
+    EXPERIMENT, it is simply not the reproduction line, and it has to say so on
+    the command line rather than by default.
+    """
+    got = (prov.get("ulip2") or {}).get("sha256")
+    if got == OFFICIAL_ULIP2_SHA256:
+        return
+    msg = (f"the backbone was initialised from sha256 {got}, not the official "
+           f"ULIP-2 release {OFFICIAL_ULIP2_SHA256}. Kyzen ruled on 2026-09-03 "
+           "that the reproduction line starts from the official weights, so a "
+           "run from anything else is an experiment and must say so: pass "
+           "--non-official-initialiser and it will be recorded in the "
+           "checkpoint.")
+    if not allow_other:
+        raise SystemExit(msg)
+    print("WARNING " + msg, flush=True)
+
+
 def initializer_provenance(backbone) -> dict:
     """The weights this run STARTED from, which no artifact recorded.
 
@@ -2154,6 +2234,12 @@ def main() -> int:
     # Writing the module before its artifact records nothing false; swapping the
     # flag before the artifact exists would. The two vocabularies coexist until
     # Kyzen rules, and saying so here is cheaper than a reader discovering it.
+    ap.add_argument("--non-official-initialiser", action="store_true",
+                    help="allow a backbone that did not start from the official "
+                         "ULIP-2 release. The reproduction line does start from "
+                         "it [Kyzen 2026-09-03]; this is for the continuity "
+                         "test and the ablations, and the run records that it "
+                         "was used.")
     ap.add_argument("--query-observation", required=True,
                     choices=("same_record", "second_observation"),
                     help="what the query tower sees during training; "
@@ -2370,7 +2456,9 @@ def main() -> int:
     named = (list(backbone.named_trainable_parameters())
              + list(model.named_parameters())
              + list(loss_fn.named_parameters()))
-    groups = weight_decay_groups(named, values["weight_decay"])
+    groups = weight_decay_groups(
+        named, values["weight_decay"],
+        decay_mask_tokens=bool(values["decay_mask_tokens"]))
     opt = torch.optim.AdamW(groups,
                             lr=values["learning_rate"],
                             betas=tuple(values["betas"]),
@@ -2482,6 +2570,8 @@ def main() -> int:
     if dev_val_uids:
         training["_pools"]["selection_content"] = input_content_digest(dev_val_uids)
     training["_initializers"] = initializer_provenance(backbone)
+    assert_official_initialiser(training["_initializers"],
+                                args.non_official_initialiser)
     training["_repeat_index"] = args.repeat_index
     training["_argv"] = sys.argv[1:]
     training["_hardware"] = {

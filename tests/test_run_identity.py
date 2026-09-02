@@ -22,6 +22,7 @@ def _values(**over):
     v = {"optimizer": "adamw", "learning_rate": 5e-4, "weight_decay": 0.1,
          "scheduler": "cosine", "batch_size": 64, "epochs": 5, "max_epochs": 250,
          "p_mask": 0.30, "init_temperature": 0.5, "learnable_temperature": False,
+         "decay_mask_tokens": False,
          "max_logit_scale": 100.0, "betas": [0.9, 0.98], "eps": 1e-8,
          "warmup_epochs": 1, "lr_start": 1e-6, "lr_end": 1e-5, "seed": 20260816}
     return {**v, **over}
@@ -582,6 +583,14 @@ ARM_RECIPE_KEYS = {
     "training.allow_all_masked",
     # stage1_encoding_protocol.json, whole, minus ENCODING_EXCLUDED
     "encoding.image_aggregation", "encoding.missing_modality_representation",
+    # [ADDED 2026-09-03] TREATMENT, not policy. Whether the stand-in for an
+    # absent modality is weight-decayed is a training-recipe value that changes
+    # what the model LEARNS, not how a run is administered: measured, decay
+    # holds the mask tokens at their initialisation, so two runs differing only
+    # here end with different stand-in vectors and a different answer to the
+    # paper's "masked embedding, not zero padding". Different arms; must not
+    # share a hash.
+    "decay_mask_tokens",
     # [ADDED 2026-09-03] TREATMENT, not policy. `view_aggregation` records
     # WHICH of the stored views are pooled and whether either side of the mean
     # is normalised. Two runs differing only there saw different image vectors,

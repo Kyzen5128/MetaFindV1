@@ -81,21 +81,40 @@ STAGE2_DECISIONS = {
     # and is not implemented. Recorded so the choice is visible, not inferred
     # from the absence of code.
     "query_modality_masking": "none",
-    # Eq. 6's lambda at initialisation. The paper: "a learnable scalar", no
-    # value. Measured 2026-09-02 with the approved seven-layer ESSGNN: an
-    # untrained sum-pooled e_layout was 27x the fused query at init (max 40x)
-    # and the step-0 loss sat at chance, against the paper's own statement
-    # that the term is a residual which must not disrupt the embedding space.
-    # With the pooling changed to normalised_sum, e_layout is a unit vector,
-    # so lambda IS the layout term's norm. The intent of Kyzen's ruling
-    # (item 8, 甲) is a residual that starts at about a tenth of the fused
-    # query; the fused query is NOT unit-norm -- the Transformer fusion's
-    # output measured ||Fusion|| = 91.4 on the smoke batch (the loss
-    # normalises it afterwards) -- so a literal 0.1 made the layout term
-    # 0.1% of the query, invisible. 9.0 is 0.1 x 91.4, rounded: the ruling's
-    # ten percent, in the fused query's actual scale. Re-measure if the
-    # fusion changes.
-    "init_lambda": 9.0,
+    # [MASTER DECISION 2026-09-03, under Kyzen's explicit delegation of the four
+    # open items. IMPLEMENTATION CHOICE. Reversible; he can pin a literal.]
+    #
+    # WHAT KYZEN RULED, restored. DL-077 item 8: lambda init **0.1**. DL-078
+    # then recorded 9.0 = 0.1 x 91.4, where 91.4 was the fused-query norm
+    # measured once, on one smoke batch, through the checkpoint
+    # `qpack_ti_lr2.50e-04_s20260816/stage1_best.pt`. The reasoning was sound --
+    # a literal 0.1 makes the layout term 0.1% of a query whose norm is ~91, so
+    # it is invisible, and the ruling's intent is plainly a tenth -- but the
+    # ARTEFACT it produced was a constant welded to a retired measurement.
+    #
+    # That checkpoint is twelve-view-era and archived as non-comparable, and
+    # DL-079 schedules a Stage 1 retrain before the reproduction-line Stage 2.
+    # After it, 9.0 is a tenth of a norm that no longer exists, and nothing in
+    # the code would notice: the fusion output is not normalised before the
+    # loss, so its scale is a free property of whichever checkpoint is loaded.
+    # The ESSGNN Block Reviewer raised this as MAJOR-1 and it is right.
+    #
+    # SO THE RATIO IS THE DECISION, NOT THE PRODUCT. 0.1 is Kyzen's own number,
+    # stored as what he actually said. lambda_0 is derived at Stage 2 start from
+    # the fused-query norm of the first kept batch, under no_grad, and BOTH the
+    # ratio and the derived value are written into the run record. That makes
+    # the intent survive a retrain instead of silently expiring with one
+    # measurement, and it makes the number reproducible from the checkpoint
+    # rather than from a ledger entry.
+    #
+    # The paper gives NO initial value (Eq. 6: "lambda is a learnable scalar"),
+    # so choosing 0.1-of-the-query is an implementation choice either way. This
+    # one is merely the version that says how it was obtained.
+    "init_lambda_ratio": 0.1,
+    # Kept so an existing artifact still loads and so a literal remains
+    # expressible: when this is not null it WINS and no measurement is taken.
+    # Null means "derive from the ratio", which is now the default.
+    "init_lambda": None,
 }
 
 EDGE_DECISIONS = {

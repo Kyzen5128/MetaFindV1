@@ -294,6 +294,28 @@ MISSING_MODALITY = "learned_token"
 DEFAULT_HYPERPARAMETERS = {
     "optimizer": "adamw",
 
+    # [MASTER DECISION 2026-09-03, under Kyzen's explicit delegation of the four
+    # open items. IMPLEMENTATION CHOICE resting on an INFERENCE. Reversible by
+    # flipping this one value; the old behaviour is `true`.]
+    #
+    # Upstream's decay predicate sorts by `ndim`, so the (3, D) mask tokens land
+    # beside the attention weight matrices. Measured in `stage1_best.pt`: after
+    # a full run their row norms are 0.7209 / 0.7358 / 0.7074 against an init
+    # expectation of 0.7155 -- held exactly where they started, while receiving
+    # a measured gradient norm of 0.122. Decay and gradient are in balance, and
+    # the stand-in sits at ~2% of a real modality vector's norm (~37).
+    #
+    # PAPER FACT `2methdology.tex:75`: "Rather than zero-padding, we apply
+    # masked embeddings", and Table 3 reports zero-padding as the worse arm. A
+    # stand-in pinned at 2% is nearer zero-padding than a real embedding, so the
+    # default was quietly walking the paper's mechanism toward the ablation the
+    # paper contrasts itself against.
+    #
+    # The paper says NOTHING about a mask embedding's norm, so "it should be
+    # larger" is an inference from the mechanism's purpose. That is why `true`
+    # stays runnable: the difference is an experiment, not a belief.
+    "decay_mask_tokens": False,
+
     # [LR] USER-APPROVED (Kyzen, 2026-08-27). 5e-4 is the STARTING POINT of a
     # sweep -- 2.5e-4 / 5e-4 / 7.5e-4 / 1e-3 -- not a settled value.
     #

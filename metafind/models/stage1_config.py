@@ -142,6 +142,12 @@ REQUIRED_HYPERPARAMETERS = (
     "epochs",
     "max_epochs",
     "p_mask",
+    # [MASTER DECISION 2026-09-03, under Kyzen's delegation] Whether the learned
+    # stand-in for an absent modality is weight-decayed with the weight
+    # matrices. Required, not defaulted: the run that discovered it mattered had
+    # no way to say which it had done, and a default here would be the same
+    # silence with a value attached. See `stage1.weight_decay_groups`.
+    "decay_mask_tokens",
     "init_temperature",
     "learnable_temperature",
     "max_logit_scale",

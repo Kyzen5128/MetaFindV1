@@ -95,6 +95,10 @@ def protocols(tmp_path, **over):
         "optimizer": "adamw", "learning_rate": 1e-3, "weight_decay": 0.1,
         "scheduler": "cosine", "batch_size": 64, "epochs": 50, "max_epochs": 250,
         "p_mask": 0.30,
+        # [2026-09-03] Whether the learned stand-in for an absent modality is
+        # weight-decayed with the weight matrices. Required, so a run cannot
+        # leave it unstated. See stage1.weight_decay_groups.
+        "decay_mask_tokens": False,
         "init_temperature": 0.07, "learnable_temperature": True,
         "max_logit_scale": 100.0,
         "betas": [0.9, 0.98], "eps": 1e-8, "warmup_epochs": 1,
@@ -1526,3 +1530,107 @@ def test_two_towers_with_different_image_policies_emit_a_query_vector(
     assert "q_image" not in same, (
         "when the two policies agree there is nothing to emit -- that is the "
         "old same_record, as a property rather than a mode")
+
+
+def test_the_mask_token_is_not_decayed_with_the_weight_matrices():
+    """[MASTER DECISION 2026-09-03, under Kyzen's delegation.]
+
+    Upstream's predicate sorts by `ndim`, so a (3, D) mask token lands beside
+    the attention weight matrices. Measured in `stage1_best.pt` after a full
+    run: row norms 0.7209 / 0.7358 / 0.7074 against an init expectation of
+    0.7155 -- held where they started while receiving gradient. Against real
+    modality vectors of norm ~37 the stand-in sits at ~2%, which is nearer the
+    zero-padding the paper contrasts itself against (`2methdology.tex:75`,
+    Table 3) than a real embedding.
+
+    Both arms are pinned, because the point is that this is now an EXPERIMENT
+    with a recorded value and not a silent default.
+    """
+    import torch
+    from torch import nn
+
+    import metafind.train.stage1 as m
+
+    named = [("query.fusion.mask_tokens", nn.Parameter(torch.zeros(3, 8))),
+             ("query.fusion.modality_pos", nn.Parameter(torch.zeros(3, 8))),
+             ("query.fusion.attn.in_proj_weight", nn.Parameter(torch.zeros(8, 8))),
+             ("query.fusion.attn.in_proj_bias", nn.Parameter(torch.zeros(8))),
+             ("backbone.norm.ln.weight", nn.Parameter(torch.zeros(8)))]
+
+    def where(groups, name):
+        want = dict(named)[name]
+        for i, g in enumerate(groups):
+            if any(p is want for p in g["params"]):
+                return g["weight_decay"]
+        raise AssertionError(f"{name} reached no group")
+
+    off = m.weight_decay_groups(named, 0.1, decay_mask_tokens=False)
+    assert where(off, "query.fusion.mask_tokens") == 0.0
+    assert where(off, "query.fusion.modality_pos") == 0.0
+    # The weight matrix must still be decayed, or this widened the exemption
+    # instead of narrowing it -- the failure that would look like a fix.
+    assert where(off, "query.fusion.attn.in_proj_weight") == 0.1
+    assert where(off, "query.fusion.attn.in_proj_bias") == 0.0
+
+    on = m.weight_decay_groups(named, 0.1, decay_mask_tokens=True)
+    assert where(on, "query.fusion.mask_tokens") == 0.1, (
+        "the previous behaviour must stay runnable, or the comparison the "
+        "decision rests on cannot be made")
+    assert where(on, "query.fusion.attn.in_proj_weight") == 0.1
+
+    # Name-matched, so a parameter that merely CONTAINS the word is not exempt.
+    other = [("query.fusion.mask_tokens_proj.weight", nn.Parameter(torch.zeros(8, 8)))]
+    g = m.weight_decay_groups(other, 0.1, decay_mask_tokens=False)
+    assert any(other[0][1] is p for p in g[0]["params"]), (
+        "the exemption matched a substring; it must match the parameter name")
+
+
+def test_the_decay_decision_is_a_recorded_protocol_value_not_a_code_default():
+    """A default is a decision nobody wrote down. This one is required."""
+    from metafind.models.stage1_config import REQUIRED_HYPERPARAMETERS
+
+    assert "decay_mask_tokens" in REQUIRED_HYPERPARAMETERS
+
+
+def test_the_reproduction_line_starts_from_the_official_release():
+    """[KYZEN RULING 2026-09-03] The clean main line initialises from the
+    official ULIP-2 checkpoint, not from anything we fine-tuned.
+
+    Stage 1 already behaved this way, but by the ABSENCE of a call:
+    `load_stage1_checkpoint` is used by Stage 2, the evaluator, the gallery
+    index and the probes, and never by `stage1.main`. A property that holds
+    because nobody wrote the line survives exactly until someone writes it for
+    a good reason. This turns it into a check the run makes against itself.
+
+    The escape hatch is tested too, because the continuity test and the
+    ablations Kyzen named are legitimate runs -- they just are not the
+    reproduction line, and they have to say so on the command line.
+    """
+    from metafind.train.stage1 import (
+        OFFICIAL_ULIP2_SHA256,
+        assert_official_initialiser,
+    )
+
+    assert_official_initialiser({"ulip2": {"sha256": OFFICIAL_ULIP2_SHA256}}, False)
+
+    for prov in ({"ulip2": {"sha256": "deadbeef"}},
+                 {"ulip2": {"status": "unavailable"}},
+                 {}):
+        with pytest.raises(SystemExit, match="official ULIP-2 release"):
+            assert_official_initialiser(prov, False)
+        # With the flag it warns and proceeds -- an experiment, not the line.
+        assert_official_initialiser(prov, True)
+
+
+def test_stage1_never_initialises_from_one_of_our_own_checkpoints():
+    """The structural half of the same ruling, pinned so a later `--resume`
+    cannot quietly become the reproduction line's starting point."""
+    import inspect
+
+    import metafind.train.stage1 as m
+
+    src = inspect.getsource(m.main)
+    assert "load_stage1_checkpoint" not in src, (
+        "stage1.main now loads one of our checkpoints. That may be right, but "
+        "it changes what the reproduction line starts from, and Kyzen ruled "
+        "on 2026-09-03 that it starts from the official ULIP-2 weights.")

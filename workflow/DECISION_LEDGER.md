@@ -6097,3 +6097,165 @@ repair the ProcTHOR node text at all, since its construction is itself
 unresolved.
 
 ---
+
+## DL-088 -- Kyzen delegates the four open items; the reproduction line is pinned to the official ULIP-2 release
+
+Date 2026-09-03. Two instructions, both verbatim. 「4件事由你決定 反正完成他」 --
+MASTER decides the four items MASTER had reserved for him. And, separately and
+in his own words, the initialisation ruling below, which is HIS decision, not a
+delegated one.
+
+Three of the four are the class `REPRODUCTION_PROTOCOL_20260903.md` §十九
+forbids MASTER from deciding. He has now explicitly delegated them. Every one is
+recorded as a **MASTER DECISION**, never as a paper fact, each with its evidence
+and each reversible by one value.
+
+---
+
+### KYZEN'S RULING -- the reproduction line starts from the official ULIP-2 weights
+
+> 「不要先用我們之前已經 fine-tune 過、改過 protocol 的 checkpoint 當主
+> reproduction 起點。那些可以之後拿來做 continuity test / ablation，但第一條乾淨
+> 主線應該從官方 ULIP-2 權重開始。」
+
+```
+Official ULIP-2 checkpoint
+        |
+Shared ULIP-2 backbone
+        |-- Text encoder   frozen
+        |-- Image encoder  frozen
+        +-- PointBERT      trainable, fine-tuned in Stage 1
+                |
+       Query / Gallery Fusion   (MetaFind's own, freshly initialised)
+                |
+             Stage 1
+```
+Mask embeddings are MetaFind's own parameters and are freshly initialised.
+ESSGNN and lambda belong to Stage 2.
+
+**Verified, not assumed.** Stage 1 already behaves this way:
+`paths.ULIP2_CKPT` resolves to
+`ULIP-2-PointBERT-10k-xyzrgb-pc-vit_g-objaverse_shapenet-pretrained.pt`,
+sha256 `a4b5ed97...`, and that hash matches what n06 stamped into all 45,692
+embedding sidecars. `load_stage1_checkpoint` is called by Stage 2, the
+evaluator, the gallery index and sixteen probes -- and **never by
+`stage1.main`**. There was no path by which one of our fine-tuned checkpoints
+could become a Stage 1 initialiser.
+
+**But that was correct by the absence of a call**, which is the shape that
+survives until somebody adds `--resume` for a good reason and nobody notices
+what it changed. So the ruling is now a value the run checks against itself:
+`OFFICIAL_ULIP2_SHA256`, and `assert_official_initialiser` refuses a Stage 1 run
+from anything else unless `--non-official-initialiser` is passed, which the
+checkpoint then records. A second test asserts `stage1.main`'s source contains
+no call to `load_stage1_checkpoint`, so the structural property fails loudly if
+it is ever broken.
+
+He is also right that this is the cleanest anchor available: that file
+reproduced the official zero-shot numbers at 50.5647 / 78.9285 (DL-069), so its
+behaviour is known independently of anything we trained.
+
+---
+
+### 1. Lambda -- the ratio is the decision, the product is derived
+
+**MASTER DECISION.** `init_lambda_ratio: 0.1` -- Kyzen's own number from DL-077
+item 8, restored as the ratio it always was. `init_lambda: null` means derive.
+Pooling stays `normalised_sum`, which was genuinely his ruling.
+
+At Stage 2 start, after the checkpoint is restored and before the first
+optimizer step, `derive_init_lambda` measures the fused-query norm over the
+first 64 samples under `no_grad` with `drop_layout=True`, takes the **median**
+(one outlying asset must not move a scalar governing the whole layout term),
+and sets lambda_0 to `ratio x median`. The ratio, the median, the sample count
+and the range all enter the run record.
+
+**Why the literal 9.0 had to go.** DL-078's reasoning was right -- a literal 0.1
+makes the layout term 0.1% of a query whose norm is ~91, which is invisible --
+but the artefact was a constant welded to a measurement taken once, through
+`qpack_ti_lr2.50e-04_s20260816/stage1_best.pt`, a twelve-view-era checkpoint
+archived as non-comparable. DL-079 schedules a Stage 1 retrain before the
+reproduction-line Stage 2, and Kyzen's ruling above means Stage 2's starting
+checkpoint will be a NEW one trained from official weights. After that, 9.0 is a
+tenth of a norm that no longer exists and nothing would notice, because the
+fusion output is never normalised before the loss. The ESSGNN Block Reviewer
+raised this as MAJOR-1 and was right.
+
+A pinned literal still wins if `init_lambda` is set, so expressing one remains
+possible.
+
+### 2. The 253 degraded admitted assets -- kept, and made a sensitivity axis
+
+**MASTER DECISION.** The corpus is unchanged at 45,692.
+
+Removing them changes the corpus, which changes the 80/20 partition, which
+invalidates every archived `train_uid_set_sha256` and every number measured so
+far -- for an effect nobody has measured. Keeping them and making them
+**filterable at evaluation** turns the question into exactly what §十六 is for:
+run the protocol twice and report the difference.
+
+`run_retrieval --exclude-degraded-renders` drops them from **both** the query
+pool and the gallery -- excluding from the query alone would measure something
+in between and call it either -- and every result now carries
+`degraded_renders_excluded: {query, gallery}`, present as 0 on an unfiltered run
+so an absent field can never read as "not filtered". Verified against the
+manifest: 253.
+
+### 3. Mask tokens -- out of the weight-decay group, and both arms runnable
+
+**MASTER DECISION.** `decay_mask_tokens: false`, a REQUIRED hyperparameter, so a
+run cannot leave it unstated. Declared a TREATMENT in `ARM_RECIPE_KEYS`.
+
+Upstream's predicate sorts by `ndim`, so the (3, D) mask tokens landed beside
+the attention weight matrices. Measured in `stage1_best.pt` after a full run:
+row norms 0.7209 / 0.7358 / 0.7074 against an initialisation expectation of
+0.7155 -- held exactly where they started while receiving a measured gradient
+norm of 0.122. Decay and gradient are in balance, and the stand-in sits at about
+2% of a real modality vector's norm.
+
+`2methdology.tex:75` is a PAPER FACT -- "Rather than zero-padding, we apply
+masked embeddings" -- and Table 3 reports zero-padding as the worse arm. A
+stand-in pinned at 2% is nearer zero-padding than a real embedding, so the
+default was quietly walking the paper's own mechanism toward the ablation the
+paper contrasts itself against, and nothing recorded it.
+
+**What is NOT claimed:** the paper says nothing about a mask embedding's norm,
+so "it should be larger" is an INFERENCE from the mechanism's purpose. That is
+why `true` stays runnable and both arms are pinned by test -- the difference is
+an experiment, not a belief.
+
+The hyperparameter hash moved `2c9a5000` -> `583ea2e8`; `splits.py` was
+re-materialised so `stage1_protocol.json` names it, and the split was verified
+byte-identical afterwards.
+
+### 4. ProcTHOR node text -- deferred, and the deferral made safe
+
+**MASTER DECISION: do not repair now.** §十三 defers LLM semantic-edge
+generation until the Stage 2 protocol is complete, and 問題 10 -- what `t_i`
+should be built from at all -- is UNRESOLVED. Repairing the CURRENT rule would
+spend GPU on a rule that may not survive that answer, and nothing between here
+and PHASE 6 reads the node text.
+
+**But "remember to run them together" is the class of instruction that fails
+once, silently.** `Stage2Data` now samples 200 real houses at load and refuses
+to start if more than 1% of requested semantic edges miss the cache. Verified in
+both directions, which is the half a guard usually skips: today it measures
+**0.00% over 66,603 edges**, and against a text regenerated with current code it
+measures **11.56%** -- reproducing the audit's number independently.
+
+`tools/repair_procthor_node_text.py` is written, dry-run verified (146 of 1,467
+assets change, 613 pairs need a new call), and its self-check asserts that apply
+REFUSES, so the day someone deletes that guard the test fails instead of the
+corpus.
+
+---
+
+**1,027 tests pass.** Nothing on §十九's forbidden list was done: no re-render,
+no full annotation, no ProcTHOR rendering, no deleted twelfth view, no
+overwritten raw data, no deleted cache, no hardcoded observation policy, no
+gallery scope fixed to either side, no fixed point-cloud embedding in place of
+trainable PointBERT, and no self-generated semantic edges. Pooling and lambda
+WERE decided -- under explicit delegation, recorded as MASTER DECISIONS with
+their evidence, and reversible.
+
+---

@@ -50,6 +50,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import pathlib
 import os
 import time
 from pathlib import Path
@@ -289,6 +290,61 @@ def _edge_key(a: str, b: str, text_map: dict) -> str:
                      meta["llm_model"], meta["text_encoder_version"])
 
 
+def derive_init_lambda(model, samples, graphs, data, ratio: float,
+                       device: str, n: int = 64) -> dict:
+    """Eq. 6's lambda_0, from the ratio Kyzen ruled and a norm measured NOW.
+
+    [MASTER DECISION 2026-09-03, under Kyzen's delegation.] He ruled 0.1
+    (DL-077 item 8). DL-078 turned that into the literal 9.0 by multiplying it
+    by a fused-query norm of 91.4 measured once, through a Stage 1 checkpoint
+    that is twelve-view-era and archived as non-comparable. The reasoning was
+    right and the artefact was a constant welded to a retired measurement:
+    after the scheduled Stage 1 retrain, 9.0 is a tenth of a norm that no
+    longer exists, and nothing would notice, because the fusion output is never
+    normalised before the loss and its scale is a free property of whichever
+    checkpoint is loaded.
+
+    So the ratio is stored and the product is derived, here, under `no_grad`,
+    from the first `n` samples of THIS run with THIS checkpoint. The median
+    rather than the mean: one asset with an outlying fused norm should not move
+    the initialisation of a scalar that governs the whole layout term.
+
+    Both numbers go into the run record. That is the point -- a reader can see
+    which norm produced which lambda instead of taking a ledger entry's word.
+    """
+    import statistics
+
+    import torch
+
+    norms = []
+    was_training = model.query.training
+    model.query.eval()
+    with torch.no_grad():
+        for house, target_index, asset_id in samples[:n]:
+            g = graphs.get(house)
+            if g is None:
+                continue
+            # `drop_layout=True` so ESSGNN does not run and lambda does not
+            # enter: what is wanted is ||Fusion(e_T, e_I, e_P)|| alone, the
+            # thing the layout term will be a tenth OF.
+            q = encode_query(model, g, target_index, asset_id,
+                             drop_layout=True, device=device, data=data)
+            norms.append(float(q.norm()))
+    if was_training:
+        model.query.train()
+    if not norms:
+        raise SystemExit(
+            "could not measure a single fused-query norm, so lambda_0 cannot be "
+            "derived from the ratio. Pin `init_lambda` in stage2_protocol.json "
+            "if a literal is intended.")
+    med = statistics.median(norms)
+    return {"init_lambda": ratio * med, "init_lambda_ratio": ratio,
+            "fused_query_norm_median": med, "fused_query_norm_n": len(norms),
+            "fused_query_norm_min": min(norms), "fused_query_norm_max": max(norms),
+            "derived_at": "stage2_start", "basis": "median over the first "
+            f"{len(norms)} samples of this run, drop_layout=True, no_grad"}
+
+
 def encode_query(model, graph: dict, target_index: int, asset_id: str,
                  drop_layout: bool, device: str, data: "Stage2Data"):
     """One leave-one-out query: the target's modalities plus its scene context.
@@ -423,11 +479,76 @@ class Stage2Data:
             "text_encoder_version": cache["text_encoder_version"],
         }
 
+        self._assert_text_and_edges_agree()
+
         # [U-30] The missing-edge token lives on ESSGNN as an nn.Parameter and
         # is genuinely learned; it used to be a seeded vector here, which the
         # protocol already called `learned_missing_token` and which got no
         # gradient, entered no optimizer and reached no checkpoint.
         # build_context_graph now emits a bool mask instead.
+
+    def _assert_text_and_edges_agree(self, n_houses: int = 200,
+                                     tolerance: float = 0.01) -> None:
+        """Refuse a corpus whose node text and semantic edges came from
+        different generations of the text rule.
+
+        [MASTER DECISION 2026-09-03, under Kyzen's delegation of the four open
+        items. The DECISION was to DEFER the repair; this is what makes
+        deferring safe.]
+
+        `_edge_key` hashes the DESCRIPTIONS, so regenerating
+        `procthor_object_text.json` without re-running the edge stage in the
+        same operation changes 146 assetIds' keys, the lookup misses, `vec is
+        None`, `edge_missing = True`, and the learned missing token substitutes.
+        Nothing raises. Training proceeds. Table 2 and Table 3 are wrong.
+        Measured over 200 houses and 66,603 edges: 11.56% of edges would go
+        missing that way.
+
+        Why the repair is deferred rather than run. `REPRODUCTION_PROTOCOL_20260903`
+        §十三 says LLM semantic-edge generation waits until the Stage 2 protocol
+        is complete, and 問題 10 -- what `t_i` should be built from at all --
+        is still UNRESOLVED. Repairing the CURRENT rule now would spend the GPU
+        on a rule that may not survive that answer, and nothing between here and
+        PHASE 6 reads the node text. `tools/repair_procthor_node_text.py` is
+        written, dry-run verified, and refuses to apply.
+
+        Why a check and not a note. "Remember to run them together" is the class
+        of instruction that fails exactly once and silently. This measures the
+        real miss rate over a sample of real houses, and a run whose text and
+        edges have drifted apart cannot start. Today it measures 0.00%.
+        """
+        import glob
+        import random as _random
+
+        files = sorted(glob.glob(str(paths.SCENE_GRAPHS / "*.json")))
+        if not files:
+            return
+        sample = _random.Random(0).sample(files, min(n_houses, len(files)))
+        asked = missing = 0
+        for f in sample:
+            g = json.loads(pathlib.Path(f).read_text())
+            by_index = {n["index"]: n["asset_id"] for n in g["nodes"]}
+            for i, j in g.get("sem_edge_ids") or []:
+                a, b = by_index.get(i), by_index.get(j)
+                if a is None or b is None:
+                    continue
+                asked += 1
+                if _edge_key(a, b, self.text_map) not in self.sem_cache:
+                    missing += 1
+        if not asked:
+            return
+        rate = missing / asked
+        if rate > tolerance:
+            raise SystemExit(
+                f"{missing:,} of {asked:,} semantic edges ({rate:.2%}) sampled "
+                f"over {len(sample)} houses have no cache entry. The node text "
+                "and the semantic edges are from different generations of the "
+                "text rule: `_edge_key` hashes the descriptions, so a text "
+                "regenerated without re-running the edge stage silently "
+                "substitutes the learned missing token and Table 2/3 come out "
+                "wrong with nothing raised. Repair them TOGETHER with "
+                "`tools/repair_procthor_node_text.py --apply`, or restore the "
+                "text the cache was built under.")
 
     def graphs_for(self, house_ids) -> dict:
         return {h: json.loads((paths.SCENE_GRAPHS / f"{h}.json").read_text())
@@ -794,15 +915,22 @@ def main() -> int:
     variant = load_variant(args.variant, ckpt, training=training,
                            encoding=encoding, values=_stage1_hyperparameters["values"])
     use_layout = variant["layout_encoder"] is not None
-    if "init_lambda" not in stage2:
-        raise ValueError("stage2_protocol.json has no init_lambda; re-run "
-                         "`python -m metafind.models.resolve_stage2` so Eq. 6's "
-                         "starting value is a recorded decision, not a default")
+    if "init_lambda" not in stage2 and "init_lambda_ratio" not in stage2:
+        raise ValueError(
+            "stage2_protocol.json records neither init_lambda nor "
+            "init_lambda_ratio; re-run `python -m metafind.models.resolve_stage2` "
+            "so Eq. 6's starting value is a recorded decision, not a default")
+    # A pinned literal WINS and no measurement is taken; that path exists so a
+    # literal stays expressible. Otherwise lambda_0 is derived below, after the
+    # model exists, from the ratio and a norm measured on this checkpoint.
+    pinned = stage2.get("init_lambda")
+    lambda_record = None
     model = build_stage2_model(encoding, training, hyperparameters, arch_proto,
                                node_feat_dim=data.node_dim,
                                edge_feat_dim=data.edge_dim,
                                use_layout=use_layout,
-                               init_lambda=float(stage2["init_lambda"]))
+                               init_lambda=float(pinned) if pinned is not None
+                               else 1.0)
     loss_fn = MetaFindContrastiveLoss(ContrastiveConfig(
         # [Eq. 7/8] symmetric, unlike Stage 1's Eq. 5
         bidirectional=True,
@@ -857,6 +985,30 @@ def main() -> int:
         eps=values["eps"])
 
     graphs = data.graphs_for({h for h, _, _ in samples})
+
+    # Eq. 6's lambda_0, derived AFTER the checkpoint is restored and BEFORE the
+    # first optimizer step, so the norm it is a tenth of is this run's own.
+    # Placed here rather than beside `build_stage2_model` because it needs the
+    # restored weights and the graphs; the model was built with a placeholder
+    # and the parameter is overwritten in place below.
+    if pinned is None and use_layout:
+        lambda_record = derive_init_lambda(
+            model, samples, graphs, data,
+            float(stage2["init_lambda_ratio"]), args.device)
+        with torch.no_grad():
+            model.query.layout_weight.fill_(float(lambda_record["init_lambda"]))
+        print(f"lambda_0 = {lambda_record['init_lambda']:.4f} "
+              f"= {lambda_record['init_lambda_ratio']} x median ||Fusion|| "
+              f"{lambda_record['fused_query_norm_median']:.2f} "
+              f"(n={lambda_record['fused_query_norm_n']}, range "
+              f"{lambda_record['fused_query_norm_min']:.2f}"
+              f"-{lambda_record['fused_query_norm_max']:.2f})", flush=True)
+    elif pinned is not None:
+        lambda_record = {"init_lambda": float(pinned), "init_lambda_ratio": None,
+                         "basis": "pinned literal in stage2_protocol.json; no "
+                                  "measurement taken"}
+        print(f"lambda_0 = {pinned} (pinned literal, not derived)", flush=True)
+
     # [P1] NOT values["p_mask"]. Both rates are 30% in the paper, which is
     # exactly what made the alias invisible -- but they are different
     # mechanisms: 2.6 masks each MODALITY independently at 30% in Stage 1, and
@@ -953,6 +1105,11 @@ def main() -> int:
                     "init_temperature": values["init_temperature"],
                     "learnable_temperature": values["learnable_temperature"],
                 },
+                # Eq. 6's starting lambda AND how it was obtained. Without the
+                # second half, a finished run's lambda_0 is unrecoverable from
+                # its own record -- which is what DL-078 left behind, and the
+                # ESSGNN Reviewer's MAJOR-3.
+                "lambda_init": lambda_record,
                 "samples_per_epoch": len(samples),
                 "train_houses": len(train_houses),
                 "n_params_saved": sum(
