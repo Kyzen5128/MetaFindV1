@@ -5841,3 +5841,23 @@ secondary disk, 111 GB deleted, and 260 GB free became 369 GB.
   clouds 5.7 G -- all live inputs.
 
 ---
+
+## DL-084 -- Kyzen: 「做完自動下一步」. The role tree is put back to work, the chain is designed, and the plan's n05/n06 order is corrected
+
+Date 2026-09-02, evening. Kyzen, verbatim: 「還有之前到底我不是設計過subagent給你了嗎?我想知道你到底有沒有再用」「我覺得你最近寫程式都感覺 很被動監控也是 可以解決嗎?做完自動下一步」「設定好跟我報備 目前設定是? 以及接下來流程先設定好」. Also 「沒關係就這樣吧 Objaverse 還是放在NVMe 比較好」: the disk stays as it is, the `ulip` conda environment is not deleted, Objaverse stays on the NVMe.
+
+**FINDING (OBSERVED DATA, counted from this session's transcript, not recalled).** Agent dispatches in this session: 53 (ulip2-engineer 16, ulip2-reviewer 10, integrator 9, essgnn-engineer 7, essgnn-reviewer 4, general-purpose 4, codex 2, guide 1) plus 379 SendMessage calls to the earlier role windows. By time: dense on 08-29/08-30; seven audit dispatches on 09-01 20:41 UTC and 09-02 02:15 UTC; **none after that**. Everything from DL-075 to DL-083 -- the ESSGNN QM9 values, the normalised-sum pooling, lambda's start, the eleven-view renderer, the data scan, the disk cleanup -- was written by MASTER alone and was never sent to a reviewer or to Codex. That contradicts MASTER's own card (「你不做長時間的單一實作」) and the three-rule loop (改完自動送 REVIEWER＋Codex). Kyzen's word for what he saw is 「被動」; the mechanism was MASTER doing the engineers' work and then stopping to ask after each step.
+
+**DECISION (MASTER, under Kyzen's instruction).** The rules are written down in `workflow/AUTOPILOT.md` and take effect now: code changes go to the block engineer; every change is sent to the block reviewer and Codex without asking; MASTER commits after PASS; long jobs run under `nohup` with a `Monitor` armed in the same turn so each stage transition wakes MASTER; Kyzen is called only at decisions and at the gates that need his eyes. The role windows of `workflow/ROSTER.md` no longer exist (`ListAgents` shows none); the roles are the `.claude/agents/*.md` subagents Kyzen designed.
+
+**Dispatched now, in parallel:** ulip2-engineer (chain script `tools/chain_eleven_view.sh`, pilot checker, stale-view cleanup, uid files); ulip2-reviewer (items 1-3, F-1, F-2 and the chain's stage gates); essgnn-reviewer (items 4-6); Codex (the whole code range). Common brief: `docs/CODEX_REVIEW_BRIEF_20260902.md`. The integrator follows once both block reviews pass, per its card.
+
+**Two findings made while designing the chain, both to be verified by the reviewers:**
+
+F-1 `render_blender.render_asset` moves `view_00..view_10` into an asset directory that still holds `view_11.png` from the twelve-view era and deletes nothing. Consumers read `view_paths` from the sidecar, so the file is not consumed; it is still a landmine and a lie to any directory count. Fix routed to the engineer.
+
+F-2 The plan in DL-076 / `DATA_PLAN_PAPER_FIRST.md` §二 put n06 (encode) before n05 (re-annotate). That order cannot run: `encode_text_image.py` retires and HALTS (rc 3) when any annotation's `image_identity` differs from the render's, and after the re-render all 45,692 annotations differ. Corrected in the plan to render -> n05 -> n06. `CLASSIFICATION` OBSERVED IMPLEMENTATION; the halt is Codex's 2026-08-24 N-1 rule doing exactly its job.
+
+**Authorization of the run.** Kyzen approved the strict re-render (DL-079, 3甲) and the layout (2甲), and today asked for automatic progression. On the 2026-08-29 precedent (「每個階段做完自動去審 設定個監控自動去看 我希望我起床後看到訓練結果」, `tools/chain_overnight.sh`), MASTER reads today's 「做完自動下一步」 as the release for the chain in `AUTOPILOT.md` §四 through annotation rung 1, and NOT beyond it: rung 2, the full n05, n06, ProcTHOR and Stage 1 wait for his eyes on the pilot renders and the 100 annotations. The DL-030 eight items are in `AUTOPILOT.md` §五. The chain starts only after both block reviews and Codex return PASS on the code it runs, which leaves Kyzen a window of roughly an hour to say 停. `CLASSIFICATION` INFERENCE about Kyzen's intent, stated so he can correct it.
+
+---

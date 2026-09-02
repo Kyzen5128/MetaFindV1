@@ -30,8 +30,11 @@ Kyzen：「一切以論文為主」。這份文件只認 MetaFind 論文原文�
          （ULIP-2 的單圈慣例改 11 台；退役渲染器已定義過這個佈局 `ulip2_azimuth_orbit_11`）
      乙  同上但正交相機（把「orthogonal」讀成正交投影）
    我建議甲：編碼器在 ULIP-2 訓練時看的是透視渲染；「orthogonal viewpoints」更像在講視角組而非投影
-2  重新編碼圖片向量（n06）        11 張 × 45,692 過 ViT-bigG；約 2～3 小時
-3  重新標註（gemma，11 張）        80 小時；先 100 件 → 1,000 件 → test 子集試點；同一趟產 canonical / paraphrase / single-view / short
+2  重新標註（gemma，11 張）        80 小時；先 100 件 → 1,000 件 → test 子集試點；同一趟產 canonical / paraphrase / single-view / short
+3  重新編碼圖片向量（n06）        11 張 × 45,692 過 ViT-bigG；約 2～3 小時
+   [順序修正 2026-09-02 晚] 原本寫 n06 在標註前。錯：n06 只要看到一筆標註的 image_identity
+   跟渲染不同就整個停（encode_text_image.py，rc 3），重渲後 45,692 筆全都不同。
+   所以是 渲染 → 標註 → 編碼，不能反過來。
 4  ProcTHOR 統一到同一協定        AI2-THOR 重渲 1,467 件（小時級）→ gemma 描述資產（2.5 h，已核可）→ 物件文字（修字後）
                                  → 語意邊（35 分）→ 節點向量 → Stage 2 索引（10 分）
 5  query pack 重建（延伸軌用）     分鐘級
