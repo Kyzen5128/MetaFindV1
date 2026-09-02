@@ -86,10 +86,16 @@ STAGE2_DECISIONS = {
     # untrained sum-pooled e_layout was 27x the fused query at init (max 40x)
     # and the step-0 loss sat at chance, against the paper's own statement
     # that the term is a residual which must not disrupt the embedding space.
-    # With the pooling changed to normalised_sum (unit-norm e_layout), 0.1
-    # starts the layout term at a tenth of a unit vector. [Kyzen 2026-09-02,
-    # item 8: 甲]
-    "init_lambda": 0.1,
+    # With the pooling changed to normalised_sum, e_layout is a unit vector,
+    # so lambda IS the layout term's norm. The intent of Kyzen's ruling
+    # (item 8, 甲) is a residual that starts at about a tenth of the fused
+    # query; the fused query is NOT unit-norm -- the Transformer fusion's
+    # output measured ||Fusion|| = 91.4 on the smoke batch (the loss
+    # normalises it afterwards) -- so a literal 0.1 made the layout term
+    # 0.1% of the query, invisible. 9.0 is 0.1 x 91.4, rounded: the ruling's
+    # ten percent, in the fused query's actual scale. Re-measure if the
+    # fusion changes.
+    "init_lambda": 9.0,
 }
 
 EDGE_DECISIONS = {

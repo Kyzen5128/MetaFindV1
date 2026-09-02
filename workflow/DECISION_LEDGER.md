@@ -5637,3 +5637,21 @@ moves from the Stage 1 recipe (where it silently defaulted to 1.0) into
 protocols; the smoke re-measures the layout term's scale.
 
 ---
+
+## DL-078 -- Question 1 ruled (one backbone); lambda's start moved to the fused query's scale
+
+Date 2026-09-02. Kyzen on question 1: 「1.甲」 -- ONE ULIP-2 backbone shared
+by both towers (text and image encoders frozen, one PointBERT trained in
+Stage 1 and frozen in Stage 2), two fusion heads. This is what the code
+runs; `fully_separate` stays a refused protocol value. Supersedes the
+2026-09-01 ruling for two backbones (DL-068). Evidence he weighed: Figure 1
+prints `ULIP-2 (Shared)`; ULIP-2 itself has one point encoder.
+
+`OBSERVED DATA` After item 8 (normalised-sum pooling, lambda 0.1): the
+layout term measured 0.1% of the fused query, because the Transformer
+fusion's output has norm 91.4 on the smoke batch (the loss normalises it
+later). The ruling's intent -- a residual starting at about ten percent --
+is kept by setting init_lambda to 9.0 = 0.1 x 91.4, recorded as derived
+from that measurement. Kyzen may veto; nothing else changed.
+
+---
