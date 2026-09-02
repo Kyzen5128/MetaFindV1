@@ -214,6 +214,52 @@ def main() -> int:
                                     args.device, data))
         positives.append(gallery_vecs[id_to_row[asset_id]])
     out = loss_fn(torch.stack(queries), torch.stack(positives))
+
+    # ---- how big is the untrained layout term against the fused query? ----
+    # Eq. 6 adds lambda * e_layout to Fusion(...). With sum pooling the layout
+    # vector grows with the node count, so at init it can swamp the fused
+    # query and put the step-0 loss near chance. Measured on this batch when
+    # the layout was kept: ||lambda * e_layout|| / ||Fusion(...)||.
+    # Informational; not a pass/fail.
+    if model.query.layout_encoder is not None and not drop:
+        from metafind.train.stage2 import build_context_graph
+        fused_norms, layout_norms = [], []
+        with torch.no_grad():
+            for idx in batch[:16]:
+                house_id, target_index, asset_id = samples[idx]
+                vec = data.asset_vectors[asset_id]
+                e = {k: torch.from_numpy(vec[k]).to(args.device).unsqueeze(0)
+                     for k in ("text", "image", "pc")}
+                fused = model.query.fusion(e)
+                keep, pos, ei, ea, em = build_context_graph(
+                    graphs[house_id], target_index, data.edge_dim,
+                    data.sem_cache, data.text_map)
+                if not keep:
+                    continue
+                nf = torch.stack([torch.from_numpy(data.node_vectors[str(n["asset_id"])])
+                                  for n in keep]).to(args.device)
+                lay = model.query.encode_layout(
+                    nf, torch.from_numpy(pos).to(args.device),
+                    torch.from_numpy(ei).to(args.device),
+                    torch.from_numpy(ea).to(args.device),
+                    edge_missing=torch.from_numpy(em).to(args.device))
+                fused_norms.append(float(fused.norm()))
+                layout_norms.append(float((model.query.lam * lay).norm()))
+        if fused_norms:
+            ratio = [l / f for l, f in zip(layout_norms, fused_norms)]
+            R["layout_term_scale"] = {
+                "n_samples": len(ratio),
+                "fused_norm_mean": round(sum(fused_norms) / len(fused_norms), 3),
+                "lambda_layout_norm_mean": round(sum(layout_norms) / len(layout_norms), 3),
+                "ratio_mean": round(sum(ratio) / len(ratio), 3),
+                "ratio_max": round(max(ratio), 3),
+                "pooling": arch_proto.get("pooling"),
+                "n_layers": arch_proto.get("n_layers"),
+                "init_lambda": float(model.query.lam.detach())}
+            print(f"\nlayout term at init: ||lambda*e_layout|| / ||Fusion|| mean "
+                  f"{R['layout_term_scale']['ratio_mean']:.2f} max "
+                  f"{R['layout_term_scale']['ratio_max']:.2f} "
+                  f"(pooling={arch_proto.get('pooling')}, layers={arch_proto.get('n_layers')})")
     opt.zero_grad(set_to_none=True)
     out["loss"].backward()
 

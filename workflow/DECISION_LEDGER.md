@@ -5559,3 +5559,49 @@ view's own caption. Sent to Codex for confirmation as he requested.
 question 6's chain.
 
 ---
+
+## DL-076 -- Course correction: the paper is the only yardstick; the data scanned against it; what must be redone
+
+Date 2026-09-02. Kyzen: MetaFind cannot be compared with CAMERA -- it is a
+dual tower that uses ULIP-2's tri-modal alignment for its own retrieval
+purpose; re-read the paper and execute what the paper says; scan all the
+data and say what preprocessing must change, the paper being the authority.
+
+`RULING RECORDED` CAMERA's and ULIP-2's official evaluations were instrument
+checks (backbone reproduces 50.56/78.93; evaluator ranks correctly; our clouds
+and renders match the released ones) and are not MetaFind's protocol. The
+reproduction line is the paper's literal Stage 1 (same record on both towers,
+30% query masking); the second-observation construction and the scene-
+replacement benchmark are extensions, kept separate. Numbers are judged only
+against the paper's seven conditions, 80/20, R@1 / R@5, full gallery primary.
+
+`OBSERVED DATA` (`data_scan_against_paper.json`): corpus 45,692 of the
+official 46,052 (paper ~48K, unreachable); renders 12 views per asset (paper
+11 orthogonal; camera set unspecified); annotations carry all four named
+fields at 100%, annotator gemma (paper GPT-4o, ruled); point clouds 10,000
+xyz+rgb (paper silent); split 36,554/9,138 disjoint; ProcTHOR 12,000 houses
+(paper >10,000) holding 827,730 objects with children and exactly **1,467**
+distinct asset ids in the RAW houses -- our graphs hold the same 1,467, so
+the paper's ">3,000 unique assets" is the AI2-THOR catalogue size, not what
+appears in ProcTHOR-10K; node text is the category name only (93 distinct
+sentences; the paper's "comprehensive semantic metadata" does not exist in
+the dataset); ProcTHOR renders are 11 x 224 orthographic white against
+Objaverse's 12 x 512 perspective black.
+
+`PLAN` `workflow/DATA_PLAN_PAPER_FIRST.md`: re-render Objaverse at eleven
+views (camera set is Kyzen's choice; recommended: one orbit of eleven equal
+azimuths at 20 degrees, perspective, 512 px, black), re-encode, re-annotate
+on eleven views behind the pilot ladder, unify ProcTHOR to the same protocol
+and regenerate its caption / object-text / semantic-edge / node-embedding /
+index chain, rebuild the query pack, then Stage 1: 10 epochs as a check, 250
+as the target. A fast variant keeps the 12-view images (recorded deviation)
+and only re-annotates on eleven of them.
+
+`OBSERVED DATA` Stage 2 at init under the approved ESSGNN (7 layers, sum
+pooling): ||lambda * e_layout|| / ||Fusion|| = 26.8 mean, 40.5 max over 16
+samples; step-0 loss 4.08 against chance 4.16. Sum pooling scales the layout
+term with the room's object count. The paper gives no lambda init. Options
+(lambda init near 1/30, normalising e_layout, mean pooling) are for Kyzen and
+Codex; nothing changed.
+
+---
