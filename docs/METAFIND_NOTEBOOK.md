@@ -1754,3 +1754,16 @@ Stage 2 前置：語意邊 4,242 句（已做）、節點向量 1,467（已做�
 - §2.3「11/12 視角」— 12 是 `DEV`，你已裁「要改」，排程見 12.6 第 5 題。
 - §10 已拍板表「tower_sharing ✅」— 見 12.6 第 1 題。
 - §10 ESSGNN 五個參數「Kyzen 核可 B」— 現況：磁碟協定檔仍寫 `resolved`，與 B 的結論衝突，見 12.6 第 2 題。
+
+
+### 12.8 同日下午追補（2026-09-02）：五份程式稽核與 Codex 第二輪
+
+- 五份唯讀稽核（Stage 1 trainer、雙塔/fusion/loss、ESSGNN/Stage 2、評估端、資料前處理）共 59 條發現，逐條對過程式後修掉三十餘處，
+  細目在 `workflow/DECISION_LEDGER.md` 的 DL-073 與 commit 2f255f5；測試 581 通過；Stage 2 七項機制檢查在新 optimizer 構造下全過。
+- 三件事用量測取代了爭論：AdamW 對零梯度張量的 decay（grad 是零張量不是 None）、深度殼灰色常數（0.5→0.4 有影響，已改）、Unity 左手系（不需鏡射）。
+  另量了官方 ULIP-2 `image_feat` 的空間相容性（同空間、不同相機、不可互換）。
+- 資料協定與 Codex 第二輪對齊後的修正版：`workflow/STAGE1_DATA_PROTOCOL_R2.md`（VERIFIED / ASSUMPTION / RECOMMENDATION / MISSING-EVIDENCE 四類）。
+  主要修正：13.8 只是 empirical discrepancy；1/11 視角拆法是現有資料下最簡單可稽核的方案而非唯一；文字獨立性分四級；
+  `prompt_avg` 是 prompt-template 平均（撤回多句平均的支持）；loss 的 L* 公式撤回、改 margin 診斷。
+- 12.6 的六題新增第七題：**ProcTHOR 視角用的是退役渲染常數（11 張、224px、正交、白底）**，與 Objaverse（12 張、512px、透視、黑底）不同 →
+  重渲 1,467 件（成本小時級）或登記為偏離。節點文字修字後的資料鏈重跑（語意邊 35 分鐘 GPU）要與這題一起做。
