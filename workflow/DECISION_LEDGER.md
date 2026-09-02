@@ -5605,3 +5605,35 @@ term with the room's object count. The paper gives no lambda init. Options
 Codex; nothing changed.
 
 ---
+
+## DL-077 -- Kyzen decides nine of the thirteen paper-first questions
+
+Date 2026-09-02. Answers to the numbered list, each against the paper text
+quoted in the reply. Verbatim where it matters.
+
+| # | question | ruling |
+|---|---|---|
+| 2 | which eleven cameras | 甲: one orbit of eleven equal azimuths, 20 degree elevation, perspective camera, 512 px, black composite. IMPLEMENTATION CHOICE under the paper's "11 orthogonal viewpoints" |
+| 4 | query observation on the reproduction line | 甲: same record on both towers with the 30% query masking (paper-literal); the second-observation construction is an extension only |
+| 6 | image-only query at evaluation | 甲: the same aggregated image vector the gallery holds; single-view queries only in the extension |
+| 8 | lambda init and the layout term's scale | 甲: Pooling = normalised sum (sum over nodes, divided by its L2 norm), lambda init 0.1. Replaces the plain sum approved in DL-075 |
+| 9 | modality masking in Stage 2 | 甲: none (the paper states scene dropout only); an ablation later. 「論文沒寫就先甲吧」 |
+| 10 | ProcTHOR node text | 甲: gemma captions from the (unified-protocol) renders, the 2026-08-27 approval now scheduled |
+| 11 | ProcTHOR rendering | 甲: the same protocol as Objaverse (question 2) |
+| 12 | Table 1 row "w/ ESSGNN" | 甲: build the Stage 2 evaluation path after Stage 2 trains |
+| 13 | Table 2 scene-quality ratings | 甲: after Stage 2, 200 scenes, gemma as the rater (recorded deviation from GPT-4o) |
+
+Open, explained again in the reply: 1 (one backbone or two -- he asked what
+it means), 3 (what a strict re-render is and whether the official ULIP-2
+data can replace it: it cannot, the shards hold twelve-view FEATURES and no
+pixels), 5 (whether the paper has a formula for turning eleven views into one
+vector: it does not; the equations are listed), 7 (whether 48K is the two
+datasets combined: 46,052 + 1,467 = 47,519, close, but the paper attributes
+48K to Objaverse-LVIS alone; UNRESOLVED and inconsequential).
+
+Item 8 is implemented: `essgnn.Pool` gains `normalised_sum`; `init_lambda`
+moves from the Stage 1 recipe (where it silently defaulted to 1.0) into
+`stage2_protocol` as a recorded decision; the resolver re-materialises the
+protocols; the smoke re-measures the layout term's scale.
+
+---

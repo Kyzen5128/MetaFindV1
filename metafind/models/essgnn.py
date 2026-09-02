@@ -101,7 +101,14 @@ CoordFeat = Literal["updated", "current"]
 Agg = Literal["sum", "mean"]
 Distance = Literal["squared", "euclidean"]
 LayerSharing = Literal["independent", "shared"]
-Pool = Literal["mean", "sum", "max"]
+# "normalised_sum": the sum over nodes divided by its own L2 norm. The paper
+# names Pooling without defining it (2methdology.tex:56) and says Eq. 6's
+# layout term is a residual that must not disrupt the embedding space
+# (2methdology.tex:87). A plain sum grows with the room's object count and
+# was measured at 27x the fused query at init (smoke, 2026-09-02); the
+# normalised sum keeps the sum's direction (EGNN's QM9 readout) at unit
+# scale, so lambda alone sets the contribution. [Kyzen 2026-09-02, item 8]
+Pool = Literal["mean", "sum", "max", "normalised_sum"]
 # [C1 / U-26] The two ESSGNNs MetaFind describes. Not a style choice -- different
 # parameter counts, different gradient paths, different functions.
 ArchFamily = Literal["appendix_shared_msg", "sec25_two_mlp"]
@@ -651,11 +658,17 @@ class ESSGNN(nn.Module):
                 return h.mean(dim=0)
             if self.cfg.pooling == "sum":
                 return h.sum(dim=0)
+            if self.cfg.pooling == "normalised_sum":
+                s = h.sum(dim=0)
+                return s / (s.norm() + 1e-12)
             return h.max(dim=0).values
 
         n_graphs = int(batch.max().item()) + 1
         if self.cfg.pooling == "sum":
             return unsorted_segment_sum(h, batch, num_segments=n_graphs)
+        if self.cfg.pooling == "normalised_sum":
+            s = unsorted_segment_sum(h, batch, num_segments=n_graphs)
+            return s / (s.norm(dim=1, keepdim=True) + 1e-12)
         if self.cfg.pooling == "mean":
             return unsorted_segment_mean(h, batch, num_segments=n_graphs)
         out = h.new_full((n_graphs, h.size(1)), float("-inf"))

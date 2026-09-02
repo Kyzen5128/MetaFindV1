@@ -147,7 +147,8 @@ def main() -> int:
     model = build_stage2_model(encoding, training, hyperparameters, arch_proto,
                                node_feat_dim=data.node_dim,
                                edge_feat_dim=data.edge_dim,
-                               use_layout=use_layout)
+                               use_layout=use_layout,
+                               init_lambda=float(_stage2.get("init_lambda", 1.0)))
     loss_fn = MetaFindContrastiveLoss(ContrastiveConfig(
         bidirectional=True,
         learnable_temperature=values["learnable_temperature"],

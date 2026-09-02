@@ -589,7 +589,7 @@ def load_variant(variant_id: str, ckpt_record: dict, *, training: dict | None = 
 
 def build_stage2_model(encoding: dict, training: dict, hyperparameters: dict,
                        arch_proto: dict, *, node_feat_dim: int, edge_feat_dim: int,
-                       use_layout: bool = True):
+                       use_layout: bool = True, init_lambda: float = 1.0):
     """[P0-3] The Stage 2 dual tower -- WITH the ESSGNN branch.
 
     Stage 1's ``build_model`` sets ``use_layout=False``, which is right there:
@@ -634,7 +634,10 @@ def build_stage2_model(encoding: dict, training: dict, hyperparameters: dict,
         # [Table 3] "w/o Layout Context" is this flag. It is the one ablation
         # field Stage 2 owns; the rest were fixed when n10 trained the towers.
         use_layout=use_layout, essgnn=essgnn if use_layout else None,
-        init_lambda=float(hyperparameters["values"].get("init_lambda", 1.0))))
+        # Eq. 6's lambda starts here. The paper calls it "a learnable scalar"
+        # and gives no initial value; it lives in stage2_protocol (a Stage 2
+        # decision), not in the Stage 1 recipe it used to be read from.
+        init_lambda=float(init_lambda)))
 
 
 def main() -> int:
@@ -791,10 +794,15 @@ def main() -> int:
     variant = load_variant(args.variant, ckpt, training=training,
                            encoding=encoding, values=_stage1_hyperparameters["values"])
     use_layout = variant["layout_encoder"] is not None
+    if "init_lambda" not in stage2:
+        raise ValueError("stage2_protocol.json has no init_lambda; re-run "
+                         "`python -m metafind.models.resolve_stage2` so Eq. 6's "
+                         "starting value is a recorded decision, not a default")
     model = build_stage2_model(encoding, training, hyperparameters, arch_proto,
                                node_feat_dim=data.node_dim,
                                edge_feat_dim=data.edge_dim,
-                               use_layout=use_layout)
+                               use_layout=use_layout,
+                               init_lambda=float(stage2["init_lambda"]))
     loss_fn = MetaFindContrastiveLoss(ContrastiveConfig(
         # [Eq. 7/8] symmetric, unlike Stage 1's Eq. 5
         bidirectional=True,

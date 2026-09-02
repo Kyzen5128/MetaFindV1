@@ -81,6 +81,15 @@ STAGE2_DECISIONS = {
     # and is not implemented. Recorded so the choice is visible, not inferred
     # from the absence of code.
     "query_modality_masking": "none",
+    # Eq. 6's lambda at initialisation. The paper: "a learnable scalar", no
+    # value. Measured 2026-09-02 with the approved seven-layer ESSGNN: an
+    # untrained sum-pooled e_layout was 27x the fused query at init (max 40x)
+    # and the step-0 loss sat at chance, against the paper's own statement
+    # that the term is a residual which must not disrupt the embedding space.
+    # With the pooling changed to normalised_sum (unit-norm e_layout), 0.1
+    # starts the layout term at a tenth of a unit vector. [Kyzen 2026-09-02,
+    # item 8: 甲]
+    "init_lambda": 0.1,
 }
 
 EDGE_DECISIONS = {
@@ -151,7 +160,10 @@ ARCH_DECISIONS = {
     #                        recorded as "what the code happened to build".
     # hidden_dim 128 already equals QM9's; distance, projections and
     # layer_sharing are unchanged.
-    "pooling": "sum",
+    # [Kyzen 2026-09-02, item 8: 甲] normalised_sum, not the plain sum
+    # approved a few hours earlier: the plain sum scales with the room's
+    # object count and was 27x the fused query at init. See essgnn.Pool.
+    "pooling": "normalised_sum",
     "hidden_dim": 128,
     "n_layers": 7,
     "mlp_structure": "egnn_appendix",
