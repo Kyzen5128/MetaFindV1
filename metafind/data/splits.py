@@ -320,14 +320,54 @@ def admitted_uids() -> list[str]:
     # authority, so it is applied here as well.
     ledger = paths.OUTPUTS / "annotation_exclusions.json"
     if ledger.exists():
-        raw = json.loads(ledger.read_text())
-        entries = raw.values() if isinstance(raw, dict) else raw
-        excluded = set()
-        for key, e in (raw.items() if isinstance(raw, dict) else enumerate(raw)):
-            uid = e.get("uid") if isinstance(e, dict) else e
-            excluded.add(str(uid if uid is not None else key))
-        admitted -= excluded
+        admitted -= ledger_excluded_uids(json.loads(ledger.read_text()))
     return sorted(admitted)
+
+
+def ledger_excluded_uids(ledger: dict) -> set[str]:
+    """The uids `annotation_exclusions.json` actually excludes.
+
+    [FIXED 2026-09-03] This walked the ledger as `{uid: entry}`. It is not one:
+    it is a metadata dict whose keys are `decided_at`, `decided_by`,
+    `decision`, `git_commit`, `corpus_before`, `excluded_total`,
+    `corpus_after`, `rendered_assets` and `groups`. The loop therefore
+    subtracted nine strings -- 'Kyzen', '45692', '332', a timestamp, the word
+    'groups' -- and not one of the 332 real uids, which live under
+    `groups.<name>.uids` and were never read.
+
+    The corpus count was nevertheless right, by luck: those 332 have no
+    annotation sidecar, so the three-way intersection above had already dropped
+    them. What was gone is the property the caller's docstring claims -- that
+    the ledger is the authority and a restored sidecar cannot readmit a
+    rejected asset. Restoring one sidecar would have readmitted it silently.
+
+    Two shapes are on disk and both are handled, because the ledger records
+    them differently and neither is wrong: `n05_quarantine.uids` is a list of
+    uid strings, `manual_review_rejected.uids` is a list of dicts carrying
+    `uid` beside the CLIP scores the rejection was decided on.
+    """
+    out: set[str] = set()
+    for name, group in (ledger.get("groups") or {}).items():
+        for e in (group or {}).get("uids") or []:
+            uid = e.get("uid") if isinstance(e, dict) else e
+            if not uid:
+                raise ValueError(
+                    f"annotation_exclusions.json groups.{name} has an entry "
+                    f"with no uid: {e!r}. Refusing to guess: an unreadable "
+                    "exclusion silently readmits a rejected asset.")
+            out.add(str(uid))
+    # The ledger states its own total. Cross-checking the parse against it is
+    # what turns "the loop read something" into "the loop read the uids": the
+    # defect above produced nine entries against a stated 332 and nothing
+    # noticed for six days.
+    stated = ledger.get("excluded_total")
+    if stated is not None and int(stated) != len(out):
+        raise ValueError(
+            f"annotation_exclusions.json says excluded_total {stated} but "
+            f"groups.*.uids parses to {len(out)} distinct uid(s). The ledger "
+            "and its own groups disagree; fix the ledger rather than the "
+            "reader.")
+    return out
 
 
 def main() -> int:

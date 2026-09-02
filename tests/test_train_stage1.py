@@ -19,7 +19,6 @@ import torch
 from torch import nn
 
 from metafind.train.stage1 import (
-    N_VIEWS_PER_ASSET,
     build_model,
     collate,
     load_protocols,
@@ -346,7 +345,14 @@ def test_no_warmup_starts_at_the_base_rate():
 
 # --- [U-14] the aggregation field must decide something ----------------------
 
-def _cache(tmp_path, n_views=11, dim=8):
+# 12, not 11: what the corpus on disk actually holds. Every embedding sidecar
+# says `n_views: 12` and every `views` array is (12, 1280). A fixture shaped to
+# the paper's number instead of the corpus's is how a trainer that could not
+# read its own cache passed a green suite.
+CORPUS_N_VIEWS = 12
+
+
+def _cache(tmp_path, n_views=CORPUS_N_VIEWS, dim=8):
     """n06's cache and n03's cloud, in SEPARATE directories as on disk.
 
     They collide otherwise: both are `<uid>.npz`, and pointing both roots at one
@@ -1157,13 +1163,16 @@ def _pack(tmp_path, uids, *, text=True, pc=True, image=True, dim=8,
     return path
 
 
-def _packed_dataset(monkeypatch, tmp_path, **packkw):
+def _packed_dataset(monkeypatch, tmp_path, n_views=CORPUS_N_VIEWS, **packkw):
     import metafind.train.stage1 as m
 
-    views, emb, pcs = _cache(tmp_path)
+    views, emb, pcs = _cache(tmp_path, n_views=n_views)
     monkeypatch.setattr(m.paths, "EMBEDDINGS", emb)
     monkeypatch.setattr(m.paths, "POINTCLOUDS", pcs)
-    pack = m.QueryPack(_pack(tmp_path, ["u"], **packkw))
+    # ONE number reaches both the cache and the pack. They disagreed in
+    # production -- the sidecars said 12 and the trainer's constant said 11 --
+    # so a fixture that lets them differ silently cannot catch the recurrence.
+    pack = m.QueryPack(_pack(tmp_path, ["u"], **packkw), n_views)
     return m.Stage1Dataset(["u"], "mean", query_pack=pack), views, pack
 
 
@@ -1193,7 +1202,10 @@ def test_the_query_image_is_one_stored_view_chosen_by_uid_seed(
 
     ds, views, _ = _packed_dataset(monkeypatch, tmp_path)
     got = ds[0]["q_image"]
-    assert np.allclose(got, views[uid_seed("u") % N_VIEWS_PER_ASSET])
+    assert np.allclose(got, views[uid_seed("u") % ds.query_pack.n_views])
+    assert ds.query_pack.n_views == CORPUS_N_VIEWS, (
+        "the modulus must come from the protocol the corpus was encoded "
+        "under, not from a constant compiled into the trainer")
     assert not np.allclose(got, views.mean(axis=0)), "still the pooled vector"
 
 
@@ -1221,10 +1233,13 @@ def test_the_gallery_image_ignores_the_views_matrix_entirely(
     views, emb, pcs = _cache(tmp_path)
     monkeypatch.setattr(m.paths, "EMBEDDINGS", emb)
     monkeypatch.setattr(m.paths, "POINTCLOUDS", pcs)
-    pack = m.QueryPack(_pack(tmp_path, ["u"]))
+    pack = m.QueryPack(_pack(tmp_path, ["u"]), CORPUS_N_VIEWS)
     before = m.Stage1Dataset(["u"], "mean", query_pack=pack)[0]["image"].copy()
 
-    k = m.QueryPack.view_index("u")
+    # An instance method since 2026-09-03: the modulus is the pack's own
+    # `n_views`, taken from the encoding protocol, so there is no such
+    # thing as a view index that does not know what the corpus holds.
+    k = pack.view_index("u")
     poisoned = views.copy()
     poisoned[k] = 1e6
     np.savez(emb / "u.npz", text=np.zeros(8),
@@ -1250,7 +1265,7 @@ def test_the_pc_arm_refuses_rather_than_reusing_the_canonical_cloud(
     views, emb, pcs = _cache(tmp_path)
     monkeypatch.setattr(m.paths, "EMBEDDINGS", emb)
     monkeypatch.setattr(m.paths, "POINTCLOUDS", pcs)
-    pack = m.QueryPack(_pack(tmp_path, ["u"], pc_rows=["someone_else"]))
+    pack = m.QueryPack(_pack(tmp_path, ["u"], pc_rows=["someone_else"]), CORPUS_N_VIEWS)
     with pytest.raises(ValueError, match="Refusing"):
         m.Stage1Dataset(["u"], "mean", query_pack=pack)
 
@@ -1264,7 +1279,7 @@ def test_a_shard_whose_array_and_uid_list_disagree_is_refused(tmp_path):
     import metafind.train.stage1 as m
 
     with pytest.raises(ValueError, match="rows"):
-        m.QueryPack(_pack(tmp_path, ["u"], text=False, pc_array_rows=5))
+        m.QueryPack(_pack(tmp_path, ["u"], text=False, pc_array_rows=5), CORPUS_N_VIEWS)
 
 
 def test_the_selection_is_deterministic_across_processes():
@@ -1274,9 +1289,14 @@ def test_the_selection_is_deterministic_across_processes():
     import subprocess
     import sys
 
+    # `view_index` is `uid_seed(uid) % n_views`, and `n_views` is a protocol
+    # value the subprocess would need a whole pack to obtain. What this test is
+    # actually about is the OTHER half: that `uid_seed` is re-derivable from
+    # the uid alone and does not move with PYTHONHASHSEED. So it exercises the
+    # rule directly at a fixed count rather than building a pack to reach it.
     code = ("import sys; sys.path.insert(0, '.');"
-            "from metafind.train.stage1 import QueryPack;"
-            "print([QueryPack.view_index(u) for u in "
+            "from metafind.data.pointclouds import uid_seed;"
+            "print([uid_seed(u) % 12 for u in "
             "['a','b','c','000074a334c541878360457c672b6c2e']])")
     runs = {subprocess.run([sys.executable, "-c", code], capture_output=True,
                            text=True, cwd=str(pathlib.Path(__file__).parents[1]),
@@ -1300,7 +1320,7 @@ def test_a_partial_pack_leaves_the_other_modalities_on_the_gallery(
     views, emb, pcs = _cache(tmp_path)
     monkeypatch.setattr(m.paths, "EMBEDDINGS", emb)
     monkeypatch.setattr(m.paths, "POINTCLOUDS", pcs)
-    pack = m.QueryPack(_pack(tmp_path, ["u"], pc=False, image=False))
+    pack = m.QueryPack(_pack(tmp_path, ["u"], pc=False, image=False), CORPUS_N_VIEWS)
     assert pack.arms == ("text",)
     item = m.Stage1Dataset(["u"], "mean", query_pack=pack)[0]
     assert "q_text" in item and "q_image" not in item and "q_pc" not in item
@@ -1349,7 +1369,7 @@ def test_covered_splits_the_pool_without_softening_the_guard(
     views, emb, pcs = _cache(tmp_path)
     monkeypatch.setattr(m.paths, "EMBEDDINGS", emb)
     monkeypatch.setattr(m.paths, "POINTCLOUDS", pcs)
-    pack = m.QueryPack(_pack(tmp_path, ["u"], text_rows=["u"], pc_rows=["u"]))
+    pack = m.QueryPack(_pack(tmp_path, ["u"], text_rows=["u"], pc_rows=["u"]), CORPUS_N_VIEWS)
 
     kept, dropped = pack.covered(["u", "no_second_look"])
     assert kept == ["u"] and dropped == ["no_second_look"]
@@ -1359,3 +1379,54 @@ def test_covered_splits_the_pool_without_softening_the_guard(
         m.Stage1Dataset(["u", "no_second_look"], "mean", query_pack=pack)
     # and the kept pool passes it
     assert len(m.Stage1Dataset(kept, "mean", query_pack=pack)) == 1
+
+
+def test_the_view_count_comes_from_the_protocol_not_from_a_constant():
+    """The defect this replaces: `check_embedding_sidecars` compared each
+    sidecar's self-reported `n_views` against a number compiled into the
+    trainer. The corpus said 12, the constant said 11, and `main` raised
+    SystemExit over all 45,692 assets before the first batch -- while the cache
+    and the protocol agreed with each other perfectly.
+
+    So the test is not "11 or 12". It is that the guard READS the protocol: a
+    protocol saying 7 must make the guard want 7, and a protocol that says
+    nothing must be refused rather than defaulted.
+    """
+    import metafind.train.stage1 as m
+
+    for n in (7, 11, 12, 24):
+        enc = {"view_aggregation": {"n_views": n}}
+        assert m.protocol_n_views(enc) == n
+
+    # No default. A protocol resolved before view_aggregation existed does not
+    # know its own view count, and inventing one here restores the defect.
+    for absent in ({}, {"view_aggregation": {}}, {"view_aggregation": None}):
+        with pytest.raises(SystemExit, match="view_aggregation"):
+            m.protocol_n_views(absent)
+
+
+def test_the_sidecar_guard_asks_the_protocol_for_the_view_count(tmp_path, monkeypatch):
+    """End to end over the guard itself, on sidecars shaped like the real ones.
+
+    A cache written at 12 must PASS under a protocol that says 12 and FAIL
+    under one that says 11 -- the second half is what would have caught the
+    original defect, and the first half is what it broke.
+    """
+    import json
+
+    import metafind.train.stage1 as m
+    from metafind.data.encode_text_image import ENCODER_VERSION
+
+    emb = tmp_path / "emb"
+    emb.mkdir()
+    (emb / "u.json").write_text(json.dumps({
+        "text_serialization": "tpl@abc", "aggregation": "mean",
+        "encoder_version": ENCODER_VERSION, "n_views": 12}))
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", emb)
+
+    base = {"text_serialization": "tpl@abc", "image_aggregation": "mean"}
+    m.check_embedding_sidecars(["u"], {**base, "view_aggregation": {"n_views": 12}})
+
+    with pytest.raises(SystemExit, match="n_views"):
+        m.check_embedding_sidecars(["u"], {**base,
+                                           "view_aggregation": {"n_views": 11}})

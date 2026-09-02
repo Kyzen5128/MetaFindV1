@@ -248,3 +248,54 @@ def test_no_selection_protocol_without_a_dev_val():
     """Callers that pass no dev-val must not silently get a third protocol."""
     train, test = split_assets(uids(1000), DEFAULT_SEED)
     assert "C_dev_selection" not in build_eval_protocols(train, test)
+
+
+def test_the_exclusion_ledger_yields_uids_not_its_own_metadata_keys():
+    """The defect: `annotation_exclusions.json` was walked as `{uid: entry}`.
+
+    It is a metadata dict, so the loop subtracted its KEYS -- 'Kyzen',
+    'groups', '45692', a timestamp -- and never touched the 332 real uids under
+    `groups.<name>.uids`. The corpus count stayed right by luck, because those
+    332 had no annotation sidecar and the three-way intersection had already
+    dropped them; what was lost is the property that the ledger is the
+    authority, so restoring one sidecar would have silently readmitted an asset
+    Kyzen rejected.
+
+    Both on-disk shapes are exercised: a list of uid strings, and a list of
+    dicts carrying `uid` beside the scores the rejection was decided on.
+    """
+    from metafind.data.splits import ledger_excluded_uids
+
+    ledger = {
+        "decided_at": "2026-08-28T14:44:25+08:00",
+        "decided_by": "Kyzen",
+        "decision": "delete these",
+        "git_commit": "9e91457220fe625b3313d30c387364d592ee20a0",
+        "corpus_before": 46024,
+        "corpus_after": 45692,
+        "excluded_total": 3,
+        "groups": {
+            "n05_quarantine": {"uids": ["aaa", "bbb"]},
+            "manual_review_rejected": {"uids": [{"uid": "ccc", "clip_score": 0.1}]},
+        },
+    }
+    got = ledger_excluded_uids(ledger)
+    assert got == {"aaa", "bbb", "ccc"}
+    for key in ledger:
+        assert key not in got, f"the ledger's own metadata key {key!r} leaked in"
+
+
+def test_the_ledger_parse_is_checked_against_the_ledgers_own_total():
+    """Nine parsed entries against a stated 332 went unnoticed for six days.
+
+    The cross-check is what turns "the loop read something" into "the loop read
+    the uids", so a parse that silently reads the wrong field now fails loudly.
+    """
+    from metafind.data.splits import ledger_excluded_uids
+
+    with pytest.raises(ValueError, match="excluded_total"):
+        ledger_excluded_uids({"excluded_total": 332,
+                              "groups": {"g": {"uids": ["only-one"]}}})
+
+    with pytest.raises(ValueError, match="no uid"):
+        ledger_excluded_uids({"groups": {"g": {"uids": [{"clip_score": 0.1}]}}})

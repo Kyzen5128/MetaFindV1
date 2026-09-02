@@ -219,7 +219,9 @@ class QueryPack:
     --------------------
         text   a non-canonical `description_candidates` entry, re-serialised
                through the same template and encoded by the same frozen tower
-        image  ONE view, `views[uid_seed(uid) % 12]`
+        image  ONE view, `views[uid_seed(uid) % self.n_views]`, where
+               `n_views` is the encoding protocol's count (12 on the
+               corpus this pack was built for), not a literal
         pc     a second independent 10,000-point sample of the same mesh
 
     Fixed per asset, never per epoch [MASTER ruling 2026-08-31]: `uid_seed`
@@ -253,7 +255,13 @@ class QueryPack:
     no second candidate at all, so the uncovered set is real, not theoretical.
     """
 
-    def __init__(self, manifest_path: str | Path) -> None:
+    def __init__(self, manifest_path: str | Path, n_views: int) -> None:
+        # `n_views` comes from the encoding protocol (`protocol_n_views`), not
+        # from this manifest and not from a constant: the image arm is a RULE
+        # over the corpus's `views` matrix, so the modulus belongs to whatever
+        # produced that matrix. Required, because a default here would be the
+        # compile-time constant again under another name.
+        self.n_views = int(n_views)
         self.path = Path(manifest_path)
         if not self.path.exists():
             raise FileNotFoundError(
@@ -349,17 +357,21 @@ class QueryPack:
         si, ri = self.rows[arm][uid]
         return np.asarray(self.arrays[arm][si][ri], dtype=np.float32)
 
-    @staticmethod
-    def view_index(uid: str) -> int:
+    def view_index(self, uid: str) -> int:
         """Which view the query takes. A rule over `uid_seed`, not a stored map.
 
         `uid_seed` is already the project's per-asset seed (`pointclouds.py:128`)
         and the pc arm derives from it too, so the image draw cannot drift out
         of sync with a file that would have to be kept in step.
+
+        The modulus is `self.n_views`, the protocol's count, and was a module
+        constant. It is an instance attribute rather than an argument so that
+        the only way to obtain an index is from a pack that was told what the
+        corpus holds.
         """
         from metafind.data.pointclouds import uid_seed
 
-        return uid_seed(uid) % N_VIEWS_PER_ASSET
+        return uid_seed(uid) % self.n_views
 
     def identity(self) -> dict:
         """What goes into the arm hash: which arms, and which bytes supplied them.
@@ -383,16 +395,36 @@ class QueryPack:
                 "image_rule": (self.manifest.get("image") or {}).get("rule")}
 
 
-# n06 writes 12 per asset (`encode_text_image.py`, `views (12, 1280)`); asserted
-# against the loaded matrix in `__getitem__` rather than trusted, because a
-# corpus re-rendered at a different view count would otherwise silently change
-# which view every query drew.
-# [PAPER 2methdology.tex:28] eleven views per asset. Was 12 while the corpus
-# was rendered with OpenShape's three-ring list; RENDERER_VERSION 7 reverted
-# that deviation. Asserted against the loaded `views` matrix in __getitem__
-# rather than trusted, so a corpus rendered at another count cannot silently
-# change which view a query draws.
-N_VIEWS_PER_ASSET = 11
+def protocol_n_views(encoding: dict) -> int:
+    """How many views an asset holds, as the ENCODING PROTOCOL records it.
+
+    [WAS `N_VIEWS_PER_ASSET = 11`, a module constant.] It was compared against
+    what each cached sidecar records about ITSELF, and every one of the 45,692
+    says 12, so `check_embedding_sidecars` refused the whole corpus and `main`
+    raised SystemExit before the first batch -- 200 of 200 sampled assets
+    mismatched. The guard's purpose was right and its comparison source was
+    not: the view count is a protocol value. n05b resolves it, n06 stamps what
+    it actually encoded into every sidecar, and the two get compared. A
+    compile-time constant can be neither side of that comparison.
+
+    The safety property the deleted constant's comment claimed is NOT dropped;
+    it moves to `_query_side`, which still asserts the loaded `views` matrix
+    against this number rather than trusting it, so a corpus re-rendered at
+    another count cannot silently change which view a query draws.
+
+    No default, on purpose. A protocol resolved before `view_aggregation`
+    existed does not know its own view count, and substituting one here would
+    restore exactly the defect this replaces.
+    """
+    try:
+        n = encoding["view_aggregation"]["n_views"]
+    except (KeyError, TypeError):
+        raise SystemExit(
+            "stage1_encoding_protocol.json carries no view_aggregation.n_views. "
+            "Re-run n05b_resolve_stage1_encoding: the view count is a protocol "
+            "value and this trainer will not substitute a constant for it."
+        ) from None
+    return int(n)
 
 
 class Stage1Dataset:
@@ -460,12 +492,14 @@ class Stage1Dataset:
             out["q_text"] = pack.vector("text", uid)
         if "image" in pack.arms:
             views = entry["views"]
-            if views.shape[0] != N_VIEWS_PER_ASSET:
+            if views.shape[0] != pack.n_views:
                 raise ValueError(
-                    f"{uid} has {views.shape[0]} views, not {N_VIEWS_PER_ASSET}; "
+                    f"{uid} has {views.shape[0]} views, not {pack.n_views} as "
+                    "stage1_encoding_protocol.view_aggregation.n_views says; "
                     "the held-out index is taken modulo that count, so a "
                     "re-rendered corpus would silently change which view every "
-                    "query drew.")
+                    "query drew. Re-run n05b and n06 together, or use the "
+                    "protocol the cache was built under.")
             out["q_image"] = np.asarray(views[pack.view_index(uid)],
                                         dtype=np.float32)
         if "pc" in pack.arms:
@@ -1478,7 +1512,11 @@ def check_embedding_sidecars(uids: list[str], encoding: dict) -> None:
     want = {"text_serialization": str(encoding["text_serialization"]),
             "aggregation": str(encoding["image_aggregation"]),
             "encoder_version": str(ENCODER_VERSION),
-            "n_views": str(N_VIEWS_PER_ASSET)}
+            # The PROTOCOL's count, not a module constant. Comparing a
+            # sidecar's self-report against a number compiled into the trainer
+            # made this guard refuse the entire corpus while the cache and the
+            # protocol agreed with each other.
+            "n_views": str(protocol_n_views(encoding))}
     bad: dict[str, int] = {}
     missing = 0
     for uid in uids:
@@ -2087,7 +2125,8 @@ def main() -> int:
         dev_val_uids = []
     # Built HERE, before `--limit` and before `_pools`, because it CHANGES THE
     # POOL and the recorded digests have to describe what actually ran.
-    query_pack = QueryPack(args.query_pack) if args.query_pack else None
+    query_pack = (QueryPack(args.query_pack, protocol_n_views(encoding))
+                  if args.query_pack else None)
     # The declared observation and the dataset's construction must agree, or
     # the checkpoint would record one thing and the towers would have seen
     # another. Checked before any data is loaded.

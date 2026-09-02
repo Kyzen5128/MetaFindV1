@@ -96,10 +96,17 @@ os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
 
 NODE = "n04_render_views"
 # [RETIRED with the pyrender path] The live view count is
-# `render_blender.N_VIEWS` (12) and is imported as `LIVE_N_VIEWS` below. This 11
+# `render_blender.N_VIEWS` and is imported as `LIVE_N_VIEWS` below. This 11
 # is MetaFind's stated number and stays as the reference the DEVIATION is
 # measured against; `azimuth_orbit_directions` and `fibonacci_directions` still
 # default to it because the verification tools reproduce the retired layout.
+#
+# [CORRECTED 2026-09-03] This line said `render_blender.N_VIEWS` was "(12)".
+# It has been 11 since RENDERER_VERSION 7 (commit 7785679, 2026-09-02). The
+# number is NOT restated here any more: a second copy of a value is how the
+# first one goes stale, and this comment is the proof. Read the live value
+# from `render_blender`; read what the CORPUS holds from a sidecar, which is
+# 12 and will stay 12 until a re-render is approved.
 N_VIEWS = 11
 RESOLUTION = 224  # U-04
 PROJECTION = "orthographic"  # U-03a -- implementation choice, not an inference

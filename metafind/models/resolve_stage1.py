@@ -20,7 +20,7 @@ Three of the four have a defensible default and are recorded with the reasoning
 below. The fourth does not, and this module will not invent it:
 
   U-15 text_serialization      pinned template, golden-string test
-  U-14 image_aggregation       mean of the 11 per-view embeddings
+  U-14 image_aggregation       mean of the per-view embeddings
   U-11 missing_modality        learned token
   U-34 paper_clip_train_scope  NO DEFAULT -- must be passed explicitly
 
@@ -204,9 +204,14 @@ MAX_MATERIALS = 3
 # --- U-14 -----------------------------------------------------------------
 
 # [U-14] Paper 2.3 says each asset is "rendered from 11 orthogonal viewpoints"
-# and never states the aggregation. Mean of the 11 per-view embeddings:
+# and never states the aggregation. Mean of the per-view embeddings:
 #
-#   * it uses all eleven, which is what the paper says exist;
+#   * it uses every view the corpus holds, with no selection policy;
+#     [CORRECTED 2026-09-03] this line read "it uses all eleven, which is what
+#     the paper says exist". The corpus on disk holds TWELVE views per asset
+#     and n06 pooled all twelve, so the claim was true of the paper and false
+#     of the run. The count now travels in `view_aggregation()` below instead
+#     of being asserted in prose;
 #   * 2.1 defines the query as containing "images q_img", PLURAL, so a single
 #     view would contradict the paper's own wording on the query side;
 #   * it is deterministic, which the gallery requires -- a gallery embedding
@@ -218,6 +223,58 @@ MAX_MATERIALS = 3
 # augmentation while aligning a 3D encoder. A retrieval gallery cannot be built
 # from it. Recorded so the difference is visible rather than assumed away.
 IMAGE_AGGREGATION = "mean"
+
+# [SPEC 20260903 §五] `method: mean` on its own is NOT a protocol. Normalize(
+# mean(z)) and Normalize(mean(Normalize(z))) are different transformations
+# wearing the same word, so the block below records the whole rule.
+#
+# Every value here is OBSERVED IMPLEMENTATION being written down, not a new
+# IMPLEMENTATION CHOICE. `encode_text_image.aggregate` has always done
+# `views.mean(axis=0)` on the raw embeddings with no normalisation on either
+# side, and the audit did not take the code's word for it: recomputing all four
+# candidates from the `views` matrices actually stored on disk, mean(raw)
+# reproduces the stored `image` vector at cosine 1.00000000 while both
+# normalised forms sit at 0.9999 (PHASE1_AUDIT_20260903.md, Q18).
+#
+# N_VIEWS is a record too. n06 encoded every view the renderer produced and
+# stamped the count it saw into each sidecar; all 45,692 say 12. MetaFind
+# states 11 (2methdology.tex:28) and that DEVIATION is already registered in
+# every render sidecar's `n_views_source` (USER decision 2026-08-23). What is
+# new is only that the count is now written where the trainer can read it:
+# `stage1.check_embedding_sidecars` used to compare each sidecar's self-report
+# against a compile-time constant in `stage1.py`, which is not a protocol and
+# could not be reconciled with the corpus without editing code.
+#
+# ⚠ HASH CONSEQUENCE, stated rather than discovered. `arm_config_hash` takes
+# the encoding artifact WHOLE, so adding this block changes the arm hash of
+# every run resolved after it. That is correct -- the protocol genuinely
+# records more than it did -- but it means new runs are NOT hash-comparable
+# with the archived ones. AGGREGATION_VERSION exists so a later change to the
+# rule itself is distinguishable from this one; `main` prints both.
+N_VIEWS = 12
+VIEW_SELECTION_POLICY = "all"
+PRE_NORMALIZE_EACH_VIEW = False
+POST_NORMALIZE = False
+AGGREGATION_VERSION = 1
+
+
+def view_aggregation() -> dict:
+    """The §五 block. Derived from the constants above so it cannot drift.
+
+    `selected_view_ids` and `method` are DERIVED, never typed: a literal list
+    would be a second place for the view count to live, and two places for one
+    number is the defect this block exists to remove.
+    """
+    return {
+        "n_views": N_VIEWS,
+        "selected_view_ids": list(range(N_VIEWS)),
+        "view_selection_policy": VIEW_SELECTION_POLICY,
+        "pre_normalize_each_view": PRE_NORMALIZE_EACH_VIEW,
+        "method": IMAGE_AGGREGATION,
+        "post_normalize": POST_NORMALIZE,
+        "aggregation_version": AGGREGATION_VERSION,
+    }
+
 
 # --- U-11 -----------------------------------------------------------------
 
@@ -693,6 +750,12 @@ def build_protocol(paper_clip_train_scope: str, actual_clip_train_scope: str,
         "text_serialization_probes": [serialize_annotation(p)
                                       for p in serialization_probes()],
         "image_aggregation": IMAGE_AGGREGATION,
+        # [SPEC 20260903 §五] The complete view-aggregation rule, of which
+        # `image_aggregation` above is one field. Kept as well as, not instead
+        # of: n06 reads `image_aggregation` and `stage1.Stage1Dataset` takes it
+        # as its `aggregation` argument, and this node does not get to change
+        # what they consume as a side effect of recording more.
+        "view_aggregation": view_aggregation(),
         "paper_clip_train_scope": paper_clip_train_scope,
         "paper_clip_train_scope_basis": CLIP_SCOPE_BASIS[paper_clip_train_scope],
         "paper_clip_train_scope_confidence": confidence,
@@ -766,6 +829,13 @@ def main() -> int:
     print(f"stage1_encoding_protocol resolved by {decided_by}")
     print(f"  text_serialization  {text_serialization_id()}")
     print(f"  image_aggregation   {IMAGE_AGGREGATION}")
+    va = view_aggregation()
+    print(f"  view_aggregation    n_views {va['n_views']}, policy "
+          f"{va['view_selection_policy']}, pre_norm "
+          f"{va['pre_normalize_each_view']}, method {va['method']}, post_norm "
+          f"{va['post_normalize']}, version {va['aggregation_version']}")
+    print( "                      ^ this block enters arm_config_hash, so runs "
+           "resolved now are NOT hash-comparable with archived ones")
     print(f"  missing_modality    {MISSING_MODALITY}")
     print(f"  paper CLIP scope    {args.paper_clip_train_scope}")
     print(f"  actual CLIP scope   {args.actual_clip_train_scope}")
