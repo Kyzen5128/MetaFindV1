@@ -738,9 +738,16 @@ def collate(batch: list[dict]):
     # punishes the model for ranking it highly. Nothing raised, and the run
     # would simply learn slightly worse for a reason invisible in the curves.
     #
-    # This is the consumer the policy needs. A `positive_policy` field with no
-    # code reading it is this project's signature defect (PHASE1 audit M-1);
-    # asserting the invariant here is what stops it becoming another one.
+    # [NARROWED, ULIP2 REVIEWER MINOR 3] This was described as "the consumer
+    # `positive_policy` needs". One notch too wide, and the notch matters: this
+    # code does not read `observation.POSITIVE_POLICIES` and would behave
+    # identically if that tuple said something else. What now has an enforcer is
+    # the INVARIANT the policy rests on, not the declaration. The declaration is
+    # still uncontrolled, and calling this its consumer would have hidden that.
+    #
+    # The guard stays exactly as it is: enforcing unconditionally is the safe
+    # direction, because the arange diagonal is what the loss does regardless of
+    # what any protocol says.
     if len(set(uids)) != len(uids):
         dup = sorted({u for u in uids if uids.count(u) > 1})
         raise ValueError(
@@ -1379,6 +1386,13 @@ ENCODING_EXCLUDED = (
 # value the code cannot honour is the failure Codex named: a run could set
 # `scheduler: linear`, change its arm hash, and still be annealed by
 # `cosine_schedule`. Refusing is the only way the declaration stays true.
+def _live_view_aggregation() -> dict:
+    """The view rule this code would resolve. Imported late to avoid a cycle."""
+    from metafind.models.resolve_stage1 import view_aggregation
+
+    return view_aggregation()
+
+
 ENFORCED_SINGLETONS = {
     "values": {
         "optimizer": "adamw",   # torch.optim.AdamW is constructed unconditionally
@@ -1407,6 +1421,24 @@ ENFORCED_SINGLETONS = {
         # towers are never in the optimizer and the cached vectors are read from
         # disk. `trainable` and `finetuned` were accepted and hashed.
         "actual_clip_train_scope": "frozen",
+        # [ULIP2 REVIEWER MINOR 1, 2026-09-03] `load_protocol` binds this block
+        # at n06, the node that PERFORMS the pooling. This binds it at n10, the
+        # node that CONSUMES the cache and RECORDS the recipe -- and those are
+        # different failures.
+        #
+        # `check_embedding_sidecars` compares four fields, and a sidecar stores
+        # only `n_views` and `aggregation`. `arm_config_hash` hashes the encoding
+        # protocol WHOLE. So editing `post_normalize` to true in the artifact
+        # moved the arm hash, passed the sidecar guard, left the cached vectors
+        # untouched, and wrote a checkpoint recording a pooling rule that did not
+        # happen. Every resolved value is currently the identity value, so
+        # nothing was mislabelled -- correct by the defaults, not by a guarantee,
+        # which is this singleton table's whole subject.
+        #
+        # Bound to what the code would produce rather than to a literal: a
+        # literal here would be the second copy of the rule that the block was
+        # created to remove.
+        "view_aggregation": _live_view_aggregation(),
     },
 }
 
@@ -2095,6 +2127,19 @@ def main() -> int:
     #                       held-out view, a second point sample) while the
     #                       gallery keeps the canonical record. Required for
     #                       every run whose numbers will be compared.
+    # [ULIP2 REVIEWER MINOR 3, 2026-09-03] TWO VOCABULARIES FOR ONE AXIS, and
+    # this is the old one. `metafind/data/observation.py` dissolves
+    # `same_record` into a positive policy plus two per-modality observations,
+    # precisely because the token asserts "the same" without saying the same
+    # WHAT. This flag still requires it, and `arm_config_hash` stamps it into
+    # every checkpoint and sidecar.
+    #
+    # Left standing on purpose. Replacing it means the Stage 1 protocol artifact
+    # must carry an observation block, and choosing what goes in that block is
+    # deciding an UNRESOLVED question (REPRODUCTION_PROTOCOL_20260903 問題 4).
+    # Writing the module before its artifact records nothing false; swapping the
+    # flag before the artifact exists would. The two vocabularies coexist until
+    # Kyzen rules, and saying so here is cheaper than a reader discovering it.
     ap.add_argument("--query-observation", required=True,
                     choices=("same_record", "second_observation"),
                     help="what the query tower sees during training; "

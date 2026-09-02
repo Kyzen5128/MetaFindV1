@@ -275,8 +275,14 @@ def test_the_exclusion_ledger_yields_uids_not_its_own_metadata_keys():
         "corpus_after": 45692,
         "excluded_total": 3,
         "groups": {
-            "n05_quarantine": {"uids": ["aaa", "bbb"]},
-            "manual_review_rejected": {"uids": [{"uid": "ccc", "clip_score": 0.1}]},
+            # [ULIP2 REVIEWER MINOR 5] `n` was absent here, so the per-group
+            # check below was skipped in every test and was live only because
+            # the real ledger happens to carry it (311 and 21). A guard whose
+            # only support is a field in a data file is one file edit from
+            # being a no-op.
+            "n05_quarantine": {"n": 2, "uids": ["aaa", "bbb"]},
+            "manual_review_rejected": {
+                "n": 1, "uids": [{"uid": "ccc", "clip_score": 0.1}]},
         },
     }
     got = ledger_excluded_uids(ledger)
@@ -299,3 +305,66 @@ def test_the_ledger_parse_is_checked_against_the_ledgers_own_total():
 
     with pytest.raises(ValueError, match="no uid"):
         ledger_excluded_uids({"groups": {"g": {"uids": [{"clip_score": 0.1}]}}})
+
+
+def test_a_group_whose_own_count_disagrees_with_its_uids_is_refused():
+    """[ULIP2 REVIEWER MINOR 5] Localises a wrong parse instead of counting one.
+
+    The total-only check passes any parse that reads the wrong field of the
+    right NUMBER of entries. Each group states its own `n`, so a per-group
+    comparison says WHICH group went wrong.
+    """
+    from metafind.data.splits import ledger_excluded_uids
+
+    with pytest.raises(ValueError, match="n05_quarantine"):
+        ledger_excluded_uids({"excluded_total": 3, "groups": {
+            "n05_quarantine": {"n": 2, "uids": ["aaa"]},
+            "manual_review_rejected": {"n": 1, "uids": ["ccc"]}}})
+
+
+def test_the_filter_ladder_reports_before_removed_after_for_every_stage(
+        monkeypatch, tmp_path):
+    """[SPEC §六, ULIP2 REVIEWER MINOR 6] The function answering §六 had no test.
+
+    Built on a synthetic corpus where every stage removes a KNOWN number, so
+    the arithmetic is pinned rather than confirmed by having been run once
+    against the live corpus.
+    """
+    import json as _json
+
+    from metafind.data import splits as sp
+
+    logs, out = tmp_path / "logs", tmp_path
+    logs.mkdir()
+    manifest = [f"u{i}" for i in range(10)]
+    (tmp_path / "lvis.json").write_text(_json.dumps(manifest))
+
+    def _idx(name, uids):
+        (logs / name).write_text("\n".join(
+            _json.dumps({"uid": u}) for u in uids))
+
+    _idx("pointclouds_index.jsonl", manifest)          # removes 0
+    _idx("renders_index.jsonl", manifest[:9])          # removes 1
+    _idx("annotations_index.jsonl", manifest[:7])      # removes 2
+    (out / "annotation_exclusions.json").write_text(_json.dumps({
+        "excluded_total": 1,
+        "groups": {"g": {"n": 1, "uids": ["u0"]}}}))    # removes 1
+
+    monkeypatch.setattr(sp.paths, "LOGS", logs)
+    monkeypatch.setattr(sp.paths, "OUTPUTS", out)
+    monkeypatch.setattr(sp.paths, "LVIS_MANIFEST", tmp_path / "lvis.json")
+
+    lad = sp.filter_ladder()
+    assert lad["raw_assets"] == 10
+    assert [(s["stage"], s["before"], s["removed"], s["after"]) for s in lad["stages"]] == [
+        ("n03_pointclouds", 10, 0, 10),
+        ("n04_renders", 10, 1, 9),
+        ("n05_annotate", 9, 2, 7),
+        ("exclusion_ledger", 7, 1, 6),
+    ]
+    assert lad["usable_assets"] == 6
+    assert lad["ledger_uids_parsed"] == 1
+    # Every stage's `after` must be the next stage's `before`, or the ladder is
+    # describing four unrelated measurements rather than one pipeline.
+    for a, b in zip(lad["stages"], lad["stages"][1:]):
+        assert a["after"] == b["before"]

@@ -500,6 +500,18 @@ def main() -> int:
     # supposed to be already absent from the three-way intersection, so the
     # ledger stage should remove ZERO. If that ever changes, the corpus changed
     # and it says so here rather than in a silently different split.
+    # [ULIP2 REVIEWER MINOR 2] Two independent computations of one universe:
+    # `filter_ladder` starts from the LVIS manifest and intersects, while
+    # `admitted_uids` intersects the three indexes without touching the
+    # manifest. `main` PRINTS the first and SPLITS the second, so a uid present
+    # in an index but absent from the manifest would make the printed USABLE
+    # figure disagree with what was actually split -- and the operator would
+    # read the ladder as confirmation of the split. They agree today, which is
+    # luck, not a guarantee.
+    if lad["usable_assets"] != len(uids):
+        print(f"  MISMATCH the ladder says {lad['usable_assets']:,} usable but "
+              f"admitted_uids() returned {len(uids):,}. These are two "
+              "computations of one set and THIS RUN SPLIT THE SECOND.")
     led = next(st for st in lad["stages"] if st["stage"] == "exclusion_ledger")
     if led["removed"]:
         print(f"  NOTE the exclusion ledger removed {led['removed']:,} asset(s) "

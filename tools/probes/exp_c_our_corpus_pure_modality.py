@@ -69,6 +69,7 @@ sys.path.insert(0, str(REPO))
 from metafind import paths  # noqa: E402
 from metafind.data.pointclouds import uid_seed  # noqa: E402
 from metafind.models import resolve_stage1 as R  # noqa: E402
+from metafind.train.stage1 import protocol_n_views  # noqa: E402
 
 OUT = REPO / "output" / "look" / "exp_c_our_corpus_pure_modality.json"
 ROWS = REPO / "output" / "look" / "exp_c_our_corpus_rows.jsonl"
@@ -132,7 +133,13 @@ def main() -> int:
             if i % (args.batch * 40) == 0:
                 print(f"  query text {i:,}/{len(strs):,}", flush=True)
 
-    k_of = {u: uid_seed(u) % 12 for u in queries}
+    # [ULIP2 REVIEWER MINOR 4] Was `% 12`, fifteen lines above the
+    # `protocol_n_views` call added to remove exactly this. It does not depend
+    # on the query pack, so the "defer with the pack" rationale did not reach
+    # it. Correct today only because the corpus is 12.
+    _enc0 = json.loads((paths.OUTPUTS / "stage1_encoding_protocol.json").read_text())
+    _n_views = protocol_n_views(_enc0)
+    k_of = {u: uid_seed(u) % _n_views for u in queries}
     Q_i = np.stack([np.load(paths.EMBEDDINGS / f"{u}.npz")["views"]
                     .astype(np.float32)[k_of[u]] for u in queries])
 
@@ -140,7 +147,7 @@ def main() -> int:
     Q_p = np.load(PC_CACHE).astype(np.float32)[[pos[u] for u in queries]]
     if QPACK.exists():
         try:
-            from metafind.train.stage1 import QueryPack, protocol_n_views
+            from metafind.train.stage1 import QueryPack
             # Reviewer 2026-09-03: this sits inside a try/except, so the
             # missing-argument TypeError was swallowed and the probe reported
             # "no query pack on disk" while the pack was present and
