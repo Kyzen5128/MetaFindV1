@@ -192,6 +192,11 @@ class ModalityFusion(nn.Module):
             e = embeds.get(name)
             keep = present[:, i : i + 1]
             if e is None:
+                if bool(keep.any()):
+                    raise ValueError(
+                        f"{name} is marked present for some rows but no "
+                        f"{name} embedding was passed; it would have been "
+                        "silently mask-filled and counted as present")
                 fill = torch.zeros_like(self.mask_tokens[i]) if self.cfg.zero_pad else self.mask_tokens[i]
                 cols.append(fill.expand(present.size(0), -1))
                 continue
@@ -246,7 +251,11 @@ class ModalityFusion(nn.Module):
             return (x * w).sum(dim=1) / denom
 
         if kind == "masked_mlp":
-            return self.head(x.flatten(1))
+            # Honour include_absent_slots here too: with it off, an absent
+            # slot's token must not reach the MLP. It used to be ignored for
+            # this kind only, so an "absent slots excluded" masked_mlp run was
+            # the included variant under the other label.
+            return self.head((x * w).flatten(1))
 
         if kind == "mlp":
             return self.head((x * w).sum(dim=1) / denom)

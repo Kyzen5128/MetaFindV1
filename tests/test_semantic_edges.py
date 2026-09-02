@@ -279,3 +279,23 @@ def test_a_missing_object_text_is_raised_not_skipped():
     g = build_scene_graph(two_object_house(), "h0")
     with pytest.raises(KeyError):
         list(iter_pair_descriptions(g, {"Bed_1": TEXT_MAP["Bed_1"]}))
+
+
+def test_prompt_text_is_pinned_to_prompt_version():
+    """The cache key hashes PROMPT_VERSION, not the prompt text, so editing the
+    prompt without bumping the version would serve every cached sentence under
+    an unchanged key. This pins the current prompt to the current version: a
+    changed prompt fails here with the instruction to bump PROMPT_VERSION."""
+    import hashlib
+
+    from metafind.data.semantic_edges import PROMPT_VERSION, build_relation_prompt
+
+    digest = hashlib.sha256(build_relation_prompt("A", "B").encode()).hexdigest()[:16]
+    pinned = {1: "16bb476c77f21bd9"}
+    assert PROMPT_VERSION in pinned, (
+        f"PROMPT_VERSION {PROMPT_VERSION} has no pinned prompt digest; add "
+        f"{{{PROMPT_VERSION}: {digest!r}}} here")
+    assert digest == pinned[PROMPT_VERSION], (
+        f"build_relation_prompt changed (digest {digest}) but PROMPT_VERSION is "
+        f"still {PROMPT_VERSION}; bump PROMPT_VERSION and pin the new digest, "
+        "or every cached sentence is served under a stale key")

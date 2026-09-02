@@ -311,9 +311,23 @@ def admitted_uids() -> list[str]:
         return {json.loads(line)["uid"]
                 for line in path.read_text().splitlines() if line.strip()}
 
-    return sorted(index_uids("pointclouds_index.jsonl")
-                  & index_uids("renders_index.jsonl")
-                  & index_uids("annotations_index.jsonl"))
+    admitted = (index_uids("pointclouds_index.jsonl")
+                & index_uids("renders_index.jsonl")
+                & index_uids("annotations_index.jsonl"))
+    # The manually rejected assets stay out only while their annotation
+    # sidecars are absent; a forced re-annotation or a restored sidecar would
+    # readmit them through the index above. The exclusion ledger is the
+    # authority, so it is applied here as well.
+    ledger = paths.OUTPUTS / "annotation_exclusions.json"
+    if ledger.exists():
+        raw = json.loads(ledger.read_text())
+        entries = raw.values() if isinstance(raw, dict) else raw
+        excluded = set()
+        for key, e in (raw.items() if isinstance(raw, dict) else enumerate(raw)):
+            uid = e.get("uid") if isinstance(e, dict) else e
+            excluded.add(str(uid if uid is not None else key))
+        admitted -= excluded
+    return sorted(admitted)
 
 
 def main() -> int:

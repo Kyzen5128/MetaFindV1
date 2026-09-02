@@ -81,6 +81,14 @@ def main() -> int:
     ap.add_argument("--hyperparameters", required=True,
                     help="the recipe file Stage 2 will be launched with; the "
                          "Stage 1 artifact is accepted and recorded as such")
+    ap.add_argument("--optimizer", choices=("groups", "flat"), default="groups",
+                    help="groups = the trainer's construction (ULIP decay "
+                         "groups, artifact betas/eps); flat = the pre-2026-09-02 "
+                         "flat AdamW, for the optimizer audit only")
+    ap.add_argument("--freeze-mask-tokens", choices=("yes", "no"), default="yes",
+                    help="no = the pre-2026-09-02 freeze, with the fusion mask "
+                         "tokens left in the optimizer; for the audit only")
+    ap.add_argument("--out", default=None, help="override the output JSON path")
     args = ap.parse_args()
 
     from metafind.models.losses import ContrastiveConfig, MetaFindContrastiveLoss
@@ -98,7 +106,8 @@ def main() -> int:
     encoding, training, stage1_hp = load_protocols()
     _stage2, _edge, arch_proto = load_stage2_protocols()
     hp_path = Path(args.hyperparameters)
-    values = json.loads(hp_path.read_text())["values"]
+    hyperparameters = json.loads(hp_path.read_text())
+    values = hyperparameters["values"]
     hp_sha = hashlib.sha256(hp_path.read_bytes()).hexdigest()
 
     positive_map = json.loads((paths.OUTPUTS / "stage2_positive_map.json").read_text())
@@ -149,6 +158,8 @@ def main() -> int:
     model.to(args.device)
     loss_fn.to(args.device)
     freeze_for_stage2(model, backbone)
+    if args.freeze_mask_tokens == "no":
+        model.query.fusion.mask_tokens.requires_grad_(True)
 
     R = {"variant": args.variant, "use_layout": use_layout,
          "checkpoint": ckpt["uri"], "checkpoint_sha256": ckpt["sha256"],
@@ -173,10 +184,22 @@ def main() -> int:
         "pass": bool(backbone.is_frozen()) and not bb_trainable}
 
     # ---- one real step -----------------------------------------------------
-    params = [p for p in list(model.parameters()) + list(loss_fn.parameters())
-              if p.requires_grad]
-    opt = torch.optim.AdamW(params, lr=values["learning_rate"],
-                            weight_decay=values["weight_decay"])
+    if args.optimizer == "flat":
+        # The construction Stage 2 used until 2026-09-02: one flat AdamW over
+        # every requires_grad tensor. Kept selectable so the optimizer audit
+        # below can show what it did to tensors with a zero gradient.
+        params = [p for p in list(model.parameters()) + list(loss_fn.parameters())
+                  if p.requires_grad]
+        opt = torch.optim.AdamW(params, lr=values["learning_rate"],
+                                weight_decay=values["weight_decay"])
+    else:
+        from metafind.train.stage1 import weight_decay_groups
+        opt = torch.optim.AdamW(
+            weight_decay_groups(list(model.named_parameters())
+                                + list(loss_fn.named_parameters()),
+                                values["weight_decay"]),
+            lr=values["learning_rate"], betas=tuple(values["betas"]),
+            eps=values["eps"])
     graphs = data.graphs_for({h for h, _, _ in samples})
     batch = unique_positive_batches(samples, values["batch_size"], rng)[0]
     drop = bool(rng.random() < float(values.get("scene_dropout",
@@ -196,9 +219,42 @@ def main() -> int:
 
     grad_norm = {n: (None if p.grad is None else float(p.grad.norm()))
                  for n, p in model.named_parameters()}
+    grad_is_none = {n: p.grad is None for n, p in model.named_parameters()}
     opt.step()
     moved = {n: float((p.detach() - before[n]).abs().max())
              for n, p in model.named_parameters()}
+
+    # ---- optimizer audit, per named tensor -------------------------------
+    # Codex 2026-09-02: PyTorch AdamW skips a parameter whose .grad is None,
+    # so "no gradient but still decayed" needs the distinction between a None
+    # grad and a ZERO grad made on the actual tensors, not argued. For each
+    # tensor of interest: requires_grad, grad is None, grad norm, and the
+    # parameter delta after one step. A zero-norm grad with a nonzero delta
+    # is decay-only movement.
+    lr, wd = values["learning_rate"], values["weight_decay"]
+    watch = [n for n in moved if n.endswith("layout_weight")
+             or n.endswith("fusion.mask_tokens")
+             or n.endswith("missing_edge_token")
+             or n.endswith("fusion.modality_pos")]
+    watch += [n for n in moved if n.startswith("query.fusion.head")][:2]
+    rg = {n: p.requires_grad for n, p in model.named_parameters()}
+    R["optimizer_audit"] = {
+        "lr": lr, "weight_decay": wd, "optimizer": "torch.optim.AdamW",
+        "construction": args.optimizer,
+        "mask_tokens_frozen": args.freeze_mask_tokens == "yes",
+        "tensors": {n: {"requires_grad": rg[n],
+                        "grad_is_none": grad_is_none[n],
+                        "grad_norm": grad_norm[n],
+                        "delta_max": moved[n],
+                        "decay_only_movement": (grad_norm[n] == 0.0
+                                                and moved[n] > 0.0)}
+                    for n in watch if n in grad_norm}}
+    print("\noptimizer audit (one AdamW step)")
+    for n, c in R["optimizer_audit"]["tensors"].items():
+        gn = "None" if c["grad_norm"] is None else "%.3e" % c["grad_norm"]
+        flag = "  <- moved with ZERO grad (decay only)" if c["decay_only_movement"] else ""
+        print("  %-44s grad_none=%-5s grad_norm=%10s delta=%.3e%s"
+              % (n, c["grad_is_none"], gn, c["delta_max"], flag))
 
     def group(prefix_test):
         return [n for n in moved if prefix_test(n)]
@@ -210,7 +266,12 @@ def main() -> int:
                 "n_moved": sum(moved[n] > 0 for n in names)}
 
     gal = group(lambda n: n.startswith("gallery."))
-    fus = group(lambda n: n.startswith("query.fusion"))
+    # Only the fusion tensors the trainer PUT in the optimizer. Under
+    # query_modality_masking="none" the mask tokens are deliberately frozen
+    # (no gradient path; see freeze_for_stage2), so they are reported beside
+    # the check rather than counted as a tensor that failed to move.
+    fus = group(lambda n: n.startswith("query.fusion") and rg[n])
+    fus_frozen = group(lambda n: n.startswith("query.fusion") and not rg[n])
     ess = group(lambda n: n.startswith("query.layout_encoder"))
     lam = group(lambda n: n.endswith("layout_weight"))
 
@@ -221,7 +282,8 @@ def main() -> int:
     # ---- 3. query fusion updated -------------------------------------------
     s = summarise(fus)
     R["checks"]["3_query_fusion_updated"] = {
-        **s, "pass": s["n"] > 0 and s["n_moved"] == s["n"]}
+        **s, "frozen_by_design": fus_frozen,
+        "pass": s["n"] > 0 and s["n_moved"] == s["n"]}
 
     # ---- 4. ESSGNN receives gradients --------------------------------------
     s = summarise(ess)
@@ -297,9 +359,10 @@ def main() -> int:
     R["n_failed"] = sum(not R["checks"][k]["pass"] for k in order)
     print(f"\n{'七項全過' if R['all_pass'] else str(R['n_failed']) + ' 項未過'}")
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(R, indent=1, ensure_ascii=False))
-    print(f"-> {OUT}")
+    out = pathlib.Path(args.out) if args.out else OUT
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(R, indent=1, ensure_ascii=False))
+    print(f"-> {out}")
     return 0 if R["all_pass"] else 1
 
 

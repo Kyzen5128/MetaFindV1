@@ -74,6 +74,13 @@ STAGE2_DECISIONS = {
     # [U-32] 2.6 says the layout vector is "omitted in 30% of BATCHES", which
     # reads as one draw per batch. `sample` stays selectable as a variant.
     "scene_dropout_granularity": "batch",
+    # Whether Stage 1's per-modality query masking is also applied in Stage 2.
+    # The paper states scene dropout for Stage 2 and is silent on modality
+    # masking there. "none" records what every Stage 2 run has done (all
+    # three query modalities always present); "p_mask" is a possible ablation
+    # and is not implemented. Recorded so the choice is visible, not inferred
+    # from the absence of code.
+    "query_modality_masking": "none",
 }
 
 EDGE_DECISIONS = {

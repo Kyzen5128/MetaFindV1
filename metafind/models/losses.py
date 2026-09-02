@@ -166,7 +166,13 @@ class MetaFindContrastiveLoss(nn.Module):
         q = F.normalize(query, dim=-1)
         g = F.normalize(gallery, dim=-1)
 
-        scale = self.logit_scale.exp().clamp(max=self.cfg.max_logit_scale)
+        scale = self.logit_scale.exp()
+        if self.cfg.learnable_temperature:
+            # The clamp exists to stop a LEARNED scale running away. Applied
+            # to a fixed buffer it silently retrained a tau below
+            # 1/max_logit_scale at the clamp while `.temperature` reported
+            # the configured value.
+            scale = scale.clamp(max=self.cfg.max_logit_scale)
         logits_q2g = scale * q @ g.t()
 
         if labels is None:
@@ -186,9 +192,13 @@ class MetaFindContrastiveLoss(nn.Module):
 
         # Eq. 7b then Eq. 8. Transposing is valid only because the gallery batch
         # is the same set of items; with a decoupled gallery this would need its
-        # own logits.
-        loss_g2q = F.cross_entropy(logits_q2g.t(), labels)
+        # own logits. Under a non-identity `labels`, gallery row g's positive is
+        # the query q with labels[q] == g, i.e. the INVERSE permutation; using
+        # `labels` directly here was wrong for every labels != arange.
+        inverse = torch.empty_like(labels)
+        inverse[labels] = torch.arange(labels.numel(), device=labels.device)
+        loss_g2q = F.cross_entropy(logits_q2g.t(), inverse)
         out["loss_g2q"] = loss_g2q
-        out["acc_g2q"] = (logits_q2g.t().argmax(dim=-1) == labels).float().mean().detach()
+        out["acc_g2q"] = (logits_q2g.t().argmax(dim=-1) == inverse).float().mean().detach()
         out["loss"] = 0.5 * (loss_q2g + loss_g2q)
         return out

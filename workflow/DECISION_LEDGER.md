@@ -5388,3 +5388,105 @@ test_gallery_freeze_gate, test_resolve_stage1. One fixture gained the new
 required `mlp_structure` key.
 
 ---
+
+## DL-073 -- Five code audits, thirty-odd fixes, three measurements that replaced arguments, and Codex's second-round corrections adopted
+
+Date 2026-09-02. Kyzen: check the whole codebase and fix what should be fixed;
+then reconcile with Codex. Five read-only audits (Stage 1 trainer and data
+path; dual tower / fusion / losses; ESSGNN and Stage 2; evaluation; data
+preprocessing) reported 14 + 10 + 12 + 9 + 14 findings. Each was verified
+against the code before it was acted on; the ones that needed a measurement
+got one. Tests: 581 pass. The specification is `workflow/STAGE1_DATA_PROTOCOL_R2.md`.
+
+### Measured, not argued
+
+`OBSERVED DATA` Optimizer, per tensor, one AdamW step (`stage2_optimizer_audit_flat.json`
+vs `stage2_smoke_seven_checks.json`): under the old flat AdamW the fusion mask
+tokens and the missing-edge token had a grad that was a ZERO TENSOR, not
+None, and moved by decay alone (3.6e-6 per step = lr*wd*|p|); lambda moved
+5.50e-4 = lr + lr*wd*lambda. Under the trainer's new construction (ULIP decay
+groups, artifact betas/eps, mask tokens frozen under query_modality_masking
+= none) lambda moves exactly lr and neither token moves. Codex's objection --
+"AdamW skips grad-is-None parameters" -- is correct and does not apply: the
+grads were zero tensors. Conclusion kept, reason corrected.
+
+`OBSERVED DATA` Depth-shell grey (`depth_shell_conventions.json`): 0.5 vs
+0.4 over the 1,439 ProcTHOR shells gives mean cosine 0.9562 between the two
+embeddings and only 93.47% self-top-1 (worst rank 10). The constant matters;
+ULIP's 0.4 is adopted and the Stage 2 index rebuilt (sha 0f783296).
+
+`OBSERVED DATA` Handedness: z-mirroring 400 Objaverse test clouds gives mean
+cosine 0.9963 (min 0.9812), self-top-1 100%. PointBERT is reflection-
+insensitive on this corpus; the Unity frame needs no mirror. Finding closed.
+
+`OBSERVED DATA` Official ULIP-2 `image_feat` vs ours on 1,930 shared assets
+(`official_image_feat_compat.json`): norms 43.07 vs 43.46 (same scale, both
+raw); same-asset nearest-pose cosine 0.8515 against an other-asset floor of
+0.4968; twelve-view means agree at 0.8937; our text as query, R@1 76.74 on
+their gallery vs 80.88 on ours (pool 1,930). Same space, no projection needed,
+different cameras, not numerically interchangeable.
+
+`OBSERVED IMPLEMENTATION` `prompt_avg` in the official shards is OpenShape's
+prompt-TEMPLATE average (`upstream/OpenShape/src/data.py:33`), not a mean over
+several captions. My earlier use of it to support a multi-sentence gallery is
+withdrawn.
+
+`PAPER FACT` ULIP-2 section 3.3: per step, a random rendered view and that
+view's own BLIP-2 caption (`I ~ render(O)`, `T ~ blip2(I)`). Upgraded from
+LIKELY.
+
+`OBSERVED DATA` ProcTHOR node text: 7 of 93 distinct strings are wrong
+("a c d", "a t v stand", "a apple"...), 48,577 of 827,730 graph nodes (5.9%).
+The camel-case splitter and the article are fixed in code; the data chain
+(object text -> semantic edges -> node embeddings -> Stage 2 index) is to be
+regenerated together with the ProcTHOR render-protocol decision, not before.
+
+### Fixed in this pass (each verified; see the commit for the diff)
+
+Stage 2: checkpoint record written to `variant_ckpts.json`; `load_variant`
+checks fusion / p_mask / missing-modality; epochs <= 0 refused; only the
+query tower enters train mode; protocol fields the code hardcodes are compared
+and refused on mismatch; semantic-edge row labels and node-embedding sha
+verified; `--overwrite` required to replace a variant.
+Models: `masked_mlp` honours include_absent_slots; a modality marked present
+with no vector is refused; `labels` uses the inverse permutation for g2q; the
+logit-scale clamp applies only to a learnable tau; the model-side scene-
+dropout sampler and `drop_layout` (called by nothing but their tests) removed.
+Evaluation: non-finite similarities refused (NaN ranked 0 = hit); a reported
+protocol refuses dropped queries; provenance gains checkpoint phase,
+sealed-read-on-nonfinal flag, split identity, and the query-view note; the
+gallery encoder hash includes BatchNorm buffers for new indexes (flagged in
+the record; readers compute accordingly).
+Stage 1: `train_scope` hashed once; missing-modality vocabulary enforced;
+embedding sidecars checked against the encoding protocol; query observation
+in the checkpoint; dev-val worker count follows the trainer; checkpoint
+restore covers buffers; `full` refused early; QueryPack identity hashes shard
+bytes, not the rewritten manifest; manual exclusions applied in
+`admitted_uids`.
+Data: query pack skips byte-equal candidates, `--limit` gets its own tag,
+resume checks the row; point-cloud index publishes only current-version
+sidecars with an existing cloud; render bbox uses the sampler's mesh filter;
+semantic-edge prompt text pinned to its version number by a test; six-seed
+test really varies the seed.
+
+### Not fixed, and why
+
+ProcTHOR views rendered with retired constants (11 x 224 orthographic, white)
+against Objaverse's 12 x 512 perspective, black: a render-protocol decision
+for Kyzen. n06 cache key does not bind the OpenCLIP weight blob: fixing it
+forces a full re-encode. `promote()` records a gate path the next G4 run
+overwrites: sha still verifiable, path not durable. No evaluation path for a
+Stage 2 checkpoint on Table 1's second row: scope gap.
+
+### Codex's second-round corrections, adopted
+
+Empirical discrepancy, not incompatibility; the 1/11 view split as the
+simplest auditable scheme under the cached features, not the only one; text
+independence in four levels with external captions only generator-disjoint;
+the 15-point caption gap not read as quality; the 75-token multi-sentence
+format not frozen before a length ablation; official image features usable
+only after the compatibility test (now done); the L* formula withdrawn for
+margin diagnostics; the resample pack kept as a sampling control; the 11-view
+re-annotation behind a pilot ladder.
+
+---

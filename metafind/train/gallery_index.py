@@ -97,8 +97,17 @@ def load_checkpoint_record(record_path: str | Path | None = None) -> dict:
     return record
 
 
-def gallery_encoder_sha256(backbone, model) -> str:
+def gallery_encoder_sha256(backbone, model, include_buffers: bool = False) -> str:
     """A digest over EVERYTHING that produces a gallery embedding.
+
+    ``include_buffers`` adds the registered buffers -- PointBERT's BatchNorm
+    running statistics, which decide the embedding in eval mode and which
+    training moves. A parameters-only digest could not tell two encoders with
+    the same weights and different statistics apart. New indexes are written
+    with buffers included and say so in their record
+    (``gallery_encoder_hash_includes_buffers``); a reader must compute the
+    live digest the same way the record was, which is why this is a flag and
+    not a silent change of the function.
 
     The gallery path is::
 
@@ -122,6 +131,10 @@ def gallery_encoder_sha256(backbone, model) -> str:
         for name, p in sorted(module.named_parameters()):
             h.update(f"{tag}.{name}".encode())
             h.update(p.detach().cpu().numpy().tobytes())
+        if include_buffers:
+            for name, b in sorted(module.named_buffers()):
+                h.update(f"{tag}.buffer.{name}".encode())
+                h.update(b.detach().cpu().numpy().tobytes())
     return h.hexdigest()
 
 
@@ -460,7 +473,7 @@ def main() -> int:
     assert backbone.is_frozen(), "the backbone is still trainable or in train mode"
     model.to(args.device).eval()
     model.freeze_gallery(True)
-    encoder_sha = gallery_encoder_sha256(backbone, model)
+    encoder_sha = gallery_encoder_sha256(backbone, model, include_buffers=True)
 
     node = "n11_gallery_index_staging" if args.mode == "stage1" else "n11b_stage2_gallery_index"
     started = time.time()
@@ -497,6 +510,7 @@ def main() -> int:
                 np.stack(vectors), ids,
                 paths.OUTPUTS / f"gallery_index_{ckpt_record['sha256'][:16]}.npz")
             record["gallery_encoder_sha256"] = encoder_sha
+            record["gallery_encoder_hash_includes_buffers"] = True
             # [CODEX MAJOR 2026-08-30] Stated in the record, not only in the
             # dict key: Stage 2 reads the record, and a key is not a field.
             record["stage1_checkpoint_sha256"] = ckpt_record["sha256"]
@@ -585,6 +599,7 @@ def main() -> int:
                 "embedding_dim": record["dim"],
                 "n_assets": record["count"],
                 "gallery_encoder_sha256": encoder_sha,
+                "gallery_encoder_hash_includes_buffers": True,
                 "modality_completeness": {
                     "complete": len(ids),
                     "excluded_no_pointcloud": excluded,

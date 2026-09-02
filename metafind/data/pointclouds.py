@@ -768,10 +768,19 @@ def rebuild_index(index_path: Path) -> int:
     with tmp.open("w") as f:
         for sc in sorted(paths.POINTCLOUDS.glob("*.json")):
             try:
-                f.write(json.dumps(json.loads(sc.read_text())) + "\n")
-                n += 1
+                rec = json.loads(sc.read_text())
             except (OSError, json.JSONDecodeError):
                 continue
+            # A sidecar from an earlier sampler version, or one whose cloud
+            # file is gone, is not part of this corpus. Publishing every
+            # parseable sidecar admitted a stale cloud after a failed
+            # re-sample; the render index already excludes its stale rows.
+            if rec.get("sampler_version") != SAMPLER_VERSION:
+                continue
+            if not (paths.POINTCLOUDS / f"{sc.stem}.npz").exists():
+                continue
+            f.write(json.dumps(rec) + "\n")
+            n += 1
     tmp.replace(index_path)
     return n
 

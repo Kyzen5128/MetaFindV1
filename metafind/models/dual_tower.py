@@ -98,8 +98,13 @@ class DualTowerConfig:
         init_lambda: initial value of the learnable layout weight. The paper
             gives no value (U-22); 1.0 keeps the residual at full strength at
             initialisation and lets training scale it down.
-        scene_dropout: probability of dropping the layout term for a sample
-            during training (sec. 2.6, "stochastic scene dropout (30%)").
+
+    Scene dropout (sec. 2.6, "omitted in 30% of batches") is NOT a field here.
+    It is drawn once per batch by the Stage 2 trainer, which then passes
+    ``layout=None`` for a dropped batch; the model never sees a per-row mask.
+    A model-side sampler and a ``drop_layout`` argument used to exist beside
+    that, were called by nothing but their own tests, and carried a generator
+    device bug the trainer's path did not have. Deleted 2026-09-02.
     """
 
     # REQUIRED, no defaults. `dim` is the loaded checkpoint's embedding width
@@ -120,10 +125,6 @@ class DualTowerConfig:
     gallery_fusion: FusionConfig | None = None
     use_layout: bool = True
     init_lambda: float = 1.0
-    scene_dropout: float = 0.30
-    # U-32. "batch" is the literal reading of 2.6 ("omitted in 30% of
-    # batches"); "sample" is kept selectable as the variant.
-    scene_dropout_granularity: Literal["batch", "sample"] = "batch"
 
     def __post_init__(self) -> None:
         if self.tower_sharing not in TOWER_SHARING:
@@ -220,19 +221,15 @@ class QueryTower(nn.Module):
         embeds: dict[str, Tensor | None],
         present: Tensor | None = None,
         layout: Tensor | None = None,
-        drop_layout: Tensor | None = None,
     ) -> Tensor:
         """
         Args:
             embeds: ``{"text"|"image"|"pc": (B, D) or None}``.
             present: ``(B, 3)`` bool presence mask; see ``ModalityFusion``.
             layout: ``(B, D)`` layout vectors from ``encode_layout``. ``None``
-                means no scene context, which is the layout-free query case the
-                paper's Table 1 evaluates.
-            drop_layout: ``(B,)`` bool, True where the layout term is suppressed
-                for this sample (sec. 2.6's stochastic scene dropout). Pass
-                explicitly so the decision stays reproducible from a seed rather
-                than being drawn inside the forward pass.
+                means no scene context: the layout-free query case the paper's
+                Table 1 evaluates, and also what the Stage 2 trainer passes
+                for a batch that scene dropout omitted.
 
         Returns:
             ``(B, D)`` query embeddings.
@@ -244,15 +241,7 @@ class QueryTower(nn.Module):
             raise ValueError("layout provided but this tower was built with use_layout=False")
         if layout.shape != fused.shape:
             raise ValueError(f"layout {tuple(layout.shape)} != fused {tuple(fused.shape)}")
-
-        contribution = self.lam * layout
-        if drop_layout is not None:
-            if drop_layout.shape != (fused.size(0),):
-                raise ValueError(
-                    f"drop_layout must be ({fused.size(0)},), got {tuple(drop_layout.shape)}"
-                )
-            contribution = torch.where(drop_layout.unsqueeze(-1), torch.zeros_like(contribution), contribution)
-        return fused + contribution
+        return fused + self.lam * layout
 
     def encode_layout(
         self,
@@ -330,39 +319,12 @@ class MetaFindDualTower(nn.Module):
     def trainable_parameters(self) -> list[nn.Parameter]:
         return [p for p in self.parameters() if p.requires_grad]
 
-    def sample_scene_dropout(
-        self, batch_size: int, generator: torch.Generator | None = None, device="cpu"
-    ) -> Tensor:
-        """Draw sec. 2.6's 30% scene dropout mask. True means "drop the layout".
-
-        Granularity follows ``cfg.scene_dropout_granularity`` (U-32):
-
-        * ``"batch"`` -- ONE draw for the whole batch, which is what 2.6 says:
-          "the layout vector e_layout is omitted in 30% of batches". Every row
-          then shares the layout condition, so the in-batch negatives of a
-          contrastive step are all in the same regime.
-        * ``"sample"`` -- an independent draw per row.
-
-        The two are not interchangeable for an in-batch contrastive loss.
-        Note 2.6's OTHER 30%, the Stage 1 modality masking, is explicitly
-        "independently" per modality; that one is genuinely per-sample. An
-        earlier version applied the per-sample reading to both.
-        """
-        p = self.cfg.scene_dropout
-        if not 0.0 <= p <= 1.0:
-            raise ValueError(f"scene_dropout must be in [0, 1], got {p}")
-        if self.cfg.scene_dropout_granularity == "batch":
-            drop = torch.rand((), device=device, generator=generator) < p
-            return drop.expand(batch_size).clone()
-        return torch.rand(batch_size, device=device, generator=generator) < p
-
     def forward(
         self,
         query_embeds: dict[str, Tensor | None],
         gallery_embeds: dict[str, Tensor | None],
         present: Tensor | None = None,
         layout: Tensor | None = None,
-        drop_layout: Tensor | None = None,
     ) -> tuple[Tensor, Tensor]:
         """Encode a batch through both towers.
 
@@ -370,7 +332,7 @@ class MetaFindDualTower(nn.Module):
             ``(query, gallery)``, each ``(B, D)``, aligned so row ``i`` of the
             query is the positive for row ``i`` of the gallery.
         """
-        q = self.query(query_embeds, present=present, layout=layout, drop_layout=drop_layout)
+        q = self.query(query_embeds, present=present, layout=layout)
         g = self.gallery(gallery_embeds)
         if q.shape != g.shape:
             raise ValueError(f"tower outputs disagree: query {tuple(q.shape)} vs gallery {tuple(g.shape)}")

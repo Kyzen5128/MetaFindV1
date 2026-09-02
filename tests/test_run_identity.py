@@ -120,7 +120,10 @@ def test_encoding_protocol_fields_change_the_arm():
 
 
 @pytest.mark.parametrize("source,field,bad", [
-    ("training", "train_scope", "fuser_only"),
+    # `fuser_only` has been a real, executed scope since 2026-09-01; `full` is
+    # the one the trainer still refuses (ViT-bigG-14's optimizer state does
+    # not fit the card), so it is the value that must be refused here.
+    ("training", "train_scope", "full"),
     ("encoding", "actual_clip_train_scope", "trainable"),
     ("encoding", "actual_clip_train_scope", "finetuned"),
 ])
@@ -391,7 +394,10 @@ def test_run_paths_cannot_be_moved_after_construction():
     (["--out-dir", "/tmp/elsewhere"], "absolute"),
 ])
 def test_the_cli_refuses_arguments_that_cannot_produce_a_run(argv, expect):
-    r = subprocess.run([PY, "-m", "metafind.train.stage1", *argv],
+    # --query-observation is required since 2026-09-02; without it argparse
+    # exits before any of the guards under test are reached.
+    r = subprocess.run([PY, "-m", "metafind.train.stage1",
+                        "--query-observation", "same_record", *argv],
                        capture_output=True, text=True, timeout=180,
                        cwd=str(paths.REPO))
     assert r.returncode != 0, r.stdout[-500:]

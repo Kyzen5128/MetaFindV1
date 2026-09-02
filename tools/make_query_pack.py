@@ -130,9 +130,16 @@ def pick_alternate(annotation: dict) -> tuple[int, str] | None:
     from metafind.data.encode_text_image import TEXT_CONTEXT_LENGTH, true_token_count
     from metafind.models.resolve_stage1 import serialize_annotation
 
+    canonical = (annotation.get("description") or "").strip()
     for cand in (annotation.get("description_candidates") or []):
         if cand.get("rank") == 0:
             continue        # the canonical one IS the gallery's; that is the leak
+        # A rank>=1 candidate can be the canonical string again (the generator
+        # repeated itself; 68 rows in the first pack). Skipping only rank 0 let
+        # those through as "second observations" that were byte-equal to the
+        # gallery's text -- the exact identity this pack exists to remove.
+        if (cand.get("text") or "").strip() == canonical:
+            continue
         text = serialize_annotation({**annotation, "description": cand["text"]})
         if true_token_count(text) <= TEXT_CONTEXT_LENGTH:
             return int(cand["rank"]), text
@@ -255,9 +262,19 @@ def build_pc(uids: list[str], tag: str, workers: int) -> dict:
                 "Different pool: move the old array aside rather than resuming "
                 "onto it -- the uid order is a positional index into it.")
         del existing
+        uid_index = {u: i for i, u in enumerate(uids)}
         for line in done_path.read_text().splitlines():
             if line.strip():
                 rec = json.loads(line)
+                # The done-list records the ROW each uid was written to. A
+                # resume against a pool of the same size but different order
+                # would otherwise serve one asset's cloud as another's.
+                if uid_index.get(rec["uid"]) != rec["row"]:
+                    raise SystemExit(
+                        f"{done_path}: {rec['uid']} was written at row "
+                        f"{rec['row']} but the current pool puts it at "
+                        f"{uid_index.get(rec['uid'])}. Different pool order; "
+                        "move the old array and done-list aside.")
                 shas[rec["uid"]] = rec["sha256"]
         print(f"  resuming: {len(shas):,} already written", flush=True)
     else:
@@ -442,7 +459,11 @@ def main() -> int:
 
     shard = (build_pc(uids, args.split, args.workers) if args.arm == "pc"
              else build_text(uids, args.split, args.device, args.batch))
-    shard["tag"] = args.split
+    # A --limit run must not replace the full shard under the split's own tag:
+    # it used to write the same array path and the same manifest tag, so a
+    # ten-asset smoke overwrote a 31,931-row artifact. The limited run gets
+    # its own tag and is never mistaken for coverage of the split.
+    shard["tag"] = f"{args.split}_limit{args.limit}" if args.limit else args.split
     shard["n_assets"] = len(uids)
     merge(args.arm, shard)
     return 0

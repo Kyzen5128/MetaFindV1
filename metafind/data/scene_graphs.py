@@ -85,23 +85,32 @@ OBJECT_TEXT_PATH = paths.OUTPUTS / "procthor_object_text.json"
 REQUIRED_HOUSE_FIELDS = ("objects", "rooms")
 
 # "CounterTop|2|0" -> "CounterTop"; "Apple|surface|2|0" -> "Apple".
-_CAMEL = re.compile(r"(?<!^)(?=[A-Z])")
+# Split at a lower->upper boundary, or before the last capital of a run of
+# capitals ("TVStand" -> "TV Stand"). Splitting before EVERY capital turned
+# "CD" into "c d" and "TVStand" into "t v stand"; those strings were the node
+# text t_i and the semantic-edge prompt input for 48,577 of 827,730 nodes
+# (5.9%, measured 2026-09-02). Changing this changes the semantic-edge cache
+# keys, so the fix takes effect only when the object-text map, the
+# semantic-edge job and the node embeddings are regenerated together.
+_CAMEL = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 
 
 def humanise(category: str) -> str:
-    """"CounterTop" -> "counter top". [U-12] part of the t_i template."""
+    """"CounterTop" -> "counter top", "TVStand" -> "tv stand", "CD" -> "cd"."""
     return _CAMEL.sub(" ", category).lower().replace("_", " ").strip()
 
 
 def object_text(category: str) -> str:
-    """[U-12] The sentence behind t_i, from ProcTHOR's category alone.
+    """The sentence behind t_i, from ProcTHOR's category alone.
 
     Deliberately not enriched with room type or material: this map is keyed by
     assetId, and a chair's room varies per instance while its assetId does not.
     Folding instance context into an instance-independent key would make the
     same asset carry whichever room happened to be seen last.
     """
-    return f"a {humanise(category)}"
+    noun = humanise(category)
+    article = "an" if noun[:1] in "aeiou" else "a"
+    return f"{article} {noun}"
 
 
 def _category(obj: dict) -> str:

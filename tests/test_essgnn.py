@@ -201,13 +201,19 @@ def message_mlp(layer):
     return getattr(layer, "f_h", None) or layer.phi_e
 
 
-def geometric_sensitivity(edge_dim: int, n: int = 12, family: str = TWO_MLP) -> float:
-    """max |d e_layout / d pos| with semantic edges zeroed."""
-    cfg = ESSGNNConfig(architecture_family=family, 
+def geometric_sensitivity(edge_dim: int, n: int = 12, family: str = TWO_MLP,
+                          seed: int = 0) -> float:
+    """max |d e_layout / d pos| with semantic edges zeroed.
+
+    `seed` reaches make_scene. It did not use to: the six-seed loop below
+    called this without a seed, make_scene re-seeded to 0 every time, and six
+    bit-identical measurements were reported as six seeds.
+    """
+    cfg = ESSGNNConfig(architecture_family=family,
         node_feat_dim=32, edge_feat_dim=edge_dim, hidden_dim=32, out_dim=64, n_layers=3,
         use_io_projections=True,
     )
-    model, nf, pos, ei, ea = make_scene(n, cfg)
+    model, nf, pos, ei, ea = make_scene(n, cfg, seed=seed)
     pos = pos.clone().requires_grad_(True)
     model(nf, pos, ei, torch.zeros_like(ea)).sum().backward()
     return pos.grad.abs().max().item()
@@ -257,9 +263,11 @@ def test_f8_does_not_generalise_to_the_appendix_layer():
     ESSGNN and get carried into the report for whichever family we run."""
     ratios = []
     for seed in range(6):
-        n = geometric_sensitivity(16, family="appendix_shared_msg")
-        w = geometric_sensitivity(1280, family="appendix_shared_msg")
+        n = geometric_sensitivity(16, family="appendix_shared_msg", seed=seed)
+        w = geometric_sensitivity(1280, family="appendix_shared_msg", seed=seed)
         ratios.append(w / n)
+    assert len(set(round(r, 9) for r in ratios)) > 1, (
+        "six seeds produced one value; the seed is not reaching the scene")
     assert max(ratios) > 0.243, (
         "the appendix layer now suppresses geometry as consistently as the "
         "two-MLP one; F8's scope claim needs re-measuring")

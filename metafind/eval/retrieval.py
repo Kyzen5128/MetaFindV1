@@ -205,6 +205,13 @@ def rank_of_target(similarity: np.ndarray, targets: np.ndarray) -> np.ndarray:
             f"{similarity.shape[0]} queries")
     if targets.size and (targets.min() < 0 or targets.max() >= similarity.shape[1]):
         raise ValueError("a target column is outside the gallery")
+    # NaN compares False on both sides: a NaN target score gave rank 0, which
+    # `ranks <= 1` counted as a hit. Production goes through
+    # normalize_for_scoring, which refuses non-finite embeddings; this is the
+    # reference used by the probes, which build their own matrices.
+    if not np.isfinite(similarity).all():
+        raise ValueError("similarity holds non-finite values; a NaN target "
+                         "score would rank 0 and count as a hit")
 
     own = similarity[np.arange(similarity.shape[0]), targets][:, None]
     higher = (similarity > own).sum(axis=1)

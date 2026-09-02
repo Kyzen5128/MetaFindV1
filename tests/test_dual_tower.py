@@ -112,62 +112,25 @@ def test_essgnn_width_mismatch_is_rejected_at_construction():
 
 
 # --------------------------------------------------------------- scene dropout
+#
+# Scene dropout is drawn by the Stage 2 trainer once per batch (stage2.py),
+# which then calls the query tower with layout=None. The model-side sampler
+# and drop_layout mask that five tests here used to exercise were never called
+# by any trainer; they were deleted on 2026-09-02, and with them the tests
+# that only tested themselves. The trainer's draw is verified on a real batch
+# by tools/probes/stage2_smoke_seven_checks.py (rate over 20,000 draws, one
+# value per batch).
 
 
-def test_scene_dropout_rate_is_30_percent_per_batch():
-    """U-32: sec. 2.6 drops the layout "in 30% of batches", so the unit is a batch.
-
-    Measuring one large batch cannot see this rate at all -- under batch
-    granularity a single batch is entirely dropped or entirely kept, so the
-    within-batch mean is 0.0 or 1.0. The rate only exists across batches.
-    """
-    model = MetaFindDualTower(cfg())
-    g = torch.Generator().manual_seed(0)
-    dropped = [
-        bool(model.sample_scene_dropout(8, generator=g)[0].item()) for _ in range(20_000)
-    ]
-    rate = sum(dropped) / len(dropped)
-    assert abs(rate - 0.30) < 0.01, f"per-batch scene dropout rate {rate:.4f}"
-
-
-def test_scene_dropout_batch_granularity_is_uniform_within_a_batch():
-    """The whole point of batch granularity: every row shares the condition."""
-    model = MetaFindDualTower(cfg())
-    g = torch.Generator().manual_seed(0)
-    for _ in range(50):
-        mask = model.sample_scene_dropout(16, generator=g)
-        assert mask.unique().numel() == 1, "a batch-level draw must not vary within the batch"
-
-
-def test_scene_dropout_sample_granularity_varies_within_a_batch():
-    """The variant stays available and must behave differently (U-32)."""
-    model = MetaFindDualTower(cfg(scene_dropout_granularity="sample"))
-    mask = model.sample_scene_dropout(200_000, generator=torch.Generator().manual_seed(0))
-    rate = mask.float().mean().item()
-    assert abs(rate - 0.30) < 0.01, f"per-sample scene dropout rate {rate:.4f}"
-    assert mask.unique().numel() == 2, "independent draws should produce both values"
-
-
-def test_scene_dropout_suppresses_only_the_marked_rows():
+def test_a_dropped_batch_is_the_layout_free_query():
+    """What the trainer does for a dropped batch: pass no layout at all."""
     torch.manual_seed(0)
     model = MetaFindDualTower(cfg()).eval()
     e = embeds()
-    layout = torch.randn(4, D)
-    drop = torch.tensor([True, False, True, False])
-
     with torch.no_grad():
-        out = model.query(e, layout=layout, drop_layout=drop)
         no_layout = model.query(e, layout=None)
-        full = model.query(e, layout=layout)
-
-    assert torch.allclose(out[drop], no_layout[drop], atol=1e-6), "dropped rows kept their layout"
-    assert torch.allclose(out[~drop], full[~drop], atol=1e-6), "kept rows lost their layout"
-
-
-def test_scene_dropout_shape_contract():
-    model = MetaFindDualTower(cfg())
-    with pytest.raises(ValueError, match="drop_layout"):
-        model.query(embeds(), layout=torch.randn(4, D), drop_layout=torch.zeros(3, dtype=torch.bool))
+        fused_only = model.query.fusion(e)
+    assert torch.allclose(no_layout, fused_only, atol=1e-6)
 
 
 # --------------------------------------------------------------- gallery tower
@@ -454,5 +417,10 @@ def test_missing_modality_representation_comes_from_the_protocol():
     assert _runtime().missing_modality_representation == "learned_token"
     with pytest.raises(UnsupportedProtocol, match="not implemented"):
         _runtime(enc={"missing_modality_representation": "validity_mask"})
-    with pytest.raises(ValueError, match="not one of U-11"):
+    # zero_pad is a known reading (Table 3's zero-padding row, honoured by the
+    # trainer's build_model) that THIS runtime-config path does not implement,
+    # so it is refused as unimplemented rather than as unknown.
+    with pytest.raises(UnsupportedProtocol, match="not implemented"):
         _runtime(enc={"missing_modality_representation": "zero_pad"})
+    with pytest.raises(ValueError, match="not one of U-11"):
+        _runtime(enc={"missing_modality_representation": "something_else"})

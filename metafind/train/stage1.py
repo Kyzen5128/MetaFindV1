@@ -60,7 +60,6 @@ from metafind.models.stage1_config import UnsupportedProtocol
 paths.setup_env()
 
 from metafind.models.stage1_config import (  # noqa: E402
-    PAPER_P_MASK,
     PER_VIEW_AGGREGATIONS,
     PRECOMPUTABLE_AGGREGATIONS,
     REQUIRED_HYPERPARAMETERS,
@@ -363,8 +362,25 @@ class QueryPack:
         return uid_seed(uid) % N_VIEWS_PER_ASSET
 
     def identity(self) -> dict:
-        """What goes into the arm hash: which arms, and which bytes supplied them."""
-        return {"arms": list(self.arms), "manifest_sha256": self.sha256}
+        """What goes into the arm hash: which arms, and which bytes supplied them.
+
+        The BYTES of the consumed arrays, not the manifest: `merge()` rewrites
+        the manifest (written_at, code_revision) every time another shard is
+        added, so hashing the manifest gave byte-identical dev_train arrays two
+        different arm hashes before and after the dev_val shards were merged.
+        Shard digests are computed once per pack construction.
+        """
+        shards = {}
+        for arm in self.rows:
+            digests = []
+            for sh in self.manifest[arm]["shards"]:
+                sha = sh.get("array_sha256")
+                if not sha:
+                    sha = hashlib.sha256(Path(sh["array"]).read_bytes()).hexdigest()
+                digests.append({"tag": sh.get("tag"), "array_sha256": sha})
+            shards[arm] = sorted(digests, key=lambda d: (d["tag"] or "", d["array_sha256"]))
+        return {"arms": list(self.arms), "shards": shards,
+                "image_rule": (self.manifest.get("image") or {}).get("rule")}
 
 
 # n06 writes 12 per asset (`encode_text_image.py`, `views (12, 1280)`); asserted
@@ -1031,7 +1047,7 @@ def flatten_condition_scores(scores: dict) -> dict:
 
 
 def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
-                     batch_size, query_pack=None):
+                     batch_size, query_pack=None, num_workers: int = 4):
     """Mean R@1 / R@5 over the seven Table 1 conditions, on the dev-val gallery.
 
     Gallery is dev_val itself (`splits.build_eval_protocols`, protocol
@@ -1118,7 +1134,7 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
     loader = DataLoader(Stage1Dataset(dev_val_uids, aggregation,
                                       query_pack=query_pack),
                         batch_size=batch_size, shuffle=False, collate_fn=collate,
-                        num_workers=4, drop_last=False)
+                        num_workers=num_workers, drop_last=False)
     per_condition_q = {c: [] for c in QUERY_CONDITIONS}
     gallery = []
     # `backbone.model` as well as `model`: the tower is what `model.eval()`
@@ -1195,6 +1211,11 @@ ARM_EXCLUDED = ("seed", "preload", "num_workers", "device", "max_epochs")
 # [CODEX 2026-08-30, BLOCKER 1]
 TRAINING_EXCLUDED = (
     "status", "decided_by", "decided_at",
+    # Lifted out explicitly below as `train_scope`, so it must not ALSO enter
+    # as `training.train_scope`: with `--train-scope` given, the key exists in
+    # the dict and was hashed twice under two names, and a flag-less run (no
+    # key) hashed it once -- one treatment, two arm hashes.
+    "train_scope",
     # Recorded separately and verbatim as `base_hyperparameter_sha256`. Hashing
     # it here too would make the arm change whenever the artifact's digest does,
     # which is already covered and is not itself a treatment.
@@ -1305,6 +1326,15 @@ def arm_config_hash(values: dict, training: dict, encoding: dict,
             "optimizer state alone is ~30 GB against a 32.6 GB card (RA-3), so "
             "the run would fail mid-epoch after recording its recipe. Use "
             "'fuser_only' or 'point_encoder_and_fuser'.")
+    # build_model honours exactly two values of this field: "zero_pad" sets
+    # FusionConfig.zero_pad and anything else trains learned tokens. A protocol
+    # naming a third reading would hash that reading into the arm and train
+    # learned tokens -- a recorded recipe that did not happen.
+    missing_repr = encoding.get("missing_modality_representation", "learned_token")
+    if missing_repr not in ("learned_token", "zero_pad"):
+        raise UnsupportedProtocol(
+            f"encoding.missing_modality_representation is {missing_repr!r}; "
+            "this trainer implements 'learned_token' and 'zero_pad' only.")
 
     resolved = {k: v for k, v in values.items() if k not in ARM_EXCLUDED}
     # Underscore-prefixed keys are THIS RUN's facts riding on the protocol dict
@@ -1426,6 +1456,41 @@ def input_content_digest(uids: list[str]) -> dict:
             "pointcloud_digest_source": "sha256 of the .npz bytes; the n07 "
                                         "sidecar's claim is checked against it",
             "embedding_digest_source": "sha256 of the .npz bytes"}
+
+
+def check_embedding_sidecars(uids: list[str], encoding: dict) -> None:
+    """Refuse cached embeddings produced under a different encoding protocol.
+
+    The trainer reads `embeddings/<uid>.npz` and hashes the encoding protocol
+    into the arm; nothing compared the two. Re-resolving the text template or
+    the image aggregation without re-running the encoder would train on the
+    old vectors under the new arm keys, with a self-consistent and wrong
+    record. Each sidecar names what produced its vectors; four fields are
+    compared, as strings, because the sidecar stores them as strings.
+    """
+    from metafind.data.encode_text_image import ENCODER_VERSION
+
+    want = {"text_serialization": str(encoding["text_serialization"]),
+            "aggregation": str(encoding["image_aggregation"]),
+            "encoder_version": str(ENCODER_VERSION),
+            "n_views": str(N_VIEWS_PER_ASSET)}
+    bad: dict[str, int] = {}
+    missing = 0
+    for uid in uids:
+        side = paths.EMBEDDINGS / f"{uid}.json"
+        if not side.exists():
+            missing += 1
+            continue
+        rec = json.loads(side.read_text())
+        for k, v in want.items():
+            if str(rec.get(k)) != v:
+                bad[k] = bad.get(k, 0) + 1
+    if bad or missing:
+        raise SystemExit(
+            f"cached embeddings disagree with the encoding protocol: "
+            f"{bad} sidecar field mismatches, {missing} sidecars missing, over "
+            f"{len(uids):,} assets. Expected {want}. Re-run the encoder under "
+            "this protocol, or restore the protocol the cache was built under.")
 
 
 def initializer_provenance(backbone) -> dict:
@@ -1628,6 +1693,7 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         # the arm hash so a loose .pt can still answer which construction
         # trained it, without the arm dict to dereference.
         "query_construction": training.get("_query_construction"),
+        "query_observation": training.get("_query_observation"),
         "train_scope": training.get("train_scope", "point_encoder_and_fuser"),
         "trainable_only": True,
         "n_params_saved": int(n_params),
@@ -1752,9 +1818,17 @@ def load_stage1_checkpoint(backbone, model, loss_fn, path=None,
             raise ValueError(f"{section} holds keys {module} does not have: "
                              f"{sorted(unexpected)[:5]}")
         trainable = {n for n, p in module.named_parameters() if p.requires_grad}
-        gap = {n for n in trainable - set(state)
+        # The buffers of every submodule that has a trainable parameter are
+        # saved (see trainable_state_dict: BatchNorm running statistics MOVE
+        # during training) and must be restored too. A checkpoint from before
+        # that fix lacks them and used to load silently, leaving trained
+        # weights on ULIP-2's original statistics.
+        owners = _submodules_with_trainable_params(module)
+        expected = trainable | {n for n, _ in module.named_buffers()
+                                if _owner(n) in owners}
+        gap = {n for n in expected - set(state)
                if not n.startswith(new_prefixes)} if new_prefixes else \
-            trainable - set(state)
+            expected - set(state)
         if gap:
             raise ValueError(
                 f"{section} does not cover {len(gap)} trainable parameter(s), "
@@ -1930,6 +2004,13 @@ def main() -> int:
     # overriding once is enough and cannot leave the two disagreeing.
     if args.train_scope is not None:
         training["train_scope"] = args.train_scope
+    # Refused HERE, before the 9.5 GB backbone is built and the pool digested;
+    # arm_config_hash refuses it too, but by then minutes have been spent and
+    # the run directory has been claimed.
+    if training.get("train_scope") == "full":
+        raise SystemExit("train_scope 'full' unfreezes ViT-bigG-14, whose AdamW "
+                         "state alone exceeds this card. Use 'fuser_only' or "
+                         "'point_encoder_and_fuser'.")
     # [CODEX F 2026-08-30] No arbitrary upper bound -- a ceiling on lr would be
     # an invented hyperparameter. These three are internal consistency: a
     # non-finite base rate poisons the whole cosine array, and a base below
@@ -2183,7 +2264,13 @@ def main() -> int:
             "pack. The difference is intended and this run is not pool-"
             "comparable to those arms.")
     print("  digesting input contents...", flush=True)
+    check_embedding_sidecars(train_uids + dev_val_uids, encoding)
     training["_pools"]["train_content"] = input_content_digest(train_uids)
+    if training["_pools"]["train_content"]["n_missing_embedding_npz"]:
+        raise SystemExit(
+            f"{training['_pools']['train_content']['n_missing_embedding_npz']} "
+            "training asset(s) have no cached embedding; the run would die in a "
+            "worker at an unpredictable step. Re-run the encoder first.")
     if dev_val_uids:
         training["_pools"]["selection_content"] = input_content_digest(dev_val_uids)
     training["_initializers"] = initializer_provenance(backbone)
@@ -2333,7 +2420,10 @@ def main() -> int:
             if args.phase == "dev" and dev_val_uids:
                 scores = evaluate_dev_val(
                     backbone, model, dev_val_uids, encoding["image_aggregation"],
-                    args.device, values["batch_size"], query_pack)
+                    args.device, values["batch_size"], query_pack,
+                    # the same worker count the training loader uses, so a
+                    # --preload run really has no worker processes at all
+                    num_workers=workers)
                 runlog.train_metrics("stage1_dev_val", epoch=epoch, step=step,
                                      **{k: v for k, v in scores.items()
                                         if isinstance(v, (int, float))},

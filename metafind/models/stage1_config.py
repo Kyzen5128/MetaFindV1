@@ -109,7 +109,10 @@ SUPPORTED_SIMILARITY = ("cosine",)
 # U-11. Only the first is implemented. The other two are named so a protocol
 # can record them and be REFUSED, rather than being silently unrepresentable.
 SUPPORTED_MISSING_MODALITY = ("learned_token",)
-KNOWN_MISSING_MODALITY = ("learned_token", "validity_mask", "drop_slot")
+# "zero_pad" is Table 3's "Padding missing modalities with 0" row and is what
+# the trainer's build_model honours; it was missing here, so this vocabulary
+# and the trainer's disagreed on which values are legal.
+KNOWN_MISSING_MODALITY = ("learned_token", "zero_pad", "validity_mask", "drop_slot")
 
 # Paper 2.6: "each modality in the query has a 30% probability of being
 # independently masked". That is STATED, not one of U-22's omissions -- Table 3

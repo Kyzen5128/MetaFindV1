@@ -150,7 +150,16 @@ def pc_norm(xyz: np.ndarray) -> np.ndarray:
     return centred / scale
 
 
-DEPTH_SHELL_GREY = 0.5
+# ULIP's stand-in colour for a cloud with no colour channel is 0.4
+# (vendor/ulip/data/dataset_3d.py:292,297; pointclouds.DEFAULT_GREY). This was
+# 0.5, with no rationale recorded, and the encoder is NOT indifferent to the
+# constant: encoding the same 1,439 ProcTHOR shells under 0.5 and 0.4 gives a
+# mean cosine of 0.9562 between the two embeddings, and only 93.47% of assets
+# would still find their own other-constant embedding at rank 1 (worst rank
+# 10; tools/probes/depth_shell_conventions.py, 2026-09-02). Upstream's value
+# is the one the frozen encoder saw in training, so it is adopted; the Stage 2
+# gallery index must be rebuilt after this change.
+DEPTH_SHELL_GREY = 0.4
 
 
 def prepare_depth_shell(xyz: np.ndarray) -> np.ndarray:

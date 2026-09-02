@@ -172,7 +172,7 @@ CHECK
 # gallery-encoder hash, the ProcTHOR pc_norm -- none of which can be tested
 # without the 9.5 GB of weights, which is why the audit marks them SPEC ONLY.
 say "=== Stage 1 smoke: 200 assets, 1 epoch ==="
-$PY -m metafind.train.stage1 --limit 200 --epochs 1 >> "$LOGS/n10_smoke.log" 2>&1
+$PY -m metafind.train.stage1 --limit 200 --epochs 1 --query-observation same_record >> "$LOGS/n10_smoke.log" 2>&1
 rc=$?
 [ $rc -eq 0 ] || die "Stage 1 smoke exited $rc -- read $LOGS/n10_smoke.log"
 

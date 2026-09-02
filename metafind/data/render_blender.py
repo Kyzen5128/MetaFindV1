@@ -67,6 +67,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import trimesh
+
 __all__ = [
     "BLENDERPROC", "BLENDER_INSTALL", "CAMERA_DIST", "ENGINE", "N_VIEWS",
     "RESOLUTION", "VIEW_DIRECTIONS", "render_asset", "renderer_versions",
@@ -198,7 +200,12 @@ def raw_extents(glb: Path):
     for node in scene.graph.nodes_geometry:
         transform, name = scene.graph[node]
         geom = scene.geometry.get(name)
-        if geom is None or not hasattr(geom, "vertices") or len(geom.vertices) == 0:
+        # Same filter as the point sampler (pointclouds.py): triangle meshes
+        # with faces. Counting any geometry with vertices (Path3D, PointCloud)
+        # gave a different bounding box from the one the annotation was
+        # prompted with for 97 assets, by up to 3x.
+        if (geom is None or not isinstance(geom, trimesh.Trimesh)
+                or len(geom.faces) == 0):
             continue
         v = np.asarray(geom.vertices, dtype=np.float64)
         v = v @ transform[:3, :3].T + transform[:3, 3]

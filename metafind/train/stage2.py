@@ -119,6 +119,26 @@ def load_stage2_protocols() -> tuple[dict, dict, dict]:
     edge = read("essgnn_edge_protocol.json", "n09b_resolve_stage2_protocol")
     arch = read("essgnn_arch_protocol.json", "n09b_resolve_stage2_protocol")
 
+    # These decisions are implemented as fixed code in this module and in
+    # build_context_graph / ESSGNN, not read from the protocol at run time.
+    # Until now the protocol was loaded and never compared, so editing it
+    # changed nothing while the run went on citing it. Refuse any value the
+    # code does not implement.
+    implemented = {
+        "scene_dropout_granularity": ("batch", stage2),
+        "target_removed_before_essgnn": (True, stage2),
+        "batch_positive_uniqueness": (True, stage2),
+        "directionality": ("symmetric", edge),
+        "semantic_missing_representation": ("learned_missing_token", edge),
+        "physical_relation_encoding": ("neighbourhood_only", edge),
+    }
+    for field, (want, proto) in implemented.items():
+        if proto.get(field) != want:
+            raise ValueError(
+                f"protocol field {field} = {proto.get(field)!r}, but the Stage 2 "
+                f"code implements only {want!r}. The run would cite a protocol it "
+                "does not follow; change the code or the protocol, not neither.")
+
     # `status: resolved` is a CLAIM, and until now nothing checked it on the way
     # in. n09b validates what it writes, but an artifact written before the code
     # moved keeps its old contents and its old status: the file on disk said
@@ -325,8 +345,7 @@ def encode_query(model, graph: dict, target_index: int, asset_id: str,
     embeds = {"text": text, "image": image, "pc": pc_vec}
     # [2.4] the query side may drop the point cloud; here it is present because
     # target_eligibility required one. `present=None` means all three.
-    return model.query(embeds, present=None, layout=layout,
-                       drop_layout=None)[0]
+    return model.query(embeds, present=None, layout=layout)[0]
 
 
 class Stage2Data:
@@ -350,6 +369,11 @@ class Stage2Data:
             self.modalities[rec["asset_id"]] = rec
 
         node = json.loads((paths.OUTPUTS / "procthor_node_embeddings.json").read_text())
+        # The record carries the array's sha256; verify it like the gallery
+        # index is verified, so a rewritten node file cannot be read under an
+        # older record's identity.
+        verify_recorded_artifact(node, "node embeddings",
+                                 "Re-run the semantic-edge job.")
         arr = np.load(node["uri"])
         self.node_vectors = {a: v for a, v in
                              zip(arr["ids"].tolist(), arr["embeddings"])}
@@ -375,10 +399,21 @@ class Stage2Data:
                 f"sem_edge_cache declares edge_dim {self.edge_dim} but "
                 f"sem_edge_embeddings is {vecs.shape[1]}-d")
         self.sem_cache = {}
+        # The uri's "#<row>" is a positional pointer into the npz. The npz
+        # also stores the key of every row; compare them, so a cache written
+        # against a different embedding file (a crash between the two writes
+        # in the semantic-edge run) is caught here rather than served.
+        emb_keys = emb["keys"].tolist() if "keys" in emb.files else None
         for key, entry in cache["entries"].items():
             if entry.get("degraded") or entry.get("embedding_uri") is None:
                 continue
-            self.sem_cache[key] = vecs[int(entry["embedding_uri"].rsplit("#", 1)[1])]
+            row = int(entry["embedding_uri"].rsplit("#", 1)[1])
+            if emb_keys is not None and emb_keys[row] != key:
+                raise ValueError(
+                    f"sem_edge_cache entry {key[:16]}... points at row {row}, "
+                    f"which sem_edge_embeddings labels {emb_keys[row][:16]}.... "
+                    "The cache and the embeddings are from different runs.")
+            self.sem_cache[key] = vecs[row]
 
         text = json.loads((paths.OUTPUTS / "procthor_object_text.json").read_text())
         self.text_map = {a: rec["text"] for a, rec in text.items()}
@@ -434,7 +469,7 @@ def trainable_state_dict(model) -> dict:
             for name, p in model.named_parameters() if p.requires_grad}
 
 
-def freeze_for_stage2(model, backbone) -> dict:
+def freeze_for_stage2(model, backbone, query_modality_masking: str = "none") -> dict:
     """[PAPER 2.6] Only the query fuser and the ESSGNN move.
 
     The query POINT encoder is the trap. Stage 1 trains it, so it arrives with
@@ -460,11 +495,20 @@ def freeze_for_stage2(model, backbone) -> dict:
     for name, p in model.named_parameters():
         trains = name.startswith("query.fusion") or name.startswith("query.layout_encoder") \
             or name.endswith("layout_weight")
+        # With no modality masking in Stage 2 every query slot is always
+        # present, the fusion's mask tokens are never selected, and their
+        # gradient is identically zero every step. A parameter that cannot
+        # learn must not sit in the optimizer, where weight decay would erode
+        # the values Stage 1 learned for it (measured: zero grad, nonzero
+        # delta per step). It is restored from Stage 1 and left alone.
+        if query_modality_masking == "none" and name.endswith("fusion.mask_tokens"):
+            trains = False
         p.requires_grad_(trains)
     return {name: p.requires_grad for name, p in model.named_parameters()}
 
 
-def load_variant(variant_id: str, ckpt_record: dict) -> dict:
+def load_variant(variant_id: str, ckpt_record: dict, *, training: dict | None = None,
+                 encoding: dict | None = None, values: dict | None = None) -> dict:
     """Resolve a Table 3 row into settings, and refuse the ones we cannot run.
 
     `--variant` used to reach only the checkpoint FILENAME. Every row trained
@@ -515,6 +559,31 @@ def load_variant(variant_id: str, ckpt_record: dict) -> dict:
             f"variant {variant_id!r} needs a Stage 1 checkpoint trained with "
             f"train_scope={variant['train_scope']!r}, but stage1_ckpt records "
             f"{ckpt_record['train_scope']!r}. Re-run n10 for this variant.")
+    # The other three Stage 1 fields were named in the docstring as checked
+    # and were not: a `fusion_mean` run built the transformer fusion from the
+    # Stage 1 protocol, restored the transformer checkpoint, trained, and
+    # saved the result as stage2_fusion_mean.pt. Same failure the paragraph
+    # above describes, one field over. Each is compared against the artifact
+    # that actually decides it.
+    want_fusion = variant.get("fusion") or (training or {}).get("fusion")
+    if training is not None and want_fusion != training["fusion"]:
+        raise ValueError(
+            f"variant {variant_id!r} needs fusion={want_fusion!r} but the Stage 1 "
+            f"protocol (and therefore the checkpoint) is {training['fusion']!r}. "
+            "Train Stage 1 for this variant first.")
+    if values is not None and variant.get("dropout") is not None \
+            and abs(float(variant["dropout"]) - float(values["p_mask"])) > 1e-9:
+        raise ValueError(
+            f"variant {variant_id!r} needs p_mask={variant['dropout']} but the "
+            f"Stage 1 recipe records p_mask={values['p_mask']}. Train Stage 1 "
+            "for this variant first.")
+    want_missing = variant.get("missing_modality_representation", "learned_token")
+    if encoding is not None and want_missing != encoding["missing_modality_representation"]:
+        raise ValueError(
+            f"variant {variant_id!r} needs missing_modality_representation="
+            f"{want_missing!r} but the encoding protocol is "
+            f"{encoding['missing_modality_representation']!r}. Train Stage 1 "
+            "for this variant first.")
     return variant
 
 
@@ -584,6 +653,10 @@ def main() -> int:
     # It must now be named on the command line. Passing Stage 1's file is
     # allowed -- that is the current, undecided fallback -- but the record then
     # says so, and the choice is visible in the launch command.
+    ap.add_argument("--overwrite", action="store_true",
+                    help="permit replacing an existing stage2_<variant>.pt and "
+                         "its record. Without it an occupied destination stops "
+                         "the run before the first batch.")
     ap.add_argument("--hyperparameters", required=True,
                     help="JSON with a `values` block (same schema as "
                          "stage1_hyperparameters.json) giving Stage 2's optimizer, "
@@ -624,6 +697,22 @@ def main() -> int:
             raise ValueError(f"{hp_path} values block is missing {key!r}")
     hp_sha256 = hashlib.sha256(hp_path.read_bytes()).hexdigest()
     hp_is_stage1 = hp_sha256 == _stage1_hyperparameters.get("sha256")
+    dest = CKPT_DIR / f"stage2_{args.variant}.pt"
+    if dest.exists() and not args.overwrite:
+        raise SystemExit(f"{dest} already exists; the path is fixed per variant, "
+                         "so a second run would overwrite the first's weights "
+                         "and record. Pass --overwrite to replace them.")
+    # Whether the query side sees Stage 1's per-modality masking during Stage 2.
+    # The paper states scene dropout for Stage 2 and says nothing about
+    # modality masking there, so this is a recorded choice, not a paper fact:
+    # "none" is what every Stage 2 run so far did (all three modalities always
+    # present); "p_mask" would be an ablation and is not implemented yet.
+    query_masking = stage2.get("query_modality_masking", "none")
+    if query_masking != "none":
+        raise NotImplementedError(
+            f"stage2_protocol.query_modality_masking = {query_masking!r}; only "
+            "'none' is implemented. Applying Stage 1's mask in Stage 2 is an "
+            "ablation that has to be built and recorded before it runs.")
     print(f"hyperparameters {hp_path}  sha256 {hp_sha256[:12]}"
           + ("  (this is the STAGE 1 artifact: Stage 2 recipe not yet decided, "
              "inheriting Stage 1's values)" if hp_is_stage1 else ""), flush=True)
@@ -699,7 +788,8 @@ def main() -> int:
     # use_layout=False -- correct there, since 2.6 puts ESSGNN in Stage 2 -- so
     # reusing it here left query.layout_encoder as None while encode_query below
     # calls encode_layout, which raises. Eq. 6's lambda was absent too.
-    variant = load_variant(args.variant, ckpt)
+    variant = load_variant(args.variant, ckpt, training=training,
+                           encoding=encoding, values=_stage1_hyperparameters["values"])
     use_layout = variant["layout_encoder"] is not None
     model = build_stage2_model(encoding, training, hyperparameters, arch_proto,
                                node_feat_dim=data.node_dim,
@@ -740,12 +830,23 @@ def main() -> int:
                                          "query.layout_weight"))
     model.to(args.device)
     loss_fn.to(args.device)
-    grads = freeze_for_stage2(model, backbone)
+    grads = freeze_for_stage2(model, backbone, query_modality_masking=query_masking)
 
-    params = [p for p in list(model.parameters()) + list(loss_fn.parameters())
-              if p.requires_grad]
-    opt = torch.optim.AdamW(params, lr=values["learning_rate"],
-                            weight_decay=values["weight_decay"])
+    # Same optimizer construction as Stage 1: ULIP's rule puts biases, norms
+    # and every 0-/1-D tensor (that includes Eq. 6's lambda and the missing-
+    # edge token) in the no-decay group, and the artifact's betas/eps are used
+    # rather than torch's defaults. A flat AdamW(weight_decay=...) decayed all
+    # of them, and decayed the fusion mask tokens -- which under
+    # query_modality_masking="none" receive a zero gradient every step -- by
+    # (1 - lr*wd) per step with nothing pushing back (measured, see
+    # output/look/stage2_smoke_seven_checks.json "optimizer_audit").
+    from metafind.train.stage1 import weight_decay_groups
+    opt = torch.optim.AdamW(
+        weight_decay_groups(list(model.named_parameters())
+                            + list(loss_fn.named_parameters()),
+                            values["weight_decay"]),
+        lr=values["learning_rate"], betas=tuple(values["betas"]),
+        eps=values["eps"])
 
     graphs = data.graphs_for({h for h, _, _ in samples})
     # [P1] NOT values["p_mask"]. Both rates are 30% in the paper, which is
@@ -757,6 +858,8 @@ def main() -> int:
     # of one thing.
     stage2_dropout = float(values.get("scene_dropout", PAPER_SCENE_DROPOUT))
     epochs = args.epochs or values["epochs"]
+    if epochs <= 0:
+        raise SystemExit(f"epochs must be positive, got {epochs}")
     # Batching is redrawn per epoch, inside the loop. Computing it once here
     # meant every epoch saw the identical partition, so a given sample met the
     # same negatives every time -- with 1,467 assets and a unique-positive
@@ -769,7 +872,11 @@ def main() -> int:
     started, step = time.time(), 0
     with runlog.run_progress(NODE):
         for epoch in range(epochs):
-            model.train()
+            # The QUERY tower only. `model.train()` recursed into the gallery
+            # tower and undid freeze_gallery's eval(); harmless while the loop
+            # never calls the gallery, but a promise in freeze_gallery's
+            # docstring that the code then broke.
+            model.query.train()
             batches = unique_positive_batches(samples, values["batch_size"], rng)
             for batch in batches:
                 # [U-32 / 2.6] "omitted in 30% of BATCHES" -- ONE draw per batch,
@@ -857,6 +964,23 @@ def main() -> int:
                     "variant": args.variant}, record["uri"])
         record["sha256"] = hashlib.sha256(Path(record["uri"]).read_bytes()).hexdigest()
         record["size_bytes"] = Path(record["uri"]).stat().st_size
+        record["arch_protocol"] = {k: arch_proto[k] for k in sorted(arch_proto)
+                                   if not k.startswith("decided")}
+        record["query_modality_masking"] = query_masking
+        record["code_revision"] = runlog.code_revision()
+        record["code_dirty"] = runlog.code_dirty()
+        record["steps"] = step
+        # The record used to be built, printed and dropped: a stage2_<variant>.pt
+        # existed on disk with nothing saying which checkpoint, index, recipe,
+        # seed or arch protocol produced it. Written per variant, merged into
+        # one file, and an existing entry for the same variant is only replaced
+        # under --overwrite (checked before training started, above).
+        existing = (json.loads(VARIANT_CKPTS.read_text())
+                    if VARIANT_CKPTS.exists() else {})
+        existing[args.variant] = record
+        tmp = VARIANT_CKPTS.with_suffix(".json.part")
+        tmp.write_text(json.dumps(existing, indent=1))
+        tmp.replace(VARIANT_CKPTS)
 
     runlog.cost_ledger(wallclock_s=round(time.time() - started, 1), steps=step)
     print(f"\n{args.variant}: {record['n_params_saved']:,} params, "

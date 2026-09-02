@@ -413,6 +413,25 @@ def resolve_split(splits: dict, name: str) -> list[str]:
     return list(splits[name])
 
 
+def _splits_identity() -> dict:
+    """Which split file a table was scored under: bytes, seeds, admitted count.
+
+    A regenerated splits.json under another seed would move most of a new test
+    set into an old checkpoint's training pool, and every size check would
+    still pass. The table has to carry the split's identity for that to be
+    detectable afterwards.
+    """
+    import hashlib
+
+    p = paths.OUTPUTS / "splits.json"
+    raw = json.loads(p.read_text())
+    obj = raw.get("object", {})
+    return {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+            "split_seed": obj.get("split_seed", raw.get("split_seed")),
+            "dev_split_seed": obj.get("dev_split_seed", raw.get("dev_split_seed")),
+            "admitted_total": obj.get("admitted_total", raw.get("admitted_total"))}
+
+
 def check_seal(protocol_name: str, protocol: dict, unsealed: bool) -> bool:
     """Refuse a sealed-split protocol unless the operator said so, in words.
 
@@ -595,7 +614,9 @@ def gallery_from_promoted_index(name: str, gallery_uids: list[str], ckpt: dict,
             "not written by promotion. Refusing: a reported Table 1 number "
             "must be able to name the verdict that cleared its gallery.")
 
-    live = gallery_encoder_sha256(backbone, model)
+    live = gallery_encoder_sha256(
+        backbone, model,
+        include_buffers=bool(record.get("gallery_encoder_hash_includes_buffers")))
     if live != record["gallery_encoder_sha256"]:
         raise ValueError(
             f"the gallery encoder loaded here hashes to {live[:16]}... but the "
@@ -923,6 +944,17 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
             print(f"  {len(dropped_queries)} query asset(s) dropped: no second "
                   f"observation. Gallery unchanged at {len(gallery_uids):,}.",
                   flush=True)
+            # A dropped query is neither a hit nor a miss; on a development
+            # protocol that is recorded and tolerated, on a REPORTED one it
+            # would make the cell an R@k over a subset of the test split while
+            # every size check stayed green. A reported number is over the
+            # whole split or it is not the protocol's number.
+            if protocol.get("reported", False):
+                raise ValueError(
+                    f"{name} is a reported protocol and {len(dropped_queries)} "
+                    "test query asset(s) have no second observation in the "
+                    "query pack. Build the pack over the whole test split, or "
+                    "score this protocol without a pack.")
 
     # [ULIP2 REVIEWER 2026-08-30, MINOR] An empty pool used to WRITE A TABLE.
     # `R@1: float((ranks <= 1).mean()) if ranks.size else 0.0` turned "there was
@@ -1092,6 +1124,13 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
         # BY UID. A count says something was removed; the uids say which, which
         # is what it takes to check whether two runs dropped the same assets.
         "dropped_query_uids": dropped_queries,
+        # Stated so no image cell under a pack is read as held-out: the pack's
+        # query view is one of the twelve averaged into the gallery image
+        # vector (ruling of 2026-08-31, option (a)); the E1 protocol's
+        # leave-one-view-out gallery is a separate index, not this one.
+        "query_observation_note": (
+            "query image = one of the 12 views; the gallery image vector is the "
+            "mean of all 12 INCLUDING that view" if query_pack else None),
         "query_construction": (query_pack.identity() if query_pack
                                else {"arms": [], "note": "query reads the "
                                      "gallery's own observations"}),
@@ -1296,9 +1335,18 @@ def main() -> int:
             "checkpoint": {k: ckpt.get(k) for k in
                            ("uri", "sha256", "epoch", "run_id", "seed",
                             "arm_config_hash", "base_hyperparameter_sha256",
-                            "code_revision", "checkpoint_schema")},
+                            "code_revision", "checkpoint_schema", "phase",
+                            "query_observation", "query_construction")},
             "control": args.control,
             "unsealed": bool(args.unseal),
+            # The development rule opens the test split once, on a --phase
+            # final checkpoint. A sealed read on a dev-phase checkpoint is a
+            # diagnostic, and the table must say so on its face rather than
+            # leave it to whoever remembers which checkpoint this was.
+            "sealed_read_on_nonfinal_checkpoint": bool(
+                any(seals.values()) and not untrained
+                and ckpt.get("phase") != "final"),
+            "splits": _splits_identity(),
             "device": args.device,
             "ckpt_record": "none" if untrained else str(
                 args.ckpt_record or paths.CHECKPOINTS / "stage1_ckpt.json"),
