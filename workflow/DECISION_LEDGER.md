@@ -5924,3 +5924,52 @@ migration questions (33-40) once they return. Nothing in §十九's forbidden li
 has been started.
 
 ---
+
+## DL-086 -- The Stage 2 stamp no longer credits Kyzen with a ruling he did not make. Implementation on the existing corpus begins.
+
+Date 2026-09-03. Kyzen: 「不是目前的討論就是利用現有的資料及去實作看看 全部依我剛剛
+給你的討論去實作 你有那裡卡住?」 -- implement against `REPRODUCTION_PROTOCOL_20260903.md`
+using the corpus that exists, and say what is blocking.
+
+**Nothing is blocking.** The four items MASTER put to him are recorded and none of
+them stops the work: lambda's initial value and ESSGNN's pooling belong to Stage 2
+and are not reached by phases 2 through 5; the 253 degraded admitted assets are
+kept and made visible rather than removed, which is what the spec's §六 asks for
+anyway; the mask tokens' optimizer group is a training-recipe question that the
+correctness test can measure rather than presuppose; and the ProcTHOR node-text
+repair is a Stage 2 input. Each proceeds under current behaviour, measured and
+recorded, with the decision left open.
+
+**The provenance correction, made now because it records something false.**
+Both `stage2_protocol.json` and `essgnn_arch_protocol.json` carried
+`decided_by = "Kyzen (2026-09-02, item 8: pooling normalised_sum; init_lambda 9.0
+= 0.1 x measured fused norm 91.4)"`. Kyzen ruled `normalised_sum` and lambda
+**0.1** (DL-077 item 8); 9.0 was derived by an agent from a single measured
+fused-query norm with his veto explicitly pending (DL-078); and the new protocol
+document calls both UNRESOLVED. Re-materialised through
+`python -m metafind.models.resolve_stage2 --decided-by ...` rather than by editing
+the JSON, so the stamp is a resolver output and not a hand-typed literal. The
+stamp now separates the two: pooling attributed to Kyzen with its ledger id, and
+`init_lambda 9.0` marked DERIVED with his veto pending and his actual ruling of
+0.1 named. **No value changed** -- `init_lambda` is still 9.0 and `pooling` is
+still `normalised_sum`, both live and both reaching the model. Only the
+attribution is now true. The conflict itself stays open for Kyzen.
+
+**Three implementation tasks dispatched in parallel, on disjoint files, no GPU.**
+The ULIP2 engineer makes Stage 1 run on the twelve-view corpus: the sidecar guard
+compares the protocol's recorded view count instead of a compile-time constant,
+the encoding protocol gains the full `view_aggregation` block §五 requires, the
+view count becomes data-driven, and `admitted_uids()` starts reading the exclusion
+ledger's actual uid lists instead of nine metadata strings. The integrator builds
+the §四 manifest over artifacts that already exist, recomputing nothing. The
+ESSGNN engineer corrects the stale ProcTHOR docstrings and writes -- without
+running -- the all-or-nothing node-text repair, so its dry run can put real
+numbers in front of Kyzen.
+
+**The eleven-view renderer code is deliberately left alone.** `RENDERER_VERSION 7`
+and the patched camera list describe a protocol that exists in code and has not
+been approved to run. `is_complete` reporting all 46,024 renders stale is a true
+statement about a corpus rendered under a different protocol, and making it lie
+would be worse than leaving it loud.
+
+---
