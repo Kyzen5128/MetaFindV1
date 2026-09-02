@@ -242,7 +242,12 @@ ORBIT_ELEVATION_DEG = 20.0
 # those fields -- only `tools/measure_render_criteria.py` writes its own copy --
 # so the split is legible rather than load-bearing. It is recorded here because
 # a reader comparing two sidecars deserves to know why they differ.
-RENDERER_VERSION = 6
+# [RENDERER_VERSION 7, 2026-09-02] Eleven views on one azimuth orbit at 20 deg
+# elevation, replacing OpenShape's twelve in three polar rings. The paper says
+# eleven (2methdology.tex:28); which eleven it does not say, and Kyzen chose
+# the single orbit. Every v6 asset is stale under this version and is
+# re-rendered.
+RENDERER_VERSION = 7
 
 # [ADDED 2026-08-24] How many assets may fail BACK TO BACK before the run is
 # treated as broken rather than unlucky. IMPLEMENTATION CHOICE: 8 workers deep,
@@ -838,12 +843,18 @@ def process_one(uid: str, glb: Path, out_dir: Path,
         # [RENDERER_VERSION 5] These describe BLENDER now. The previous values
         # (orthographic, ulip2_azimuth_orbit_11, 20 deg, 224 px) described
         # pyrender and would be a lie in a v5 record.
+        # [RENDERER_VERSION 7, 2026-09-02] Eleven views on one orbit, the
+        # paper's count under Kyzen's chosen layout. Read off render_blender's
+        # own constants rather than restated, so the record cannot describe a
+        # layout the renderer does not use.
         "projection": "perspective",
-        "camera_layout": "openshape_three_rings_of_four",
-        "orbit_elevation_deg": None,          # three rings, not one elevation
+        "camera_layout": "metafind_eleven_azimuth_orbit",
+        "orbit_elevation_deg": render_blender.ORBIT_ELEVATION_DEG,
         "view_directions": [
-            {"ring": name, "polar_deg": polar, "azimuths_deg": list(az)}
-            for (name, az), polar in zip(render_blender.VIEW_DIRECTIONS, (60, 90, 120))],
+            {"ring": name,
+             "polar_deg": 90.0 - render_blender.ORBIT_ELEVATION_DEG,
+             "azimuths_deg": list(az)}
+            for name, az in render_blender.VIEW_DIRECTIONS],
         "resolution": render_blender.RESOLUTION,
         "background": "transparent_rgba",
         "renderer_version": RENDERER_VERSION,
@@ -853,9 +864,12 @@ def process_one(uid: str, glb: Path, out_dir: Path,
         "renderer": render_blender.renderer_versions(),
         # How each choice was arrived at, so a reader never has to guess which
         # of these the paper actually specifies.
-        "camera_layout_source": "openshape_render_single_glb.py",
+        "camera_layout_source": "Kyzen 2026-09-02 (paper is silent on WHICH 11 "
+                                "viewpoints); one orbit of 11 equal azimuths at "
+                                "20 deg, patched into openshape_render_single_glb.py",
         "projection_source": "openshape_render_single_glb.py",
-        "n_views_source": "USER decision 2026-08-23; DEVIATION from MetaFind's stated 11",
+        "n_views_source": "PAPER 2methdology.tex:28 '11 orthogonal viewpoints'; "
+                          "Kyzen 2026-09-02 reverted the 12-view deviation",
         "background_source": "openshape film_transparent=True",
         "blank_views": blank,
         # [ADDED 2026-08-24] The evidence the two guards above now judge, kept so

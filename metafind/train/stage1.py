@@ -387,7 +387,12 @@ class QueryPack:
 # against the loaded matrix in `__getitem__` rather than trusted, because a
 # corpus re-rendered at a different view count would otherwise silently change
 # which view every query drew.
-N_VIEWS_PER_ASSET = 12
+# [PAPER 2methdology.tex:28] eleven views per asset. Was 12 while the corpus
+# was rendered with OpenShape's three-ring list; RENDERER_VERSION 7 reverted
+# that deviation. Asserted against the loaded `views` matrix in __getitem__
+# rather than trusted, so a corpus rendered at another count cannot silently
+# change which view a query draws.
+N_VIEWS_PER_ASSET = 11
 
 
 class Stage1Dataset:

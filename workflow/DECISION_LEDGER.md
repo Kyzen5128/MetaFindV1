@@ -5655,3 +5655,92 @@ is kept by setting init_lambda to 9.0 = 0.1 x 91.4, recorded as derived
 from that measurement. Kyzen may veto; nothing else changed.
 
 ---
+
+## DL-079 -- Strict re-render ruled; 48K read as the two datasets combined; the image-modality wording and the A/B/C image protocols
+
+Date 2026-09-02. Kyzen: 「3甲 7.用加起來的吧」, and for question 5 a wording
+he took from Codex, adopted verbatim in substance:
+
+**Question 3 -- RULED 甲, strict.** Re-render all 46,024 Objaverse-LVIS assets
+at eleven views under the question-2 layout (one orbit of eleven equal
+azimuths, 20 degree elevation, perspective camera, 512 px, black composite),
+then re-encode and re-annotate on the eleven. The official ULIP-2 shards
+cannot substitute: they hold twelve-view features and no pixels.
+
+**Question 7 -- his reading.** The paper's "48K" is taken as the two datasets
+combined (46,052 + 1,467 = 47,519). ASSUMPTION, recorded as his; the paper's
+two sentences attribute 48K to Objaverse-LVIS alone. It changes nothing in
+the pipeline.
+
+**Question 5 -- the image modality, worded as a reproduction assumption,
+not as the paper's text.** The paper fixes three things only: eleven
+orthogonal rendered views per asset; the gallery built from the three
+available modalities; an image-only query condition among seven. It does
+not define how eleven views become one image representation, nor which
+view an image-only query uses. Main reproduction line:
+
+> Each of an asset's eleven views goes through the ULIP-2 image encoder
+> separately; the asset-level image representation is their mean; query and
+> gallery use the SAME asset-level image representation for the image
+> modality. Single-view queries are a sensitivity / extension experiment.
+
+One adjustment to the wording Codex wrote (`zI_A = normalize(mean(...))`):
+in this pipeline no modality vector is normalised before fusion -- text,
+image and point-cloud vectors enter the fusion at the encoder's own scale
+(norm about 43) and the loss normalises the fused output. Normalising only
+the image mean would put a unit vector beside two norm-43 vectors. So the
+main line is the plain mean at the encoder's scale, which is also what
+every Stage 1 checkpoint so far consumed; "normalise" is done in the loss.
+Recorded so the equation and the code say the same thing.
+
+**Image protocols to run, all three kept (reproduction disambiguation, not
+model selection):**
+
+| protocol | image query | gallery image | purpose |
+|---|---|---|---|
+| A, main | eleven-view mean | eleven-view mean | paper reproduction assumption |
+| B | one fixed view (uid_seed(uid) mod 11) | eleven-view mean | sensitivity |
+| C | one random view | eleven-view mean | robustness |
+
+The A-vs-B image-only R@1 against the paper's 11.7 is the diagnostic: A
+near the paper supports the multi-view reading; A far above with B near it
+would point at a single-view query in the original evaluation.
+
+---
+
+## DL-080 -- Eleven views implemented. RENDERER_VERSION 7, one orbit, the paper's count.
+
+Date 2026-09-02. Kyzen ruled 3甲 (strict re-render) and 2甲 (one orbit of
+eleven equal azimuths, 20 degrees elevation, perspective, 512 px, black).
+Implemented; nothing rendered yet.
+
+**Why the camera list had to be patched, not just the count.** OpenShape's
+vendored `render_single_glb.py` holds a hardcoded twelve-entry `views` list --
+three polar rings of four, staggered in azimuth. Passing `--num_images 11`
+takes the FIRST ELEVEN of those: two complete rings and three quarters of the
+third. That is not eleven well-spread viewpoints, and it is what a naive
+count change would have produced. `render_blender._patched_script` now
+replaces the list with eleven equal azimuths at polar 70 degrees (elevation
+20), through the same asserted-edit mechanism the other three patches use, so
+an upstream change to that block fails loudly instead of rendering silently.
+
+`RENDERER_VERSION` 6 -> 7: every existing asset is stale and will be
+re-rendered. The sidecar's camera block is now read off `render_blender`'s own
+constants rather than restated, and its `camera_layout` /
+`camera_layout_source` / `n_views_source` fields name the paper sentence and
+Kyzen's choice instead of the old "USER decision 2026-08-23; DEVIATION from
+MetaFind's stated 11".
+
+`N_VIEWS_PER_ASSET` in the Stage 1 trainer follows to 11. 599 tests pass;
+the ones that asserted twelve now assert the live constant, and the camera
+test checks equal azimuth spacing at a single elevation -- a silent revert to
+upstream's three rings would fail it.
+
+`CLASSIFICATION` The count is a PAPER FACT (2methdology.tex:28). WHICH eleven
+viewpoints is an IMPLEMENTATION CHOICE under a paper silence, decided by
+Kyzen, and recorded as such in every sidecar this renderer writes.
+
+**Not started:** the re-render itself (46,024 assets), the re-encode, the
+re-annotation, the ProcTHOR chain. Waiting on Kyzen's go.
+
+---

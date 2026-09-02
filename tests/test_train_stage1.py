@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 from metafind.train.stage1 import (
+    N_VIEWS_PER_ASSET,
     build_model,
     collate,
     load_protocols,
@@ -345,7 +346,7 @@ def test_no_warmup_starts_at_the_base_rate():
 
 # --- [U-14] the aggregation field must decide something ----------------------
 
-def _cache(tmp_path, n_views=12, dim=8):
+def _cache(tmp_path, n_views=11, dim=8):
     """n06's cache and n03's cloud, in SEPARATE directories as on disk.
 
     They collide otherwise: both are `<uid>.npz`, and pointing both roots at one
@@ -1192,7 +1193,7 @@ def test_the_query_image_is_one_stored_view_chosen_by_uid_seed(
 
     ds, views, _ = _packed_dataset(monkeypatch, tmp_path)
     got = ds[0]["q_image"]
-    assert np.allclose(got, views[uid_seed("u") % 12])
+    assert np.allclose(got, views[uid_seed("u") % N_VIEWS_PER_ASSET])
     assert not np.allclose(got, views.mean(axis=0)), "still the pooled vector"
 
 

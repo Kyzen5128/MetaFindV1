@@ -87,7 +87,14 @@ BLENDER_INSTALL = Path(os.environ.get(
 # All four are upstream's own values. `camera_dist 1.2` is the number in the
 # invocation comment at the top of their script, not argparse's 1.5 default.
 ENGINE = "CYCLES"
-N_VIEWS = 12
+# [PAPER 2methdology.tex:28] "Each asset is rendered from 11 orthogonal
+# viewpoints". Eleven, not the twelve OpenShape's script hardcodes.
+# [Kyzen 2026-09-02, question 2: 甲] Which eleven the paper does not say. The
+# layout is ONE orbit of eleven equal azimuths at 20 degrees elevation,
+# perspective camera -- ULIP-2's single-orbit convention at the paper's count.
+# This is an IMPLEMENTATION CHOICE under a paper silence, not a paper fact.
+N_VIEWS = 11
+ORBIT_ELEVATION_DEG = 20.0
 CAMERA_DIST = 1.2
 RESOLUTION = 512
 
@@ -98,15 +105,35 @@ RESOLUTION = 512
 # [USER DECISION 2026-08-24] switch it to OptiX, which denoises on the GPU.
 DENOISER = "OPTIX"
 
-# Upstream's `views` list, restated here so the layout is greppable without
-# opening vendored code. Three polar rings of four, staggered in azimuth --
-# NOT the single 360/12 orbit ULIP-2's sentence describes. phi is measured from
-# +Z, so 120 deg looks UP at the object from below.
-VIEW_DIRECTIONS = (
-    ("phi_60_above", (30, 120, 210, 300)),
-    ("phi_90_level", (60, 150, 240, 330)),
-    ("phi_120_below", (0, 90, 180, 270)),
-)
+# [RENDERER_VERSION 7, 2026-09-02] The camera list this renderer uses, and the
+# one it replaces.
+#
+# UPSTREAM (OpenShape's `render_single_glb.py`, still vendored unedited): a
+# hardcoded twelve-entry list, three polar rings of four staggered in azimuth:
+#     phi 60 deg  azimuths (30, 120, 210, 300)
+#     phi 90 deg  azimuths (60, 150, 240, 330)
+#     phi 120 deg azimuths (0, 90, 180, 270)
+# Passing `--num_images 11` to that script does NOT give eleven well-spread
+# views: it takes the first eleven entries, i.e. two complete rings and three
+# quarters of the third. That is why the camera list is patched rather than
+# the count merely lowered.
+#
+# OURS: one orbit, eleven equal azimuths, 20 degrees above the horizon.
+# `phi` in the vendored script is the polar angle from +Z (Blender's up after
+# the glTF import), so an elevation of 20 deg is phi = 70 deg.
+VIEW_ELEVATION_DEG = ORBIT_ELEVATION_DEG
+VIEW_AZIMUTHS_DEG = tuple(round(i * 360.0 / N_VIEWS, 6) for i in range(N_VIEWS))
+VIEW_DIRECTIONS = (("phi_70_orbit", VIEW_AZIMUTHS_DEG),)
+
+
+def _views_literal() -> str:
+    """The vendored script's `views` list, rewritten for our camera layout."""
+    import math
+
+    phi = math.radians(90.0 - ORBIT_ELEVATION_DEG)
+    rows = ",\n".join(f"            [{phi!r}, {math.radians(a)!r}]"
+                      for a in VIEW_AZIMUTHS_DEG)
+    return f"    views = [\n{rows}]\n"
 
 # Rendering is a subprocess, so a source-hash guard over this module says
 # nothing about what actually drew the pixels. These three do.
@@ -167,6 +194,24 @@ def _patched_script(dst: Path) -> Path:
          "    # [METAFIND] upstream leaves the denoiser unnamed, so BlenderProc's\n"
          "    # CPU default (INTEL/OIDN) was in force. Name it explicitly.\n"
          f"    RendererUtility.set_denoiser({DENOISER!r})\n"),
+        # [METAFIND, RENDERER_VERSION 7] The camera list. The paper renders
+        # ELEVEN views; upstream's list is twelve in three polar rings, and
+        # `--num_images 11` would take the first eleven of those -- two rings
+        # and three quarters of a third. Replaced by one orbit of eleven equal
+        # azimuths at 20 degrees elevation. See VIEW_DIRECTIONS above.
+        ("""    views = [[np.pi / 3, np.pi / 6],
+            [np.pi / 3, np.pi / 6 * 4],
+            [np.pi / 3, np.pi / 6 * 7],
+            [np.pi / 3, np.pi / 6 * 10],
+            [np.pi / 2, np.pi / 6 * 2],
+            [np.pi / 2, np.pi / 6 * 5],
+            [np.pi / 2, np.pi / 6 * 8],
+            [np.pi / 2, np.pi / 6 * 11],
+            [np.pi / 3 * 2, 0],
+            [np.pi / 3 * 2, np.pi / 2],
+            [np.pi / 3 * 2, np.pi],
+            [np.pi / 3 * 2, np.pi / 2 * 3]]
+""", "    # [METAFIND] eleven equal azimuths, 20 deg elevation\n" + _views_literal()),
     ]
     for old, new in edits:
         if old not in src:
@@ -292,11 +337,10 @@ def render_asset(glb: Path, asset_dir: Path, *, timeout: int = 900) -> list[Path
 def demo() -> None:
     """Render one real asset and check the properties the pipeline depends on.
 
-    Expected truth here is structural, not aesthetic: twelve files, 512x512,
-    an alpha channel that is actually used, and three view groups whose
-    silhouette areas differ -- the last is what distinguishes OpenShape's three
-    polar rings from a single azimuth orbit, and a renderer that quietly fell
-    back to one ring would pass every other check.
+    Expected truth here is structural, not aesthetic: ELEVEN files, 512x512,
+    an alpha channel that is actually used, and silhouette areas that vary
+    across the orbit without splitting into rings -- a renderer still running
+    upstream's three-ring list would show four-view groups instead.
     """
     import glob
 
@@ -320,12 +364,11 @@ def demo() -> None:
             assert a.min() == 0, "no transparent pixel: film_transparent lost"
             assert a.max() == 255, "no opaque pixel: nothing was rendered"
             areas.append(float((a > 0).mean()))
-        rings = [np.mean(areas[0:4]), np.mean(areas[4:8]), np.mean(areas[8:12])]
-        assert len(set(round(r, 4) for r in rings)) > 1, (
-            f"all three rings have the same silhouette area {rings}; the camera "
-            "layout collapsed to a single elevation")
-        print(f"render_blender demo ok: 12x{RESOLUTION} RGBA, "
-              f"ring coverage {[round(r, 4) for r in rings]} -- OK")
+        assert len(set(round(a, 5) for a in areas)) > 1, (
+            f"every view has the same silhouette area {areas}; the camera "
+            "never moved")
+        print(f"render_blender demo ok: {N_VIEWS}x{RESOLUTION} RGBA, "
+              f"coverage {[round(a, 4) for a in areas]} -- OK")
 
 
 if __name__ == "__main__":

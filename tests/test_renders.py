@@ -282,24 +282,31 @@ def test_record_carries_the_channel_contract(tmp_path):
     # [UPDATED 2026-08-23] Was 11 / orthographic / ulip2_azimuth_orbit_11 / 224.
     # Those described pyrender. This test correctly failed on the swap rather
     # than passing quietly, which is the whole reason it names the values.
-    assert len(rec["view_paths"]) == LIVE_N_VIEWS == 12
+    assert len(rec["view_paths"]) == LIVE_N_VIEWS == 11
     assert len(set(rec["view_sha256"])) == LIVE_N_VIEWS
     assert rec["projection"] == "perspective"
-    assert rec["camera_layout"] == "openshape_three_rings_of_four"
+    assert rec["camera_layout"] == "metafind_eleven_azimuth_orbit"
     assert rec["resolution"] == render_blender.RESOLUTION == 512
     assert rec["background"] == "transparent_rgba"
     # [UPDATED 2026-08-24] 5 -> 6. The denoiser is now named explicitly instead
     # of inheriting BlenderProc's CPU default (INTEL/OIDN); it changes the pixels,
     # so v5 sidecars are not this renderer's output. USER DECISION 2026-08-24.
-    assert rec["renderer_version"] == 6
+    # [UPDATED 2026-09-02] 6 -> 7. Eleven views on one azimuth orbit, the count
+    # the paper states (2methdology.tex:28), replacing OpenShape's twelve in
+    # three polar rings. Different cameras, different pixels; a v6 sidecar is
+    # not this renderer's output either. Kyzen 2026-09-02.
+    assert rec["renderer_version"] == 7
     assert rec["renderer"]["denoiser"] == render_blender.DENOISER == "OPTIX"
 
-    # Three rings of four, and the below-ring really is below the equator --
-    # a layout that silently collapsed to one elevation would still produce 12
-    # files and pass every count above.
+    # One orbit at one elevation, eleven equally spaced azimuths. A layout that
+    # silently reverted to upstream's three rings would still produce the right
+    # number of files and pass every count above.
     polars = [r["polar_deg"] for r in rec["view_directions"]]
-    assert polars == [60, 90, 120], polars
-    assert sum(len(r["azimuths_deg"]) for r in rec["view_directions"]) == 12
+    assert polars == [90.0 - render_blender.ORBIT_ELEVATION_DEG], polars
+    assert sum(len(r["azimuths_deg"]) for r in rec["view_directions"]) == N_VIEWS
+    az = rec["view_directions"][0]["azimuths_deg"]
+    steps = [(b - a) % 360 for a, b in zip(az, az[1:])]
+    assert max(steps) - min(steps) < 1e-4, steps
 
     # Provenance must identify the thing that drew the pixels, not this repo.
     assert rec["renderer"]["engine"] == "CYCLES"
@@ -757,28 +764,30 @@ def _frame(rgb, alpha, size=16, seed=0):
 
 
 def test_a_flat_object_is_not_a_broken_camera(monkeypatch, tmp_path):
-    """[2026-08-24] The guard required all 12 renders to be byte-DISTINCT and
+    """[2026-08-24] The guard required every render to be byte-DISTINCT and
     told the operator "the camera is not moving between renders".
 
-    A carpet's four edge-on views are genuinely and identically empty. The
-    camera moved for every one of them and the other eight views are perfect.
-    148 assets were discarded this way -- 91 at exactly 9/12 -- carpets 32,
-    manholes 12, chessboards 10, doormats 8.
+    A carpet's edge-on views are genuinely and identically empty. The camera
+    moved for every one of them and the rest are perfect. 148 assets were
+    discarded this way -- carpets 32, manholes 12, chessboards 10, doormats 8.
 
     Pixel identity cannot tell "the camera did not move" from "the object looks
-    the same from there". This asserts the corpus case, not the constant.
+    the same from there". This asserts the corpus case, not the constant, so
+    it is written against the live view count rather than a literal.
     """
     from metafind.data.renders import process_one
 
-    frames = [_frame((200, 200, 200), 0.30, seed=i) for i in range(4)]   # from above
-    frames += [_frame((0, 0, 0), 0.0) for _ in range(4)]                 # edge on: empty
-    frames += [_frame((200, 200, 200), 0.30, seed=8 + i) for i in range(4)]
+    n_blank = 4
+    n_kept = N_VIEWS - n_blank
+    frames = [_frame((200, 200, 200), 0.30, seed=i) for i in range(n_kept)]
+    frames += [_frame((0, 0, 0), 0.0) for _ in range(n_blank)]  # edge on: empty
     _fake_views(monkeypatch, frames)
 
     rec = process_one("flat", _asset(tmp_path), tmp_path / "out")
-    assert rec["distinct_views"] == 9, "four identical empty views is what a carpet IS"
-    assert rec["blank_views"] == 4
-    assert len(rec["view_paths"]) == 12, "and all twelve are kept"
+    assert rec["distinct_views"] == n_kept + 1, (
+        "the identical empty views count once; a carpet IS that")
+    assert rec["blank_views"] == n_blank
+    assert len(rec["view_paths"]) == N_VIEWS, "and every view is kept"
 
 
 def test_a_camera_that_really_never_moved_is_still_refused(monkeypatch, tmp_path):
@@ -786,7 +795,7 @@ def test_a_camera_that_really_never_moved_is_still_refused(monkeypatch, tmp_path
     is something no real object and no working camera produces."""
     from metafind.data.renders import process_one
 
-    _fake_views(monkeypatch, [_frame((200, 200, 200), 0.30) for _ in range(12)])
+    _fake_views(monkeypatch, [_frame((200, 200, 200), 0.30) for _ in range(N_VIEWS)])
     with pytest.raises(ValueError, match="byte-identical"):
         process_one("stuck", _asset(tmp_path), tmp_path / "out")
 
@@ -803,10 +812,10 @@ def test_a_black_object_entered_frame(monkeypatch, tmp_path):
     """
     from metafind.data.renders import process_one
 
-    _fake_views(monkeypatch, [_frame((0, 0, 0), 0.35, seed=i) for i in range(12)])
+    _fake_views(monkeypatch, [_frame((0, 0, 0), 0.35, seed=i) for i in range(N_VIEWS)])
     rec = process_one("black", _asset(tmp_path), tmp_path / "out")
     assert rec["blank_views"] == 0, "alpha says the geometry is there"
-    assert rec["dark_views"] == 12, "and that it is black -- recorded, not fatal"
+    assert rec["dark_views"] == N_VIEWS, "and that it is black -- recorded, not fatal"
     assert min(rec["view_coverage"]) > 0.3
 
 
@@ -814,23 +823,30 @@ def test_an_asset_that_drew_nothing_is_still_refused(monkeypatch, tmp_path):
     """Zero alpha everywhere is the case the blank guard is actually for."""
     from metafind.data.renders import process_one
 
-    _fake_views(monkeypatch, [_frame((0, 0, 0), 0.0) for _ in range(12)])
+    _fake_views(monkeypatch, [_frame((0, 0, 0), 0.0)
+                              for _ in range(N_VIEWS)])
     with pytest.raises(ValueError, match="drew nothing"):
         process_one("empty", _asset(tmp_path), tmp_path / "out")
 
 
 def test_the_camera_is_checked_where_the_camera_lives():
     """The property the pixel test was standing in for, tested directly: the
-    twelve recorded viewpoints are distinct. This is what "the camera moved"
-    means, and unlike pixel identity it cannot be defeated by a symmetric
-    object."""
-    from metafind.data import render_blender
+    recorded viewpoints are distinct. This is what "the camera moved" means,
+    and unlike pixel identity it cannot be defeated by a symmetric object.
 
-    poses = [(polar, az)
-             for (_, azs), polar in zip(render_blender.VIEW_DIRECTIONS, (60, 90, 120))
-             for az in azs]
-    assert len(poses) == render_blender.N_VIEWS == 12
-    assert len(set(poses)) == 12, poses
+    [RENDERER_VERSION 7] Eleven poses on one orbit, the paper's count, so the
+    polar angle is the same for all of them and only the azimuth separates
+    them -- which is exactly what has to be distinct.
+    """
+    from metafind.data import render_blender as rb
+
+    polar = 90.0 - rb.ORBIT_ELEVATION_DEG
+    poses = [(polar, az) for _, azs in rb.VIEW_DIRECTIONS for az in azs]
+    assert len(poses) == rb.N_VIEWS == 11
+    assert len(set(poses)) == 11, poses
+    steps = [(b - a) % 360 for a, b in zip(rb.VIEW_AZIMUTHS_DEG,
+                                           rb.VIEW_AZIMUTHS_DEG[1:])]
+    assert max(steps) - min(steps) < 1e-4, f"azimuths not equally spaced: {steps}"
 
 
 def test_an_unrecognised_failure_still_trips_the_breaker(monkeypatch):
