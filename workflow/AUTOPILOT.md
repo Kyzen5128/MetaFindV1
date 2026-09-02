@@ -11,24 +11,30 @@ MetaFind MASTER（這個視窗）
    ├─ ulip2-engineer ──→ ulip2-reviewer
    ├─ essgnn-engineer ─→ essgnn-reviewer
    └─ integrator（兩個 block 都審過之後才進場）
-   Codex（codex:codex-rescue）：只看程式碼本身
 ```
+
+**Codex 不在這棵樹裡。**（Kyzen 2026-09-02 晚：「不要有codex審查這個機制 拔掉 然後codex
+審查由我呼叫 你們要審查互相呼叫 reviewer就好」）Codex 只有 Kyzen 自己會叫。MASTER、
+engineer、reviewer 都不准派 Codex，也不准把「Codex 過了」寫進任何開跑條件。
+需要第二意見時，找**另一個 block 的 reviewer**：ULIP2 的東西可以請 ESSGNN Reviewer
+反過來看，反之亦然。這取代原本的「reviewer ＋ Codex 雙軌」。
 
 2026-09-02 前的實況（從對話紀錄數出來的，不是印象）：
 8/29–8/30 派工 40 多次、9/1–9/2 凌晨派 7 次稽核；**9/2 上午之後到晚上，0 次**。
 十一視角渲染、ESSGNN 改法、λ 初值、資料掃描、清硬碟全是 MASTER 自己寫的，
 而且沒送審。這違反 MASTER 的角色卡（「你不做長時間的單一實作」）和三條循環
-（改完自動送 REVIEWER＋Codex）。從這份檔案起改回來。
+（改完自動送 REVIEWER）。從這份檔案起改回來。
 
 ## 二、每一件工作的固定循環（不問、直接跑）
 
 ```
 1  有疑問  → 先查帳本 / notebook 有沒有討論過 → 沒有才查上游 → 三步都空才問 Kyzen
 2  要改碼  → 派給對應 block 的 engineer；MASTER 不自己寫實作
-3  改完    → 自動同時送：對應 block 的 reviewer ＋ Codex（共同基準：docs/CODEX_REVIEW_BRIEF_<日期>.md）
+3  改完    → 自動送對應 block 的 reviewer（共同基準：docs/REVIEW_BRIEF_<日期>.md）
+           跨 block 或想要第二雙眼睛 → 再送另一個 block 的 reviewer。不送 Codex。
 4  有發現  → 回 engineer 修 → 再送審，直到 BLOCKER=0 且 MAJOR=0
 5  過了    → MASTER commit
-6  要開跑  → 只有兩個 block 都審過、Codex 也過，才能開；開跑用 nohup 的 chain script
+6  要開跑  → 只有兩個 block 的 reviewer 都審過才能開；開跑用 nohup 的 chain script
 7  開跑後  → 立刻掛 Monitor（persistent）盯 chain log；每個階段轉換都會叫醒 MASTER
 8  叫醒後  → 讀結果 → 過關就讓 chain 繼續、不過就停下來修 → 到「要 Kyzen 眼睛」的關卡才通知他
 ```
@@ -49,13 +55,15 @@ MetaFind MASTER（這個視窗）
 
 ## 四、接下來的流程（十一視角語料）
 
+**⏸ 全停中（Kyzen 2026-09-02 晚：「先全停 codex 跟 gpt有其他建議」）。**
+下面是停之前的隊列，等他帶 Codex／GPT 的建議回來再定。沒有他的話不准重開。
+
 ```
-[現在]  四路平行：
-        ulip2-engineer   寫 tools/chain_eleven_view.sh ＋ 試跑檢查器 ＋ 清掉舊的第 12 張圖
-        ulip2-reviewer   審渲染／Stage 1 的十一視角改動（已 commit 的範圍）
-        essgnn-reviewer  審 ESSGNN 池化、MLP 形狀、λ 初值、Stage 2 讀協定
-        codex            審整段程式碼
-[審過]  MASTER commit → nohup 開 chain → 掛 Monitor
+[停在這]  ulip2-engineer   只做完了「清掉舊第 12 張圖」的程式碼（未 commit、未測試、未審）
+                           chain script、試渲檢查器、兩個 uid 檔都還沒寫（撞到額度上限死掉）
+          ulip2-reviewer   撞到額度上限死掉，沒有結論
+          essgnn-reviewer  跑完了：CHANGES REQUIRED，BLOCKER 0 / MAJOR 3
+[重開後]  MASTER commit → nohup 開 chain → 掛 Monitor
 [chain] 0 前檢查（GPU 空、版本 7、11 視角、硬碟夠）
         1 試渲 6 件 → 檢查 sidecar 與相機 → 拼圖放 output/look/eleven_view_pilot/
         2 全語料重渲 46,052 件（估 ~43 小時，3.36 秒/件）→ 檢查數量與隔離率

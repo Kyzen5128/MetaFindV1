@@ -18,10 +18,14 @@ Read the real files, not only the diff. Files under docs/paper/ in that range ar
 downloaded upstream papers (EGNN v3, ULIP-2 v4) -- sources to read, not code to
 review.
 
-This is the common baseline for three reviewers. Codex reviews the CODE (logic,
-control flow, foot-guns). The ULIP2 Block Reviewer reviews items 1-3 and F-1/F-2
-against the paper and the vendored renderer. The ESSGNN Block Reviewer reviews
-items 4-6 against the EGNN paper, the EGNN repo and the ledger's rulings.
+This is the common baseline for the block reviewers. The ULIP2 Block Reviewer
+reviews items 1-3 and F-1/F-2 against the paper and the vendored renderer, and
+the CODE of those files. The ESSGNN Block Reviewer reviews items 4-6 against the
+EGNN paper, the EGNN repo and the ledger's rulings.
+
+[2026-09-02 evening, Kyzen] Codex is no longer part of this loop and is not to
+be dispatched by MASTER or by any block. Only Kyzen calls Codex. A second
+opinion comes from the OTHER block's reviewer.
 
 ## Files under review
 
