@@ -89,7 +89,15 @@ REQUIRED_HOUSE_FIELDS = ("objects", "rooms")
 # capitals ("TVStand" -> "TV Stand"). Splitting before EVERY capital turned
 # "CD" into "c d" and "TVStand" into "t v stand"; those strings were the node
 # text t_i and the semantic-edge prompt input for 48,577 of 827,730 nodes
-# (5.9%, measured 2026-09-02). Changing this changes the semantic-edge cache
+# (5.9%, measured 2026-09-02).
+#
+# [CORRECTED 2026-09-03] That 5.9% is right and its attribution was not: it
+# covers BOTH fixes made in the same commit, this regex and the article rule
+# ("a apple" -> "an apple"). The regex alone accounts for 15,209 of 827,730
+# nodes, 1.84%. Wording that credits one of two causes with the whole effect is
+# how the next person mis-sizes the repair.
+#
+# Changing this changes the semantic-edge cache
 # keys, so the fix takes effect only when the object-text map, the
 # semantic-edge job and the node embeddings are regenerated together.
 _CAMEL = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")

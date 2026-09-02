@@ -8,8 +8,14 @@ carries no IMPLEMENTS-NODE marker -- the structural check that compares a
 node's declared writes against its source would otherwise pass on a file that
 produces no edges at all.
 
-The half that needs a GPU -- Qwen for the sentence, a frozen text encoder for
-e_ij, and C2's bounded repair -- lives in ``semantic_edges_run.py``.
+The half that needs a GPU -- the LLM for the sentence, a frozen text encoder
+for e_ij, and C2's bounded repair -- lives in ``semantic_edges_run.py``.
+
+[CORRECTED 2026-09-03] This said "Qwen". The model has been `gemma-4-12B-it`
+since deviation D-2 was re-pointed on 2026-08-24, and `semantic_edges_run.py`
+imports it from `annotate_run.MODEL_ID` rather than naming one, so the name is
+not restated here either -- a second copy of a value is how the first goes
+stale, and this line is the proof.
 
 What the paper says
 -------------------
@@ -94,9 +100,16 @@ _COORDINATE_HINT = re.compile(
 # gone from the embedding. Losing content is worse than carrying a constant
 # preamble, which at least shifts every edge alike.
 #
-# The list is deliberately short and literal. n08 has not run yet, so anything
-# broader would be guessing at a failure mode we have not observed; if the real
-# run shows other wrappers, they get added with the evidence attached.
+# The list is deliberately short and literal: anything broader would be guessing
+# at a failure mode we have not observed, and a wrapper that shows up in a real
+# run gets added with its evidence attached.
+#
+# [CORRECTED 2026-09-03] This said "n08 has not run yet". It has run twice: once
+# under Qwen on 2026-08-17, superseded, and once under gemma on 2026-09-01
+# (1,519.7 s, rc 0, code_revision d402e09f). The 4,242 sentences on disk are the
+# gemma run's, with 0 degraded, and the model name is in the cache key so the
+# Qwen keys were invalidated by the switch. A reader taking this sentence at
+# face value would draw the wrong conclusion about what those sentences are.
 _PREAMBLE = re.compile(
     r"^\s*(?:sure|certainly|of course|okay|ok|here(?:'s| is| it is)?|"
     r"the (?:answer|response|sentence|relationship)|"

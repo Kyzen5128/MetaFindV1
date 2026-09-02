@@ -140,8 +140,14 @@ def main() -> int:
     Q_p = np.load(PC_CACHE).astype(np.float32)[[pos[u] for u in queries]]
     if QPACK.exists():
         try:
-            from metafind.train.stage1 import QueryPack
-            qp = QueryPack(QPACK)
+            from metafind.train.stage1 import QueryPack, protocol_n_views
+            # Reviewer 2026-09-03: this sits inside a try/except, so the
+            # missing-argument TypeError was swallowed and the probe reported
+            # "no query pack on disk" while the pack was present and
+            # unbuildable -- a different query construction under a label
+            # saying it had not been used.
+            _enc = json.loads((paths.OUTPUTS / "stage1_encoding_protocol.json").read_text())
+            qp = QueryPack(QPACK, protocol_n_views(_enc))
             n_hit = 0
             clouds, where = [], []
             for u in queries:

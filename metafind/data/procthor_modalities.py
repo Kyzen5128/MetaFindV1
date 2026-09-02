@@ -30,10 +30,32 @@ cut in two. Numbers said pass, pictures said no.
 What is comparable to the gallery, and what is not
 --------------------------------------------------
 
-Images ARE comparable: the camera layout, elevation, count, projection and
-resolution are imported from ``renders`` rather than copied, so "n04-compatible"
-is enforced by construction and a change to n04 cannot silently desynchronise
-this side.
+Images are NOT comparable to the Objaverse gallery today. The camera layout,
+elevation, count, projection and resolution are imported from ``renders``
+rather than copied, which was meant to make them so.
+
+[CORRECTED 2026-09-03] This claimed that made "n04-compatible" true BY
+CONSTRUCTION and that a change to n04 could not silently desynchronise the two
+sides. Both halves are false, and the second is the dangerous one.
+
+`renders.py` says of exactly those constants that they "describe the RETIRED
+pyrender path ... nothing in `process_one` reads them any more". The live
+Objaverse path goes through `render_blender` via `LIVE_N_VIEWS`. So the import
+binds this node to a DEAD code path: the guarantee is real at the level of
+Python names and says nothing about the corpus, which is the level a reader
+takes it at. Measured divergence between what the two sides actually hold:
+
+    ProcTHOR (this node)      Objaverse (the corpus)
+    11 views                  12 views
+    orthographic              perspective
+    224 px                    512 px
+    single orbit, elev 20     three polar rings of four
+    AI2-THOR skybox           transparent RGBA
+
+The import is LEFT AS IT IS and no value is changed -- moving either side is a
+protocol decision, and the reproduction spec of 2026-09-03 calls the camera
+protocol UNRESOLVED. What is corrected is only the claim. The two renders are
+not interchangeable today, and nothing in code enforces that they ever were.
 
 Point clouds are NOT. n03 samples a complete mesh surface and reaches occluded
 faces; this back-projects depth from the same 11 views and reaches the visible
