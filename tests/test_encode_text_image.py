@@ -42,6 +42,9 @@ ANNOTATION = {
 }
 
 
+from metafind.models.resolve_stage1 import view_aggregation  # noqa: E402
+
+
 def protocol(**over) -> dict:
     base = {
         "status": "resolved",
@@ -51,6 +54,11 @@ def protocol(**over) -> dict:
         "text_serialization": text_serialization_id(),
         "text_template": TEXT_TEMPLATE,
         "image_aggregation": "mean",
+        # Re-derived, for the same reason as the two lines above: `load_protocol`
+        # compares the whole block against what this code would produce, so a
+        # hardcoded copy here would start failing the moment the rule moved --
+        # which is the point.
+        "view_aggregation": view_aggregation(),
         "paper_clip_train_scope": "frozen",
         "actual_clip_train_scope": "frozen",
         "missing_modality_representation": "learned_token",
@@ -734,3 +742,34 @@ def test_a_second_retirement_does_not_overwrite_the_first(tmp_path):
     m._retire(art)
     assert (tmp_path / "abc.json.stale").read_text() == "first"
     assert (tmp_path / "abc.json.stale.2").read_text() == "second"
+
+
+def test_an_edited_view_aggregation_block_is_refused(monkeypatch, tmp_path):
+    """[ULIP2 REVIEWER MAJOR 1] Six of the block's seven fields had no consumer.
+
+    `POST_NORMALIZE = True` was a one-line edit that changed every recorded
+    recipe, changed every arm hash, changed nothing about `aggregate()` -- an
+    unconditional `views.mean(axis=0)` -- and raised nothing. A recorded recipe
+    that did not happen.
+
+    The comparison is TOTAL rather than per field, so a field added later
+    inherits the check instead of having to be remembered. Each case below is a
+    single edited field, which is how the defect would actually arrive.
+    """
+    from metafind.data.encode_text_image import load_protocol
+
+    for field, wrong in (("post_normalize", True),
+                         ("pre_normalize_each_view", True),
+                         ("view_selection_policy", "first_eleven"),
+                         ("selected_view_ids", list(range(11))),
+                         ("aggregation_version", 2),
+                         ("n_views", 11)):
+        va = dict(view_aggregation())
+        va[field] = wrong
+        write_protocol(monkeypatch, tmp_path, protocol(view_aggregation=va))
+        with pytest.raises(ValueError, match="view_aggregation"):
+            load_protocol()
+
+    write_protocol(monkeypatch, tmp_path, protocol(view_aggregation=None))
+    with pytest.raises(ValueError, match="view_aggregation"):
+        load_protocol()

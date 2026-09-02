@@ -294,6 +294,52 @@ def _write(path: Path, obj) -> None:
     tmp.replace(path)
 
 
+def filter_ladder() -> dict:
+    """Every filtering stage as before / removed / after.
+
+    [SPEC 20260903 §六, ULIP2 REVIEWER MAJOR 2, 2026-09-03] 「每一道 filter 都要
+    輸出 before count / removed count / after count」and a final report of raw /
+    usable / train / test / quarantined.
+
+    The exclusion ledger's subtraction was live and silent. Until 2026-09-03 it
+    removed nine metadata strings, i.e. nothing; the parse fix made it remove up
+    to 332 real uids, and `admitted_uids` still returned a bare list. The
+    docstring there asserts the corpus count does not move BECAUSE those 332
+    have no annotation sidecar -- true when measured, and asserted by no code.
+    If it is ever false by one asset, `admitted_total` leaves 45,692, the 80/20
+    partition is taken over a different universe, and every archived
+    `train_uid_set_sha256` stops matching with nothing printed. Three integers
+    per stage is the whole cost of noticing.
+    """
+    def _index(name):
+        p = paths.LOGS / name
+        if not p.exists():
+            return set()
+        return {json.loads(l)["uid"] for l in p.read_text().splitlines() if l.strip()}
+
+    manifest = set(json.loads(paths.LVIS_MANIFEST.read_text()))
+    clouds = _index("pointclouds_index.jsonl")
+    renders = _index("renders_index.jsonl")
+    anns = _index("annotations_index.jsonl")
+
+    ledger_path = paths.OUTPUTS / "annotation_exclusions.json"
+    excluded = (ledger_excluded_uids(json.loads(ledger_path.read_text()))
+                if ledger_path.exists() else set())
+
+    stages, cur = [], manifest
+    for name, have in (("n03_pointclouds", clouds), ("n04_renders", renders),
+                       ("n05_annotate", anns)):
+        after = cur & have
+        stages.append({"stage": name, "before": len(cur),
+                       "removed": len(cur - have), "after": len(after)})
+        cur = after
+    stages.append({"stage": "exclusion_ledger", "before": len(cur),
+                   "removed": len(cur & excluded), "after": len(cur - excluded)})
+    return {"raw_assets": len(manifest), "stages": stages,
+            "usable_assets": len(cur - excluded),
+            "ledger_uids_parsed": len(excluded)}
+
+
 def admitted_uids() -> list[str]:
     """Assets that survived every upstream node, not everything the manifest lists.
 
@@ -360,6 +406,17 @@ def ledger_excluded_uids(ledger: dict) -> set[str]:
     # what turns "the loop read something" into "the loop read the uids": the
     # defect above produced nine entries against a stated 332 and nothing
     # noticed for six days.
+    # [ULIP2 REVIEWER MINOR 4] Per group as well as in total. A parse that read
+    # the wrong field of the RIGHT NUMBER of entries passes a cardinality check;
+    # the ledger already ships each group's own `n` (311 and 21), and comparing
+    # those localises a wrong parse instead of only counting one.
+    for name, group in (ledger.get("groups") or {}).items():
+        n = (group or {}).get("n")
+        got = len((group or {}).get("uids") or [])
+        if n is not None and int(n) != got:
+            raise ValueError(
+                f"annotation_exclusions.json groups.{name} says n={n} but "
+                f"carries {got} uid(s). Fix the ledger rather than the reader.")
     stated = ledger.get("excluded_total")
     if stated is not None and int(stated) != len(out):
         raise ValueError(
@@ -431,6 +488,23 @@ def main() -> int:
         _write(STAGE1_PROTOCOL_PATH,
                build_stage1_protocol(hyperparameters, decided_by))
 
+    lad = filter_ladder()
+    print("filtering, per §六 -- before / removed / after:")
+    for st in lad["stages"]:
+        print(f"  {st['stage']:<18} {st['before']:>7,} - {st['removed']:>5,} "
+              f"= {st['after']:>7,}")
+    print(f"  {'RAW':<18} {lad['raw_assets']:>7,}     "
+          f"USABLE {lad['usable_assets']:,}   "
+          f"quarantined or excluded {lad['raw_assets'] - lad['usable_assets']:,}")
+    # The ledger's own claim, checked instead of believed: those 332 are
+    # supposed to be already absent from the three-way intersection, so the
+    # ledger stage should remove ZERO. If that ever changes, the corpus changed
+    # and it says so here rather than in a silently different split.
+    led = next(st for st in lad["stages"] if st["stage"] == "exclusion_ledger")
+    if led["removed"]:
+        print(f"  NOTE the exclusion ledger removed {led['removed']:,} asset(s) "
+              "that HAD survived n03/n04/n05. The corpus is not the one the "
+              "audit measured; every archived train_uid_set_sha256 will differ.")
     print(f"{len(train):,} train / {len(test):,} test objects "
           f"(seed {args.seed}, {len(uids):,} admitted)")
     print(f"  of the train pool: {len(dev_train):,} dev_train / "

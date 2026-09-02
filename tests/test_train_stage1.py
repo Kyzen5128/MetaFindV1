@@ -1203,9 +1203,14 @@ def test_the_query_image_is_one_stored_view_chosen_by_uid_seed(
     ds, views, _ = _packed_dataset(monkeypatch, tmp_path)
     got = ds[0]["q_image"]
     assert np.allclose(got, views[uid_seed("u") % ds.query_pack.n_views])
-    assert ds.query_pack.n_views == CORPUS_N_VIEWS, (
-        "the modulus must come from the protocol the corpus was encoded "
-        "under, not from a constant compiled into the trainer")
+    # [ULIP2 REVIEWER MINOR 3] This used to claim the modulus "comes from the
+    # protocol"; it does not test that -- the fixture passes the number and this
+    # reads it back. The provenance claim is tested where the protocol dict
+    # actually appears, in
+    # test_the_view_count_comes_from_the_protocol_not_from_a_constant. What is
+    # worth pinning HERE is that the pack and the cache agree, which is the
+    # condition the rule above is only meaningful under.
+    assert ds.query_pack.n_views == views.shape[0]
     assert not np.allclose(got, views.mean(axis=0)), "still the pooled vector"
 
 
@@ -1430,3 +1435,94 @@ def test_the_sidecar_guard_asks_the_protocol_for_the_view_count(tmp_path, monkey
     with pytest.raises(SystemExit, match="n_views"):
         m.check_embedding_sidecars(["u"], {**base,
                                            "view_aggregation": {"n_views": 11}})
+
+
+def test_a_pack_and_a_cache_that_disagree_about_the_view_count_are_refused(
+        monkeypatch, tmp_path):
+    """The safety property the deleted constant used to carry, now tested.
+
+    [ULIP2 REVIEWER MINOR 2] `_packed_dataset` deliberately threads ONE count to
+    both the cache and the pack, which is right for every other test and makes
+    this trigger structurally unreachable from that fixture. So this one builds
+    the mismatch on purpose: a twelve-view cache under a pack told eleven.
+
+    Before 2026-09-03 that mismatch was the DEFAULT state -- a constant 11
+    against a corpus of 12 -- so a test that cannot produce it is a test that
+    would not have caught the defect it exists for.
+    """
+    import metafind.train.stage1 as m
+
+    views, emb, pcs = _cache(tmp_path, n_views=12)
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", emb)
+    monkeypatch.setattr(m.paths, "POINTCLOUDS", pcs)
+    pack = m.QueryPack(_pack(tmp_path, ["u"]), 11)
+    ds = m.Stage1Dataset(["u"], "mean", query_pack=pack)
+
+    with pytest.raises(ValueError, match="views"):
+        ds[0]
+
+
+def test_a_batch_that_repeats_a_uid_is_refused():
+    """[SPEC §十一] `positive_policy: same_uid`, made executable rather than declared.
+
+    The loss uses `labels = torch.arange(B)`, which says two things: row i of
+    the query is the positive of row i of the gallery, AND every other row is a
+    negative. A uid appearing twice breaks the second half -- the duplicate is a
+    true positive sitting in the negative set, and the loss punishes the model
+    for ranking it highly. Nothing raised; the run simply learned a little worse
+    for a reason invisible in the curves.
+
+    A `positive_policy` field with no code reading it is this project's
+    signature defect (PHASE 1 audit, M-1). This assertion is its consumer.
+    """
+    import metafind.train.stage1 as m
+
+    def item(uid):
+        return {"uid": uid, "text": np.zeros(4, np.float32),
+                "image": np.zeros(4, np.float32), "pc": np.zeros((2, 3), np.float32)}
+
+    m.collate([item("a"), item("b"), item("c")])
+
+    with pytest.raises(ValueError, match="same_uid"):
+        m.collate([item("a"), item("b"), item("a")])
+
+
+def test_two_towers_with_different_image_policies_emit_a_query_vector(
+        monkeypatch, tmp_path):
+    """§十一's whole purpose: the query drawing one view while the gallery pools
+    all twelve, WITHOUT that being a different positive policy.
+
+    問題 4 says the paper permits exactly this and `same_record` could not say
+    it. The gallery keeps the pooled vector n06 stored, byte for byte; the query
+    gets the single view the uid's own seed picks.
+    """
+    import metafind.train.stage1 as m
+    from metafind.data.observation import Observation, ObservationProtocol
+    from metafind.data.pointclouds import uid_seed
+
+    views, emb, pcs = _cache(tmp_path, n_views=12)
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", emb)
+    monkeypatch.setattr(m.paths, "POINTCLOUDS", pcs)
+    obs = ObservationProtocol("same_uid", Observation(image="single_view"),
+                              Observation(image="same_mean"))
+    ds = m.Stage1Dataset(["u"], "mean", observation=obs)
+    it = ds[0]
+
+    assert np.allclose(it["image"], views.mean(axis=0)), "gallery keeps the pooled vector"
+    assert np.allclose(it["q_image"], views[uid_seed("u") % 12]), "query takes one view"
+    assert not np.allclose(it["q_image"], it["image"])
+
+    # The same dataset PRELOADED must produce the same keys and the same bytes.
+    # It did not: the non-preloaded branch gated the query side on "is there a
+    # pack" instead of "is there a query side", so one flag silently changed
+    # the experiment.
+    pre = m.Stage1Dataset(["u"], "mean", preload=True, observation=obs)[0]
+    assert set(pre) == set(it), (set(pre) ^ set(it))
+    for k in ("image", "q_image"):
+        assert np.allclose(pre[k], it[k]), f"{k} differs between preload modes"
+
+    same = m.Stage1Dataset(["u"], "mean", observation=ObservationProtocol(
+        "same_uid", Observation(), Observation()))[0]
+    assert "q_image" not in same, (
+        "when the two policies agree there is nothing to emit -- that is the "
+        "old same_record, as a property rather than a mode")

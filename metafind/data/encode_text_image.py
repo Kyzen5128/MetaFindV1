@@ -354,6 +354,36 @@ def load_protocol() -> dict:
             "the artifact's template field has been edited independently of the "
             "code that produced it. Re-run n05b_resolve_stage1_encoding."
         )
+    # [ULIP2 REVIEWER MAJOR 1, 2026-09-03] The same treatment for the view
+    # rule, and for the same reason.
+    #
+    # `view_aggregation` has seven fields and only `n_views` had a consumer:
+    # the trainer's sidecar guard. The other six -- `selected_view_ids`,
+    # `view_selection_policy`, `pre_normalize_each_view`, `method`,
+    # `post_normalize`, `aggregation_version` -- were declared, folded into the
+    # arm hash, and honoured by nothing. Setting `POST_NORMALIZE = True` was a
+    # one-line edit that changed every recorded recipe, changed every arm hash,
+    # changed nothing about `aggregate()` below (an unconditional
+    # `views.mean(axis=0)`), and raised nothing. That is the "recorded recipe
+    # that did not happen" defect this file has already been fixed for three
+    # times, and the reviewer's verdict on the labels was right: they were
+    # accurate, and a correct label is not a control.
+    #
+    # Comparing the artifact against what the code would produce NOW makes the
+    # whole block honest at once. The comparison is total, not per field, so a
+    # field added later inherits the check instead of needing to be remembered.
+    from metafind.models.resolve_stage1 import view_aggregation
+
+    expected_va = view_aggregation()
+    if protocol.get("view_aggregation") != expected_va:
+        raise ValueError(
+            f"stage1_encoding_protocol records view_aggregation "
+            f"{protocol.get('view_aggregation')!r}, but this code would produce "
+            f"{expected_va!r}. Every field in that block describes what "
+            "`aggregate()` actually does, so a difference means either the "
+            "artifact was hand-edited or the code changed without re-resolving. "
+            "Re-run n05b_resolve_stage1_encoding; do not edit the artifact."
+        )
     return protocol
 
 

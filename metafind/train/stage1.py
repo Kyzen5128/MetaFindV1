@@ -424,7 +424,17 @@ def protocol_n_views(encoding: dict) -> int:
             "Re-run n05b_resolve_stage1_encoding: the view count is a protocol "
             "value and this trainer will not substitute a constant for it."
         ) from None
-    return int(n)
+    # [ULIP2 REVIEWER INFO] `0` reached `uid_seed(uid) % n` and raised
+    # ZeroDivisionError deep inside a dataloader worker instead of here. The
+    # same "no default, on purpose" reasoning says a count that cannot be a
+    # count is refused at the point the protocol is read.
+    n = int(n)
+    if n <= 0:
+        raise SystemExit(
+            f"stage1_encoding_protocol.json records view_aggregation.n_views "
+            f"= {n}. A view count must be positive; re-run "
+            "n05b_resolve_stage1_encoding.")
+    return n
 
 
 class Stage1Dataset:
@@ -448,7 +458,16 @@ class Stage1Dataset:
 
     def __init__(self, uids: list[str], aggregation: str,
                  preload: bool = False,
-                 query_pack: "QueryPack | None" = None) -> None:
+                 query_pack: "QueryPack | None" = None,
+                 observation=None) -> None:
+        """`observation` is the §十一 protocol block, resolved.
+
+        `None` reproduces the pre-2026-09-03 construction byte for byte: the
+        gallery reads the pooled `image` vector and the query differs only where
+        a pack supplies an arm. Passing one lets each tower state its own
+        per-modality observation, which is what `same_record` could not express
+        -- it asserted "the same" without saying the same WHAT.
+        """
         if aggregation not in PRECOMPUTABLE_AGGREGATIONS + PER_VIEW_AGGREGATIONS:
             raise ValueError(
                 f"unknown image_aggregation {aggregation!r}; "
@@ -462,6 +481,15 @@ class Stage1Dataset:
         # keeps `gallery_index.py`, `tools/measure_dtype_effect.py` and every
         # existing arm hash unaffected by this change.
         self.query_pack = query_pack
+        self.observation = observation
+        # A policy the cache cannot serve must have been refused at resolution
+        # time, not discovered here on asset 30,000 of an epoch.
+        if observation is not None and observation.query.needs_pack() and query_pack is None:
+            raise ValueError(
+                f"query_observation asks for {observation.query.needs_pack()}, "
+                "which no cache serves and no query pack was supplied. "
+                "metafind.data.observation.resolve() refuses these by default; "
+                "something passed cache_only=False without providing the arm.")
         # Checked HERE, against this dataset's own uid list, not once by the
         # caller: `encode_pools` builds two datasets over two different pools,
         # and a pack covering only one of them would otherwise be discovered on
@@ -474,8 +502,32 @@ class Stage1Dataset:
 
     def _needs_views(self) -> bool:
         """`views` is 12x the pooled vector, so it is kept only when read."""
+        if self.observation is not None and (self.observation.query.needs_views()
+                                             or self.observation.gallery.needs_views()):
+            return True
         return self.per_view or (self.query_pack is not None
                                  and "image" in self.query_pack.arms)
+
+    def _image_for(self, side, uid: str, entry: dict) -> np.ndarray:
+        """One side's image modality, under its own observation policy.
+
+        `same_mean` returns the vector n06 pooled and stored, byte for byte --
+        NOT a re-pooling of `views`, which would be the same arithmetic in
+        float32 instead of the stored float16 and would silently differ in the
+        last bits from every embedding already on disk.
+
+        Every other policy is a mean over a SUBSET of the stored per-view
+        vectors, with no normalisation on either side, which is the rule
+        `view_aggregation` records. That the subsets exist at all is why §七
+        needed no work: n06 has been storing `views (12, 1280)` all along.
+        """
+        from metafind.data.observation import view_indices
+
+        if side.image == "same_mean":
+            return np.asarray(entry["image"], dtype=np.float32)
+        views = entry["views"]
+        idx = view_indices(side.image, uid, views.shape[0])
+        return np.asarray(views[idx], dtype=np.float32).mean(axis=0)
 
     def _query_side(self, uid: str, entry: dict) -> dict:
         """The `q_*` half of one item. Empty dict when query IS gallery.
@@ -484,13 +536,23 @@ class Stage1Dataset:
         not active in the pack -- never when it is active and the asset is
         missing, which `QueryPack.require` has already made impossible.
         """
+        out = {}
+        obs = self.observation
+        if obs is not None and obs.query.image != obs.gallery.image:
+            # The two towers disagree about which views they see, which is
+            # exactly the case 問題 4 says the paper permits and `same_record`
+            # could not express. Emitted as a `q_` key, so `split_embeds` takes
+            # the two-tower branch and the checkpoint records that it did.
+            out["q_image"] = self._image_for(obs.query, uid, entry)
         pack = self.query_pack
         if pack is None:
-            return {}
-        out = {}
+            return out
         if "text" in pack.arms:
             out["q_text"] = pack.vector("text", uid)
         if "image" in pack.arms:
+            # The pack wins over an observation policy for the same arm: it
+            # supplies a vector the cache does not hold, so there is nothing to
+            # prefer it to. Recorded in the arm hash either way.
             views = entry["views"]
             if views.shape[0] != pack.n_views:
                 raise ValueError(
@@ -569,8 +631,16 @@ class Stage1Dataset:
         if self.cache is not None:
             e = self.cache[uid]
             if self.per_view:
+                # [ULIP2 REVIEWER INFO] This reaches a view index through
+                # `shape[0]`, not through the protocol -- the one surviving path
+                # that does. It is unreachable from `main()`: `arm_config_hash`
+                # refuses any `image_aggregation` but `mean` before the first
+                # batch, 900 lines away. Correct by a guard, not by luck, and
+                # said here because the two are far apart.
                 v = e["views"]
                 image = v[random.randrange(v.shape[0])]
+            elif self.observation is not None:
+                image = self._image_for(self.observation.gallery, uid, e)
             else:
                 image = e["image"]
             # Copies, not views: the collate stacks these and torch would
@@ -617,6 +687,14 @@ class Stage1Dataset:
             # moment nobody re-reads this comment.
             views = cached["views"]
             image = views[random.randrange(views.shape[0])]
+        elif self.observation is not None:
+            # Same rule as the preloaded branch. If these two ever diverge,
+            # `--preload` silently becomes a different experiment.
+            image = self._image_for(self.observation.gallery, uid,
+                                    {"image": cached["image"],
+                                     "views": cached["views"]}
+                                    if self._needs_views() else
+                                    {"image": cached["image"]})
         else:
             image = cached["image"]
         item = {
@@ -625,8 +703,17 @@ class Stage1Dataset:
             "image": image.astype(np.float32),
             "pc": pc,
         }
-        if self.query_pack is not None:
-            entry = {"views": cached["views"]} if self._needs_views() else {}
+        # The gate is "is there a query side at all", not "is there a pack".
+        # It was the latter, and with an observation protocol and no pack that
+        # made `preload=True` emit `q_image` while `preload=False` did not --
+        # the same run producing two different datasets depending on a flag
+        # that is supposed to change only where the bytes live. Caught by
+        # test_two_towers_with_different_image_policies_emit_a_query_vector,
+        # which is why that test builds the non-preloaded dataset.
+        if self.query_pack is not None or self.observation is not None:
+            entry = {"image": cached["image"]}
+            if self._needs_views():
+                entry["views"] = cached["views"]
             item.update({k: np.asarray(v, dtype=np.float32)
                          for k, v in self._query_side(uid, entry).items()})
         return item
@@ -642,8 +729,26 @@ def collate(batch: list[dict]):
     """
     import torch
 
+    uids = [b["uid"] for b in batch]
+    # [SPEC §十一] `positive_policy: same_uid` made executable. The loss uses
+    # `labels = torch.arange(B)` (losses.py), which says row i of the query is
+    # the positive of row i of the gallery AND that every other row is a
+    # negative. A uid appearing twice in one batch breaks the second half: the
+    # duplicate is a true positive sitting in the negative set, and the loss
+    # punishes the model for ranking it highly. Nothing raised, and the run
+    # would simply learn slightly worse for a reason invisible in the curves.
+    #
+    # This is the consumer the policy needs. A `positive_policy` field with no
+    # code reading it is this project's signature defect (PHASE1 audit M-1);
+    # asserting the invariant here is what stops it becoming another one.
+    if len(set(uids)) != len(uids):
+        dup = sorted({u for u in uids if uids.count(u) > 1})
+        raise ValueError(
+            f"positive_policy is same_uid, but this batch repeats {len(dup)} "
+            f"uid(s), e.g. {dup[:3]}. labels=arange(B) would then place a true "
+            "positive in the negative set for those rows.")
     out = {
-        "uid": [b["uid"] for b in batch],
+        "uid": uids,
         "text": torch.from_numpy(np.stack([b["text"] for b in batch])),
         "image": torch.from_numpy(np.stack([b["image"] for b in batch])),
         "pc": torch.from_numpy(np.stack([b["pc"] for b in batch])),

@@ -1383,9 +1383,17 @@ def main() -> int:
         # same table be produced by two different query constructions.
         query_pack = None
         if args.query_pack:
-            from metafind.train.stage1 import QueryPack
+            from metafind.train.stage1 import QueryPack, protocol_n_views
 
-            query_pack = QueryPack(args.query_pack)
+            # `n_views` comes from the SAME encoding artifact the trainer read.
+            # [BLOCKER, ULIP2 Reviewer 2026-09-03] This call was left at one
+            # argument when `QueryPack` gained the parameter, so `--query-pack`
+            # raised TypeError here -- after the backbone and checkpoint had
+            # loaded, on the one path that turns a checkpoint into a Table 1
+            # number. A pack could be trained with and not scored with, which
+            # is precisely the split QueryPack's own docstring exists to
+            # prevent.
+            query_pack = QueryPack(args.query_pack, protocol_n_views(encoding))
             print(f"query pack {query_pack.path} arms={list(query_pack.arms)} "
                   f"sha256={query_pack.sha256[:12]}", flush=True)
 

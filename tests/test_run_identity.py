@@ -582,6 +582,13 @@ ARM_RECIPE_KEYS = {
     "training.allow_all_masked",
     # stage1_encoding_protocol.json, whole, minus ENCODING_EXCLUDED
     "encoding.image_aggregation", "encoding.missing_modality_representation",
+    # [ADDED 2026-09-03] TREATMENT, not policy. `view_aggregation` records
+    # WHICH of the stored views are pooled and whether either side of the mean
+    # is normalised. Two runs differing only there saw different image vectors,
+    # so they are different arms and must not share a hash. `image_aggregation`
+    # above stays as well: n06 and Stage1Dataset consume that field, and this
+    # block is the whole rule of which it is one part.
+    "encoding.view_aggregation",
     "encoding.actual_clip_train_scope", "encoding.text_serialization",
     "encoding.text_serialization_family", "encoding.text_serialization_contract",
     "encoding.text_serialization_probes", "encoding.text_template",
