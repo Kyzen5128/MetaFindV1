@@ -5490,3 +5490,20 @@ margin diagnostics; the resample pack kept as a sampling control; the 11-view
 re-annotation behind a pilot ladder.
 
 ---
+
+## DL-074 -- Kyzen approves the Stage 2 recipe: inherit Stage 1's, epochs by the pilot ladder
+
+Date 2026-09-02. Kyzen, on question 3 of notebook section 12.6 (Stage 2
+training recipe), verbatim: 「可以依照你的評估」. The recommendation he
+approved: Stage 2 uses Stage 1's recipe -- AdamW, lr 5e-4, weight decay 0.1,
+betas (0.9, 0.98), eps 1e-8, batch 64, tau 0.5 fixed, scene dropout 0.30 --
+with the epoch count climbing the 5 -> 10 -> 25 ladder, each rung looked at
+before the next. `USER-APPROVED`. The paper gives no Stage 2 recipe, so this
+stays an IMPLEMENTATION CHOICE with his approval, recorded in every Stage 2
+checkpoint record as `hyperparameters_are_stage1_artifact: true` until a
+separate Stage 2 artifact is materialised.
+
+Questions 1, 2, 4, 5, 6, 7 remain open; he asked for each to be explained in
+plain words before deciding, which is done in the same reply.
+
+---
