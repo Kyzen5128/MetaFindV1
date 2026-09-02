@@ -1056,3 +1056,59 @@ embedding npz `views` shape `(12, 1280)`、sidecar `n_views = 12`。
 **兩個權威來源相衝突**（Kyzen 先前的裁決 vs 本文件），MASTER 不自行選擇，
 按 `CLAUDE.md` §3 留為顯性衝突，等 Kyzen 裁示。
 無論如何，`decided_by` 把未發生的裁決寫成 Kyzen 的決定，這一點必須更正。
+
+
+---
+
+# 附錄 B：MASTER 逐句回論文原文核對這份文件的 PAPER FACT 標籤
+
+由 MASTER 於 2026-09-03 加註。這份文件自己說論文權威高於它，所以每一個 `PAPER FACT`
+標籤都回去對了原文。**十三項全部成立，沒有一項需要降級，也沒有發現漏標的論文事實。**
+引用路徑為 `docs/paper/metafind_source/`。
+
+| 這份文件的宣稱 | 原文出處與原句 | 判定 |
+|---|---|---|
+| 11 orthogonal viewpoints | `2methdology.tex:28`　"Each asset is rendered from 11 orthogonal viewpoints" | 成立 |
+| 80/20 split | `3experiments.tex:8`　"we allocate 80% of the data for training and reserve the remaining 20% for testing" | 成立 |
+| dual-tower、separate encoders、兩塔都用 ULIP-2 | `2methdology.tex:34`　"separate encoders for the query and gallery"；`:14`　"both leveraging the ULIP-2 embedding backbone" | 成立。原文確實**沒有**提到權重共享，所以問題 1 標 AUTHOR EVIDENCE 是對的 |
+| Stage 1 兩座塔都訓練 | `2methdology.tex:75`　"both query and gallery encoders are trained" | 成立 |
+| 每個 modality 獨立遮罩 p=0.3 | `2methdology.tex:75`　"each modality in the query has a 30% probability of being independently masked" | 成立 |
+| masked embedding，不是 zero padding | `2methdology.tex:75`　"Rather than zero-padding, we apply masked embeddings" | 成立 |
+| Gallery modality-complete | `2methdology.tex:75`　"The gallery encoder is trained to be modality-complete" | 成立 |
+| Stage 1 loss 單向 q to g | Eq. 5，`2methdology.tex:77`。分母是 `sum over A' in B` 的 gallery 集合，query 側不入和 | 成立，**確認單向** |
+| λ 是 learnable scalar，殘差設計 | Eq. 6，`2methdology.tex:85`　"λ is a learnable scalar"、"This residual design allows layout reasoning to enhance retrieval without disrupting the original embedding space"。**初值原文沒有給** | 成立 |
+| Stage 2 只更新 query fusion 與 ESSGNN，gallery 凍結 | `2methdology.tex:89`　"Only the query-side fusion layer and the ESSGNN module are updated during this stage; the gallery encoder is frozen" | 成立 |
+| scene dropout 30% | `2methdology.tex:89`　"the layout vector e_layout is omitted in 30% of batches" | 成立。見 B-2 |
+| Stage 2 雙向 loss | `2methdology.tex:93`　"bidirectional contrastive learning"，並列出 q2g 與 g2q 兩式 | 成立 |
+| Table 1 的 `w/ ESSGNN` 是 Stage-2 head 回到沒有 layout 的物件檢索 | `3experiments.tex:24`　"we instead explore a single shared head by freezing both encoders in Stage-2, updating only ESSGNN and the fusion, and applying stochastic scene dropout (30%)"，並說改用 Stage-1 head 就會重現 w/o ESSGNN 的數字 | 成立，§十四 的讀法正確 |
+
+## B-1　一個原文細節，這份文件沒有明講，但會影響復現忠實度
+
+`3experiments.tex:143`，消融段：
+
+> while training only the fusion module in the query encoder improves efficiency,
+> **full encoder fine-tuning yields better performance** by allowing earlier layers
+> to adapt to modality-aware supervision.
+
+Table 3（`3experiments.tex:106`）的 `Train fuser only` 是 **8.7**，明顯低於主結果。
+
+也就是說，論文自己說**完整 encoder 微調**才是比較好的那一臂，主結果很可能就是那一臂。
+我們目前的 `train_scope = point_encoder_and_fuser`（文字與影像編碼器凍結）**兩邊都不是**：
+比 `fuser only` 多，比 `full encoder fine-tuning` 少。
+
+這份文件 §三 C 已經正確地把它標成 `IMPLEMENTATION MAINLINE` 而不是 PAPER FACT，
+所以標籤沒有錯。這裡補記的是**後果**：我們的主線不是論文回報為最佳的那一臂，
+因此把我們的數字拿去跟論文 Table 1 對照時，這是必須寫明的差異，
+不是可以略過的實作細節。要不要另開一條 full-encoder-finetune 的實驗臂，是 Kyzen 的決定。
+
+## B-2　scene dropout 是 per batch，不是 per sample
+
+原文用字是 "omitted in 30% of batches"。單獨記一條，因為 per-sample 的實作在統計上不同
+（整個 batch 全有或全無，vs 每一筆各自擲骰），而且很容易在重寫時滑掉。
+
+## B-3　核對的範圍與盲點
+
+只核對了這份文件標為 `PAPER FACT` 的句子，用的是 `2methdology.tex`、`3experiments.tex`、
+`appendix.tex` 的全文檢索。**沒有**核對的：作者 rebuttal 的原文（不在這台機器上，
+問題 1 的 AUTHOR EVIDENCE 因此只能照這份文件轉述），以及 Figure 1 的圖上文字
+（圖檔在，但沒有逐字讀圖）。這兩項維持 UNVERIFIED。
