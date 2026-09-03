@@ -25,7 +25,7 @@ Kyzen：「這些評估你都應該重視……逐步不排除及修正。」
 | P0-5 | 評估畫廊範圍（25） | UNRESOLVED | 評估器四協定：A test→test 9,138、B test→full 45,692、C dev→dev 4,569、D dev→train 36,554 | ✅ 機制齊；A/B 只在最終上鎖時 `--unseal` | 每個 arm 同時報 C、D |
 | P0-6 | 進 Fusion 前正規化（C8） | IMPLEMENTATION CHOICE | P1（開）→ **P7**（關，其餘同 P1，唯一對照） | P7 排隊 | 量到 pc 範數 139 對 text 37；打亂 gallery pc 全崩 |
 | — | Fusion 一份或兩份（3 / C2） | PAPER FIGURE FACT（圖畫一個）vs 正文 "separate encoders" | P1（兩份）→ **P4**（一份共用） | ✅ | P4 與 P1 七格同形（text 12.0 vs 11.6、pc 52.3 vs 66.6）→ 不是拉開差距的軸 |
-| — | Fusion 輸入粒度（13 / C4） | UNRESOLVED：Eq. 6 寫每模態一支，Figure 1 畫 K 支 | P1（一支）→ **P3**（12 token） | P3 跑中 | 第 0 輪 8.3/19.3/59.2/28.3/78.1/67.8/81.7 |
+| — | Fusion 輸入粒度（13 / C4） | UNRESOLVED：Eq. 6 寫每模態一支，Figure 1 畫 K 支 | P1（一支）→ **P3**（12 token） | ✅ | P3 D：10.4/24.6/61.1/59.7/94.6/72.7/98.0，與 P1 同族（shape 0.41 vs 0.41）→ 不是拉開差距的軸；主線維持每模態一支 |
 | — | 11 vs 12 視角（44） | DIRECT DEVIATION | 11-of-12 兩邊都換（評估敏感度） | ✅ | 七格不動（57.8/84.7/78.4/96.3/99.6/94.2/100.0 對 12 視角 58.0/84.6/78.8/96.5/99.6/94.1/100.0）→ 不重渲染 |
 | — | ULIP 只餵類別（16） | UNRESOLVED（論文兩列都沒寫餵什麼） | 評估敏感度：類別 / 填表 / 描述 / 完整 | ✅ | text 3.8 / 4.7 / 24.1 / 24.5（論文 0.1）；T+PC 全 98.7（論文 33.9）→ 文字解釋一格、解釋不了形狀 |
 | — | 早期壞探針（46） | INVALID EXPERIMENT | 撤回；`tests/test_probe_gallery_parity.py` 守住 | ✅ | 四個結論全在正式評估器上重測 |
@@ -54,7 +54,7 @@ Kyzen：「這些評估你都應該重視……逐步不排除及修正。」
 ## 4. 執行順序（自動鏈）
 
 ```
-P1 ✅ → P4 ✅ → P3（跑中）→ P5 → P7 → P6 → ULIP 探針加 pack → 看 P5 決定 P0-3′ → Transformer 內部掃 → 訓練範圍
+P1 ✅ → P4 ✅ → P3 ✅ → P5（跑中）→ geometry + ULIP-with-pack 探針 → P7 → P6 → 看 P5 決定 P0-3′ → Transformer 內部掃 → 訓練範圍
 ```
 
 所有 arm 的 14 格表：`output/look/ARMS_TABLE.md`（`tools/fingerprint.py` 產生，含到論文列的距離）。
