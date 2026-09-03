@@ -70,6 +70,35 @@ TRAINER_VERSION = 1
 # one symbol coupled Table 3's p_mask sweep to scene dropout.
 PAPER_SCENE_DROPOUT = 0.30
 
+# [AUDIT 2026-09-04 F3] How the Stage 2 QUERY is built, per sample:
+#   none       the target's text, image and point cloud all present (what every
+#              Stage 2 run before 2026-09-04 did). Pilot 2 measured that the
+#              layout term then has nothing to add: S2-on = S2-off, lambda
+#              does not move -- the answer is already in the query.
+#   text_only  text present, image and pc absent (mask tokens). Figure 1's
+#              query is a text box plus the scene graph; sec. 2.4 "It accepts
+#              any subset of modalities and can be augmented with a layout-aware
+#              vector".
+#   stage1     sec. 2.6's independent 30% masking continued into Stage 2, at
+#              least one modality kept. The paper does not say Stage 2 keeps it
+#              (Kyzen's item 33); an ablation.
+# The paper defines none of these for Stage 2 training. IMPLEMENTATION CHOICE,
+# recorded in the checkpoint as query_modality_masking.
+QUERY_MASKING_MODES = ("none", "text_only", "stage1")
+
+
+def query_present(mode: str, rng, p_mask: float = 0.30):
+    """A (1, 3) bool presence mask for one query, or None under `none`."""
+    import torch
+    if mode == "none":
+        return None
+    if mode == "text_only":
+        return torch.tensor([[True, False, False]])
+    keep = rng.random(3) >= p_mask
+    if not keep.any():
+        keep[int(rng.integers(3))] = True
+    return torch.tensor(keep.reshape(1, 3))
+
 CKPT_DIR = paths.CHECKPOINTS
 VARIANT_STATUS = paths.OUTPUTS / "variant_status.json"
 VARIANT_CKPTS = paths.OUTPUTS / "variant_ckpts.json"
@@ -389,7 +418,8 @@ def derive_init_lambda(model, samples, graphs, data, ratio: float,
 
 
 def encode_query(model, graph: dict, target_index: int, asset_id: str,
-                 drop_layout: bool, device: str, data: "Stage2Data"):
+                 drop_layout: bool, device: str, data: "Stage2Data",
+                 present=None):
     """One leave-one-out query: the target's modalities plus its scene context.
 
     The target is removed from the graph here and nowhere else, so the removal
@@ -442,9 +472,13 @@ def encode_query(model, graph: dict, target_index: int, asset_id: str,
                 edge_missing=torch.from_numpy(edge_missing).to(device))
 
     embeds = {"text": text, "image": image, "pc": pc_vec}
-    # [2.4] the query side may drop the point cloud; here it is present because
-    # target_eligibility required one. `present=None` means all three.
-    return model.query(embeds, present=None, layout=layout)[0]
+    # [2.4] the query side may drop the point cloud. `present=None` means all
+    # three (the pre-2026-09-04 construction); under query_modality_masking
+    # text_only / stage1 the caller passes a (1, 3) mask and the absent slots
+    # take the learned mask tokens, as in Stage 1 -- the target's own image and
+    # cloud then no longer answer the query by themselves, which is what gives
+    # Eq. 6's layout term work to do.
+    return model.query(embeds, present=present, layout=layout)[0]
 
 
 class Stage2Data:
@@ -874,6 +908,10 @@ def main() -> int:
                     help="permit replacing an existing stage2_<variant>.pt and "
                          "its record. Without it an occupied destination stops "
                          "the run before the first batch.")
+    ap.add_argument("--query-modality-masking", default=None,
+                    choices=QUERY_MASKING_MODES,
+                    help="override stage2_protocol.query_modality_masking for "
+                         "this run; recorded in the checkpoint")
     ap.add_argument("--hyperparameters", required=True,
                     help="JSON with a `values` block (same schema as "
                          "stage1_hyperparameters.json) giving Stage 2's optimizer, "
@@ -925,11 +963,14 @@ def main() -> int:
     # "none" is what every Stage 2 run so far did (all three modalities always
     # present); "p_mask" would be an ablation and is not implemented yet.
     query_masking = stage2.get("query_modality_masking", "none")
-    if query_masking != "none":
-        raise NotImplementedError(
-            f"stage2_protocol.query_modality_masking = {query_masking!r}; only "
-            "'none' is implemented. Applying Stage 1's mask in Stage 2 is an "
-            "ablation that has to be built and recorded before it runs.")
+    if args.query_modality_masking is not None:
+        print(f"query_modality_masking {query_masking!r} (protocol) overridden by "
+              f"--query-modality-masking {args.query_modality_masking!r}; recorded",
+              flush=True)
+        query_masking = args.query_modality_masking
+    if query_masking not in QUERY_MASKING_MODES:
+        raise SystemExit(f"query_modality_masking {query_masking!r}; known "
+                         f"{QUERY_MASKING_MODES}")
     print(f"hyperparameters {hp_path}  sha256 {hp_sha256[:12]}"
           + ("  (this is the STAGE 1 artifact: Stage 2 recipe not yet decided, "
              "inheriting Stage 1's values)" if hp_is_stage1 else ""), flush=True)
@@ -1120,6 +1161,15 @@ def main() -> int:
     # scene dropout to 10% too, and the ablation would no longer be an ablation
     # of one thing.
     stage2_dropout = float(values.get("scene_dropout", PAPER_SCENE_DROPOUT))
+    # [AUDIT 2026-09-04 F3] Stage 1's recipe has a warmup and a cosine decay;
+    # Stage 2's optimizer ran flat, and the first 50 steps at the flat rate
+    # cost the probe batch 11 points of in-batch top-1. Optional, recipe-driven:
+    # warmup_frac (of all steps) and lr_end; absent = flat, as before.
+    warmup_frac = float(values.get("warmup_frac", 0.0))
+    lr_start = float(values.get("lr_start", 1e-6))
+    lr_end = float(values.get("lr_end", values["learning_rate"]))
+    lr_schedule = None
+    from metafind.train.stage1 import cosine_schedule
     epochs = args.epochs or values["epochs"]
     if epochs <= 0:
         raise SystemExit(f"epochs must be positive, got {epochs}")
@@ -1146,7 +1196,23 @@ def main() -> int:
                 print(f"  {len(batches):,} batches kept; {n_small} with fewer than "
                       f"{MIN_BATCH} samples dropped ({n_small_samples:,} samples, the "
                       "over-placed assets' leftovers)", flush=True)
+            if epoch == 0 and warmup_frac > 0:
+                total = epochs * len(batches)
+                warm = max(1, int(round(warmup_frac * total)))
+                lr_schedule = cosine_schedule(float(values["learning_rate"]), lr_end,
+                                              1, total, 0, lr_start)
+                # cosine_schedule's warmup is in epochs; do the warmup in steps
+                # here so a one-epoch fine-tune can still warm up briefly.
+                ramp = np.linspace(lr_start, float(values["learning_rate"]), warm)
+                lr_schedule = np.concatenate([ramp, lr_schedule[warm:]])
+                print(f"  lr schedule: warmup {warm} steps from {lr_start:g}, cosine "
+                      f"{values['learning_rate']:g} -> {lr_end:g} over {total} steps",
+                      flush=True)
             for batch in batches:
+                if lr_schedule is not None:
+                    lr_now = float(lr_schedule[min(step, len(lr_schedule) - 1)])
+                    for group in opt.param_groups:
+                        group["lr"] = lr_now
                 # [U-32 / 2.6] "omitted in 30% of BATCHES" -- ONE draw per batch,
                 # so every sample in a dropped batch loses the layout term and
                 # every sample in a kept batch has it. L1-SCENE-DROPOUT-30
@@ -1157,8 +1223,12 @@ def main() -> int:
                 for idx in batch:
                     house_id, target_index, asset_id = samples[idx]
                     graph = graphs[house_id]
+                    present = query_present(query_masking, rng)
+                    if present is not None:
+                        present = present.to(args.device)
                     q = encode_query(model, graph, target_index,
-                                     asset_id, drop, args.device, data)
+                                     asset_id, drop, args.device, data,
+                                     present=present)
                     queries.append(q)
                     positives.append(gallery_vecs[id_to_row[asset_id]])
 
@@ -1210,6 +1280,9 @@ def main() -> int:
                     "epochs": epochs,
                     "seed": seed,
                     "scene_dropout": stage2_dropout,
+                    "warmup_frac": warmup_frac,
+                    "lr_start": lr_start if warmup_frac > 0 else None,
+                    "lr_end": lr_end if warmup_frac > 0 else None,
                     "init_temperature": values["init_temperature"],
                     "learnable_temperature": values["learnable_temperature"],
                 },

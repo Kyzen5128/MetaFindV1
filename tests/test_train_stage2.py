@@ -326,3 +326,17 @@ def test_the_stage2_tower_uses_the_stage1_fusion_config():
         assert (c1.prefusion_norm, c1.image_tokens, c1.kind, c1.zero_pad) == \
                (c2.prefusion_norm, c2.image_tokens, c2.kind, c2.zero_pad), tower
     assert s2.query.fusion.cfg.prefusion_norm is True
+
+
+def test_query_present_modes():
+    import numpy as np
+    from metafind.train.stage2 import query_present, QUERY_MASKING_MODES
+    assert QUERY_MASKING_MODES == ("none", "text_only", "stage1")
+    rng = np.random.default_rng(0)
+    assert query_present("none", rng) is None
+    t = query_present("text_only", rng)
+    assert t.shape == (1, 3) and t.tolist() == [[True, False, False]]
+    masks = [query_present("stage1", rng) for _ in range(300)]
+    assert all(m.shape == (1, 3) and m.any() for m in masks)
+    rate = 1 - sum(m.float().mean().item() for m in masks) / len(masks)
+    assert 0.15 < rate < 0.45          # ~30% absent, minus the at-least-one rule
