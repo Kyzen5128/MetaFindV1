@@ -2074,6 +2074,7 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         # directory; without these three a checkpoint cannot say which corpus
         # it saw, and two of them would look like repeats of one condition.
         "query_image_policy": training.get("_query_image_policy"),
+        "prefusion_norm": bool(training.get("prefusion_norm", False)),
         "text_template": training.get("_text_template"),
         "embeddings_dir": training.get("_embeddings_dir"),
         "train_scope": training.get("train_scope", "point_encoder_and_fuser"),
@@ -2232,7 +2233,9 @@ def build_model(encoding: dict, training: dict, hyperparameters: dict):
     # is made here rather than letting a dataclass default decide -- Table 3's
     # "Padding missing modalities with 0" is the row that sets it True.
     zero_pad = encoding["missing_modality_representation"] == "zero_pad"
-    fusion = FusionConfig(kind=training["fusion"], dim=EMBED_DIM, zero_pad=zero_pad)
+    fusion = FusionConfig(kind=training["fusion"], dim=EMBED_DIM, zero_pad=zero_pad,
+                          # absent in protocols written before 2026-09-03
+                          prefusion_norm=bool(training.get("prefusion_norm", False)))
     model = MetaFindDualTower(DualTowerConfig(
         dim=EMBED_DIM, tower_sharing=training["tower_sharing"],
         query_fusion=fusion, gallery_fusion=fusion,
@@ -2508,15 +2511,25 @@ def main() -> int:
     # The declared observation and the dataset's construction must agree, or
     # the checkpoint would record one thing and the towers would have seen
     # another. Checked before any data is loaded.
-    if args.query_observation == "second_observation" and query_pack is None:
+    # [AUDIT 2026-09-03 E1] A second observation can come from a query pack
+    # (text / pc arms) OR from a query image policy other than same_mean (the
+    # cached per-view matrix). Either one makes the query read something the
+    # gallery does not hold; declaring same_record beside either is a false
+    # label, and declaring second_observation with neither is an empty one.
+    second_via_image = args.query_image_policy != "same_mean"
+    if args.query_observation == "second_observation" and query_pack is None \
+            and not second_via_image:
         raise SystemExit("--query-observation second_observation needs "
-                         "--query-pack; without one the query tower reads the "
+                         "--query-pack and/or --query-image-policy other than "
+                         "same_mean; with neither the query tower reads the "
                          "gallery's own record.")
-    if args.query_observation == "same_record" and query_pack is not None:
+    if args.query_observation == "same_record" and (query_pack is not None
+                                                    or second_via_image):
         raise SystemExit("--query-observation same_record was declared but "
-                         "--query-pack was given; the query tower would read "
-                         "a second observation. Declare second_observation "
-                         "or drop the pack.")
+                         "the query tower would read a second observation "
+                         f"(pack={'yes' if query_pack else 'no'}, "
+                         f"image policy={args.query_image_policy}). Declare "
+                         "second_observation, or drop both.")
     if args.query_observation == "same_record":
         print("query observation: SAME RECORD on both towers (paper-literal "
               "Stage 1; the query text/image/pc are the gallery's own cached "

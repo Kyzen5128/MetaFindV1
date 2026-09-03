@@ -50,6 +50,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 import torch
+import torch.nn.functional as F
 from torch import Tensor, nn
 
 __all__ = ["FusionConfig", "ModalityFusion", "MODALITIES", "sample_modality_mask"]
@@ -93,6 +94,16 @@ class FusionConfig:
     zero_pad: bool = False
     include_absent_slots: bool = True
     dropout: float = 0.0
+    # [AUDIT 2026-09-03 C8] The paper says nothing about normalising modality
+    # vectors before Fusion, and neither did this module: raw vectors went in.
+    # Measured on the 10-epoch pilot, the vectors entering Fusion had norms
+    # text 37.1 / image 40.2 / pc 139.1 -- PointBERT trains and grew 3.5x past
+    # the frozen CLIP towers -- and permuting the gallery's pc alone took every
+    # Table 1 condition to single digits. With this on, each PRESENT modality
+    # is L2-normalised before it enters the Transformer; the learned mask
+    # tokens are left free. IMPLEMENTATION CHOICE, recorded in
+    # stage1_protocol.json, off by default.
+    prefusion_norm: bool = False
 
 
 def sample_modality_mask(
@@ -200,6 +211,8 @@ class ModalityFusion(nn.Module):
                 fill = torch.zeros_like(self.mask_tokens[i]) if self.cfg.zero_pad else self.mask_tokens[i]
                 cols.append(fill.expand(present.size(0), -1))
                 continue
+            if self.cfg.prefusion_norm:
+                e = F.normalize(e, dim=-1)
             fill = torch.zeros_like(e) if self.cfg.zero_pad else self.mask_tokens[i].expand_as(e)
             cols.append(torch.where(keep, e, fill))
         return torch.stack(cols, dim=1)
