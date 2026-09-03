@@ -1826,15 +1826,25 @@ def pilot_diagnostics(backbone, model, present, q, g) -> dict:
     """
     import torch
 
-    def gnorm(named) -> float:
-        t = sum(p.grad.norm().item() ** 2 for _, p in named if p.grad is not None)
+    def gnorm(params) -> float:
+        t = sum(p.grad.norm().item() ** 2 for p in params if p.grad is not None)
         return round(float(t ** 0.5), 6)
 
-    pb = [(n, p) for n, p in backbone.named_parameters()
-          if n.startswith("point_encoder") or n.startswith("pc_projection")]
-    clip = [(n, p) for n, p in backbone.named_parameters()
-            if n.startswith("open_clip_model")]
-    fus = [(n, p) for n, p in model.named_parameters() if "fusion" in n]
+    # [FIXED 2026-09-03, caught by the run itself at step 20] This called
+    # `backbone.named_parameters()`. `ULIPBackbone` is NOT an `nn.Module` -- it
+    # is a wrapper holding `.model` -- so the real object has no such method and
+    # the pilot died twenty steps in.
+    #
+    # The unit test passed because its fake backbone WAS an `nn.Module`. That is
+    # the failure family this project keeps closing, committed by me in the same
+    # hour I was fixing four instances of it: a test green for a reason beside
+    # the point. The fix is to reach through the accessors the wrapper actually
+    # publishes, and the test below now builds its fake to the same shape.
+    inner = backbone.model
+    pb = backbone._point_parameters()
+    clip = list(inner.open_clip_model.parameters()) if hasattr(
+        inner, "open_clip_model") else []
+    fus = [p for n, p in model.named_parameters() if "fusion" in n]
     masks = [p for n, p in model.named_parameters() if n.endswith("mask_tokens")]
 
     out = {"pointbert_grad_norm": gnorm(pb),

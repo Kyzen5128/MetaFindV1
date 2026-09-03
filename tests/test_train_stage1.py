@@ -1672,12 +1672,28 @@ def test_the_pilot_diagnostics_name_what_the_ten_epoch_run_is_for():
 
     from metafind.train.stage1 import pilot_diagnostics
 
-    class BB(nn.Module):
+    # Shaped like the REAL `ULIPBackbone`, which is NOT an `nn.Module`: it is a
+    # wrapper holding `.model`, and it publishes `_point_parameters()`.
+    #
+    # [FIXED 2026-09-03] The first version of this fake WAS an `nn.Module` with
+    # `named_parameters()`, so the test passed and the ten-epoch run died at
+    # step 20 on `AttributeError: 'ULIPBackbone' object has no attribute
+    # 'named_parameters'`. A fake with a shape the real object does not have is
+    # a test of the fake. The contract test below is the other half.
+    class Inner(nn.Module):
         def __init__(self):
             super().__init__()
             self.point_encoder = nn.Linear(4, 4)
             self.pc_projection = nn.Linear(4, 4)
             self.open_clip_model = nn.Linear(4, 4)
+
+    class BB:
+        def __init__(self):
+            self.model = Inner()
+
+        def _point_parameters(self):
+            return (list(self.model.point_encoder.parameters())
+                    + list(self.model.pc_projection.parameters()))
 
     class Fusion(nn.Module):
         def __init__(self):
@@ -1694,8 +1710,8 @@ def test_the_pilot_diagnostics_name_what_the_ten_epoch_run_is_for():
     bb, model = BB(), M()
     # A backward that reaches PointBERT and the fusion but NOT the CLIP tower,
     # which is the state the protocol claims.
-    (bb.point_encoder(torch.ones(1, 4)).sum()
-     + bb.pc_projection(torch.ones(1, 4)).sum()
+    (bb.model.point_encoder(torch.ones(1, 4)).sum()
+     + bb.model.pc_projection(torch.ones(1, 4)).sum()
      + model.fusion.w(torch.ones(1, 2)).sum()).backward()
 
     present = torch.tensor([[True, True, True], [False, False, False],
@@ -1718,3 +1734,39 @@ def test_the_pilot_diagnostics_name_what_the_ten_epoch_run_is_for():
     assert d["mask_token_norm"] == 5.0        # (5 + 10 + 0) / 3
     assert d["mask_token_norm_min"] == 0.0
     assert d["mask_token_norm_max"] == 10.0
+
+
+def test_pilot_diagnostics_reaches_only_what_the_real_backbone_publishes():
+    """The contract the fake above cannot check, and the run paid for.
+
+    `pilot_diagnostics` called `backbone.named_parameters()`. `ULIPBackbone` is
+    not an `nn.Module` and has no such method, so the ten-epoch pilot died at
+    step 20 -- while its unit test was green, because the fake backbone was an
+    `nn.Module`. A fake with a shape the real object does not have is a test of
+    the fake.
+
+    This asserts the members against the REAL CLASS, without constructing it:
+    building one loads 9.5 GB of weights, and the defect was never about the
+    weights. Attribute names, on the class, is exactly the level the bug lived
+    at.
+    """
+    import inspect
+
+    from metafind.models.ulip_backbone import ULIPBackbone
+    from metafind.train.stage1 import pilot_diagnostics
+
+    assert callable(getattr(ULIPBackbone, "_point_parameters", None)), (
+        "pilot_diagnostics calls backbone._point_parameters()")
+    assert not hasattr(ULIPBackbone, "named_parameters"), (
+        "ULIPBackbone has grown named_parameters(); pilot_diagnostics may now "
+        "use it, but the accessor it uses must exist on the class it is given")
+
+    # And the reverse direction: every attribute the function reaches for on the
+    # backbone must be one the real class sets or exposes.
+    src = inspect.getsource(pilot_diagnostics)
+    for attr in ("_point_parameters", "model", "open_clip_model"):
+        assert attr in src, f"pilot_diagnostics no longer mentions {attr}"
+        assert attr in inspect.getsource(ULIPBackbone), (
+            f"pilot_diagnostics reaches for `{attr}`, which ULIPBackbone does "
+            "not have. This is the exact failure that killed the 2026-09-03 "
+            "pilot at step 20.")
