@@ -10,8 +10,13 @@ All rows: metafind.eval.run_retrieval (float64 cosine, ties against the model). 
 | **P1**: attrs_v1 text, single_view query image, prefusion L2 | C | 34.7 | 56.9 | 86.2 | 87.6 | 99.0 | 92.7 | 99.7 |
 | P1 | D | 11.6 | 29.7 | 66.6 | 67.5 | 95.6 | 77.8 | 98.1 |
 | P1 / paper | D | 0.84x | 2.54x | 0.89x | 3.93x | 2.15x | 1.70x | 1.90x |
+| **P4**: P1 + ONE Fusion shared by both towers (Figure 1 draws one Fusion Layer) | C | 34.1 | 49.0 | 75.1 | 80.6 | 98.6 | 84.8 | 99.7 |
+| P4 | D | 12.0 | 25.0 | 52.3 | 58.5 | 94.4 | 65.8 | 98.0 |
+| P4 / paper | D | 0.87x | 2.14x | 0.70x | 3.40x | 2.12x | 1.44x | 1.90x |
 
 P1 per-epoch dev_val (C shape): text climbs 11.4 -> 34.7, image 17.8 -> 56.9, pc 45.8 -> 86.1, full 82.1 -> 99.7 over 10 epochs. Text and pc are the gallery's own record on the query side, so every condition containing them keeps heading for Eq. 5's trivial solution; only the image differs. P5 (every modality a second observation) is queued for that reason.
+
+P4 (one shared Fusion) lands within a few points of P1 on every condition (pc and image+pc lower, image slightly higher) and keeps the same text+pc / full ceiling. Fusion sharing is not the axis that separates us from Table 1; it stays an open reading of Figure 1, not a fix.
 
 ## ULIP row hypothesis (Kyzen 2026-09-03 evening): does a category-only text query explain ULIP's 0.1?
 
