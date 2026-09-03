@@ -35,7 +35,7 @@ import numpy as np
 import torch
 
 from metafind import paths
-from metafind.data.pointclouds import DEFAULT_GREY, N_POINTS, pc_norm, uid_seed
+from metafind.data.pointclouds import uid_seed
 from metafind.eval.retrieval import (QUERY_CONDITIONS, condition_mask,
                                      normalize_for_scoring, recall_at_k)
 from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
@@ -50,39 +50,15 @@ POLICIES = ("canonical", "resample", "nocolor", "jitter02", "sparse1k", "rotz",
 
 
 def perturb(xyz: np.ndarray, rgb: np.ndarray, policy: str, seed: int) -> np.ndarray:
-    """(N_POINTS, 6) float32. `xyz` is already pc_norm'd; every policy re-norms
-    the way the pipeline would if this were the cloud it had been given."""
-    rng = np.random.default_rng(seed)
-    xyz, rgb = xyz.astype(np.float32).copy(), rgb.astype(np.float32).copy()
+    """(N_POINTS, 6). `canonical` and `resample` are the cloud as given; the
+    rest go through the SAME function the trainer and evaluator apply
+    (`metafind.data.observation.perturb_cloud`), so a row here is what a
+    `--query-pc-perturb` run would feed the query tower."""
+    from metafind.data.observation import perturb_cloud
+    cloud = np.concatenate([xyz, rgb], axis=1).astype(np.float32)
     if policy in ("canonical", "resample"):
-        pass
-    elif policy == "nocolor":
-        rgb[:] = DEFAULT_GREY
-    elif policy == "jitter02":
-        xyz += rng.normal(0.0, 0.02, xyz.shape).astype(np.float32)
-    elif policy == "sparse1k":
-        keep = rng.choice(len(xyz), 1024, replace=False)
-        idx = rng.choice(keep, N_POINTS, replace=True)
-        xyz, rgb = xyz[idx], rgb[idx]
-    elif policy == "rotz":
-        a = rng.uniform(0, 2 * np.pi)
-        c, s = np.cos(a), np.sin(a)
-        R = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]], dtype=np.float32)  # about y (up)
-        xyz = xyz @ R.T
-    elif policy.startswith("half"):
-        n = rng.normal(size=3); n /= np.linalg.norm(n)
-        keep = np.nonzero((xyz - xyz.mean(0)) @ n > 0)[0]
-        if len(keep) < 64:                       # degenerate plane: take the other side
-            keep = np.nonzero((xyz - xyz.mean(0)) @ n <= 0)[0]
-        if policy == "half_sparse1k":
-            keep = rng.choice(keep, min(1024, len(keep)), replace=False)
-        idx = rng.choice(keep, N_POINTS, replace=True)
-        xyz, rgb = xyz[idx], rgb[idx]
-        if policy == "half_nocolor":
-            rgb[:] = DEFAULT_GREY
-    else:
-        raise ValueError(policy)
-    return np.concatenate([pc_norm(xyz).astype(np.float32), rgb], axis=1)
+        return cloud
+    return perturb_cloud(cloud, policy, seed)
 
 
 def encode_clouds(bb, clouds, batch: int = 48) -> np.ndarray:

@@ -1362,6 +1362,11 @@ def main() -> int:
                          "second point sample) instead of the gallery's own "
                          "cached vectors. Omit for the pre-2026-08-31 "
                          "construction. The gallery is unchanged either way.")
+    ap.add_argument("--query-pc-perturb", default=None,
+                    help="perturbation of the query pack's pc arm "
+                         "(metafind.data.observation.PC_PERTURBATIONS). "
+                         "Default: what the checkpoint record says it was "
+                         "trained under.")
     ap.add_argument("--query-image-policy", default=None,
                     choices=("same_mean", "single_view", "held_out_view",
                              "disjoint_views"),
@@ -1573,6 +1578,9 @@ def main() -> int:
             "runtime_source_status": runlog.runtime_source_status(),
             "started_at": time.time(),
             "query_image_policy": image_policy,
+            # resolved again (and enforced) where the pack is built, below
+            "query_pc_perturb": (args.query_pc_perturb
+                                 or ckpt.get("query_pc_perturb") or "none"),
             "image_tokens": image_tokens,
             # None for the w/o ESSGNN row. For w/ ESSGNN: which Stage 2 run laid
             # its query-side weights over this Stage 1 parent, and with what
@@ -1646,6 +1654,18 @@ def main() -> int:
             query_pack = QueryPack(args.query_pack, protocol_n_views(encoding))
             print(f"query pack {query_pack.path} arms={list(query_pack.arms)} "
                   f"sha256={query_pack.sha256[:12]}", flush=True)
+        pc_perturb = args.query_pc_perturb or ckpt.get("query_pc_perturb") or "none"
+        if pc_perturb != "none":
+            if query_pack is None or "pc" not in query_pack.arms:
+                raise SystemExit(
+                    f"the checkpoint was trained with query pc perturbation "
+                    f"{pc_perturb!r} but no --query-pack with a pc arm was given; "
+                    "scoring it on the gallery's own cloud would be a different "
+                    "construction from the one it was trained under")
+            query_pack.pc_perturb = pc_perturb
+            print(f"query pc perturbation: {pc_perturb}"
+                  f"{'' if args.query_pc_perturb else ' (from the checkpoint record)'}",
+                  flush=True)
 
         exclude_uids = (degraded_render_uids()
                         if args.exclude_degraded_renders else None)

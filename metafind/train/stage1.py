@@ -321,6 +321,10 @@ class QueryPack:
         # produced that matrix. Required, because a default here would be the
         # compile-time constant again under another name.
         self.n_views = int(n_views)
+        # Query-side perturbation of the pc arm (observation.PC_PERTURBATIONS);
+        # set by the trainer / evaluator from --query-pc-perturb, recorded in
+        # the run and in identity(). "none" is the pre-2026-09-04 pack.
+        self.pc_perturb = "none"
         self.path = Path(manifest_path)
         if not self.path.exists():
             raise FileNotFoundError(
@@ -414,7 +418,12 @@ class QueryPack:
 
     def vector(self, arm: str, uid: str) -> np.ndarray:
         si, ri = self.rows[arm][uid]
-        return np.asarray(self.arrays[arm][si][ri], dtype=np.float32)
+        v = np.asarray(self.arrays[arm][si][ri], dtype=np.float32)
+        if arm == "pc" and self.pc_perturb != "none":
+            from metafind.data.observation import perturb_cloud
+            from metafind.data.pointclouds import uid_seed
+            v = perturb_cloud(v, self.pc_perturb, uid_seed(uid) + 7)
+        return v
 
     def view_index(self, uid: str) -> int:
         """Which view the query takes. A rule over `uid_seed`, not a stored map.
@@ -450,8 +459,11 @@ class QueryPack:
                     sha = hashlib.sha256(Path(sh["array"]).read_bytes()).hexdigest()
                 digests.append({"tag": sh.get("tag"), "array_sha256": sha})
             shards[arm] = sorted(digests, key=lambda d: (d["tag"] or "", d["array_sha256"]))
-        return {"arms": list(self.arms), "shards": shards,
-                "image_rule": (self.manifest.get("image") or {}).get("rule")}
+        ident = {"arms": list(self.arms), "shards": shards,
+                 "image_rule": (self.manifest.get("image") or {}).get("rule")}
+        if self.pc_perturb != "none":          # absent => old identities unchanged
+            ident["pc_perturb"] = self.pc_perturb
+        return ident
 
 
 def protocol_n_views(encoding: dict) -> int:
@@ -2115,6 +2127,7 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         # directory; without these three a checkpoint cannot say which corpus
         # it saw, and two of them would look like repeats of one condition.
         "query_image_policy": training.get("_query_image_policy"),
+        "query_pc_perturb": training.get("_query_pc_perturb", "none"),
         "prefusion_norm": bool(training.get("prefusion_norm", False)),
         "image_tokens": int(training.get("image_tokens", 1)),
         "text_template": training.get("_text_template"),
@@ -2419,6 +2432,11 @@ def main() -> int:
                     help="which observation the QUERY tower's image modality "
                          "reads. The gallery keeps the 12-view mean. Served "
                          "from the cache; no re-render. Recorded in the run.")
+    from metafind.data.observation import PC_PERTURBATIONS
+    ap.add_argument("--query-pc-perturb", default="none", choices=PC_PERTURBATIONS,
+                    help="perturb the QUERY pack's pc arm (a one-sided scan, "
+                         "no colour, ...); needs --query-pack with a pc arm. "
+                         "Gallery untouched. Recorded in the run.")
     ap.add_argument("--limit", type=int, help="assets, for a smoke run")
     ap.add_argument("--device", default="cuda")
     # [D-3] `dev` is the development phase: train on dev_train, score dev_val
@@ -2551,6 +2569,15 @@ def main() -> int:
     # POOL and the recorded digests have to describe what actually ran.
     query_pack = (QueryPack(args.query_pack, protocol_n_views(encoding))
                   if args.query_pack else None)
+    if args.query_pc_perturb != "none":
+        if query_pack is None or "pc" not in query_pack.arms:
+            raise SystemExit(f"--query-pc-perturb {args.query_pc_perturb} needs "
+                             "--query-pack with a pc arm: the perturbation is "
+                             "applied to the pack's resampled cloud, never to "
+                             "the gallery's canonical one")
+        query_pack.pc_perturb = args.query_pc_perturb
+        print(f"  query pc perturbation: {args.query_pc_perturb} "
+              "(uid-seeded, fixed per asset; gallery untouched)", flush=True)
     # The declared observation and the dataset's construction must agree, or
     # the checkpoint would record one thing and the towers would have seen
     # another. Checked before any data is loaded.
@@ -2799,6 +2826,7 @@ def main() -> int:
                                        else None)
     training["_query_observation"] = args.query_observation
     training["_query_image_policy"] = args.query_image_policy
+    training["_query_pc_perturb"] = args.query_pc_perturb
     training["_embeddings_dir"] = str(paths.EMBEDDINGS)
     from metafind.models.resolve_stage1 import TEXT_TEMPLATE_NAME
     training["_text_template"] = TEXT_TEMPLATE_NAME

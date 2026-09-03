@@ -67,6 +67,58 @@ IMAGE_POLICIES = ("same_mean", "single_view", "held_out_view", "disjoint_views",
                   "random_view")
 PC_POLICIES = ("canonical_pc", "resampled_pc")
 
+# A qualitatively different observation of the SAME mesh, applied to the query
+# pack's resampled cloud (never to the gallery). [KYZEN 2026-09-04: reach the
+# w/o-ESSGNN row first.] `tools/probes/exp_query_pc_observation.py` measured
+# that a second surface sample is still cos 0.99 to the gallery's cloud under
+# the released encoder, so every fused cell can only rise; these are the
+# observations that actually move it. IMPLEMENTATION CHOICE: the paper does
+# not say how its query clouds differ from the gallery's.
+PC_PERTURBATIONS = ("none", "nocolor", "jitter02", "sparse1k", "rotz",
+                    "half", "half_nocolor", "half_sparse1k")
+
+
+def perturb_cloud(cloud, policy: str, seed: int):
+    """``(N, 6)`` xyz+rgb -> ``(N, 6)``; xyz re-normalised the way the pipeline
+    (`pc_norm`) would if this were the cloud it had been handed. Deterministic
+    in ``seed``: pass ``uid_seed(uid) + 7`` so train and eval draw the same
+    plane / jitter / subset for an asset."""
+    import numpy as np
+    from metafind.data.pointclouds import DEFAULT_GREY, N_POINTS, pc_norm
+
+    if policy not in PC_PERTURBATIONS:
+        raise ValueError(f"unknown pc perturbation {policy!r}; have {PC_PERTURBATIONS}")
+    cloud = np.asarray(cloud, dtype=np.float32)
+    if policy == "none":
+        return cloud
+    rng = np.random.default_rng(seed)
+    xyz, rgb = cloud[:, :3].copy(), cloud[:, 3:6].copy()
+    if policy == "nocolor":
+        rgb[:] = DEFAULT_GREY
+    elif policy == "jitter02":
+        xyz += rng.normal(0.0, 0.02, xyz.shape).astype(np.float32)
+    elif policy == "sparse1k":
+        keep = rng.choice(len(xyz), 1024, replace=False)
+        idx = rng.choice(keep, N_POINTS, replace=True)
+        xyz, rgb = xyz[idx], rgb[idx]
+    elif policy == "rotz":
+        a = rng.uniform(0, 2 * np.pi)
+        c, s = np.cos(a), np.sin(a)
+        R = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]], dtype=np.float32)  # about y (up)
+        xyz = xyz @ R.T
+    else:                                       # half*: a one-sided scan
+        n = rng.normal(size=3); n /= np.linalg.norm(n)
+        keep = np.nonzero((xyz - xyz.mean(0)) @ n > 0)[0]
+        if len(keep) < 64:
+            keep = np.nonzero((xyz - xyz.mean(0)) @ n <= 0)[0]
+        if policy == "half_sparse1k":
+            keep = rng.choice(keep, min(1024, len(keep)), replace=False)
+        idx = rng.choice(keep, N_POINTS, replace=True)
+        xyz, rgb = xyz[idx], rgb[idx]
+        if policy == "half_nocolor":
+            rgb[:] = DEFAULT_GREY
+    return np.concatenate([pc_norm(xyz).astype(np.float32), rgb], axis=1)
+
 # Reachable from the n06 cache alone, with no re-encoding and no query pack.
 CACHE_SERVED = {
     "text": ("canonical",),
