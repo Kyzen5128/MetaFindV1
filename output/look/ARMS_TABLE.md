@@ -1,26 +1,36 @@
-# Stage 1 retrain arms — official evaluator, seven Table 1 conditions, R@1 (%)
+# Stage 1 arms vs Table 1 (MetaFind w/o ESSGNN) -- fourteen cells
 
-All rows: metafind.eval.run_retrieval (float64 cosine, ties against the model). C = 4,569 dev_val queries vs the 4,569 dev_val gallery; D = the same queries vs the 36,554 train gallery. Paper: 48K-asset Objaverse-LVIS, 20% test queries, gallery size unstated.
+Official evaluator (float64 cosine, ties against the model). C: 4,569 dev_val queries vs the 4,569 dev_val gallery. D: same queries vs the 36,554 train gallery. Paper: 20% test queries on Objaverse-LVIS, gallery size unstated. Distance = mean over the 14 cells of |ln(ours/paper)|; a ranking device, not a protocol claim.
 
-| arm | protocol | text | image | pc | text+image | text+pc | image+pc | full |
+## D_dev_val_vs_train
+
+| arm | dist | text | image | pc | text+image | text+pc | image+pc | full |
 |---|---|---|---|---|---|---|---|---|
-| **paper, MetaFind w/o ESSGNN** | — | **13.8** | **11.7** | **75.1** | **17.2** | **44.5** | **45.8** | **51.7** |
-| pilot10b: same_record, v2_cm text, 12-view mean query, raw inputs | C | 78.4 | 95.0 | 92.1 | 98.8 | 99.9 | 98.7 | 100.0 |
-| pilot10b | D | 58.0 | 84.6 | 78.8 | 96.5 | 99.6 | 94.1 | 100.0 |
-| **P1**: attrs_v1 text, single_view query image, prefusion L2 | C | 34.7 | 56.9 | 86.2 | 87.6 | 99.0 | 92.7 | 99.7 |
-| P1 | D | 11.6 | 29.7 | 66.6 | 67.5 | 95.6 | 77.8 | 98.1 |
-| P1 / paper | D | 0.84x | 2.54x | 0.89x | 3.93x | 2.15x | 1.70x | 1.90x |
-| **P4**: P1 + ONE Fusion shared by both towers (Figure 1 draws one Fusion Layer) | C | 34.1 | 49.0 | 75.1 | 80.6 | 98.6 | 84.8 | 99.7 |
-| P4 | D | 12.0 | 25.0 | 52.3 | 58.5 | 94.4 | 65.8 | 98.0 |
-| P4 / paper | D | 0.87x | 2.14x | 0.70x | 3.40x | 2.12x | 1.44x | 1.90x |
+| **paper R@1** | 0 | **13.8** | **11.7** | **75.1** | **17.2** | **44.5** | **45.8** | **51.7** |
+| **paper R@5** | 0 | **23.1** | **19.2** | **78.0** | **21.8** | **71.3** | **73.1** | **76.5** |
+| P4: P1 + ONE shared Fusion (n=36,554) R@1 | 0.54 | 12.0 | 25.0 | 52.3 | 58.5 | 94.4 | 65.8 | 98.0 |
+| ↳ R@5 | | 30.8 | 48.7 | 76.0 | 81.8 | 99.0 | 85.9 | 99.8 |
+| P1: attrs_v1 text + single_view query + prefusion L2 (n=36,554) R@1 | 0.59 | 11.6 | 29.7 | 66.6 | 67.5 | 95.6 | 77.8 | 98.1 |
+| ↳ R@5 | | 31.3 | 56.6 | 88.6 | 89.5 | 99.6 | 94.3 | 99.9 |
+| pilot10b: same_record, v2_cm text, 12-view mean, raw inputs (n=36,554) R@1 | 0.91 | 58.0 | 84.6 | 78.8 | 96.5 | 99.6 | 94.1 | 100.0 |
+| ↳ R@5 | | 79.0 | 95.6 | 93.2 | 98.9 | 99.9 | 99.1 | 100.0 |
 
-P1 per-epoch dev_val (C shape): text climbs 11.4 -> 34.7, image 17.8 -> 56.9, pc 45.8 -> 86.1, full 82.1 -> 99.7 over 10 epochs. Text and pc are the gallery's own record on the query side, so every condition containing them keeps heading for Eq. 5's trivial solution; only the image differs. P5 (every modality a second observation) is queued for that reason.
+## C_dev_selection
 
-P4 (one shared Fusion) lands within a few points of P1 on every condition (pc and image+pc lower, image slightly higher) and keeps the same text+pc / full ceiling. Fusion sharing is not the axis that separates us from Table 1; it stays an open reading of Figure 1, not a fix.
+| arm | dist | text | image | pc | text+image | text+pc | image+pc | full |
+|---|---|---|---|---|---|---|---|---|
+| **paper R@1** | 0 | **13.8** | **11.7** | **75.1** | **17.2** | **44.5** | **45.8** | **51.7** |
+| **paper R@5** | 0 | **23.1** | **19.2** | **78.0** | **21.8** | **71.3** | **73.1** | **76.5** |
+| P4: P1 + ONE shared Fusion (n=4,569) R@1 | 0.77 | 34.1 | 49.0 | 75.1 | 80.6 | 98.6 | 84.8 | 99.6 |
+| ↳ R@5 | | 65.3 | 74.6 | 91.3 | 94.5 | 100.0 | 96.1 | 100.0 |
+| P1: attrs_v1 text + single_view query + prefusion L2 (n=4,569) R@1 | 0.83 | 34.7 | 56.9 | 86.1 | 87.6 | 99.0 | 92.7 | 99.7 |
+| ↳ R@5 | | 67.7 | 82.1 | 97.9 | 97.6 | 100.0 | 99.2 | 100.0 |
+| pilot10b: same_record, v2_cm text, 12-view mean, raw inputs (n=4,569) R@1 | 0.98 | 78.3 | 95.0 | 92.1 | 98.8 | 99.9 | 98.7 | 100.0 |
+| ↳ R@5 | | 92.8 | 99.3 | 98.4 | 99.8 | 100.0 | 99.9 | 100.0 |
 
-## ULIP row hypothesis (Kyzen 2026-09-03 evening): does a category-only text query explain ULIP's 0.1?
+## ULIP row hypothesis (2026-09-03): does a category-only text query explain ULIP's 0.1?
 
-Released ULIP-2, no training, gallery = PC embedding, query = raw mean of the available ULIP embeddings, 36,554 gallery, 4,569 queries:
+Released ULIP-2, no training, gallery = PC embedding, query = raw mean of the available embeddings, 36,554 gallery, 4,569 queries (R@1):
 
 | text arm | text | image | pc | T+I | T+PC | I+PC | full |
 |---|---|---|---|---|---|---|---|
@@ -30,4 +40,4 @@ Released ULIP-2, no training, gallery = PC embedding, query = raw mean of the av
 | description only | 24.1 | 58.4 | 100.0 | 52.8 | 98.4 | 98.6 | 96.5 |
 | full template | 24.5 | 58.4 | 100.0 | 52.3 | 98.6 | 98.6 | 96.6 |
 
-Category-only moves the text cell from 24.5 to 3.8 (paper 0.1) and is the closest arm there. It moves T+PC and full by nothing: 98.7 / 96.6 in every arm against the paper's 33.9 / 6.4, because a query pc identical to the gallery pc dominates any mean. The paper's fingerprint -- adding text or image to pc HURTS -- cannot come from the text content; it needs the query's pc and image to sit far from the gallery's. INFERENCE; the paper does not say what text either row was fed.
+Category-only moves the text cell from 24.5 to 3.8 (paper 0.1) and nothing else: T+PC and full stay 98.7 / 96.6 in every arm against 33.9 / 6.4, because a query pc identical to the gallery pc dominates any mean. The paper's shape -- adding text or image to pc HURTS -- needs the query's pc and image to sit far from the gallery's. INFERENCE; the paper says what neither row was fed.
