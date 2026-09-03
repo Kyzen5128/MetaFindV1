@@ -20,7 +20,7 @@ Kyzen：「這些評估你都應該重視……逐步不排除及修正。」
 |---|---|---|---|---|---|
 | P0-1 | 文字字串化（15） | IMPLEMENTATION CHOICE，高敏感 | pilot10b（v2_cm 長描述）→ **P1**（attrs_v1 純填表）→ **P5**（desc_v1 一句描述） | P1 ✅、P5 排隊 | text 58.0 → 11.6（論文 13.8） |
 | P0-2 | 11 視角 → e_img（14） | UNRESOLVED | 12 視角平均（pilot10b）→ **P1** query 單一視角 → **P3** 12 視角當 12 token → **P6** 每步隨機視角（ULIP-2 自己的做法） | P1 ✅、P3 跑中、P6 排隊 | image 84.6 → 29.7（論文 11.7） |
-| P0-3 | Q/G 同一份 vs 獨立觀測（17） | UNRESOLVED；「三個都同一份」為 **EXPERIMENTALLY DISFAVORED**（實測 full 0.9998、cos 0.9989；Eq. 5 只是動機，不是定理——GPT 修正，採納） | P1（只有影像獨立）→ **P5**（三個都獨立：第二名描述、重取樣點雲、單一視角） | P5 排隊 | P1 的 T+PC 95.6、full 98.1 仍逼近 100 → 文字與點雲也必須獨立 |
+| P0-3 | Q/G 同一份 vs 獨立觀測（17） | UNRESOLVED；「三個都同一份」為 **EXPERIMENTALLY DISFAVORED**（實測 full 0.9998、cos 0.9989；Eq. 5 只是動機，不是定理——GPT 修正，採納） | P1（只有影像獨立）→ **P5**（三個都「第二份」：第二名描述、重取樣點雲、單一視角） | ✅ P5 是 **independent-observation stress test**，不是 reproduction candidate（GPT 命名，採納） | P5 D：14.3/49.4/88.5/59.5/92.8/94.0/95.5。text 對上了（14.3 vs 13.8），但 **geometry 探針證明「第二份」在 embedding 空間裡幾乎不獨立**：釋出編碼器下配對 cos text 0.80 / image 0.93 / pc 0.99，單模態 raw 檢索 R@1 text 50.4 / image 89.0 / pc 97.7。重取樣點雲只是換了 bytes，沒換難度。交互比 T+PC/PC 1.05、Full/PC 1.08（論文 0.59 / 0.69）—— 加模態仍不會變差 |
 | P0-4 | ULIP baseline 畫廊構法（24） | PAPER-CONSTRAINED INFERENCE | B1 純 PC 畫廊 vs B2 三模態平均畫廊；raw mean vs L2 mean；文字四種；影像三種 | ✅ 全量完 | 只有 B1 重現「加了 text/image 反而變差」的**單調形狀**；但 T+PC 98.7 對論文 33.9 —— query 點雲同一份時無法壓下來 |
 | P0-5 | 評估畫廊範圍（25） | UNRESOLVED | 評估器四協定：A test→test 9,138、B test→full 45,692、C dev→dev 4,569、D dev→train 36,554 | ✅ 機制齊；A/B 只在最終上鎖時 `--unseal` | 每個 arm 同時報 C、D |
 | P0-6 | 進 Fusion 前正規化（C8） | IMPLEMENTATION CHOICE | P1（開）→ **P7**（關，其餘同 P1，唯一對照） | P7 排隊 | 量到 pc 範數 139 對 text 37；打亂 gallery pc 全崩 |
@@ -34,7 +34,8 @@ Kyzen：「這些評估你都應該重視……逐步不排除及修正。」
 
 | # | 項目 | 標籤 | 要做的 arm | 排程 |
 |---|---|---|---|---|
-| P0-4′ | ULIP baseline 的 query 是不是第二份觀測 | 推論：E1 對 baseline 也成立（T+PC 33.9 < PC 97.9） | ULIP 探針加 query pack（重取樣點雲 + 第二名描述）；不用訓練 | P5 之後（pack 已建好） |
+| P0-4′ | ULIP baseline 的 query 是不是第二份觀測 | 兩個候選並列（GPT 修正，採納）：(a) query pc / image 與 gallery 不同；(b) pc 同一份，但論文的 text / image 觀測或 scorer 足以翻掉 pc 排名 | ULIP 探針加 query pack | ✅ 量完：pack 當 query（重取樣 pc、第二名描述、單視角）→ 24.0/46.1/**97.7**/48.9/96.8/96.6/94.6。pc-only 正好落在論文的 97.9（同一份時是 100.0），但 T+PC 仍 96.8 —— **換點雲不會讓 T+PC 掉**，(a) 單獨不夠 |
+| P0-A/B/C/D | ULIP 列：scorer 2×2（raw/L2 mean × cosine/dot）、影像單視角 vs 平均、PC-only 校準（為何我們 100 論文 97.9）、margin decomposition（pc 同一份時 text/image 能翻掉多少查詢） | GPT 提出，採納；零訓練 | `tools/probes/exp_ulip_scorer_margin.py` | 排在 P6 之後（GPU 滿） |
 | P0-3′ | 三個模態各自獨立的貢獻 | UNRESOLVED | P5 若不等於論文：拆成「只有文字獨立」「只有點雲獨立」兩個 arm | 看 P5 結果 |
 | P1-7 | Transformer 內部（12） | IMPLEMENTATION CHOICE × 6 | 在最好的觀測構法上掃：層數 1/2/4、讀出 mean/CLS、缺席 slot 排除 | 觀測構法定案後 |
 | P1-8 | Stage 1 訓練範圍（20–22） | UNRESOLVED（§3.4 "earlier layers adapt"） | CLIP 文字／影像塔最後 N 層解凍（全解凍 AdamW 狀態 ~30 GB，卡不下） | 觀測構法定案後；需先量記憶體 |
@@ -54,7 +55,7 @@ Kyzen：「這些評估你都應該重視……逐步不排除及修正。」
 ## 4. 執行順序（自動鏈）
 
 ```
-P1 ✅ → P4 ✅ → P3 ✅ → P5（跑中）→ geometry + ULIP-with-pack 探針 → P7 → P6 → 看 P5 決定 P0-3′ → Transformer 內部掃 → 訓練範圍
+P1 ✅ → P4 ✅ → P3 ✅ → P5 ✅ → geometry + ULIP-with-pack 探針 ✅ → P7（跑中）→ P6 → ULIP scorer/margin 探針 → 依 P0-A..D 決定下一個 arm
 ```
 
 所有 arm 的 14 格表：`output/look/ARMS_TABLE.md`（`tools/fingerprint.py` 產生，含到論文列的距離）。
