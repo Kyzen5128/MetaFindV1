@@ -70,6 +70,20 @@ P1 ✅ → P4 ✅ → P3 ✅ → P5 ✅ → geometry 探針 ✅ → P7 ✅ → P
 
 **Stage 2 的 Stage 1 父 checkpoint：P1**（attrs_v1 + 單一視角 + pre-fusion L2；text 11.6 / pc 66.6 最接近論文，一次只動一個變數的乾淨主線；MASTER 選定，Kyzen 可改）。
 
+
+### 5a. 代數不是原因（2026-09-04 07:55，P1e25）
+
+Kyzen 問「會不會是訓練不夠」。P1 設定完全不變，只把 epochs 10 改 25（cosine 也拉到 25）。最佳 epoch 24，dev_val 平均 R@1 0.778（10 代版 0.795）。
+
+| arm | text | image | pc | T+I | T+PC | I+PC | full |
+|---|---|---|---|---|---|---|---|
+| 論文 | 13.8 | 11.7 | 75.1 | 17.2 | 44.5 | 45.8 | 51.7 |
+| P1（10 代）D | 11.6 | 29.7 | 66.6 | 67.5 | 95.6 | 77.8 | 98.1 |
+| P1e25（25 代）D | 12.1 | 26.1 | 65.4 | 61.6 | 95.7 | 75.7 | 97.8 |
+
+形狀不變，含 pc 的融合格仍 95+。裁決：代數定 10；250 不跑（論文沒寫代數，250 是 ULIP main.py:23 的預設）。
+出處：`/home/kyzen/metafind_data_attrs/outputs/checkpoints/pilotP1e25_20260904/`、`outputs/eval/eval_pilotP1e25_20260904/`、`outputs/logs/chain_P1e25.log`。
+
 ## 6. Stage 2（2026-09-04 凌晨開跑）
 
 審計：`docs/audit/STAGE2_FRESH_AUDIT_20260904.md`。Eq. 6/7/8 逐項一致；場景 dropout、凍結範圍、τ 全對；正文 vs 附錄三處矛盾走附錄版（Eq. 4 才成立）。
