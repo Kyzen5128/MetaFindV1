@@ -144,6 +144,16 @@ L_layout = ½ (L_q2g + L_g2q)
 | 8 | 12 視角 / Gemma / 45,692 | 🔴 偏離但已知 | A1–A3 | 11-of-12 已證明不是差距來源；Gemma 待 300–500 筆對照 |
 | 9 | sim = cosine | ⚪ | D6 | 與 5 一起看（正規化後 cosine / dot 應收斂） |
 
+## F′. 旁證：CAMERA（薛聖群）的 ULIP 筆記，2025-06-26 / 08-07 / 08-12
+
+Kyzen 問「Camera 的論文有沒有可以參考的」。三頁都是 **ULIP-1 在 ShapeNet / Text2Shape** 上的實驗，不是 MetaFind 證據；但三件事對我們的設計有用：
+
+1. **ULIP-2 的 caption 是每張渲染圖各生一句**（他們引 ULIP-2 原文："For each rendered image, we employ BLIP-2 … to generate 10 detailed descriptions independently, which are then ranked using CLIP-VIT-Large … we use the top 1"）。這正是 Figure 1 畫 T1…TK 的來源：**K 個文字向量 = K 張圖各一句**。我們的 `description_candidates`（5 句、CLIP 排名）是同一個機制，所以「替代描述」當第二份觀測有上游依據。
+2. **他們的 fusion 對 (1+K) 個 token 用 CLS 讀出**（RAG 版本），不是平均——C7 的另一個具體候選。
+3. **ULIP 訓練時點雲有增強**（random dropout / scale / shift / rotate）；我們 Stage 1 沒有（D9）。論文沉默；上游候選。
+
+他們的 T2S R@1 = 13.50 是 14,966 件 ShapeNet 池、ULIP-1 訓 250 輪的數字，與 MetaFind 的 13.8 只是數字相近，**不得引為證據**（見 §7.5）。
+
 ## G. 這份審計改變了什麼判斷
 
 之前把 `same_record` 當成「論文最字面的讀法（A arm）」與 B、C 並列。**E1 把它從候選裡拿掉**：它與 Table 1 的 full = 51.7 矛盾，不是候選，是排除項。主線必須是 query 讀第二份觀測；剩下要選的是**哪一種**第二份觀測（B 或 C）。

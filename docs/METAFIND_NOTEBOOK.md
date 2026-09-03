@@ -437,8 +437,8 @@ normalize_for_scoring（float64）→ rank_of_target（同分算輸）→ R@1 / 
 |---|---|---|
 | 1 | 修 evaluator parity；撤回零點雲探針的結論 | ✅ 完成（commit `73ce0af`） |
 | 2 | 復現 ULIP Table 1：PC-gallery / mean-gallery、raw / L2 mean、D / 全語料 | ✅ D 完成（§7.4）；全語料與文字／影像軸跑中 |
-| 3 | Stage 1 cheap sensitivity：11-of-12 views、text serialization、same/alternate observation、single/aggregate image、cosine/dot、pre-fusion normalization —— 只用來 shortlist | 🔶 文字、影像已量；11-of-12、cosine/dot、pre-fusion norm 未量 |
-| 4 | Stage 1 真正 retrain arms：observation × normalization × train-scope；同 split、同 horizon、同 seed；finalist 三 seed | ⏸ 機制已接線（`69dbbb6`）；**Kyzen 說先不跑** |
+| 3 | Stage 1 cheap sensitivity：11-of-12 views、text serialization、same/alternate observation、single/aggregate image、cosine/dot、pre-fusion normalization —— 只用來 shortlist | ✅ 全部量完（`output/look/STEP3_TABLE.txt`）。11-of-12 不動指紋；dot 讓 image 正好 11.7 但 pc 崩；pc 進 Fusion 的範數 139 對 text 37；打亂 gallery pc 全崩。Gemma vs GPT-4o 對照未做（無 GPT-4o） |
+| 4 | Stage 1 真正 retrain arms | 🔶 **跑中（Kyzen 2026-09-03「全程交給你處理」）**：P1 = attrs_v1 文字 + single_view 查詢 + pre-fusion L2（overlay `metafind_data_attrs`，10 輪）；P4 = P1 + 一份共用 Fusion（`metafind_data_attrs_shared`）；P3 = P1 + 12 視角當 12 個 token 進 Fusion（`metafind_data_attrs_tokens`）。依序排隊。P1 第 0 輪 dev_val（4,569）：text 11.4 / image 17.8 / pc 45.8 / T+I 29.4 / T+PC 78.9 / I+PC 63.8 / full 82.1 —— 第一次落在論文的量級 |
 | 5 | Stage 1 w/o ESSGNN 定案：七格 R@1/R@5 pattern 合理才進 Stage 2 | ⏸ |
 | 6 | Stage 2 context experiment：leave-one-out vs iterative-prefix；ESSGNN M/P、pooling、λ | ⏸ |
 | 7 | Table 1 w/ ESSGNN：Stage 2 query fusion + 同一份凍結 Stage 1 gallery + layout off；`run_retrieval.py` 要加路徑 | ⏸ |
