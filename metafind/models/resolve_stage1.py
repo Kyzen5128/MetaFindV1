@@ -89,7 +89,51 @@ VARIANT_REGISTRY_PATH = paths.OUTPUTS / "variant_registry.json"
 # v1 template and the centimetre one -- so a sidecar carrying it does not say
 # which serializer produced its embedding. The identity n06 stamps and validates
 # is text_serialization_id() below, which is content-addressed.
-TEXT_SERIALIZATION_FAMILY = "metafind_v2_cm"
+# [KYZEN 2026-09-03] "文字都先採用固定填表的方式". The template is now a NAMED
+# choice rather than a single constant, because the text format is a research
+# variable and we need two of them side by side.
+#
+# `v2_cm` is what the corpus was built and trained on and stays the default;
+# nothing about an unset environment changes.
+#
+# `attrs_v1` is the pure form-fill: the annotation's structured fields only, no
+# free description. arXiv HTML sec. 2.3 lists what the annotations carry --
+# "object category, size dimensions, materials, and placement constraints" --
+# and Figure 2's record adds `description` alongside them, so dropping the
+# description is a DEVIATION from the figure, taken deliberately: on a fixed
+# form whose only moving part is how much description it admits, text-only R@1
+# runs 8.3 / 23.0 / 30.8 / 38.4 / 49.2 / 54.7 / 58.0 at 0 / 30 / 50 / 70 / 100
+# / 140 / 160 characters, and Table 1's 13.8 falls between the first two rungs.
+#
+# The identity below is content-addressed (`serialization_id_for` hashes what
+# the serializer EMITS), so it moves on its own when the selection moves, and a
+# cache built under one name is refused by a run under the other.
+TEXT_TEMPLATES = {
+    "v2_cm": (
+        "{description} {category} made of {materials}, "
+        "roughly {width} by {length} by {height} centimetres, "
+        "{placement}."
+    ),
+    "attrs_v1": (
+        "{category} made of {materials}, "
+        "roughly {width} by {length} by {height} centimetres, "
+        "{placement}."
+    ),
+}
+TEXT_TEMPLATE_NAME = os.environ.get("METAFIND_TEXT_TEMPLATE", "v2_cm")
+if TEXT_TEMPLATE_NAME not in TEXT_TEMPLATES:
+    raise SystemExit(
+        f"METAFIND_TEXT_TEMPLATE={TEXT_TEMPLATE_NAME!r} is not one of "
+        f"{sorted(TEXT_TEMPLATES)}")
+TEXT_TEMPLATE = TEXT_TEMPLATES[TEXT_TEMPLATE_NAME]
+
+# Derived from the selected template name, NOT hard-coded. This module's own
+# docstring records why: the retired "metafind_v1_natural" labelled two
+# different transformations, so 5,276 sidecars carry a name that does not
+# identify what produced them. A second named template must not repeat that.
+# For the default selection this evaluates to "metafind_v2_cm", exactly the
+# string it has always been, so no existing sidecar changes identity.
+TEXT_SERIALIZATION_FAMILY = f"metafind_{TEXT_TEMPLATE_NAME}"
 
 # [U-15] Paper 2.3 names the fields and gives no format. RATIFIED by D0-008
 # (2026-08-21) as an IMPLEMENTATION CHOICE, and held by a golden-string test
@@ -116,11 +160,6 @@ TEXT_SERIALIZATION_FAMILY = "metafind_v2_cm"
 # one. {category} likewise receives the capitalised form (S-2). This constant
 # therefore does NOT fully describe the emitted string, which is exactly why the
 # cache identity hashes the emitted string instead of this template.
-TEXT_TEMPLATE = (
-    "{description} {category} made of {materials}, "
-    "roughly {width} by {length} by {height} centimetres, "
-    "{placement}."
-)
 
 # [U-15] RATIFIED by D0-008 §11.3 row 8 as an IMPLEMENTATION CHOICE whose
 # retrieval impact is UNKNOWN. Paper Figure 2 gives the annotation SCHEMA but

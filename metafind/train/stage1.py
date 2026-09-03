@@ -1257,7 +1257,8 @@ def flatten_condition_scores(scores: dict) -> dict:
 
 
 def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
-                     batch_size, query_pack=None, num_workers: int = 4):
+                     batch_size, query_pack=None, num_workers: int = 4,
+                     observation=None):
     """Mean R@1 / R@5 over the seven Table 1 conditions, on the dev-val gallery.
 
     Gallery is dev_val itself (`splits.build_eval_protocols`, protocol
@@ -1342,7 +1343,8 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
     # epoch that best exploits a leak the run exists to remove, and the two
     # numbers would look comparable. `main` passes one object to both.
     loader = DataLoader(Stage1Dataset(dev_val_uids, aggregation,
-                                      query_pack=query_pack),
+                                      query_pack=query_pack,
+                                      observation=observation),
                         batch_size=batch_size, shuffle=False, collate_fn=collate,
                         num_workers=num_workers, drop_last=False)
     per_condition_q = {c: [] for c in QUERY_CONDITIONS}
@@ -2067,6 +2069,13 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         # trained it, without the arm dict to dereference.
         "query_construction": training.get("_query_construction"),
         "query_observation": training.get("_query_observation"),
+        # Which observation the query image read, which text template built the
+        # cache, and which cache. A run under a second template writes a second
+        # directory; without these three a checkpoint cannot say which corpus
+        # it saw, and two of them would look like repeats of one condition.
+        "query_image_policy": training.get("_query_image_policy"),
+        "text_template": training.get("_text_template"),
+        "embeddings_dir": training.get("_embeddings_dir"),
         "train_scope": training.get("train_scope", "point_encoder_and_fuser"),
         "trainable_only": True,
         "n_params_saved": int(n_params),
@@ -2344,6 +2353,26 @@ def main() -> int:
                     help="what the query tower sees during training; "
                          "second_observation requires --query-pack, "
                          "same_record forbids it. Recorded in the checkpoint.")
+    # [KYZEN 2026-09-03] "影像要不要也一起改成單一視角查詢?" -- the machinery was
+    # already there and unreachable: `Stage1Dataset` takes an `observation=`,
+    # `metafind.data.observation` implements all four image policies, and
+    # `CACHE_SERVED` marks every one of them reachable from the n06 cache
+    # because `views (12,1280)` is stored. `main` simply never passed one.
+    #
+    # Why it matters: with the query image left at `same_mean` it IS the
+    # gallery's own vector, and image-only R@1 measures 84.6 against Table 1's
+    # 11.7. Re-scoring the 10-epoch pilot under the weaker observations gives
+    # 79.8 (four_views), 76.0 (disjoint_views) and 55.2 (single_view) -- still
+    # 4.5x, but the axis is real and had never been TRAINED on.
+    #
+    # The GALLERY keeps its 12-view mean under every value here, per sec. 2.4:
+    # "The gallery encoder is modality-complete and frozen after pretraining."
+    ap.add_argument("--query-image-policy", default="same_mean",
+                    choices=("same_mean", "single_view", "held_out_view",
+                             "disjoint_views"),
+                    help="which observation the QUERY tower's image modality "
+                         "reads. The gallery keeps the 12-view mean. Served "
+                         "from the cache; no re-render. Recorded in the run.")
     ap.add_argument("--limit", type=int, help="assets, for a smoke run")
     ap.add_argument("--device", default="cuda")
     # [D-3] `dev` is the development phase: train on dev_train, score dev_val
@@ -2582,9 +2611,25 @@ def main() -> int:
     # above, with the pools). Two constructions in one run -- train independent,
     # select shared -- would choose the epoch that best exploits the leak, and
     # nothing in the numbers would say so. `evaluate_dev_val` gets this object.
+    # One object for the training loader and the selection loader, the same
+    # argument the pack already makes: training on one observation while
+    # selecting the checkpoint on another picks the epoch that best exploits
+    # whichever is easier, and nothing in the numbers would say so.
+    from metafind.data.observation import Observation, ObservationProtocol
+    observation = ObservationProtocol(
+        positive_policy="same_uid",
+        query=Observation(image=args.query_image_policy),
+        gallery=Observation())
+    if observation.is_same_observation():
+        observation = None      # the shipping construction, bit-for-bit
+    else:
+        print(f"  query image observation: {args.query_image_policy} "
+              "(gallery keeps the 12-view mean)", flush=True)
+
     loader = DataLoader(
         Stage1Dataset(train_uids, encoding["image_aggregation"],
-                      preload=args.preload, query_pack=query_pack),
+                      preload=args.preload, query_pack=query_pack,
+                      observation=observation),
         batch_size=values["batch_size"], shuffle=True, collate_fn=collate,
         num_workers=workers, drop_last=True, generator=generator)
 
@@ -2688,6 +2733,10 @@ def main() -> int:
     training["_query_construction"] = (query_pack.identity() if query_pack
                                        else None)
     training["_query_observation"] = args.query_observation
+    training["_query_image_policy"] = args.query_image_policy
+    training["_embeddings_dir"] = str(paths.EMBEDDINGS)
+    from metafind.models.resolve_stage1 import TEXT_TEMPLATE_NAME
+    training["_text_template"] = TEXT_TEMPLATE_NAME
     training["_arm_config_hash"], training["_arm_config"] = arm_config_hash(
         values, training, encoding, args.phase,
         query_construction=training["_query_construction"])
@@ -2825,7 +2874,7 @@ def main() -> int:
                     args.device, values["batch_size"], query_pack,
                     # the same worker count the training loader uses, so a
                     # --preload run really has no worker processes at all
-                    num_workers=workers)
+                    num_workers=workers, observation=observation)
                 runlog.train_metrics("stage1_dev_val", epoch=epoch, step=step,
                                      **{k: v for k, v in scores.items()
                                         if isinstance(v, (int, float))},
