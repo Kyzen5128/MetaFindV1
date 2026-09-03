@@ -6432,3 +6432,129 @@ that under same-record six of seven conditions saturate and the paper's six do
 not.
 
 ---
+
+## DL-091 -- Figure 1 opened and read rather than relayed; five of Kyzen's questions answered from the primary source
+
+Date 2026-09-03, during the ten-epoch pilot. Kyzen asked five architecture
+questions in sequence. Every answer below comes from the paper itself, and the
+figure was OPENED AND LOOKED AT rather than quoted from the protocol document,
+which is the only part of that document nobody here had verified.
+
+### 1. Is the ULIP-2 backbone shared? -- AUTHOR EVIDENCE, and the body contradicts itself
+
+The two body sentences point opposite ways, and both are body text:
+
+* `docs/paper/metafind_source/2methdology.tex:14` -- "a query encoder and a gallery encoder, both
+  leveraging **the** ULIP-2 embedding backbone". Singular article.
+* `docs/paper/metafind_source/2methdology.tex:34` -- "**separate encoders** for the query and
+  gallery. Each tower leverages ULIP-2 to **independently** encode".
+
+**Figure 1, read directly from `docs/paper/metafind_source/MetaFind.drawio.png`** (3015x1702, split
+and rendered): the box carrying the three modality encoders is labelled, in
+plain text, **`ULIP-2 (Shared)`**. That is now OBSERVED DATA rather than a
+relayed claim. The rebuttal is NOT on this machine and remains unverified by
+anyone here; the protocol document's quotation of it stands unchecked.
+
+So `AUTHOR EVIDENCE / MAINLINE` is the right label and it rests on the figure,
+not on the body, which cannot settle it.
+
+### 1b. The figure draws ONE Fusion Layer. Two readings, and I do not pick.
+
+Inside the `ULIP-2 (Shared)` box: three encoders, their outputs P1..PK /
+I1..IK / T1..TK, one box labelled `Fusion Layer`, and an output stack E1..EN.
+Outside it, a separate box labelled `Item Encoder` takes the four assets of the
+`Assets Repository` and arrows into that same E-stack.
+
+* **Reading A**, the natural one: E1..EN is the GALLERY bank of N assets, the
+  `Item Encoder` produces it, and the drawn `Fusion Layer` is the QUERY's. The
+  gallery's fusion is inside `Item Encoder`, drawn as a black box. This is
+  consistent with two fusion heads and with `2methdology.tex:34`.
+* **Reading B**: one fusion serves both.
+
+Recording it because our implementation has two heads
+(`shared_backbone_separate_fusion`) on the strength of the protocol document,
+and the figure does not by itself show two. Reading A is consistent with what
+we built; nothing in the figure refutes it, and nothing in the figure proves it
+either.
+
+### 2. Stage 1 positive: same UID or same observation? -- the notation is the evidence
+
+`docs/paper/metafind_source/2methdology.tex:6`, Task Definition, defines the two symbols as
+different KINDS of thing:
+
+> given an input query `Q = {q_text, q_img, q_pc, q_layout}` ... the system
+> retrieves the asset `A*` from a **pre-encoded asset database** `A`
+
+and Eq. 1 is `A* = argmax_A sim(f_query(Q), f_gallery(A))`. Eq. 5 at `:77`
+keeps exactly those symbols: `sim(f_query(Q), f_gallery(A))` over
+`A' in B`.
+
+**The paper never writes `f_query(A)`.** The query side is `Q` -- what a user
+supplies -- everywhere it appears; the gallery side is `A` -- what the database
+holds.
+
+```
+same UID          PAPER FACT. The denominator sums over A' in B, other ASSETS.
+same observation  Not stated. But the notation separates Q from A throughout
+                  and never derives the query from the asset's stored record.
+```
+
+This is a signal about notation, not a statement about how the authors built
+training pairs, and it must not be reported as the latter. What it does mean is
+that our `same_record` construction -- which literally computes
+`f_query(A_record)` and `f_gallery(A_record)` from one dict -- is the thing the
+paper's own symbols decline to write.
+
+### 3. Table 1's image-only observation -- UNRESOLVED, one weak signal
+
+`docs/paper/metafind_source/3experiments.tex:24` names the seven conditions and defines none of
+them. The only textual hint is in the Task Definition: `q_img` is glossed
+"**images**", plural. Plural is more consistent with a multi-view query than
+with one held-out view, but it is an INFERENCE and the paper states nothing.
+
+### 4. ESSGNN pooling and lambda -- one is a PAPER FACT, the other is a word with no definition
+
+`docs/paper/metafind_source/2methdology.tex:56`, verbatim and complete:
+
+```
+e_layout = Pooling({h_i^(L)})
+```
+
+`Pooling` is capitalised, used as an operator, and **defined nowhere** -- not in
+the body, not in the appendix. Grepped for pool / aggregat / readout / sum over
+/ mean over across `2methdology.tex` and `appendix.tex`: nothing.
+
+Do not confuse it with the neighbour sum. Eqs. at `:51-52` carry
+`sum over j in N(i)`, which is MESSAGE PASSING, and that the paper does
+specify. Graph-level pooling it does not.
+
+`:87` -- "lambda is a learnable scalar controlling the contribution of layout
+information". Learnable is stated; no initial value appears anywhere.
+
+```
+lambda learnable   PAPER FACT
+lambda init        UNRESOLVED   (ours: ratio 0.1, derived at run start, DL-088)
+global pooling     UNRESOLVED   (ours: normalised_sum, DL-088)
+```
+
+### 5. Does Stage 2 keep Stage 1's modality masking? -- no, and we already match
+
+Stage 1, `:75`: "each modality in the query has a 30% probability of being
+independently masked". Stage 2, `:89`: "the layout vector e_layout is omitted
+in 30% of batches". **Grepping `mask` across the whole Stage 2 subsection
+returns nothing.** Two different mechanisms that happen to share the number 30,
+which is exactly what made the alias invisible when they were once conflated.
+
+`stage2_protocol.json` already records `query_modality_masking: "none"`.
+Kyzen's reading and the implementation agree; adding modality masking to
+Stage 2 would be an ablation, never the reproduction line.
+
+---
+
+**Of the five, two are settled by the paper's own words** -- the positive is
+asset-level, and lambda is learnable. **Three are not**: which eleven cameras,
+what the image-only query observes, and what `Pooling` means. The backbone
+question is settled only by a figure, and the rebuttal half of that evidence
+remains unread by anyone on this machine.
+
+---
