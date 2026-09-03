@@ -6259,3 +6259,91 @@ WERE decided -- under explicit delegation, recorded as MASTER DECISIONS with
 their evidence, and reversible.
 
 ---
+
+## DL-089 -- The reviewer's blocker was real: the degraded-render filter could not run at all, and the decay exemption had widened past its evidence
+
+Date 2026-09-03. Review of DL-088's four decisions. Verdict CHANGES REQUIRED,
+BLOCKER 1, MAJOR 1, MINOR 5, INFO 4. Both substantive findings were correct.
+
+**BLOCKER -- decision 2 had no executable path.** `run_protocol` filtered both
+pools for `--exclude-degraded-renders`, then eighty lines later compared the
+FILTERED gallery length against `protocol["gallery_size"]` and raised. Every
+protocol on disk declares a size and `main` refuses any key not in that file,
+so all four raised, with a message blaming a stale artifact. Confirmed with the
+reviewer's own command before fixing anything:
+
+```
+A_test_gallery       declared   9138  filtered   9091  excluded   47  -> RAISES
+B_full_gallery       declared  45692  filtered  45439  excluded  253  -> RAISES
+C_dev_selection      declared   4569  filtered   4549  excluded   20  -> RAISES
+D_dev_val_vs_train   declared  36554  filtered  36348  excluded  206  -> RAISES
+```
+
+The check now compares against the unfiltered size, so the staleness guard
+stays live and a deliberate filter is not read as decay. **1,027 tests were
+green because none of them passed a non-empty exclusion set**; the test that
+would have caught it now exists and asserts both halves -- a genuinely stale
+declaration still raises, and an exclusion does not.
+
+**MAJOR -- the decay exemption covered a parameter no evidence covered.** The
+regex matched `mask_tokens` and `modality_pos`. `fusion.py:277` adds
+`modality_pos` to all three slots on every forward, present or masked: it is a
+positional embedding, not a stand-in for absence, so DL-088's justification --
+"the vector the fusion layer reads where a real modality vector would have
+been" -- is true of one and false of the other. Every measurement offered was
+of `mask_tokens`: the norms 0.7209 / 0.7358 / 0.7074, the gradient 0.122, the
+2%. Nothing measured `modality_pos`, and `2methdology.tex:75` says nothing
+about a positional embedding.
+
+Three things followed and all three are why it is out: an unmeasured treatment
+changed on the main line; the artifact named `decay_mask_tokens` while two
+parameters moved, so a reader could not learn the second had; and the two
+effects were welded, so no flag could attribute a difference to either. There
+IS a defensible case for exempting a positional embedding -- timm and ViT
+exclude `pos_embed` by convention -- but that is an UPSTREAM argument, not the
+paper's masked-embedding mechanism, and it needs its own measurement and its
+own field. Narrowed to `mask_tokens`; the test now asserts `modality_pos` stays
+decayed, and its docstring says why.
+
+**Five minors, all taken.**
+
+* The lambda arithmetic was correct by a protocol value nothing read.
+  `lam = ratio x ||fused||` is the intended tenth only if `||e_layout|| == 1`,
+  which holds only under `normalised_sum`; under `sum`, approved hours earlier,
+  the layout term measured 27x. `derive_init_lambda` now refuses any other
+  pooling and records the assumption beside the result.
+* The eval round-trip recorded one flag and restored with a call that recurses
+  -- the pattern `modules_in_eval` was written for after the 2026-08-28
+  measurement. It now uses the helper.
+* The ProcTHOR guard drew the SAME 1.4% of houses every run, so drift outside
+  the sample was invisible permanently rather than probabilistically, and its
+  1% tolerance was ten times a measured 0.00% baseline. Now an unseeded draw of
+  600 houses at 0.1%, and it refuses instead of returning when there are no
+  scene graphs -- skipping itself when it has nothing to check is not a guard.
+  Re-measured at the new settings: **0.000% over 215,964 edges today, 11.042%
+  against a text regenerated alone.**
+* Stage 2 called `weight_decay_groups` without `decay_mask_tokens`, so it took
+  the default while Stage 1 read the artifact. Inert today because
+  `freeze_for_stage2` freezes those parameters, live the moment
+  `query_modality_masking` becomes `p_mask`.
+* Pre-existing, found while reading: the `table1.json` projection was shallow,
+  so popping `diagnostics` from it stripped the block from `results` too and
+  `diagnostics.json` -- the artifact that exists to hold exactly that block --
+  was written without it. Deep-copied.
+
+**Two claims of mine narrowed.** The initialiser guard hashes the file at
+`cfg.checkpoint`, so it catches the file on disk being replaced and does not
+catch weights loaded after construction; the docstring said "a value the run
+checks against itself" without that limit, and the source-scan test is the
+other half. And the source-scan test read only `main`, missing a call in any
+helper; it now scans the module, which the reviewer had verified is clean.
+
+**Two untested functions now have tests.** `derive_init_lambda` and
+`_assert_text_and_edges_agree` had none -- for a guard, that is the failure it
+exists to prevent, one level up.
+
+1,032 tests pass. `splits.py` was re-materialised again for the provenance
+wording (the file said "kyzen" for a re-materialisation MASTER performed) and
+the split was verified byte-identical a second time.
+
+---

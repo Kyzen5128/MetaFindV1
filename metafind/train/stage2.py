@@ -291,7 +291,8 @@ def _edge_key(a: str, b: str, text_map: dict) -> str:
 
 
 def derive_init_lambda(model, samples, graphs, data, ratio: float,
-                       device: str, n: int = 64) -> dict:
+                       device: str, n: int = 64,
+                       arch_protocol: dict | None = None) -> dict:
     """Eq. 6's lambda_0, from the ratio Kyzen ruled and a norm measured NOW.
 
     [MASTER DECISION 2026-09-03, under Kyzen's delegation.] He ruled 0.1
@@ -316,10 +317,32 @@ def derive_init_lambda(model, samples, graphs, data, ratio: float,
 
     import torch
 
+    # [ULIP2 REVIEWER MINOR 1] `lam = ratio * ||fused||` is the intended tenth
+    # ONLY IF `||e_layout|| == 1`, because Eq. 6 is `fused + lam * e_layout`.
+    # It is 1 today, and only because pooling is `normalised_sum`
+    # (`essgnn.py:661-663`, `s / (s.norm() + 1e-12)`). `essgnn.Pool` legally
+    # admits mean, sum and max, and under `sum` -- approved hours before
+    # normalised_sum -- the layout term measured 27x the fused query at init,
+    # so this same formula would land at ~2.7x rather than a tenth. The
+    # arithmetic was correct by a protocol value nothing read.
+    pooling = (arch_protocol or {}).get("pooling")
+    if pooling != "normalised_sum":
+        raise SystemExit(
+            f"init_lambda_ratio assumes a unit-norm layout vector, which is "
+            f"what `normalised_sum` produces. essgnn_arch_protocol records "
+            f"pooling={pooling!r}, so `ratio x ||fused||` is not a ratio of "
+            "anything. Pin `init_lambda` to a literal, or derive it against a "
+            "measured ||e_layout|| for this pooling.")
+
+    # [ULIP2 REVIEWER MINOR 2] `modules_in_eval`, not a single flag plus
+    # `model.query.train()`. That restore RECURSES while the state it must put
+    # back is per-module -- which is the measurement that made the helper exist
+    # on 2026-08-28. Safe here today only because nothing evals a query
+    # submodule independently; the helper makes it safe by construction.
+    from metafind.train.stage1 import modules_in_eval
+
     norms = []
-    was_training = model.query.training
-    model.query.eval()
-    with torch.no_grad():
+    with modules_in_eval(model.query), torch.no_grad():
         for house, target_index, asset_id in samples[:n]:
             g = graphs.get(house)
             if g is None:
@@ -330,8 +353,6 @@ def derive_init_lambda(model, samples, graphs, data, ratio: float,
             q = encode_query(model, g, target_index, asset_id,
                              drop_layout=True, device=device, data=data)
             norms.append(float(q.norm()))
-    if was_training:
-        model.query.train()
     if not norms:
         raise SystemExit(
             "could not measure a single fused-query norm, so lambda_0 cannot be "
@@ -341,8 +362,12 @@ def derive_init_lambda(model, samples, graphs, data, ratio: float,
     return {"init_lambda": ratio * med, "init_lambda_ratio": ratio,
             "fused_query_norm_median": med, "fused_query_norm_n": len(norms),
             "fused_query_norm_min": min(norms), "fused_query_norm_max": max(norms),
+            # The assumption the arithmetic rests on, recorded beside the
+            # result rather than left implicit.
+            "pooling": pooling, "layout_norm_assumed": 1.0,
             "derived_at": "stage2_start", "basis": "median over the first "
-            f"{len(norms)} samples of this run, drop_layout=True, no_grad"}
+            f"{len(norms)} samples of this run, drop_layout=True, no_grad",
+            "sample_is_a_positional_prefix": True}
 
 
 def encode_query(model, graph: dict, target_index: int, asset_id: str,
@@ -487,8 +512,8 @@ class Stage2Data:
         # gradient, entered no optimizer and reached no checkpoint.
         # build_context_graph now emits a bool mask instead.
 
-    def _assert_text_and_edges_agree(self, n_houses: int = 200,
-                                     tolerance: float = 0.01) -> None:
+    def _assert_text_and_edges_agree(self, n_houses: int = 600,
+                                     tolerance: float = 0.001) -> None:
         """Refuse a corpus whose node text and semantic edges came from
         different generations of the text rule.
 
@@ -522,8 +547,29 @@ class Stage2Data:
 
         files = sorted(glob.glob(str(paths.SCENE_GRAPHS / "*.json")))
         if not files:
-            return
-        sample = _random.Random(0).sample(files, min(n_houses, len(files)))
+            raise SystemExit(
+                f"no scene graphs under {paths.SCENE_GRAPHS}, so the text-vs-edge "
+                "agreement cannot be checked. A guard that skips itself when its "
+                "input is missing is not a guard. Run n07 first.")
+        # [ULIP2 REVIEWER MINOR 3] Three things changed together, and the
+        # reviewer's answer to "can a run pass the sample and still be broken"
+        # was yes -- bounded inside the sample, unbounded outside it.
+        #
+        #   * NOT a fixed seed. `Random(0)` drew the SAME 1.4% of houses on
+        #     every run, so drift confined to the other 98.6% was invisible
+        #     PERMANENTLY rather than probabilistically. An unseeded draw makes
+        #     it a real sample: the chance of missing it falls with every run
+        #     instead of staying at one.
+        #   * 600 houses, not 200. ~4.3% of the corpus, ~200k edges.
+        #   * tolerance 0.001, not 0.01. 1% was a round number ten times the
+        #     measured baseline; the only legitimate miss source is the
+        #     degraded / null-uri entries dropped from `sem_cache` above, and
+        #     that rate is 0.00% today. 0.1% still clears the realistic failure
+        #     -- a global text regeneration measures 11.56% -- by 100x.
+        #
+        # `if not files: return` was the same defect one level up: the guard
+        # skipped itself exactly when it had nothing to check.
+        sample = _random.Random().sample(files, min(n_houses, len(files)))
         asked = missing = 0
         for f in sample:
             g = json.loads(pathlib.Path(f).read_text())
@@ -538,6 +584,8 @@ class Stage2Data:
         if not asked:
             return
         rate = missing / asked
+        print(f"  text/edge agreement: {missing:,} of {asked:,} sampled edges "
+              f"missing ({rate:.3%}) over {len(sample)} houses", flush=True)
         if rate > tolerance:
             raise SystemExit(
                 f"{missing:,} of {asked:,} semantic edges ({rate:.2%}) sampled "
@@ -980,7 +1028,16 @@ def main() -> int:
     opt = torch.optim.AdamW(
         weight_decay_groups(list(model.named_parameters())
                             + list(loss_fn.named_parameters()),
-                            values["weight_decay"]),
+                            values["weight_decay"],
+                            # [ULIP2 REVIEWER MINOR 4] Was omitted, so Stage 2
+                            # took the default while Stage 1 read the artifact.
+                            # Inert today -- freeze_for_stage2 freezes the mask
+                            # tokens under query_modality_masking "none" and
+                            # frozen parameters never reach a group -- and live
+                            # the moment that becomes p_mask, at which point the
+                            # two stages would silently disagree.
+                            decay_mask_tokens=bool(
+                                values["decay_mask_tokens"])),
         lr=values["learning_rate"], betas=tuple(values["betas"]),
         eps=values["eps"])
 
@@ -994,7 +1051,8 @@ def main() -> int:
     if pinned is None and use_layout:
         lambda_record = derive_init_lambda(
             model, samples, graphs, data,
-            float(stage2["init_lambda_ratio"]), args.device)
+            float(stage2["init_lambda_ratio"]), args.device,
+            arch_protocol=arch_proto)
         with torch.no_grad():
             model.query.layout_weight.fill_(float(lambda_record["init_lambda"]))
         print(f"lambda_0 = {lambda_record['init_lambda']:.4f} "

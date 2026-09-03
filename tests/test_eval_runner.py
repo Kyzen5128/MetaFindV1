@@ -802,3 +802,41 @@ def test_the_untrained_run_loads_no_stage1_weights_and_says_so(tmp_path, monkeyp
     # assertions above would pass for a projection that drops nothing
     assert "embedding_health" not in cell
     assert "diagnostics" not in cell["conditions"]["full"]
+
+
+def test_the_degraded_render_exclusion_does_not_read_as_a_stale_gallery():
+    """[BLOCKER, ULIP2 REVIEWER 2026-09-03] The flag could not execute at all.
+
+    `run_protocol` filtered both pools, then compared the FILTERED gallery
+    length against `protocol["gallery_size"]` and raised. Every protocol on
+    disk declares a size -- A 9,138 / B 45,692 / C 4,569 / D 36,554 -- and
+    `main` refuses any key not in that file, so all four raised, with a message
+    blaming a stale artifact. Measured before the fix: A short by 47, B by 253,
+    C by 20, D by 206.
+
+    1,027 tests were green because none of them passed a non-empty
+    `exclude_uids`. This is that test.
+
+    The staleness guard must SURVIVE, so both halves are asserted: a genuinely
+    stale declaration still raises, and a deliberate exclusion does not.
+    """
+    splits = {"train": [], "test": ["a", "b", "c"], "dev_val": ["a"]}
+    proto = {"query_split": "test", "gallery_split": "test", "gallery_size": 3}
+
+    # Stale by one, no exclusion: must still raise. Without this half, a check
+    # deleted outright would also pass the half below.
+    with pytest.raises(ValueError, match="declares gallery_size"):
+        n15.run_protocol("stale", {**proto, "gallery_size": 4}, splits,
+                         None, None, "mean", "cpu", 4, "none", 0, 8)
+
+    # The same declared size, one asset excluded: must NOT raise THIS error.
+    # It goes on to fail on the None backbone, which is a different failure and
+    # is what "the size check let it through" looks like from here.
+    try:
+        n15.run_protocol("filtered", proto, splits, None, None, "mean", "cpu",
+                         4, "none", 0, 8, False, None, None, {"b"})
+    except ValueError as e:
+        assert "declares gallery_size" not in str(e), (
+            f"the exclusion was read as a stale artifact: {e}")
+    except Exception:
+        pass  # reached the model with a None backbone: the size check passed

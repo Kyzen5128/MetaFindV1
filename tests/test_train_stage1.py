@@ -1545,6 +1545,9 @@ def test_the_mask_token_is_not_decayed_with_the_weight_matrices():
 
     Both arms are pinned, because the point is that this is now an EXPERIMENT
     with a recorded value and not a silent default.
+
+    Scope: `mask_tokens` ONLY. `modality_pos` is asserted to stay decayed --
+    see the comment at that assertion.
     """
     import torch
     from torch import nn
@@ -1566,7 +1569,14 @@ def test_the_mask_token_is_not_decayed_with_the_weight_matrices():
 
     off = m.weight_decay_groups(named, 0.1, decay_mask_tokens=False)
     assert where(off, "query.fusion.mask_tokens") == 0.0
-    assert where(off, "query.fusion.modality_pos") == 0.0
+    # [NARROWED, ULIP2 REVIEWER MAJOR 1] `modality_pos` stays DECAYED, and this
+    # asserts it. It is added to all three slots on every forward, present or
+    # masked, so it is a positional embedding and not a stand-in for absence --
+    # the docstring above justifies one and the assertion used to cover both.
+    # Nothing measured it, and the paper's masked-embedding sentence says
+    # nothing about a positional embedding. Exempting it would need its own
+    # evidence and its own field.
+    assert where(off, "query.fusion.modality_pos") == 0.1
     # The weight matrix must still be decayed, or this widened the exemption
     # instead of narrowing it -- the failure that would look like a fix.
     assert where(off, "query.fusion.attn.in_proj_weight") == 0.1
@@ -1629,8 +1639,18 @@ def test_stage1_never_initialises_from_one_of_our_own_checkpoints():
 
     import metafind.train.stage1 as m
 
-    src = inspect.getsource(m.main)
-    assert "load_stage1_checkpoint" not in src, (
-        "stage1.main now loads one of our checkpoints. That may be right, but "
-        "it changes what the reproduction line starts from, and Kyzen ruled "
-        "on 2026-09-03 that it starts from the official ULIP-2 weights.")
+    # The MODULE, not just `main`. [ULIP2 REVIEWER INFO] `getsource(m.main)`
+    # misses a call in any helper `main` invokes, or one reached through an
+    # alias. Scanning the module is a one-word change and the reviewer verified
+    # the stronger property holds: the symbol appears only as a comment and as
+    # its own definition, with no call anywhere in the file.
+    src = inspect.getsource(m)
+    body = [ln for ln in src.splitlines()
+            if "load_stage1_checkpoint" in ln
+            and not ln.lstrip().startswith("#")
+            and not ln.lstrip().startswith("def ")]
+    assert not body, (
+        f"stage1 now calls load_stage1_checkpoint at {body}. That may be "
+        "right, but it changes what the reproduction line starts from, and "
+        "Kyzen ruled on 2026-09-03 that it starts from the official ULIP-2 "
+        "weights.")

@@ -53,6 +53,7 @@ of strictly-higher and tied entries, and every diagnostic here is an accumulator
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import time
 from pathlib import Path
@@ -1060,10 +1061,20 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
     targets = np.array([col[u] for u in query_uids], dtype=np.int64)
 
     declared = protocol.get("gallery_size")
-    if declared is not None and declared != len(gallery_uids):
+    # [BLOCKER, ULIP2 Reviewer 2026-09-03] Against the UNFILTERED size. This
+    # compared the declared size to the length AFTER the degraded-render
+    # exclusion, so the flag that exclusion exists for raised on every one of
+    # the four protocols -- A by 47, B by 253, C by 20, D by 206 -- with a
+    # message blaming a stale artifact. The staleness guard is the point and
+    # stays live; what it must not do is read a deliberate filter as decay.
+    resolved = len(gallery_uids) + n_excluded_g
+    if declared is not None and declared != resolved:
         raise ValueError(
             f"{name} declares gallery_size {declared:,} but the split resolves "
-            f"to {len(gallery_uids):,}. One of them is stale.")
+            f"to {resolved:,}. One of them is stale."
+            + (f" ({n_excluded_g:,} degraded assets were then excluded, leaving "
+               f"{len(gallery_uids):,}; that is not the mismatch.)"
+               if n_excluded_g else ""))
 
     # Decided from the protocol's own fields, here in the callee. A reported
     # protocol gets the promoted index or an exception; there is no third
@@ -1503,10 +1514,17 @@ def main() -> int:
         # the other. `table1.json` is the `retrieval_metrics` channel n20 and
         # n21 read; `diagnostics.json` is not that channel and no aggregator
         # should key off it.
+        # DEEP copy. [ULIP2 REVIEWER MINOR 5, 2026-09-03] The dict comprehension
+        # is shallow, so `table[...]["conditions"]` was the SAME OBJECT as
+        # `results[...]["conditions"]`, and `cell.pop("diagnostics")` below
+        # stripped it from `results` too. `diagnostics.json`, whose entire
+        # purpose is to hold the block `table1.json` must not carry, was then
+        # written with that block already removed. Recoverable from the
+        # per-query rows, which is why it went unnoticed.
         table = {"provenance": provenance,
-                 "protocols": {n: {k: v for k, v in r.items()
-                                   if k != "embedding_health"}
-                               for n, r in results.items()}}
+                 "protocols": copy.deepcopy(
+                     {n: {k: v for k, v in r.items() if k != "embedding_health"}
+                      for n, r in results.items()})}
         for r in table["protocols"].values():
             for cell in r["conditions"].values():
                 cell.pop("diagnostics", None)

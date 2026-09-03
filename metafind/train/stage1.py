@@ -81,10 +81,30 @@ BEST_CKPT_PATH = paths.CHECKPOINTS / "stage1_best.pt"
 BEST_CKPT_RECORD = paths.CHECKPOINTS / "stage1_best_ckpt.json"
 
 
-# The learned stand-ins for an ABSENT input: the per-modality mask token and the
-# modality position embedding. Matched by name because upstream's predicate
-# cannot see them -- it sorts by `ndim`, and these are (3, D), so they land
-# beside the attention weight matrices.
+# The learned stand-in for an ABSENT input: the per-modality mask token.
+# Matched by name because upstream's predicate cannot see it -- that rule sorts
+# by `ndim`, and this is (3, D), so it lands beside the attention weight
+# matrices.
+#
+# [NARROWED, ULIP2 REVIEWER MAJOR 1, 2026-09-03] This also matched
+# `modality_pos`, and that was wrong. `fusion.py:277` adds `modality_pos` to
+# ALL THREE slots on EVERY forward, present or masked -- it is a positional
+# embedding, not a stand-in for absence, so the justification below ("the vector
+# the fusion layer reads where a real modality vector would have been") is true
+# of one and false of the other. Every measurement offered is of `mask_tokens`:
+# the norms, the gradient, the 2%. Nothing measured `modality_pos`, and
+# `2methdology.tex:75` says nothing about a positional embedding.
+#
+# Three things followed from including it and all three are why it is out: an
+# unmeasured treatment changed on the main line; the artifact says
+# `decay_mask_tokens` while two parameters moved, so a reader could not learn
+# the second one had; and the two effects were welded, so no flag could ever
+# attribute a difference to either.
+#
+# There IS a defensible case for exempting a positional embedding -- timm and
+# ViT exclude `pos_embed` from decay by convention -- but that is an UPSTREAM
+# argument, not the paper's masked-embedding mechanism, and it needs its own
+# measurement and its own field. Left decayed until someone does that.
 #
 # [MASTER DECISION 2026-09-03, under Kyzen's explicit delegation. INFERENCE,
 # not a paper fact, and reversible by one protocol value.]
@@ -114,7 +134,7 @@ BEST_CKPT_RECORD = paths.CHECKPOINTS / "stage1_best_ckpt.json"
 # purpose, not a requirement. That is exactly why the old behaviour stays
 # runnable: `decay_mask_tokens: true` reproduces it, so the difference is an
 # experiment rather than a belief.
-_IS_STANDIN = __import__("re").compile(r"(^|\.)(mask_tokens|modality_pos)$")
+_IS_STANDIN = __import__("re").compile(r"(^|\.)mask_tokens$")
 
 
 def weight_decay_groups(named, weight_decay: float, *,
@@ -1737,7 +1757,14 @@ def check_embedding_sidecars(uids: list[str], encoding: dict) -> None:
 # which is exactly the kind of property that survives until someone adds a
 # `--resume` flag for a good reason and nobody notices what it changed.
 #
-# So the ruling is written down as a value the run checks against itself. It is
+# So the ruling is written down as a value the run checks against itself --
+# though only as far as the mechanism reaches. [ULIP2 REVIEWER INFO] What it
+# hashes is the file at `backbone.cfg.checkpoint`, so it genuinely catches THE
+# FILE ON DISK BEING REPLACED (a real hazard: `download.py` skips the fetch for
+# anything over 3e8 bytes) and it does NOT catch weights loaded after
+# construction, which is the `--resume` case named above. The test asserting no
+# call to `load_stage1_checkpoint` exists in this module is the other half, and
+# together they cover it. It is
 # also the cleanest anchor available: this file reproduced the official
 # zero-shot numbers to 50.5647 / 78.9285 (DL-069), so its behaviour is known
 # independently of anything we trained.
