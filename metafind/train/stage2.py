@@ -1203,6 +1203,11 @@ def main() -> int:
         record["size_bytes"] = Path(record["uri"]).stat().st_size
         record["arch_protocol"] = {k: arch_proto[k] for k in sorted(arch_proto)
                                    if not k.startswith("decided")}
+        # [AUDIT 2026-09-04 D-2] h0_mode, coords_agg, edge_proj_dim and
+        # normalize_coord_diff are pinned in code (essgnn.PRIMARY_INTERPRETATION),
+        # not in the protocol artifact; a checkpoint must still say which it ran.
+        from metafind.models.essgnn import PRIMARY_INTERPRETATION
+        record["primary_interpretation"] = dict(PRIMARY_INTERPRETATION)
         record["query_modality_masking"] = query_masking
         record["code_revision"] = runlog.code_revision()
         record["code_dirty"] = runlog.code_dirty()

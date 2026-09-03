@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -980,6 +981,67 @@ def apply_control(control: str, targets: np.ndarray, n_gallery: int,
     raise ValueError(f"unknown control {control!r}")
 
 
+def load_stage2_over_stage1(record_path: str, stage1_ckpt: dict) -> dict:
+    """Read a Stage 2 record, refuse a wrong parent, build the tower it fits.
+
+    The tower is built WITH the ESSGNN branch (`use_layout=True`) so the Stage 2
+    state's `query.layout_encoder.*` and `query.layout_weight` have somewhere to
+    land; evaluation then passes no layout, which is exactly what sec. 3.2
+    describes for the w/ ESSGNN row. The loss module is the Stage 1 one, built
+    only so `load_stage1_checkpoint` can restore its temperature buffer.
+    """
+    from metafind.train.stage1 import build_model
+    from metafind.train.stage2 import (Stage2Data, build_stage2_model,
+                                       load_stage2_protocols)
+
+    rec = json.loads(Path(record_path).read_text())
+    parent = rec.get("stage1_checkpoint_sha256")
+    if parent != stage1_ckpt.get("sha256"):
+        raise SystemExit(
+            f"{record_path} was fine-tuned from Stage 1 checkpoint "
+            f"{str(parent)[:16]} but --ckpt-record is {str(stage1_ckpt.get('sha256'))[:16]}. "
+            "The w/ ESSGNN row must lay the Stage 2 query weights over the towers "
+            "they were fine-tuned from; pass that checkpoint's record.")
+    for k in ("uri", "sha256", "lambda_init"):
+        if k not in rec:
+            raise SystemExit(f"{record_path} lacks {k!r}; not a Stage 2 record")
+    if hashlib.sha256(Path(rec["uri"]).read_bytes()).hexdigest() != rec["sha256"]:
+        raise SystemExit(f"{rec['uri']} does not match the sha256 in its record")
+    encoding, training, hyperparameters = load_stage1_protocols()
+    _stage2_proto, _edge_proto, arch_proto = load_stage2_protocols()
+    data = Stage2Data("cpu")               # only for node_dim / edge_dim
+    model = build_stage2_model(encoding, training, hyperparameters, arch_proto,
+                               node_feat_dim=data.node_dim, edge_feat_dim=data.edge_dim,
+                               use_layout=True,
+                               init_lambda=float(rec["lambda_init"]["init_lambda"]))
+    _, loss_fn = build_model(encoding, training, hyperparameters)
+    print(f"stage2 record {record_path}\n  variant {rec.get('variant_id')}  "
+          f"parent {str(parent)[:16]}  lambda_0 {rec['lambda_init']['init_lambda']:.4f}  "
+          f"steps {rec.get('steps')}", flush=True)
+    return {"record": rec, "model": model, "loss_fn": loss_fn}
+
+
+def overlay_stage2_weights(model, rec: dict, device: str) -> None:
+    """Lay the Stage 2 trainable state over the Stage 1 towers, and check it
+    covers what Stage 2 trains -- the query fusion, the ESSGNN, lambda."""
+    import torch
+    state = torch.load(rec["uri"], map_location=device, weights_only=False)["trainable_state"]
+    missing, unexpected = model.load_state_dict(state, strict=False)
+    if unexpected:
+        raise SystemExit(f"Stage 2 state has keys the tower lacks: {sorted(unexpected)[:5]}")
+    should = {n for n, _ in model.named_parameters()
+              if n.startswith("query.fusion") or n.startswith("query.layout_encoder")
+              or n == "query.layout_weight"}
+    absent = {n for n in should if n not in state
+              and not n.endswith("fusion.mask_tokens")}   # frozen under masking=none
+    if absent:
+        raise SystemExit(f"Stage 2 state does not cover {sorted(absent)[:5]}; the "
+                         "w/ ESSGNN row would be scored with Stage 1 query weights")
+    lam = float(model.query.layout_weight.item())
+    print(f"  Stage 2 query weights laid over the Stage 1 parent: {len(state)} tensors, "
+          f"lambda {lam:.4f} (unused at evaluation: layout=None)", flush=True)
+
+
 def _construction_kwargs(observation, image_tokens: int) -> dict:
     """Only what differs from the pre-2026-09-03 construction, as keywords."""
     out = {}
@@ -1300,6 +1362,18 @@ def main() -> int:
                          "evaluation construction matches the training one "
                          "unless you say otherwise; same_mean for records "
                          "written before 2026-09-03.")
+    # [PAPER 3.2] "Using the Stage-1 head reproduces the 'w/o ESSGNN'" and the
+    # w/ ESSGNN row is that same evaluation "on Objaverse-LVIS (which lacks
+    # layout and disables ESSGNN)" with the Stage-2 head: the query fusion
+    # after layout-aware fine-tuning, no layout vector, the gallery unchanged
+    # because Stage 2 froze it. So the w/ ESSGNN row is: the Stage 1 parent's
+    # towers, with the Stage 2 checkpoint's query-side weights laid over them.
+    ap.add_argument("--stage2-ckpt-record", default=None,
+                    help="stage2_<variant>.json from metafind.train.stage2. Its "
+                         "stage1_checkpoint_sha256 must equal --ckpt-record's "
+                         "sha256. Produces the Table 1 'MetaFind w/ ESSGNN' row: "
+                         "Stage 2 query fusion, layout=None, gallery = the Stage 1 "
+                         "parent's (frozen in Stage 2).")
     ap.add_argument("--exclude-degraded-renders", action="store_true",
                     help="drop the 253 admitted assets whose render sidecar "
                          "reports blank, dark or fewer-distinct-than-listed "
@@ -1461,10 +1535,23 @@ def main() -> int:
             # "seed at the top of main" is the habit that makes it matter later.
             import torch
             torch.manual_seed(args.init_seed)
-        model, loss_fn = build_model(encoding, training, hyperparameters)
-        model.to(args.device)
-        if not untrained:
-            load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]))
+        stage2 = None
+        if args.stage2_ckpt_record:
+            if untrained:
+                raise SystemExit("--stage2-ckpt-record needs a real Stage 1 parent, "
+                                 "not --ckpt-record none")
+            stage2 = load_stage2_over_stage1(args.stage2_ckpt_record, ckpt)
+            model, loss_fn = stage2["model"], stage2["loss_fn"]
+            model.to(args.device)
+            load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]),
+                                   new_prefixes=("query.layout_encoder",
+                                                 "query.layout_weight"))
+            overlay_stage2_weights(model, stage2["record"], args.device)
+        else:
+            model, loss_fn = build_model(encoding, training, hyperparameters)
+            model.to(args.device)
+            if not untrained:
+                load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]))
 
         provenance = {
             "run_id": runlog.run_id(),
@@ -1475,6 +1562,14 @@ def main() -> int:
             "started_at": time.time(),
             "query_image_policy": image_policy,
             "image_tokens": image_tokens,
+            # None for the w/o ESSGNN row. For w/ ESSGNN: which Stage 2 run laid
+            # its query-side weights over this Stage 1 parent, and with what
+            # lambda -- the layout vector itself is never computed here.
+            "stage2_checkpoint": (None if stage2 is None else
+                                  {k: stage2["record"].get(k) for k in
+                                   ("uri", "sha256", "variant_id",
+                                    "stage1_checkpoint_sha256", "effective_values",
+                                    "lambda_init", "steps", "code_revision")}),
             "checkpoint": {k: ckpt.get(k) for k in
                            ("uri", "sha256", "epoch", "run_id", "seed",
                             "arm_config_hash", "base_hyperparameter_sha256",

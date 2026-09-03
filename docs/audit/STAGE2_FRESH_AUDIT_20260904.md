@@ -104,9 +104,9 @@ w/  ESSGNN 列 = Stage 2 checkpoint；query fusion = Stage 2 改過的；layout 
 
 | 序 | 項目 | 級別 | 動作 |
 |---|---|---|---|
-| 1 | `run_retrieval.py` 無 Stage 2 評估路徑 | 🔴 缺件 | 補 `--stage2-ckpt-record`；gallery = 該 Stage 2 的 Stage 1 父 checkpoint 的索引；layout None |
-| 2 | `h0_mode` 沒進 `essgnn_arch_protocol.json` | 🔴 協定漏記 | 寫進協定（預設 semantic）；`from_protocol` 必讀 |
-| 3 | Stage 2 gallery index 的 Stage 1 父 checkpoint 是哪個 | 🔴 必查 | `stage1_checkpoint_sha256` 對到現有 arm；用哪個 Stage 1 當 Stage 2 起點要 Kyzen 定（P1 / P5 / 舊 pilot10b） |
+| 1 | `run_retrieval.py` 無 Stage 2 評估路徑 | ✅ 已補（2026-09-04） | `--stage2-ckpt-record`：拒絕父 checkpoint 不符；Stage 2 的 query 權重疊在 Stage 1 父塔上；layout None；覆蓋檢查（query.fusion / layout_encoder / λ 都要在 state 裡）；`tests/test_eval_stage2_row.py` |
+| 2 | `h0_mode` 沒進 `essgnn_arch_protocol.json` | 🟡 降級：**在程式裡釘住**（`essgnn.PRIMARY_INTERPRETATION`：h0_mode semantic、coords_agg sum、無 edge_proj、不正規化座標差），`from_protocol` 每次都套；不在 artifact | Stage 2 checkpoint 紀錄現在多寫 `primary_interpretation`（2026-09-04） |
+| 3 | Stage 2 gallery index 的 Stage 1 父 checkpoint 是哪個 | ✅ 查了 | 舊索引（sha 00f591…）不對應任何現存 arm → 從 **P1** 重建（attrs 疊加目錄，`gallery_index stage2 --stage1-ckpt-record P1`）。P1 為 Stage 2 父 checkpoint：MASTER 選定，Kyzen 可改 |
 | 4 | 正文 vs 附錄三處矛盾（d_ij 平方、f_x 輸入層、f_x 輸出維度、h^(0)） | 🟠 PAPER-INTERNAL CONTRADICTION | 主線 = 附錄一致版（Eq. 4 才成立）；正文字面版一個 arm |
 | 5 | leave-one-out vs iterative-prefix | ⚪ UNRESOLVED | 兩個 arm |
 | 6 | Stage 2 query 模態構法（完整 T/I/P vs 文字為主） | ⚪ UNRESOLVED | 兩個 arm |
