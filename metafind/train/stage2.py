@@ -560,7 +560,7 @@ class Stage2Data:
         #     PERMANENTLY rather than probabilistically. An unseeded draw makes
         #     it a real sample: the chance of missing it falls with every run
         #     instead of staying at one.
-        #   * 600 houses, not 200. ~4.3% of the corpus, ~200k edges.
+        #   * 600 houses, not 200. 5.0% of the 12,000, ~200k edges.
         #   * tolerance 0.001, not 0.01. 1% was a round number ten times the
         #     measured baseline; the only legitimate miss source is the
         #     degraded / null-uri entries dropped from `sem_cache` above, and
@@ -582,21 +582,35 @@ class Stage2Data:
                 if _edge_key(a, b, self.text_map) not in self.sem_cache:
                     missing += 1
         if not asked:
-            return
+            raise SystemExit(
+                f"the {len(sample)} sampled scene graphs carry no sem_edge_ids "
+                "at all, so text/edge agreement could not be measured. This is "
+                "the twin of the empty-corpus case above and reachable the same "
+                "way: a partial or aborted n07 edge stage -- which is exactly "
+                "the two-stages-run-separately hazard this guard exists for. "
+                "Re-run n07, or restore the scene graphs the edges were built "
+                "for.")
         rate = missing / asked
         print(f"  text/edge agreement: {missing:,} of {asked:,} sampled edges "
               f"missing ({rate:.3%}) over {len(sample)} houses", flush=True)
         if rate > tolerance:
             raise SystemExit(
                 f"{missing:,} of {asked:,} semantic edges ({rate:.2%}) sampled "
-                f"over {len(sample)} houses have no cache entry. The node text "
-                "and the semantic edges are from different generations of the "
-                "text rule: `_edge_key` hashes the descriptions, so a text "
-                "regenerated without re-running the edge stage silently "
-                "substitutes the learned missing token and Table 2/3 come out "
-                "wrong with nothing raised. Repair them TOGETHER with "
-                "`tools/repair_procthor_node_text.py --apply`, or restore the "
-                "text the cache was built under.")
+                f"over {len(sample)} houses have no cache entry.\n"
+                "TWO things produce this and the remedies differ:\n"
+                "  1. The node text and the semantic edges are from different "
+                "generations of the text rule. `_edge_key` hashes the "
+                "descriptions, so a text regenerated without re-running the "
+                "edge stage silently substitutes the learned missing token and "
+                "Table 2/3 come out wrong with nothing raised. Repair them "
+                "TOGETHER with `tools/repair_procthor_node_text.py --apply`, or "
+                "restore the text the cache was built under.\n"
+                "  2. The cache legitimately lacks those entries -- degraded or "
+                "null-uri rows are dropped from `sem_cache` when it loads. That "
+                "rate was 0.00% when this threshold was set; if it is no longer, "
+                "the edges need regenerating, not the text.\n"
+                "Check which by looking at the dropped-entry count in this "
+                "run's own load, above.")
 
     def graphs_for(self, house_ids) -> dict:
         return {h: json.loads((paths.SCENE_GRAPHS / f"{h}.json").read_text())

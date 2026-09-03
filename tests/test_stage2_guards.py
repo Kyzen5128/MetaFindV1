@@ -8,6 +8,7 @@ import json
 
 import numpy as np
 import pytest
+from torch import nn
 
 
 def _text_map(pairs, cache_meta):
@@ -50,32 +51,40 @@ def test_the_lambda_derivation_measures_the_fused_query_and_records_its_basis(
     norms = [2.0, 4.0, 6.0, 100.0]     # median 5.0, one deliberate outlier
     seen = []
 
-    class Q:
-        training = False
-
-        def train(self, mode=True):
-            return self
-
-        def eval(self):
-            return self
-
-        def modules(self):
-            return iter(())
+    # [ULIP2 REVIEWER MINOR 1] The stub used to return `iter(())` from
+    # `modules()`, so `modules_in_eval` built an empty work list and the `with`
+    # block did nothing -- deleting it from `derive_init_lambda` left all four
+    # tests green. A real child in train mode makes the assertion real: the
+    # helper exists because BatchNorm running stats moved under `no_grad`, which
+    # is exactly what a 64-sample norm pass would do here.
+    class Q(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.bn = nn.BatchNorm1d(2)
 
     class Model:
-        query = Q()
+        def __init__(self):
+            self.query = Q()
 
     def fake_encode_query(model, graph, target_index, asset_id, drop_layout,
                           device, data):
         seen.append(drop_layout)
+        assert not model.query.bn.training, (
+            "the norm pass must run with the query tower in EVAL -- otherwise "
+            "BatchNorm running stats move while measuring, which is the "
+            "measurement modules_in_eval was written after")
         return torch.tensor([norms[len(seen) - 1], 0.0, 0.0])
 
     monkeypatch.setattr(m, "encode_query", fake_encode_query)
     samples = [(f"h{i}", i, f"a{i}") for i in range(len(norms))]
-    rec = m.derive_init_lambda(Model(), samples, {f"h{i}": {} for i in range(4)},
+    model = Model()
+    assert model.query.bn.training, "the fixture must start in train mode"
+    rec = m.derive_init_lambda(model, samples, {f"h{i}": {} for i in range(4)},
                                None, 0.1, "cpu",
                                arch_protocol={"pooling": "normalised_sum"})
 
+    assert model.query.bn.training, (
+        "train mode must be RESTORED after the measurement, not left in eval")
     assert all(seen), "the norm must be measured with the layout term OFF"
     assert rec["fused_query_norm_median"] == 5.0, "median, not mean"
     assert rec["init_lambda"] == pytest.approx(0.5)
@@ -147,3 +156,22 @@ def test_the_guard_refuses_rather_than_skipping_itself_on_an_empty_corpus(
 
     with pytest.raises(SystemExit, match="no scene graphs"):
         m.Stage2Data._assert_text_and_edges_agree(Data())
+
+
+def test_stage2_actually_calls_the_text_edge_guard():
+    """[ULIP2 REVIEWER MINOR 2] Every other test here invokes the guard unbound
+    on a duck-typed object, so deleting its call site left them all green with
+    the guard uninstalled.
+
+    That is this project's first failure family -- a check written, tested, and
+    not reached by the live path -- in the file that was just written to close
+    it. Same technique as the initialiser test in test_train_stage1.py.
+    """
+    import inspect
+
+    import metafind.train.stage2 as m
+
+    src = inspect.getsource(m.Stage2Data.__init__)
+    assert "_assert_text_and_edges_agree(" in src, (
+        "Stage2Data.__init__ no longer calls the text/edge guard, so a corpus "
+        "whose node text and semantic edges disagree would train silently.")

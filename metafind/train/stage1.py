@@ -1794,6 +1794,68 @@ def assert_official_initialiser(prov: dict, allow_other: bool) -> None:
     print("WARNING " + msg, flush=True)
 
 
+def pilot_diagnostics(backbone, model, present, q, g) -> dict:
+    """The numbers a 10-epoch protocol smoke exists to look at.
+
+    [KYZEN 2026-09-03] He named them, and the reason: the run is not for a
+    score, it is to answer whether the main line is sound before 60+ hours are
+    spent on it. Each one answers a specific question he asked.
+
+      pointbert_grad_norm   is PointBERT actually learning, or is only the
+                            projection moving? A per-module norm, because the
+                            aggregate `grad_norm` cannot distinguish them.
+      fusion_grad_norm      the other half of `train_scope`.
+      clip_grad_norm        must stay 0.0. Text and image are frozen, and this
+                            is the only line that would say so if they were not.
+      mask_token_norm       the one he called out. Measured at ~2% of a real
+                            modality vector, and the mask tokens are now out of
+                            the weight-decay group precisely so that ten epochs
+                            can distinguish "the design cannot learn" from "the
+                            optimizer was pressing it to zero". Without this
+                            number the run cannot answer that.
+      all_masked_frac       0.3^3 = 2.7% in expectation, per batch. A drift
+                            here means the mask is not what the protocol says.
+      query_norm / gallery_norm
+                            the scale the loss actually sees. Also the
+                            denominator for reading `mask_token_norm`: 0.7
+                            means nothing until you know a real vector is ~37.
+
+    Cheap by construction: every tensor is already in hand, nothing is
+    recomputed, and the whole function is a few norms over parameters that were
+    just used.
+    """
+    import torch
+
+    def gnorm(named) -> float:
+        t = sum(p.grad.norm().item() ** 2 for _, p in named if p.grad is not None)
+        return round(float(t ** 0.5), 6)
+
+    pb = [(n, p) for n, p in backbone.named_parameters()
+          if n.startswith("point_encoder") or n.startswith("pc_projection")]
+    clip = [(n, p) for n, p in backbone.named_parameters()
+            if n.startswith("open_clip_model")]
+    fus = [(n, p) for n, p in model.named_parameters() if "fusion" in n]
+    masks = [p for n, p in model.named_parameters() if n.endswith("mask_tokens")]
+
+    out = {"pointbert_grad_norm": gnorm(pb),
+           "fusion_grad_norm": gnorm(fus),
+           # Frozen means frozen. If this is ever non-zero the run is not the
+           # protocol it recorded.
+           "clip_grad_norm": gnorm(clip),
+           "all_masked_frac": round(float((~present.any(dim=1)).float().mean()), 6),
+           "query_norm": round(float(q.norm(dim=-1).mean()), 4),
+           "gallery_norm": round(float(g.norm(dim=-1).mean()), 4)}
+    if masks:
+        # Per row, because the three modalities' stand-ins are independent
+        # parameters and one of them learning while another does not is exactly
+        # the kind of thing a single mean would hide.
+        rows = torch.cat([m.detach().norm(dim=-1) for m in masks])
+        out["mask_token_norm"] = round(float(rows.mean()), 6)
+        out["mask_token_norm_min"] = round(float(rows.min()), 6)
+        out["mask_token_norm_max"] = round(float(rows.max()), 6)
+    return out
+
+
 def initializer_provenance(backbone) -> dict:
     """The weights this run STARTED from, which no artifact recorded.
 
@@ -2720,7 +2782,12 @@ def main() -> int:
                         grad_norm=round(float(sum(
                             p.grad.norm().item() ** 2
                             for grp in opt.param_groups for p in grp["params"]
-                            if p.grad is not None) ** 0.5), 6))
+                            if p.grad is not None) ** 0.5), 6),
+                        # [KYZEN 2026-09-03] The protocol smoke's own numbers.
+                        # Emitted here, INSIDE the `step % 20` gate and BEFORE
+                        # `opt.zero_grad` on the next iteration, because the
+                        # gradients still exist at this point and nowhere else.
+                        **pilot_diagnostics(backbone, model, present, q, g))
                 if step % 100 == 0:
                     print(f"  epoch {epoch} step {step}: loss {out['loss'].item():.4f}, "
                           f"acc {out.get('acc_q2g', torch.tensor(0.0)).item():.3f}, "

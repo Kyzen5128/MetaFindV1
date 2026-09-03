@@ -686,7 +686,8 @@ def gallery_from_promoted_index(name: str, gallery_uids: list[str], ckpt: dict,
 
 
 def protocol_caveat(protocol: dict, splits: dict,
-                    gallery_source: str | None = None) -> str:
+                    gallery_source: str | None = None,
+                    n_excluded_g: int = 0) -> str:
     """What a reader has to be told about this protocol's number -- FROM FIELDS.
 
     [ULIP2 REVIEWER 2026-08-30, MAJOR] This was a
@@ -732,6 +733,17 @@ def protocol_caveat(protocol: dict, splits: dict,
     if distractors:
         parts.append(f"the gallery contains {distractors:,} training assets "
                      "as distractors")
+    # [ULIP2 REVIEWER MINOR 6] The distractor count above is over the UNFILTERED
+    # split, so under --exclude-degraded-renders it names more assets than the
+    # gallery holds -- protocol B would read "36,554 training assets" beside a
+    # gallery of 36,348. The docstring says this count is derived rather than
+    # literal "so a fourth stale corpus count is not created"; the flag created
+    # one by another route. Said in the same sentence rather than plumbed
+    # through, because the number is already in hand at the call site.
+    if n_excluded_g:
+        parts.append(f"{n_excluded_g:,} degraded-render assets were excluded "
+                     "from both pools, so the distractor count above is the "
+                     "unfiltered split's")
     if gallery_source:
         parts.append(_source_clause(gallery_source))
     return "; ".join(parts)
@@ -1495,8 +1507,13 @@ def main() -> int:
             # artifact adds the "never reported" caveat, printed beside a
             # reported number. `gallery_source` is passed rather than
             # recomputed, so the sentence and the field cannot disagree.
-            core["caveat"] = protocol_caveat(protocols[name], splits,
-                                             core.get("gallery_source"))
+            core["caveat"] = protocol_caveat(
+                protocols[name], splits, core.get("gallery_source"),
+                # From the result the run just produced, not from the flag, so
+                # the sentence and the `degraded_renders_excluded` field in the
+                # same artifact cannot disagree -- the reason `gallery_source`
+                # is passed rather than recomputed, one line above.
+                (core.get("degraded_renders_excluded") or {}).get("gallery", 0))
             core["sealed_split_read"] = seals[name]
             results[name] = core
 

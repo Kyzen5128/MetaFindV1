@@ -804,7 +804,7 @@ def test_the_untrained_run_loads_no_stage1_weights_and_says_so(tmp_path, monkeyp
     assert "diagnostics" not in cell["conditions"]["full"]
 
 
-def test_the_degraded_render_exclusion_does_not_read_as_a_stale_gallery():
+def test_the_degraded_render_exclusion_does_not_read_as_a_stale_gallery(capsys):
     """[BLOCKER, ULIP2 REVIEWER 2026-09-03] The flag could not execute at all.
 
     `run_protocol` filtered both pools, then compared the FILTERED gallery
@@ -832,11 +832,22 @@ def test_the_degraded_render_exclusion_does_not_read_as_a_stale_gallery():
     # The same declared size, one asset excluded: must NOT raise THIS error.
     # It goes on to fail on the None backbone, which is a different failure and
     # is what "the size check let it through" looks like from here.
+    # [ULIP2 REVIEWER MINOR 4] A KEYWORD, not the 15th positional. This same
+    # file records that `run_protocol` gained a positional twice; a 16th would
+    # slide {"b"} onto `query_pack`, whose `.covered()` raises AttributeError on
+    # a set, which the broad except below would eat -- green having exercised
+    # no exclusion at all.
     try:
         n15.run_protocol("filtered", proto, splits, None, None, "mean", "cpu",
-                         4, "none", 0, 8, False, None, None, {"b"})
+                         4, "none", 0, 8, exclude_uids={"b"})
     except ValueError as e:
         assert "declares gallery_size" not in str(e), (
             f"the exclusion was read as a stale artifact: {e}")
     except Exception:
         pass  # reached the model with a None backbone: the size check passed
+
+    # And assert the filter FIRED. `exclude_uids` reaches only two files in the
+    # repo; if the filtering lines stopped filtering, both halves above would
+    # still pass.
+    out = capsys.readouterr().out
+    assert "degraded-render exclusion: 1 from the query pool, 1 from the gallery" in out, out

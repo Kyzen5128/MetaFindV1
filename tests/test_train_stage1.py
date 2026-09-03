@@ -1654,3 +1654,67 @@ def test_stage1_never_initialises_from_one_of_our_own_checkpoints():
         "right, but it changes what the reproduction line starts from, and "
         "Kyzen ruled on 2026-09-03 that it starts from the official ULIP-2 "
         "weights.")
+
+
+def test_the_pilot_diagnostics_name_what_the_ten_epoch_run_is_for():
+    """[KYZEN 2026-09-03] The ten-epoch run is not for a score. It is to answer
+    five questions before 60+ hours are spent, and each needs its own number.
+
+    The aggregate `grad_norm` cannot distinguish PointBERT learning from its
+    projection moving, and cannot say whether the frozen towers are actually
+    frozen. `mask_token_norm` is the one he called out: measured at ~2% of a
+    real modality vector, and the tokens are now out of the weight-decay group
+    precisely so this run can tell "the design cannot learn" from "the optimizer
+    was pressing it to zero". Without the number the run cannot answer that.
+    """
+    import torch
+    from torch import nn
+
+    from metafind.train.stage1 import pilot_diagnostics
+
+    class BB(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.point_encoder = nn.Linear(4, 4)
+            self.pc_projection = nn.Linear(4, 4)
+            self.open_clip_model = nn.Linear(4, 4)
+
+    class Fusion(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.mask_tokens = nn.Parameter(torch.tensor(
+                [[3.0, 4.0], [6.0, 8.0], [0.0, 0.0]]))   # norms 5, 10, 0
+            self.w = nn.Linear(2, 2)
+
+    class M(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.fusion = Fusion()
+
+    bb, model = BB(), M()
+    # A backward that reaches PointBERT and the fusion but NOT the CLIP tower,
+    # which is the state the protocol claims.
+    (bb.point_encoder(torch.ones(1, 4)).sum()
+     + bb.pc_projection(torch.ones(1, 4)).sum()
+     + model.fusion.w(torch.ones(1, 2)).sum()).backward()
+
+    present = torch.tensor([[True, True, True], [False, False, False],
+                            [False, False, False], [True, False, True]])
+    q = torch.tensor([[3.0, 4.0], [3.0, 4.0]])      # norm 5 each
+    g = torch.tensor([[6.0, 8.0], [6.0, 8.0]])      # norm 10 each
+
+    d = pilot_diagnostics(bb, model, present, q, g)
+
+    assert d["pointbert_grad_norm"] > 0, "PointBERT must show gradient"
+    assert d["fusion_grad_norm"] > 0, "the fusion must show gradient"
+    assert d["clip_grad_norm"] == 0.0, (
+        "the frozen towers must read exactly zero -- this is the only line "
+        "that would say so if they were not frozen")
+    assert d["all_masked_frac"] == 0.5, "2 of 4 rows have no modality present"
+    assert d["query_norm"] == 5.0 and d["gallery_norm"] == 10.0
+
+    # Per row, because one modality's stand-in learning while another does not
+    # is exactly what a single mean would hide.
+    assert d["mask_token_norm"] == 5.0        # (5 + 10 + 0) / 3
+    assert d["mask_token_norm_min"] == 0.0
+    assert d["mask_token_norm_max"] == 10.0
