@@ -71,13 +71,9 @@ def modality_norms(ckpt_path: Path, uids: list[str], device: str,
     backbone = ULIPBackbone(BackboneConfig(
         device=device, train_scope=training.get("train_scope",
                                                 "point_encoder_and_fuser")))
-    model = build_model(encoding, training, values, backbone.dim).to(device)
-    from metafind.models.losses import ContrastiveConfig, MetaFindContrastiveLoss
-    loss_fn = MetaFindContrastiveLoss(ContrastiveConfig(
-        bidirectional=False,
-        learnable_temperature=values["learnable_temperature"],
-        init_temperature=values["init_temperature"],
-        max_logit_scale=values["max_logit_scale"])).to(device)
+    model, loss_fn = build_model(encoding, training, hyperparameters)
+    model = model.to(device)
+    loss_fn = loss_fn.to(device)
     load_stage1_checkpoint(backbone, model, loss_fn, ckpt_path)
 
     text, image, pcs = [], [], []
