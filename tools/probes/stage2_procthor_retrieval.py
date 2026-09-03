@@ -40,6 +40,10 @@ def main() -> int:
     ap.add_argument("--stage2-record", required=True, help="variant_ckpts.json")
     ap.add_argument("--variant", default="full")
     ap.add_argument("--houses", type=int, default=300, help="test houses to query from")
+    ap.add_argument("--query-mode", default="none", choices=("none", "text_only"),
+                    help="how the query is built, matching the Stage 2 run's "
+                         "query_modality_masking: none = the target's T/I/P; "
+                         "text_only = text alone, image and pc as mask tokens")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out", default="output/look/exp_stage2_procthor_retrieval.json")
     args = ap.parse_args()
@@ -82,20 +86,24 @@ def main() -> int:
     targets = np.array([row[a] for _, _, a in samples])
     g = normalize_for_scoring(gallery.cpu().numpy())
 
+    present = (torch.tensor([[True, False, False]]).to(args.device)
+               if args.query_mode == "text_only" else None)
+
     def run(label: str, drop_layout: bool):
         model.eval()
         qs = []
         with torch.no_grad():
             for house_id, tidx, asset_id in samples:
                 q = encode_query(model, graphs[house_id], tidx, asset_id,
-                                 drop_layout, args.device, data)
+                                 drop_layout, args.device, data, present=present)
                 qs.append(q.float().cpu())
         qv = normalize_for_scoring(torch.stack(qs).numpy())
         r = recall_at_k(qv @ g.T, targets)
         print(f"  {label:<8} R@1 {r['R@1']*100:5.1f}  R@5 {r['R@5']*100:5.1f}", flush=True)
         return r
 
-    out = {"n_query": len(samples), "n_gallery": len(ids), "heads": {}}
+    out = {"n_query": len(samples), "n_gallery": len(ids), "query_mode": args.query_mode, "heads": {}}
+    print(f"query mode: {args.query_mode}")
     print("\nProcTHOR leave-one-out retrieval (held-out houses):")
     out["heads"]["S1_no_layout"] = run("S1", drop_layout=True)
     model.load_state_dict(s2_state, strict=False)
@@ -106,8 +114,8 @@ def main() -> int:
     # how big is the layout term relative to the fused query, after training?
     with torch.no_grad():
         h, t, a = samples[0]
-        q_off = encode_query(model, graphs[h], t, a, True, args.device, data).float()
-        q_on = encode_query(model, graphs[h], t, a, False, args.device, data).float()
+        q_off = encode_query(model, graphs[h], t, a, True, args.device, data, present=present).float()
+        q_on = encode_query(model, graphs[h], t, a, False, args.device, data, present=present).float()
     out["norm_fused"] = float(q_off.norm()); out["norm_layout_term"] = float((q_on - q_off).norm())
     print(f"  lambda {lam:.3f}; |Fusion| {out['norm_fused']:.1f}  |lambda*e_layout| {out['norm_layout_term']:.1f} (one sample)")
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
