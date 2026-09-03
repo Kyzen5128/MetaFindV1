@@ -3,17 +3,28 @@
   "why": "Pilots 1 and 2 (P1 parent, Stage 1 recipe at a FLAT 5e-4, no warmup) moved the query fusion by a median relative distance of 0.55 and cost the probe batch 11 points of in-batch top-1 within 50 steps; the layout-free head fell from 82.4 to 24.2 R@1 on ProcTHOR. Sec. 2.6 calls Stage 2 'fine-tuning' and gives no rate or schedule. IMPLEMENTATION CHOICE; one arm changes only this against pilot 2.",
   "values": {
     "optimizer": "adamw",
+    "decay_mask_tokens": false,
     "learning_rate": 5e-05,
     "weight_decay": 0.1,
+    "scheduler": "cosine",
     "batch_size": 64,
     "epochs": 1,
-    "seed": 20260816,
+    "max_epochs": 250,
+    "p_mask": 0.3,
     "init_temperature": 0.5,
     "learnable_temperature": false,
-    "scene_dropout": 0.3,
-    "warmup_frac": 0.1,
+    "max_logit_scale": 100.0,
+    "betas": [
+      0.9,
+      0.98
+    ],
+    "eps": 1e-08,
+    "warmup_epochs": 1,
     "lr_start": 1e-06,
     "lr_end": 1e-06,
-    "max_logit_scale": 100.0
-  }
+    "seed": 20260816,
+    "warmup_frac": 0.1,
+    "scene_dropout": 0.3
+  },
+  "basis": "Stage 1 recipe (stage1_hyperparameters.json values) with these overrides: {\"learning_rate\": 5e-05, \"epochs\": 1, \"warmup_frac\": 0.1, \"lr_start\": 1e-06, \"lr_end\": 1e-06, \"scene_dropout\": 0.3}"
 }
