@@ -69,15 +69,50 @@ def load_tower(ckpt_path: Path, device: str):
     return model
 
 
-def gallery_vectors(uids: list[str], device: str):
-    """The gallery bank. Unchanged by every policy -- only the QUERY varies."""
-    text, img = [], []
-    for uid in uids:
-        z = np.load(paths.EMBEDDINGS / f"{uid}.npz")
-        text.append(z["text"].astype(np.float32))
-        img.append(z["image"].astype(np.float32))
-    return (torch.from_numpy(np.stack(text)).to(device),
-            torch.from_numpy(np.stack(img)).to(device))
+# ---------------------------------------------------------------------------
+# RETRACTED 2026-09-03. Everything this module measured is withdrawn.
+#
+# `gallery_vectors` read only the cached text and image vectors, and `recall`
+# then called the gallery tower with `"pc": torch.zeros_like(g_text)`. A zero
+# tensor of the right shape is not an absent modality -- the fusion Transformer
+# received it as a PRESENT third slot -- so the gallery was
+#
+#     Fusion_G(text, image, 0)      instead of      Fusion_G(text, image, e_pc)
+#
+# which contradicts sec. 2.4, verbatim: "The gallery encoder is
+# modality-complete and frozen after pretraining." The repo's own derangement
+# experiment had already measured this gallery to be PC-DOMINANT (deranging the
+# gallery pc drops text R@1 from 66.88 to 1.80), so zeroing pc removed the
+# strongest signal in it.
+#
+# `recall` also diverged from the production scorer twice more:
+#   - ties counted FOR the model (`(sims > own).sum() + 1`), where
+#     `metafind.eval.retrieval.rank_of_target` counts `higher + tied + 1`;
+#   - float32 Torch GEMM, where `normalize_for_scoring` mandates float64.
+#
+# Found independently the same day from the ULIP2 side and by Kyzen reading the
+# repo. The replacement, `tools/probes/exp_text_length.py`, scores with
+# `metafind.eval.retrieval` and builds its gallery through `split_embeds`; its
+# canonical arm reproduces `run_retrieval.py` to the printed digit on protocol C
+# (78.4/95.0/92.1/98.8/99.9/98.7/100.0) and protocol D
+# (58.0/84.6/78.8/96.5/99.6/94.1/100.0). That parity is the entry condition for
+# every sensitivity experiment from now on.
+#
+# `load_tower` is UNAFFECTED and is still imported by the replacement.
+# ---------------------------------------------------------------------------
+_RETRACTED = (
+    "tools/probes/exp_query_observation.py is retracted: its gallery passed a "
+    "ZERO point cloud to a modality-complete gallery tower, and its recall "
+    "counted ties in the model's favour in float32. Use "
+    "tools/probes/exp_text_length.py, which scores with metafind.eval.retrieval "
+    "and matches run_retrieval.py exactly on the canonical arm."
+)
+
+
+def gallery_vectors(*_a, **_k):
+    """RETRACTED. Read only text and image, so every caller scored against a
+    gallery missing its point cloud. Body removed: it must not be copied."""
+    raise SystemExit(_RETRACTED)
 
 
 def vectors(uids: list[str], policy: str, device: str):
@@ -101,100 +136,16 @@ def vectors(uids: list[str], policy: str, device: str):
         torch.from_numpy(np.stack(g_img)).to(device)
 
 
-def recall(model, text, q_img, gal, present, device, target_row, batch=256):
-    """R@1 / R@5 of each query against the whole gallery.
-
-    `target_row[i]` is where query i's own asset sits in the gallery, so the
-    gallery may be LARGER than the query pool -- which is the point of the
-    full-corpus arm. Reading the diagonal instead would silently score against
-    the wrong asset the moment the two pools differ.
-    """
-    g_text, g_img = gal
-    n = text.size(0)
-    with torch.no_grad():
-        q = model.query({"text": text if present[0] else None,
-                         "image": q_img if present[1] else None,
-                         "pc": None},
-                        present=torch.tensor([[present[0], present[1], False]]
-                                             ).repeat(n, 1).to(device))
-        q = torch.nn.functional.normalize(q.float(), dim=-1)
-        gs = []
-        for i in range(0, g_text.size(0), 4096):
-            gs.append(model.gallery({"text": g_text[i:i + 4096],
-                                     "image": g_img[i:i + 4096],
-                                     "pc": torch.zeros_like(g_text[i:i + 4096])}))
-        g = torch.nn.functional.normalize(torch.cat(gs).float(), dim=-1)
-        r1 = r5 = 0
-        for i in range(0, n, batch):
-            sims = q[i:i + batch] @ g.T
-            rows = torch.arange(sims.size(0))
-            tgt = sims[rows, target_row[i:i + batch]]
-            rank = (sims > tgt.unsqueeze(1)).sum(dim=1) + 1
-            r1 += int((rank <= 1).sum())
-            r5 += int((rank <= 5).sum())
-    return r1 / n, r5 / n
+def recall(*_a, **_k):
+    """RETRACTED. Passed `"pc": torch.zeros_like(g_text)` to a modality-complete
+    gallery tower, counted ties FOR the model, and scored in float32. Body
+    removed: it must not be copied."""
+    raise SystemExit(_RETRACTED)
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--ckpt", required=True)
-    ap.add_argument("--split", default="dev_val")
-    ap.add_argument("--gallery-split", default=None,
-                    help="default: the same pool as the queries. `full` is the "
-                         "whole admitted corpus, which is the other axis §十六 "
-                         "asks about -- ten times the distractors, same queries.")
-    ap.add_argument("--device", default="cpu")
-    ap.add_argument("--limit", type=int)
-    ap.add_argument("--out", default="output/look/exp_query_observation.json")
-    args = ap.parse_args()
-
-    sp = json.loads((paths.OUTPUTS / "splits.json").read_text())["object"]
-    uids = sorted(sp[args.split])[: args.limit] if args.limit else sorted(sp[args.split])
-    if args.gallery_split == "full":
-        g_uids = sorted(set(sp["train"]) | set(sp["test"]))
-    elif args.gallery_split:
-        g_uids = sorted(sp[args.gallery_split])
-    else:
-        g_uids = uids
-    where = {u: i for i, u in enumerate(g_uids)}
-    missing = [u for u in uids if u not in where]
-    if missing:
-        raise SystemExit(f"{len(missing)} query assets are not in the gallery, "
-                         f"e.g. {missing[:3]} -- every query needs its positive")
-    target_row = torch.tensor([where[u] for u in uids]).to(args.device)
-    model = load_tower(Path(args.ckpt), args.device)
-    gal = gallery_vectors(g_uids, args.device)
-
-    print(f"checkpoint {args.ckpt}")
-    print(f"{len(uids):,} queries against {len(g_uids):,} gallery items, "
-          f"image policy varied, GALLERY UNCHANGED\n")
-    head = "policy".ljust(16) + "".join(c.rjust(14) for c in CONDITIONS)
-    print(head)
-    out = {}
-    for policy in POLICIES:
-        text, q_img, _ = vectors(uids, policy, args.device)
-        row, cells = policy.ljust(16), {}
-        for name, mods in CONDITIONS.items():
-            r1, r5 = recall(model, text, q_img, gal,
-                            ("text" in mods, "image" in mods), args.device,
-                            target_row)
-            cells[name] = {"R@1": r1, "R@5": r5}
-            row += ("%.4f / %.4f" % (r1, r5)).rjust(14)
-        print(row)
-        out[policy] = cells
-
-    p = Path(args.out)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({
-        "checkpoint": args.ckpt, "split": args.split, "n": len(uids),
-        "gallery_split": args.gallery_split or args.split,
-        "n_gallery": len(g_uids),
-        "gallery": "unchanged (12-view mean) in every row; only the QUERY varies",
-        "caveat": "inference sensitivity on ONE checkpoint. It cannot stand in "
-                  "for training under a different observation (§十六).",
-        "results": out}, indent=1, ensure_ascii=False))
-    print(f"\n-> {p}")
-    return 0
+def main(*_a, **_k):
+    """RETRACTED. See the module note."""
+    raise SystemExit(_RETRACTED)
 
 
 if __name__ == "__main__":
