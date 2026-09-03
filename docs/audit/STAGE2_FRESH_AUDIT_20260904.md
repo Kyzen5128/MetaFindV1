@@ -153,3 +153,30 @@ Table 1 w/ ESSGNN（Stage 2 頭、layout 關）：C 10.1/15.2/49.2/22.2/56.4/50.
 **問題 B：fine-tuning 把 layout-free 的頭訓壞。** 50 步內 probe 批的 top-1 從 0.953 掉到 0.84（lr 5e-4 與 5e-5 都是），loss 卻在降：目標在拿「整體 logit 形狀」換「top-1 margin」。Stage 2 的優化器是**沒有 warmup、沒有 cosine 的平坦 AdamW**（Stage 1 有 1 輪 warmup + cosine）。論文說 Stage 2 是 fine-tuning，沒給配方 → 先鏡射 Stage 1 的排程（warmup + cosine）並降 lr；這是 IMPLEMENTATION CHOICE，目的是讓 w/ ESSGNN 的掉幅回到論文的量級，會如實標記。
 
 先導 2 的 artifact 保留（`checkpoints/stage2_full.pt`、`variant_ckpts.json["full"]`、`eval_stage2_pilot2_full_over_P1/`）。
+
+### F4. S2-C / S2-D（lr 5e-5、10% warmup、cosine；1 輪 / 1,500 間房）
+
+```
+ProcTHOR 端（300 間沒看過的房，1,439 畫廊，R@1 / R@5）
+                        S1（父）        S2-off          S2-on           λ
+S2-C  query 只給文字    10.3 / 29.0     12.4 / 43.1     12.2 / 42.7     93.46 → 93.43
+S2-D  完整 T/I/P        82.4 / 98.1     36.8 / 78.0     32.8 / 76.8     93.46 → 93.43
+
+Table 1 w/ ESSGNN（Stage 2 頭、layout 關），協定 C ／ D，R@1
+                     text  image    pc   T+I  T+PC  I+PC  full
+論文 w/ ESSGNN       11.3  10.5  63.2  15.9  41.2  42.0  48.2
+論文 w/ ÷ w/o        0.82  0.90  0.84  0.92  0.93  0.92  0.93
+P1 父（w/o）   C     34.7  56.9  86.1  87.6  99.0  92.7  99.7
+S2-C           C     22.5  37.7  74.3  62.8  86.1  80.1  88.2   ÷父 0.65 0.66 0.86 0.72 0.87 0.86 0.88
+S2-D           C     24.9  36.1  71.2  58.2  80.9  73.0  80.1   ÷父 0.72 0.63 0.83 0.66 0.82 0.79 0.80
+P1 父（w/o）   D     11.6  29.7  66.6  67.5  95.6  77.8  98.1
+S2-C           D      6.0  15.2  48.1  32.5  67.0  55.3  69.6
+S2-D           D      7.3  14.2  44.7  29.9  58.6  47.3  57.5
+```
+
+**讀法**
+1. **λ 在四個 run 裡都不動（93.46 → 93.43）、S2-on ≈ S2-off**，文字 query 也一樣。這不是 bug，是任務結構：ProcTHOR 的資產變體在類別內隨機擺放，「房間裡有什麼」決定不了「是哪一張椅子」；exact-instance R@1 沒有 layout 能補的資訊。這與論文一致——Table 1 的 w/ ESSGNN 比 w/o **低**，論文對 ESSGNN 的證據在場景層（GPT-4o 評分、人評），不在 R@1。我們沒有 GPT-4o 評審，那一半做不了。
+2. **配方（warmup + cosine、5e-5）把 layout-free 頭的損傷從先導 2 的 −40 分壓到 −10 ～ −25 分**（協定 C）。S2-C 在協定 C 的 pc 格 ÷父 = 0.86，論文 0.84；full 0.88，論文 0.93。方向與量級第一次落在論文附近；但這只是 1 輪 1,500 間房（論文全量 9,600 間、輪數未知），損傷是下界。
+3. 文字 query（S2-C）比完整 T/I/P（S2-D）**更接近論文的 w/ 列**（÷父在 pc/T+PC/I+PC/full 都較高），且符合 Figure 1 畫的 query 形式 → S2-C 的構法為 Stage 2 主線候選。
+
+**先導 2 → S2-C 只動了兩個變數（query 構法、配方）**；S2-D 隔離出配方的貢獻（36.8 vs 24.2 on ProcTHOR S2-off）。

@@ -78,7 +78,7 @@ P1 ✅ → P4 ✅ → P3 ✅ → P5 ✅ → geometry 探針 ✅ → P7 ✅ → P
 |---|---|---|---|
 | 先導 1 | P1 父、完整 T/I/P query、Stage 1 配方（平坦 5e-4） | INVALID | builder 漏帶 prefusion_norm（F1）；批次尾巴退化（F2） |
 | 先導 2 | 同上，builder 修好 | ✅ | ProcTHOR S1 82.4 / S2-off 24.2 / S2-on 23.5；λ 93.5→93.1 不學；w/ ESSGNN C 10.1/15.2/49.2/22.2/56.4/50.5/58.9（父 34.7/56.9/86.1/87.6/99.0/92.7/99.7）。結論：完整 T/I/P 的 query 讓 layout 無事可做；平坦 lr 把 layout-free 頭訓壞 |
-| S2-C | query 只給文字（Figure 1 的 query 形式）+ 5e-5 warmup 10% cosine | 跑中 | — |
-| S2-D | 完整 T/I/P + 5e-5 warmup cosine（只隔離配方） | 排隊 | — |
+| S2-C | query 只給文字（Figure 1 的 query 形式）+ 5e-5 warmup 10% cosine | ✅ | ProcTHOR S1 10.3 / S2-off 12.4 / S2-on 12.2；w/ ESSGNN C 22.5/37.7/74.3/62.8/86.1/80.1/88.2（÷父 0.65…0.88，論文 0.82…0.93）→ **Stage 2 主線候選** |
+| S2-D | 完整 T/I/P + 5e-5 warmup cosine（只隔離配方） | ✅ | ProcTHOR S1 82.4 / S2-off 36.8 / S2-on 32.8；w/ ESSGNN C 24.9/36.1/71.2/58.2/80.9/73.0/80.1。配方讓損傷從 −40 縮到 −25；λ 仍不動 |
 
 Stage 2 的 UNRESOLVED（各有 arm 或待排）：query 構法（S2-C / S2-D / stage1 遮罩）、leave-one-out vs iterative-prefix、正文字面版 ESSGNN、pooling / λ₀、ProcTHOR 切分（Kyzen 定）。
