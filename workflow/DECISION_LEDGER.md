@@ -6347,3 +6347,88 @@ wording (the file said "kyzen" for a re-materialisation MASTER performed) and
 the split was verified byte-identical a second time.
 
 ---
+
+## DL-090 -- Table 1 read verbatim: PC-only is the one condition we match, and the paper itself calls identical query/gallery embeddings "inflated"
+
+Date 2026-09-03, during the ten-epoch pilot. Kyzen asked whether Stage 1's
+architecture could now be stated from the paper. Answering it required reading
+Table 1 and Table 3 verbatim rather than from memory, and that turned up a
+misquotation of mine plus the strongest paper-side evidence yet on 問題 4.
+
+**CORRECTION FIRST. The 8.7 I have cited repeatedly as "train fuser only" is a
+TEXT-ONLY number.** `docs/paper/metafind_source/3experiments.tex:87` captions Table 3
+*"Ablation study (Text Only). We report top-1 retrieval accuracy (R@1) on the
+Object-level task..."*. Every value in that table -- 11.4 full MetaFind, 8.7
+fuser-only, 13.5 w/o Layout Context, 7.3 and 13.2 for the dropout sweep -- is
+the text-only condition. I have been reading them as full-modality numbers. The
+ablation's DIRECTION (full encoder fine-tuning beats fuser-only) is unaffected;
+the magnitude I attached to it was wrong.
+
+**Table 1, `3experiments.tex:45`, MetaFind w/o ESSGNN, R@1 in percent:**
+
+```
+text 13.8 · image 11.7 · pc 75.1 · T+I 17.2 · T+PC 44.5 · I+PC 45.8 · full 51.7
+```
+
+**Our ten-epoch pilot at epoch 3, dev_val gallery 4,569, beside it:**
+
+```
+cond          paper   untrained    ours    ratio
+text           13.8       97.3     70.1     5.1x
+image          11.7       90.4     89.1     7.6x
+pc             75.1       95.3     83.0     1.1x
+text+image     17.2          -     94.4     5.5x
+text+pc        44.5          -     99.0     2.2x
+image+pc       45.8          -     97.8     2.1x
+full           51.7       99.9     99.7     1.9x
+```
+
+**PC-only is the one condition that matches, and it is the one moving toward
+the paper.** 95.3 untrained, 83.0 after four epochs, against the paper's 75.1.
+Every other condition is 2x to 7.6x high and most were saturated before
+training began.
+
+**The paper's own sentence about why.** `3experiments.tex:24`:
+
+> since other models do not adopt a dual-tower design, their "PC only"
+> performance reflects retrieval using identical embeddings for both query and
+> gallery, leading to **inflated accuracy**. In contrast, our dual-tower
+> framework introduces more cross-modality retrieval, which results in lower
+> accuracy under the "PC only".
+
+The baselines sit at 97.9-99.0 on PC-only; MetaFind reports 75.1 and explains
+the gap as the absence of that identity. **The paper names identical
+query/gallery embeddings as the inflation mechanism and states that MetaFind is
+not that.** This is PAPER TEXT about the baselines, not an inference about
+MetaFind's hidden protocol -- but it is the strongest paper-side evidence yet
+that the reproduction line's `same_record` construction is not what produced
+Table 1.
+
+**What is now ruled out as the explanation.** Gallery scope. Measured on the
+archived untrained anchors, same queries, gallery 4,569 vs 36,554: full moves
+0.9989 -> 0.9961 and text 0.9729 -> 0.9044. An eight-fold gallery costs full
+0.3 percentage points. It cannot take 99.7 to 51.7. 問題 7 stays UNRESOLVED as
+a protocol question; it is no longer a candidate for THIS gap.
+
+**What the paper does not state about Stage 1, searched rather than assumed.**
+Grepping `2methdology.tex`, `3experiments.tex` and `appendix.tex` for optimizer,
+learning rate, batch size, epochs, iterations, scheduler, warmup, weight decay,
+GPU and hours returns nothing about Stage 1. **The paper publishes no training
+hyperparameter at all.** Every value in `stage1_hyperparameters.json` is
+upstream inheritance or our choice, and the artifact says so.
+
+**What it does state, and we implement, verified against the running
+checkpoint:** one shared ULIP-2 backbone (227 tensors, no tower prefix),
+separate fusion heads (26 + 26, mask-token cosines 0.05 / -0.06 / 0.05 --
+independently trained), query accepts absent modalities and gallery refuses
+them, positives on the diagonal with duplicate uids refused, tau fixed at 0.5,
+loss one-directional.
+
+`CLASSIFICATION` The architecture correspondence is OBSERVED IMPLEMENTATION
+against PAPER FACT and holds. The numeric divergence is OBSERVED DATA. The
+attribution of that divergence to observation construction is INFERENCE, and
+the spec forbids asserting the authors' hidden protocol; what may be stated is
+that under same-record six of seven conditions saturate and the paper's six do
+not.
+
+---
