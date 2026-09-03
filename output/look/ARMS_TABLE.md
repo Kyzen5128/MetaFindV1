@@ -85,3 +85,35 @@ Released ULIP-2, no training, gallery = PC embedding, query = raw mean of the av
 | full template | 24.5 | 58.4 | 100.0 | 52.3 | 98.6 | 98.6 | 96.6 |
 
 Category-only moves the text cell from 24.5 to 3.8 (paper 0.1) and nothing else: T+PC and full stay 98.7 / 96.6 in every arm against 33.9 / 6.4. Per-modality L2 before the mean does not change that either (T+PC 99.3, full 98.0, every text arm): with q = (p + t)/|p + t| and the gallery's own p, the own score (1 + p.t) exceeds every other (p.p_j + t.p_j) unless t prefers asset j over the own asset by MORE than the pc margin 1 - p.p_j, so an uninformative text cannot flip the ranking, only lower every score together. The paper's shape needs the query's pc (or image) to sit far from the gallery's own, or a text that is systematically anti-informative. INFERENCE; the paper says what neither row was fed. No ln-ratio score for this row (paper has a 0.0 cell); read the table.
+## Stage 2: the Table 1 'w/ ESSGNN' row (Stage 2 query head over the P1 parent, layout off)
+
+Paper: w/o 13.8/11.7/75.1/17.2/44.5/45.8/51.7 -> w/ 11.3/10.5/63.2/15.9/41.2/42.0/48.2. The ratio row is w/ divided by w/o, per cell: the paper loses 7-16%; the arms below are 1 epoch over 1,500 of 9,600 houses, so their loss is a lower bound on what a full Stage 2 would do.
+
+### D_dev_val_vs_train
+
+| head | text | image | pc | text+image | text+pc | image+pc | full |
+|---|---|---|---|---|---|---|---|
+| **paper w/ ESSGNN R@1** | **11.3** | **10.5** | **63.2** | **15.9** | **41.2** | **42.0** | **48.2** |
+| **paper w/ ÷ w/o** | **0.82** | **0.90** | **0.84** | **0.92** | **0.93** | **0.92** | **0.93** |
+| P1 parent (w/o) R@1 | 11.6 | 29.7 | 66.6 | 67.5 | 95.6 | 77.8 | 98.1 |
+| S2 pilot 2: full-T/I/P query, flat 5e-4, 1 ep / 1,500 houses R@1 | 1.6 | 4.0 | 23.4 | 6.8 | 31.6 | 25.5 | 34.6 |
+| ↳ ÷ parent | 0.14 | 0.13 | 0.35 | 0.10 | 0.33 | 0.33 | 0.35 |
+| S2-C: text-only query, 5e-5 warmup+cosine, 1 ep / 1,500 houses R@1 | 6.0 | 15.2 | 48.1 | 32.5 | 67.0 | 55.3 | 69.6 |
+| ↳ ÷ parent | 0.52 | 0.51 | 0.72 | 0.48 | 0.70 | 0.71 | 0.71 |
+| S2-D: full-T/I/P query, 5e-5 warmup+cosine, 1 ep / 1,500 houses R@1 | 7.3 | 14.2 | 44.7 | 29.9 | 58.5 | 47.3 | 57.5 |
+| ↳ ÷ parent | 0.63 | 0.48 | 0.67 | 0.44 | 0.61 | 0.61 | 0.59 |
+
+### C_dev_selection
+
+| head | text | image | pc | text+image | text+pc | image+pc | full |
+|---|---|---|---|---|---|---|---|
+| **paper w/ ESSGNN R@1** | **11.3** | **10.5** | **63.2** | **15.9** | **41.2** | **42.0** | **48.2** |
+| **paper w/ ÷ w/o** | **0.82** | **0.90** | **0.84** | **0.92** | **0.93** | **0.92** | **0.93** |
+| P1 parent (w/o) R@1 | 34.7 | 56.9 | 86.1 | 87.6 | 99.0 | 92.7 | 99.7 |
+| S2 pilot 2: full-T/I/P query, flat 5e-4, 1 ep / 1,500 houses R@1 | 10.1 | 15.1 | 49.2 | 22.2 | 56.4 | 50.5 | 58.9 |
+| ↳ ÷ parent | 0.29 | 0.27 | 0.57 | 0.25 | 0.57 | 0.54 | 0.59 |
+| S2-C: text-only query, 5e-5 warmup+cosine, 1 ep / 1,500 houses R@1 | 22.5 | 37.7 | 74.3 | 62.8 | 86.1 | 80.1 | 88.2 |
+| ↳ ÷ parent | 0.65 | 0.66 | 0.86 | 0.72 | 0.87 | 0.86 | 0.88 |
+| S2-D: full-T/I/P query, 5e-5 warmup+cosine, 1 ep / 1,500 houses R@1 | 24.9 | 36.1 | 71.2 | 58.2 | 80.8 | 73.0 | 80.1 |
+| ↳ ÷ parent | 0.72 | 0.63 | 0.83 | 0.66 | 0.82 | 0.79 | 0.80 |
+
