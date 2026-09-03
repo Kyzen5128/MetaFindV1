@@ -792,6 +792,8 @@ class Stage1Dataset:
             "text": cached["text"].astype(np.float32),
             "image": image.astype(np.float32),
             "pc": pc,
+            **({"image_present": np.ones(self.image_tokens, dtype=bool)}
+               if self.image_tokens > 1 else {}),
         }
         # The gate is "is there a query side at all", not "is there a pack".
         # It was the latter, and with an observation protocol and no pack that
