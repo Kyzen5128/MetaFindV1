@@ -199,6 +199,24 @@ def enumerate_samples(train_houses: list[str], eligible: set[str]) -> list[tuple
     return samples
 
 
+# [MEASURED 2026-09-04, first real Stage 2 run] unique_positive_batches on
+# 99,945 samples over 1,500 houses gave 1,529 full batches and then 374 with
+# fewer than 14 samples -- 69 of size 1, 205 of size 2 -- all drawn from the
+# two most-placed assets (Cellphone_6 x200, Pencil_6 x131), because once every
+# other asset is spent a batch can hold at most one of each survivor. A batch
+# of one has InfoNCE loss exactly 0 (one class), a batch of two has one
+# negative; the log showed 'loss 0.0000' for the last 300 steps and the
+# optimizer still stepped on them. Eq. 7/8 need B negatives to mean anything.
+MIN_BATCH = 8
+
+
+def usable_batches(batches: list[list[int]], min_size: int = MIN_BATCH):
+    """Drop the degenerate tail. Returns (kept, n_dropped_batches, n_dropped_samples)."""
+    kept = [b for b in batches if len(b) >= min_size]
+    dropped = [b for b in batches if len(b) < min_size]
+    return kept, len(dropped), sum(len(b) for b in dropped)
+
+
 def unique_positive_batches(samples: list[tuple[str, int, str]], batch_size: int,
                             rng: np.random.Generator) -> list[list[int]]:
     """[U-08e] Batches in which no assetId appears twice.
@@ -1110,6 +1128,11 @@ def main() -> int:
             # docstring that the code then broke.
             model.query.train()
             batches = unique_positive_batches(samples, values["batch_size"], rng)
+            batches, n_small, n_small_samples = usable_batches(batches)
+            if epoch == 0:
+                print(f"  {len(batches):,} batches kept; {n_small} with fewer than "
+                      f"{MIN_BATCH} samples dropped ({n_small_samples:,} samples, the "
+                      "over-placed assets' leftovers)", flush=True)
             for batch in batches:
                 # [U-32 / 2.6] "omitted in 30% of BATCHES" -- ONE draw per batch,
                 # so every sample in a dropped batch loses the layout term and
@@ -1183,6 +1206,9 @@ def main() -> int:
                 # ESSGNN Reviewer's MAJOR-3.
                 "lambda_init": lambda_record,
                 "samples_per_epoch": len(samples),
+                "min_batch_size": MIN_BATCH,
+                "small_batches_dropped_per_epoch": n_small,
+                "small_batch_samples_dropped_per_epoch": n_small_samples,
                 "train_houses": len(train_houses),
                 "n_params_saved": sum(
                     v.numel() for m in (model, loss_fn)

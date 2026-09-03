@@ -288,3 +288,15 @@ def test_a_stage1_field_mismatch_is_caught_not_applied(tmp_path, monkeypatch):
     registry_file(tmp_path, monkeypatch, [row])
     with pytest.raises(ValueError, match="Re-run n10"):
         load_variant("fuser_only", CKPT)
+
+
+def test_the_degenerate_tail_of_unique_positive_batching_is_dropped():
+    """[MEASURED 2026-09-04] the first real Stage 2 run ended with 300 steps of
+    'loss 0.0000': batches of one or two samples left over from the most-placed
+    assets. InfoNCE over one class is identically zero."""
+    from metafind.train.stage2 import MIN_BATCH, usable_batches
+    batches = [list(range(64))] * 3 + [[1], [2, 3], list(range(7)), list(range(8))]
+    kept, n_b, n_s = usable_batches(batches)
+    assert MIN_BATCH == 8
+    assert len(kept) == 4 and all(len(b) >= 8 for b in kept)
+    assert (n_b, n_s) == (3, 1 + 2 + 7)
