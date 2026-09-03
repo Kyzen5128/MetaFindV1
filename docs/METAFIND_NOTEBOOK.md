@@ -151,6 +151,11 @@ Padding missing modalities with 0                                10.5
 
 ## 3. 現行架構對照表（逐行核對過程式碼）
 
+> **2026-09-03 晚間追加**：Kyzen 要求「當作新專案、只憑論文原文、逐細節對照、找出錯誤」。完整審計在 [`docs/audit/STAGE1_FRESH_AUDIT_20260903.md`](audit/STAGE1_FRESH_AUDIT_20260903.md)。三個改變判斷的結論：
+> 1. **`same_record` 不是候選，是排除項**（審計 §E1）：Table 1 的 `full` = 51.7 < 100，而 query 讀 gallery 自己那一筆時，不論 Fusion 一份或兩份，full 都趨近 100（實測 0.9998）。§5.2 的 A arm 據此撤下。
+> 2. **Figure 1 的 `ULIP-2 (Shared)` 方塊裡只畫一個 `Fusion Layer`**（審計 §C2）：`fully_shared` 的拒跑理由（凍 gallery ≠ 訓 query fusion）是我們的推論，快取 gallery 向量即可同時滿足 §2.6 與 §2.7。列為未測 arm。
+> 3. **Figure 1 每個編碼器畫 K 支向量進 Fusion**（審計 §C4）：影像可能是每視角一個 token，而非先平均。快取的 `views (12,1280)` 足以測。
+
 | 項目 | 論文 | 我們現在（`OBSERVED IMPLEMENTATION`） | 判定 |
 |---|---|---|---|
 | Dual tower | §2.4 明確 | 有（`dual_tower.py`） | 🟢 |
