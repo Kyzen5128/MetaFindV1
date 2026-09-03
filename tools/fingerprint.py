@@ -30,9 +30,32 @@ LABEL = {
 }
 
 
-def distance(cells: dict) -> float:
+def d_level(cells: dict) -> float:
+    """mean |ln(ours/paper)| over the 14 cells: absolute level error."""
     return sum(abs(math.log(max(cells[m][c], 1e-4) / PAPER[m][c]))
                for m in ("R@1", "R@5") for c in C) / 14
+
+
+def d_shape(cells: dict) -> float:
+    """[GPT via Kyzen 2026-09-03] the same, with each table's overall level
+    removed: compare the seven conditions' RELATIVE pattern. R@1 and R@5 each
+    centred on their own mean log, then averaged."""
+    tot = 0.0
+    for m in ("R@1", "R@5"):
+        ours = [math.log(max(cells[m][c], 1e-4)) for c in C]
+        pap = [math.log(PAPER[m][c]) for c in C]
+        mo, mp = sum(ours) / 7, sum(pap) / 7
+        tot += sum(abs((o - mo) - (q - mp)) for o, q in zip(ours, pap)) / 7
+    return tot / 2
+
+
+def diagnostics(r1: dict, r5: dict) -> dict:
+    """The interactions Table 1 is most discriminating on."""
+    return {"T+PC/PC": r1["text+pc"] / r1["pc"],
+            "I+PC/PC": r1["image+pc"] / r1["pc"],
+            "Full/PC": r1["full"] / r1["pc"],
+            "T+I/max(T,I)": r1["text+image"] / max(r1["text"], r1["image"]),
+            "R@5/R@1": (sum(r5.values()) / 7) / (sum(r1.values()) / 7)}
 
 
 def main() -> int:
@@ -45,22 +68,33 @@ def main() -> int:
             t = json.load(open(p))
             for proto, res in t["protocols"].items():
                 cells = {m: {c: res["conditions"][c][m] * 100 for c in C} for m in ("R@1", "R@5")}
-                arms.append((LABEL[name], proto, res["n_gallery"], cells, distance(cells)))
+                arms.append((LABEL[name], proto, res["n_gallery"], cells,
+                             d_level(cells), d_shape(cells)))
     out = ["# Stage 1 arms vs Table 1 (MetaFind w/o ESSGNN) -- fourteen cells",
            "",
-           "Official evaluator (float64 cosine, ties against the model). C: 4,569 dev_val queries vs the 4,569 dev_val gallery. D: same queries vs the 36,554 train gallery. Paper: 20% test queries on Objaverse-LVIS, gallery size unstated. Distance = mean over the 14 cells of |ln(ours/paper)|; a ranking device, not a protocol claim.",
+           "Official evaluator (float64 cosine, ties against the model). C: 4,569 dev_val queries vs the 4,569 dev_val gallery. D: same queries vs the 36,554 train gallery. Paper: 20% test queries on Objaverse-LVIS, gallery size unstated.",
+           "",
+           "Two scores per arm, never merged: **level** = mean |ln(ours/paper)| over the 14 cells; **shape** = the same after removing each table's overall level (R@1 and R@5 centred separately), i.e. only the relative pattern of the seven conditions. Plus the interaction ratios Table 1 is most discriminating on. Ranking devices, not protocol claims.",
            ""]
+    pd = diagnostics(PAPER["R@1"], PAPER["R@5"])
     for proto in ("D_dev_val_vs_train", "C_dev_selection"):
         rows = [a for a in arms if a[1] == proto]
         if not rows:
             continue
         out += [f"## {proto}", "",
-                "| arm | dist | " + " | ".join(C) + " |", "|---|---|" + "---|" * len(C),
-                "| **paper R@1** | 0 | " + " | ".join(f"**{PAPER['R@1'][c]:.1f}**" for c in C) + " |",
-                "| **paper R@5** | 0 | " + " | ".join(f"**{PAPER['R@5'][c]:.1f}**" for c in C) + " |"]
-        for label, _, n, cells, d in sorted(rows, key=lambda a: a[4]):
-            out.append(f"| {label} (n={n:,}) R@1 | {d:.2f} | " + " | ".join(f"{cells['R@1'][c]:.1f}" for c in C) + " |")
-            out.append(f"| ↳ R@5 | | " + " | ".join(f"{cells['R@5'][c]:.1f}" for c in C) + " |")
+                "| arm | level | shape | " + " | ".join(C) + " |", "|---|---|---|" + "---|" * len(C),
+                "| **paper R@1** | 0 | 0 | " + " | ".join(f"**{PAPER['R@1'][c]:.1f}**" for c in C) + " |",
+                "| **paper R@5** | | | " + " | ".join(f"**{PAPER['R@5'][c]:.1f}**" for c in C) + " |"]
+        for label, _, n, cells, dl, ds in sorted(rows, key=lambda a: a[5]):
+            out.append(f"| {label} (n={n:,}) R@1 | {dl:.2f} | {ds:.2f} | " + " | ".join(f"{cells['R@1'][c]:.1f}" for c in C) + " |")
+            out.append(f"| ↳ R@5 | | | " + " | ".join(f"{cells['R@5'][c]:.1f}" for c in C) + " |")
+        keys = list(pd)
+        out += ["", "Interaction ratios (R@1):", "",
+                "| arm | " + " | ".join(keys) + " |", "|---|" + "---|" * len(keys),
+                "| **paper** | " + " | ".join(f"**{pd[k]:.2f}**" for k in keys) + " |"]
+        for label, _, n, cells, dl, ds in sorted(rows, key=lambda a: a[5]):
+            dg = diagnostics(cells["R@1"], cells["R@5"])
+            out.append(f"| {label} | " + " | ".join(f"{dg[k]:.2f}" for k in keys) + " |")
         out.append("")
     out += ["## ULIP row hypothesis (2026-09-03): does a category-only text query explain ULIP's 0.1?", "",
             "Released ULIP-2, no training, gallery = PC embedding, query = raw mean of the available embeddings, 36,554 gallery, 4,569 queries (R@1):", "",
@@ -70,7 +104,7 @@ def main() -> int:
             "| form-fill (attrs) | 4.7 | 58.4 | 100.0 | 39.7 | 98.7 | 98.6 | 96.6 |",
             "| description only | 24.1 | 58.4 | 100.0 | 52.8 | 98.4 | 98.6 | 96.5 |",
             "| full template | 24.5 | 58.4 | 100.0 | 52.3 | 98.6 | 98.6 | 96.6 |", "",
-            "Category-only moves the text cell from 24.5 to 3.8 (paper 0.1) and nothing else: T+PC and full stay 98.7 / 96.6 in every arm against 33.9 / 6.4, because a query pc identical to the gallery pc dominates any mean. The paper's shape -- adding text or image to pc HURTS -- needs the query's pc and image to sit far from the gallery's. INFERENCE; the paper says what neither row was fed."]
+            "Category-only moves the text cell from 24.5 to 3.8 (paper 0.1) and nothing else: T+PC and full stay 98.7 / 96.6 in every arm against 33.9 / 6.4. Per-modality L2 before the mean does not change that either (T+PC 99.3, full 98.0, every text arm): with q = (p + t)/|p + t| and the gallery's own p, the own score (1 + p.t) exceeds every other (p.p_j + t.p_j) unless t prefers asset j over the own asset by MORE than the pc margin 1 - p.p_j, so an uninformative text cannot flip the ranking, only lower every score together. The paper's shape needs the query's pc (or image) to sit far from the gallery's own, or a text that is systematically anti-informative. INFERENCE; the paper says what neither row was fed. No ln-ratio score for this row (paper has a 0.0 cell); read the table."]
     Path("output/look/ARMS_TABLE.md").write_text("\n".join(out) + "\n")
     print("\n".join(l for l in out if l.startswith("| ") or l.startswith("## ") or l.startswith("| **paper R@1")))
     return 0
