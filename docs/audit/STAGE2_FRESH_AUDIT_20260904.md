@@ -123,3 +123,14 @@ w/  ESSGNN 列 = Stage 2 checkpoint；query fusion = Stage 2 改過的；layout 
 4  評 Table 1 w/ ESSGNN（Objaverse，layout 關）+ Stage 2 自己的 ProcTHOR 檢索
 5  arm：正文字面版 ESSGNN；iterative-prefix；文字為主 query
 ```
+
+## F. 第一次真跑找到的兩個實作錯誤（2026-09-04 凌晨）
+
+| 序 | 錯誤 | 證據 | 修法 | commit |
+|---|---|---|---|---|
+| F1 | **`build_stage2_model` 建的 Fusion 沒帶 Stage 1 的 `prefusion_norm` / `image_tokens`** → P1（訓練時進 Fusion 前 L2）的權重被載進一個吃 raw 向量的 Fusion（pc 範數 139 對 text 37）；訓練與 w/ ESSGNN 評估器都走這條 | 先導 1：損失從第一步就 2.65 且 1,500 步不動（父模型對自己紀錄應接近 0.8）；query fusion 相對漂移中位 0.55、最大 2.1；w/ ESSGNN 協定 C 掉到 1.3/2.0/17.0/4.8/15.0/15.8/19.7（P1 是 34.7/56.9/86.1/87.6/99.0/92.7/99.7） | 鏡射 `stage1.build_model` 的 FusionConfig；測試比對兩塔設定 | `98fb90e` |
+| F2 | **`unique_positive_batches` 的尾巴退化**：一批內 asset 不重複的規則，把最常擺的資產（Cellphone_6 ×200、Pencil_6 ×131）留到最後，尾端 374 批只有 1–2 個樣本；B=1 的 InfoNCE 恆為 0，優化器照踩 | 先導 1 log 最後 300 步 "loss 0.0000"；模擬同一批次序列：1,529 個滿批 + 69 個 B=1 + 205 個 B=2 | 少於 `MIN_BATCH = 8` 的批丟掉並記進 checkpoint 紀錄 | `d3ff975` |
+
+**先導 1 全部標為 INVALID EXPERIMENT**（artifact 搬到 `checkpoints/INVALID_stage2_pilot1_rawfusion/` 留證）。先導 2（builder 修好、其餘同）已重跑，之後接 ProcTHOR 端 S1 / S2-off / S2-on 探針與 Table 1 w/ ESSGNN 列。
+
+順帶記錄：先導 1 的 λ₀ = 96.8（= 0.1 × Fusion 輸出範數中位 968；P1 的 fused 向量範數約 700–1,180），λ 在 1,900 步只動到 96.5——λ 幾乎不學，這一點在先導 2 要再看。
