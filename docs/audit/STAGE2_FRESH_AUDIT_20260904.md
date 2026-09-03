@@ -134,3 +134,22 @@ w/  ESSGNN 列 = Stage 2 checkpoint；query fusion = Stage 2 改過的；layout 
 **先導 1 全部標為 INVALID EXPERIMENT**（artifact 搬到 `checkpoints/INVALID_stage2_pilot1_rawfusion/` 留證）。先導 2（builder 修好、其餘同）已重跑，之後接 ProcTHOR 端 S1 / S2-off / S2-on 探針與 Table 1 w/ ESSGNN 列。
 
 順帶記錄：先導 1 的 λ₀ = 96.8（= 0.1 × Fusion 輸出範數中位 968；P1 的 fused 向量範數約 700–1,180），λ 在 1,900 步只動到 96.5——λ 幾乎不學，這一點在先導 2 要再看。
+
+### F3. 先導 2（builder 修好、其餘同先導 1）：Stage 2 的兩個結構性問題浮出來
+
+**數字**（ProcTHOR 端，300 間沒看過的房、19,305 個 leave-one-out 查詢、1,439 資產畫廊）：
+```
+S1（父，無 layout）        R@1 82.4   R@5 98.1
+S2-off（Stage 2 頭，無 layout） 24.2   65.2
+S2-on（Stage 2 頭 + λ·ESSGNN）  23.5   63.9
+λ 93.46 → 93.13；|Fusion| 1851，|λ·e_layout| 93（一個樣本）
+```
+Table 1 w/ ESSGNN（Stage 2 頭、layout 關）：C 10.1/15.2/49.2/22.2/56.4/50.5/58.9；D 1.6/4.0/23.4/6.8/31.6/25.5/34.6。父 P1 是 C 34.7/56.9/86.1/…、D 11.6/29.7/66.6/…。論文 w/ 比 w/o 只掉 2–12 分，我們掉 30–40 分。
+
+**Step-0 探針**（`tools/probes/stage2_step0.py`，同一構法、更新前）：loss 2.78、批內 top-1 準確率 0.953。所以「loss 2.65 且不動」不是 bug：τ = 0.5 的 cosine InfoNCE 在 B = 64 時 softmax 幾乎均勻（最大 logit 差 ≈ 2 × 0.1），loss 貼在 ln 64 附近是這個溫度的常態，Stage 1 也一樣。梯度弱但在。
+
+**問題 A：ESSGNN 分支沒有貢獻。** S2-on ≈ S2-off；λ 在 1,600 步只動 −0.3；λ·e_layout 只佔 fused 的 5%。原因不在 λ₀：**query 已經帶了目標資產完整的 T/I/P，答案本來就在 query 裡，layout 沒有可以補的資訊**。這給了整理稿第 42 項（Stage 2 query 構法）一個實驗證據：完整 T/I/P 的 leave-one-out 讓 Eq. 6 的殘差項無事可做。Figure 1 畫的 query 是「文字 + 場景圖」——文字為主的 query 才是 layout 能幫上忙的場合。→ **下一個 arm：Stage 2 訓練時 query 只給文字（或 Stage 1 那種隨機遮罩）**。
+
+**問題 B：fine-tuning 把 layout-free 的頭訓壞。** 50 步內 probe 批的 top-1 從 0.953 掉到 0.84（lr 5e-4 與 5e-5 都是），loss 卻在降：目標在拿「整體 logit 形狀」換「top-1 margin」。Stage 2 的優化器是**沒有 warmup、沒有 cosine 的平坦 AdamW**（Stage 1 有 1 輪 warmup + cosine）。論文說 Stage 2 是 fine-tuning，沒給配方 → 先鏡射 Stage 1 的排程（warmup + cosine）並降 lr；這是 IMPLEMENTATION CHOICE，目的是讓 w/ ESSGNN 的掉幅回到論文的量級，會如實標記。
+
+先導 2 的 artifact 保留（`checkpoints/stage2_full.pt`、`variant_ckpts.json["full"]`、`eval_stage2_pilot2_full_over_P1/`）。
