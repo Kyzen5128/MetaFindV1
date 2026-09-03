@@ -765,7 +765,8 @@ def _source_clause(gallery_source: str) -> str:
 
 
 def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
-                 device, batch_size, query_pack=None):
+                 device, batch_size, query_pack=None, observation=None,
+                 image_tokens: int = 1):
     """Query embeddings per condition, plus gallery embeddings, plus the map.
 
     The gallery is encoded ONCE and shared by all seven conditions: the gallery
@@ -800,7 +801,16 @@ def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
         # to the same condition that decides which tower runs. One expression,
         # not two statements a later edit could separate.
         pack = query_pack if conditions else None
-        loader = DataLoader(Stage1Dataset(uids, aggregation, query_pack=pack),
+        # The observation, like the pack, is a QUERY-side construction: the
+        # gallery pass (conditions empty) reads the promoted 12-view mean, per
+        # sec. 2.4 "modality-complete and frozen after pretraining".
+        obs = observation if conditions else None
+        extra = {}
+        if obs is not None:
+            extra["observation"] = obs
+        if image_tokens != 1:
+            extra["image_tokens"] = image_tokens
+        loader = DataLoader(Stage1Dataset(uids, aggregation, query_pack=pack, **extra),
                             batch_size=batch_size,
                             shuffle=False, collate_fn=collate, num_workers=4,
                             drop_last=False)
@@ -970,13 +980,24 @@ def apply_control(control: str, targets: np.ndarray, n_gallery: int,
     raise ValueError(f"unknown control {control!r}")
 
 
+def _construction_kwargs(observation, image_tokens: int) -> dict:
+    """Only what differs from the pre-2026-09-03 construction, as keywords."""
+    out = {}
+    if observation is not None:
+        out["observation"] = observation
+    if image_tokens != 1:
+        out["image_tokens"] = image_tokens
+    return out
+
+
 def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
                  aggregation: str, device: str, batch_size: int,
                  control: str, seed: int, block: int,
                  untrained: bool = False,
                  ckpt: dict | None = None,
                  query_pack=None,
-                 exclude_uids: set | None = None) -> tuple[dict, list]:
+                 exclude_uids: set | None = None,
+                 observation=None, image_tokens: int = 1) -> tuple[dict, list]:
     """One protocol, seven conditions. Returns (core result, per-query rows).
 
     The gallery's SOURCE is decided here, from the protocol's own fields, not by
@@ -1101,11 +1122,13 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
             name, gallery_uids, ckpt or {}, backbone, model)
         # `None`, not `gallery_uids`: the gallery encoder is not called at all.
         queries, _ = encode_pools(backbone, model, query_uids, None,
-                                  aggregation, device, batch_size, query_pack)
+                                  aggregation, device, batch_size, query_pack,
+                                  **_construction_kwargs(observation, image_tokens))
     else:
         queries, gallery = encode_pools(backbone, model, query_uids,
                                         gallery_uids, aggregation, device,
-                                        batch_size, query_pack)
+                                        batch_size, query_pack,
+                                        **_construction_kwargs(observation, image_tokens))
 
     eff_targets, control_used = apply_control(control, targets,
                                               len(gallery_uids), seed)
@@ -1268,6 +1291,15 @@ def main() -> int:
                          "second point sample) instead of the gallery's own "
                          "cached vectors. Omit for the pre-2026-08-31 "
                          "construction. The gallery is unchanged either way.")
+    ap.add_argument("--query-image-policy", default=None,
+                    choices=("same_mean", "single_view", "held_out_view",
+                             "disjoint_views"),
+                    help="which observation the QUERY image reads (the gallery "
+                         "keeps the 12-view mean). Default: whatever the "
+                         "checkpoint record says it trained under, so the "
+                         "evaluation construction matches the training one "
+                         "unless you say otherwise; same_mean for records "
+                         "written before 2026-09-03.")
     ap.add_argument("--exclude-degraded-renders", action="store_true",
                     help="drop the 253 admitted assets whose render sidecar "
                          "reports blank, dark or fewer-distinct-than-listed "
@@ -1335,6 +1367,19 @@ def main() -> int:
     # supplied is written as null rather than invented, and `untrained: true`
     # plus `init_seed` say why.
     ckpt = {} if untrained else load_checkpoint_record(args.ckpt_record)
+    # [AUDIT 2026-09-03 E1] the query's observation is part of the
+    # construction, and it follows the checkpoint unless overridden.
+    from metafind.data.observation import Observation, ObservationProtocol
+    image_policy = args.query_image_policy or ckpt.get("query_image_policy") or "same_mean"
+    observation = ObservationProtocol(
+        positive_policy="same_uid",
+        query=Observation(image=image_policy), gallery=Observation())
+    if observation.is_same_observation():
+        observation = None
+    image_tokens = int(training.get("image_tokens", 1))
+    print(f"query image observation: {image_policy}"
+          f"{'' if args.query_image_policy else ' (from the checkpoint record)'}"
+          f"; image_tokens={image_tokens}", flush=True)
     seals = {n: check_seal(n, protocols[n], args.unseal) for n in wanted}
 
     # ---- where these paths actually land (checked 2026-08-30, so the next
@@ -1422,6 +1467,8 @@ def main() -> int:
             "runtime_source_sha256": runlog.runtime_source_sha256(),
             "runtime_source_status": runlog.runtime_source_status(),
             "started_at": time.time(),
+            "query_image_policy": image_policy,
+            "image_tokens": image_tokens,
             "checkpoint": {k: ckpt.get(k) for k in
                            ("uri", "sha256", "epoch", "run_id", "seed",
                             "arm_config_hash", "base_hyperparameter_sha256",
@@ -1489,6 +1536,7 @@ def main() -> int:
 
         exclude_uids = (degraded_render_uids()
                         if args.exclude_degraded_renders else None)
+
         if exclude_uids:
             print(f"excluding {len(exclude_uids):,} assets with a degraded "
                   "render [MASTER 2026-09-03; the corpus is unchanged, this is "
@@ -1501,7 +1549,8 @@ def main() -> int:
                 name, protocols[name], splits, backbone, model,
                 encoding["image_aggregation"], args.device, args.batch_size,
                 args.control, args.seed, args.block, untrained, ckpt,
-                query_pack, exclude_uids)
+                query_pack, exclude_uids,
+                **_construction_kwargs(observation, image_tokens))
             # From the protocol's FIELDS, never its name. See protocol_caveat:
             # the name lookup that used to be here gave any protocol the
             # artifact adds the "never reported" caveat, printed beside a
