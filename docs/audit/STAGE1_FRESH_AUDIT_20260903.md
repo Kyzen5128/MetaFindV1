@@ -94,7 +94,7 @@ L_pre = − log  exp( sim(f_query(Q), f_gallery(A)) / τ )
 **從 Eq. 5 能推出什麼（E1 的代數）**：
 - 對固定的 `f_gallery`，Eq. 5 對 `f_query(Q)` 的最小值在 `sim(f_query(Q), f_gallery(A)) = 1`，即 `f_query(Q) ∝ f_gallery(A)`。
 - 若 Q 與 A 是**同一份紀錄**（`same_record`），存在一個平凡解 `f_query ≡ f_gallery`，梯度會往那裡走；訓練後 `full` 條件（Q = A 的三模態全開）自然 `sim → 1`，R@1 → 100。**這是公式推出來的，實測 0.9998、cos 0.9989 只是確認。**
-- 論文 `full` = 51.7。所以論文評估時 `Q ≠ A 的紀錄`——至少一個模態是另一份觀測。**公式 + Table 1 就足以排除 `same_record`。**
+- 論文 `full` = 51.7。所以在我們這套架構與資料下，`same_record` 的 fingerprint 與論文完全不像；分類為 **EXPERIMENTALLY DISFAVORED**（見 E1 的證據等級註記）。公式給的是動機，排除的依據是實測。
 
 **Eq. 5 與 τ = 0.5 的數值意義**：`1/τ = 2`，logits 落在 [−2, 2]。B = 64 時，全部負例正交（sim = 0）的損失下限 = `−log[e² / (e² + 63)] = 2.254`；隨機 = `ln 64 = 4.159`。先導的損失貼在 2.25 上（`pilot10.json`），**代表 q̂ 與所有負例幾乎正交、與正例幾乎重合**——正是平凡解。
 
@@ -124,7 +124,8 @@ L_layout = ½ (L_q2g + L_g2q)
   - **共用一個 Fusion（Figure 1 讀法）**：`f_q(A) ≡ f_g(A)`，同函數同輸入，R@1 = 100 減重複資產。
   - **兩份 Fusion（我們）**：Eq. 5 直接把 `f_q(A)` 拉向 `f_g(A)`；10 輪先導在 36,554 畫廊上已到 **0.9998**，cos(q_A, g_A) = 0.9989。
 - 論文的 full 是 **51.7**。
-- 所以：**不管 Fusion 是一份還是兩份，論文評估時 query 看到的觀測不可能是 gallery 自己那一筆。** 這不是設定，是 Table 1 自己逼出來的。
+- 所以：**不管 Fusion 是一份還是兩份，「query 讀 gallery 自己那一筆」在我們的架構與資料下都跑成 ~100，而論文是 51.7。**
+- 證據等級（GPT via Kyzen 2026-09-03 修正，採納）：Eq. 5 的最小值論證講的是無約束最佳解；有限容量的參數化模型、batch 內負例、隨機遮罩、held-out 資產，都不保證達到它。所以這是 **EXPERIMENTALLY DISFAVORED**（實測 0.9998、cos 0.9989，且 P1 的 T+PC / full 仍飽和），不是數學上不可能，也不是 PAPER FACT。從主線拿掉的理由是實測，不是定理。
 
 **E2. 同一顆釋出 ULIP-2、零訓練，論文 text→PC 0.1 / image→PC 0.1，我們 24.5 / 58.4。** 文獻 [30] 就是 ULIP-2。差 245–580 倍，在任何 MetaFind 元件介入之前。與 E1 一致：論文的 query 觀測比 gallery 紀錄弱很多。
 

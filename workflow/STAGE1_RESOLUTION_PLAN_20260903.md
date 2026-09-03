@@ -20,7 +20,7 @@ Kyzen：「這些評估你都應該重視……逐步不排除及修正。」
 |---|---|---|---|---|---|
 | P0-1 | 文字字串化（15） | IMPLEMENTATION CHOICE，高敏感 | pilot10b（v2_cm 長描述）→ **P1**（attrs_v1 純填表）→ **P5**（desc_v1 一句描述） | P1 ✅、P5 排隊 | text 58.0 → 11.6（論文 13.8） |
 | P0-2 | 11 視角 → e_img（14） | UNRESOLVED | 12 視角平均（pilot10b）→ **P1** query 單一視角 → **P3** 12 視角當 12 token → **P6** 每步隨機視角（ULIP-2 自己的做法） | P1 ✅、P3 跑中、P6 排隊 | image 84.6 → 29.7（論文 11.7） |
-| P0-3 | Q/G 同一份 vs 獨立觀測（17） | UNRESOLVED；但 E1 由 Eq. 5 + Table 1 full=51.7 **排除「三個都同一份」** | P1（只有影像獨立）→ **P5**（三個都獨立：第二名描述、重取樣點雲、單一視角） | P5 排隊 | P1 的 T+PC 95.6、full 98.1 仍逼近 100 → 文字與點雲也必須獨立 |
+| P0-3 | Q/G 同一份 vs 獨立觀測（17） | UNRESOLVED；「三個都同一份」為 **EXPERIMENTALLY DISFAVORED**（實測 full 0.9998、cos 0.9989；Eq. 5 只是動機，不是定理——GPT 修正，採納） | P1（只有影像獨立）→ **P5**（三個都獨立：第二名描述、重取樣點雲、單一視角） | P5 排隊 | P1 的 T+PC 95.6、full 98.1 仍逼近 100 → 文字與點雲也必須獨立 |
 | P0-4 | ULIP baseline 畫廊構法（24） | PAPER-CONSTRAINED INFERENCE | B1 純 PC 畫廊 vs B2 三模態平均畫廊；raw mean vs L2 mean；文字四種；影像三種 | ✅ 全量完 | 只有 B1 重現「加了 text/image 反而變差」的**單調形狀**；但 T+PC 98.7 對論文 33.9 —— query 點雲同一份時無法壓下來 |
 | P0-5 | 評估畫廊範圍（25） | UNRESOLVED | 評估器四協定：A test→test 9,138、B test→full 45,692、C dev→dev 4,569、D dev→train 36,554 | ✅ 機制齊；A/B 只在最終上鎖時 `--unseal` | 每個 arm 同時報 C、D |
 | P0-6 | 進 Fusion 前正規化（C8） | IMPLEMENTATION CHOICE | P1（開）→ **P7**（關，其餘同 P1，唯一對照） | P7 排隊 | 量到 pc 範數 139 對 text 37；打亂 gallery pc 全崩 |
@@ -39,6 +39,8 @@ Kyzen：「這些評估你都應該重視……逐步不排除及修正。」
 | P1-7 | Transformer 內部（12） | IMPLEMENTATION CHOICE × 6 | 在最好的觀測構法上掃：層數 1/2/4、讀出 mean/CLS、缺席 slot 排除 | 觀測構法定案後 |
 | P1-8 | Stage 1 訓練範圍（20–22） | UNRESOLVED（§3.4 "earlier layers adapt"） | CLIP 文字／影像塔最後 N 層解凍（全解凍 AdamW 狀態 ~30 GB，卡不下） | 觀測構法定案後；需先量記憶體 |
 | P1-9 | Stage 2 leave-one-out vs iterative-prefix（43） | UNRESOLVED | 兩個 arm | Stage 1 定案後 |
+| — | ProcTHOR 家具數：論文 "more than 3,000 unique assets" | **論文數字沒有上游支持**：ProcTHOR 論文摘要 / §3 / 附錄 B.8.1 皆為 **1,633 assets, 108 types**；生成器 repo `asset-database.json` 1,653 / 109；ProcTHOR-10K 的 12,000 間房實際用到 **1,467**（含門窗 1,528）；AI2-THOR 官網 iTHOR "over 2000 unique objects"、RoboTHOR "600+"。3,000 對不到任何一個。資料下載完整（10,000 / 1,000 / 1,000 與 ProcTHOR 論文 §4 一致），從資料榨不出 3,000 | 記錄為 PAPER STATEMENT WITHOUT UPSTREAM SUPPORT；用 1,467 | — |
+| — | ProcTHOR 切分：論文 80/20 vs 官方 10k/1k/1k | UNRESOLVED | Kyzen 決定：照官方或重切 | Stage 2 前 |
 | P1-10 | Stage 2 query 構法（42） | UNRESOLVED | 完整 T/I/P vs 文字為主 | Stage 1 定案後 |
 | P1-11 | ESSGNN 正文 vs 附錄（40） | PAPER-INTERNAL CONTRADICTION | Method-literal / Proof-consistent 兩個 arm | Stage 1 定案後 |
 | P1-12 | ESSGNN pooling / λ₀（41） | UNRESOLVED | sum/mean/attention × λ₀ | Stage 1 定案後 |
