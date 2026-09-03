@@ -71,7 +71,22 @@ ARMS = {
     "figure2_json": "__json__",     # the record itself, serialised as Figure 2
     "figure2_prose": None,          # our template, but Figure 2's number format
     "desc_only": "{description}",
+    # --- the form-fill ladder --------------------------------------------
+    # [KYZEN 2026-09-03] "文字都先採用固定填表的方式". Every rung is the SAME
+    # fixed form -- description, category, materials, whole-centimetre
+    # dimensions, placement -- and the only thing that moves is how much of the
+    # description the form admits. `fill0` is the pure form-fill (no free
+    # prose at all); the rest cap it on a WORD boundary at N characters.
+    # Figure 2's own record carries a description, so a rung that keeps one is
+    # closer to the figure than `fill0` is; the ladder exists to find which cap
+    # lands on Table 1's 13.8 rather than to argue for one.
+    "fill0": "{category} made of {materials}, roughly {width} by {length} by "
+             "{height} centimetres, {placement}.",
+    "fill30": None, "fill50": None, "fill70": None,
+    "fill100": None, "fill140": None,
 }
+FILL = {"fill0": 0, "fill30": 30, "fill50": 50, "fill70": 70, "fill100": 100,
+        "fill140": 140}
 # Dimensions rounded to the nearest 10 cm: a length ablation, not the paper.
 COARSE = {"attrs_coarse"}
 # Figure 2 prints whole-number dimensions ("width": 30, "height": 40) and a
@@ -83,6 +98,61 @@ FIGURE2 = {"figure2_json", "figure2_prose"}
 FIGURE2_KEYS = ("category", "synset", "width", "length", "height", "volume",
                 "mass", "description", "materials",
                 "onCeiling", "onWall", "onFloor", "onObject")
+
+
+# --- the image axis ---------------------------------------------------------
+# [KYZEN 2026-09-03] "補影像嗎?" -- yes. image-only is the worst cell (84.6
+# against Table 1's 11.7) and no text arm moves it, because the query image IS
+# the gallery's own vector: sec. 2.3 renders each asset from several views and
+# `n07` caches their mean, and `split_embeds` hands that one mean to both towers.
+#
+# The 12 per-view vectors are already in every `.npz` (`views`, 12x1280), so
+# every policy below is a re-read of cached data. No re-render, no re-encode.
+#
+# `same_mean` is the shipping construction. `single_view` and `four_views` change
+# the QUERY only and leave the gallery exactly as the promoted index has it,
+# which is what sec. 2.4 requires -- "The gallery encoder is modality-complete
+# and frozen after pretraining." `disjoint_views` also rebuilds the GALLERY from
+# the complementary half; it is the only policy that touches the gallery, and it
+# is declared in the output for that reason.
+IMAGE_POLICIES = ("same_mean", "single_view", "four_views", "disjoint_views")
+GALLERY_CHANGING = {"disjoint_views"}
+
+
+def _views(uid: str) -> np.ndarray:
+    v = np.load(paths.EMBEDDINGS / f"{uid}.npz")["views"].astype(np.float32)
+    if v.shape[0] != 12:
+        raise SystemExit(f"{uid} caches {v.shape[0]} views, not 12")
+    return v
+
+
+def _pick(uid: str, k: int) -> list[int]:
+    """Which view indices this asset offers the query. Deterministic per uid --
+    a seeded global RNG would make the arm depend on evaluation order."""
+    import hashlib
+    h = int(hashlib.sha256(uid.encode()).hexdigest()[:8], 16)
+    return sorted((h + i * 12 // k) % 12 for i in range(k)) if k > 1 else [h % 12]
+
+
+def image_pair(uids: list[str], policy: str):
+    """(query image, gallery image) for every uid, as float32 tensors."""
+    if policy not in IMAGE_POLICIES:
+        raise SystemExit(f"unknown image policy {policy!r}")
+    q, g = [], []
+    for u in uids:
+        v = _views(u)
+        if policy == "same_mean":
+            m = v.mean(0)
+            q.append(m); g.append(m)
+        elif policy == "single_view":
+            q.append(v[_pick(u, 1)[0]]); g.append(v.mean(0))
+        elif policy == "four_views":
+            q.append(v[_pick(u, 4)].mean(0)); g.append(v.mean(0))
+        else:                                    # disjoint_views
+            idx = set(_pick(u, 6))
+            other = [i for i in range(12) if i not in idx]
+            q.append(v[sorted(idx)].mean(0)); g.append(v[other].mean(0))
+    return (torch.from_numpy(np.stack(q)), torch.from_numpy(np.stack(g)))
 
 
 def _sentence_cap(text: str, limit: int) -> str:
@@ -100,6 +170,18 @@ def text_for(ann: dict, arm: str) -> str:
         ann = copy.deepcopy(ann)
         for k in ("width", "length", "height"):
             ann[k] = max(10.0, round(float(ann[k]) / 10.0) * 10.0)
+    if arm in FILL:
+        ann = copy.deepcopy(ann)
+        for k in ("width", "length", "height"):
+            ann[k] = float(round(float(ann[k])))
+        d = ann["description"].strip()
+        n = FILL[arm]
+        if n == 0:
+            return serialize_annotation(ann, template=ARMS["fill0"])
+        if len(d) > n:                      # cut on a word, never mid-word
+            d = d[:n].rsplit(" ", 1)[0].rstrip(" ,;:")
+        ann["description"] = d
+        return serialize_annotation(ann, template=None)
     if arm in FIGURE2 or arm == "desc_only":
         ann = copy.deepcopy(ann)
         for k in ("width", "length", "height"):
@@ -123,6 +205,9 @@ def main() -> int:
     ap.add_argument("--gallery-split", default="train")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--batch-size", type=int, default=64)
+    ap.add_argument("--image-policy", default="same_mean",
+                    help="which observation the QUERY image is; "
+                         "same_mean is the shipping construction")
     ap.add_argument("--arm", action="append",
                     help="repeatable; default every arm")
     ap.add_argument("--out", default="output/look/exp_text_length.json")
@@ -165,6 +250,25 @@ def main() -> int:
                 print(f"  batch {i}", flush=True)
     IMG, PC = torch.cat(IMG), torch.cat(PC)
 
+    # `same_mean` keeps the dataloader's own vectors, so the canonical arm stays
+    # bit-for-bit the construction `run_retrieval.py` scores and the parity check
+    # keeps meaning something. Any other policy rebuilds from the cached views.
+    if args.image_policy == "same_mean":
+        QIMG = GIMG = IMG
+    else:
+        QIMG, GIMG = image_pair(g_uids, args.image_policy)
+        cached_mean, _ = image_pair(g_uids[:256], "same_mean")
+        drift = (cached_mean - IMG[:256]).abs().max().item()
+        if drift > 2e-2:
+            raise SystemExit(
+                f"mean(views) and the cached `image` differ by {drift:.4f}; the "
+                "view-derived policies would not be measuring the same object "
+                "as the shipping aggregation")
+        print(f"  image policy {args.image_policy}: query rebuilt from cached "
+              f"views (mean(views) vs cached image, max |diff| {drift:.5f})"
+              + ("; GALLERY ALSO REBUILT" if args.image_policy
+                 in GALLERY_CHANGING else "; gallery unchanged"), flush=True)
+
     anns = [json.loads((paths.ANNOTATIONS / f"{u}.json").read_text())
             for u in g_uids]
     print("\none asset, every arm:")
@@ -191,7 +295,7 @@ def main() -> int:
             for i in range(0, len(g_uids), 512):
                 s = slice(i, i + 512)
                 e = {"text": TXT[s].to(args.device),
-                     "image": IMG[s].to(args.device),
+                     "image": GIMG[s].to(args.device),
                      "pc": PC[s].to(args.device)}
                 G.append(model.gallery(e).float().cpu())
             G = torch.cat(G)
@@ -201,7 +305,7 @@ def main() -> int:
                 for i in range(0, len(q_uids), 512):
                     r = q_rows[i:i + 512]
                     e = {"text": TXT[r].to(args.device),
-                         "image": IMG[r].to(args.device),
+                         "image": QIMG[r].to(args.device),
                          "pc": PC[r].to(args.device)}
                     m = condition_mask(cond, len(r)).to(args.device)
                     Q.append(model.query(e, present=m).float().cpu())
@@ -221,6 +325,8 @@ def main() -> int:
         "paper_w_o_essgnn_R@1_percent": PAPER,
         "templates": ARMS, "coarse_dimension_arms": sorted(COARSE),
         "both_sides_re_encoded": True,
+        "image_policy": args.image_policy,
+        "gallery_image_rebuilt": args.image_policy in GALLERY_CHANGING,
         "scoring": "metafind.eval.retrieval (the Table 1 code path)",
         "caveat": "one checkpoint trained on the `full` template, re-scored "
                   "under other serializations. Not a retrain.",
