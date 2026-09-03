@@ -70,6 +70,50 @@ Kyzen 的指令：「把它當作一個新專案去處理，什麼都不知道�
 | D10 | §3.1 "80% … for training and … 20% for testing"——沒有 validation | —— | 80% 內再切 12.5% 當 dev_val 選 checkpoint；20% 封存（D-3） | ⚪ 必要的補充；已登記偏離 |
 | D11 | 論文沒寫 checkpoint 怎麼選 | —— | dev_val 七條件平均 R@1 取最佳 | ⚪ |
 
+## D′. 公式（逐字）與程式對應 —— 推理從這裡起
+
+[KYZEN 2026-09-03]「補充公式很重要，可以看公式去推理。」以下每條都是 HTML 逐字，後面接程式碼對應與從公式本身能推出的結論。
+
+**Eq. 1（§2.1，檢索）**
+```
+A* = argmax_{A ∈ 𝒜} sim( f_query(Q), f_gallery(A) )
+```
+- `sim` 沒定義（§2.1 "denotes the similarity function"）。程式：`normalize_for_scoring` 後點積 = cosine。
+- 公式只說 `f_query` 與 `f_gallery` 是兩個函數，**沒說它們參數相不相交**（見 C2）。
+
+**Eq. 5（§2.6，Stage 1 損失）**
+```
+L_pre = − log  exp( sim(f_query(Q), f_gallery(A)) / τ )
+               ─────────────────────────────────────────
+               Σ_{A' ∈ B}  exp( sim(f_query(Q), f_gallery(A')) / τ )
+```
+"where τ is a temperature hyperparameter and B denotes the gallery batch."；§3.1 "The temperature is 0.5 for all experiments."
+
+程式（`losses.py`）：`q̂ = normalize(f_q)`, `ĝ = normalize(f_g)`, `logits = (1/τ)·q̂ĝᵀ`, `loss = CE(logits, arange(B))`。第 i 列的 CE = `−log[exp(q̂ᵢ·ĝᵢ/τ) / Σⱼ exp(q̂ᵢ·ĝⱼ/τ)]`，與 Eq. 5 逐項相同（分母含正例本身，CE 天然如此）。**單向**：沒有 `logitsᵀ` 那一項。✅
+
+**從 Eq. 5 能推出什麼（E1 的代數）**：
+- 對固定的 `f_gallery`，Eq. 5 對 `f_query(Q)` 的最小值在 `sim(f_query(Q), f_gallery(A)) = 1`，即 `f_query(Q) ∝ f_gallery(A)`。
+- 若 Q 與 A 是**同一份紀錄**（`same_record`），存在一個平凡解 `f_query ≡ f_gallery`，梯度會往那裡走；訓練後 `full` 條件（Q = A 的三模態全開）自然 `sim → 1`，R@1 → 100。**這是公式推出來的，實測 0.9998、cos 0.9989 只是確認。**
+- 論文 `full` = 51.7。所以論文評估時 `Q ≠ A 的紀錄`——至少一個模態是另一份觀測。**公式 + Table 1 就足以排除 `same_record`。**
+
+**Eq. 5 與 τ = 0.5 的數值意義**：`1/τ = 2`，logits 落在 [−2, 2]。B = 64 時，全部負例正交（sim = 0）的損失下限 = `−log[e² / (e² + 63)] = 2.254`；隨機 = `ln 64 = 4.159`。先導的損失貼在 2.25 上（`pilot10.json`），**代表 q̂ 與所有負例幾乎正交、與正例幾乎重合**——正是平凡解。
+
+**Eq. 6（§2.6，Stage 2 查詢）**
+```
+e_query = Fusion(e_text, e_img, e_pc) + λ · e_layout
+```
+"λ is a learnable scalar"。程式：`dual_tower.py` `fused + self.lam * layout`；`layout is None` 時回傳 `fused`（Table 1 的 layout-free 評估）。✅；λ₀ 沒給。
+
+**Eq. 7 / 8（§2.6，Stage 2 損失）**
+```
+L_q2g = − log exp(sim(e_query, e_gallery)/τ) / Σ_{e'_gallery ∈ B} exp(sim(e_query, e'_gallery)/τ)
+L_g2q = − log exp(sim(e_gallery, e_query)/τ) / Σ_{e'_query ∈ B} exp(sim(e_gallery, e'_query)/τ)
+L_layout = ½ (L_q2g + L_g2q)
+```
+程式：`bidirectional=True` → `½(CE(logits) + CE(logitsᵀ))`。`logitsᵀ` 的第 i 列分母是 `Σⱼ exp(q̂ⱼ·ĝᵢ/τ)`，恰為 `Σ_{e'_query∈B}`，前提是 `sim` 對稱（cosine 是）且 query batch 與 gallery batch 是同一組配對。✅
+
+**沒有公式的東西**（論文用文字帶過）：Fusion 的內部（§2.2 只列名字）；masked embedding 是什麼向量（§2.6 "we apply masked embeddings"）；影像多視角怎麼變一支（沒有任何句子）；`Pooling`（§2.5 未定義）。這四個在公式層級就是空白，只能用實驗填。
+
 ## E. 邏輯檢查（不靠任何設定，只靠 Table 1 的數字）
 
 **E1. 「query 讀的是 gallery 自己那一筆」與 Table 1 的 full = 51.7 不能同時成立。**
