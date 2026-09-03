@@ -115,8 +115,15 @@ FIGURE2_KEYS = ("category", "synset", "width", "length", "height", "volume",
 # and frozen after pretraining." `disjoint_views` also rebuilds the GALLERY from
 # the complementary half; it is the only policy that touches the gallery, and it
 # is declared in the output for that reason.
-IMAGE_POLICIES = ("same_mean", "single_view", "four_views", "disjoint_views")
-GALLERY_CHANGING = {"disjoint_views"}
+IMAGE_POLICIES = ("same_mean", "single_view", "four_views", "disjoint_views",
+                  "eleven_views")
+# `eleven_views` rebuilds BOTH sides from eleven of the twelve cached views, the
+# dropped index chosen per uid. It is the cheapest reading of sec. 2.3's "11
+# orthogonal viewpoints" against our 12 (a DEVIATION, sec. 6.1 of the
+# notebook): if dropping any one view leaves the fingerprint where it was, the
+# camera count is not the axis that separates us from Table 1; if it moves it,
+# the view protocol is promoted to a blocker before anyone re-renders 46K.
+GALLERY_CHANGING = {"disjoint_views", "eleven_views"}
 
 
 def _views(uid: str) -> np.ndarray:
@@ -148,6 +155,10 @@ def image_pair(uids: list[str], policy: str):
             q.append(v[_pick(u, 1)[0]]); g.append(v.mean(0))
         elif policy == "four_views":
             q.append(v[_pick(u, 4)].mean(0)); g.append(v.mean(0))
+        elif policy == "eleven_views":
+            keep = [i for i in range(12) if i != _pick(u, 1)[0]]
+            m = v[keep].mean(0)
+            q.append(m); g.append(m)
         else:                                    # disjoint_views
             idx = set(_pick(u, 6))
             other = [i for i in range(12) if i not in idx]
@@ -208,6 +219,28 @@ def main() -> int:
     ap.add_argument("--image-policy", default="same_mean",
                     help="which observation the QUERY image is; "
                          "same_mean is the shipping construction")
+    ap.add_argument("--prefusion-norm", action="store_true",
+                    help="L2-normalise each modality vector before it enters "
+                         "Fusion, on BOTH towers. `fusion.py` does not: raw "
+                         "vectors go straight into the Transformer, and the "
+                         "three towers are trained differently, so their scales "
+                         "drift. DIAGNOSTIC ONLY -- this checkpoint was trained "
+                         "without it, so a drop here measures scale sensitivity, "
+                         "not what a model trained with it would score.")
+    ap.add_argument("--derange", default="none",
+                    choices=("none", "text", "image", "pc"),
+                    help="permute ONE modality's asset identity on the GALLERY "
+                         "side only, keeping the query intact. How far R@1 "
+                         "falls is how much of the gallery vector's identity "
+                         "that modality carries. A diagnostic of the learned "
+                         "Fusion_G, not a protocol.")
+    ap.add_argument("--similarity", default="cosine", choices=("cosine", "dot"),
+                    help="cosine is the production scorer (normalize_for_scoring "
+                         "then GEMM). dot skips the normalisation: sec. 2.1 "
+                         "writes only 'sim(.,.)', and DPR, which the paper cites "
+                         "for the dual-tower paradigm, uses the unnormalised "
+                         "inner product. A SENSITIVITY on one checkpoint trained "
+                         "under cosine; not a claim about the paper.")
     ap.add_argument("--arm", action="append",
                     help="repeatable; default every arm")
     ap.add_argument("--out", default="output/look/exp_text_length.json")
@@ -269,6 +302,16 @@ def main() -> int:
               + ("; GALLERY ALSO REBUILT" if args.image_policy
                  in GALLERY_CHANGING else "; gallery unchanged"), flush=True)
 
+    # What actually enters Fusion. The three towers are trained differently --
+    # PointBERT moves, the two CLIP towers do not -- so their scales drift
+    # apart, and `fusion.py` applies no per-modality normalisation before the
+    # Transformer. Printed here because a modality that is numerically larger
+    # dominates attention regardless of what it means.
+    print("\nmodality norms entering Fusion (this checkpoint, gallery side):")
+    for nm, arr in (("image", IMG), ("pc", PC)):
+        n = arr.float().norm(dim=1)
+        print(f"  {nm:<6} mean {n.mean():7.2f}  std {n.std():6.2f}")
+
     anns = [json.loads((paths.ANNOTATIONS / f"{u}.json").read_text())
             for u in g_uids]
     print("\none asset, every arm:")
@@ -290,13 +333,40 @@ def main() -> int:
                 vecs.append(bb.encode_text(texts[i:i + 256]).float().cpu())
         TXT = torch.cat(vecs)
 
+        n = TXT.float().norm(dim=1)
+        print(f"  text   mean {n.mean():7.2f}  std {n.std():6.2f}"
+              f"   (arm {arm})", flush=True)
+
+        # The derangement acts on the GALLERY only, after the query rows are
+        # taken, so a query still meets its own text/image/pc -- only the
+        # gallery entry it should match now carries someone else's.
+        gTXT, gIMG, gPC = TXT, IMG, PC
+        if args.derange != "none":
+            rng = np.random.default_rng(20260903)
+            perm = rng.permutation(len(g_uids))
+            fixed = int((perm == np.arange(len(g_uids))).sum())
+            print(f"  derange {args.derange}: {fixed} of {len(g_uids):,} rows "
+                  "happen to map to themselves", flush=True)
+            pt = torch.from_numpy(perm)
+            if args.derange == "text":
+                gTXT = TXT[pt]
+            elif args.derange == "image":
+                gIMG = IMG[pt]
+            else:
+                gPC = PC[pt]
+
+        def _pf(t):
+            return (torch.nn.functional.normalize(t, dim=-1)
+                    if args.prefusion_norm else t)
+
         G, Q = [], []
         with modules_in_eval(model, getattr(bb, "model", None)), torch.no_grad():
             for i in range(0, len(g_uids), 512):
                 s = slice(i, i + 512)
-                e = {"text": TXT[s].to(args.device),
-                     "image": GIMG[s].to(args.device),
-                     "pc": PC[s].to(args.device)}
+                e = {"text": _pf(gTXT[s].to(args.device)),
+                     "image": _pf((GIMG if args.derange != "image" else gIMG)[s]
+                                  .to(args.device)),
+                     "pc": _pf(gPC[s].to(args.device))}
                 G.append(model.gallery(e).float().cpu())
             G = torch.cat(G)
             cells = {}
@@ -304,13 +374,17 @@ def main() -> int:
                 Q = []
                 for i in range(0, len(q_uids), 512):
                     r = q_rows[i:i + 512]
-                    e = {"text": TXT[r].to(args.device),
-                         "image": QIMG[r].to(args.device),
-                         "pc": PC[r].to(args.device)}
+                    e = {"text": _pf(TXT[r].to(args.device)),
+                         "image": _pf(QIMG[r].to(args.device)),
+                         "pc": _pf(PC[r].to(args.device))}
                     m = condition_mask(cond, len(r)).to(args.device)
                     Q.append(model.query(e, present=m).float().cpu())
-                qv = normalize_for_scoring(torch.cat(Q).numpy())
-                gv = normalize_for_scoring(G.numpy())
+                if args.similarity == "cosine":
+                    qv = normalize_for_scoring(torch.cat(Q).numpy())
+                    gv = normalize_for_scoring(G.numpy())
+                else:   # dot: float64 GEMM, same rank/tie rule, no normalisation
+                    qv = torch.cat(Q).numpy().astype(np.float64)
+                    gv = G.numpy().astype(np.float64)
                 cells[cond] = recall_at_k(qv @ gv.T, targets)
         out[arm] = cells
         print(arm.ljust(15) + "".join(("%.1f" % (cells[c]["R@1"] * 100)).rjust(13)
@@ -326,6 +400,8 @@ def main() -> int:
         "templates": ARMS, "coarse_dimension_arms": sorted(COARSE),
         "both_sides_re_encoded": True,
         "image_policy": args.image_policy,
+        "similarity": args.similarity, "derange": args.derange,
+        "prefusion_norm": args.prefusion_norm,
         "gallery_image_rebuilt": args.image_policy in GALLERY_CHANGING,
         "scoring": "metafind.eval.retrieval (the Table 1 code path)",
         "caveat": "one checkpoint trained on the `full` template, re-scored "
