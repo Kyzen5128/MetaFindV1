@@ -981,7 +981,8 @@ def apply_control(control: str, targets: np.ndarray, n_gallery: int,
     raise ValueError(f"unknown control {control!r}")
 
 
-def load_stage2_over_stage1(record_path: str, stage1_ckpt: dict) -> dict:
+def load_stage2_over_stage1(record_path: str, stage1_ckpt: dict,
+                            variant: str = "full") -> dict:
     """Read a Stage 2 record, refuse a wrong parent, build the tower it fits.
 
     The tower is built WITH the ESSGNN branch (`use_layout=True`) so the Stage 2
@@ -995,6 +996,13 @@ def load_stage2_over_stage1(record_path: str, stage1_ckpt: dict) -> dict:
                                        load_stage2_protocols)
 
     rec = json.loads(Path(record_path).read_text())
+    # stage2.py writes variant_ckpts.json, one record per Table 3 variant id;
+    # a single-record file is accepted too.
+    if "uri" not in rec:
+        if variant not in rec:
+            raise SystemExit(f"{record_path} holds variants {sorted(rec)}; "
+                             f"{variant!r} is not among them")
+        rec = rec[variant]
     parent = rec.get("stage1_checkpoint_sha256")
     if parent != stage1_ckpt.get("sha256"):
         raise SystemExit(
@@ -1374,6 +1382,8 @@ def main() -> int:
                          "sha256. Produces the Table 1 'MetaFind w/ ESSGNN' row: "
                          "Stage 2 query fusion, layout=None, gallery = the Stage 1 "
                          "parent's (frozen in Stage 2).")
+    ap.add_argument("--stage2-variant", default="full",
+                    help="which record to take from a variant_ckpts.json")
     ap.add_argument("--exclude-degraded-renders", action="store_true",
                     help="drop the 253 admitted assets whose render sidecar "
                          "reports blank, dark or fewer-distinct-than-listed "
@@ -1540,7 +1550,8 @@ def main() -> int:
             if untrained:
                 raise SystemExit("--stage2-ckpt-record needs a real Stage 1 parent, "
                                  "not --ckpt-record none")
-            stage2 = load_stage2_over_stage1(args.stage2_ckpt_record, ckpt)
+            stage2 = load_stage2_over_stage1(args.stage2_ckpt_record, ckpt,
+                                             variant=args.stage2_variant)
             model, loss_fn = stage2["model"], stage2["loss_fn"]
             model.to(args.device)
             load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]),
