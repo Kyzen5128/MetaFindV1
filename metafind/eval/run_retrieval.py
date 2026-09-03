@@ -992,6 +992,7 @@ def load_stage2_over_stage1(record_path: str, stage1_ckpt: dict,
     only so `load_stage1_checkpoint` can restore its temperature buffer.
     """
     from metafind.train.stage1 import build_model
+    from metafind.train.stage1 import load_protocols as load_stage1_protocols
     from metafind.train.stage2 import (Stage2Data, build_stage2_model,
                                        load_stage2_protocols)
 
