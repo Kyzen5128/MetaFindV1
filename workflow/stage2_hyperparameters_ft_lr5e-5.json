@@ -13,6 +13,7 @@
     "scene_dropout": 0.3,
     "warmup_frac": 0.1,
     "lr_start": 1e-06,
-    "lr_end": 1e-06
+    "lr_end": 1e-06,
+    "max_logit_scale": 100.0
   }
 }
