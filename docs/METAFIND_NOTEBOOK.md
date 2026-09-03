@@ -1,3 +1,493 @@
+# MetaFind 復現筆記（Master 說明書）
+
+**v5 — 2026-09-03 全面重整。** 這一版是**現行版本**；v4 及更早的全文原封保留在本檔末尾的「附錄 A」，其中的裁決（DL 編號、✅ 核可）仍然有效，只是句子被本版重新分類。與附錄衝突處，以本版為準；本版列出了它取代的每一句（§12）。
+
+撰寫：Master（Claude）。依 Kyzen 2026-09-03 的指令重整：「把 HTML 當 A0 最高權威」「重新定義三個 reproduction target」「論文明講／論文沒講／我們自己選的／有 bug 的探針，四件事分開」。
+
+---
+
+## 0. 這份文件怎麼讀
+
+### 0.1 權威順序
+
+```
+A0   docs/paper/metafind_source/metafind_arxiv_v1.html      ← 唯一最高權威，含 Figure 1 / Figure 2
+A1   同目錄的 .tex                                          ← 只用來定位原文；與 HTML 衝突時以 HTML 為準
+A2   上游論文與官方程式碼（ULIP-2 / EGNN / OpenShape / ProcTHOR）
+A3   本 repo 的程式碼與量測
+A4   舊設計說明、Claude/Codex 的結論、對話記憶
+```
+
+本版引用論文一律**逐字英文**，附章節。凡是「論文說…」而底下沒有逐字引文的，都不算 PAPER FACT。
+
+### 0.2 標籤（Kyzen 2026-09-03 定的四類，加三個量測類）
+
+| 標籤 | 意思 |
+|---|---|
+| `PAPER FACT` | HTML 正文或圖直接支持，附逐字引文 |
+| `AUTHOR EVIDENCE / MAINLINE` | 正文沒完全講清楚，但 Figure 或作者材料提供強證據，主線採用 |
+| `UNRESOLVED` | 論文、Figure、作者材料都不足以唯一確定 |
+| `IMPLEMENTATION CHOICE / MAINLINE` | 為了能實作，我們目前選的；不得寫成作者公布的設定 |
+| `DEVIATION` | 明知與論文不同、刻意或不得已 |
+| `OBSERVED IMPLEMENTATION` | 從 repo 程式碼確認（附檔案:行） |
+| `OBSERVED DATA` | 從資料或量測確認（附產物檔） |
+| `RETRACTED` | 曾經主張、已撤回；附撤回理由 |
+
+### 0.3 三層分類（本版的骨架）
+
+```
+第一層  論文 hard facts             不准因為數字不好看就改（§4）
+第二層  論文沒講的 protocol         用受控實驗＋整張表的 fingerprint 選（§5）
+第三層  偏離與 bug                  不能假裝是 MetaFind 的 protocol（§6）
+```
+
+---
+
+## 1. 三個復現目標（先把這個寫死）
+
+| 目標 | 要復現什麼 | 正確理解 |
+|---|---|---|
+| **ULIP** | Table 1 的 ULIP 七格 | **baseline evaluator**，不是 MetaFind Stage 1。文獻 [30] = **ULIP-2**（HTML 參考文獻逐字：「Le Xue … Ulip-2: Towards scalable multimodal pre-training for 3d understanding」），所以它用的就是我們載入的那顆釋出權重 |
+| **MetaFind w/o ESSGNN** | Table 1 `13.8 / 11.7 / 75.1 / 17.2 / 44.5 / 45.8 / 51.7` | **Stage 1 Objaverse 模型**，layout-free |
+| **MetaFind w/ ESSGNN** | Table 1 `11.3 / 10.5 / 63.2 / 15.9 / 41.2 / 42.0 / 48.2` | **Stage 2 訓完的模型，回 Objaverse 做 layout-free 評估**（Objaverse 沒有 layout，ESSGNN 項為 None）。它量的是 Stage 2 讓 query fusion 漂移多少，**不是** ESSGNN 的正面效果 |
+| **ESSGNN 的正面效果** | Table 2 場景品質 | ProcTHOR / I-Design 場景組合，layout 真的進 ESSGNN |
+
+`PAPER FACT`，§3.2 逐字：
+
+> "After integrating the ESSGNN, while the overall scene quality is improved, we observe a drop in accuracy due to the added encoded information. This reflects a temporary and explainable trade-off between object-level precision and scene-level coherence. Stage-1 pretraining on Objaverse-LVIS uses isolated assets (no layout) and no ESSGNN; Stage-2 fine-tuning introd[uces …]"
+
+寫死：
+
+```
+MetaFind w/o ESSGNN Table 1 = Stage-1 checkpoint + layout-free Objaverse retrieval
+MetaFind w/  ESSGNN Table 1 = Stage-2 checkpoint + layout = None（ESSGNN 不參與）
+ESSGNN 的正面效果          = Table 2，≠ Table 1 w/ ESSGNN
+```
+
+`OBSERVED IMPLEMENTATION`：`metafind/models/dual_tower.py` 的 query tower `forward` 在 `layout is None` 時直接 `return fused`，Eq. 6 的 λ 項整個省略——這條路存在。**但 `metafind/eval/run_retrieval.py` 目前沒有載入 Stage 2 checkpoint 的路徑**（全檔無 `stage2` / `layout`），所以「w/ ESSGNN 的 Table 1」現在**跑不了**，是待辦（§10 第 7 步）。
+
+---
+
+## 2. 論文原文（PAPER FACT 清單，逐字）
+
+以下每一條都是 2026-09-03 從 HTML 直接讀出、逐字貼上的。要引用論文，從這裡引；這裡沒有的，先回 HTML 找，找不到就是 UNRESOLVED。
+
+### 2.1 任務與雙塔（§2.1 / §2.2 / §2.4）
+
+- §2.1 Eq. 1：`A* = argmax_{A∈𝒜} sim(f_query(Q), f_gallery(A))`；"sim(·,·) denotes the similarity function"。**sim 沒有定義。**
+- §2.2："a dual-tower retrieval framework consisting of a query encoder and a gallery encoder, both leveraging the ULIP-2 embedding backbone. The gallery encoder precomputes embeddings for assets using three available modalities, which are then stored for efficient retrieval."
+- §2.2："each available modality is independently encoded using the ULIP-2 backbone, and these modality embeddings are subsequently integrated via a fusion layer, such as mean pooling, an MLP, or a Transformer-based module"
+- §2.4："MetaFind employs a dual-tower architecture with **separate encoders** for the query and gallery. Each tower leverages ULIP-2 to independently encode available modalities (text, images, and point clouds)."
+- §2.4："**The gallery encoder is modality-complete and frozen after pretraining**, while the query encoder remains flexible: It accepts any subset of modalities and can be augmented with a layout-aware vector."
+- **Figure 1** 印的是 `ULIP-2 (Shared)`，整張圖只畫一個骨幹方塊（親眼開圖核對，DL-091）。
+- §2.7："At inference time, all gallery asset embeddings are precomputed and cached for efficient retrieval."；Algorithm 1 第 3 行 `e_layout ← EGNN(G)`，第 6 行 `A*_i ← argmax_{A∈E_gallery} sim(e_query, e_gallery(A))`，第 7 行 `G ← G ∪ {A*_i}`。
+
+### 2.2 資料（§1 / §2.3 / Figure 2）
+
+- §1："we annotate 48K 3D assets from the Objaverse-LVIS subset [2], each rendered from **11 views** and processed with **GPT-4o** to generate structured text descriptions."
+- §2.3："the Objaverse-LVIS dataset, which comprises approximately 48,000 distinct 3D assets. Each asset is rendered from **11 orthogonal viewpoints** and annotated using GPT-4o. These annotations provide rich textual descriptions detailing attributes such as object category, size dimensions, materials, and placement constraints."
+- **Figure 2** 印出一筆標註紀錄，**13 個欄位**：`category, synset, width, length, height, volume, mass, description, materials, onCeiling, onWall, onFloor, onObject`。範例的 `width: 30, length: 30, height: 40`（整數）、`description` 是一句 135 字元的完整句子。**論文沒有說這筆 JSON 怎麼變成餵給 CLIP 的字串。**
+- §2.3 ProcTHOR："over 10,000 generated houses constructed from a curated collection of more than 3,000 unique assets"；邊兩種："(i) physical-relation edges that capture spatial dependencies (e.g., 'cup on table'); and (ii) semantic-relation edges that capture functional or contextual associations (e.g., 'microscope–lab bench'), obtained by prompting an LLM on object pairs."
+
+### 2.3 Stage 1（§2.6）
+
+> "In the first stage, **both query and gallery encoders are trained** on large-scale object-level data from Objaverse-LVIS, where each asset has full modality inputs (text, images, and point clouds). We introduce stochastic modality masking to simulate partial-modality queries: **each modality in the query has a 30% probability of being independently masked. Rather than zero-padding, we apply masked embeddings** to ensure flexibility and prevent model degradation. The goal is to align all available modality combinations into a shared embedding space. The gallery encoder is trained to be modality-complete, and both towers share the contrastive retrieval objective:" Eq. 5（單向，分母 `Σ_{A'∈B}`，"B denotes the gallery batch"）。
+
+### 2.4 Stage 2（§2.6）
+
+> Eq. 6 `e_query = Fusion(e_text, e_img, e_pc) + λ·e_layout`，"where λ is a learnable scalar controlling the contribution of layout information. This residual design allows layout reasoning to enhance retrieval without disrupting the original embedding space."
+> "the layout vector e_layout is omitted in **30% of batches**"
+> "**Only the query-side fusion layer and the ESSGNN module are updated** during this stage; the gallery encoder is frozen to reduce training costs and preserve asset embedding consistency."
+> Eq. 7 雙向、Eq. 8 `L = ½(L_q2g + L_g2q)`。
+
+Stage 2 全段 **沒有** "mask" 一字（DL-091 第 5 題）。
+
+### 2.5 實驗設定（§3.1）
+
+- "In both datasets, we allocate **80%** of the data for training and reserve the remaining **20%** for testing."
+- "we extend each baseline by adding a simple **mean pooling layer** to aggregate available modalities, and use these fused embeddings to retrieve from a pre-encoded gallery. For completeness, we also include our own dual-tower model with a mean fusion layer but without layout context as a direct ablation baseline. **The temperature is 0.5 for all experiments.**"
+- Metrics："top-k retrieval accuracy (R@1, R@5)"。**R@k 的候選集、query 集、正解定義都沒有寫。**
+
+### 2.6 §3.2 那句關鍵話
+
+> "Notably, since other models do not adopt a dual-tower design, their 'PC only' performance reflects retrieval using **identical embeddings for both query and gallery, leading to inflated accuracy**. In contrast, our dual-tower framework introduces more cross-modality retrieval, which results in lower accuracy under the 'PC only'."
+
+這句話講的是**別人**的模型；它證明 Table 1 是 exact-instance（自己找自己），也證明論文認為「雙塔本身」是把 PC-only 從 98 壓到 75 的機制——**不是**「查詢用另一份觀測」。
+
+### 2.7 Table 1（逐字，R@1 / R@5）
+
+```
+Method               Text        Image       PC          T+I        T+PC        I+PC        T+I+PC
+ULIP [30]            0.1/0.9     0.1/1.3     97.9/99.4   0/0.3      33.9/58     22.6/41.6   6.4/15.9
+OpenShape [10]       0.6/1.7     0.3/1.1     98.4/99.7   0/0.5      35.1/61.4   25.0/44.3   7.0/17.2
+SCA3D                6.9/10.4    –           98.1/99.3   –          39.7/65.2   –           –
+Uni3DL               4.5/9.2     –           98.5/99.8   –          37.4/63.9   –           –
+Uni3D                1.7/3.9     1.2/2.5     98.3/99.4   0.5/1.1    36.3/63.6   26.1/44.8   8.2/19.1
+OmniBind (Full)      5.3/11.7    2.3/3.5     99.0/99.7   0.5/1.2    37.5/60.8   27.5/46.4   11.9/23.4
+MetaFind w/o ESSGNN  13.8/23.1   11.7/19.2   75.1/78.0   17.2/21.8  44.5/71.3   45.8/73.1   51.7/76.5
+MetaFind w/  ESSGNN  11.3/21.5   10.5/15.9   63.2/66.5   15.9/20.3  41.2/68.8   42.0/70.4   48.2/74.9
+```
+
+w/ − w/o 的 R@1 差：Text −2.5 · Image −1.2 · PC −11.9 · T+I −1.3 · T+PC −3.3 · I+PC −3.8 · Full −3.5。
+
+### 2.8 Table 3（逐字；標題是 "Ablation study (Text Only)"，全表都是 text-only R@1）
+
+```
+MetaFind (Full, bidirectional) w/ iterative retrieval & ESSGNN   11.4
+w/o iterative retrieval                                          11.3
+w/o Layout Context                                               13.5
+w/ Layout Context (GAT)                                          11.0
+Fusion = Mean                                                     9.4
+Fusion = MLPs                                                     9.9
+Modality Dropout = 10%                                            7.3
+Modality Dropout = 50%                                           13.2
+Train fuser only                                                  8.7
+Padding missing modalities with 0                                10.5
+```
+
+§3.4 正文："MLP and the final selected **Transformer** outperform others"；"full encoder fine-tuning yields better performance by allowing earlier layers to adapt to modality-aware supervision"。Table 3 只能證明「只訓 fuser 不夠」，**不能**推出 CLIP 文字／影像塔要不要訓、PointBERT 的 LR、兩塔骨幹是否分開。
+
+---
+
+## 3. 現行架構對照表（逐行核對過程式碼）
+
+| 項目 | 論文 | 我們現在（`OBSERVED IMPLEMENTATION`） | 判定 |
+|---|---|---|---|
+| Dual tower | §2.4 明確 | 有（`dual_tower.py`） | 🟢 |
+| 骨幹一份／兩份 | 正文 "separate encoders"；Figure 1 `ULIP-2 (Shared)` | 一份骨幹、兩份 Fusion（`shared_backbone_separate_fusion`） | 🟢 `AUTHOR EVIDENCE / MAINLINE`（Figure 1）。Stage 2 要「凍 gallery、訓 query fusion」，兩座 Fusion 若是同一個參數物件無法同時成立，所以 Fusion 必須分開 |
+| Gallery = T+I+PC 齊全 | §2.4 明確 | 正式路徑是（`stage1.py:split_embeds` → `model.gallery`，pc 由 PointBERT 現算） | 🟢 |
+| Query 任意子集 | §2.4 明確 | 有（`condition_mask`，七條件） | 🟢 |
+| Fusion = Transformer | §3.4 明確 | Transformer | 🟢 |
+| Transformer 2 層 / 8 頭 / FFN 2048 / dropout 0 | 沒講 | 寫死（`fusion.py:176-182`） | 🟡 §5.1 |
+| 模態位置向量 `modality_pos` | 沒講 | 有（`fusion.py:183`，加在輸入上） | 🟡 §5.1 |
+| 讀出 = active slot 平均 | 沒講 | 有（`fusion.py:295`） | 🟡 §5.1 |
+| **進 Fusion 前每模態 L2 normalize** | 沒講 | **沒有**（`fusion.py:277` 直接 `self.head(x + self.modality_pos)`；全檔無 `normalize`） | 🟡 **§5.1 最高優先** |
+| Stage 1 p(mask)=0.3 各模態獨立 | §2.6 明確 | 有；全遮 2.75%（期望 2.7%，`output/look/pilot10.json`） | 🟢 |
+| 缺席 = masked embedding 非補零 | §2.6 明確 | learned mask token（std 0.02） | 🟡 token 是實作 |
+| Stage 1 loss q→g、τ=0.5 | Eq. 5；§3.1 | 單向、τ=0.5 固定（`losses.py:70`） | 🟢；τ **可學性**論文沒講 → 固定是 `IMPLEMENTATION CHOICE` |
+| sim = cosine | 只寫 `sim` | L2 normalize 後點積 | 🟡 `IMPLEMENTATION CHOICE` |
+| PointBERT 訓、CLIP 凍 | "both … encoders are trained"；Table 3 fuser-only 8.7 < 11.4 | `point_encoder_and_fuser`；CLIP 梯度實測恆 0（`pilot10.json`） | 🟡 `IMPLEMENTATION CHOICE / MAINLINE`，理由是 ULIP-2 lineage，**不是** paper fact |
+| 11 views | §2.3 明確 11 | **12**（OpenShape 佈局） | 🔴 `DEVIATION` §6.1 |
+| GPT-4o 標註 | §1、§2.3 明確 | **gemma-4-12B-it** | 🔴 `DEVIATION` §6.2 |
+| 文字字串化 | 沒講（Figure 2 只給 JSON） | `{description} {category} made of {materials}, roughly {W} by {L} by {H} centimetres, {placement}.`（`resolve_stage1.py TEXT_TEMPLATES["v2_cm"]`） | 🟡 **高敏感** §5.3 |
+| 視角聚合 | 沒講 | 12 視角 raw 向量平均（`view_aggregation.method = mean`） | 🟡 §5.4 |
+| Query／Gallery observation | 沒講 | `same_record`：`split_embeds` 無 pack 時 `return gallery, gallery`——**同一個 dict 物件** | 🟡 §5.2（現在是可切換的宣告，不再是靜默預設） |
+| Gallery 大小 | 沒講 | 四個協定並跑（4,569 / 9,138 / 36,554 / 45,692） | 🟢 正確做法 |
+| Stage 2 凍 gallery、訓 query fusion + ESSGNN + λ | §2.6 明確 | `freeze_for_stage2()`；smoke 實測 gallery 26 張量 0 個動 | 🟢 |
+| Stage 2 scene dropout 30% per batch | §2.6 明確 | per batch，實測 0.2972 | 🟢 |
+| Stage 2 雙向 loss | Eq. 7/8 | 雙向平均 | 🟢 |
+| Stage 2 不做模態遮罩 | §2.6 全段無 mask | `query_modality_masking: none` | 🟢 |
+| λ learnable | §2.6 明確 | `nn.Parameter`，直接當 λ 用（無 exp） | 🟢 |
+| λ 初值 | 沒講 | ratio 0.1 × 融合向量範數中位（開跑時量） | 🟡 §5.10 |
+| ESSGNN pooling / L / hidden | 沒講（`Pooling` 沒定義） | `normalised_sum` / 7 / 128（`essgnn_arch_protocol.json`） | 🟡 §5.10 |
+| ESSGNN 方法版 vs 附錄版 | 論文自相矛盾 | 附錄版主線（`appendix_shared_msg`，squared，φ_x 純量，h⁰=t） | 🟡 §5.11 |
+| 物理邊 | §2.3 兩種邊 | 拓樸 = support ∪ kNN-8 adjacency（`scene_graphs.py:227`）；語意句掛在這些 pair 上；**物理邊型別不是特徵** | 🟡 §5.12 |
+| Stage 2 樣本 = 整間房減目標 | 沒講（Algorithm 1 講的是推論） | leave-one-out（`stage2.py:241 build_context_graph`） | 🟠 §5.8 **重要未知** |
+| Stage 2 query = 目標自己的 T/I/P 全開 | 沒講 | `present=None`（`stage2.py:encode_query`） | 🟠 §5.9 |
+
+---
+
+## 4. 第一層：論文 hard facts（不准因為數字不好看就改）
+
+1. 雙塔；gallery modality-complete、訓後凍結；query 任意子集。
+2. Stage 1 兩塔都訓；query 各模態獨立 30% 遮罩；masked embedding 不補零；Eq. 5 單向；τ = 0.5。
+3. Stage 2 只動 query fusion + ESSGNN（+ λ）；gallery 凍；layout 30% 的 batch 省略；Eq. 6 殘差、λ 可學；Eq. 7/8 雙向平均。
+4. 80 / 20 切分，兩個資料集都是。
+5. 語料：Objaverse-LVIS ≈ 48K；11 視角；GPT-4o；標註含 Figure 2 那 13 個欄位。
+6. Table 1 是 exact-instance 檢索（§2.6 的 "identical embeddings … inflated" 只在自己找自己時成立）；R@1 / R@5。
+7. Fusion 最終選 Transformer；Table 3 說 fuser-only < full。
+8. ESSGNN：Eq. 2/3/4、Eq. 6、附錄證明；`Pooling` 未定義；物理邊與語意邊兩種。
+
+第 5 條我們有兩處 `DEVIATION`（§6.1、§6.2），必須一直掛著，不能寫成「MetaFind protocol」。
+
+---
+
+## 5. 第二層：論文沒講的 protocol（每一項：候選 → 主線 → 怎麼用實驗選）
+
+原則（Kyzen 2026-09-03）：**不要再一次選一個值；用整張表的 fingerprint 選** —— 7 × R@1 + 7 × R@5 = 14 維，Stage 2 再加 `Δ = w/ − w/o` 的七格形狀。
+
+### 5.1 Transformer Fusion 內部（`UNRESOLVED`）
+
+| 軸 | 現況 | 候選 | 優先 |
+|---|---|---|---|
+| **進 Fusion 前是否每模態 L2 normalize** | 否（raw） | raw vs per-modality L2 | **最高**。PointBERT 在訓、CLIP 凍結，範數會漂：釋出編碼器在本語料的範數 text 37.1 / image 40.2 / pc 27.8（`exp_ulip_table1_D.json`），訓練後 pc 會再變。raw 進 Transformer 讓數值大的模態主導 |
+| 層數 | 2 | 1 / 2 / 4 | 中 |
+| 模態位置向量 | 有 | on / off | 中 |
+| 讀出 | active slot 平均 | mean / CLS-like | 中 |
+| 缺席 slot 是否參與注意力 | 參與（帶 mask token） | yes / no | 中 |
+| dropout | 0 | 0 / 0.1 | 後 |
+
+主線暫維持現況（`IMPLEMENTATION CHOICE / MAINLINE`）；**第一個要開的 retrain arm 是 pre-fusion normalization**（§10 第 4 步）。
+
+### 5.2 Query observation：query 和 gallery 各看到什麼（`UNRESOLVED`）
+
+論文只說每個資產有完整三模態、正例是 `(Q, A)`。它**沒說** `Query Text_A == Gallery Text_A`、`Query Image_A == Gallery Image_A`、`Query PC_A == Gallery PC_A`。
+
+`OBSERVED DATA`（同一顆 10 輪 checkpoint，`same_record` 訓練，held-out 4,569 資產，`output/look/exp_tower_agreement.json`）：**兩座塔權重完全不同（26 對同名參數相對距離中位 1.25），但對同一份輸入的輸出 cos(q_A, g_A) = 0.9989、‖q̂−ĝ‖ = 0.044**。Eq. 5 在共用觀測下的最佳解就是 `q ≡ g`，兩塔學成同一個函數，`full` 條件 R@1 = 0.9998（36,554 畫廊）。
+
+三個完整 protocol（Kyzen §九），不是一個模態一個模態亂換：
+
+| Arm | Query | Gallery | 意義 |
+|---|---|---|---|
+| A | canonical T / 12-view mean I / canonical PC | canonical T/I/PC | 最字面的 asset-record 讀法（現行 `same_record`） |
+| B | alternate caption / single or held-out view / resampled PC | canonical | independent-observation 讀法 |
+| C | user-like 短文字 / single view / resampled PC | canonical | real-query-like 讀法 |
+
+**只改 evaluation 不等於測 training protocol**：A 訓 → B 評叫 sensitivity；要判 A vs B 哪個像 MetaFind，得 A 訓 A 評、B 訓 B 評。機制已齊：`--query-observation`、`--query-image-policy`（2026-09-03 接線，commit `69dbbb6`）、query pack（text / pc arm；image arm 由 `--query-image-policy` 從快取 `views` 直接取，不需 pack）。
+
+### 5.3 文字字串化（`UNRESOLVED`，高敏感）
+
+Figure 2 給 JSON、沒給字串化規則。現行 `v2_cm` 把 160 字元描述放最前面，中位 68 token（上限 77），3.5% 被砍尾（`OBSERVED DATA`，600 筆抽樣）。
+
+`OBSERVED DATA`（`output/look/exp_text_fill_ladder.json`，協定 D，兩邊都換文字，官方計分，同一顆 checkpoint 重評）：
+
+```
+描述留幾字元      0     30     50     70    100    140    160
+text-only R@1   8.3   23.0   30.8   38.4   49.2   54.7   58.0     Table 1: 13.8
+```
+
+- 論文的 13.8 落在 0 與 30 字元之間（≈ 15 字元）。
+- 尺寸粗到 10 公分只動 0.1（8.3 → 8.2）：**指紋是描述，不是尺寸**。
+- **矛盾記著不硬解**：Figure 2 自己那句描述 135 字元，放到這條階梯約 54.7，不是 13.8。文字長度是量到最大的單一槓桿，仍不足以解釋全部。
+- 整包 JSON 直接餵：76 token 中位、100% 砍尾、text-only 7.7 —— 論文不太可能直接餵 JSON。
+
+主線候選：`attrs_v1`（純填表、無自由描述，已註冊在 `TEXT_TEMPLATES`）。它丟掉了 Figure 2 有的 `description` 欄位，是刻意的 `DEVIATION`，理由是 8.3 對 13.8 是量過最近的。**尚未重訓；上面所有數字是長文字訓出來的模型換文字重評。**
+
+### 5.4 視角聚合（`UNRESOLVED`）
+
+12 視角 raw 平均。`mean(views)` 與快取 `image` 最大差 0.0036（`OBSERVED DATA`），所以視角政策量的是同一個東西。`OBSERVED DATA`（`exp_image_*.json`，協定 D，query 換、gallery 不動）：
+
+```
+query image      12 視角平均   4 視角平均   不重疊 6 vs 6   單一視角      Table 1
+image-only R@1       84.6        79.8         76.0          55.2         11.7
+```
+
+最弱的觀測還差 4.5 倍；**影像那格不是視角選擇能解的**。剩下的候選是渲染本身（背景／解析度／相機）、查詢圖是否為真實照片、影像塔是否凍結——三個都要新資料或重訓才能測。11-of-12 leave-one-view-out 的 aggregation 敏感度是下一個便宜實驗（§10 第 3 步）。
+
+### 5.5 Gallery 大小（`UNRESOLVED`）
+
+論文只說 48K，沒說候選集。四個協定並跑並報是正確做法。Kyzen 2026-09-03：「我的資料集就是這麼多」，不再往「畫廊更大」追。
+
+### 5.6 τ 固定、cosine
+
+τ = 0.5 是 `PAPER FACT`；「不可學」是 `IMPLEMENTATION CHOICE`（論文把 λ 叫 learnable、τ 叫 hyperparameter）。cosine 是 `IMPLEMENTATION CHOICE`（DPR 用未正規化點積，ULIP-2 用 cosine；取較近的上游）。
+
+### 5.7 誰在訓（`IMPLEMENTATION CHOICE / MAINLINE`）
+
+```
+Text OpenCLIP   frozen      Image OpenCLIP  frozen
+PointBERT       trainable   pc_projection   trainable
+Fusion_Q        trainable   Fusion_G        trainable
+```
+
+理由是 lineage（MetaFind builds on ULIP-2；ULIP-2 凍 CLIP、訓 3D 編碼器；Table 3 說 full encoder > fuser only），**不是**論文明講 CLIP frozen。名字改成 `point_encoder_and_fuser = IMPLEMENTATION MAINLINE`。
+
+### 5.8 Stage 2 的訓練樣本：整間房減目標 vs 迭代前綴（`UNRESOLVED`，重要）
+
+`OBSERVED IMPLEMENTATION`：`stage2.py:241 build_context_graph` = 整間房 **減掉目標**；`encode_query` 用目標自己的 T/I/P。沒有目標洩漏。
+
+但 Algorithm 1 的推論是：`G ← G0`，放一件、更新圖、再放下一件——第 i 個目標只看得到**已擺進去的前綴**，不是「整間房除了自己」。訓練分布比推論分布多知道未來。
+
+| Arm | context | 地位 |
+|---|---|---|
+| A leave-one-out | 整間房 − 目標 | 現行 `IMPLEMENTATION CHOICE` |
+| B iterative-prefix | 隨機排序，目標 = 下一件，context = 前面已放的 | **preferred mainline candidate**：理由不是論文說訓練這樣做（它沒說），是它與論文公布的推論分布一致 |
+
+用 Stage 2 訓練穩定度、Table 1 w/ ESSGNN 的 Δ 形狀、ProcTHOR layout 檢索、Table 2 選。
+
+### 5.9 Stage 2 的 query 模態（`UNRESOLVED`）
+
+論文只說 Q_i 有 available modalities。現行「目標自己的 T/I/P 全開」是 `IMPLEMENTATION CHOICE`。I-Design 的實際請求多半是文字型。排在 5.8 之後：full T/I/P vs text-dominant / partial。
+
+### 5.10 ESSGNN pooling、L、hidden、λ 初值（`UNRESOLVED`）
+
+論文：`e_layout = Pooling({h_i^(L)})`，`Pooling` 全文未定義；λ learnable、無初值；L 無數字。現行（`essgnn_arch_protocol.json`）：`normalised_sum` / 7 / 128 / io projections / independent / squared / egnn_appendix；`init_lambda_ratio = 0.1`，λ₀ = 0.1 × median‖e_fusion‖ 開跑時量（DL-088，MASTER 在 Kyzen 委任下決定）。
+
+建議改成更可解釋、不依賴 pooling 剛好單位範數的形式：`e_layout = L2Normalize(mean({h_i^L}))`，`λ₀ = r × median‖e_fusion‖ / median‖e_layout‖`，r ∈ {0.05, 0.10, 0.20}。r 的意思清楚：Stage 2 開始時 layout 殘差約是模態融合的 5 / 10 / 20%。
+
+### 5.11 ESSGNN 方法版 vs 附錄版（論文自相矛盾）
+
+方法章：`h⁰ = Concat(x, t)`、`d_ij = ‖x_i − x_j‖`、`f_x → R³`。附錄證明要求：h 對 SE(3) 不變、用平方距離、座標係數是純量才能與旋轉交換。兩者不能同時成立。
+
+```
+Arm M  方法章字面      Arm P  附錄證明一致（現行主線）
+主線 = P；權威 = IMPLEMENTATION INTERPRETATION，不是 PAPER FACT
+理由 = 保住論文自己宣稱的等變性
+```
+
+要用實驗（旋轉／平移／縮放敏感度、訓練、場景品質）判，不再在文件裡辯「作者一定是想哪個」。C2–C6 的逐條裁決保留在附錄 A §3.3。
+
+### 5.12 物理邊（`UNRESOLVED` → 🟡）
+
+Kyzen §二十 的問題已查：`scene_graphs.py:227` `sem_edge_ids = sorted(set(support) | set(adjacency))`，`ADJACENCY = kNN, k=8`。**拓樸就是物理邊**（support 來自 ProcTHOR 的父子樹、adjacency 來自 kNN），語意句掛在這些 pair 上。物理邊**型別**（support vs adjacency）沒有進特徵。判定：🟡 合理但未證實的 interpretation，不是 🔴 漏掉。Stage 2 重訓前要不要加一個型別特徵通道，列實驗。
+
+---
+
+## 6. 第三層：偏離與 bug（不能假裝是 MetaFind protocol）
+
+### 6.1 12 views（`DEVIATION`）
+
+論文 11，我們 12（OpenShape 三圈 × 4）。不建議現在重渲 46K。做法：12 個 leave-one-view-out 的 11 視角聚合 → 看 fingerprint 敏感度 → 小就暫不是主因、大就升級為 blocker。
+
+### 6.2 GPT-4o → gemma-4-12B-it（`DEVIATION` D-2）
+
+Gemma 版可用來 debug 架構，不能當最終 strict reproduction。做法：固定 300–500 筆，同一組視角，GPT-4o vs Gemma，比欄位一致率、字串、CLIP cosine、text→gallery R@1/R@5、七格 fingerprint。差小 → Gemma 註明偏離做工程版；Text / T+I / Full 明顯變 → 最終必須重做 GPT-4o。
+
+### 6.3 零點雲畫廊的探針（`RETRACTED`，2026-09-03）
+
+`tools/probes/exp_query_observation.py` 把 `"pc": torch.zeros_like(g_text)` 餵給 modality-complete 的畫廊塔（零張量被當成**存在**的第三模態），同時自己寫 recall（同分算模型贏、float32）。三支探針繼承它。**以下結論全部撤回**：「observation 已排除」「gallery size 已排除」「text content 是主因」「5.6x 是均勻倍數」「77.2 / 73.3 / 96.5 代表 MetaFind」。三個壞函式已刪除本體改成拒跑 stub，`tests/test_probe_gallery_parity.py` 掃描任何探針把零點雲餵進 `.gallery()`。退稿全文 `output/look/RETRACTED_20260903.md`。Kyzen 與 ULIP2 側同日獨立發現。
+
+### 6.4 語料 45,692 vs 48K（`DEVIATION`，不可補齊）
+
+官方 LVIS 清單 46,052；點雲 46,052 ∩ 渲染 46,024 ∩ 標註 45,692 = **45,692**。48K 從官方清單做不出來（附錄 A §12.3）。
+
+### 6.5 ProcTHOR（`DEVIATION` D-4 等）
+
+論文說 "comprehensive semantic metadata"，實測 house JSON 的 `material` 100% 空、節點文字只有 93 個相異字串；"3,000+ assets" 查無此數（引擎全庫 1,934、實際擺出 1,528）。ProcTHOR 視角用的是退役渲染常數（11 張、224px、正交、白底）與 Objaverse（12 張、512px、透視、黑底）不同。全部記偏離（附錄 A §10、§12.8）。
+
+---
+
+## 7. 今天的量測（全部用同一套已對帳的評估器）
+
+### 7.1 對帳（parity gate）
+
+新探針 `tools/probes/exp_text_length.py` 用 `metafind.eval.retrieval`（float64、同分算輸）、畫廊走 `Stage1Dataset → split_embeds → model.gallery`（pc 由 PointBERT 現算）。`full` arm 與 `run_retrieval.py` **逐位吻合**：
+
+```
+協定                 畫廊      text  image    pc   T+I  T+PC  I+PC  full
+C_dev_selection      4,569     78.4   95.0  92.1  98.8  99.9  98.7 100.0
+D_dev_val_vs_train  36,554     58.0   84.6  78.8  96.5  99.6  94.1 100.0
+```
+
+（`data/outputs/eval/pilot10b_official_CD/table1.json`；`tests/test_probe_gallery_parity.py` 釘住。）checkpoint：`pilot10b_20260903/stage1_best.pt`，10 輪、官方 ULIP-2 初始化、`same_record`、`code_revision 516351e`。dev_val 4,569 **不在** dev_train 31,985 裡（run record `n_train 31985`，`stage1.py:2466` 檢查重疊）——是誠實的留出評估。
+
+### 7.2 MetaFind w/o ESSGNN 對論文（協定 D）
+
+```
+條件         論文    我們   倍數
+pc           75.1    78.8   1.05x   ← 唯一對上的
+full         51.7   100.0   1.9x
+image+pc     45.8    94.1   2.1x
+text+pc      44.5    99.7   2.2x
+text         13.8    58.0   4.2x
+text+image   17.2    96.5   5.6x
+image        11.7    84.6   7.2x
+```
+
+### 7.3 文字（§5.3 的階梯）與影像（§5.4 的政策）— 見各節。最好的組合（`attrs_v1` 文字 + 單一視角）：text 8.3 / pc 77.5 / image 52.1 對 13.8 / 75.1 / 11.7。**文字可以壓到論文水準、點雲本來就對、影像壓不下來。**
+
+### 7.4 ULIP baseline（釋出 ULIP-2、不訓練、無 fusion；`exp_ulip_table1_D.json`，協定 D）
+
+```
+arm                          text  image     pc   T+I  T+PC  I+PC  full
+paper ULIP                    0.1    0.1   97.9   0.0  33.9  22.6   6.4
+B1 gallery=PC,  raw mean     24.5   58.4  100.0  52.3  98.6  98.6  96.6
+B1 gallery=PC,  L2 mean      24.5   58.4  100.0  51.5  99.3  99.4  98.0
+B2 gallery=mean3, raw        98.6   93.9   95.4 100.0 100.0  97.0 100.0
+B2 gallery=mean3, L2         98.4   94.4   97.2 100.0 100.0  98.4 100.0
+```
+
+釋出編碼器在本語料的幾何：範數 text 37.1 / image 40.2 / pc 27.8；配對 cosine text–pc 0.347、image–pc 0.471、text–image 0.456。
+
+讀法：
+- **B1（純 PC 畫廊）的形狀對**：pc 100 > full 96.6，加非 PC 模態會拉低——與論文的單調下降同向；B2 全部 94–100，沒有形狀。所以論文的 baseline 畫廊是 PC（`AUTHOR EVIDENCE / MAINLINE`，§2.6 那句 "identical embeddings" 也只在 B1 成立）。
+- **但層級對不上**：同一顆釋出權重，論文 text→PC 0.1、我們 24.5；image→PC 0.1、我們 58.4。**模型沒訓、fusion 沒有，差 245 倍**。這是「語料比論文好認」最乾淨的證據：差距是資料層繼承下來的，不是 MetaFind 架構造成的。
+- 文字／影像軸的 ULIP 版正在跑（`exp_ulip_text_*.json`、`exp_ulip_image_*.json`），看哪個觀測能把 text→PC 和 image→PC 壓到 0.1 附近。
+
+### 7.5 先前一個容易誤用的數字
+
+`tools/probes/gallery_construction_bakeoff.py` 提到 "CAMERA 13.16 vs 13.80"。查證（`exp_b2_camera_protocol.py` docstring）：那是**別的機器上 ULIP-1 在 ShapeNet / Text2Shape 14,966 件池**的 T2S R@1，訓練 250 輪、不同語料、不同模型。**不是 MetaFind 證據**，不得再引。Kyzen 引的 derangement 數字（intact 66.88 / text deranged 41.68 / PC deranged 1.80）我在 `output/look/` 找不到產物（`gallery_construction_bakeoff.json` 不存在），標「已報告、產物未定位」；方向（畫廊 PC 主導）與 §7.4 的範數一致。
+
+---
+
+## 8. 為什麼論文三列長那樣（現在的理解）
+
+- **ULIP 列**：畫廊 = PC 嵌入；query = 可用模態平均。PC→PC 是 identical（97.9）；text / image → PC 是跨模態 exact-instance，在**論文的語料**上幾乎是 0；加 text/image 稀釋 PC 訊號所以單調下降。
+- **w/o ESSGNN 列**：雙塔＋Transformer fusion 把 text / image 從 ~0 拉到 13.8 / 11.7，把 PC 從 98 壓到 75。我們的 PC 對上（78.8），text / image 高 4–7 倍——而 ULIP 列已經顯示這 4–7 倍**在訓練之前就在**。
+- **w/ ESSGNN 列**：Stage 2 讓 query fusion 適應 layout-conditioned 表徵後，回 layout-free 評估發生 attribution drift；Δ 的形狀（PC −11.9 最大）是判斷 Stage 2 protocol 是否同機制的指紋。
+
+---
+
+## 9. 評估器：只剩一套
+
+```
+Checkpoint
+  ├─ Query encoding（七條件 condition_mask；observation 依宣告）
+  └─ Gallery = Stage1Dataset → split_embeds → model.gallery
+       T + I + PointBERT(PC 現算) → Gallery Fusion → g_bank
+normalize_for_scoring（float64）→ rank_of_target（同分算輸）→ R@1 / R@5
+```
+
+規則：
+1. 任何探針不准自己寫 gallery 或 recall（`tests/test_probe_gallery_parity.py`）。
+2. 每支探針先過 parity gate：canonical 設定的結果 == `run_retrieval.py`；不等就停。
+3. 訓練與 checkpoint 選擇只用 dev_train / dev_val；20% test 封存到正式期最後一次。
+4. `w/ ESSGNN` 的 Table 1 = Stage 2 checkpoint + `layout=None` + **同一份凍結的 Stage 1 gallery**；`run_retrieval.py` 尚無此路徑（§10 第 7 步）。
+
+---
+
+## 10. 實驗順序（Kyzen 2026-09-03；狀態）
+
+| # | 步驟 | 狀態 |
+|---|---|---|
+| 1 | 修 evaluator parity；撤回零點雲探針的結論 | ✅ 完成（commit `73ce0af`） |
+| 2 | 復現 ULIP Table 1：PC-gallery / mean-gallery、raw / L2 mean、D / 全語料 | ✅ D 完成（§7.4）；全語料與文字／影像軸跑中 |
+| 3 | Stage 1 cheap sensitivity：11-of-12 views、text serialization、same/alternate observation、single/aggregate image、cosine/dot、pre-fusion normalization —— 只用來 shortlist | 🔶 文字、影像已量；11-of-12、cosine/dot、pre-fusion norm 未量 |
+| 4 | Stage 1 真正 retrain arms：observation × normalization × train-scope；同 split、同 horizon、同 seed；finalist 三 seed | ⏸ 機制已接線（`69dbbb6`）；**Kyzen 說先不跑** |
+| 5 | Stage 1 w/o ESSGNN 定案：七格 R@1/R@5 pattern 合理才進 Stage 2 | ⏸ |
+| 6 | Stage 2 context experiment：leave-one-out vs iterative-prefix；ESSGNN M/P、pooling、λ | ⏸ |
+| 7 | Table 1 w/ ESSGNN：Stage 2 query fusion + 同一份凍結 Stage 1 gallery + layout off；`run_retrieval.py` 要加路徑 | ⏸ |
+| 8 | Table 2：I-Design 迭代組合 | ⏸ |
+
+---
+
+## 11. 已拍板決策索引（仍然有效；原文在附錄 A）
+
+| 決策 | 結果 | 出處 |
+|---|---|---|
+| CLIP 凍結 | ✅ | DL-032；附錄 A §10 |
+| τ = 0.5 固定不可學 | ✅ | 附錄 A §10 |
+| 12 視角 Blender（DEV 11→12）| ✅ USER 決策，現標 `DEVIATION` | 附錄 A §10、§2.3 |
+| ESSGNN 架構家族 appendix_shared_msg | ✅ | U-26 / DL-004；附錄 A §3.2 |
+| f_x 純量 | ✅ PAPER-AMBIGUOUS 裁決 | DL-004 |
+| tower_sharing = shared_backbone_separate_fusion | ✅（現標 `AUTHOR EVIDENCE / MAINLINE`） | 附錄 A §2.5、§12.6 第 1 題 |
+| lr 5e-4 起跑、sweep 2.5e-4…1e-3 | ✅ | 附錄 A §10 #11、§4.3 |
+| wd / betas / eps / warmup / cosine 起訖 | ✅ | 附錄 A §4.3 |
+| 250 輪上限、5→10→25 階梯、不自動早停 | ✅ | 附錄 A §4.3 |
+| dev-val 選政策、正式期鎖死重訓、test 封存（D-3） | ✅ | 附錄 A §4.3 |
+| U-20 節點／邊文字編碼器 = ViT-bigG-14 | ✅ | 附錄 A §10 |
+| n07c ProcTHOR 節點文字重生（D-4）、另存新檔 | ✅ | 附錄 A §10 |
+| ESSGNN 五參數 2026-08-19 的戳 = B（非逐項核可） | ✅ | 附錄 A §10 |
+| 四件開放事項委任 MASTER；主線從官方 ULIP-2 初始化 | ✅ | DL-088 |
+| pooling normalised_sum、λ ratio 0.1 | Kyzen DL-077 item 8 → MASTER DL-088 | §5.10 標 `UNRESOLVED` 候選，建議改形式 |
+
+---
+
+## 12. 本版取代的句子（對照附錄 A）
+
+| 舊說法（附錄 A 位置） | 新判定 |
+|---|---|
+| `same UID = PAPER FACT`（§12.1、DL-091 第 1 題附近） | 改 `strong task/loss inference`：Eq. 5 的 (Q, A) 正例是資產層級，但論文沒公布 `query_uid == gallery_uid` 這種資料實作 |
+| 「single-view gallery 不是 modality-complete」 | **刪**：modality-complete 指 T/I/P 是否存在，不是視角數 |
+| 「`q_img` 是複數所以不能 single view」（DL-091 第 3 題） | **刪**：複數措辭不能決定 observation protocol |
+| shared backbone 只是 rebuttal evidence | 改 `AUTHOR EVIDENCE / MAINLINE`（Figure 1 + 正文解讀） |
+| `PointBERT + fuser` = paper exact train scope | 改 `IMPLEMENTATION CHOICE / MAINLINE` |
+| 12-view mean = MetaFind image protocol | 改 `DEVIATION`（12）＋ `IMPLEMENTATION CHOICE`（mean） |
+| Gemma annotation = reproduction data | 改明確 `DEVIATION` |
+| proof-consistent ESSGNN = paper exact | 改 paper-internal-contradiction interpretation |
+| Stage 2 leave-one-out = paper protocol（§4.2 U-08 系列「全部已解」） | 改 `IMPLEMENTATION CHOICE`；iterative-prefix 是 preferred candidate |
+| Stage 2 full target T/I/P = paper protocol | 改 `IMPLEMENTATION CHOICE` |
+| `w/ ESSGNN Table 1` = ESSGNN active at evaluation（§6.1 措辭） | **錯**；改 Stage 2 model、layout disabled |
+| 77.2 / 73.3 / 96.5 observation experiments | `RETRACTED`，見 §6.3 |
+| §12.1「主要錯誤是兩塔讀同一份資料」 | 保留為量測事實（§5.2），但**不再是「錯誤」**：論文的 §3.2 說壓低 PC-only 的機制是雙塔，不是第二份觀測；`same_record` 是 A 讀法，與 B、C 並列為要用實驗判的 arm |
+| §12.6 第 2 題「建議層數 7、pooling sum」 | 現行協定已是 7 / normalised_sum（DL-088）；本版 §5.10 把它們列回 `UNRESOLVED` 候選，用 fingerprint 選 |
+
+---
+
+---
+
+# 附錄 A：v4 及更早的原文（歷史紀錄；與 v5 衝突處以 v5 為準）
+
 # MetaFind 復現筆記（Master 說明書・完整版）
 
 撰寫：Master（Claude）。v2 2026-08-25 全面擴充；**v3 2026-08-26 依外部審查修正**。
