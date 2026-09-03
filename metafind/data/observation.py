@@ -53,11 +53,18 @@ from typing import Literal
 # image modality (問題 4, 問題 5, both UNRESOLVED). Choosing among them is an
 # IMPLEMENTATION CHOICE and must be recorded as one.
 TextPolicy = Literal["canonical", "alternate_caption"]
-ImagePolicy = Literal["same_mean", "single_view", "held_out_view", "disjoint_views"]
+ImagePolicy = Literal["same_mean", "single_view", "held_out_view", "disjoint_views",
+                     "random_view"]
 PcPolicy = Literal["canonical_pc", "resampled_pc"]
 
 TEXT_POLICIES = ("canonical", "alternate_caption")
-IMAGE_POLICIES = ("same_mean", "single_view", "held_out_view", "disjoint_views")
+# `random_view`: a FRESH view per call, so per training step. [UPSTREAM ulip2
+# main.tex:612] "randomly sample its 2D rendered image I ~ render(O)" -- the
+# data protocol ULIP-2 itself pretrains with; OpenShape and ULIP-1 do the same.
+# Query side only; a stochastic query is not a reported number, so the
+# evaluator maps it to single_view.
+IMAGE_POLICIES = ("same_mean", "single_view", "held_out_view", "disjoint_views",
+                  "random_view")
 PC_POLICIES = ("canonical_pc", "resampled_pc")
 
 # Reachable from the n06 cache alone, with no re-encoding and no query pack.
@@ -196,6 +203,12 @@ def view_indices(policy: str, uid: str, n_views: int) -> list[int]:
 
     if policy == "same_mean":
         return list(range(n_views))
+    if policy == "random_view":
+        # `random`, not a dataset-owned RNG: torch seeds each DataLoader
+        # worker's `random` from the generator handed to the loader, the same
+        # reason `per_view` in stage1.py draws from it.
+        import random
+        return [random.randrange(n_views)]
     k = uid_seed(uid) % n_views
     if policy in ("single_view", "held_out_view"):
         return [k]

@@ -2415,7 +2415,7 @@ def main() -> int:
     # "The gallery encoder is modality-complete and frozen after pretraining."
     ap.add_argument("--query-image-policy", default="same_mean",
                     choices=("same_mean", "single_view", "held_out_view",
-                             "disjoint_views"),
+                             "disjoint_views", "random_view"),
                     help="which observation the QUERY tower's image modality "
                          "reads. The gallery keeps the 12-view mean. Served "
                          "from the cache; no re-render. Recorded in the run.")
@@ -2681,6 +2681,14 @@ def main() -> int:
     else:
         print(f"  query image observation: {args.query_image_policy} "
               "(gallery keeps the 12-view mean)", flush=True)
+    # A fresh view per step is a TRAINING protocol; checkpoint selection needs
+    # a deterministic query, so dev_val scores under single_view (uid-seeded).
+    eval_observation = observation
+    if args.query_image_policy == "random_view":
+        eval_observation = ObservationProtocol(
+            positive_policy="same_uid",
+            query=Observation(image="single_view"), gallery=Observation())
+        print("  dev_val selection scores under single_view (deterministic)", flush=True)
 
     loader = DataLoader(
         Stage1Dataset(train_uids, encoding["image_aggregation"],
@@ -2931,7 +2939,7 @@ def main() -> int:
                     args.device, values["batch_size"], query_pack,
                     # the same worker count the training loader uses, so a
                     # --preload run really has no worker processes at all
-                    num_workers=workers, observation=observation,
+                    num_workers=workers, observation=eval_observation,
                     image_tokens=int(training.get("image_tokens", 1)))
                 runlog.train_metrics("stage1_dev_val", epoch=epoch, step=step,
                                      **{k: v for k, v in scores.items()

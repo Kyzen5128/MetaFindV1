@@ -1371,6 +1371,12 @@ def main() -> int:
     # construction, and it follows the checkpoint unless overridden.
     from metafind.data.observation import Observation, ObservationProtocol
     image_policy = args.query_image_policy or ckpt.get("query_image_policy") or "same_mean"
+    if image_policy == "random_view":
+        # a stochastic query is not a reported number; the deterministic
+        # counterpart of "one view per query" is the uid-seeded single view
+        print("checkpoint trained under random_view; evaluating under single_view",
+              flush=True)
+        image_policy = "single_view"
     observation = ObservationProtocol(
         positive_policy="same_uid",
         query=Observation(image=image_policy), gallery=Observation())

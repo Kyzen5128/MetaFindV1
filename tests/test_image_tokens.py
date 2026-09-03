@@ -101,3 +101,13 @@ def test_collate_and_split_embeds_carry_the_view_masks():
     assert g["image_present"].all()
     assert q["image_present"].tolist() == [[True, False, False]] * 2
     assert q is not g
+
+
+def test_random_view_draws_one_view_and_only_on_the_query_side():
+    import random
+    from metafind.data.observation import IMAGE_POLICIES, view_indices
+    assert "random_view" in IMAGE_POLICIES
+    random.seed(0)
+    draws = {tuple(view_indices("random_view", "u", 12)) for _ in range(50)}
+    assert all(len(d) == 1 and 0 <= d[0] < 12 for d in draws)
+    assert len(draws) > 3, "a per-step draw must actually vary"
