@@ -300,3 +300,29 @@ def test_the_degenerate_tail_of_unique_positive_batching_is_dropped():
     assert MIN_BATCH == 8
     assert len(kept) == 4 and all(len(b) >= 8 for b in kept)
     assert (n_b, n_s) == (3, 1 + 2 + 7)
+
+
+def test_the_stage2_tower_uses_the_stage1_fusion_config():
+    """[BUG 2026-09-04] build_stage2_model dropped prefusion_norm / image_tokens,
+    so a parent trained with prefusion_norm=True got its fusion fed raw vectors
+    in Stage 2 and in the w/ ESSGNN evaluation."""
+    import json
+    from metafind.train.stage1 import build_model
+    from metafind.train.stage2 import build_stage2_model
+    encoding = {"missing_modality_representation": "learned_token"}
+    training = {"fusion": "transformer", "tower_sharing": "shared_backbone_separate_fusion",
+                "prefusion_norm": True, "image_tokens": 1}
+    hyper = {"values": {"learnable_temperature": False, "init_temperature": 0.5,
+                        "max_logit_scale": 100.0}}
+    arch = {"status": "resolved", "architecture_family": "appendix_shared_msg",
+            "use_io_projections": True, "distance": "squared", "coord_feat": "current",
+            "layer_sharing": "independent", "pooling": "normalised_sum", "hidden_dim": 16,
+            "n_layers": 1, "mlp_structure": "egnn_appendix"}
+    s1, _ = build_model(encoding, training, hyper)
+    s2 = build_stage2_model(encoding, training, hyper, arch, node_feat_dim=8,
+                            edge_feat_dim=8, use_layout=True, init_lambda=1.0)
+    for tower in ("query", "gallery"):
+        c1, c2 = getattr(s1, tower).fusion.cfg, getattr(s2, tower).fusion.cfg
+        assert (c1.prefusion_norm, c1.image_tokens, c1.kind, c1.zero_pad) == \
+               (c2.prefusion_norm, c2.image_tokens, c2.kind, c2.zero_pad), tower
+    assert s2.query.fusion.cfg.prefusion_norm is True

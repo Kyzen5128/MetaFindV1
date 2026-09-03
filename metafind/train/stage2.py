@@ -811,7 +811,20 @@ def build_stage2_model(encoding: dict, training: dict, hyperparameters: dict,
     from metafind.models.ulip_backbone import EMBED_DIM
 
     zero_pad = encoding["missing_modality_representation"] == "zero_pad"
-    fusion = FusionConfig(kind=training["fusion"], dim=EMBED_DIM, zero_pad=zero_pad)
+    # [BUG FIX 2026-09-04] The Stage 2 tower must be the Stage 1 tower plus the
+    # layout branch -- same FusionConfig, or the Stage 1 weights are loaded into
+    # a fusion that pre-processes its inputs differently. This built
+    # FusionConfig(kind, dim, zero_pad) only, so a parent trained with
+    # prefusion_norm=True (P1) had its fusion fed raw vectors here (pc norm 139
+    # against text 37): the first Stage 2 pilot started at loss 2.65 instead of
+    # the parent's ~0.8, never improved, and moved the fusion by a median
+    # relative distance of 0.55 trying to cope -- and the evaluator's Stage 2
+    # path, which calls this builder, scored that head the same wrong way
+    # (protocol C pc-only 17.0 against the parent's 86.1). Mirror
+    # stage1.build_model exactly.
+    fusion = FusionConfig(kind=training["fusion"], dim=EMBED_DIM, zero_pad=zero_pad,
+                          prefusion_norm=bool(training.get("prefusion_norm", False)),
+                          image_tokens=int(training.get("image_tokens", 1)))
     essgnn = ESSGNNConfig.from_protocol(
         arch_proto,
         # MEASURED from n08's artifacts, NOT read from a protocol. An earlier

@@ -1,0 +1,15 @@
+{
+  "what": "Stage 2 fine-tuning recipe, arm S2-B: the Stage 1 recipe with the learning rate lowered 10x.",
+  "why": "The first Stage 2 pilot (P1 parent, Stage 1 recipe lr 5e-4, 1,600 steps) moved the query fusion by a median relative distance of 0.55 (max 2.1) and its layout-free head fell from 86.1 to 17.0 pc-only R@1 on protocol C. Sec. 2.6 calls Stage 2 'fine-tuning'; the paper gives no rate. IMPLEMENTATION CHOICE, one variable changed against the pilot.",
+  "values": {
+    "optimizer": "adamw",
+    "learning_rate": 5e-05,
+    "weight_decay": 0.1,
+    "batch_size": 64,
+    "epochs": 1,
+    "seed": 20260816,
+    "init_temperature": 0.5,
+    "learnable_temperature": false,
+    "scene_dropout": 0.3
+  }
+}
