@@ -268,7 +268,8 @@ def build_eval_protocols(train: list[str], test: list[str],
 def build_stage1_protocol(hyperparameters: dict, decided_by: str,
                           fusion: str = DEFAULT_FUSION,
                           tower_sharing: str = DEFAULT_TOWER_SHARING,
-                          prefusion_norm: bool = False) -> dict:
+                          prefusion_norm: bool = False,
+                          image_tokens: int = 1) -> dict:
     if "cosine" not in SUPPORTED_SIMILARITY:
         raise ValueError("cosine is no longer supported; U-24's reading changed")
     return {
@@ -283,6 +284,8 @@ def build_stage1_protocol(hyperparameters: dict, decided_by: str,
         # [AUDIT 2026-09-03 C8] see FusionConfig.prefusion_norm. Absent in
         # protocols written before this date; the trainer reads absence as False.
         "prefusion_norm": bool(prefusion_norm),
+        # [AUDIT 2026-09-03 C4] see FusionConfig.image_tokens; 1 = pooled view.
+        "image_tokens": int(image_tokens),
         "hyperparameter_config_hash": hyperparameters["sha256"],
         "decided_by": decided_by,
         "decided_at": datetime.now(timezone.utc).isoformat(),

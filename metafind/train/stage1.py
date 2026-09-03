@@ -518,8 +518,13 @@ class Stage1Dataset:
     def __init__(self, uids: list[str], aggregation: str,
                  preload: bool = False,
                  query_pack: "QueryPack | None" = None,
-                 observation=None) -> None:
+                 observation=None, image_tokens: int = 1) -> None:
         """`observation` is the §十一 protocol block, resolved.
+
+        `image_tokens` > 1 hands the image modality over as the per-view
+        matrix instead of the pooled vector (FusionConfig.image_tokens): the
+        gallery side carries all K views; the query side carries the same
+        matrix with only its observation's views marked present.
 
         `None` reproduces the pre-2026-09-03 construction byte for byte: the
         gallery reads the pooled `image` vector and the query differs only where
@@ -541,6 +546,7 @@ class Stage1Dataset:
         # existing arm hash unaffected by this change.
         self.query_pack = query_pack
         self.observation = observation
+        self.image_tokens = int(image_tokens)
         # A policy the cache cannot serve must have been refused at resolution
         # time, not discovered here on asset 30,000 of an epoch.
         if observation is not None and observation.query.needs_pack() and query_pack is None:
@@ -561,6 +567,8 @@ class Stage1Dataset:
 
     def _needs_views(self) -> bool:
         """`views` is 12x the pooled vector, so it is kept only when read."""
+        if self.image_tokens > 1:
+            return True
         if self.observation is not None and (self.observation.query.needs_views()
                                              or self.observation.gallery.needs_views()):
             return True
@@ -588,6 +596,13 @@ class Stage1Dataset:
         idx = view_indices(side.image, uid, views.shape[0])
         return np.asarray(views[idx], dtype=np.float32).mean(axis=0)
 
+    def _view_matrix(self, entry: dict) -> np.ndarray:
+        v = np.asarray(entry["views"], dtype=np.float32)
+        if v.shape[0] != self.image_tokens:
+            raise ValueError(f"image_tokens={self.image_tokens} but the cache "
+                             f"holds {v.shape[0]} views")
+        return v
+
     def _query_side(self, uid: str, entry: dict) -> dict:
         """The `q_*` half of one item. Empty dict when query IS gallery.
 
@@ -602,7 +617,16 @@ class Stage1Dataset:
             # exactly the case 問題 4 says the paper permits and `same_record`
             # could not express. Emitted as a `q_` key, so `split_embeds` takes
             # the two-tower branch and the checkpoint records that it did.
-            out["q_image"] = self._image_for(obs.query, uid, entry)
+            if self.image_tokens > 1:
+                # same matrix, only the observation's views marked present
+                from metafind.data.observation import view_indices
+                vm = self._view_matrix(entry)
+                keep = np.zeros(self.image_tokens, dtype=bool)
+                keep[view_indices(obs.query.image, uid, self.image_tokens)] = True
+                out["q_image"] = vm.copy()
+                out["q_image_present"] = keep
+            else:
+                out["q_image"] = self._image_for(obs.query, uid, entry)
         pack = self.query_pack
         if pack is None:
             return out
@@ -689,7 +713,9 @@ class Stage1Dataset:
         uid = self.uids[i]
         if self.cache is not None:
             e = self.cache[uid]
-            if self.per_view:
+            if self.image_tokens > 1:
+                image = self._view_matrix(e)
+            elif self.per_view:
                 # [ULIP2 REVIEWER INFO] This reaches a view index through
                 # `shape[0]`, not through the protocol -- the one surviving path
                 # that does. It is unreachable from `main()`: `arm_config_hash`
@@ -708,7 +734,10 @@ class Stage1Dataset:
             item = {"uid": uid, "text": e["text"].copy(),
                     "image": np.asarray(image, dtype=np.float32).copy(),
                     "pc": e["pc"].copy()}
-            item.update({k: np.asarray(v, dtype=np.float32).copy()
+            if self.image_tokens > 1:
+                item["image_present"] = np.ones(self.image_tokens, dtype=bool)
+            item.update({k: (np.asarray(v).copy() if k.endswith("_present")
+                             else np.asarray(v, dtype=np.float32).copy())
                          for k, v in self._query_side(uid, e).items()})
             return item
         cached = np.load(paths.EMBEDDINGS / f"{uid}.npz")
@@ -716,7 +745,9 @@ class Stage1Dataset:
         xyz = cloud["xyz"].astype(np.float32)
         rgb = cloud["rgb"].astype(np.float32) if "rgb" in cloud else None
         pc = xyz if rgb is None else np.concatenate([xyz, rgb], axis=1)
-        if self.per_view:
+        if self.image_tokens > 1:
+            image = self._view_matrix({"views": cached["views"]})
+        elif self.per_view:
             # [UPSTREAM ulip2 main.tex:612] "randomly sample its 2D rendered
             # image I ~ render(O)"; OpenShape method.tex:77 and ULIP-1
             # main.tex:236 do the same. A fresh view per step, not per asset --
@@ -819,6 +850,9 @@ def collate(batch: list[dict]):
         "image": torch.from_numpy(np.stack([b["image"] for b in batch])),
         "pc": torch.from_numpy(np.stack([b["pc"] for b in batch])),
     }
+    for k in ("image_present", "q_image_present"):
+        if k in batch[0]:
+            out[k] = torch.from_numpy(np.stack([b[k] for b in batch]))
     for key in ("q_text", "q_image", "q_pc"):
         if key in batch[0]:
             out[key] = torch.from_numpy(np.stack([b[key] for b in batch]))
@@ -847,6 +881,8 @@ def split_embeds(batch, backbone, device):
     gallery = {"text": batch["text"].to(device),
                "image": batch["image"].to(device),
                "pc": pc}
+    if "image_present" in batch:
+        gallery["image_present"] = batch["image_present"].to(device)
     if not any(k in batch for k in ("q_text", "q_image", "q_pc")):
         return gallery, gallery
     query = dict(gallery)
@@ -854,6 +890,8 @@ def split_embeds(batch, backbone, device):
         query["text"] = batch["q_text"].to(device)
     if "q_image" in batch:
         query["image"] = batch["q_image"].to(device)
+        if "q_image_present" in batch:
+            query["image_present"] = batch["q_image_present"].to(device)
     if "q_pc" in batch:
         query["pc"] = backbone.encode_pc(batch["q_pc"].to(device))
     return query, gallery
@@ -1258,7 +1296,7 @@ def flatten_condition_scores(scores: dict) -> dict:
 
 def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
                      batch_size, query_pack=None, num_workers: int = 4,
-                     observation=None):
+                     observation=None, image_tokens: int = 1):
     """Mean R@1 / R@5 over the seven Table 1 conditions, on the dev-val gallery.
 
     Gallery is dev_val itself (`splits.build_eval_protocols`, protocol
@@ -1344,7 +1382,8 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
     # numbers would look comparable. `main` passes one object to both.
     loader = DataLoader(Stage1Dataset(dev_val_uids, aggregation,
                                       query_pack=query_pack,
-                                      observation=observation),
+                                      observation=observation,
+                                      image_tokens=image_tokens),
                         batch_size=batch_size, shuffle=False, collate_fn=collate,
                         num_workers=num_workers, drop_last=False)
     per_condition_q = {c: [] for c in QUERY_CONDITIONS}
@@ -2075,6 +2114,7 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         # it saw, and two of them would look like repeats of one condition.
         "query_image_policy": training.get("_query_image_policy"),
         "prefusion_norm": bool(training.get("prefusion_norm", False)),
+        "image_tokens": int(training.get("image_tokens", 1)),
         "text_template": training.get("_text_template"),
         "embeddings_dir": training.get("_embeddings_dir"),
         "train_scope": training.get("train_scope", "point_encoder_and_fuser"),
@@ -2235,7 +2275,8 @@ def build_model(encoding: dict, training: dict, hyperparameters: dict):
     zero_pad = encoding["missing_modality_representation"] == "zero_pad"
     fusion = FusionConfig(kind=training["fusion"], dim=EMBED_DIM, zero_pad=zero_pad,
                           # absent in protocols written before 2026-09-03
-                          prefusion_norm=bool(training.get("prefusion_norm", False)))
+                          prefusion_norm=bool(training.get("prefusion_norm", False)),
+                          image_tokens=int(training.get("image_tokens", 1)))
     model = MetaFindDualTower(DualTowerConfig(
         dim=EMBED_DIM, tower_sharing=training["tower_sharing"],
         query_fusion=fusion, gallery_fusion=fusion,
@@ -2642,7 +2683,8 @@ def main() -> int:
     loader = DataLoader(
         Stage1Dataset(train_uids, encoding["image_aggregation"],
                       preload=args.preload, query_pack=query_pack,
-                      observation=observation),
+                      observation=observation,
+                      image_tokens=int(training.get("image_tokens", 1))),
         batch_size=values["batch_size"], shuffle=True, collate_fn=collate,
         num_workers=workers, drop_last=True, generator=generator)
 
@@ -2887,7 +2929,8 @@ def main() -> int:
                     args.device, values["batch_size"], query_pack,
                     # the same worker count the training loader uses, so a
                     # --preload run really has no worker processes at all
-                    num_workers=workers, observation=observation)
+                    num_workers=workers, observation=observation,
+                    image_tokens=int(training.get("image_tokens", 1)))
                 runlog.train_metrics("stage1_dev_val", epoch=epoch, step=step,
                                      **{k: v for k, v in scores.items()
                                         if isinstance(v, (int, float))},

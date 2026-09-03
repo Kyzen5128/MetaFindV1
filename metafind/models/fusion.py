@@ -104,6 +104,15 @@ class FusionConfig:
     # tokens are left free. IMPLEMENTATION CHOICE, recorded in
     # stage1_protocol.json, off by default.
     prefusion_norm: bool = False
+    # [AUDIT 2026-09-03 C4] Figure 1 draws K vectors per encoder (P1..PK,
+    # I1..IK, T1..TK) entering ONE Fusion Layer; nothing in the paper averages
+    # the views first. With image_tokens = K > 1 the image modality enters as
+    # K view tokens -- `embeds["image"]` is (B, K, D) and the optional
+    # `embeds["image_present"]` (B, K) says which views the query actually
+    # holds; an absent view carries the image mask token. The text and point
+    # cloud stay one token each. 1 keeps the pooled vector and the pre-existing
+    # (B, 3, D) construction byte for byte. Transformer only.
+    image_tokens: int = 1
 
 
 def sample_modality_mask(
@@ -193,8 +202,70 @@ class ModalityFusion(nn.Module):
             self.head = nn.TransformerEncoder(layer, num_layers=cfg.n_layers)
             self.modality_pos = nn.Parameter(torch.zeros(m, d))
             nn.init.normal_(self.modality_pos, std=0.02)
+            if cfg.image_tokens > 1:
+                # which VIEW a token is, on top of which MODALITY it is
+                self.view_pos = nn.Parameter(torch.zeros(cfg.image_tokens, d))
+                nn.init.normal_(self.view_pos, std=0.02)
         else:  # pragma: no cover - guarded by the Literal type
             raise ValueError(f"unknown fusion kind {cfg.kind!r}")
+        if cfg.image_tokens < 1:
+            raise ValueError(f"image_tokens must be >= 1, got {cfg.image_tokens}")
+        if cfg.image_tokens > 1 and cfg.kind != "transformer":
+            raise ValueError("image_tokens > 1 needs a token sequence; only the "
+                             f"transformer fusion takes one, not {cfg.kind!r}")
+
+    def _stack_tokens(self, embeds: dict[str, Tensor | None], present: Tensor):
+        """image_tokens > 1: ``(B, 1+K+1, D)`` plus the per-token active mask.
+
+        Token order is text, the K views, pc. A view is active when the image
+        modality is present for that row AND `image_present` marks the view;
+        inactive views carry the image mask token, exactly as an absent
+        modality does in the 3-slot path.
+        """
+        K = self.cfg.image_tokens
+        b = present.size(0)
+        cols, act = [], []
+        for i, name in enumerate(MODALITIES):
+            e = embeds.get(name)
+            keep = present[:, i : i + 1]                       # (B, 1)
+            if name == "image":
+                vp = embeds.get("image_present")
+                if e is None:
+                    if bool(keep.any()):
+                        raise ValueError("image marked present but no image "
+                                         "embedding was passed")
+                    e = self.mask_tokens[1].expand(b, K, -1)
+                    vkeep = torch.zeros(b, K, dtype=torch.bool, device=present.device)
+                else:
+                    if e.dim() != 3 or e.size(1) != K:
+                        raise ValueError(f"image must be (B, {K}, D) under "
+                                         f"image_tokens={K}, got {tuple(e.shape)}")
+                    vkeep = keep.expand(-1, K)
+                    if vp is not None:
+                        if vp.shape != (b, K):
+                            raise ValueError(f"image_present must be (B, {K}), "
+                                             f"got {tuple(vp.shape)}")
+                        vkeep = vkeep & vp.to(torch.bool)
+                    if self.cfg.prefusion_norm:
+                        e = F.normalize(e, dim=-1)
+                    fill = (torch.zeros_like(e) if self.cfg.zero_pad
+                            else self.mask_tokens[1].expand_as(e))
+                    e = torch.where(vkeep.unsqueeze(-1), e, fill)
+                cols.append(e); act.append(vkeep)
+                continue
+            if e is None:
+                if bool(keep.any()):
+                    raise ValueError(f"{name} is marked present for some rows "
+                                     f"but no {name} embedding was passed")
+                fill = (torch.zeros_like(self.mask_tokens[i]) if self.cfg.zero_pad
+                        else self.mask_tokens[i])
+                cols.append(fill.expand(b, -1).unsqueeze(1)); act.append(keep)
+                continue
+            if self.cfg.prefusion_norm:
+                e = F.normalize(e, dim=-1)
+            fill = torch.zeros_like(e) if self.cfg.zero_pad else self.mask_tokens[i].expand_as(e)
+            cols.append(torch.where(keep, e, fill).unsqueeze(1)); act.append(keep)
+        return torch.cat(cols, dim=1), torch.cat(act, dim=1)
 
     def _stack(self, embeds: dict[str, Tensor | None], present: Tensor) -> Tensor:
         """Build ``(B, 3, D)`` with absent slots filled by mask tokens or zeros."""
@@ -229,14 +300,15 @@ class ModalityFusion(nn.Module):
         Returns:
             ``(B, D)`` fused query embedding.
         """
-        sizes = {e.size(0) for e in embeds.values() if e is not None}
+        sizes = {embeds[m].size(0) for m in MODALITIES if embeds.get(m) is not None}
         if not sizes:
             raise ValueError("at least one modality embedding must be provided")
         if len(sizes) != 1:
             raise ValueError(f"modality embeddings disagree on batch size: {sizes}")
         b = sizes.pop()
 
-        for name, e in embeds.items():
+        for name in MODALITIES:          # `image_present` is a mask, not a vector
+            e = embeds.get(name)
             if e is not None and e.size(-1) != self.cfg.dim:
                 raise ValueError(f"{name} embedding has width {e.size(-1)}, expected {self.cfg.dim}")
 
@@ -246,6 +318,9 @@ class ModalityFusion(nn.Module):
             present = torch.tensor(flags, device=ref.device).expand(b, -1).clone()
         if present.shape != (b, len(MODALITIES)):
             raise ValueError(f"present must be {(b, len(MODALITIES))}, got {tuple(present.shape)}")
+
+        if self.cfg.image_tokens > 1:
+            return self._forward_tokens(embeds, present)
 
         x = self._stack(embeds, present)  # (B, 3, D)
         kind = self.cfg.kind
@@ -288,4 +363,21 @@ class ModalityFusion(nn.Module):
         pad = ~active
         pad = torch.where(pad.all(dim=-1, keepdim=True), torch.zeros_like(pad), pad)
         h = self.head(x + self.modality_pos, src_key_padding_mask=pad)
+        return (h * w).sum(dim=1) / denom
+
+    def _forward_tokens(self, embeds: dict[str, Tensor | None], present: Tensor) -> Tensor:
+        """Transformer over text + K view tokens + pc. Same readout rule as the
+        3-slot path: mean over the tokens that take part (all of them under
+        include_absent_slots, the active ones otherwise)."""
+        K = self.cfg.image_tokens
+        x, act = self._stack_tokens(embeds, present)          # (B, T, D), (B, T)
+        pos = torch.cat([self.modality_pos[0:1],
+                         self.modality_pos[1:2].expand(K, -1) + self.view_pos,
+                         self.modality_pos[2:3]], dim=0)      # (T, D)
+        take = torch.ones_like(act) if self.cfg.include_absent_slots else act
+        w = take.to(x.dtype).unsqueeze(-1)
+        denom = w.sum(dim=1).clamp(min=1.0)
+        pad = ~take
+        pad = torch.where(pad.all(dim=-1, keepdim=True), torch.zeros_like(pad), pad)
+        h = self.head(x + pos, src_key_padding_mask=pad)
         return (h * w).sum(dim=1) / denom
