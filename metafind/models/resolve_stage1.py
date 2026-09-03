@@ -119,6 +119,14 @@ TEXT_TEMPLATES = {
         "roughly {width} by {length} by {height} centimetres, "
         "{placement}."
     ),
+    # `desc_v1`: the free description alone, capped at MAX_DESCRIPTION_CHARS.
+    # Exists so a SECOND text observation is possible: `description_candidates`
+    # holds five CLIP-ranked candidates per asset (the ULIP-2 pattern, ten
+    # BLIP-2 captions per image ranked by CLIP), and the query pack's text arm
+    # re-serialises a non-canonical candidate through the live template. Under
+    # attrs_v1 that would emit the identical form-fill string; under desc_v1 it
+    # emits a different sentence about the same asset -- Figure 1's T1..TK.
+    "desc_v1": "{description}",
 }
 TEXT_TEMPLATE_NAME = os.environ.get("METAFIND_TEXT_TEMPLATE", "v2_cm")
 if TEXT_TEMPLATE_NAME not in TEXT_TEMPLATES:
