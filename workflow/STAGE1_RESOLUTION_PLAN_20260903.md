@@ -84,6 +84,24 @@ Kyzen 問「會不會是訓練不夠」。P1 設定完全不變，只把 epochs 
 形狀不變，含 pc 的融合格仍 95+。裁決：代數定 10；250 不跑（論文沒寫代數，250 是 ULIP main.py:23 的預設）。
 出處：`/home/kyzen/metafind_data_attrs/outputs/checkpoints/pilotP1e25_20260904/`、`outputs/eval/eval_pilotP1e25_20260904/`、`outputs/logs/chain_P1e25.log`。
 
+
+### 5b. 學習率掃描（2026-09-04 10:30；P1 設定不變，只換 lr，各 10 代）
+
+選法事先寫死：dev_val 七格 R@1 平均最高者勝（不看論文、不看測試集）。
+
+| lr | best epoch | dev_val mean R@1 | D：text / image / pc / T+I / T+PC / I+PC / full |
+|---|---|---|---|
+| 1e-4 | 9 | **0.830** | 11.1 / 40.5 / 92.1 / 63.6 / 98.5 / 92.9 / 99.0 |
+| 5e-4（P1） | 9 | 0.795 | 11.6 / 29.7 / 66.6 / 67.5 / 95.6 / 77.8 / 98.1 |
+| 1e-3 | 9 | 0.748 | 9.1 / 27.1 / 43.8 / 59.2 / 93.0 / 70.6 / 97.7 |
+| 3e-3（ULIP 官方值，batch 512） | 9 | 0.531 | 21.5 / 8.4 / **0.0** / 51.4 / 48.7 / 16.1 / 90.4（Point-BERT 崩掉） |
+| 論文 | | | 13.8 / 11.7 / 75.1 / 17.2 / 44.5 / 45.8 / 51.7 |
+
+裁決：**lr = 1e-4**（dev_val 規則）。附註：lr 越低 pc 越接近釋出 ULIP-2（92.1，離論文 75.1 更遠），形狀四個 lr 全部相同（full > pc），所以 lr 不是形狀的來源；3e-3 在單卡 batch 64 下把點雲塔訓壞，ULIP 官方 3e-3 是 8 卡 batch 512 的值。
+出處：`metafind_data_attrs/outputs/checkpoints/pilotP1_lr{1e-4,1e-3,3e-3}_20260904/`、`outputs/eval/eval_pilotP1_lr*`、`outputs/logs/chain_lr_sweep.log`。
+
+P8 已用 lr 1e-4 開跑（query 三模態全換第二份觀測；image 改 held_out_view，把 query 那張從 gallery 平均拿掉）：`outputs/logs/chain_P8.log`。
+
 ## 6. Stage 2（2026-09-04 凌晨開跑）
 
 審計：`docs/audit/STAGE2_FRESH_AUDIT_20260904.md`。Eq. 6/7/8 逐項一致；場景 dropout、凍結範圍、τ 全對；正文 vs 附錄三處矛盾走附錄版（Eq. 4 才成立）。
