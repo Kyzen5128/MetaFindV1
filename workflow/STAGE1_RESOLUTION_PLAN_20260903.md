@@ -102,6 +102,22 @@ Kyzen 問「會不會是訓練不夠」。P1 設定完全不變，只把 epochs 
 
 P8 已用 lr 1e-4 開跑（query 三模態全換第二份觀測；image 改 held_out_view，把 query 那張從 gallery 平均拿掉）：`outputs/logs/chain_P8.log`。
 
+
+### 5c. P8：query 三模態全換第二份觀測（2026-09-04 11:50）— 形狀仍未翻
+
+設定：desc_v1 另一段描述（query pack）、held_out_view（query 那張從 gallery 12 張平均拿掉）、點雲單邊掃描（`--query-pc-perturb half`）、lr 1e-4、10 代。最佳第 9 代，dev_val 平均 0.829。
+
+| | text | image | pc | T+I | T+PC | I+PC | full |
+|---|---|---|---|---|---|---|---|
+| 論文 | 13.8 | 11.7 | 75.1 | 17.2 | 44.5 | 45.8 | 51.7 |
+| P1（5e-4）D | 11.6 | 29.7 | 66.6 | 67.5 | 95.6 | 77.8 | 98.1 |
+| P8 D | 19.2 | 55.4 | 69.5 | 66.3 | 81.0 | 86.5 | 90.7 |
+
+讀法：融合格有下來（T+PC 95.6 → 81.0，full 98.1 → 90.7），pc 69.5 接近論文 75.1；但 full 仍高於 pc，image 反而升到 55.4（模型學會對 held-out 視角）。「同一物件的不同觀測」不足以做出論文形狀。
+
+**新假設（由論文 ULIP 列與 Figure 1 推得）**：ULIP 列 text 0.1、image 0.1 是亂猜水準 → 論文 query 的文字、圖片不指向該實例，只指向類別（Figure 1 的文字 query 是 `Platform Bed {size:…}`）。只有點雲是該資產自己的。若成立，T+PC 從 97.9 掉到 33.9 就有解釋：文字／圖片把 query 拉向同類別的別的資產。
+檢驗（不訓練）：`tools/probes/exp_ulip_row_category_query.py`，query 文字 = 類別名、圖片 = 同類別另一個資產的一張視角、pc = 自己的，用釋出 ULIP-2 直接平均對 ULIP 列。排在 AMP 量測之後自動跑。
+
 ## 6. Stage 2（2026-09-04 凌晨開跑）
 
 審計：`docs/audit/STAGE2_FRESH_AUDIT_20260904.md`。Eq. 6/7/8 逐項一致；場景 dropout、凍結範圍、τ 全對；正文 vs 附錄三處矛盾走附錄版（Eq. 4 才成立）。
