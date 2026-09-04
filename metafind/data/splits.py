@@ -330,10 +330,16 @@ def build_eval_protocols(train: list[str], test: list[str],
         # `reported: False` for the same reason as C, and one more: its gallery
         # is the training pool, so every candidate is an asset the model was
         # fitted on. It is a diagnostic, never a result.
+        # [D-3b] Under 80/10/10 `dev_val` is OUTSIDE the training pool, so a
+        # gallery of `train` alone would not contain the query's own asset and
+        # the evaluator refuses (measured 2026-09-04 16:50 on P10: "4,569 query
+        # assets are absent"). The gallery is then train + val: every training
+        # asset plus the queries themselves, 41,123.
+        d_gallery = "train_val" if holdout is not None else "train"
         protocols["D_dev_val_vs_train"] = {
             "query_split": "dev_val",
-            "gallery_split": "train",
-            "gallery_size": len(train),
+            "gallery_split": d_gallery,
+            "gallery_size": len(train) + (len(dev_val) if holdout is not None else 0),
             "layout_free_context": "omitted",
             "reported": False,
         }
@@ -563,7 +569,7 @@ def main() -> int:
 
         _write(SPLITS_PATH, {
             "object": {"train": train, "val": val, "test": test,
-                       "holdout": holdout,
+                       "holdout": holdout, "train_val": train + val,
                        "dev_train": dev_train, "dev_val": dev_val},
             "scheme": SPLIT_SCHEME,
             "split_seed": args.seed,

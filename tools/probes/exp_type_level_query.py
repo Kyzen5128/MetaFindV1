@@ -42,7 +42,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--ckpt", default="/home/kyzen/metafind_data_attrs/outputs/checkpoints/pilotP1_attrs_singleview_prefnorm_20260903/stage1_best.pt")
     ap.add_argument("--device", default="cuda")
-    ap.add_argument("--gallery-split", default="train")
+    ap.add_argument("--gallery-split", default="train_val")   # [D-3b] dev_val is outside train now
     ap.add_argument("--out", default="output/look/exp_type_level_query.json")
     ap.add_argument("--fields-text-cache", default="/home/kyzen/metafind_data_attrs/outputs/embeddings",
                     help="embeddings dir whose `text` is the FIELDS form-fill (attrs_v1); used as a q_text variant")

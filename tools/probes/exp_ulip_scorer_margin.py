@@ -71,7 +71,7 @@ def seven(q_mods: dict, gal: np.ndarray, targets: np.ndarray, fusion: str, score
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--query-split", default="dev_val")
-    ap.add_argument("--gallery-split", default="train")
+    ap.add_argument("--gallery-split", default="train_val")   # [D-3b] dev_val is outside train now
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out", default="output/look/exp_ulip_scorer_margin.json")
     args = ap.parse_args()

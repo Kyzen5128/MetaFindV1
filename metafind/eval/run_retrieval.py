@@ -413,6 +413,8 @@ def resolve_split(splits: dict, name: str) -> list[str]:
     if name == "holdout" and name not in splits:
         # the paper's 20% on a file that predates the key
         return sorted(set(splits.get("val", [])) | set(splits["test"]))
+    if name == "train_val" and name not in splits:
+        return list(splits["train"]) + list(splits.get("val", []))
     if name not in splits:
         raise ValueError(
             f"protocol names split {name!r}, which splits.json does not have "

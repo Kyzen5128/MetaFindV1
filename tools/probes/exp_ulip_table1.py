@@ -104,7 +104,7 @@ def fingerprint(T, I, P, q_rows, targets, QT=None, QI=None):
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--query-split", default="dev_val")
-    ap.add_argument("--gallery-split", default="train",
+    ap.add_argument("--gallery-split", default="train_val",   # [D-3b]
                     help="a split key, or 'full' for train+test")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--batch-size", type=int, default=64)
