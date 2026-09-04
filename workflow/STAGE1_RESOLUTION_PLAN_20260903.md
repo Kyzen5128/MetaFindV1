@@ -272,6 +272,12 @@ Clone：`/home/kyzen/upstream/OpenShape_code`（abe5aa4）、`/home/kyzen/upstre
 讀法：P5 的 Fusion 只看過描述，欄位句對它是雜訊（text 0.7），跟 5l 的 Sketchfab 名稱同一現象。**測試時換 q_text 無法判斷這個讀法**，要訓練時就用「gallery 描述、query 欄位句」讓 Fusion 學會跨寫法對應。→ P10：gallery 文字 = 描述（desc overlay）、q_text = 欄位句（attrs_v1 向量，`--query-text-override`）、q_image 單張自己的圖、q_pc 自己的；lr 1e-4、10 代。這是 Kyzen 提出的構法，也是 Figure 1（query 欄位）＋ Figure 2（gallery 描述）最直接的讀法。
 出處：`output/look/exp_type_level_query_P5desc.json`、`data/outputs/logs/exp_type_level_query_P5.log`。
 
+### 5n. OpenShape 論文的檢索怎麼做（arXiv 2305.10764v2，UPSTREAM FACT；2026-09-04 15:20）
+
+§4.4 Cross-Modal Applications：「we retrieve 3D shapes … by calculating the cosine similarity between input embedding(s) and 3D shape embeddings and performing kNN」。輸入是**單一**圖片、文字或點雲；全部是**定性圖例**（Figure 11、12、14、15），**沒有 R@k**、沒有測試集。兩個點雲同時查詢的做法是 argmax_i min(h_i·h_a, h_i·h_b)，取「對兩者都近」，**不是平均**。附錄 6.1：圖片查詢的輸入圖來自 unsplash.com（真實照片，不是渲染圖）。附錄 6.3.1：Objaverse 的 raw text = 該 shape 的 **name**（Sketchfab 名稱），再經 GPT-4 過濾、BLIP／Azure 描述、LAION 檢索文字補強。
+含意：(1) MetaFind Table 1 的 OpenShape 列不可能來自 OpenShape 官方碼，是 MetaFind 自己加 mean pooling 算的；(2) 上游做圖片查詢時用真實照片而非渲染圖，與「MetaFind 的 q_image 不是渲染圖」一致；(3) 上游的 raw text 就是名稱，支持 Figure 1「Platform Bed」= 名稱的讀法。
+檔案：論文 HTML 放在 docs/paper 下的 openshape_source 目錄。
+
 ## 6. Stage 2（2026-09-04 凌晨開跑）
 
 審計：`docs/audit/STAGE2_FRESH_AUDIT_20260904.md`。Eq. 6/7/8 逐項一致；場景 dropout、凍結範圍、τ 全對；正文 vs 附錄三處矛盾走附錄版（Eq. 4 才成立）。
