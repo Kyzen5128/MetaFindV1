@@ -6650,3 +6650,17 @@ What runs (`/home/kyzen/metafind_data_attrs/ulip2_pretrain_run/launch_ulip2_scra
 - Epochs: 25 (pilot ladder; 250 is the official default and ≈ 5 days at ~1.5-3 s/step here). Cosine spans the 25.
 
 Deviation from the MetaFind paper, stated: the paper says both towers "leverage the ULIP-2 embedding backbone"; this run replaces Salesforce's 800K-object / 250-epoch / 8-GPU encoder with one trained on 36,554 objects. Its zero-shot LVIS top-1 on the 20% is the first number to look at (released ULIP-2: 50.9 on our val).
+
+---
+
+## DL-096 -- 「完整地按照步驟去完成」: the whole pipeline chained behind the from-scratch backbone (2026-09-05 00:3x)
+
+Kyzen, after `docs/PAPER_PIPELINE_FULL_20260905.md`: 「完整地按照步驟去完成」. Chain `logs/chain_full_pipeline_scratchbb.sh` waits for DL-095 to finish, then:
+1. slims `checkpoint_best.pt` (official-loop format, 10.5 GB with frozen OpenCLIP inside) to the release shape (`tools/ulip2_pretrain/slim_checkpoint.py`; OpenCLIP dropped, it was frozen);
+2. Stage 1 from that backbone (`--backbone-ckpt`, new flag, hashed into `initializers.ulip2`; `--non-official-initialiser` stated): full encoder fine-tune (Point-BERT + fusion; CLIP frozen), 30% independent masking with mask tokens, Eq. 5 single-direction, τ 0.5, lr 1e-4, 10 epochs, batch 64, select on the whole 20% (DL-093 order); query image = one view, text/pc = own;
+3. n11 → G4 → n12;
+4. Table 1 on the 20% (`A20_holdout_vs_holdout`, plus B) twice: (a) own observations, (b) partner text+image (same-category asset, pc own) -- (b) is the construction that reproduces the paper's shape (DL-094), labelled, never called the paper's definition;
+5. n11b ProcTHOR gallery index for that checkpoint; Stage 2 `--variant full`, `workflow/stage2_hyperparameters_ft_lr5e-5.json` (lr 5e-5, 1 epoch, scene_dropout 0.3, τ 0.5), `--query-modality-masking none`, 1,500 train houses (same bound as the S2C/S2D arms; the full 9,600 is ~6x longer), gallery frozen, ESSGNN + query fusion trained, bidirectional loss; artifacts copied to `stage2_arms/S2_scratchbb_none_ft5e-5_20260905`;
+6. `tools/probes/stage2_procthor_retrieval.py` on 300 test houses (S1 / S2-off / S2-on).
+
+Not in the chain (cannot be done here): the paper's scene-level GPT-4o + 5-human scoring through I-Design (5b); Stage 2's positive/query definitions remain our IMPLEMENTATION CHOICEs (stage2_protocol.json). Prediction on record: with own observations the pc cell stays ≥ 90 whatever the backbone; the from-scratch backbone's zero-shot on the 20% (best so far 6.2 at epoch 3, released weights 50.9) says its text/image alignment is far weaker, so text/image cells will be lower than P1s's. Smoke: Stage 1 on CPU from a slimmed epoch-3 file loads and records the initialiser (`smoke_scratchbb_cpu_20260905`). Disk: each ULIP epoch checkpoint is 10.5 GB; a janitor keeps best/last + two newest.

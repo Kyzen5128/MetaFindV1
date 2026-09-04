@@ -2538,6 +2538,14 @@ def main() -> int:
     # Writing the module before its artifact records nothing false; swapping the
     # flag before the artifact exists would. The two vocabularies coexist until
     # Kyzen rules, and saying so here is cheaper than a reader discovering it.
+    # [KYZEN 2026-09-05 「完整地按照步驟去完成」] the backbone may start from a
+    # Point-BERT WE trained (DL-095: ULIP-2's official loop on our 80%). The file
+    # is hashed into `initializers.ulip2` exactly like the official one, and
+    # --non-official-initialiser is still required so the run says so.
+    ap.add_argument("--backbone-ckpt", default=None,
+                    help="ULIP-2-format checkpoint (point_encoder / pc_projection / "
+                         "logit_scale) to initialise the backbone from instead of "
+                         "the official release. Recorded in initializers.ulip2.")
     ap.add_argument("--non-official-initialiser", action="store_true",
                     help="allow a backbone that did not start from the official "
                          "ULIP-2 release. The reproduction line does start from "
@@ -2804,9 +2812,11 @@ def main() -> int:
     # `named_trainable_parameters()` and `trainable_state_dict()` both key off
     # `requires_grad`, so the optimizer and the checkpoint follow automatically.
     scope = training.get("train_scope", "point_encoder_and_fuser")
+    _bb_kwargs = {"checkpoint": Path(args.backbone_ckpt)} if args.backbone_ckpt else {}
     backbone = ULIPBackbone(BackboneConfig(device=args.device,
                                            train_scope=scope,
-                                           grad_checkpointing=args.device.startswith("cuda")))
+                                           grad_checkpointing=args.device.startswith("cuda"),
+                                           **_bb_kwargs))
     # [U-16 reading B, P13] the query tower's own point path, cloned from the
     # backbone just loaded so both towers start from the same ULIP-2 weights.
     backbone_q = (backbone.clone_point_path()
