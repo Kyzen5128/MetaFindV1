@@ -196,6 +196,23 @@ Kyzen ✅ 後開跑。P1 構法、lr 1e-4、10 代、`--query-partner same_categ
 → 新假設：**訓練用資產自己的文字／圖片（有資訊），測試用別的資產的（誤導）**。訓練讓 Fusion 學會信任文字圖片，測試時它們就把 query 拉走。不用訓練即可驗：拿 P1（訓練用自己的文字／單張圖／自己的 pc）在測試時改用 partner query 評 C、D（`eval_P1_testpartner_20260904`，跑中）。
 出處：`metafind_data_attrs/outputs/checkpoints/pilotP9_partner_same_category_lr1e-4_20260904b/`、`outputs/eval/eval_pilotP9_*`、`outputs/logs/chain_P9.log`。
 
+
+### 5i. 找到了：訓練用自己的紀錄、測試用別人的文字／圖片，MetaFind 列的形狀翻過來（2026-09-04 13:51）
+
+P1 checkpoint 不動（訓練：自己的文字、單張圖、自己的 pc），評估時 query 文字／圖片改成同類別另一資產的（`--query-partner same_category`），pc 自己的：
+
+| | text | image | pc | T+I | T+PC | I+PC | full |
+|---|---|---|---|---|---|---|---|
+| 論文 | 13.8 | 11.7 | 75.1 | 17.2 | 44.5 | 45.8 | 51.7 |
+| P1，測試 partner，D | 1.0 | 0.4 | 66.6 | 0.5 | **53.6** | **50.5** | **28.9** |
+| P1，測試 partner，C | 5.3 | 1.4 | 86.2 | 1.1 | 74.7 | 75.1 | 50.4 |
+| P1，測試自己的（原本）D | 11.6 | 29.7 | 66.6 | 67.5 | 95.6 | 77.8 | 98.1 |
+
+**第一次在訓練過的 MetaFind 模型上出現論文的順序**：pc > T+PC ≈ I+PC > full。T+PC 53.6 對 44.5、I+PC 50.5 對 45.8，同一量級；full 28.9 對 51.7。機制：模型在訓練時學會信任文字／圖片（因為它們是目標的），測試時它們換成別人的，就把 query 拉走。P9（訓練時也用別人的）反而讓模型丟掉文字圖片，證明論文不是那樣訓的。
+還差的：text 1.0 / image 0.4 對論文 13.8 / 11.7 → 論文 query 的文字／圖片帶有目標的**類別層級**資訊但不指向實例（Figure 1 的 `Platform Bed {size:…}` 正是這種：目標的類別＋尺寸欄位，沒有描述）。下一步（不訓練）：測試時 query 文字改成目標自己的「類別＋尺寸」填表句、圖片維持同類別別人的，看 text 單格會不會升到 13.8 而 full 仍 < pc。
+裁決：**融合格偏高的原因確定**——訓練協定（兩塔都讀目標自己的紀錄）與論文一致，差的是**評估時 query 的文字／圖片來源**。這是評估協定，不是模型。
+出處：`metafind_data_attrs/outputs/eval/eval_P1_testpartner_20260904/`、`outputs/logs/eval_P1_testpartner.log`。
+
 ## 6. Stage 2（2026-09-04 凌晨開跑）
 
 審計：`docs/audit/STAGE2_FRESH_AUDIT_20260904.md`。Eq. 6/7/8 逐項一致；場景 dropout、凍結範圍、τ 全對；正文 vs 附錄三處矛盾走附錄版（Eq. 4 才成立）。
