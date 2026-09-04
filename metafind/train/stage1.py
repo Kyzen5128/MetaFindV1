@@ -2128,6 +2128,7 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         # it saw, and two of them would look like repeats of one condition.
         "query_image_policy": training.get("_query_image_policy"),
         "query_pc_perturb": training.get("_query_pc_perturb", "none"),
+        "amp": training.get("amp", "off"),
         "prefusion_norm": bool(training.get("prefusion_norm", False)),
         "image_tokens": int(training.get("image_tokens", 1)),
         "text_template": training.get("_text_template"),
@@ -2345,6 +2346,11 @@ def main() -> int:
     # 37 and 40, which is what lets the point cloud dominate the unweighted
     # readout. UNLIKE --seed this DOES enter arm_config_hash, because a
     # different set of trainable parameters is a different treatment.
+    ap.add_argument("--amp", default="off", choices=("off", "bf16"),
+                    help="mixed precision for the training forward/backward "
+                         "(torch.autocast bf16). ULIP's own trainer runs under "
+                         "amp.autocast (upstream main.py); ours was float32. "
+                         "Enters the arm hash when on; recorded in the run.")
     ap.add_argument("--train-scope", default=None,
                     choices=("fuser_only", "point_encoder_and_fuser", "full"),
                     help="override the training protocol's train_scope for this "
@@ -2827,6 +2833,8 @@ def main() -> int:
     training["_query_observation"] = args.query_observation
     training["_query_image_policy"] = args.query_image_policy
     training["_query_pc_perturb"] = args.query_pc_perturb
+    if args.amp != "off":            # absent when off => pre-2026-09-04 arm hashes unchanged
+        training["amp"] = args.amp
     training["_embeddings_dir"] = str(paths.EMBEDDINGS)
     from metafind.models.resolve_stage1 import TEXT_TEMPLATE_NAME
     training["_text_template"] = TEXT_TEMPLATE_NAME
@@ -2865,6 +2873,9 @@ def main() -> int:
     print(f"{len(train_uids):,} train assets, batch {values['batch_size']}, "
           f"{epochs} epochs, {len(loader):,} steps/epoch", flush=True)
 
+    amp_mode = args.amp
+    if args.device.startswith("cuda"):
+        torch.cuda.reset_peak_memory_stats()
     started, step, best = time.time(), 0, None
     with runlog.run_progress(NODE):
         for epoch in range(epochs):
@@ -2874,21 +2885,28 @@ def main() -> int:
                 # decides WHICH observation each modality is, the mask decides
                 # WHETHER it is present. The two are independent and 2.6
                 # constrains only the second.
-                query_embeds, gallery_embeds = split_embeds(
-                    batch, backbone, args.device)
+                # [UPSTREAM upstream/ULIP/main.py] the official trainer runs
+                # the forward under amp.autocast; --amp bf16 does the same
+                # (bf16 needs no GradScaler). Off = the float32 path every
+                # arm before 2026-09-04 used.
+                with torch.autocast(device_type="cuda", dtype=torch.bfloat16,
+                                    enabled=(amp_mode == "bf16"
+                                             and args.device.startswith("cuda"))):
+                    query_embeds, gallery_embeds = split_embeds(
+                        batch, backbone, args.device)
 
-                # [PAPER 2.6] each modality masked INDEPENDENTLY at 30%, on the
-                # query side only -- 2.6 also says the gallery encoder is
-                # trained to be modality-complete.
-                present = sample_modality_mask(
-                    gallery_embeds["text"].size(0), p_mask=values["p_mask"],
-                    allow_empty=training["allow_all_masked"],
-                    device=args.device, generator=generator)
+                    # [PAPER 2.6] each modality masked INDEPENDENTLY at 30%, on
+                    # the query side only -- 2.6 also says the gallery encoder
+                    # is trained to be modality-complete.
+                    present = sample_modality_mask(
+                        gallery_embeds["text"].size(0), p_mask=values["p_mask"],
+                        allow_empty=training["allow_all_masked"],
+                        device=args.device, generator=generator)
 
-                q = model.query(query_embeds, present=present)
-                g = model.gallery(gallery_embeds)
+                    q = model.query(query_embeds, present=present)
+                    g = model.gallery(gallery_embeds)
 
-                out = loss_fn(q, g)
+                    out = loss_fn(q.float(), g.float())
                 opt.zero_grad(set_to_none=True)
                 out["loss"].backward()
                 # [UPSTREAM-OFFICIAL-IMPL upstream/ULIP/main.py:292] the lr is
@@ -2991,6 +3009,9 @@ def main() -> int:
 
     runlog.cost_ledger(wallclock_s=round(time.time() - started, 1),
                        steps=step, epochs=epochs)
+    if args.device.startswith("cuda"):
+        print(f"peak GPU memory {torch.cuda.max_memory_allocated() / 2**30:.1f} GiB "
+              f"(amp={amp_mode}); {(time.time() - started) / max(step, 1):.2f} s/step")
     print(f"\nStage 1 done: {step:,} steps -> {run_paths.latest_checkpoint}")
     if best is not None:
         print(f"best epoch {best[1]} (dev-val mean R@1 {best[0][0]:.4f}) "
