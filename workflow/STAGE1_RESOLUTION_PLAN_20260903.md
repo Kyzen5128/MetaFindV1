@@ -278,6 +278,31 @@ Clone：`/home/kyzen/upstream/OpenShape_code`（abe5aa4）、`/home/kyzen/upstre
 含意：(1) MetaFind Table 1 的 OpenShape 列不可能來自 OpenShape 官方碼，是 MetaFind 自己加 mean pooling 算的；(2) 上游做圖片查詢時用真實照片而非渲染圖，與「MetaFind 的 q_image 不是渲染圖」一致；(3) 上游的 raw text 就是名稱，支持 Figure 1「Platform Bed」= 名稱的讀法。
 檔案：論文 HTML 放在 docs/paper 下的 openshape_source 目錄。
 
+
+### 5o. 網路查證：NeurIPS 2025 海報（2026-09-04 15:40，PAPER FIGURE FACT）
+
+來源：https://neurips.cc/media/PosterPDFs/NeurIPS%202025/115513.png（存檔 `docs/reference/metafind_neurips2025_poster.png`）。OpenReview 論壇與 PDF 被驗證頁擋住，抓不到審稿意見；arXiv 只有 v1；沒有程式碼連結。
+
+兩個新事實：
+1. **gallery 文字是標註 JSON 本身**。海報右上「Structured Detailed Description」印的是 `{"annotations": {"category": "robot", "synset": "robot.n.01", "width": 30, "length": 30, "height": 40, "volume": 36000, "mass": 2.5, "description": "A small cubic-shaped robot …", "materials": ["metal","glass","plastic"], "onCeiling": false, "onWall": false, "onFloor": true, "onObject": true}}`。這串超過 CLIP 的 77 token（我們的資產約 120 token），CLIP 會截尾。
+2. **query 文字是 `Platform Bed (size: ……)`**（框架圖），只有類別＋尺寸。q_image 畫的是一張床的渲染圖，q_pc 一朵點雲。
+
+Table 1 全表（海報版，多了幾列基線）：
+
+| Method | Text | Image | PC | T+I | T+PC | I+PC | T+I+PC |
+|---|---|---|---|---|---|---|---|
+| ULIP | 0.1/0.9 | 0.1/1.3 | 97.9/99.4 | 0/0.3 | 33.9/58 | 22.6/41.6 | 6.4/15.9 |
+| OpenShape | 0.6/1.7 | 0.3/1.1 | 98.4/99.7 | 0/0.5 | 35.1/61.4 | 25.0/44.3 | 7.0/17.2 |
+| SCA3D | 6.9/10.4 | – | 98.1/99.3 | – | 39.7/65.2 | – | – |
+| Uni3DL | 4.5/9.2 | – | 98.5/99.8 | – | 37.4/63.9 | – | – |
+| Uni3D | 1.7/3.9 | 1.2/2.5 | 98.3/99.4 | 0.5/1.1 | 36.3/63.6 | 26.1/44.8 | 8.2/19.1 |
+| OmniBind (Base/Large/Full) | 1.2–5.3 | 0.6–2.3 | 98.2–99.0 | 0–0.5 | 34.0–37.5 | 21.5–27.5 | 5.5–11.9 |
+| MetaFind w/o ESSGNN | 13.8/23.1 | 11.7/19.2 | 75.1/78.0 | 17.2/21.8 | 44.5/71.3 | 45.8/73.1 | 51.7/76.5 |
+| MetaFind w/ ESSGNN | 11.3/21.5 | 10.5/15.9 | 63.2/66.5 | 15.9/20.3 | 41.2/68.8 | 42.0/70.4 | 48.2/74.9 |
+
+讀法：八個基線形狀一模一樣（text/image ≈ 0–7、pc ≈ 98、T+PC ≈ 34–40、I+PC ≈ 22–28、full ≈ 5–12），與 5g「任意資產的文字／圖片 + 自己的 pc、gallery 三模態平均」的重現（0.0/0.0/99.3/0.0/64.9/36.7/0.2）同型。文字專用模型（SCA3D 6.9、Uni3DL 4.5）text 單格較高 → query 文字帶類別資訊。
+→ P12（排在 P10、縱圖重評之後）：gallery 文字 = 標註 JSON（`figure2_json` 模板，截 77 token 並記錄）、q_text = `{category} {size: w x l x h cm}`、q_image 單張自己的圖、q_pc 自己的、lr 1e-4、10 代。overlay：`/home/kyzen/metafind_data_json`。
+
 ## 6. Stage 2（2026-09-04 凌晨開跑）
 
 審計：`docs/audit/STAGE2_FRESH_AUDIT_20260904.md`。Eq. 6/7/8 逐項一致；場景 dropout、凍結範圍、τ 全對；正文 vs 附錄三處矛盾走附錄版（Eq. 4 才成立）。
