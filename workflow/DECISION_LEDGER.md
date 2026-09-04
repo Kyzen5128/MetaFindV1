@@ -6674,3 +6674,15 @@ Kyzen forwarded a GPT critique of `docs/STAGE1_ARCHITECTURE_EQUATIONS_20260905.m
 New finding, verified in code: `train_scope=fuser_only` freezes the backbone but the optimizer still takes `model.parameters()` -- BOTH fusion towers train (`stage1.py:2117`) -- while the paper's Table 3 row is "training only the fusion module in the query encoder". Our fuser_only arm therefore does not map onto Table 3's 8.7; no reported number used it.
 
 Open, for Kyzen: the selection pool. D-3b says val 4,569 selects and test 4,569 is final-only; his 2026-09-04 order 「20%選啦」 (DL-093) selects on the whole 9,138, which puts the test half inside model selection, so A / A20 stop being held-out. The running s1_scratchbb chain follows the 9/4 order. Which pool the FINAL report uses is his call; both are recorded.
+
+---
+
+## DL-098 -- Full pipeline on the from-scratch backbone finished; query-observation sweep; where the Table 1 gap now stands (2026-09-05 07:1x)
+
+Chain `chain_full_pipeline_scratchbb.sh` ran to `FULL PIPELINE DONE`; sweep `sweep_query_observation.sh` to `SWEEP DONE`. Report: `docs/TABLE1_REPORT_20260905_v2.md`.
+
+- s1_scratchbb (backbone = DL-095 from-scratch ULIP-2, zero-shot 16.2): Stage 1 best epoch 9, holdout mean R@1 0.7675 (P1s 0.83). Table 1 on holdout→holdout 9,138: own observations 24.0 / 52.3 / **84.4** / 81.4 / 99.5 / 96.0 / 99.7; partner text+image 2.5 / 0.8 / 84.4 / 0.7 / 81.9 / 75.3 / 69.1. Paper 13.8 / 11.7 / 75.1 / 17.2 / 44.5 / 45.8 / 51.7. pc-only self-match falls with backbone alignment (96.7 → 84.4), consistent with the authors' own sentence (§3.2) that the dual tower lowers PC-only.
+- Sweep (val, C, both checkpoints): changing only the query TEXT (alternate description, category+size, Sketchfab name) leaves T+PC and full ≥ 94; only changing the query IMAGE (partner) pulls I+PC / full down. No construction reaches all seven cells; the archived thumbnail probe (P1, D) shows "own thumbnail" gives image 16.8 / pc 65.0 / I+PC 72.8 but T+PC 95.4 with own text.
+- Reading (INFERENCE, in the report §3): the paper's combination "text alone 13.8 but text HURTS pc (75.1 → 44.5)" is unreachable for a fusion that learned to trust pc; it matches a near-mean fusion (baselines with mean pooling: 98 → 34). So the gap has two layers: weaker query text/image source (paper silent) AND a far less converged fusion. Reproducing the second by deliberately under-training would be fitting numbers; not done without Kyzen's word.
+- Stage 2 (1,500 houses, lr 5e-5, 1 epoch, scene dropout 0.3, bidirectional): probe S1 81.8 / S2-off 44.3 / S2-on 43.9 (R@1). Layout adds nothing; fine-tuning halves the layout-free head, as in S2C/S2D.
+- Decisions requested: selection pool for the final report (val vs 9,138); whether to adopt a query construction as our IMPLEMENTATION CHOICE; whether to run the fusion-convergence ladder as a diagnostic.
