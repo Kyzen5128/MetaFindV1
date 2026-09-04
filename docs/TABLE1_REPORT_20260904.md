@@ -28,11 +28,13 @@ Kyzen ✅（2026-09-04 ~17:40）：主線選定後，A／A20／B 只跑一次。
 | R@5 | 27.8 | 63.7 | 98.6 | 86.2 | 99.9 | 99.0 | 100.0 |
 | NDCG@5 | 18.9 | 51.9 | 95.7 | 75.7 | 99.2 | 96.6 | 99.5 |
 
-**論文 Table 1（MetaFind 列，R@1）**：text 15.2、image 29.7、pc 75.1、text+image 31.1、text+pc 44.5、image+pc 73.5、full 81.5。
+**論文 Table 1（MetaFind w/o ESSGNN 列，R@1；PAPER FACT，`3experiments.tex`）**：text 13.8、image 11.7、pc 75.1、text+image 17.2、text+pc 44.5、image+pc 45.8、full 51.7。
+
+> **更正（2026-09-04 23:2x，DL-094）**：本檔第一版與 DL-092／DL-093 用的「15.2 / 29.7 / 75.1 / 31.1 / 44.5 / 73.5 / 81.5」**不在論文裡**，來源是我的對話摘要，Kyzen 再從我這裡引回去。上面這列才是論文的數字。
 
 ## 2. 一句話結論
 
-沒有重現論文的形狀。論文 text+pc（44.5）**低於** pc（75.1）；我們三個協定 text+pc 都**高於** pc，任何含點雲的格都 ≥ 92。A20 的 gallery 尺寸與論文相同（9,138 ≈ 20%），數字仍是這個形狀。只有 text 格（A20 25.0；B 9.6）與 image 格落在論文附近。
+沒有重現論文的形狀。論文的 MetaFind 列裡 pc（75.1）是最高格，加文字或影像都**變低**（T+PC 44.5、I+PC 45.8、full 51.7）；論文所有基線也一樣（pc 98，full 6～12）。我們三個協定裡加任何東西都只會更高，含點雲的格都 ≥ 92。A20 的 gallery 尺寸與論文相同（9,138），形狀仍是這樣。
 
 原因（INFERENCE，證據在 `NOTE_20260904_ULIP2_CHECK_AND_STAGE_SUMMARY.md` §一.4 與 `docs/audit/RETRIEVAL_EVALUATION_DEFINITION_20260904.md`）：query 的點雲與 gallery 的點雲是同一份資產的同一朵雲，pc 一個人就決定名次；論文的 query 觀測是怎麼來的，論文沒寫（U-09、query construction UNKNOWN）。
 

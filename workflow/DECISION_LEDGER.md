@@ -6612,3 +6612,26 @@ Code (this commit): `metafind/train/stage1.py` gains `--selection-split {dev_val
 Run: `logs/chain_sel20.sh` → lr 1e-4 (P1s recipe, fp32, 10 epochs, select on holdout) → n11/G4/n12 → `A20_holdout_vs_holdout` + B `--unseal` (interim report) → lr 1e-3 → lr 3e-3 → best holdout mean R@1 wins; if not 1e-4, its report is run too. ~2.5 h per lr on fp32 (1.3 s/step). Prediction on record: pc cell ≈ 97 (val 97.9, test 98.0, 45,692-gallery 91.9) -- the query cloud is the gallery cloud; this run changes the pool, not that.
 
 **Independent cosine check (Kyzen 「你確定你cos計算方法正確?」, 22:5x).** `tools/probes/independent_cosine_check.py`: CPU, 60 val assets, P1s checkpoint, both towers called directly, cosine by hand (a·b / |a||b|, per pair, no helper), rank by counting. Own-asset cosine agrees with the evaluator's stored `target_score` to max |diff| 1.6e-4 (text), 4.9e-5 (pc), 2.1e-6 (full) -- CPU vs GPU float noise. Shuffled-target control R@1 1.7-3.3% ≈ 1/60. Query and gallery vectors are not identical (own cos 0.94-0.997, best other ≈ 0.67-0.71). The scorer is correct; the height comes from the inputs.
+
+---
+
+## DL-094 -- THE TARGET ROW WAS WRONG. The paper's MetaFind row is 13.8 / 11.7 / 75.1 / 17.2 / 44.5 / 45.8 / 51.7 (2026-09-04 23:2x)
+
+While answering Kyzen's 「你去看ulip到底怎麼訓練的」 I re-read `3experiments.tex` Table 1 (`docs/paper/metafind_source`, arXiv 2510.04057v1; the HTML says the same). The row this evening's report, DL-092, DL-093 and Kyzen's own message compared against -- **15.2 / 29.7 / 75.1 / 31.1 / 44.5 / 73.5 / 81.5** -- **does not exist in the paper**. It first appears in DL-092, written from my compaction summary; Kyzen quoted it back from there. The correct rows (R@1), PAPER FACT:
+
+| method | text | image | pc | T+I | T+PC | I+PC | full |
+|---|---|---|---|---|---|---|---|
+| ULIP baseline (mean-pool fusion) | 0.1 | 0.1 | 97.9 | 0 | 33.9 | 22.6 | 6.4 |
+| OpenShape / Uni3D / OmniBind(Full) | 0.6 / 1.7 / 5.3 | 0.3 / 1.2 / 2.3 | 98.4 / 98.3 / 99.0 | 0 / 0.5 / 0.5 | 35.1 / 36.3 / 37.5 | 25.0 / 26.1 / 27.5 | 7.0 / 8.2 / 11.9 |
+| **MetaFind w/o ESSGNN (= Stage 1, our target)** | **13.8** | **11.7** | **75.1** | **17.2** | **44.5** | **45.8** | **51.7** |
+| MetaFind w/ ESSGNN | 11.3 | 10.5 | 63.2 | 15.9 | 41.2 | 42.0 | 48.2 |
+
+`output/look/ARMS_TABLE.md` and `docs/audit/STAGE1_FRESH_AUDIT_20260903.md` (E1) already carried the correct row; the summary lost it. `docs/TABLE1_REPORT_20260904.md` is corrected in this commit (paper row replaced, correction note added).
+
+**What the correct table says (PAPER FACT + INFERENCE, labelled):**
+- PAPER: every baseline's pc-only is 98-99 -- the same-cloud self-retrieval we measure (97.9-98.0). So query pc = the gallery's own cloud IS the paper's construction for pc.
+- PAPER: every baseline's text-only is 0.1-6.9 and T+I is 0-0.5; MetaFind's own full (51.7) is BELOW its pc-only (75.1). Adding text/image to pc HURTS for every method in the table.
+- INFERENCE: the paper's query text and image therefore carry little instance information about the gallery entry -- they are not the gallery's own cached vectors. Under our own-observation construction they are, and no arm of ours can fall below pc.
+- OBSERVED DATA: the one construction that reproduces the SHAPE is `eval_P1_testpartner_20260904` (P1 trained on own observations, evaluated on val with query text+image taken from ANOTHER same-category asset, pc own): 5.3 / 1.4 / 86.1 / 1.1 / 74.7 / 75.1 / **50.4** vs paper 13.8 / 11.7 / 75.1 / 17.2 / 44.5 / 45.8 / **51.7**. The audit (SPLIT §5i) had filed this as "diagnostic, shape flipped" -- against the wrong target row.
+
+**Not resolved:** what the paper's query text/image actually are (U-09 family; the paper says only "each asset is rendered from 11 orthogonal viewpoints and annotated using GPT-4o"). Partner-from-same-category is a construction that fits the numbers, not one the paper states. Decision requested from Kyzen: evaluate the DL-093 checkpoint on his 20% protocol under partner text+image as well, and report both rows side by side, or define a different query observation.
