@@ -1,0 +1,21 @@
+{
+  "paper": "Text2Shape: Generating Shapes from Natural Language by Learning Joint Embeddings",
+  "arxiv": "1803.08495v1",
+  "source_urls": [
+    "https://arxiv.org/html/1803.08495v1",
+    "https://arxiv.org/pdf/1803.08495v1"
+  ],
+  "downloaded_at": "2026-09-04T09:11:07.217716+00:00",
+  "requested_by": "Kyzen 2026-09-04",
+  "code": "https://github.com/kchen92/text2shape.git (clone: /home/kyzen/upstream/text2shape, HEAD 2f62ebc)",
+  "files": {
+    "text2shape_arxiv_v1.html": {
+      "sha256": "433f6db6657ce85e56e101c5c1d2c66ae222b9bf059a80d89f89f981f4ca1579",
+      "bytes": 392675
+    },
+    "text2shape_arxiv_v1.pdf": {
+      "sha256": "ee0f007a6c62734ceaa74d625f949cbcd82f61c402a6836e42721178fa66062e",
+      "bytes": 15047119
+    }
+  }
+}

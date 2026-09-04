@@ -229,7 +229,7 @@ def fake_encode_pools(vectors_by_uid, queries, seen=None, packs=None):
     TypeError rather than passing, which is the behaviour worth keeping.
     """
     def encode(backbone, model, query_uids, gallery_uids, aggregation,
-               device, batch_size, query_pack=None):
+               device, batch_size, query_pack=None, norms_out=None):
         if seen is not None:
             seen.append(gallery_uids)
         if packs is not None:

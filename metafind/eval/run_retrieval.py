@@ -777,7 +777,7 @@ def _source_clause(gallery_source: str) -> str:
 
 def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
                  device, batch_size, query_pack=None, observation=None, partner=None, text_override=None,
-                 image_tokens: int = 1, query_backbone=None):
+                 image_tokens: int = 1, query_backbone=None, norms_out: dict | None = None):
     """Query embeddings per condition, plus gallery embeddings, plus the map.
 
     The gallery is encoded ONCE and shared by all seven conditions: the gallery
@@ -900,10 +900,19 @@ def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
         is in the Stage 1 import closure, so it is NOT edited from here.
         """
         import torch
-        return normalize_for_scoring(torch.cat(chunks).numpy())
+        raw = torch.cat(chunks).numpy()
+        if norms_out is not None:
+            # [text2shape_eval] the row norms, so the raw dot product upstream
+            # runs can be rebuilt from the unit vectors: raw = unit * norm.
+            norms_out[key] = np.linalg.norm(np.asarray(raw, dtype=np.float64), axis=1)
+        return normalize_for_scoring(raw)
 
-    return ({c: norm(v) for c, v in per_cond.items()},
-            None if gal is None else norm(gal))
+    out = {}
+    for c, v in per_cond.items():
+        key = c
+        out[c] = norm(v)
+    key = "__gallery__"
+    return (out, None if gal is None else norm(gal))
 
 
 def apply_control(control: str, targets: np.ndarray, n_gallery: int,
@@ -1215,28 +1224,41 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
     # index-backed path exactly as they did on the re-encode path.
     source = gallery_source_for(protocol, untrained)
     index_record = None
+    norms: dict = {}          # filled by encode_pools; see text2shape_eval
     if source == "promoted_index":
         index_record, gallery = gallery_from_promoted_index(
             name, gallery_uids, ckpt or {}, backbone, model)
         # `None`, not `gallery_uids`: the gallery encoder is not called at all.
         queries, _ = encode_pools(backbone, model, query_uids, None,
                                   aggregation, device, batch_size, query_pack,
-                                  **_qb_kwargs(query_backbone),
+                                  **_qb_kwargs(query_backbone), norms_out=norms,
                                   **_construction_kwargs(observation, image_tokens, partner, text_override))
     else:
         queries, gallery = encode_pools(backbone, model, query_uids,
                                         gallery_uids, aggregation, device,
                                         batch_size, query_pack,
-                                        **_qb_kwargs(query_backbone),
+                                        **_qb_kwargs(query_backbone), norms_out=norms,
                                         **_construction_kwargs(observation, image_tokens, partner, text_override))
 
     eff_targets, control_used = apply_control(control, targets,
                                               len(gallery_uids), seed)
 
+    from metafind.eval.text2shape_eval import text2shape_metrics
     conditions, rows = {}, []
     for cond, q in queries.items():
         r = score_streaming(q, gallery, eff_targets, block=block)
         ranks = r["rank"]
+        # [KYZEN 2026-09-04 「照抄」] Text2Shape's own RR@k / NDCG@5, computed by
+        # its own code on the same vectors. `unit` = the L2-normalised vectors
+        # we score (cosine); `raw` = tower outputs as emitted, which is the
+        # unnormalised dot product upstream actually runs -- only when the row
+        # norms are known (a promoted-index gallery arrives already normalised).
+        t2s = {}
+        if gallery.shape[0] >= 5:            # top-5 needs five rows; tiny test galleries skip it
+            t2s["unit"] = text2shape_metrics(q, gallery, eff_targets)
+            nq, ng = norms.get(cond), norms.get("__gallery__")
+            if nq is not None and ng is not None:
+                t2s["raw"] = text2shape_metrics(q * nq[:, None], gallery * ng[:, None], eff_targets)
         conditions[cond] = {
             # No `if ranks.size else 0.0` fallback any more. `ranks.size ==
             # len(query_uids)`, and an empty query pool is refused at the top of
@@ -1255,6 +1277,7 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
             "degraded_renders_excluded": {"query": int(n_excluded_q),
                                           "gallery": int(n_excluded_g)},
             "error_count": int((ranks > 1).sum()),
+            "text2shape": t2s,
         }
         for i in range(len(query_uids)):
             rows.append({
@@ -1764,6 +1787,14 @@ def main() -> int:
                       f"margin p5 "
                       f"{cell['diagnostics']['signed_target_margin'].get('p5', 0):+.4f}",
                       flush=True)
+                t2s = cell.get("text2shape") or {}
+                if t2s:
+                    u, r = t2s.get("unit", {}), t2s.get("raw")
+                    print(f"  {'':12s} text2shape RR@1 {u['RR@1']:.4f} RR@5 {u['RR@5']:.4f} "
+                          f"NDCG@5 {u['NDCG@5']:.4f} (unit)"
+                          + (f" | raw-dot RR@1 {r['RR@1']:.4f} RR@5 {r['RR@5']:.4f} "
+                             f"NDCG@5 {r['NDCG@5']:.4f}" if r else " | raw-dot n/a (index gallery)"),
+                          flush=True)
 
         # Two artifacts, not one. [ULIP2 REVIEWER 2026-08-30] An aggregator that
         # finds `signed_target_margin` beside `R@1` will eventually report one as
