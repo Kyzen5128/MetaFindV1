@@ -147,6 +147,24 @@ P8 已用 lr 1e-4 開跑（query 三模態全換第二份觀測；image 改 held
 裁決：Stage 1 的形狀追逐到此停止。論文有寫的全部照做（§3、§5 表）；論文沒寫的 query 取得方式，用五種假設（同一份、不同觀測、破壞點雲、三模態第二觀測、類別層級）逐一檢驗，沒有一種能同時給出 pc ≈ 75～98 與 T+PC ≈ 34～45。記為 **UNRESOLVED：論文未指定的 query 協定**。下一步由 Kyzen 決定：問作者、或接受此差異進 Stage 2。
 出處：`tools/probes/exp_ulip_row_category_query.py`、`output/look/exp_ulip_row_category_query.json`。
 
+
+### 5f. 論文形狀第一次出現：gallery = 三模態平均 ＋ query 文字／圖片來自同類別的另一個資產（2026-09-04 12:40）
+
+根據論文兩句話重讀 ULIP 列的協定：§3.1「a simple mean pooling layer to aggregate available modalities, and use these fused embeddings to retrieve from a **pre-encoded gallery**」；§3.2 基線的 PC-only「retrieval using **identical embeddings for both query and gallery**」。gallery 不必是 pc 向量，可以是資產三模態的平均（fused embedding）。釋出 ULIP-2、不訓練、dev_val 4,569：
+
+| gallery | query | text | image | pc | T+I | T+PC | I+PC | full |
+|---|---|---|---|---|---|---|---|---|
+| 論文 ULIP 列 | | 0.1 | 0.1 | 97.9 | 0.0 | 33.9 | 22.6 | 6.4 |
+| pc | 自己的三份 | 18.9 | 69.9 | 100.0 | 62.0 | 99.9 | 99.9 | 99.8 |
+| mean3(raw) | 自己的三份 | 71.4 | 92.3 | 99.3 | 99.0 | 99.9 | 99.6 | 100.0 |
+| mean3(L2) | 同類別另一資產的文字、視角 + 自己的 pc，raw mean | 8.9 | 4.2 | 99.8 | 4.4 | 94.0 | 72.5 | 34.6 |
+| **mean3(raw)** | **同類別另一資產的文字、視角 + 自己的 pc，raw mean** | **8.8** | **4.2** | **99.3** | **4.4** | **87.7** | **55.3** | **24.0** |
+
+**這是第一次在任何設定下出現論文的順序**：pc ≫ T+PC > I+PC > full ≫ text ≈ image。機制：gallery 是三模態融合向量，query 帶進來的「別的資產」的文字／圖片會精準對上那個資產在 gallery 裡的文字／圖片分量，把 query 拉向它；pc 分量只佔三分之一，壓不住。
+差距仍在（T+PC 87.7 對 33.9、full 24.0 對 6.4）：候選解釋是「別的資產」不限同類別（任意資產）、gallery 更大（論文 test 9,138）。正在跑任意資產變體。
+含意：MetaFind 自己那列（text 13.8、T+I 17.2 > 兩個單模態、full < pc）也與「query 的文字／圖片不是該資產的、pc 是」一致。若成立，Stage 1 的 query 構法要改成跨資產的文字／圖片（資料集改動，待 Kyzen）。
+出處：`tools/probes/exp_ulip_row_category_query.py`、`output/look/exp_ulip_row_category_query.json`、`data/outputs/logs/exp_ulip_row_category_query2.log`。
+
 ## 6. Stage 2（2026-09-04 凌晨開跑）
 
 審計：`docs/audit/STAGE2_FRESH_AUDIT_20260904.md`。Eq. 6/7/8 逐項一致；場景 dropout、凍結範圍、τ 全對；正文 vs 附錄三處矛盾走附錄版（Eq. 4 才成立）。

@@ -65,14 +65,19 @@ def main() -> int:
             cvec.update({c: v[j] for j, c in enumerate(chunk)})
         t_cat = np.stack([cvec[cat[u]] for u in uids])
         # image: own single view and another same-category asset's view
-        i_own, i_other = [], []
+        i_own, i_other, t_other, i_rand, t_rand = [], [], [], [], []
         for u in uids:
             rng = random.Random(uid_seed(u) + 11)
             v = emb(u, "views"); i_own.append(v[uid_seed(u) % 12])
             pool = [x for x in by_cat[cat[u]] if x != u]
             o = rng.choice(pool) if pool else u
             i_other.append(emb(o, "views")[uid_seed(o) % 12])
-        i_own, i_other = np.stack(i_own), np.stack(i_other)
+            t_other.append(emb(o, "text"))               # the OTHER asset's own sentence
+            r = rng.choice(uids)                          # a RANDOM asset, any category
+            i_rand.append(emb(r, "views")[uid_seed(r) % 12]); t_rand.append(emb(r, "text"))
+        i_own, i_other, t_other = np.stack(i_own), np.stack(i_other), np.stack(t_other)
+        i_rand, t_rand = np.stack(i_rand), np.stack(t_rand)
+        g_img = np.stack([emb(u, "views").mean(0) for u in uids])   # gallery image = 12-view mean
         # pc: own canonical (gallery) and the pack's resampled cloud
         clouds = []
         for u in uids:
@@ -91,25 +96,41 @@ def main() -> int:
         print("encoding resampled query pc", flush=True)
         q_pc_res = enc([np.asarray(pack.vector("pc", u), dtype=np.float32) for u in uids])
 
-    G = normalize_for_scoring(g_pc)
+    # [PAPER 3.1] baselines: "a simple mean pooling layer to aggregate available modalities, and use
+    # these fused embeddings to retrieve from a pre-encoded gallery"; [PAPER 3.2] their PC-only uses
+    # "identical embeddings for both query and gallery". The gallery's own construction is not stated,
+    # so two readings are scored: gallery = pc vector, and gallery = mean of the asset's three vectors.
+    galleries = {
+        "gallery=pc": normalize_for_scoring(g_pc),
+        "gallery=mean3(L2)": normalize_for_scoring(np.mean([normalize_for_scoring(t_own), normalize_for_scoring(g_img), normalize_for_scoring(g_pc)], axis=0)),
+        "gallery=mean3(raw)": normalize_for_scoring(np.mean([t_own, g_img, g_pc], axis=0)),
+    }
     variants = {
         "own text | own view | own pc": (t_own, i_own, g_pc),
         "category text | own view | own pc": (t_cat, i_own, g_pc),
         "category text | OTHER asset view | own pc": (t_cat, i_other, g_pc),
-        "own text | OTHER asset view | own pc": (t_own, i_other, g_pc),
-        "category text | OTHER asset view | resampled pc": (t_cat, i_other, q_pc_res),
+        "OTHER asset text | OTHER asset view | own pc": (t_other, i_other, g_pc),
+        "OTHER asset text | OTHER asset view | resampled pc": (t_other, i_other, q_pc_res),
+        "RANDOM asset text | RANDOM asset view | own pc": (t_rand, i_rand, g_pc),
+        "OTHER asset text | RANDOM asset view | own pc": (t_other, i_rand, g_pc),
     }
     out = {"n": n, "paper_ulip": PAPER_ULIP, "rows": {}}
-    print(f"\n{'variant':<48}" + "".join(f"{c:>9}" for c in QUERY_CONDITIONS))
-    print(f"{'paper ULIP row':<48}" + "".join(f"{PAPER_ULIP[c]:>9.1f}" for c in QUERY_CONDITIONS))
-    for name, (t, im, pc) in variants.items():
-        mods = {"text": normalize_for_scoring(t), "image": normalize_for_scoring(im), "pc": normalize_for_scoring(pc)}
-        cells = {}
-        for cond in QUERY_CONDITIONS:
-            parts = [mods[m] for m in ("text", "image", "pc") if m in cond.replace("full", "text+image+pc").split("+")]
-            cells[cond] = recall_at_k(normalize_for_scoring(np.mean(parts, axis=0)) @ G.T, targets)
-        out["rows"][name] = cells
-        print(f"{name:<48}" + "".join(f"{cells[c]['R@1']*100:>9.1f}" for c in QUERY_CONDITIONS), flush=True)
+    for gname, G in galleries.items():
+        print(f"\n=== {gname} ===")
+        print(f"{'variant':<52}" + "".join(f"{c:>9}" for c in QUERY_CONDITIONS))
+        print(f"{'paper ULIP row':<52}" + "".join(f"{PAPER_ULIP[c]:>9.1f}" for c in QUERY_CONDITIONS))
+        for name, (t, im, pc) in variants.items():
+            for mode in ("L2", "raw"):
+                if mode == "L2":
+                    mods = {"text": normalize_for_scoring(t), "image": normalize_for_scoring(im), "pc": normalize_for_scoring(pc)}
+                else:
+                    mods = {"text": t.astype(np.float64), "image": im.astype(np.float64), "pc": pc.astype(np.float64)}
+                cells = {}
+                for cond in QUERY_CONDITIONS:
+                    parts = [mods[m] for m in ("text", "image", "pc") if m in cond.replace("full", "text+image+pc").split("+")]
+                    cells[cond] = recall_at_k(normalize_for_scoring(np.mean(parts, axis=0)) @ G.T, targets)
+                out["rows"][f"{gname} | {name} | {mode}mean"] = cells
+                print(f"{name + ' | ' + mode:<52}" + "".join(f"{cells[c]['R@1']*100:>9.1f}" for c in QUERY_CONDITIONS), flush=True)
     Path(args.out).write_text(json.dumps(out, indent=1))
     print(f"-> {args.out}")
     return 0
