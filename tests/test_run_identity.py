@@ -586,6 +586,10 @@ ARM_RECIPE_KEYS = {
     # `query_partner`, `query_text_override_sha256` enter only when the run
     # sets them (--amp bf16, --query-partner, --query-text-override) and change
     # what the model sees or how its numerics run, so they are arms, not policy.
+}
+# Treatments that enter the recipe only when a run turns them on (an overlay
+# protocol or a flag); their absence is the default arm, not a lost key.
+OPTIONAL_TREATMENT_KEYS = {
     "training.prefusion_norm", "training.image_tokens", "training.amp",
     "training.query_partner", "training.query_text_override_sha256",
     # stage1_encoding_protocol.json, whole, minus ENCODING_EXCLUDED
@@ -632,7 +636,7 @@ def test_the_recipe_key_set_is_frozen():
     _, recipe = stage1.arm_config_hash(
         hp["values"], {**tr, "_epoch_count": 5, "_lr_horizon": 5}, en, "dev")
 
-    added = set(recipe) - ARM_RECIPE_KEYS
+    added = set(recipe) - ARM_RECIPE_KEYS - OPTIONAL_TREATMENT_KEYS
     gone = ARM_RECIPE_KEYS - set(recipe)
     assert not added, (
         f"{sorted(added)} entered the arm recipe unreviewed. Decide whether each "
