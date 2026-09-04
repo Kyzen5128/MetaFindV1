@@ -1,0 +1,32 @@
+{
+    "shapenet": {
+        "config": "./data/ShapeNet-55.yaml",
+        "train": "train",
+        "test": "test",
+        "usage": "train"
+    },
+    "modelnet40": {
+        "config": "./data/ModelNet40.yaml",
+        "train": "train",
+        "test": "test",
+        "usage": "test"
+    },
+    "objaverse_lvis_colored": {
+        "config": "./data/Objaverse_Lvis_Colored.yaml",
+        "train": "train",
+        "test": "test",
+        "usage": "train"
+    },
+    "objaverse_metafind_train": {
+        "config": "./data/MetaFindObjaverse_train.yaml",
+        "train": "train",
+        "test": "test",
+        "usage": "train"
+    },
+    "objaverse_metafind_val": {
+        "config": "./data/MetaFindObjaverse_val.yaml",
+        "train": "train",
+        "test": "test",
+        "usage": "test"
+    }
+}

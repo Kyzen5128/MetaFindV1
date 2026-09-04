@@ -1,0 +1,5 @@
+NAME: MetaFindObjaverseVal
+DATA_ROOT: /home/kyzen/metafind_data_attrs/outputs
+SPLITS_PATH: /home/kyzen/metafind_data_attrs/outputs/splits.json
+SPLIT_KEY: holdout
+LIMIT: 0
