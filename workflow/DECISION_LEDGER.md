@@ -6588,3 +6588,15 @@ METAFIND_DATA=/home/kyzen/metafind_data_attrs METAFIND_TEXT_TEMPLATE=attrs_v1 py
 P13b and P12b stay val-only; their C/D numbers are reported beside as arms. The pairwise diagnostic stays on val and is never labelled Table 1.
 
 **Outcome (21:41):** chain finished rc 0 after one restart (the reported protocols need the promoted gallery index; first attempt had none -- n11 → G4 PASS → n12 → A/A20/B). Test R@1: A text 33.9 / full 99.9; A20 text 25.0 / full 99.6; B text 9.6 / full 98.8; text+pc ≥ pc in all three. Report: `docs/TABLE1_REPORT_20260904.md`. The ✅ is spent; `test` is no longer held-out for this corpus.
+
+**Query-mismatch diagnostic (val only, C, P1s checkpoint unchanged; 21:40-21:5x; `logs/diag_P1s_query_mismatch.sh`, out-dirs `diag_P1s_C_*`).** Question: does text+pc fall below pc once the query text is not the gallery's own? R@1 %:
+
+| query construction | text | image | pc | text+image | text+pc | image+pc | full |
+|---|---|---|---|---|---|---|---|
+| own observations (baseline) | 33.8 | 65.7 | 97.9 | 85.9 | 99.7 | 98.5 | 99.8 |
+| query text = Sketchfab name | 6.8 | 65.7 | 97.9 | 52.6 | 94.6 | 98.5 | 96.4 |
+| query text = category+size | 17.2 | 65.7 | 97.9 | 74.7 | 98.2 | 98.5 | 98.8 |
+| query text+image = another same-category asset | 5.5 | 1.2 | 97.9 | 1.2 | 94.4 | 96.1 | 86.1 |
+| paper | 15.2 | 29.7 | 75.1 | 31.1 | 44.5 | 73.5 | 81.5 |
+
+Reading: a mismatched query text now HURTS (99.7 → 94.6, the paper's direction) but only by a few points, because pc alone is 97.9 and the query cloud is the gallery's own cloud. The remaining gap is the pc cell (97.9 val / 91.9 on 45,692 vs paper 75.1); earlier resampling of the query cloud moved it by ~1 point (`exp_observation_geometry.json`). What the paper's query point cloud is remains UNKNOWN (U-09 family); escalated to Kyzen.
