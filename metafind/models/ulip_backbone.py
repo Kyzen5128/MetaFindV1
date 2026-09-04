@@ -464,3 +464,79 @@ class ULIPBackbone:
         # (the gallery index writer, cached text/image embeddings) call .cpu()
         # themselves, where it is a deliberate transfer rather than a hidden one.
         return out.float()
+
+
+# ---------------------------------------------------------------------------
+# [U-16 reading B, arm P13, Kyzen ✅ 2026-09-04] A SECOND point-cloud path for
+# the query tower: PointBERT + pc_projection deep-copied from the loaded ULIP-2
+# checkpoint, so both towers start from identical weights and diverge only
+# through training. Nothing else is duplicated -- the CLIP text/image towers
+# are frozen and their vectors come from the n06 cache, so a second copy of
+# them would produce the same numbers at 2x the memory. The gallery tower
+# keeps the original `ULIPBackbone`.
+
+class _PointPath(torch.nn.Module):
+    """The two tensors `ULIP2_PointBERT_Colored.encode_pc` reads, and nothing else.
+
+    Parameter names are `point_encoder.*` and `pc_projection`, the same names
+    the parent model uses, so the checkpoint section written for this object
+    reads like the gallery's.
+    """
+
+    def __init__(self, point_encoder: torch.nn.Module, pc_projection: torch.nn.Parameter) -> None:
+        super().__init__()
+        self.point_encoder = point_encoder
+        self.pc_projection = pc_projection
+
+    def encode_pc(self, pc: Tensor) -> Tensor:
+        # verbatim `ULIP_models.py` encode_pc: feat @ projection
+        return self.point_encoder(pc) @ self.pc_projection
+
+
+class PointPathBackbone(ULIPBackbone):
+    """A query-side point path cloned from a loaded `ULIPBackbone`.
+
+    Built through `ULIPBackbone.clone_point_path`, never directly. It reuses the
+    parent class's scope handling, gradient checkpointing and `encode_pc`
+    checks; `encode_text` / `encode_image` are refused because this object
+    carries no CLIP tower.
+    """
+
+    def __init__(self, parent: ULIPBackbone) -> None:  # noqa: D107 -- see class doc
+        import copy
+        from dataclasses import replace
+
+        self.cfg = replace(parent.cfg)
+        encoder = copy.deepcopy(parent.model.point_encoder)
+        # The parent's gradient-checkpointing patch is a closure bound to the
+        # PARENT's blocks and stored on the encoder INSTANCE; deepcopy carries
+        # that attribute over, and the clone would then recompute the parent's
+        # weights. Drop it and re-apply on the clone's own blocks below.
+        encoder.__dict__.pop("forward", None)
+        for m in encoder.modules():
+            m.__dict__.pop("forward", None)
+        projection = torch.nn.Parameter(parent.model.pc_projection.detach().clone())
+        self.model = _PointPath(encoder, projection).to(self.cfg.device, dtype=self.cfg.dtype)
+        self._apply_train_scope()
+        if self.cfg.grad_checkpointing:
+            self._enable_point_encoder_checkpointing()
+        self.tokenizer = None
+        self.preprocess = None
+
+    def encode_text(self, texts):  # type: ignore[override]
+        raise NotImplementedError("PointPathBackbone carries no text tower; use the gallery backbone")
+
+    def encode_image(self, images):  # type: ignore[override]
+        raise NotImplementedError("PointPathBackbone carries no image tower; use the gallery backbone")
+
+
+def _clone_point_path(self: ULIPBackbone) -> PointPathBackbone:
+    """A second, independently trainable copy of THIS backbone's point path.
+
+    Identical at the moment of cloning: `encode_pc` on the clone equals the
+    parent's, and no parameter tensor is shared (`test_separate_backbones`).
+    """
+    return PointPathBackbone(self)
+
+
+ULIPBackbone.clone_point_path = _clone_point_path
