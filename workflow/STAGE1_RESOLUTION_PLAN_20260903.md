@@ -118,6 +118,17 @@ P8 已用 lr 1e-4 開跑（query 三模態全換第二份觀測；image 改 held
 **新假設（由論文 ULIP 列與 Figure 1 推得）**：ULIP 列 text 0.1、image 0.1 是亂猜水準 → 論文 query 的文字、圖片不指向該實例，只指向類別（Figure 1 的文字 query 是 `Platform Bed {size:…}`）。只有點雲是該資產自己的。若成立，T+PC 從 97.9 掉到 33.9 就有解釋：文字／圖片把 query 拉向同類別的別的資產。
 檢驗（不訓練）：`tools/probes/exp_ulip_row_category_query.py`，query 文字 = 類別名、圖片 = 同類別另一個資產的一張視角、pc = 自己的，用釋出 ULIP-2 直接平均對 ULIP 列。排在 AMP 量測之後自動跑。
 
+
+### 5d. AMP bf16 量測（2026-09-04 12:05；P1 配方，lr 1e-4，100 步，RTX 5090 32 GB）
+
+| | 峰值記憶體（allocated） | 每步 | 100 步 loss | dev_val 平均 |
+|---|---|---|---|---|
+| float32（現行） | 23.8 GiB | 0.74 s | 2.649 | 0.643 |
+| bf16 autocast | 17.3 GiB | 0.50 s | 2.656 | 0.639 |
+
+省 27% 記憶體、快 1.5 倍，100 步內 loss／dev_val 差在雜訊內。ULIP 官方訓練本來就開 amp.autocast（main.py），所以開 bf16 是向上游靠，不是偏離。`--amp bf16` 已進 arm hash；預設仍 off，等 Stage 1 形狀定案再切主線。
+出處：`metafind_data_attrs/outputs/logs/chain_amp.log`、`checkpoints/smoke_amp_{off,bf16}_20260904/`（debug run，非科學結果）。
+
 ## 6. Stage 2（2026-09-04 凌晨開跑）
 
 審計：`docs/audit/STAGE2_FRESH_AUDIT_20260904.md`。Eq. 6/7/8 逐項一致；場景 dropout、凍結範圍、τ 全對；正文 vs 附錄三處矛盾走附錄版（Eq. 4 才成立）。
