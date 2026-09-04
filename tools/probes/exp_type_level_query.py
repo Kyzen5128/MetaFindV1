@@ -44,6 +44,9 @@ def main() -> int:
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--gallery-split", default="train")
     ap.add_argument("--out", default="output/look/exp_type_level_query.json")
+    ap.add_argument("--fields-text-cache", default="/home/kyzen/metafind_data_attrs/outputs/embeddings",
+                    help="embeddings dir whose `text` is the FIELDS form-fill (attrs_v1); used as a q_text variant")
+    ap.add_argument("--no-sketchfab", action="store_true")
     args = ap.parse_args()
     from tools.probes.exp_query_observation import load_tower
 
@@ -76,8 +79,22 @@ def main() -> int:
         # ---- query text variants
         texts = {"own(attrs)": np.stack([emb(u, "text") for u in q_uids]),
                  "partner(attrs)": np.stack([emb(partner[u], "text") for u in q_uids])}
-        for name, tpl in TEMPLATES.items():
-            sents = [serialize_annotation(anns[u], template=tpl) for u in q_uids]
+        # Objaverse / Sketchfab metadata (OpenShape's `objaverse_meta.json`): the asset's own NAME,
+        # tags, description -- about the target, but not the gallery's GPT-style form-fill.
+        meta_path = Path("/home/kyzen/upstream/openshape-objaverse-embeddings/objaverse_meta.json")
+        meta = {e["u"]: e for e in json.loads(meta_path.read_text())["entries"]} if meta_path.exists() else {}
+        def size_of(u):
+            a = anns[u]; return f"{float(a['width']):.0f} x {float(a['length']):.0f} x {float(a['height']):.0f} cm"
+        variants = {name: [serialize_annotation(anns[u], template=tpl) for u in q_uids] for name, tpl in TEMPLATES.items()}
+        if meta and not args.no_sketchfab:
+            variants["sketchfab_name"] = [meta[u]["name"] for u in q_uids]
+            variants["sketchfab_name_size"] = [f"{meta[u]['name']} {{size: {size_of(u)}}}" for u in q_uids]
+            variants["sketchfab_name_tags"] = [", ".join([meta[u]["name"]] + list(meta[u].get("tags") or [])[:5]) for u in q_uids]
+            variants["sketchfab_desc_or_name"] = [(meta[u].get("desc") or meta[u]["name"])[:300] for u in q_uids]
+        fc = Path(args.fields_text_cache)
+        if fc.exists() and fc != paths.EMBEDDINGS:
+            texts["fields(attrs cache)"] = np.stack([np.load(fc / f"{u}.npz")["text"].astype(np.float32) for u in q_uids])
+        for name, sents in variants.items():
             print(f"  {name} e.g. {sents[0]!r}", flush=True)
             vecs = []
             for i in range(0, len(sents), 256):
@@ -107,10 +124,10 @@ def main() -> int:
 
         combos = [("own(attrs)", "own view", "parity: P1 as evaluated"),
                   ("partner(attrs)", "partner view", "parity: 5i (partner text+image)"),
-                  ("cat_size", "partner view", "Figure-1 text of the TARGET + reference view"),
-                  ("cat_only", "partner view", "category only + reference view"),
-                  ("cat_size", "own view", "Figure-1 text + own view"),
-                  ("cat_only", "own view", "category only + own view")]
+                  ("cat_size", "partner view", "Figure-1 text of the TARGET + reference view")]
+        for tn in ("fields(attrs cache)", "cat_only", "sketchfab_name", "sketchfab_name_size", "sketchfab_name_tags", "sketchfab_desc_or_name"):
+            if tn in texts:
+                combos += [(tn, "partner view", f"{tn} + reference view"), (tn, "own view", f"{tn} + own view")]
         out = {"n_query": len(q_uids), "n_gallery": len(g_uids), "paper": PAPER, "rows": {}}
         print(f"\n{'query (text | image); pc = own':<50}" + "".join(f"{c:>9}" for c in QUERY_CONDITIONS))
         print(f"{'paper w/o ESSGNN':<50}" + "".join(f"{PAPER[c]:>9.1f}" for c in QUERY_CONDITIONS))
