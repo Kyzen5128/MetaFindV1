@@ -165,6 +165,23 @@ P8 已用 lr 1e-4 開跑（query 三模態全換第二份觀測；image 改 held
 含意：MetaFind 自己那列（text 13.8、T+I 17.2 > 兩個單模態、full < pc）也與「query 的文字／圖片不是該資產的、pc 是」一致。若成立，Stage 1 的 query 構法要改成跨資產的文字／圖片（資料集改動，待 Kyzen）。
 出處：`tools/probes/exp_ulip_row_category_query.py`、`output/look/exp_ulip_row_category_query.json`、`data/outputs/logs/exp_ulip_row_category_query2.log`。
 
+
+### 5g. 任意資產的文字／圖片 + 自己的 pc：ULIP 列七格全部對上量級（2026-09-04 12:55）
+
+gallery = mean3(raw)，query raw mean，dev_val 4,569：
+
+| query 文字／圖片來源 | text | image | pc | T+I | T+PC | I+PC | full |
+|---|---|---|---|---|---|---|---|
+| 論文 ULIP 列 | 0.1 | 0.1 | 97.9 | 0.0 | 33.9 | 22.6 | 6.4 |
+| 同類別另一資產 | 8.8 | 4.2 | 99.3 | 4.4 | 87.7 | 55.3 | 24.0 |
+| **任意資產（不限類別）** | **0.0** | **0.0** | **99.3** | **0.0** | **64.9** | **36.7** | **0.2** |
+| 文字同類別、圖片任意 | 8.8 | 0.0 | 99.3 | 2.5 | 87.7 | 36.7 | 79.5 |
+
+讀法：ULIP 列的 0.1 / 0.1 / 0.0 三格只有「文字、圖片與目標無關」做得出來；T+PC 64.9 對 33.9、I+PC 36.7 對 22.6 是同一量級（gallery 4,569 對論文 9,138，更大的 gallery 會再壓低）。**ULIP 列的協定至此可重現到量級**：gallery = 三模態 raw 平均、query 的文字／圖片不是目標資產的、pc 是。
+對 MetaFind 自己那列的含意：text 13.8 / image 11.7 不是 0，所以 MetaFind 的 query 文字／圖片帶有目標的類別資訊 → 「同類別另一資產」版本（8.8 / 4.2 的量級）；訓練後可望到 13.8 / 11.7；含 pc 的融合格會被別的資產拉低 → full < pc。這就是 P9 的構法。
+兩列的 query 來源不一定相同（基線與 MetaFind 各有評估管線），論文沒寫；記 INFERENCE。
+出處：`data/outputs/logs/exp_ulip_row_category_query3.log`、`output/look/exp_ulip_row_category_query.json`。
+
 ## 6. Stage 2（2026-09-04 凌晨開跑）
 
 審計：`docs/audit/STAGE2_FRESH_AUDIT_20260904.md`。Eq. 6/7/8 逐項一致；場景 dropout、凍結範圍、τ 全對；正文 vs 附錄三處矛盾走附錄版（Eq. 4 才成立）。
