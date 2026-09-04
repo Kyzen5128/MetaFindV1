@@ -530,8 +530,18 @@ class Stage1Dataset:
     def __init__(self, uids: list[str], aggregation: str,
                  preload: bool = False,
                  query_pack: "QueryPack | None" = None,
-                 observation=None, image_tokens: int = 1) -> None:
+                 observation=None, image_tokens: int = 1,
+                 partner: str | None = None) -> None:
         """`observation` is the §十一 protocol block, resolved.
+
+        `partner="same_category"` [KYZEN ✅ 2026-09-04, P9]: the QUERY's text
+        and image are taken from ANOTHER asset of the same LVIS category (one
+        fixed partner per asset, `Random(uid_seed(uid) + 11)`), the query's pc
+        stays the asset's own. Motivated by the paper's ULIP row: its text /
+        image / T+I cells at 0.1 / 0.1 / 0.0 are only reproducible when the
+        query's text and image do not identify the instance, and its T+PC /
+        I+PC / full drops appear only then (exp_ulip_row_category_query). The
+        gallery is untouched.
 
         `image_tokens` > 1 hands the image modality over as the per-view
         matrix instead of the pooled vector (FusionConfig.image_tokens): the
@@ -559,6 +569,8 @@ class Stage1Dataset:
         self.query_pack = query_pack
         self.observation = observation
         self.image_tokens = int(image_tokens)
+        self.partner = partner
+        self._partner_of = self._build_partners(uids) if partner else None
         # A policy the cache cannot serve must have been refused at resolution
         # time, not discovered here on asset 30,000 of an epoch.
         if observation is not None and observation.query.needs_pack() and query_pack is None:
@@ -608,6 +620,49 @@ class Stage1Dataset:
         idx = view_indices(side.image, uid, views.shape[0])
         return np.asarray(views[idx], dtype=np.float32).mean(axis=0)
 
+    def _build_partners(self, uids: list[str]) -> dict:
+        """uid -> partner uid, deterministic, never the asset itself.
+
+        Pool = the assets of the same `lvis_category` INSIDE this dataset's own
+        uid list (train partners come from train, dev_val partners from
+        dev_val), so no split leaks into another. A category with a single
+        asset here falls back to a random asset of any category, seeded the
+        same way; the count is printed."""
+        import random as _random
+        from collections import defaultdict
+        from metafind.data.pointclouds import uid_seed
+        if self.partner != "same_category":
+            raise ValueError(f"unknown partner policy {self.partner!r}; have ('same_category',)")
+        cat = {}
+        for u in uids:
+            cat[u] = json.loads((paths.ANNOTATIONS / f"{u}.json").read_text())["lvis_category"]
+        pools = defaultdict(list)
+        for u in uids:
+            pools[cat[u]].append(u)
+        out, singles = {}, 0
+        for u in uids:
+            rng = _random.Random(uid_seed(u) + 11)
+            pool = [x for x in pools[cat[u]] if x != u]
+            if not pool:
+                singles += 1
+                pool = [x for x in uids if x != u]
+            out[u] = rng.choice(pool)
+        print(f"  query partner=same_category: {len(uids):,} assets, "
+              f"{len(pools):,} categories, {singles} singleton(s) fell back to any-category",
+              flush=True)
+        return out
+
+    def _apply_partner(self, uid: str, out: dict) -> dict:
+        if self._partner_of is None:
+            return out
+        from metafind.data.pointclouds import uid_seed
+        p = self._partner_of[uid]
+        cached = np.load(paths.EMBEDDINGS / f"{p}.npz")
+        out["q_text"] = np.asarray(cached["text"], dtype=np.float32)
+        views = cached["views"]
+        out["q_image"] = np.asarray(views[uid_seed(p) % views.shape[0]], dtype=np.float32)
+        return out                                  # q_pc untouched: the asset's own
+
     def _view_matrix(self, entry: dict) -> np.ndarray:
         v = np.asarray(entry["views"], dtype=np.float32)
         if v.shape[0] != self.image_tokens:
@@ -641,7 +696,7 @@ class Stage1Dataset:
                 out["q_image"] = self._image_for(obs.query, uid, entry)
         pack = self.query_pack
         if pack is None:
-            return out
+            return self._apply_partner(uid, out)
         if "text" in pack.arms:
             out["q_text"] = pack.vector("text", uid)
         if "image" in pack.arms:
@@ -665,7 +720,7 @@ class Stage1Dataset:
         # keep the gallery's observation. The active arm list travels into the
         # checkpoint's arm hash, so a partial pack is recorded as partial rather
         # than mistaken for a full one.
-        return out
+        return self._apply_partner(uid, out)
 
     def _preload(self) -> None:
         """Read every asset once, up front, and keep it in RAM.
@@ -814,7 +869,8 @@ class Stage1Dataset:
         # that is supposed to change only where the bytes live. Caught by
         # test_two_towers_with_different_image_policies_emit_a_query_vector,
         # which is why that test builds the non-preloaded dataset.
-        if self.query_pack is not None or self.observation is not None:
+        if (self.query_pack is not None or self.observation is not None
+                or self.partner is not None):
             entry = {"image": cached["image"]}
             if self._needs_views():
                 entry["views"] = cached["views"]
@@ -1310,7 +1366,7 @@ def flatten_condition_scores(scores: dict) -> dict:
 
 def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
                      batch_size, query_pack=None, num_workers: int = 4,
-                     observation=None, image_tokens: int = 1):
+                     observation=None, image_tokens: int = 1, partner=None):
     """Mean R@1 / R@5 over the seven Table 1 conditions, on the dev-val gallery.
 
     Gallery is dev_val itself (`splits.build_eval_protocols`, protocol
@@ -1397,7 +1453,8 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
     loader = DataLoader(Stage1Dataset(dev_val_uids, aggregation,
                                       query_pack=query_pack,
                                       observation=observation,
-                                      image_tokens=image_tokens),
+                                      image_tokens=image_tokens,
+                                      partner=partner),
                         batch_size=batch_size, shuffle=False, collate_fn=collate,
                         num_workers=num_workers, drop_last=False)
     per_condition_q = {c: [] for c in QUERY_CONDITIONS}
@@ -2129,6 +2186,7 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         "query_image_policy": training.get("_query_image_policy"),
         "query_pc_perturb": training.get("_query_pc_perturb", "none"),
         "amp": training.get("amp", "off"),
+        "query_partner": training.get("query_partner", "none"),
         "prefusion_norm": bool(training.get("prefusion_norm", False)),
         "image_tokens": int(training.get("image_tokens", 1)),
         "text_template": training.get("_text_template"),
@@ -2346,6 +2404,11 @@ def main() -> int:
     # 37 and 40, which is what lets the point cloud dominate the unweighted
     # readout. UNLIKE --seed this DOES enter arm_config_hash, because a
     # different set of trainable parameters is a different treatment.
+    ap.add_argument("--query-partner", default="none", choices=("none", "same_category"),
+                    help="[KYZEN ✅ 2026-09-04] the QUERY's text and image come "
+                         "from another asset of the same LVIS category (fixed "
+                         "partner per asset); the query pc stays the asset's own. "
+                         "Gallery untouched. Enters the arm hash; recorded.")
     ap.add_argument("--amp", default="off", choices=("off", "bf16"),
                     help="mixed precision for the training forward/backward "
                          "(torch.autocast bf16). ULIP's own trainer runs under "
@@ -2592,7 +2655,8 @@ def main() -> int:
     # cached per-view matrix). Either one makes the query read something the
     # gallery does not hold; declaring same_record beside either is a false
     # label, and declaring second_observation with neither is an empty one.
-    second_via_image = args.query_image_policy != "same_mean"
+    second_via_image = (args.query_image_policy != "same_mean"
+                        or args.query_partner != "none")
     if args.query_observation == "second_observation" and query_pack is None \
             and not second_via_image:
         raise SystemExit("--query-observation second_observation needs "
@@ -2727,7 +2791,8 @@ def main() -> int:
         Stage1Dataset(train_uids, encoding["image_aggregation"],
                       preload=args.preload, query_pack=query_pack,
                       observation=observation,
-                      image_tokens=int(training.get("image_tokens", 1))),
+                      image_tokens=int(training.get("image_tokens", 1)),
+                      partner=(args.query_partner if args.query_partner != "none" else None)),
         batch_size=values["batch_size"], shuffle=True, collate_fn=collate,
         num_workers=workers, drop_last=True, generator=generator)
 
@@ -2835,6 +2900,8 @@ def main() -> int:
     training["_query_pc_perturb"] = args.query_pc_perturb
     if args.amp != "off":            # absent when off => pre-2026-09-04 arm hashes unchanged
         training["amp"] = args.amp
+    if args.query_partner != "none":
+        training["query_partner"] = args.query_partner
     training["_embeddings_dir"] = str(paths.EMBEDDINGS)
     from metafind.models.resolve_stage1 import TEXT_TEMPLATE_NAME
     training["_text_template"] = TEXT_TEMPLATE_NAME
@@ -2986,7 +3053,8 @@ def main() -> int:
                     # the same worker count the training loader uses, so a
                     # --preload run really has no worker processes at all
                     num_workers=workers, observation=eval_observation,
-                    image_tokens=int(training.get("image_tokens", 1)))
+                    image_tokens=int(training.get("image_tokens", 1)),
+                    partner=(args.query_partner if args.query_partner != "none" else None))
                 runlog.train_metrics("stage1_dev_val", epoch=epoch, step=step,
                                      **{k: v for k, v in scores.items()
                                         if isinstance(v, (int, float))},

@@ -766,7 +766,7 @@ def _source_clause(gallery_source: str) -> str:
 
 
 def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
-                 device, batch_size, query_pack=None, observation=None,
+                 device, batch_size, query_pack=None, observation=None, partner=None,
                  image_tokens: int = 1):
     """Query embeddings per condition, plus gallery embeddings, plus the map.
 
@@ -811,6 +811,8 @@ def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
             extra["observation"] = obs
         if image_tokens != 1:
             extra["image_tokens"] = image_tokens
+        if conditions and partner not in (None, "none"):
+            extra["partner"] = partner            # QUERY side only; the gallery is untouched
         loader = DataLoader(Stage1Dataset(uids, aggregation, query_pack=pack, **extra),
                             batch_size=batch_size,
                             shuffle=False, collate_fn=collate, num_workers=4,
@@ -1051,13 +1053,15 @@ def overlay_stage2_weights(model, rec: dict, device: str) -> None:
           f"lambda {lam:.4f} (unused at evaluation: layout=None)", flush=True)
 
 
-def _construction_kwargs(observation, image_tokens: int) -> dict:
+def _construction_kwargs(observation, image_tokens: int, partner=None) -> dict:
     """Only what differs from the pre-2026-09-03 construction, as keywords."""
     out = {}
     if observation is not None:
         out["observation"] = observation
     if image_tokens != 1:
         out["image_tokens"] = image_tokens
+    if partner not in (None, "none"):
+        out["partner"] = partner
     return out
 
 
@@ -1068,7 +1072,7 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
                  ckpt: dict | None = None,
                  query_pack=None,
                  exclude_uids: set | None = None,
-                 observation=None, image_tokens: int = 1) -> tuple[dict, list]:
+                 observation=None, image_tokens: int = 1, partner=None) -> tuple[dict, list]:
     """One protocol, seven conditions. Returns (core result, per-query rows).
 
     The gallery's SOURCE is decided here, from the protocol's own fields, not by
@@ -1194,12 +1198,12 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
         # `None`, not `gallery_uids`: the gallery encoder is not called at all.
         queries, _ = encode_pools(backbone, model, query_uids, None,
                                   aggregation, device, batch_size, query_pack,
-                                  **_construction_kwargs(observation, image_tokens))
+                                  **_construction_kwargs(observation, image_tokens, partner))
     else:
         queries, gallery = encode_pools(backbone, model, query_uids,
                                         gallery_uids, aggregation, device,
                                         batch_size, query_pack,
-                                        **_construction_kwargs(observation, image_tokens))
+                                        **_construction_kwargs(observation, image_tokens, partner))
 
     eff_targets, control_used = apply_control(control, targets,
                                               len(gallery_uids), seed)
@@ -1362,6 +1366,10 @@ def main() -> int:
                          "second point sample) instead of the gallery's own "
                          "cached vectors. Omit for the pre-2026-08-31 "
                          "construction. The gallery is unchanged either way.")
+    ap.add_argument("--query-partner", default=None,
+                    help="'none' or 'same_category': the query's text and image "
+                         "come from another same-category asset (P9). Default: "
+                         "what the checkpoint record says it was trained under.")
     ap.add_argument("--query-pc-perturb", default=None,
                     help="perturbation of the query pack's pc arm "
                          "(metafind.data.observation.PC_PERTURBATIONS). "
@@ -1579,6 +1587,7 @@ def main() -> int:
             "started_at": time.time(),
             "query_image_policy": image_policy,
             # resolved again (and enforced) where the pack is built, below
+            "query_partner": (args.query_partner or ckpt.get("query_partner") or "none"),
             "query_pc_perturb": (args.query_pc_perturb
                                  or ckpt.get("query_pc_perturb") or "none"),
             "image_tokens": image_tokens,
@@ -1654,6 +1663,10 @@ def main() -> int:
             query_pack = QueryPack(args.query_pack, protocol_n_views(encoding))
             print(f"query pack {query_pack.path} arms={list(query_pack.arms)} "
                   f"sha256={query_pack.sha256[:12]}", flush=True)
+        partner = args.query_partner or ckpt.get("query_partner") or "none"
+        if partner != "none":
+            print(f"query partner: {partner} (text and image from another same-category "
+                  f"asset; pc the asset's own){'' if args.query_partner else ' (from the checkpoint record)'}", flush=True)
         pc_perturb = args.query_pc_perturb or ckpt.get("query_pc_perturb") or "none"
         if pc_perturb != "none":
             if query_pack is None or "pc" not in query_pack.arms:
@@ -1683,7 +1696,7 @@ def main() -> int:
                 encoding["image_aggregation"], args.device, args.batch_size,
                 args.control, args.seed, args.block, untrained, ckpt,
                 query_pack, exclude_uids,
-                **_construction_kwargs(observation, image_tokens))
+                **_construction_kwargs(observation, image_tokens, partner))
             # From the protocol's FIELDS, never its name. See protocol_caveat:
             # the name lookup that used to be here gave any protocol the
             # artifact adds the "never reported" caveat, printed beside a
