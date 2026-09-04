@@ -13,7 +13,7 @@ def test_rr_at_k_equals_our_recall_at_k_on_unit_vectors_without_ties():
     q = normalize_for_scoring(g + 0.8 * rng.normal(size=g.shape))
     t = np.arange(300)
     sim = q @ g.T
-    ours1, ours5 = recall_at_k(sim, t, 1), recall_at_k(sim, t, 5)
+    ours = recall_at_k(sim, t, (1, 5)); ours1, ours5 = ours["R@1"], ours["R@5"]
     m = text2shape_metrics(q, g, t)
     assert abs(m["RR@1"] - ours1) < 1e-12 and abs(m["RR@5"] - ours5) < 1e-12
     assert 0.0 < m["RR@1"] < 1.0          # a case where something is actually measured
