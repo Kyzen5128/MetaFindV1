@@ -406,8 +406,13 @@ def resolve_split(splits: dict, name: str) -> list[str]:
     stale -- `splits.py:17`, `pointclouds.py` and `renders.py` still carry
     "46,052" and "9,211" in prose, and the real counts are 45,692 and 9,138.
     """
+    from metafind.data.splits import corpus_uids
     if name == "full":
-        return list(splits["train"]) + list(splits["test"])
+        # [D-3b] train + val + test under 80/10/10, train + test before it.
+        return corpus_uids(splits)
+    if name == "holdout" and name not in splits:
+        # the paper's 20% on a file that predates the key
+        return sorted(set(splits.get("val", [])) | set(splits["test"]))
     if name not in splits:
         raise ValueError(
             f"protocol names split {name!r}, which splits.json does not have "
@@ -469,6 +474,8 @@ def _splits_identity() -> dict:
     raw = json.loads(p.read_text())
     obj = raw.get("object", {})
     return {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+            "scheme": raw.get("scheme", "70/10/20"),     # [D-3b] absent = the old shape
+            "val_seed": raw.get("val_seed"),
             "split_seed": obj.get("split_seed", raw.get("split_seed")),
             "dev_split_seed": obj.get("dev_split_seed", raw.get("dev_split_seed")),
             "admitted_total": obj.get("admitted_total", raw.get("admitted_total"))}
@@ -492,7 +499,8 @@ def check_seal(protocol_name: str, protocol: dict, unsealed: bool) -> bool:
     # protocols are read rather than named: a new protocol key is the expected
     # case, not an exotic one.
     splits_used = (protocol.get("query_split"), protocol.get("gallery_split"))
-    touches_test = "test" in splits_used or "full" in splits_used
+    touches_test = ("test" in splits_used or "full" in splits_used
+                    or "holdout" in splits_used)      # [D-3b] holdout = val + test
     if touches_test and not unsealed:
         raise SystemExit(
             f"{protocol_name} reads the sealed test split "
@@ -767,7 +775,7 @@ def _source_clause(gallery_source: str) -> str:
 
 def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
                  device, batch_size, query_pack=None, observation=None, partner=None, text_override=None,
-                 image_tokens: int = 1):
+                 image_tokens: int = 1, query_backbone=None):
     """Query embeddings per condition, plus gallery embeddings, plus the map.
 
     The gallery is encoded ONCE and shared by all seven conditions: the gallery
@@ -820,9 +828,11 @@ def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
                             shuffle=False, collate_fn=collate, num_workers=4,
                             drop_last=False)
         gal, per_cond = [], {c: [] for c in conditions}
-        with modules_in_eval(model, getattr(backbone, "model", None)), torch.no_grad():
+        with modules_in_eval(model, getattr(backbone, "model", None),
+                             getattr(query_backbone, "model", None)), torch.no_grad():
             for i, batch in enumerate(loader):
-                query_embeds, gallery_embeds = split_embeds(batch, backbone, device)
+                query_embeds, gallery_embeds = split_embeds(batch, backbone, device,
+                                                            query_backbone=query_backbone)
                 n = gallery_embeds["text"].size(0)
                 if not conditions:
                     gal.append(model.gallery(gallery_embeds).float().cpu())
@@ -1069,6 +1079,12 @@ def _construction_kwargs(observation, image_tokens: int, partner=None, text_over
     return out
 
 
+def _qb_kwargs(query_backbone) -> dict:
+    """Only when a second point path exists, so callers and test doubles that
+    predate P13 keep their signature."""
+    return {"query_backbone": query_backbone} if query_backbone is not None else {}
+
+
 def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
                  aggregation: str, device: str, batch_size: int,
                  control: str, seed: int, block: int,
@@ -1076,7 +1092,8 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
                  ckpt: dict | None = None,
                  query_pack=None,
                  exclude_uids: set | None = None,
-                 observation=None, image_tokens: int = 1, partner=None, text_override=None) -> tuple[dict, list]:
+                 observation=None, image_tokens: int = 1, partner=None, text_override=None,
+                 query_backbone=None) -> tuple[dict, list]:
     """One protocol, seven conditions. Returns (core result, per-query rows).
 
     The gallery's SOURCE is decided here, from the protocol's own fields, not by
@@ -1202,11 +1219,13 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
         # `None`, not `gallery_uids`: the gallery encoder is not called at all.
         queries, _ = encode_pools(backbone, model, query_uids, None,
                                   aggregation, device, batch_size, query_pack,
+                                  **_qb_kwargs(query_backbone),
                                   **_construction_kwargs(observation, image_tokens, partner, text_override))
     else:
         queries, gallery = encode_pools(backbone, model, query_uids,
                                         gallery_uids, aggregation, device,
                                         batch_size, query_pack,
+                                        **_qb_kwargs(query_backbone),
                                         **_construction_kwargs(observation, image_tokens, partner, text_override))
 
     eff_targets, control_used = apply_control(control, targets,
@@ -1557,6 +1576,11 @@ def main() -> int:
         scope = (ckpt or {}).get("train_scope", "point_encoder_and_fuser")
         backbone = ULIPBackbone(BackboneConfig(device=args.device,
                                                train_scope=scope))
+        # [U-16 reading B, P13] from the RECORD: a checkpoint trained with two
+        # point paths is restored into two; `load_stage1_checkpoint` refuses the
+        # other combinations.
+        sharing = (ckpt or {}).get("tower_sharing", "shared_backbone_separate_fusion")
+        backbone_q = backbone.clone_point_path() if sharing == "fully_separate" else None
         if untrained:
             # Seeded HERE, immediately before `build_model`, because that call is
             # what draws the towers' weights out of the global torch RNG. The
@@ -1576,13 +1600,15 @@ def main() -> int:
             model.to(args.device)
             load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]),
                                    new_prefixes=("query.layout_encoder",
-                                                 "query.layout_weight"))
+                                                 "query.layout_weight"),
+                                   query_backbone=backbone_q)
             overlay_stage2_weights(model, stage2["record"], args.device)
         else:
             model, loss_fn = build_model(encoding, training, hyperparameters)
             model.to(args.device)
             if not untrained:
-                load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]))
+                load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]),
+                                       query_backbone=backbone_q)
 
         provenance = {
             "run_id": runlog.run_id(),
@@ -1592,6 +1618,7 @@ def main() -> int:
             "runtime_source_status": runlog.runtime_source_status(),
             "started_at": time.time(),
             "query_image_policy": image_policy,
+            "tower_sharing": sharing,
             # resolved again (and enforced) where the pack is built, below
             "query_partner": (args.query_partner or ckpt.get("query_partner") or "none"),
             "query_text_override": (args.query_text_override or ckpt.get("query_text_override")),
@@ -1710,7 +1737,7 @@ def main() -> int:
                 name, protocols[name], splits, backbone, model,
                 encoding["image_aggregation"], args.device, args.batch_size,
                 args.control, args.seed, args.block, untrained, ckpt,
-                query_pack, exclude_uids,
+                query_pack, exclude_uids, **_qb_kwargs(backbone_q),
                 **_construction_kwargs(observation, image_tokens, partner, text_override))
             # From the protocol's FIELDS, never its name. See protocol_caveat:
             # the name lookup that used to be here gave any protocol the

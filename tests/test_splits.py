@@ -24,12 +24,16 @@ from metafind.data.splits import (
     DEFAULT_FUSION,
     DEFAULT_SEED,
     DEFAULT_TOWER_SHARING,
+    DEFAULT_VAL_SEED,
     DEV_VAL_FRACTION,
     TRAIN_FRACTION,
+    VAL_FRACTION_OF_HOLDOUT,
     build_eval_protocols,
     build_stage1_protocol,
+    corpus_uids,
     split_assets,
     split_dev,
+    split_holdout,
 )
 
 
@@ -178,10 +182,60 @@ def test_an_unknown_similarity_is_refused():
         s.SUPPORTED_SIMILARITY = original
 
 
-# --- [D-3] dev-val, carved out of the 80% -------------------------------------
+# --- [D-3b] 80/10/10: the paper's 20% halved into val / test -------------------
 #
-# The whole point of these is that the 20% test split never touches model
-# selection. Each one fails if it starts to.
+# [USER ORDER Kyzen 2026-09-04] The 80% pool is trained on in full; the 20% is
+# halved into `val` (selects checkpoints) and `test` (opened once). Each test
+# fails if a test asset starts taking part in selection.
+
+def test_val_and_test_partition_the_paper_holdout():
+    _, holdout = split_assets(uids(1000), DEFAULT_SEED)
+    val, test = split_holdout(holdout, DEFAULT_VAL_SEED)
+    assert set(val) | set(test) == set(holdout)
+    assert not set(val) & set(test)
+
+
+def test_val_never_contains_a_training_asset():
+    train, holdout = split_assets(uids(1000), DEFAULT_SEED)
+    val, _ = split_holdout(holdout, DEFAULT_VAL_SEED)
+    assert not set(val) & set(train)
+
+
+def test_moving_one_test_asset_into_val_is_detectable():
+    """The check above passes trivially unless it can also fail."""
+    _, holdout = split_assets(uids(1000), DEFAULT_SEED)
+    val, test = split_holdout(holdout, DEFAULT_VAL_SEED)
+    assert set(val + test[:1]) & set(test)
+
+
+def test_the_holdout_is_halved():
+    _, holdout = split_assets(uids(CORPUS), DEFAULT_SEED)
+    val, test = split_holdout(holdout, DEFAULT_VAL_SEED)
+    assert len(val) == round(len(holdout) * VAL_FRACTION_OF_HOLDOUT) == 4569
+    assert len(test) == 4569
+
+
+def test_corpus_uids_ignores_the_dev_aliases():
+    """`dev_train` / `dev_val` alias `train` / `val`; counting them twice would
+    put every val asset in the full gallery twice and tie with itself."""
+    obj = {"train": ["a", "b"], "val": ["c"], "test": ["d"],
+           "dev_train": ["a", "b"], "dev_val": ["c"]}
+    assert corpus_uids(obj) == ["a", "b", "c", "d"]
+    assert corpus_uids({"train": ["a"], "test": ["b"]}) == ["a", "b"]   # 70/10/20 file
+
+
+def test_the_paper_size_gallery_protocol_is_the_whole_holdout():
+    train, holdout = split_assets(uids(CORPUS), DEFAULT_SEED)
+    val, test = split_holdout(holdout, DEFAULT_VAL_SEED)
+    p = build_eval_protocols(train, test, val, holdout=holdout)
+    assert p["A_test_gallery"]["gallery_size"] == 4569
+    assert p["A20_test_vs_holdout"]["gallery_size"] == len(holdout) == 9138
+    assert p["A20_test_vs_holdout"]["gallery_split"] == "holdout"
+    assert p["B_full_gallery"]["gallery_size"] == len(train) + len(holdout) == 45692
+    assert p["A20_test_vs_holdout"]["reported"] is True
+
+
+# --- [D-3] the 70/10/20 splitter, kept importable for the old files -------------
 
 def test_dev_train_and_dev_val_partition_the_training_pool():
     train, _ = split_assets(uids(1000), DEFAULT_SEED)
@@ -191,23 +245,9 @@ def test_dev_train_and_dev_val_partition_the_training_pool():
 
 
 def test_dev_val_never_contains_a_test_asset():
-    """[D-3] The failure this deviation exists to prevent."""
     train, test = split_assets(uids(1000), DEFAULT_SEED)
     _, dev_val = split_dev(train, DEFAULT_DEV_SEED)
     assert not set(dev_val) & set(test)
-
-
-def test_moving_one_test_asset_into_dev_val_is_detectable():
-    """The check above passes trivially unless it can also fail."""
-    train, test = split_assets(uids(1000), DEFAULT_SEED)
-    _, dev_val = split_dev(train, DEFAULT_DEV_SEED)
-    assert set(dev_val + test[:1]) & set(test)
-
-
-def test_the_dev_val_share_matches_the_recorded_fraction():
-    train, _ = split_assets(uids(1000), DEFAULT_SEED)
-    _, dev_val = split_dev(train, DEFAULT_DEV_SEED)
-    assert len(dev_val) == round(len(train) * DEV_VAL_FRACTION)
 
 
 def test_the_same_dev_seed_reproduces_the_dev_split():

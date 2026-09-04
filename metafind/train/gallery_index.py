@@ -480,8 +480,9 @@ def main() -> int:
 
     with runlog.run_progress(node):
         if args.mode == "stage1":
+            from metafind.data.splits import corpus_uids
             ids = json.loads((paths.OUTPUTS / "splits.json").read_text())["object"]
-            ids = sorted(ids["train"] + ids["test"])
+            ids = sorted(corpus_uids(ids))            # [D-3b] train + val + test
             if args.limit:
                 ids = ids[: args.limit]
             vectors = []

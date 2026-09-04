@@ -121,6 +121,32 @@ DEV_VAL_FRACTION = 0.125
 # a way nobody would have chosen deliberately.
 DEFAULT_DEV_SEED = 20260827
 
+# [DEVIATION D-3b, USER ORDER Kyzen 2026-09-04, verbatim 「80/10/10 就這樣拆」]
+# SUPERSEDES the 70/10/20 shape above. The paper's 80/20 (seed 20260816) is
+# kept byte-for-byte: the 80% training pool is unchanged and is now trained on
+# in full. The paper's 20% ("holdout", 9,138) is halved into `val` (selection)
+# and `test` (final), so the shape is 80 / 10 / 10 of the corpus.
+#
+# The 2026-08-27 objection to this shape is recorded in the audit
+# (docs/audit/SPLIT_RETRIEVAL_FRESH_AUDIT_20260904.md §6): the final
+# test->test gallery is 4,569 instead of the paper's ~20%, so a paper-size
+# gallery is kept as protocol `A20_test_vs_holdout` (query = test, gallery =
+# val + test = 9,138). Kyzen reaffirmed the order after reading that section.
+#
+# What is unchanged: no test asset takes part in selecting anything (`val` and
+# `test` are disjoint, and `check_seal` treats `test`, `holdout` and `full` as
+# sealed). What changed: every checkpoint trained under 70/10/20 was fitted on
+# 31,985 assets and selected on a dev_val INSIDE the training pool; those are
+# not comparable with runs under this scheme and their records say so through
+# `pools_sha256`.
+#
+# `dev_train` / `dev_val` are still written, as ALIASES of `train` / `val`, so
+# `stage1 --phase dev` and every probe reading `dev_val` keep working without a
+# second code path.
+SPLIT_SCHEME = "80/10/10"
+VAL_FRACTION_OF_HOLDOUT = 0.5
+DEFAULT_VAL_SEED = 20260904
+
 SPLITS_PATH = paths.OUTPUTS / "splits.json"
 EVAL_PROTOCOLS_PATH = paths.OUTPUTS / "eval_protocols.json"
 STAGE1_PROTOCOL_PATH = paths.OUTPUTS / "stage1_protocol.json"
@@ -180,8 +206,40 @@ def split_dev(train: list[str], seed: int,
     return sorted(ordered[:cut]), sorted(ordered[cut:])
 
 
+def split_holdout(holdout: list[str], seed: int,
+                  val_fraction: float = VAL_FRACTION_OF_HOLDOUT) -> tuple[list[str], list[str]]:
+    """[D-3b] Halve the paper's 20% into (val, test), same discipline as above.
+
+    Returns (val, test) whose union is exactly `holdout`. `val` selects
+    checkpoints; `test` is opened once, at the end.
+    """
+    ordered = sorted(holdout)
+    rng = random.Random(seed)
+    rng.shuffle(ordered)
+    cut = int(round(len(ordered) * val_fraction))
+    return sorted(ordered[:cut]), sorted(ordered[cut:])
+
+
+def corpus_uids(obj: dict) -> list[str]:
+    """The whole admitted corpus from a `splits.json` OBJECT dict, any scheme.
+
+    Under 70/10/20 the corpus was train + test; under 80/10/10 it is
+    train + val + test. Built from the primary keys only -- `dev_train` /
+    `dev_val` are aliases and must not be double counted -- so the three
+    consumers that used to write `train + test` by hand (`run_retrieval`,
+    `gallery_index`, `g4_gallery_freeze`) cannot disagree with each other.
+
+    Concatenated in split order, NOT sorted or de-duplicated: `run_retrieval`
+    relies on `full` being the protocol's own uid order, and a duplicate is a
+    corpus defect its gallery check must see rather than have hidden here.
+    """
+    return (list(obj.get("train", [])) + list(obj.get("val", []))
+            + list(obj.get("test", [])))
+
+
 def build_eval_protocols(train: list[str], test: list[str],
-                         dev_val: list[str] | None = None) -> dict:
+                         dev_val: list[str] | None = None,
+                         holdout: list[str] | None = None) -> dict:
     """[U-09] Both gallery scopes, both reported.
 
     `gallery_size` is DERIVED from the split rather than written down. An
@@ -203,11 +261,28 @@ def build_eval_protocols(train: list[str], test: list[str],
         "B_full_gallery": {
             "query_split": "test",
             "gallery_split": "full",
-            "gallery_size": len(train) + len(test),
+            "gallery_size": len(train) + len(test) + (
+                len(holdout) - len(test) if holdout is not None else 0),
             "layout_free_context": "omitted",
             "reported": True,
         },
     }
+    if holdout is not None:
+        # [D-3b] The paper-size gallery. Under 80/10/10 `test` is half the
+        # paper's 20%, so test->test ranks against 4,569 candidates where the
+        # paper (if its gallery was its 20%) ranked against ~9.6K. This protocol
+        # keeps that size: query = test, gallery = val + test. Caveat, recorded
+        # here and in the audit: the `val` half of this gallery was used to
+        # select the checkpoint (val->val), so this is a paper-size gallery
+        # with a selection-side bias on half of it -- not leakage of any test
+        # label, but not as clean as A either.
+        protocols["A20_test_vs_holdout"] = {
+            "query_split": "test",
+            "gallery_split": "holdout",
+            "gallery_size": len(holdout),
+            "layout_free_context": "omitted",
+            "reported": True,
+        }
     if dev_val is not None:
         # [D-3] The development-phase selection protocol. `reported: False` is
         # the whole point: its numbers choose lr, epochs and checkpoint policy
@@ -442,6 +517,11 @@ def main() -> int:
                     help="fraction of the 80%% training pool held out as dev-val "
                          "(NOT ratified; see DEV_VAL_FRACTION)")
     ap.add_argument("--decided-by", default=None)
+    ap.add_argument("--val-seed", type=int, default=DEFAULT_VAL_SEED,
+                    help="[D-3b] seed that halves the paper's 20%% into val / test")
+    ap.add_argument("--rewrite-stage1-protocol", action="store_true",
+                    help="also re-materialise stage1_protocol.json (default: leave "
+                         "an existing one untouched -- the split is not the protocol)")
     args = ap.parse_args()
 
     hp_path = paths.OUTPUTS / "stage1_hyperparameters.json"
@@ -464,36 +544,54 @@ def main() -> int:
             print("no asset survived all of n03, n04 and n05", flush=True)
             progress.rc = 2
             return 2
-        train, test = split_assets(uids, args.seed)
-        dev_train, dev_val = split_dev(train, args.dev_seed,
-                                       args.dev_val_fraction)
+        # [PAPER 3.1] 80/20, seed unchanged since 2026-08-16.
+        train, holdout = split_assets(uids, args.seed)
+        # [D-3b] The paper's 20% halved into val / test.
+        val, test = split_holdout(holdout, args.val_seed)
+        dev_train, dev_val = train, val          # aliases, see D-3b above
 
-        # [L2-LEAK-OBJECT] A leaking split must not reach disk. Three pairs now,
-        # and the middle one is the one D-3 exists to prevent.
+        # [L2-LEAK-OBJECT] A leaking split must not reach disk.
         for a, b, why in ((train, test, "train/test"),
-                          (dev_val, test, "dev_val/test"),
-                          (dev_train, dev_val, "dev_train/dev_val")):
+                          (train, val, "train/val"),
+                          (val, test, "val/test")):
             if leaked := set(a) & set(b):
                 raise AssertionError(f"{len(leaked)} assets in both {why}")
-        if set(dev_train) | set(dev_val) != set(train):
-            raise AssertionError(
-                "dev_train + dev_val is not the training pool; the development "
-                "phase would be training on something the paper did not allocate "
-                "to training")
+        if set(val) | set(test) != set(holdout):
+            raise AssertionError("val + test is not the paper's 20% holdout")
+        if set(train) | set(holdout) != set(uids):
+            raise AssertionError("train + holdout is not the admitted corpus")
 
         _write(SPLITS_PATH, {
-            "object": {"train": train, "test": test,
+            "object": {"train": train, "val": val, "test": test,
+                       "holdout": holdout,
                        "dev_train": dev_train, "dev_val": dev_val},
+            "scheme": SPLIT_SCHEME,
             "split_seed": args.seed,
             "train_fraction": TRAIN_FRACTION,
-            "dev_split_seed": args.dev_seed,
-            "dev_val_fraction": args.dev_val_fraction,
+            "val_seed": args.val_seed,
+            "val_fraction_of_holdout": VAL_FRACTION_OF_HOLDOUT,
+            # kept for readers of the 70/10/20 file; under 80/10/10 they
+            # describe the SAME halving as the two fields above
+            "dev_split_seed": args.val_seed,
+            "dev_val_fraction": VAL_FRACTION_OF_HOLDOUT,
             "admitted_total": len(uids),
+            "decided_by": decided_by,
+            "decided_at": datetime.now(timezone.utc).isoformat(),
         })
         _write(EVAL_PROTOCOLS_PATH,
-               build_eval_protocols(train, test, dev_val))
-        _write(STAGE1_PROTOCOL_PATH,
-               build_stage1_protocol(hyperparameters, decided_by))
+               build_eval_protocols(train, test, dev_val, holdout=holdout))
+        if args.rewrite_stage1_protocol or not STAGE1_PROTOCOL_PATH.exists():
+            _write(STAGE1_PROTOCOL_PATH,
+                   build_stage1_protocol(hyperparameters, decided_by))
+        # Plain uid lists, one per line, so the split can be read with `wc -l`
+        # and `comm` without Python. [KYZEN 2026-09-04] asked where the folders
+        # are: membership is by LIST, the data directories are flat by uid; see
+        # tools/materialize_split_dirs.py for a symlink view per split.
+        lists = paths.OUTPUTS / "split_lists"
+        lists.mkdir(parents=True, exist_ok=True)
+        for name, ids in (("train", train), ("val", val), ("test", test),
+                          ("holdout", holdout)):
+            (lists / f"{name}.txt").write_text("\n".join(ids) + "\n")
 
     lad = filter_ladder()
     print("filtering, per §六 -- before / removed / after:")
@@ -524,12 +622,11 @@ def main() -> int:
         print(f"  NOTE the exclusion ledger removed {led['removed']:,} asset(s) "
               "that HAD survived n03/n04/n05. The corpus is not the one the "
               "audit measured; every archived train_uid_set_sha256 will differ.")
-    print(f"{len(train):,} train / {len(test):,} test objects "
+    print(f"[{SPLIT_SCHEME}] {len(train):,} train / {len(holdout):,} holdout "
           f"(seed {args.seed}, {len(uids):,} admitted)")
-    print(f"  of the train pool: {len(dev_train):,} dev_train / "
-          f"{len(dev_val):,} dev_val "
-          f"(seed {args.dev_seed}, fraction {args.dev_val_fraction})")
-    for name, p in build_eval_protocols(train, test, dev_val).items():
+    print(f"  holdout halved: {len(val):,} val (selection) / {len(test):,} test "
+          f"(final)  (val seed {args.val_seed})")
+    for name, p in build_eval_protocols(train, test, dev_val, holdout=holdout).items():
         flag = "" if p["reported"] else "   [NOT REPORTED -- selection only]"
         print(f"  {name}: query={p['query_split']}, gallery={p['gallery_split']} "
               f"({p['gallery_size']:,}){flag}")

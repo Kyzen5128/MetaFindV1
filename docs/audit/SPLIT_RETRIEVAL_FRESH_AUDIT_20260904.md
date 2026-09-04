@@ -383,3 +383,21 @@ Repo：`metafind/data/splits.py`、`download.py`、`metafind/models/dual_tower.p
 `metafind/eval/retrieval.py`、`run_retrieval.py`、`data/outputs/{splits.json,stage1_protocol.json,eval_protocols.json}`、
 `workflow/DECISION_LEDGER.md`（DL-046/068/070/090）、`docs/audit/STAGE1_FRESH_AUDIT_20260903.md §C`、
 `workflow/STAGE1_RESOLUTION_PLAN_20260903.md`、`output/look/ARMS_TABLE.md`。
+
+---
+
+## 14. Ruling after the audit（Kyzen，2026-09-04 16:0x，逐字「80/10/10 就這樣拆」）
+
+§6 的顧慮已呈報，Kyzen 讀後重申採 **S2 = 80/10/10**。照 §6 的定義實作，記為 **DIRECT DEVIATION D-3b**：
+
+- 論文的 80/20（seed 20260816）**逐位元不動**：train 36,554 與之前完全相同；論文的 20%（9,138，現稱 `holdout`）
+  用 seed 20260904 對半切成 `val` 4,569（選模）／`test` 4,569（最終，封印）。
+- 舊檔複製保留：`outputs/splits_70_10_20_seed20260816_dev20260827.json`、`outputs/eval_protocols_70_10_20.json`。
+- 協定：A test→test 4,569；**A20 test→holdout 9,138（論文 20% 的畫廊大小，reported；註記 val 那一半參與過選模）**；
+  B test→full 45,692；C val→val 4,569（選模）；D val→train 36,554（診斷）。`check_seal` 把 `holdout` 一併封印。
+- `dev_train`／`dev_val` 以**別名**保留（= train／val），trainer 與探針不用改路徑。
+- 可比性：70/10/20 下訓練的所有 checkpoint（P1…P12）訓練池是 31,985，新制是 36,554；它們的 C/D 查詢集也不同。
+  新制的主線對照是 **P1s**（P1 配方重跑），與 P13（兩份點雲路徑，Kyzen ✅ 同日）排在同一條鏈。
+- 資料夾視圖：`outputs/split_dirs/{train,val,test,holdout}/{annotations,pointclouds,embeddings}/`（符號連結，
+  `tools/materialize_split_dirs.py` 產生）；純 uid 清單在 `outputs/split_lists/*.txt`。
+- 到本次為止，**沒有任何數字來自 test**：所有 Table 1 對照都是 C/D（dev_val 4,569 查詢），`--unseal` 從未給過。

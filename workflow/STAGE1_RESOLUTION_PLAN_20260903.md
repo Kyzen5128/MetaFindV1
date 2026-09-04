@@ -315,3 +315,15 @@ Table 1 全表（海報版，多了幾列基線）：
 | S2-D | 完整 T/I/P + 5e-5 warmup cosine（只隔離配方） | ✅ | ProcTHOR S1 82.4 / S2-off 36.8 / S2-on 32.8；w/ ESSGNN C 24.9/36.1/71.2/58.2/80.9/73.0/80.1。配方讓損傷從 −40 縮到 −25；λ 仍不動 |
 
 Stage 2 的 UNRESOLVED（各有 arm 或待排）：query 構法（S2-C / S2-D / stage1 遮罩）、leave-one-out vs iterative-prefix、正文字面版 ESSGNN、pooling / λ₀、ProcTHOR 切分（Kyzen 定）。
+
+### 5p. Fresh audit → 80/10/10 → P13（2026-09-04 16:00–16:30）
+
+- 審計：`docs/audit/SPLIT_RETRIEVAL_FRESH_AUDIT_20260904.md`（commit d805688）。結論：上游沒有 LVIS 內部 split；
+  「第二份觀測」在論文裡無句可依 → RETRACTED；D 只作診斷；U-16 塔分離是唯一 P0。
+- Kyzen 裁決：**80/10/10**（D-3b，`splits.py`）。train 36,554 不動；holdout 9,138 → val 4,569 / test 4,569（seed 20260904）。
+  新協定 A20（test→holdout 9,138）。舊 split 檔已複製保留。P5/P8/P9/縱圖/擾動 → sensitivity；P10/P12 → text serialization arm。
+- Kyzen ✅ P13：`--tower-sharing fully_separate`（`ULIPBackbone.clone_point_path`，第二份 PointBERT+pc_projection，
+  CLIP 塔不複製）。checkpoint 多一節 `query_backbone_trainable_state`，記錄 `tower_sharing`，評估器照記錄建第二路徑。
+  `tests/test_separate_backbones.py`（5）。鏈 `chain_P13.sh`：smoke → **P1s**（P1 配方、新 split，對照組）→ **P13**，
+  排在 P12 之後（ETA P1s ~19:45、P13 ~21:00）。跑之前的預測：P13 的 C full 仍 > 95。
+- 已在跑的 P10 訓練是在舊 split 載入的；它之後的評估、縱圖探針、P12 訓練都會讀到新 split（各自的紀錄有 pools_sha256／splits sha）。

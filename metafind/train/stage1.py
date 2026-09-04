@@ -947,8 +947,13 @@ def collate(batch: list[dict]):
     return out
 
 
-def split_embeds(batch, backbone, device):
+def split_embeds(batch, backbone, device, query_backbone=None):
     """One batch -> (query embeds, gallery embeds).
+
+    `query_backbone` [U-16 reading B, P13]: when given, the QUERY's point cloud
+    is encoded by this second point path and the gallery's by `backbone`; the
+    two dicts are then distinct objects even without a query pack, because
+    their `pc` entries come from different parameters.
 
     THE SEAM. Before 2026-08-31 all three call sites built a single `embeds`
     dict and passed it to both towers, so every invariant about query/gallery
@@ -971,7 +976,7 @@ def split_embeds(batch, backbone, device):
                "pc": pc}
     if "image_present" in batch:
         gallery["image_present"] = batch["image_present"].to(device)
-    if not any(k in batch for k in ("q_text", "q_image", "q_pc")):
+    if query_backbone is None and not any(k in batch for k in ("q_text", "q_image", "q_pc")):
         return gallery, gallery
     query = dict(gallery)
     if "q_text" in batch:
@@ -980,7 +985,10 @@ def split_embeds(batch, backbone, device):
         query["image"] = batch["q_image"].to(device)
         if "q_image_present" in batch:
             query["image_present"] = batch["q_image_present"].to(device)
-    if "q_pc" in batch:
+    if query_backbone is not None:
+        q_cloud = batch["q_pc"] if "q_pc" in batch else batch["pc"]
+        query["pc"] = query_backbone.encode_pc(q_cloud.to(device))
+    elif "q_pc" in batch:
         query["pc"] = backbone.encode_pc(batch["q_pc"].to(device))
     return query, gallery
 
@@ -1384,7 +1392,8 @@ def flatten_condition_scores(scores: dict) -> dict:
 
 def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
                      batch_size, query_pack=None, num_workers: int = 4,
-                     observation=None, image_tokens: int = 1, partner=None, text_override=None):
+                     observation=None, image_tokens: int = 1, partner=None, text_override=None,
+                     query_backbone=None):
     """Mean R@1 / R@5 over the seven Table 1 conditions, on the dev-val gallery.
 
     Gallery is dev_val itself (`splits.build_eval_protocols`, protocol
@@ -1479,9 +1488,11 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
     gallery = []
     # `backbone.model` as well as `model`: the tower is what `model.eval()`
     # reaches, and the point encoder lives on the backbone. See `modules_in_eval`.
-    with modules_in_eval(model, getattr(backbone, "model", None)), torch.no_grad():
+    with modules_in_eval(model, getattr(backbone, "model", None),
+                         getattr(query_backbone, "model", None)), torch.no_grad():
         for batch in loader:
-            query_embeds, gallery_embeds = split_embeds(batch, backbone, device)
+            query_embeds, gallery_embeds = split_embeds(batch, backbone, device,
+                                                        query_backbone=query_backbone)
             n = gallery_embeds["text"].size(0)
             gallery.append(model.gallery(gallery_embeds).float().cpu())
             for cond in QUERY_CONDITIONS:
@@ -2096,7 +2107,7 @@ def _open_clip_weight_identity() -> dict:
 
 def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
                     encoding: dict, training: dict, seed: int, epoch: int,
-                    rp: Stage1RunPaths) -> dict:
+                    rp: Stage1RunPaths, query_backbone=None) -> dict:
     """Save EVERY trainable module, not just the dual tower.
 
     The optimizer is built from three modules::
@@ -2124,7 +2135,11 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         "tower_trainable_state": trainable_state_dict(model),
         "loss_trainable_state": trainable_state_dict(loss_fn),
     }
-    assert_checkpoint_covers_optimizer(backbone, model, loss_fn, sections)
+    if query_backbone is not None:
+        # [P13] the query tower's own point path; absent = one shared path
+        sections["query_backbone_trainable_state"] = trainable_state_dict(query_backbone.model)
+    assert_checkpoint_covers_optimizer(backbone, model, loss_fn, sections,
+                                       query_backbone=query_backbone)
     n_params = sum(v.numel() for s in sections.values() for v in s.values())
 
     tmp = rp.latest_checkpoint.with_suffix(".part")
@@ -2212,6 +2227,9 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         "text_template": training.get("_text_template"),
         "embeddings_dir": training.get("_embeddings_dir"),
         "train_scope": training.get("train_scope", "point_encoder_and_fuser"),
+        # [U-16] which reading trained this checkpoint; the evaluator builds a
+        # second point path only when this says so
+        "tower_sharing": training.get("tower_sharing", "shared_backbone_separate_fusion"),
         "trainable_only": True,
         "n_params_saved": int(n_params),
         "n_params_by_section": {k: int(sum(v.numel() for v in s.values()))
@@ -2247,16 +2265,20 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
     return record
 
 
-def assert_checkpoint_covers_optimizer(backbone, model, loss_fn, sections: dict) -> None:
+def assert_checkpoint_covers_optimizer(backbone, model, loss_fn, sections: dict,
+                                       query_backbone=None) -> None:
     """Every tensor the optimizer moves must appear in the checkpoint.
 
     Compares by IDENTITY, not by name or count. A name comparison would pass if
     two modules happened to expose the same key, and a count comparison would
     pass if one tensor were swapped for another of equal size.
     """
+    extra = ([("query_backbone_trainable_state", query_backbone.model)]
+             if query_backbone is not None else [])
     in_opt = {id(p) for p in
               list(backbone.trainable_parameters()) + list(model.parameters())
-              + list(loss_fn.parameters()) if p.requires_grad}
+              + list(loss_fn.parameters())
+              + [p for _, m in extra for p in m.parameters()] if p.requires_grad}
     if not in_opt:
         raise RuntimeError("the optimizer has no trainable parameters at all")
 
@@ -2273,9 +2295,9 @@ def assert_checkpoint_covers_optimizer(backbone, model, loss_fn, sections: dict)
     # desynchronise them either.
     saved_names = {f"{sec}:{n}" for sec, state in sections.items() for n in state}
     expected = set()
-    for sec, module in (("backbone_trainable_state", backbone.model),
+    for sec, module in [("backbone_trainable_state", backbone.model),
                         ("tower_trainable_state", model),
-                        ("loss_trainable_state", loss_fn)):
+                        ("loss_trainable_state", loss_fn)] + extra:
         expected |= {f"{sec}:{n}" for n, p in module.named_parameters()
                      if p.requires_grad and id(p) in in_opt}
         # The buffers of every module that owns a trainable parameter, on the
@@ -2290,8 +2312,8 @@ def assert_checkpoint_covers_optimizer(backbone, model, loss_fn, sections: dict)
             f"the checkpoint sections, e.g. {sorted(missing)[:3]}; Stage 1 would "
             "train them and throw the result away")
 
-    covered = {id(p) for _, module in (("b", backbone.model), ("t", model),
-                                       ("l", loss_fn))
+    covered = {id(p) for _, module in [("b", backbone.model), ("t", model),
+                                       ("l", loss_fn)] + extra
                for p in module.parameters() if p.requires_grad}
     if orphaned := in_opt - covered:
         raise RuntimeError(
@@ -2300,7 +2322,8 @@ def assert_checkpoint_covers_optimizer(backbone, model, loss_fn, sections: dict)
 
 
 def load_stage1_checkpoint(backbone, model, loss_fn, path=None,
-                           new_prefixes: tuple[str, ...] = ()) -> dict:
+                           new_prefixes: tuple[str, ...] = (),
+                           query_backbone=None) -> dict:
     """Restore all three trainable modules, refusing anything partial.
 
     ``strict=False`` is required because each section holds only the trainable
@@ -2326,9 +2349,21 @@ def load_stage1_checkpoint(backbone, model, loss_fn, path=None,
             "silently dropped the fine-tuned point encoder; they cannot be "
             "upgraded, only retrained.")
 
-    for section, module in (("backbone_trainable_state", backbone.model),
-                            ("tower_trainable_state", model),
-                            ("loss_trainable_state", loss_fn)):
+    # [P13] a checkpoint trained with two point paths must be restored into
+    # two, and one trained with one must not be handed a second: either
+    # mismatch would score a tower the run never trained.
+    has_q = "query_backbone_trainable_state" in ckpt
+    if has_q != (query_backbone is not None):
+        raise ValueError(
+            f"{path} {'carries' if has_q else 'has no'} query_backbone_trainable_state "
+            f"but the caller {'gave no' if has_q else 'gave a'} query backbone; "
+            "tower_sharing on the record and the loader disagree")
+    pairs = [("backbone_trainable_state", backbone.model),
+             ("tower_trainable_state", model),
+             ("loss_trainable_state", loss_fn)]
+    if has_q:
+        pairs.append(("query_backbone_trainable_state", query_backbone.model))
+    for section, module in pairs:
         state = ckpt[section]
         _, unexpected = module.load_state_dict(state, strict=False)
         if unexpected:
@@ -2439,6 +2474,13 @@ def main() -> int:
                          "(torch.autocast bf16). ULIP's own trainer runs under "
                          "amp.autocast (upstream main.py); ours was float32. "
                          "Enters the arm hash when on; recorded in the run.")
+    ap.add_argument("--tower-sharing", default=None,
+                    choices=("shared_backbone_separate_fusion", "fully_separate"),
+                    help="[U-16] override stage1_protocol.tower_sharing for this run. "
+                         "'fully_separate' clones the loaded PointBERT + pc_projection "
+                         "into a second, independently trained query point path (P13); "
+                         "the frozen CLIP towers are not duplicated. Enters arm_config_hash "
+                         "as training.tower_sharing and the checkpoint record.")
     ap.add_argument("--train-scope", default=None,
                     choices=("fuser_only", "point_encoder_and_fuser", "full"),
                     help="override the training protocol's train_scope for this "
@@ -2560,14 +2602,11 @@ def main() -> int:
     # routes both towers' point clouds through it. Until the second backbone
     # is wired in, a protocol asking for it must stop here, not train the
     # shared reading under the other name.
-    if training["tower_sharing"] == "fully_separate":
+    if training["tower_sharing"] not in ("shared_backbone_separate_fusion", "fully_separate"):
         raise SystemExit(
-            "stage1_protocol.tower_sharing = 'fully_separate' asks for two "
-            "ULIP-2 backbones, and this trainer builds one. The run would "
-            "silently train the shared-backbone reading and record the other. "
-            "Either set tower_sharing to 'shared_backbone_separate_fusion' "
-            "(Figure 1 prints 'ULIP-2 (Shared)'), or implement the second "
-            "backbone first.")
+            f"tower_sharing {training['tower_sharing']!r}: this trainer runs the "
+            "shared-backbone reading and, since 2026-09-04 (P13), 'fully_separate' "
+            "-- a second point path cloned from the same ULIP-2 checkpoint.")
     # A COPY. `hyperparameters` stays exactly as loaded so its recorded sha256
     # keeps describing the file on disk; the overrides below apply to this run's
     # working values only. Mutating in place would leave the artifact's digest
@@ -2583,6 +2622,8 @@ def main() -> int:
     # overriding once is enough and cannot leave the two disagreeing.
     if args.train_scope is not None:
         training["train_scope"] = args.train_scope
+    if args.tower_sharing is not None:
+        training["tower_sharing"] = args.tower_sharing
     # Refused HERE, before the 9.5 GB backbone is built and the pool digested;
     # arm_config_hash refuses it too, but by then minutes have been spent and
     # the run directory has been claimed.
@@ -2624,6 +2665,11 @@ def main() -> int:
         print(f"{splits_path} not found -- run n09_build_splits first", flush=True)
         return 2
     splits = json.loads(splits_path.read_text())["object"]
+    # [D-3b, Kyzen 2026-09-04] Under the 80/10/10 scheme `dev_train` is an alias
+    # of the full 80% `train` and `dev_val` an alias of `val`, the selection
+    # half of the paper's 20%. The disjointness check below is what still
+    # matters; the comment that follows describes the 70/10/20 shape it was
+    # written under.
     # [D-3] In the development phase the training pool is dev_train, NOT train.
     # dev_val is a subset of train (`splits.split_dev`), so training on `train`
     # and scoring `dev_val` would score the model on assets it had just fitted.
@@ -2751,6 +2797,14 @@ def main() -> int:
     backbone = ULIPBackbone(BackboneConfig(device=args.device,
                                            train_scope=scope,
                                            grad_checkpointing=args.device.startswith("cuda")))
+    # [U-16 reading B, P13] the query tower's own point path, cloned from the
+    # backbone just loaded so both towers start from the same ULIP-2 weights.
+    backbone_q = (backbone.clone_point_path()
+                  if training["tower_sharing"] == "fully_separate" else None)
+    if backbone_q is not None:
+        print(f"tower_sharing fully_separate: query point path cloned, "
+              f"{sum(p.numel() for p in backbone_q.trainable_parameters()):,} "
+              "trainable parameters of its own", flush=True)
     model, loss_fn = build_model(encoding, training, hyperparameters)
     model.to(args.device)
     loss_fn.to(args.device)
@@ -2761,6 +2815,7 @@ def main() -> int:
     # parameters that have nothing to overfit with. The mechanism is inherited;
     # the number 0.1 is USER-APPROVED separately (see resolve_stage1.py).
     named = (list(backbone.named_trainable_parameters())
+             + (list(backbone_q.named_trainable_parameters()) if backbone_q is not None else [])
              + list(model.named_parameters())
              + list(loss_fn.named_parameters()))
     groups = weight_decay_groups(
@@ -2991,7 +3046,7 @@ def main() -> int:
                                     enabled=(amp_mode == "bf16"
                                              and args.device.startswith("cuda"))):
                     query_embeds, gallery_embeds = split_embeds(
-                        batch, backbone, args.device)
+                        batch, backbone, args.device, query_backbone=backbone_q)
 
                     # [PAPER 2.6] each modality masked INDEPENDENTLY at 30%, on
                     # the query side only -- 2.6 also says the gallery encoder
@@ -3062,7 +3117,8 @@ def main() -> int:
                           f"tau {loss_fn.temperature.item():.4f}", flush=True)
 
             record = save_checkpoint(backbone, model, loss_fn, hyperparameters,
-                                     encoding, training, seed, epoch, run_paths)
+                                     encoding, training, seed, epoch, run_paths,
+                                     query_backbone=backbone_q)
             print(f"  epoch {epoch} saved: {record['n_params_saved']:,} params, "
                   f"{record['size_bytes'] / 1e6:.0f} MB", flush=True)
 
@@ -3086,7 +3142,8 @@ def main() -> int:
                     num_workers=workers, observation=eval_observation,
                     image_tokens=int(training.get("image_tokens", 1)),
                     partner=(args.query_partner if args.query_partner != "none" else None),
-                    text_override=args.query_text_override)
+                    text_override=args.query_text_override,
+                    query_backbone=backbone_q)
                 runlog.train_metrics("stage1_dev_val", epoch=epoch, step=step,
                                      **{k: v for k, v in scores.items()
                                         if isinstance(v, (int, float))},

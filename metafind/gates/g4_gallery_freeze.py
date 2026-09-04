@@ -242,8 +242,9 @@ def _admitted_ids(splits_path: Path) -> tuple[list[str], dict]:
     while its own criterion says "len(admitted)".
     """
     try:
+        from metafind.data.splits import corpus_uids
         splits = json.loads(Path(splits_path).read_text())
-        listed = list(splits["object"]["train"]) + list(splits["object"]["test"])
+        listed = corpus_uids(splits["object"])        # [D-3b] train + val + test
     except Exception as exc:  # noqa: BLE001
         raise _Blocked(f"cannot read the admitted set from {splits_path}: "
                        f"{exc}") from exc
