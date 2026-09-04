@@ -105,3 +105,26 @@ Primitives 的「正解」是同一種**設定**（class），一種設定有 10
 
 一句話：Text2Shape 給的是「**評估的定義**」——同實例、RR@k、test 池、內積——不是訓練配方。它的釋出程式只有同池版本，跨模態要自己接；
 我們已經接了（`text2shape_metrics`：fit = 畫廊、query = 查詢、每列一類）。
+
+---
+
+## 7. 逐字讀完後的補充（2026-09-04 19:5x；再讀 `losses.py`、`layers.py`、`config.py`、`main.py`、`solver.py`、`network.py`、`models/lba_models.py`、`run_lba_encoder.sh`、README 全文）
+
+**訓練細節（UPSTREAM CODE，補 §4）**
+- 優化器 Adam；lr 預設 1e-4（`config.py:84`），README 的 ShapeNet 指令用 **2e-4**；指數衰減 0.95、每 2,500 步一階（staircase）（`network.py:10-15`）。
+- 100 個 epoch（`NUM_EPOCHS 100`）；每 2,500 步存 checkpoint 並驗證一次（`CKPT_FREQ = VALIDATION_FREQ = 2500`）；驗證最多取 20,000 個樣本（`solver.py:125`）。
+- 訓練隨機種子 123（`config.py:28`、`main.py:251`）；資料佇列 3 個 worker。
+- `--lba_only` = 關掉度量損失（只剩 association）；`--metric_learning_only` = 關掉 association（只剩度量）。論文 Table 1 的 LBA-MM／ML 就是這兩個開關。
+- walker loss 的目標分布 `p_target`：同 label 的欄位均勻、其他 0（`losses.py:99-101`）；`p_aba = softmax(TSᵀ)·softmax(STᵀ)`（`:110-112`）；visit loss = 每欄平均訪問機率對均勻分布的交叉熵（`:28-45`）。STS 方向的 label 是 `range(BATCH_SIZE)`，即每個形狀自成一類（`:168`）。
+- 度量損失（`layers.py:148-201`）：`INVERTED_LOSS=True` 時 D = 點積/128，J_ij = log Σ exp(1 + D_ik) − D_ij，取 max(0,·)² 的平均再除 2；正對永遠是「相鄰兩列」（batch 排成 caption_1_1, caption_1_2, …）。text-shape 版是把偶數列換成該形狀的向量再算同一個式子（`lba.py:214-226`），權重 ×2。
+- `LBA.DIST_TYPE` 還有 `mahalanobis` 選項（可學矩陣 A，定期投影成 PSD），README 沒用，論文沒提。
+- 早停：`TextEncoderSolver.validate` 保留最近 5 次驗證的 precision@5，若全部都高於本次就終止（`solver_encoder.py:134-136`）。
+
+**評估細節（UPSTREAM CODE，補 §5）**
+- 測試模式強制 `BATCH_SIZE 1`、`N_CAPTIONS_PER_MODEL 1`（`main.py:335-339`）。`--lba_test_mode shape` 時每個形狀只餵它的**第一句**當文字（`data_process_encoder.py:451-452`）；`text` 模式餵每一句，重複句子去重（`:394-402`）。
+- 訓練中驗證用的是 **val** split（`--val_split` 預設 val）；README 產 embedding 的指令沒帶 `--val_split test`，要自己給才會在 test 上算。
+- `eval_text_encoder.compute_metrics` 用 20 個鄰居算 k = 1..20，但只在單一池上。`TextEncoderSolver` 寫 metric='minkowski' 會被 `compute_nearest_neighbors` 拒絕（`raise ValueError('Use cosine distance.')`）—— 這條路徑只有非 LBA 的舊 text encoder 才走到。
+
+**模型（補 §3）**：`LBA1` = `CNNRNNTextEncoder` + `ShapeEncoder`（`models/lba_models.py:5-10`）；`--lba_unnormalize` 拿掉輸出的 L2 normalize（`lba.py:92-108`）。
+
+**沒讀的（與檢索無關）**：`cwgan.py`、`t2s_*_component.py`、`classifier*.py`、`data_process_gan.py`、`render.py`、`nrrd_rw.py`、`encoder_component.py` 的層定義（論文 Table 3 已列）。
