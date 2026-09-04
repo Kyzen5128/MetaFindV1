@@ -6688,3 +6688,25 @@ Chain `chain_full_pipeline_scratchbb.sh` ran to `FULL PIPELINE DONE`; sweep `swe
 - Decisions requested: selection pool for the final report (val vs 9,138); whether to adopt a query construction as our IMPLEMENTATION CHOICE; whether to run the fusion-convergence ladder as a diagnostic.
 
 **DL-098 follow-up (Kyzen 「好」, 07:2x).** Item 3 launched: fusion-convergence ladder `logs/chain_fusion_ladder.sh` -- rung 0 mean pooling untrained (`tools/probes/mean_fusion_ladder_rung0.py`), rung 1 Transformer fusion 1 epoch backbone frozen (`--train-scope fuser_only`; note: trains BOTH fusion towers, DL-097), rung 2 1 epoch full scope, rung 3 3 epochs full, rung 4 = P1s; each on val with own and partner queries. Diagnostic; none of it is Table 1. Items 1-2 taken as my defaults until he says otherwise: final report selects on val 4,569 (D-3b) and reports test/A20/B; any query construction that lands near the paper is written as IMPLEMENTATION CHOICE, never as the paper's definition.
+
+---
+
+## DL-099 -- Fusion-convergence ladder finished; the "under-trained fusion" reading is refuted; the baseline rows point at query text/image that frozen CLIP cannot match (2026-09-05 07:5x)
+
+Ladder (released backbone, P1s recipe, val→val, R@1 %; `logs/chain_fusion_ladder.sh`, `eval/ladder_eval_*`):
+
+| rung | fusion / training | query | text | image | pc | T+I | T+PC | I+PC | full |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | mean pooling, untrained (L2-normalised inputs) | own | 69.8 | 91.5 | 99.8 | 99.2 | 99.9 | 99.7 | 100.0 |
+| 0 | same | partner | 5.4 | 0.2 | 99.8 | 0.1 | 98.6 | 98.2 | 68.6 |
+| 1 | Transformer, 1 epoch, backbone frozen | own / partner | 21.1 / 4.0 | 49.4 / 1.1 | 92.7 | 68.9 / 1.4 | 98.4 / 82.5 | 94.9 / 76.7 | 98.8 / 64.2 |
+| 2 | Transformer, 1 epoch, full scope | own / partner | 19.4 / 4.2 | 49.4 / 1.2 | 94.4 | 69.4 / 1.6 | 98.4 / 90.0 | 95.6 / 89.6 | 98.8 / 75.5 |
+| 3 | Transformer, 3 epochs, full | own / partner | 29.5 / 5.5 | 63.8 / 1.0 | 98.0 | 83.0 / 1.2 | 99.8 / 93.7 | 98.3 / 95.0 | 99.8 / 84.5 |
+| 4 | P1s, 10 epochs | own / partner | 33.8 / 5.5 | 65.7 / 1.2 | 97.9 | 85.9 / 1.2 | 99.7 / 94.4 | 98.5 / 96.1 | 99.8 / 86.1 |
+| paper MetaFind | | | 13.8 | 11.7 | 75.1 | 17.2 | 44.5 | 45.8 | 51.7 |
+
+Training amount does not produce the paper's shape: even with NO training (mean pooling) and partner text, T+PC is 98.6, because query pc = gallery cloud and the pc term dominates any fusion. The rung-1/2 (1 epoch) partner rows are the lowest we have (full 64-76) and still far above 51.7. The DL-098 §3 inference ("paper's fusion is near-mean / under-converged") is REFUTED as a sufficient explanation.
+
+Raw-norm companion (`tools/probes/mean_fusion_raw_norms.py`, `output/look/exp_fusion_ladder_rung0_raw.json`): released ULIP-2 raw norms text 38.0 / image 43.5 (single) 40.2 (mean) / pc 27.8. UNnormalised mean pooling, gallery = raw mean of three, query = partner text+image raw mean: 4.8 / 0.2 / 99.5 / 0.1 / 86.8 / 52.0 / 20.3 -- the closest we have come to the paper's ULIP baseline row (0.1 / 0.1 / 97.9 / 0 / 33.9 / 22.6 / 6.4): T+I ≈ 0, I+PC halved, full collapses. Gallery = pc only does not (full 88.6).
+
+Reading (INFERENCE, to be tested, not adopted): the paper's baseline text-only 0.1 and image-only 0.1 mean the FROZEN encoders cannot relate the paper's query text/image to the asset at instance level; MetaFind's 13.8 / 11.7 on the same queries then requires encoders that were fine-tuned to relate them (§2.4's contrast with "freezing pretrained text and image encoders"; §3.4 "full encoder fine-tuning ... earlier layers adapt"). Under that reading the gap has three parts: (1) query text/image are a different, harder observation than the asset's own; (2) MetaFind fine-tunes the CLIP towers (we freeze; ViT-bigG does not fit this card -- RA-3); (3) pc-only is the identical-cloud case reduced by dual-tower mixing (75.1, with R@5 barely above R@1). None of (1)-(3) is stated by the paper in a form we can implement without a choice by Kyzen.
