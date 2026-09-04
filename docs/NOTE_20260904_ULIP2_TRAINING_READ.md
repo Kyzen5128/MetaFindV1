@@ -1,5 +1,7 @@
 # ULIP-2 是怎麼訓練的 —— 論文 + 官方程式碼重讀（2026-09-04）
 
+> 2026-09-04 晚：這份是訓練配方摘要；完整逐字讀本（論文全節＋程式碼逐檔＋衝突表）在 `docs/NOTE_20260904_ULIP2_FULL_READ.md`，以那份為準。
+
 Kyzen 指示：「先去讀論文以及 ulip2 官方程式先去了解它怎麼訓練的」。來源：`docs/paper/ulip2_source/ulip2_arxiv_v4.html`
 （CVPR 2024 版）與 `/home/kyzen/upstream/ULIP`（官方 repo）。標籤：UPSTREAM PAPER = ULIP-2 論文；UPSTREAM CODE = repo；
 兩者衝突處明標。
