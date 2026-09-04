@@ -531,7 +531,7 @@ class Stage1Dataset:
                  preload: bool = False,
                  query_pack: "QueryPack | None" = None,
                  observation=None, image_tokens: int = 1,
-                 partner: str | None = None) -> None:
+                 partner: str | None = None, text_override: str | None = None) -> None:
         """`observation` is the §十一 protocol block, resolved.
 
         `partner="same_category"` [KYZEN ✅ 2026-09-04, P9]: the QUERY's text
@@ -571,6 +571,20 @@ class Stage1Dataset:
         self.image_tokens = int(image_tokens)
         self.partner = partner
         self._partner_of = self._build_partners(uids) if partner else None
+        # [KYZEN 2026-09-04, P10] q_text from an .npz (`uids`, `vecs`) built by
+        # tools/build_text_override_cache.py or the fields form-fill cache: the
+        # QUERY's text is a different sentence about the same asset (Figure 1
+        # fields vs Figure 2 description). Gallery text untouched.
+        self.text_override = str(text_override) if text_override else None
+        self._text_override_vec = None
+        if text_override:
+            z = np.load(text_override)
+            table = dict(zip(z["uids"].tolist(), range(len(z["uids"]))))
+            missing = [u for u in uids if u not in table]
+            if missing:
+                raise ValueError(f"text override {text_override} lacks {len(missing)} uid(s), e.g. {missing[:3]}")
+            self._text_override_vec = {u: z["vecs"][table[u]].astype(np.float32) for u in uids}
+            print(f"  query text override: {text_override} ({len(uids):,} assets)", flush=True)
         # A policy the cache cannot serve must have been refused at resolution
         # time, not discovered here on asset 30,000 of an epoch.
         if observation is not None and observation.query.needs_pack() and query_pack is None:
@@ -653,6 +667,8 @@ class Stage1Dataset:
         return out
 
     def _apply_partner(self, uid: str, out: dict) -> dict:
+        if self._text_override_vec is not None:
+            out["q_text"] = self._text_override_vec[uid]
         if self._partner_of is None:
             return out
         from metafind.data.pointclouds import uid_seed
@@ -661,6 +677,8 @@ class Stage1Dataset:
         out["q_text"] = np.asarray(cached["text"], dtype=np.float32)
         views = cached["views"]
         out["q_image"] = np.asarray(views[uid_seed(p) % views.shape[0]], dtype=np.float32)
+        if self._text_override_vec is not None:     # an explicit text override beats the partner's text
+            out["q_text"] = self._text_override_vec[uid]
         return out                                  # q_pc untouched: the asset's own
 
     def _view_matrix(self, entry: dict) -> np.ndarray:
@@ -870,7 +888,7 @@ class Stage1Dataset:
         # test_two_towers_with_different_image_policies_emit_a_query_vector,
         # which is why that test builds the non-preloaded dataset.
         if (self.query_pack is not None or self.observation is not None
-                or self.partner is not None):
+                or self.partner is not None or self.text_override is not None):
             entry = {"image": cached["image"]}
             if self._needs_views():
                 entry["views"] = cached["views"]
@@ -1366,7 +1384,7 @@ def flatten_condition_scores(scores: dict) -> dict:
 
 def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
                      batch_size, query_pack=None, num_workers: int = 4,
-                     observation=None, image_tokens: int = 1, partner=None):
+                     observation=None, image_tokens: int = 1, partner=None, text_override=None):
     """Mean R@1 / R@5 over the seven Table 1 conditions, on the dev-val gallery.
 
     Gallery is dev_val itself (`splits.build_eval_protocols`, protocol
@@ -1454,7 +1472,7 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
                                       query_pack=query_pack,
                                       observation=observation,
                                       image_tokens=image_tokens,
-                                      partner=partner),
+                                      partner=partner, text_override=text_override),
                         batch_size=batch_size, shuffle=False, collate_fn=collate,
                         num_workers=num_workers, drop_last=False)
     per_condition_q = {c: [] for c in QUERY_CONDITIONS}
@@ -2187,6 +2205,8 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         "query_pc_perturb": training.get("_query_pc_perturb", "none"),
         "amp": training.get("amp", "off"),
         "query_partner": training.get("query_partner", "none"),
+        "query_text_override": training.get("_query_text_override"),
+        "query_text_override_sha256": training.get("query_text_override_sha256"),
         "prefusion_norm": bool(training.get("prefusion_norm", False)),
         "image_tokens": int(training.get("image_tokens", 1)),
         "text_template": training.get("_text_template"),
@@ -2404,6 +2424,11 @@ def main() -> int:
     # 37 and 40, which is what lets the point cloud dominate the unweighted
     # readout. UNLIKE --seed this DOES enter arm_config_hash, because a
     # different set of trainable parameters is a different treatment.
+    ap.add_argument("--query-text-override", default=None,
+                    help="[KYZEN 2026-09-04, P10] .npz (uids, vecs) whose vectors "
+                         "replace the QUERY's text: a different sentence about the "
+                         "same asset (fields form-fill vs the gallery's description). "
+                         "Gallery untouched. Path recorded; sha in the arm hash.")
     ap.add_argument("--query-partner", default="none", choices=("none", "same_category"),
                     help="[KYZEN ✅ 2026-09-04] the QUERY's text and image come "
                          "from another asset of the same LVIS category (fixed "
@@ -2656,7 +2681,8 @@ def main() -> int:
     # gallery does not hold; declaring same_record beside either is a false
     # label, and declaring second_observation with neither is an empty one.
     second_via_image = (args.query_image_policy != "same_mean"
-                        or args.query_partner != "none")
+                        or args.query_partner != "none"
+                        or args.query_text_override is not None)
     if args.query_observation == "second_observation" and query_pack is None \
             and not second_via_image:
         raise SystemExit("--query-observation second_observation needs "
@@ -2792,7 +2818,8 @@ def main() -> int:
                       preload=args.preload, query_pack=query_pack,
                       observation=observation,
                       image_tokens=int(training.get("image_tokens", 1)),
-                      partner=(args.query_partner if args.query_partner != "none" else None)),
+                      partner=(args.query_partner if args.query_partner != "none" else None),
+                      text_override=args.query_text_override),
         batch_size=values["batch_size"], shuffle=True, collate_fn=collate,
         num_workers=workers, drop_last=True, generator=generator)
 
@@ -2902,6 +2929,10 @@ def main() -> int:
         training["amp"] = args.amp
     if args.query_partner != "none":
         training["query_partner"] = args.query_partner
+    if args.query_text_override:
+        import hashlib as _hl
+        training["query_text_override_sha256"] = _hl.sha256(Path(args.query_text_override).read_bytes()).hexdigest()
+        training["_query_text_override"] = str(args.query_text_override)
     training["_embeddings_dir"] = str(paths.EMBEDDINGS)
     from metafind.models.resolve_stage1 import TEXT_TEMPLATE_NAME
     training["_text_template"] = TEXT_TEMPLATE_NAME
@@ -3054,7 +3085,8 @@ def main() -> int:
                     # --preload run really has no worker processes at all
                     num_workers=workers, observation=eval_observation,
                     image_tokens=int(training.get("image_tokens", 1)),
-                    partner=(args.query_partner if args.query_partner != "none" else None))
+                    partner=(args.query_partner if args.query_partner != "none" else None),
+                    text_override=args.query_text_override)
                 runlog.train_metrics("stage1_dev_val", epoch=epoch, step=step,
                                      **{k: v for k, v in scores.items()
                                         if isinstance(v, (int, float))},

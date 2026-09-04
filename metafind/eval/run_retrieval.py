@@ -766,7 +766,7 @@ def _source_clause(gallery_source: str) -> str:
 
 
 def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
-                 device, batch_size, query_pack=None, observation=None, partner=None,
+                 device, batch_size, query_pack=None, observation=None, partner=None, text_override=None,
                  image_tokens: int = 1):
     """Query embeddings per condition, plus gallery embeddings, plus the map.
 
@@ -813,6 +813,8 @@ def encode_pools(backbone, model, query_uids, gallery_uids, aggregation,
             extra["image_tokens"] = image_tokens
         if conditions and partner not in (None, "none"):
             extra["partner"] = partner            # QUERY side only; the gallery is untouched
+        if conditions and text_override:
+            extra["text_override"] = text_override
         loader = DataLoader(Stage1Dataset(uids, aggregation, query_pack=pack, **extra),
                             batch_size=batch_size,
                             shuffle=False, collate_fn=collate, num_workers=4,
@@ -1053,7 +1055,7 @@ def overlay_stage2_weights(model, rec: dict, device: str) -> None:
           f"lambda {lam:.4f} (unused at evaluation: layout=None)", flush=True)
 
 
-def _construction_kwargs(observation, image_tokens: int, partner=None) -> dict:
+def _construction_kwargs(observation, image_tokens: int, partner=None, text_override=None) -> dict:
     """Only what differs from the pre-2026-09-03 construction, as keywords."""
     out = {}
     if observation is not None:
@@ -1062,6 +1064,8 @@ def _construction_kwargs(observation, image_tokens: int, partner=None) -> dict:
         out["image_tokens"] = image_tokens
     if partner not in (None, "none"):
         out["partner"] = partner
+    if text_override:
+        out["text_override"] = text_override
     return out
 
 
@@ -1072,7 +1076,7 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
                  ckpt: dict | None = None,
                  query_pack=None,
                  exclude_uids: set | None = None,
-                 observation=None, image_tokens: int = 1, partner=None) -> tuple[dict, list]:
+                 observation=None, image_tokens: int = 1, partner=None, text_override=None) -> tuple[dict, list]:
     """One protocol, seven conditions. Returns (core result, per-query rows).
 
     The gallery's SOURCE is decided here, from the protocol's own fields, not by
@@ -1198,12 +1202,12 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
         # `None`, not `gallery_uids`: the gallery encoder is not called at all.
         queries, _ = encode_pools(backbone, model, query_uids, None,
                                   aggregation, device, batch_size, query_pack,
-                                  **_construction_kwargs(observation, image_tokens, partner))
+                                  **_construction_kwargs(observation, image_tokens, partner, text_override))
     else:
         queries, gallery = encode_pools(backbone, model, query_uids,
                                         gallery_uids, aggregation, device,
                                         batch_size, query_pack,
-                                        **_construction_kwargs(observation, image_tokens, partner))
+                                        **_construction_kwargs(observation, image_tokens, partner, text_override))
 
     eff_targets, control_used = apply_control(control, targets,
                                               len(gallery_uids), seed)
@@ -1366,6 +1370,8 @@ def main() -> int:
                          "second point sample) instead of the gallery's own "
                          "cached vectors. Omit for the pre-2026-08-31 "
                          "construction. The gallery is unchanged either way.")
+    ap.add_argument("--query-text-override", default=None,
+                    help=".npz (uids, vecs) replacing the query's text (P10). Default: the checkpoint record's.")
     ap.add_argument("--query-partner", default=None,
                     help="'none' or 'same_category': the query's text and image "
                          "come from another same-category asset (P9). Default: "
@@ -1588,6 +1594,7 @@ def main() -> int:
             "query_image_policy": image_policy,
             # resolved again (and enforced) where the pack is built, below
             "query_partner": (args.query_partner or ckpt.get("query_partner") or "none"),
+            "query_text_override": (args.query_text_override or ckpt.get("query_text_override")),
             "query_pc_perturb": (args.query_pc_perturb
                                  or ckpt.get("query_pc_perturb") or "none"),
             "image_tokens": image_tokens,
@@ -1663,6 +1670,14 @@ def main() -> int:
             query_pack = QueryPack(args.query_pack, protocol_n_views(encoding))
             print(f"query pack {query_pack.path} arms={list(query_pack.arms)} "
                   f"sha256={query_pack.sha256[:12]}", flush=True)
+        text_override = args.query_text_override or ckpt.get("query_text_override") or None
+        if text_override:
+            import hashlib as _hl
+            sha = _hl.sha256(Path(text_override).read_bytes()).hexdigest()
+            rec_sha = ckpt.get("query_text_override_sha256")
+            if rec_sha and sha != rec_sha:
+                raise SystemExit(f"query text override {text_override} sha {sha[:12]} != the checkpoint's {rec_sha[:12]}")
+            print(f"query text override: {text_override}{'' if args.query_text_override else ' (from the checkpoint record)'}", flush=True)
         partner = args.query_partner or ckpt.get("query_partner") or "none"
         if partner != "none":
             print(f"query partner: {partner} (text and image from another same-category "
@@ -1696,7 +1711,7 @@ def main() -> int:
                 encoding["image_aggregation"], args.device, args.batch_size,
                 args.control, args.seed, args.block, untrained, ckpt,
                 query_pack, exclude_uids,
-                **_construction_kwargs(observation, image_tokens, partner))
+                **_construction_kwargs(observation, image_tokens, partner, text_override))
             # From the protocol's FIELDS, never its name. See protocol_caveat:
             # the name lookup that used to be here gave any protocol the
             # artifact adds the "never reported" caveat, printed beside a

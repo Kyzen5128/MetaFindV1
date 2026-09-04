@@ -581,6 +581,13 @@ ARM_RECIPE_KEYS = {
     # stage1_protocol.json, whole, minus TRAINING_EXCLUDED
     "training.fusion", "training.tower_sharing", "training.similarity",
     "training.allow_all_masked",
+    # [ADDED 2026-09-04] TREATMENTS. `prefusion_norm` (P1 vs P7) and
+    # `image_tokens` (P3) are protocol values in the overlays; `amp`,
+    # `query_partner`, `query_text_override_sha256` enter only when the run
+    # sets them (--amp bf16, --query-partner, --query-text-override) and change
+    # what the model sees or how its numerics run, so they are arms, not policy.
+    "training.prefusion_norm", "training.image_tokens", "training.amp",
+    "training.query_partner", "training.query_text_override_sha256",
     # stage1_encoding_protocol.json, whole, minus ENCODING_EXCLUDED
     "encoding.image_aggregation", "encoding.missing_modality_representation",
     # [ADDED 2026-09-03] TREATMENT, not policy. Whether the stand-in for an
