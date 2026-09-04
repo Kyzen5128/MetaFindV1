@@ -33,7 +33,8 @@ def main() -> int:
     ap.add_argument("--device", default="cuda")
     args = ap.parse_args()
     sp = json.loads((paths.OUTPUTS / "splits.json").read_text())["object"]
-    uids = sorted(set(sp["train"]) | set(sp["test"]))
+    from metafind.data.splits import corpus_uids
+    uids = sorted(corpus_uids(sp))          # [D-3b] train + val + test
     meta = {}
     if args.source.startswith("sketchfab"):
         meta = {e["u"]: e for e in json.loads(META.read_text())["entries"]}

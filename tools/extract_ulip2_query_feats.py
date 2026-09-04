@@ -62,7 +62,8 @@ def main() -> int:
     ap.add_argument("--splits", default="/home/kyzen/metafind_data/outputs/splits.json")
     args = ap.parse_args()
     sp = json.loads(Path(args.splits).read_text())["object"]
-    uids = sorted(set(sp["train"]) | set(sp["test"]))
+    from metafind.data.splits import corpus_uids
+    uids = sorted(corpus_uids(sp))          # [D-3b] train + val + test
     meta = {e["u"]: e for e in json.loads(META.read_text())["entries"]}
     by_shard: dict[str, set] = {}
     for u in uids:
