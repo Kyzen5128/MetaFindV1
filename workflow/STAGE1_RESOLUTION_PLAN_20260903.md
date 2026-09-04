@@ -182,6 +182,20 @@ gallery = mean3(raw)，query raw mean，dev_val 4,569：
 兩列的 query 來源不一定相同（基線與 MetaFind 各有評估管線），論文沒寫；記 INFERENCE。
 出處：`data/outputs/logs/exp_ulip_row_category_query3.log`、`output/look/exp_ulip_row_category_query.json`。
 
+
+### 5h. P9：訓練與評估都用「同類別另一資產的文字／圖片 + 自己的 pc」（2026-09-04 13:43）— 模型學會忽略文字圖片
+
+Kyzen ✅ 後開跑。P1 構法、lr 1e-4、10 代、`--query-partner same_category`。最佳第 8 代，dev_val 平均 0.583。
+
+| | text | image | pc | T+I | T+PC | I+PC | full |
+|---|---|---|---|---|---|---|---|
+| 論文 | 13.8 | 11.7 | 75.1 | 17.2 | 44.5 | 45.8 | 51.7 |
+| P9 D | 0.9 | 0.4 | 90.7 | 0.9 | 93.6 | 92.1 | 93.4 |
+
+讀法：訓練時文字／圖片對「找哪一個」沒有資訊，模型就把它們**整個丟掉**，只靠 pc：單模態 text／image 掉到接近 0（論文 13.8 / 11.7），含 pc 的四格全等於 pc（93）。論文的形狀（full < pc，text 13.8）要求模型**有在用**文字圖片、而且被它們拉偏；一個在「文字圖片無資訊」下訓出來的對比模型不會這樣。
+→ 新假設：**訓練用資產自己的文字／圖片（有資訊），測試用別的資產的（誤導）**。訓練讓 Fusion 學會信任文字圖片，測試時它們就把 query 拉走。不用訓練即可驗：拿 P1（訓練用自己的文字／單張圖／自己的 pc）在測試時改用 partner query 評 C、D（`eval_P1_testpartner_20260904`，跑中）。
+出處：`metafind_data_attrs/outputs/checkpoints/pilotP9_partner_same_category_lr1e-4_20260904b/`、`outputs/eval/eval_pilotP9_*`、`outputs/logs/chain_P9.log`。
+
 ## 6. Stage 2（2026-09-04 凌晨開跑）
 
 審計：`docs/audit/STAGE2_FRESH_AUDIT_20260904.md`。Eq. 6/7/8 逐項一致；場景 dropout、凍結範圍、τ 全對；正文 vs 附錄三處矛盾走附錄版（Eq. 4 才成立）。
