@@ -221,3 +221,21 @@ P1／P5／P8 的結論（它們的**數字**沒錯，錯的是「用擾動 query
 **核心問題的答案：MetaFind Table 1 的 Text Only，是文字經 query 塔去找「三模態一起編好的資產向量」，正解是同一個資產。**
 根據：§2.1 Eq. 1（找的是資產 A）、§2.2（畫廊用三模態預先編碼）、§2.4（畫廊 modality-complete、query 任意子集）、§2.7（推論時畫廊快取、query 任意組合）、
 §3.2（七個是 query 條件）。不是 T→PC；T→PC 是基線列的定義（§6）。
+
+---
+
+## 附錄 A. Text2Shape 全文＋程式碼完整讀後補正（2026-09-04 19:5x，Kyzen 問「你有完整看過嗎」）
+
+之前 §3 是用關鍵字抽段落寫的；這次把論文（正文＋附錄 A–D）與 `lib/lba.py`、`lib/solver_encoder.py`、
+`lib/data_process_encoder.py`、`lib/losses.py`、`lib/layers.py`、`lib/config.py`、`tools/eval/eval_text_encoder.py` 全部讀完。補正與新增：
+
+| # | 項 | 內容 | 標籤 |
+|---|---|---|---|
+| A1 | ShapeNet 上的絕對數字**非常低** | Table 7（ShapeNet，test 10% ≈ 1.5K 形狀、≈7.5K 句）：Full-MM **text-to-shape RR@1 0.40 / RR@5 2.37 / NDCG@5 1.35**；text-to-text 1.74 / 6.05；shape-to-text 0.83 / 3.37；Random 0.11 / 0.35。作者自己說「the absolute numbers do not entirely capture the performance」。→ exact-instance 的 text→shape 在千級畫廊就是個位數以下，MetaFind 基線列的 0.1–7（畫廊 ~9.6K）與此同量級。 | UPSTREAM FACT |
+| A2 | 釋出的評估器是**混合池** | `LBASolver.get_outputs_dict` 把 test 的 shape embedding 與 text embedding **接成同一個池子**，`compute_metrics` 對這個池做「自己找自己、排除 self」的最近鄰；正解 = 同 model_id，所以一句 query 的正解**同時包含**該形狀與它的其他 4 句描述。訓練時每次 validation 用的分數是這個混合池的 **precision@5**（`solver_encoder.py:124`），連續 5 次不進步就停（early stopping，`:134-136`）。 | OBSERVED CODE |
+| A3 | 純 text→shape 的入口**沒有釋出** | `compute_pr_at_k` 有 `fit_labels` 參數可以做 query≠fit，但 `compute_metrics` 永遠傳同一個矩陣當 fit 與 query。Table 7 三欄分開的數字，用釋出腳本跑不出來，要自己接。§3 表最後一列的 UNRESOLVED 改成：**確認沒有**。 | OBSERVED CODE |
+| A4 | 訓練 batch 構造 | 每 batch **100 個不同形狀 × 每形狀 2 句**（App. A；`config.py` BATCH_SIZE 100、N_CAPTIONS_PER_MODEL 2；`LBADataProcess.run`）。同一 batch 內 model_id 不重複。 | UPSTREAM FACT |
+| A5 | 損失 | L = TST(walker + 0.25·visit) + STS(同) + metric_tt + 2·metric_st（`lba.py:231-232`，`METRIC_MULTIPLIER 1`）。metric loss 是 Song et al. lifted-structure 的平滑版，相似度用點積除以 128、margin 1（`INVERTED_LOSS`）。**向量不做單位化**（README 訓練指令 `--lba_unnormalize`；論文 §4.4「embeddings are not restricted to have unit norm」），超過 norm 10 才罰（`MAX_NORM 10`，權重 2）。 | UPSTREAM FACT |
+| A6 | 編碼器 | 文字：詞向量隨機初始化 + 4 層 1D conv + GRU(256) + fc → **128 維**；形狀：3D CNN on 32³ RGBA 體素 → 128 維。**沒有任何預訓練**（§1「use no pre-training」）。 | UPSTREAM FACT |
+| A7 | 資料 | ShapeNet 椅+桌 15,038 個、75,344 句（每個 5 句，AMT 眾包，看旋轉動畫描述）；spaCy 小寫化＋lemmatize；>96 詞的句子丟掉；詞頻 ≤2 → UNK，詞彙 3,588。 | UPSTREAM FACT |
+| A8 | 對 MetaFind 的啟示 | Text2Shape 的「同一形狀的其他描述也算正解」在 MetaFind 不存在（一資產一份描述），所以 MetaFind 的 text-only 比 Text2Shape 的 text-to-text 更嚴。它的 RR@k 定義、exact-instance 正解、test→test 池，與我們一致；它的 scorer（raw dot、不單位化）與我們不同，已並列印出。 | PAPER-CONSTRAINED INFERENCE |
