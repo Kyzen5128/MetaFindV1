@@ -102,6 +102,16 @@ def main() -> int:
             texts[name] = np.concatenate(vecs)
         images = {"own view": np.stack([emb(u, "views")[uid_seed(u) % 12] for u in q_uids]),
                   "partner view": np.stack([emb(partner[u], "views")[uid_seed(partner[u]) % 12] for u in q_uids])}
+        # ULIP-2 / OpenShape per-object observations (extract_ulip2_query_feats.py): the target's OWN
+        # Sketchfab thumbnail (CLIP feature), its Sketchfab name, BLIP / Azure captions -- all ViT-bigG.
+        u2p = Path("/home/kyzen/metafind_data/outputs/_probe/ulip2_query_feats/ulip2_query_feats.npz")
+        if u2p.exists():
+            z = np.load(u2p); row = {u: i for i, u in enumerate(z["uids"].tolist())}
+            idx = np.array([row[u] for u in q_uids])
+            images["thumbnail(own)"] = z["thumbnail_feat"][idx].astype(np.float32)
+            images["thumbnail(partner)"] = z["thumbnail_feat"][np.array([row[partner[u]] for u in q_uids])].astype(np.float32)
+            for key, name in (("name_feat", "u2 name"), ("blip_feat", "u2 blip caption"), ("msft_feat", "u2 msft caption")):
+                texts[name] = z[key][idx].astype(np.float32)
         # ---- gallery (P1's construction) and the query pc (= gallery pc, the asset's own)
         g_text = np.stack([emb(u, "text") for u in g_uids])
         g_img = np.stack([emb(u, "views").mean(0) for u in g_uids])
@@ -128,6 +138,13 @@ def main() -> int:
         for tn in ("fields(attrs cache)", "cat_only", "sketchfab_name", "sketchfab_name_size", "sketchfab_name_tags", "sketchfab_desc_or_name"):
             if tn in texts:
                 combos += [(tn, "partner view", f"{tn} + reference view"), (tn, "own view", f"{tn} + own view")]
+        if "thumbnail(own)" in images:
+            combos += [("own(attrs)", "thumbnail(own)", "own fields text + OWN THUMBNAIL"),
+                       ("own(attrs)", "thumbnail(partner)", "own fields text + partner thumbnail"),
+                       ("u2 name", "thumbnail(own)", "Sketchfab name (u2 feat) + own thumbnail"),
+                       ("u2 blip caption", "thumbnail(own)", "BLIP caption + own thumbnail"),
+                       ("u2 msft caption", "thumbnail(own)", "Azure caption + own thumbnail"),
+                       ("cat_size", "thumbnail(own)", "Figure-1 fields + own thumbnail")]
         out = {"n_query": len(q_uids), "n_gallery": len(g_uids), "paper": PAPER, "rows": {}}
         print(f"\n{'query (text | image); pc = own':<50}" + "".join(f"{c:>9}" for c in QUERY_CONDITIONS))
         print(f"{'paper w/o ESSGNN':<50}" + "".join(f"{PAPER[c]:>9.1f}" for c in QUERY_CONDITIONS))
