@@ -6558,3 +6558,33 @@ question is settled only by a figure, and the rebuttal half of that evidence
 remains unread by anyone on this machine.
 
 ---
+
+---
+
+## DL-092 -- Table 1 mainline chosen on val→val: P1s. One `--unseal` pass of A / A20 / B launched (2026-09-04 21:5x)
+
+Kyzen ✅ (2026-09-04 ~17:40): after the mainline is chosen on val→val, run A (test→test 4,569), A20 (test→holdout 9,138), B (test→full 45,692) **once**, reporting Text2Shape RR@k / NDCG@5 beside R@k. Kyzen 2026-09-04 delegated the configuration decision to the experimenter (memory `i-am-the-experimenter`).
+
+Candidates, all 80/10/10 D-3b, lr 1e-4, 10 epochs, best epoch 9, protocol C (val→val, gallery 4,569), cosine R@1 in %:
+
+| arm | text | image | pc | text+image | text+pc | image+pc | full | mean | extra assumption vs paper |
+|---|---|---|---|---|---|---|---|---|---|
+| P1s (shared backbone, attrs text, fp32) | 33.8 | 65.7 | 97.9 | 85.9 | 99.7 | 98.5 | 99.8 | 83.1 | none beyond the recorded IMPLEMENTATION CHOICEs |
+| P13b (fully separate point paths, **bf16**) | 38.2 | 66.6 | 93.3 | 91.0 | 99.4 | 95.4 | 99.6 | 83.4 | U-16 tower separation (UNRESOLVED) **and** AMP bf16 -- two differences, not attributable |
+| P12b (gallery JSON text, query cat+size) | 18.6 | 68.9 | 99.3 | 80.4 | 99.7 | 99.4 | 99.7 | 80.9 | text-serialization override on both towers (poster-inspired, not in paper text) |
+| paper Table 1 | 15.2 | 29.7 | 75.1 | 31.1 | 44.5 | 73.5 | 81.5 | 50.1 | -- |
+
+Decision: **P1s is the mainline.** Reasons: (1) fewest assumptions -- shared backbone is the Figure 1 `ULIP-2 (Shared)` reading Kyzen ruled A on 09-01 (DL-068; reopened DL-070 but not overturned); (2) the mean R@1 spread across the three is 2.5 points and the shape is the same in all three (text lowest, every pc-bearing cell ≥ 93); (3) P13b changes two things at once; (4) P12b's closer text cell comes from making the query text less informative, which is an experiment arm, not a reproduction. None of the three reproduces the paper's shape (paper text+pc 44.5 < pc 75.1; ours text+pc ≥ pc in every arm). That statement goes on the Table 1 report unchanged.
+
+Checkpoint: `/home/kyzen/metafind_data_attrs/outputs/checkpoints/pilotP1s_split801010_lr1e-4_20260904/stage1_best.pt` (sha256 074f8d98…, record `stage1_best_ckpt.json`, code 1c3c654, clean). Command (nohup, log `outputs/logs/table1_P1s_unseal_20260904.log`):
+
+```
+METAFIND_DATA=/home/kyzen/metafind_data_attrs METAFIND_TEXT_TEMPLATE=attrs_v1 python -m metafind.eval.run_retrieval \
+  --ckpt-record $CK/pilotP1s_split801010_lr1e-4_20260904/stage1_best_ckpt.json \
+  --protocol A_test_gallery --protocol A20_test_vs_holdout --protocol B_full_gallery \
+  --unseal --out-dir table1_P1s_unseal_20260904
+```
+
+P13b and P12b stay val-only; their C/D numbers are reported beside as arms. The pairwise diagnostic stays on val and is never labelled Table 1.
+
+**Outcome (21:41):** chain finished rc 0 after one restart (the reported protocols need the promoted gallery index; first attempt had none -- n11 → G4 PASS → n12 → A/A20/B). Test R@1: A text 33.9 / full 99.9; A20 text 25.0 / full 99.6; B text 9.6 / full 98.8; text+pc ≥ pc in all three. Report: `docs/TABLE1_REPORT_20260904.md`. The ✅ is spent; `test` is no longer held-out for this corpus.
