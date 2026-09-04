@@ -24,7 +24,7 @@ from metafind import paths
 from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
 
 META = Path("/home/kyzen/upstream/openshape-objaverse-embeddings/objaverse_meta.json")
-SOURCES = ("sketchfab_name", "sketchfab_name_size")
+SOURCES = ("sketchfab_name", "sketchfab_name_size", "cat_size", "cat_only")
 
 
 def main() -> int:
@@ -34,18 +34,24 @@ def main() -> int:
     args = ap.parse_args()
     sp = json.loads((paths.OUTPUTS / "splits.json").read_text())["object"]
     uids = sorted(set(sp["train"]) | set(sp["test"]))
-    meta = {e["u"]: e for e in json.loads(META.read_text())["entries"]}
-    missing = [u for u in uids if u not in meta]
-    if missing:
-        raise SystemExit(f"{len(missing)} uids without Sketchfab metadata, e.g. {missing[:3]}")
+    meta = {}
+    if args.source.startswith("sketchfab"):
+        meta = {e["u"]: e for e in json.loads(META.read_text())["entries"]}
+        missing = [u for u in uids if u not in meta]
+        if missing:
+            raise SystemExit(f"{len(missing)} uids without Sketchfab metadata, e.g. {missing[:3]}")
 
     def size_of(u):
         a = json.loads((paths.ANNOTATIONS / f"{u}.json").read_text())
         return f"{float(a['width']):.0f} x {float(a['length']):.0f} x {float(a['height']):.0f} cm"
+    from metafind.models.resolve_stage1 import serialize_annotation
     if args.source == "sketchfab_name":
         sents = [meta[u]["name"] for u in uids]
-    else:
+    elif args.source == "sketchfab_name_size":
         sents = [f"{meta[u]['name']} {{size: {size_of(u)}}}" for u in uids]
+    else:   # Figure-1 forms from the annotation fields: "Platform Bed {size: ...}" / category only
+        tpl = {"cat_size": "{category} {{size: {width} x {length} x {height} cm}}", "cat_only": "{category}"}[args.source]
+        sents = [serialize_annotation(json.loads((paths.ANNOTATIONS / f"{u}.json").read_text()), template=tpl) for u in uids]
     print(f"{len(uids):,} assets; e.g. {sents[0]!r} / {sents[1]!r}", flush=True)
     bb = ULIPBackbone(BackboneConfig(device=args.device, train_scope="fuser_only"))
     vecs = []

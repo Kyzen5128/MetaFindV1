@@ -127,7 +127,40 @@ TEXT_TEMPLATES = {
     # attrs_v1 that would emit the identical form-fill string; under desc_v1 it
     # emits a different sentence about the same asset -- Figure 1's T1..TK.
     "desc_v1": "{description}",
+    # `figure2_json` [KYZEN 2026-09-04, from the NeurIPS poster]: the GALLERY
+    # text the poster shows under "Structured Detailed Description" is the
+    # annotation JSON itself -- {"annotations": {"category": ..., "synset": ...,
+    # "width": 30, ..., "description": "...", "materials": [...], "onCeiling":
+    # false, ...}} -- while the query text in the framework figure is the
+    # short "Platform Bed (size: ...)". Serialised by `figure2_json_string`,
+    # not by str.format; the sentinel keeps the template registry one table.
+    "figure2_json": "__json__",
 }
+FIGURE2_JSON_KEYS = ("category", "synset", "width", "length", "height", "volume",
+                     "mass", "description", "materials",
+                     "onCeiling", "onWall", "onFloor", "onObject")
+
+
+def figure2_json_string(annotation: dict) -> str:
+    """The poster's structured description: dimensions rounded to whole cm,
+    floats to 2 dp, the description whole (not capped), keys in Figure 2 order."""
+    import json as _json
+    rec = {}
+    for k in FIGURE2_JSON_KEYS:
+        v = annotation.get(k)
+        if k in ("width", "length", "height"):
+            v = float(round(float(v)))
+        elif isinstance(v, str) and k in ("volume", "mass"):
+            try:
+                v = round(float(v), 2)
+            except ValueError:
+                pass
+        elif isinstance(v, float):
+            v = round(v, 2)
+        elif isinstance(v, str) and v in ("True", "False"):
+            v = v == "True"
+        rec[k] = v
+    return _json.dumps({"annotations": rec}, ensure_ascii=False)
 TEXT_TEMPLATE_NAME = os.environ.get("METAFIND_TEXT_TEMPLATE", "v2_cm")
 if TEXT_TEMPLATE_NAME not in TEXT_TEMPLATES:
     raise SystemExit(
@@ -607,6 +640,8 @@ def serialize_annotation(annotation: dict, template: str | None = None) -> str:
     # placed .", which encodes fine, ranks badly, and looks like nothing is
     # wrong. A guard that depends on a check in another module is a guard that
     # disappears the first time someone calls this function from somewhere else.
+    if (template or TEXT_TEMPLATE) == "__json__":
+        return figure2_json_string(annotation)
     if not annotation["materials"]:
         raise ValueError("`materials` is empty; the serialized string would "
                          "be malformed rather than merely short")

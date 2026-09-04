@@ -46,6 +46,12 @@ def main() -> int:
     ap.add_argument("--limit", type=int)
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--batch", type=int, default=256)
+    ap.add_argument("--truncate", action="store_true",
+                    help="[KYZEN 2026-09-04, figure2_json] encode over-length text "
+                         "anyway (CLIP keeps the first 77 tokens) and record "
+                         "text_truncated=True with the true count, instead of "
+                         "refusing (P-4). The poster's gallery text is the whole "
+                         "annotation JSON, which is what the paper's CLIP saw.")
     args = ap.parse_args()
 
     src = Path(args.source).resolve()
@@ -78,8 +84,11 @@ def main() -> int:
             try:
                 n_tok = refuse_if_overlong(t)
             except ValueError:
-                overlong += 1
-                continue
+                if not args.truncate:
+                    overlong += 1
+                    continue
+                from metafind.data.encode_text_image import true_token_count
+                n_tok = true_token_count(t); overlong += 1
             texts.append((u, t, n_tok)); keep.append(u)
         if not texts:
             continue
@@ -94,7 +103,7 @@ def main() -> int:
                                 views=old["views"], image=old["image"])
             tmp.replace(npz)
             rec.update({"embedding_uri": str(npz), "text": t,
-                        "text_tokens": int(n_tok), "text_truncated": False,
+                        "text_tokens": int(n_tok), "text_truncated": bool(n_tok > 77),
                         "text_serialization": protocol["text_serialization"],
                         "reencoded_text_from": str(src)})
             sc = sidecar_path(u)
