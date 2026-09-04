@@ -231,6 +231,16 @@ P1 不動，D 協定，pc = 目標自己的：
 論文的 query 文字要同時滿足「單獨有 13.8」與「加進 pc 掉到 44.5」，圖片要「單獨 11.7」但「加進 pc 掉到 45.8」：都是**關於目標、但不是 gallery 那份**的觀測。候選：Objaverse 原始 metadata 的資產名稱（Figure 1 的「Platform Bed」像 Sketchfab 名稱）＋尺寸；圖片用 Objaverse 官方縱圖（不同渲染管線的目標本人）。兩者都是「目標的、但跟 gallery 存的不同」。是否取得為 Kyzen 決定（縱圖需下載）。
 出處：`tools/probes/exp_type_level_query.py`、`output/look/exp_type_level_query.json`。
 
+
+### 5k. OpenShape 官方程式碼怎麼餵、怎麼檢索（2026-09-04 15:10，UPSTREAM FACT）
+
+Clone：`/home/kyzen/upstream/OpenShape_code`（abe5aa4）、`/home/kyzen/upstream/openshape-demo`（HF Space）、`/home/kyzen/upstream/openshape-demo-support`（HF repo；`retrieval.py` 在 commit 70dbc29）。
+
+訓練（`src/data.py:68-103`、`src/configs/train.yaml:35-49`）：文字每步從三種來源隨機挑一（metadata 名稱／標籤、BLIP 或 Azure 對圖生成的短句、檢索文字），特徵用 ULIP 64 模板平均；圖片 50% 用 **Sketchfab 縱圖**特徵、50% 用一張渲染圖特徵；點雲 10k、y-up、正規化、增強＋隨機 z 旋轉、50% 顏色塗灰 0.4；損失 pc↔text、pc↔image 雙向對比，logit scale 可學（`train.py:60-124`）；CLIP ViT-bigG 特徵事先算好凍結。
+檢索 demo（`retrieval.py`）：gallery = 全 Objaverse 的 OpenShape **形狀向量**（`objaverse.pt`：`us`、`feats`）；query = CLIP 文字特徵／CLIP 圖片特徵／OpenShape 點雲特徵，單模態 cosine 排序。**沒有多模態融合**。
+`objaverse_meta.json`（HF dataset `OpenShape/openshape-objaverse-embeddings`）每個 uid 有：`name`、`tags`、`cats`、`desc`、**`img`（Sketchfab 縱圖 URL）**、glb 路徑。這就是「關於目標、但不是我們 gallery 那份」的文字與圖片來源；MetaFind 的渲染照 OpenShape，Figure 1 的「Platform Bed」像 Sketchfab 名稱。
+含意：Table 1 的 OpenShape 列與 ULIP 列一樣，是 MetaFind 自己加 mean pooling 算的；query 的文字／圖片最可能是 metadata 名稱與縱圖。
+
 ## 6. Stage 2（2026-09-04 凌晨開跑）
 
 審計：`docs/audit/STAGE2_FRESH_AUDIT_20260904.md`。Eq. 6/7/8 逐項一致；場景 dropout、凍結範圍、τ 全對；正文 vs 附錄三處矛盾走附錄版（Eq. 4 才成立）。
