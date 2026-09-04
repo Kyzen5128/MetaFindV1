@@ -6664,3 +6664,13 @@ Kyzen, after `docs/PAPER_PIPELINE_FULL_20260905.md`: 「完整地按照步驟去
 6. `tools/probes/stage2_procthor_retrieval.py` on 300 test houses (S1 / S2-off / S2-on).
 
 Not in the chain (cannot be done here): the paper's scene-level GPT-4o + 5-human scoring through I-Design (5b); Stage 2's positive/query definitions remain our IMPLEMENTATION CHOICEs (stage2_protocol.json). Prediction on record: with own observations the pc cell stays ≥ 90 whatever the backbone; the from-scratch backbone's zero-shot on the 20% (best so far 6.2 at epoch 3, released weights 50.9) says its text/image alignment is far weaker, so text/image cells will be lower than P1s's. Smoke: Stage 1 on CPU from a slimmed epoch-3 file loads and records the initialiser (`smoke_scratchbb_cpu_20260905`). Disk: each ULIP epoch checkpoint is 10.5 GB; a janitor keeps best/last + two newest.
+
+---
+
+## DL-097 -- GPT review of the Stage 1 equations note, checked point by point (2026-09-05 05:4x)
+
+Kyzen forwarded a GPT critique of `docs/STAGE1_ARCHITECTURE_EQUATIONS_20260905.md` with 「不要全信 逐步對照」. Each point was checked against `2methdology.tex` / `3experiments.tex` and the code; the note is now v2 with a correction table. Accepted (all): PointBERT-trainable and CLIP-frozen were labelled PAPER but the paper only says "encoders are trained" / "full encoder fine-tuning" (→ PAPER-constrained inference; CLIP freeze is ULIP-2's, MetaFind silent); learnable mask tokens are OURS (paper: "masked embeddings"); the zero-padding comparison was mis-paired across tables (Table 3: 10.5 vs Full 11.4, not vs Table 1's 13.8); Stage 1 gallery is live during training, cached only after; 11 vs 12 views is a DEVIATION; checkpoint rule is lexicographic (R@1, R@5, earlier epoch); protocols are A / A20 / B (+ A20_holdout_vs_holdout); Q/G fusion untied is OBSERVED not PAPER; τ is training-only; the note describes the P1s-family arm (lr 1e-4, 10 epochs), the canonical artifact is 5e-4 / 5.
+
+New finding, verified in code: `train_scope=fuser_only` freezes the backbone but the optimizer still takes `model.parameters()` -- BOTH fusion towers train (`stage1.py:2117`) -- while the paper's Table 3 row is "training only the fusion module in the query encoder". Our fuser_only arm therefore does not map onto Table 3's 8.7; no reported number used it.
+
+Open, for Kyzen: the selection pool. D-3b says val 4,569 selects and test 4,569 is final-only; his 2026-09-04 order 「20%選啦」 (DL-093) selects on the whole 9,138, which puts the test half inside model selection, so A / A20 stop being held-out. The running s1_scratchbb chain follows the 9/4 order. Which pool the FINAL report uses is his call; both are recorded.
