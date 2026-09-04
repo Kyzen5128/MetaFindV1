@@ -283,6 +283,19 @@ def build_eval_protocols(train: list[str], test: list[str],
             "layout_free_context": "omitted",
             "reported": True,
         }
+        # [KYZEN 2026-09-04 22:0x, verbatim 「20%選啦」「做啦」] His diagram:
+        # train on the 80%, decide lr/epochs on the 20%, report on the SAME
+        # 20%: query = every holdout asset (seven conditions), gallery = every
+        # holdout asset (full T/I/P). Selection and report share the pool by
+        # his order; that is recorded, not hidden. `--selection-split holdout`
+        # in stage1.py is the training side of the same order.
+        protocols["A20_holdout_vs_holdout"] = {
+            "query_split": "holdout",
+            "gallery_split": "holdout",
+            "gallery_size": len(holdout),
+            "layout_free_context": "omitted",
+            "reported": True,
+        }
     if dev_val is not None:
         # [D-3] The development-phase selection protocol. `reported: False` is
         # the whole point: its numbers choose lr, epochs and checkpoint policy

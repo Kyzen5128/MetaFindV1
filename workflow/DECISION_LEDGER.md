@@ -6600,3 +6600,13 @@ P13b and P12b stay val-only; their C/D numbers are reported beside as arms. The 
 | paper | 15.2 | 29.7 | 75.1 | 31.1 | 44.5 | 73.5 | 81.5 |
 
 Reading: a mismatched query text now HURTS (99.7 → 94.6, the paper's direction) but only by a few points, because pc alone is 97.9 and the query cloud is the gallery's own cloud. The remaining gap is the pc cell (97.9 val / 91.9 on 45,692 vs paper 75.1); earlier resampling of the query cloud moved it by ~1 point (`exp_observation_geometry.json`). What the paper's query point cloud is remains UNKNOWN (U-09 family); escalated to Kyzen.
+
+---
+
+## DL-093 -- Kyzen's diagram, literally: select on the whole 20%, report on the same 20% (2026-09-04 22:1x)
+
+Kyzen, after the Table 1 report and the query-mismatch diagnostic, verbatim: 「論文 15.2 29.7 75.1 31.1 44.5 73.5 81.5 你給我他媽的做出來」, then his diagram (80% TRAIN → 決定架構/lr/epochs → final Stage 1 on the full 80% → 20% TEST → query = every test asset × seven conditions, gallery = every test asset full T/I/P → similarity → rank → R@1/R@5), then 「廢話你是80%選???? 20%選啦」 and 「做啦」. The pipeline already matched the diagram except that selection used the val half (4,569) of the 20% and A20 queried only the test half. His order: select on the WHOLE 20% (9,138) and report query = gallery = that same 9,138. Selection and report share the pool by his order; recorded here, not hidden. This is the authorisation for reading the 20% again (the DL-092 ✅ was spent).
+
+Code (this commit): `metafind/train/stage1.py` gains `--selection-split {dev_val,holdout}` (default dev_val; records `selection_split` and `selected_on` in the best record); `metafind/data/splits.py` `build_eval_protocols` gains `A20_holdout_vs_holdout` (query holdout, gallery holdout, 9,138, reported); `data/outputs/eval_protocols.json` regenerated from the untouched `splits.json` (old file kept as `eval_protocols.before_holdout_protocol_20260904.json`; every existing protocol byte-equal); test added. Smoke: `smoke_sel20_20260904` (256 assets, 1 epoch) records `selection_split: holdout`, n_dev_val 9,138.
+
+Run: `logs/chain_sel20.sh` → lr 1e-4 (P1s recipe, fp32, 10 epochs, select on holdout) → n11/G4/n12 → `A20_holdout_vs_holdout` + B `--unseal` (interim report) → lr 1e-3 → lr 3e-3 → best holdout mean R@1 wins; if not 1e-4, its report is run too. ~2.5 h per lr on fp32 (1.3 s/step). Prediction on record: pc cell ≈ 97 (val 97.9, test 98.0, 45,692-gallery 91.9) -- the query cloud is the gallery cloud; this run changes the pool, not that.

@@ -408,3 +408,14 @@ def test_the_filter_ladder_reports_before_removed_after_for_every_stage(
     # describing four unrelated measurements rather than one pipeline.
     for a, b in zip(lad["stages"], lad["stages"][1:]):
         assert a["after"] == b["before"]
+
+
+def test_the_whole_20_percent_protocol_queries_and_ranks_the_holdout():
+    """[KYZEN 2026-09-04 「20%選啦」] query = gallery = every holdout asset."""
+    from metafind.data.splits import build_eval_protocols
+    train = [f"t{i}" for i in range(8)]
+    val, test = ["v0", "v1"], ["s0", "s1"]
+    p = build_eval_protocols(train, test, val, holdout=val + test)
+    h = p["A20_holdout_vs_holdout"]
+    assert (h["query_split"], h["gallery_split"]) == ("holdout", "holdout")
+    assert h["gallery_size"] == 4 and h["reported"] is True

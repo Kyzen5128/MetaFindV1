@@ -1325,7 +1325,8 @@ def save_best(record: dict, epoch: int, scores: dict, args,
     tmp_ckpt.replace(ckpt_path)
 
     payload = {**record, "uri": str(ckpt_path), "epoch": epoch,
-               "selected_on": "dev_val mean_R@1, tie mean_R@5 [D-3]",
+               "selected_on": f"{args.selection_split} mean_R@1, tie mean_R@5 [D-3]",
+               "selection_split": args.selection_split,
                "phase": args.phase, "limit": args.limit,
                "n_train": len(train_uids), "n_dev_val": len(dev_val_uids),
                "pools_sha256": digest, "dev_val": scores}
@@ -2583,6 +2584,15 @@ def main() -> int:
     ap.add_argument("--phase", choices=("dev", "final"), default="dev",
                     help="dev: train dev_train, select on dev_val (D-3). "
                          "final: train the full 80%%, no selection.")
+    # [KYZEN 2026-09-04, verbatim 「20%選啦」] select the epoch on the WHOLE
+    # 20% (`holdout`, 9,138) instead of its val half. Recorded in the best
+    # record as `selection_split` / `selected_on`; the reported protocol that
+    # shares this pool is A20_holdout_vs_holdout.
+    ap.add_argument("--selection-split", choices=("dev_val", "holdout"),
+                    default="dev_val",
+                    help="which splits.json pool selects the epoch in --phase "
+                         "dev: dev_val (D-3b, 4,569) or holdout (Kyzen "
+                         "2026-09-04, the whole 20%%, 9,138).")
     args = ap.parse_args()
     # Checked here, before protocols, splits or CUDA: an argument that can never
     # produce a run should cost a second, not a dataset load. The resolution of
@@ -2680,14 +2690,14 @@ def main() -> int:
         # subset of train, so that is not a degraded run, it is a meaningless
         # one, and nothing would have said so. Missing dev_train is a reason to
         # stop, not a reason to substitute the one pool D-3 forbids.
-        missing = [k for k in ("dev_train", "dev_val") if not splits.get(k)]
+        missing = [k for k in ("dev_train", args.selection_split) if not splits.get(k)]
         if missing:
             raise ValueError(
                 f"--phase dev needs {' and '.join(missing)} in splits.json. "
                 "Re-run n09_build_splits, or use --phase final, which selects "
                 "nothing and needs no held-out pool.")
         train_uids = splits["dev_train"]
-        dev_val_uids = splits["dev_val"]
+        dev_val_uids = splits[args.selection_split]
         # [Codex 2026-08-28] `splits.py:292` enforces disjointness when it
         # WRITES the file. This node reads it, and a stale, hand-repaired or
         # truncated splits.json satisfies every check above while overlapping.
