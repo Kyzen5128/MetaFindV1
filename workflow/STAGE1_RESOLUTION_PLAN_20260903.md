@@ -241,6 +241,22 @@ Clone：`/home/kyzen/upstream/OpenShape_code`（abe5aa4）、`/home/kyzen/upstre
 `objaverse_meta.json`（HF dataset `OpenShape/openshape-objaverse-embeddings`）每個 uid 有：`name`、`tags`、`cats`、`desc`、**`img`（Sketchfab 縱圖 URL）**、glb 路徑。這就是「關於目標、但不是我們 gallery 那份」的文字與圖片來源；MetaFind 的渲染照 OpenShape，Figure 1 的「Platform Bed」像 Sketchfab 名稱。
 含意：Table 1 的 OpenShape 列與 ULIP 列一樣，是 MetaFind 自己加 mean pooling 算的；query 的文字／圖片最可能是 metadata 名稱與縱圖。
 
+
+### 5l. 測試時 q_text 改 Sketchfab 名稱（P1 不動；2026-09-04 15:30）
+
+| q_text ｜ q_image（pc 自己的） | text | image | pc | T+I | T+PC | I+PC | full |
+|---|---|---|---|---|---|---|---|
+| 論文 | 13.8 | 11.7 | 75.1 | 17.2 | 44.5 | 45.8 | 51.7 |
+| Sketchfab 名稱 ｜ 參考圖 | 0.8 | 0.4 | 66.6 | 0.6 | 57.7 | 50.5 | 42.5 |
+| 名稱＋尺寸 ｜ 參考圖 | 1.5 | 0.4 | 66.6 | 1.1 | 60.6 | 50.5 | 46.4 |
+| 名稱＋標籤 ｜ 參考圖 | 0.7 | 0.4 | 66.6 | 0.7 | 61.0 | 50.5 | 42.3 |
+| 作者描述或名稱 ｜ 參考圖 | 0.6 | 0.4 | 66.6 | 0.6 | 55.4 | 50.5 | 41.2 |
+| 名稱＋尺寸 ｜ 自己的圖 | 1.5 | 29.7 | 66.6 | 28.7 | 60.6 | 77.8 | 74.0 |
+
+讀法：含 pc 的融合格全落在論文量級（T+PC 55～61 對 44.5；full 41～46 對 51.7）；但 text 單格 0.6～1.5 對 13.8。P1 的 Fusion 是用填表句訓的，沒見過 Sketchfab 名稱，所以把名稱當雜訊。論文 text 13.8 表示它的模型**認得**這種文字 → 訓練時 q_text 就是這類文字。
+→ P10a：訓練與評估都用 q_text = Sketchfab 名稱（`--query-text-override`），q_image 維持單張自己的圖（縱圖待下載），q_pc 自己的；lr 1e-4、10 代。預期 text 單格升、T+PC 掉。名稱向量快取：`data/outputs/_probe/text_override/sketchfab_name{,_size}.npz`（凍結 CLIP，全 45,692）。
+出處：`output/look/exp_type_level_query_sketchfab.json`、`data/outputs/logs/exp_type_level_query2.log`。
+
 ## 6. Stage 2（2026-09-04 凌晨開跑）
 
 審計：`docs/audit/STAGE2_FRESH_AUDIT_20260904.md`。Eq. 6/7/8 逐項一致；場景 dropout、凍結範圍、τ 全對；正文 vs 附錄三處矛盾走附錄版（Eq. 4 才成立）。
