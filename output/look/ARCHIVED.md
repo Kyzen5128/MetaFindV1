@@ -1,3 +1,5 @@
+> **2026-09-05 17:16 更新**：下面提到的 `/mnt/data1/kyzen/MetaFindV1_archive/…` 與 `archive_20260902_pre11view/…` 已依 Kyzen 指示（「archive 刪掉」）**整個刪除**。這裡列的是當時搬走的內容清單，檔案已不存在。
+
 # 已歸檔（2026-09-05，Kyzen「output/look 沒整理啊」）
 
 搬到 `/mnt/data1/kyzen/MetaFindV1_archive/output_look_20260905/`，原檔不刪：

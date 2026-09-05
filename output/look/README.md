@@ -19,4 +19,4 @@
 - `pilot10.json`：10-epoch pilot 紀錄。
 
 正式 Table 1 的數字不在這裡，在 `data/outputs/eval/table1_*/table1.json` 與 `docs/TABLE1_REPORT_20260904.md`。
-歸檔清單見 `ARCHIVED.md`。
+歸檔清單見 `ARCHIVED.md`（歸檔目錄本身已於 2026-09-05 依 Kyzen 指示刪除）。

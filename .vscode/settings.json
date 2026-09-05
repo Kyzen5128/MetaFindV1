@@ -1,0 +1,23 @@
+{
+  "// why": "data/ is a symlink to a 355 GB tree with 45k-92k files per folder; VS Code's watcher and indexer OOM on it (Kyzen 2026-09-05). Exclude it from watching/search; the Explorer can still browse it on demand.",
+  "files.watcherExclude": {
+    "**/data/**": true,
+    "**/output/**": true,
+    "**/graphify-out/**": true,
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/__pycache__/**": true
+  },
+  "search.exclude": {
+    "**/data/**": true,
+    "**/graphify-out/**": true,
+    "**/output/look/pptx/**": true
+  },
+  "search.followSymlinks": false,
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true
+  },
+  "explorer.autoReveal": false,
+  "git.autoRepositoryDetection": "openEditors"
+}
