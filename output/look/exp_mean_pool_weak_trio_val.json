@@ -1,0 +1,1026 @@
+{
+ "n_query": 4569,
+ "n_gallery": 4569,
+ "query_split": "dev_val",
+ "gallery_split": "dev_val",
+ "paper": {
+  "text": 13.8,
+  "image": 11.7,
+  "pc": 75.1,
+  "text+image": 17.2,
+  "text+pc": 44.5,
+  "image+pc": 45.8,
+  "full": 51.7
+ },
+ "paper_ulip": {
+  "text": 0.1,
+  "image": 0.1,
+  "pc": 97.9,
+  "text+image": 0.0,
+  "text+pc": 33.9,
+  "image+pc": 22.6,
+  "full": 6.4
+ },
+ "rows": {
+  "mean | own(attrs) | own view | pc=canonical": {
+   "pooling": "mean",
+   "text": "own(attrs)",
+   "image": "own view",
+   "pc": "canonical",
+   "cells": {
+    "text": {
+     "R@1": 0.6981834099365288,
+     "R@5": 0.9562267454585248,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.9148610199168308,
+     "R@5": 0.9682643904574305,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9975924710002189,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.9916830816371197,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.9989056686364631,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9969358721820968,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9997811337272926,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "mean | cat_size | own view | pc=canonical": {
+   "pooling": "mean",
+   "text": "cat_size",
+   "image": "own view",
+   "pc": "canonical",
+   "cells": {
+    "text": {
+     "R@1": 0.49792077040927996,
+     "R@5": 0.8739330269205515,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.9148610199168308,
+     "R@5": 0.9682643904574305,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9975924710002189,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.9794265703655066,
+     "R@5": 0.9991245349091705,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.9989056686364631,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9969358721820968,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9991245349091705,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "mean | cat_size | thumbnail(own) | pc=canonical": {
+   "pooling": "mean",
+   "text": "cat_size",
+   "image": "thumbnail(own)",
+   "pc": "canonical",
+   "cells": {
+    "text": {
+     "R@1": 0.49792077040927996,
+     "R@5": 0.8739330269205515,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.8601444517399869,
+     "R@5": 0.9671700590938936,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9975924710002189,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.8905668636463121,
+     "R@5": 0.9783322390019698,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.9989056686364631,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.996498139636682,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9978113372729263,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "mean | u2 blip caption | thumbnail(own) | pc=canonical": {
+   "pooling": "mean",
+   "text": "u2 blip caption",
+   "image": "thumbnail(own)",
+   "pc": "canonical",
+   "cells": {
+    "text": {
+     "R@1": 0.3950536222368133,
+     "R@5": 0.7025607353906763,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.8601444517399869,
+     "R@5": 0.9671700590938936,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9975924710002189,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.8028014882906545,
+     "R@5": 0.9546946815495733,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.9954038082731451,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.996498139636682,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9934340118187788,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "mean | partner(attrs) | partner view | pc=canonical": {
+   "pooling": "mean",
+   "text": "partner(attrs)",
+   "image": "partner view",
+   "pc": "canonical",
+   "cells": {
+    "text": {
+     "R@1": 0.05384110308601445,
+     "R@5": 0.4348872838695557,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.0015320639089516305,
+     "R@5": 0.2232435981615233,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9975924710002189,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.0013131976362442547,
+     "R@5": 0.38629897132851826,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.985992558546728,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9822718319107026,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.6859268986649157,
+     "R@5": 0.9816152330925805,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "mean | own(attrs) | own view | pc=resample": {
+   "pooling": "mean",
+   "text": "own(attrs)",
+   "image": "own view",
+   "pc": "resample",
+   "cells": {
+    "text": {
+     "R@1": 0.6981834099365288,
+     "R@5": 0.9562267454585248,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.9148610199168308,
+     "R@5": 0.9682643904574305,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9945283431823156,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.9916830816371197,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.9971547384548041,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9954038082731451,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9984679360910483,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "mean | cat_size | own view | pc=resample": {
+   "pooling": "mean",
+   "text": "cat_size",
+   "image": "own view",
+   "pc": "resample",
+   "cells": {
+    "text": {
+     "R@1": 0.49792077040927996,
+     "R@5": 0.8739330269205515,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.9148610199168308,
+     "R@5": 0.9682643904574305,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9945283431823156,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.9794265703655066,
+     "R@5": 0.9991245349091705,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.996498139636682,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9954038082731451,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9973736047275115,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "mean | cat_size | thumbnail(own) | pc=resample": {
+   "pooling": "mean",
+   "text": "cat_size",
+   "image": "thumbnail(own)",
+   "pc": "resample",
+   "cells": {
+    "text": {
+     "R@1": 0.49792077040927996,
+     "R@5": 0.8739330269205515,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.8601444517399869,
+     "R@5": 0.9671700590938936,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9945283431823156,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.8905668636463121,
+     "R@5": 0.9783322390019698,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.996498139636682,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9945283431823156,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.996498139636682,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "mean | u2 blip caption | thumbnail(own) | pc=resample": {
+   "pooling": "mean",
+   "text": "u2 blip caption",
+   "image": "thumbnail(own)",
+   "pc": "resample",
+   "cells": {
+    "text": {
+     "R@1": 0.3950536222368133,
+     "R@5": 0.7025607353906763,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.8601444517399869,
+     "R@5": 0.9671700590938936,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9945283431823156,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.8028014882906545,
+     "R@5": 0.9546946815495733,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.9936528780914861,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9945283431823156,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9916830816371197,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "mean | partner(attrs) | partner view | pc=resample": {
+   "pooling": "mean",
+   "text": "partner(attrs)",
+   "image": "partner view",
+   "pc": "resample",
+   "cells": {
+    "text": {
+     "R@1": 0.05384110308601445,
+     "R@5": 0.4348872838695557,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.0015320639089516305,
+     "R@5": 0.2232435981615233,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9945283431823156,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.0013131976362442547,
+     "R@5": 0.38629897132851826,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.9822718319107026,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9772379076384329,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.673232654847888,
+     "R@5": 0.9809586342744583,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "raw | own(attrs) | own view | pc=canonical": {
+   "pooling": "raw",
+   "text": "own(attrs)",
+   "image": "own view",
+   "pc": "canonical",
+   "cells": {
+    "text": {
+     "R@1": 0.7189757058437295,
+     "R@5": 0.9610418034580871,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.912672357189757,
+     "R@5": 0.96913985554826,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9947472094550229,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.9923396804552419,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.9980302035456337,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9949660757277303,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9993434011818779,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "raw | cat_size | own view | pc=canonical": {
+   "pooling": "raw",
+   "text": "cat_size",
+   "image": "own view",
+   "pc": "canonical",
+   "cells": {
+    "text": {
+     "R@1": 0.5204639964981397,
+     "R@5": 0.8879404683738236,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.912672357189757,
+     "R@5": 0.96913985554826,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9947472094550229,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.9844604946377763,
+     "R@5": 0.9993434011818779,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.996498139636682,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9949660757277303,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9989056686364631,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "raw | cat_size | thumbnail(own) | pc=canonical": {
+   "pooling": "raw",
+   "text": "cat_size",
+   "image": "thumbnail(own)",
+   "pc": "canonical",
+   "cells": {
+    "text": {
+     "R@1": 0.5204639964981397,
+     "R@5": 0.8879404683738236,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.8511709345589845,
+     "R@5": 0.9643247975486977,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9947472094550229,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.8947253228277522,
+     "R@5": 0.9778945064565551,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.996498139636682,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9892755526373386,
+     "R@5": 0.9991245349091705,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9932151455460714,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "raw | u2 blip caption | thumbnail(own) | pc=canonical": {
+   "pooling": "raw",
+   "text": "u2 blip caption",
+   "image": "thumbnail(own)",
+   "pc": "canonical",
+   "cells": {
+    "text": {
+     "R@1": 0.38914423287371414,
+     "R@5": 0.6953381483913329,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.8511709345589845,
+     "R@5": 0.9643247975486977,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9947472094550229,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.8117750054716568,
+     "R@5": 0.9546946815495733,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.9835850295469468,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9892755526373386,
+     "R@5": 0.9991245349091705,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9816152330925805,
+     "R@5": 0.9984679360910483,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "raw | partner(attrs) | partner view | pc=canonical": {
+   "pooling": "raw",
+   "text": "partner(attrs)",
+   "image": "partner view",
+   "pc": "canonical",
+   "cells": {
+    "text": {
+     "R@1": 0.0479317137229153,
+     "R@5": 0.43860801050558107,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.0017509301816590063,
+     "R@5": 0.22280586561610854,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9947472094550229,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.001094331363536879,
+     "R@5": 0.38301597723790765,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.8675859050120377,
+     "R@5": 0.9932151455460714,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.5202451302254323,
+     "R@5": 0.979645436638214,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.20267016852703,
+     "R@5": 0.8653972422849638,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "raw | own(attrs) | own view | pc=resample": {
+   "pooling": "raw",
+   "text": "own(attrs)",
+   "image": "own view",
+   "pc": "resample",
+   "cells": {
+    "text": {
+     "R@1": 0.7189757058437295,
+     "R@5": 0.9610418034580871,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.912672357189757,
+     "R@5": 0.96913985554826,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9923396804552419,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.9923396804552419,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.9969358721820968,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9943094769096082,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9982490698183409,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "raw | cat_size | own view | pc=resample": {
+   "pooling": "raw",
+   "text": "cat_size",
+   "image": "own view",
+   "pc": "resample",
+   "cells": {
+    "text": {
+     "R@1": 0.5204639964981397,
+     "R@5": 0.8879404683738236,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.912672357189757,
+     "R@5": 0.96913985554826,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9923396804552419,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.9844604946377763,
+     "R@5": 0.9993434011818779,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.9945283431823156,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.9943094769096082,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9980302035456337,
+     "R@5": 1.0,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "raw | cat_size | thumbnail(own) | pc=resample": {
+   "pooling": "raw",
+   "text": "cat_size",
+   "image": "thumbnail(own)",
+   "pc": "resample",
+   "cells": {
+    "text": {
+     "R@1": 0.5204639964981397,
+     "R@5": 0.8879404683738236,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.8511709345589845,
+     "R@5": 0.9643247975486977,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9923396804552419,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.8947253228277522,
+     "R@5": 0.9778945064565551,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.9945283431823156,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.98664915736485,
+     "R@5": 0.9991245349091705,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9919019479098271,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "raw | u2 blip caption | thumbnail(own) | pc=resample": {
+   "pooling": "raw",
+   "text": "u2 blip caption",
+   "image": "thumbnail(own)",
+   "pc": "resample",
+   "cells": {
+    "text": {
+     "R@1": 0.38914423287371414,
+     "R@5": 0.6953381483913329,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.8511709345589845,
+     "R@5": 0.9643247975486977,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9923396804552419,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.8117750054716568,
+     "R@5": 0.9546946815495733,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.9809586342744583,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.98664915736485,
+     "R@5": 0.9991245349091705,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.9785511052746771,
+     "R@5": 0.9982490698183409,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  },
+  "raw | partner(attrs) | partner view | pc=resample": {
+   "pooling": "raw",
+   "text": "partner(attrs)",
+   "image": "partner view",
+   "pc": "resample",
+   "cells": {
+    "text": {
+     "R@1": 0.0479317137229153,
+     "R@5": 0.43860801050558107,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image": {
+     "R@1": 0.0017509301816590063,
+     "R@5": 0.22280586561610854,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "pc": {
+     "R@1": 0.9923396804552419,
+     "R@5": 0.9997811337272926,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+image": {
+     "R@1": 0.001094331363536879,
+     "R@5": 0.38301597723790765,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "text+pc": {
+     "R@1": 0.857299190194791,
+     "R@5": 0.9921208141825345,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "image+pc": {
+     "R@1": 0.5003282994090611,
+     "R@5": 0.9765813088203108,
+     "n_query": 4569,
+     "n_gallery": 4569
+    },
+    "full": {
+     "R@1": 0.1880061282556358,
+     "R@5": 0.862551980739768,
+     "n_query": 4569,
+     "n_gallery": 4569
+    }
+   }
+  }
+ }
+}
