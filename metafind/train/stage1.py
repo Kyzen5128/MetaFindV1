@@ -2231,6 +2231,8 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         # [U-16] which reading trained this checkpoint; the evaluator builds a
         # second point path only when this says so
         "tower_sharing": training.get("tower_sharing", "shared_backbone_separate_fusion"),
+        "gallery_fusion": training.get("gallery_fusion") or training["fusion"],
+        "freeze_gallery": bool(training.get("freeze_gallery", False)),
         "trainable_only": True,
         "n_params_saved": int(n_params),
         "n_params_by_section": {k: int(sum(v.numel() for v in s.values()))
@@ -2407,9 +2409,18 @@ def build_model(encoding: dict, training: dict, hyperparameters: dict):
                           # absent in protocols written before 2026-09-03
                           prefusion_norm=bool(training.get("prefusion_norm", False)),
                           image_tokens=int(training.get("image_tokens", 1)))
+    # [KYZEN 2026-09-05 「去測測看」] gallery_fusion may differ from the query's:
+    # sec. 2.4 "gallery encoder is modality-complete and frozen after pretraining"
+    # + Fig. 1 "pre-encoded independently by ULIP-2" read as gallery = frozen mean
+    # of the ULIP-2 vectors, only the query tower trained.
+    gkind = training.get("gallery_fusion") or training["fusion"]
+    gallery_fusion = fusion if gkind == training["fusion"] else FusionConfig(
+        kind=gkind, dim=EMBED_DIM, zero_pad=zero_pad,
+        prefusion_norm=bool(training.get("prefusion_norm", False)),
+        image_tokens=int(training.get("image_tokens", 1)))
     model = MetaFindDualTower(DualTowerConfig(
         dim=EMBED_DIM, tower_sharing=training["tower_sharing"],
-        query_fusion=fusion, gallery_fusion=fusion,
+        query_fusion=fusion, gallery_fusion=gallery_fusion,
         # [PAPER 2.6] Stage 1 is object-level pretraining "without spatial
         # context"; the ESSGNN branch and Eq. 6's lambda term belong to Stage 2.
         # Building it here would put an untrained layout module in the optimizer
@@ -2482,6 +2493,13 @@ def main() -> int:
                          "into a second, independently trained query point path (P13); "
                          "the frozen CLIP towers are not duplicated. Enters arm_config_hash "
                          "as training.tower_sharing and the checkpoint record.")
+    ap.add_argument("--gallery-fusion", default=None, choices=("same", "mean"),
+                    help="[KYZEN 2026-09-05] gallery tower's fusion kind; 'mean' = plain "
+                         "mean of the (prefusion-normalised) ULIP-2 vectors. Default: same as query.")
+    ap.add_argument("--freeze-gallery", action="store_true",
+                    help="[KYZEN 2026-09-05] freeze the gallery tower for the whole of Stage 1 "
+                         "(sec. 2.4 'frozen after pretraining' read as: frozen ULIP-2 gallery, "
+                         "only the query tower trains). Recorded in the checkpoint.")
     ap.add_argument("--train-scope", default=None,
                     choices=("fuser_only", "point_encoder_and_fuser", "full"),
                     help="override the training protocol's train_scope for this "
@@ -2642,6 +2660,10 @@ def main() -> int:
         training["train_scope"] = args.train_scope
     if args.tower_sharing is not None:
         training["tower_sharing"] = args.tower_sharing
+    if args.gallery_fusion not in (None, "same"):
+        training["gallery_fusion"] = args.gallery_fusion      # enters arm_config_hash as training.gallery_fusion
+    if args.freeze_gallery:
+        training["freeze_gallery"] = True                     # enters arm_config_hash as training.freeze_gallery
     # Refused HERE, before the 9.5 GB backbone is built and the pool digested;
     # arm_config_hash refuses it too, but by then minutes have been spent and
     # the run directory has been claimed.
@@ -2826,6 +2848,10 @@ def main() -> int:
               f"{sum(p.numel() for p in backbone_q.trainable_parameters()):,} "
               "trainable parameters of its own", flush=True)
     model, loss_fn = build_model(encoding, training, hyperparameters)
+    if training.get("freeze_gallery"):
+        model.freeze_gallery(True)
+        print("gallery tower FROZEN for Stage 1 (--freeze-gallery); fusion kind "
+              f"{training.get('gallery_fusion') or training['fusion']}", flush=True)
     model.to(args.device)
     loss_fn.to(args.device)
 

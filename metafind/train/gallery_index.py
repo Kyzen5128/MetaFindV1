@@ -461,7 +461,11 @@ def main() -> int:
     # the restore, via freeze_gallery / eval.
     backbone = ULIPBackbone(BackboneConfig(device=args.device,
                                            train_scope="point_encoder_and_fuser"))
+    if ckpt_record.get("gallery_fusion"):
+        training = {**training, "gallery_fusion": ckpt_record["gallery_fusion"]}
     model, loss_fn = build_model(encoding, training, hyperparameters)
+    if ckpt_record.get("freeze_gallery"):
+        model.freeze_gallery(True)            # match the checkpoint's requires_grad set before loading
     load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt_record["uri"]))
     # Restore first, THEN freeze. The checkpoint's point-encoder section can only
     # land in a backbone whose point encoder is trainable, but the index must be

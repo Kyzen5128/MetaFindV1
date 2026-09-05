@@ -1629,7 +1629,11 @@ def main() -> int:
                                    query_backbone=backbone_q)
             overlay_stage2_weights(model, stage2["record"], args.device)
         else:
+            if (ckpt or {}).get("gallery_fusion"):
+                training = {**training, "gallery_fusion": ckpt["gallery_fusion"]}
             model, loss_fn = build_model(encoding, training, hyperparameters)
+            if (ckpt or {}).get("freeze_gallery"):
+                model.freeze_gallery(True)    # the checkpoint has no gallery section; match its requires_grad set
             model.to(args.device)
             if not untrained:
                 load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]),
