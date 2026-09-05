@@ -93,7 +93,15 @@ def main() -> int:
             z = np.load(U2_FEATS); row = {u: i for i, u in enumerate(z["uids"].tolist())}
             idx = np.array([row[u] for u in q_uids])
             images["thumbnail(own)"] = z["thumbnail_feat"][idx].astype(np.float32)
-            texts["u2 blip caption"] = z["blip_feat"][idx].astype(np.float32)
+            # assets without a BLIP caption carry a zero vector; a zero-norm query cannot be scored, so
+            # those fall back to the Sketchfab-name feature (own text, weaker still). Count reported.
+            blip = z["blip_feat"][idx].astype(np.float32); name = z["name_feat"][idx].astype(np.float32)
+            no_blip = np.linalg.norm(blip, axis=1) == 0
+            blip[no_blip] = name[no_blip]
+            still_zero = np.linalg.norm(blip, axis=1) == 0
+            blip[still_zero] = texts["cat_size"][still_zero]
+            print(f"  BLIP caption missing for {int(no_blip.sum())} queries (name used), {int(still_zero.sum())} also without name (cat_size used)", flush=True)
+            texts["u2 blip caption"] = blip
         pcs = {"canonical": g_pc[targets]}
         pack = QueryPack(PACK, n_views=12)
         missing = [u for u in q_uids if u not in pack.rows["pc"]]

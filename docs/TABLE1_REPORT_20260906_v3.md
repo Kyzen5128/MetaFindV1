@@ -44,7 +44,62 @@
 
 ## 4. 結果
 
-（數字由 `tools/probes/tabulate_table1_final.py` 從 `output/look/table1_final_*_holdout.json` 與 `output/look/exp_type_level_query_*_val.json` 產生；本節在跑完後填。）
+### 4.1 val → val 診斷（4,569 → 4,569；checkpoint 不動；R@1 %）
+
+同一件、但每個模態都換成較弱的另一份觀測（DL-101）。「second sample」＝同一個網格再取樣一次（P1s cos 0.996、scratchbb 0.993）。
+
+### exp_type_level_query_P1s_val  (dev_val 4,569 -> ? 4,569; ckpt pilotP1s_split801010_lr1e-4_20260904; Stage 1 head)
+
+**R@1 (%)**
+
+| query construction | text | image | pc | text+image | text+pc | image+pc | full |
+|---|---|---|---|---|---|---|---|
+| paper w/o ESSGNN | 13.8 | 11.7 | 75.1 | 17.2 | 44.5 | 45.8 | 51.7 |
+| paper w/ ESSGNN | 11.3 | 10.5 | 63.2 | 15.9 | 41.2 | 42.0 | 48.2 |
+| own observations (attrs text, own view, own cloud) | 33.8 | 65.7 | 97.9 | 85.9 | 99.7 | 98.5 | 99.8 |
+| own text + own view, cloud = second surface sample | 33.8 | 65.7 | 97.8 | 85.9 | 99.5 | 98.4 | 99.6 |
+| weak own: category+size text, own Sketchfab thumbnail, own cloud | 17.2 | 57.0 | 97.9 | 63.0 | 98.2 | 98.3 | 98.4 |
+| weak own trio: category+size, thumbnail, second sample | 17.2 | 57.0 | 97.8 | 63.0 | 97.9 | 98.1 | 98.2 |
+| weak own: BLIP caption, own thumbnail, own cloud | 13.1 | 57.0 | 97.9 | 47.6 | 95.1 | 98.3 | 95.2 |
+| weak own trio: BLIP caption, thumbnail, second sample | 13.1 | 57.0 | 97.8 | 47.6 | 94.7 | 98.1 | 94.7 |
+| partner: same-category other asset's text + view, own cloud | 5.5 | 1.2 | 97.9 | 1.2 | 94.4 | 96.1 | 86.1 |
+| partner text + view, cloud = second sample | 5.5 | 1.2 | 97.8 | 1.2 | 94.2 | 95.8 | 85.7 |
+
+### exp_type_level_query_scratchbb_val  (dev_val 4,569 -> dev_val 4,569; ckpt s1_scratchbb_sel20_lr1e-4_20260905; Stage 1 head)
+
+**R@1 (%)**
+
+| query construction | text | image | pc | text+image | text+pc | image+pc | full |
+|---|---|---|---|---|---|---|---|
+| paper w/o ESSGNN | 13.8 | 11.7 | 75.1 | 17.2 | 44.5 | 45.8 | 51.7 |
+| paper w/ ESSGNN | 11.3 | 10.5 | 63.2 | 15.9 | 41.2 | 42.0 | 48.2 |
+| own observations (attrs text, own view, own cloud) | 32.6 | 60.9 | 88.4 | 86.4 | 99.7 | 97.4 | 99.9 |
+| own text + own view, cloud = second surface sample | 32.6 | 60.9 | 87.4 | 86.4 | 99.5 | 97.1 | 99.6 |
+| weak own: category+size text, own Sketchfab thumbnail, own cloud | 14.0 | 42.4 | 88.4 | 62.1 | 97.6 | 96.7 | 98.2 |
+| weak own trio: category+size, thumbnail, second sample | 14.0 | 42.4 | 87.4 | 62.1 | 97.1 | 96.1 | 97.9 |
+| weak own: BLIP caption, own thumbnail, own cloud | 6.8 | 42.4 | 88.4 | 35.1 | 87.7 | 96.7 | 91.8 |
+| weak own trio: BLIP caption, thumbnail, second sample | 6.8 | 42.4 | 87.4 | 35.1 | 86.7 | 96.1 | 91.3 |
+| partner: same-category other asset's text + view, own cloud | 4.5 | 0.8 | 88.4 | 0.8 | 85.0 | 78.9 | 73.3 |
+| partner text + view, cloud = second sample | 4.5 | 0.8 | 87.4 | 0.8 | 84.6 | 78.0 | 72.7 |
+
+### exp_table1_stage2head_scratchbb_val  (dev_val 4,569 -> ? 4,569; ckpt s1_scratchbb_sel20_lr1e-4_20260905; Stage 2 head S2_scratchbb_none_ft5e-5_20260905)
+
+**R@1 (%)**
+
+| query construction | text | image | pc | text+image | text+pc | image+pc | full |
+|---|---|---|---|---|---|---|---|
+| paper w/o ESSGNN | 13.8 | 11.7 | 75.1 | 17.2 | 44.5 | 45.8 | 51.7 |
+| paper w/ ESSGNN | 11.3 | 10.5 | 63.2 | 15.9 | 41.2 | 42.0 | 48.2 |
+| own observations (attrs text, own view, own cloud) | 21.5 | 43.3 | 83.5 | 63.2 | 94.7 | 90.7 | 94.9 |
+| weak own: category+size text, own Sketchfab thumbnail, own cloud | 10.7 | 30.6 | 83.5 | 42.7 | 89.4 | 87.6 | 89.9 |
+| weak own: BLIP caption, own thumbnail, own cloud | 6.5 | 30.6 | 83.5 | 24.9 | 79.1 | 87.6 | 81.5 |
+| partner: same-category other asset's text + view, own cloud | 3.0 | 1.1 | 83.5 | 1.4 | 76.5 | 62.3 | 57.4 |
+
+把自己的雲弄壞（去顏色、半掃描）會把 pc 格壓到 8～35，但合併格反而升到 pc 之上（P1s 去色：pc 35.1、full 55.7；scratchbb 半掃：pc 21.4、full 80.9）——跟論文方向相反。
+
+### 4.2 20% holdout（9,138 → 9,138）最終列
+
+（`chain_table1_final_20260906.sh` 跑完後填。）
 
 ## 5. 判讀
 
