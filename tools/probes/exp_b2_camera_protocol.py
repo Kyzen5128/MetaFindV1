@@ -78,8 +78,8 @@ import torch
 REPO = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 UPSTREAM = pathlib.Path("/home/kyzen/upstream/ULIP_run")
-SN = pathlib.Path("/mnt/data1/kyzen/shapenet-55")
-CSVP = pathlib.Path("/mnt/data1/kyzen/text2shape/captions.tablechair.csv")
+SN = pathlib.Path("/mnt/data1/kyzen/datasets/shapenet-55")
+CSVP = pathlib.Path("/mnt/data1/kyzen/datasets/text2shape/captions.tablechair.csv")
 CKPT = (REPO / "data/models/ulip2/ULIP-2/pretrained_models/"
         "ULIP-2-PointBERT-8k-xyz-pc-slip_vit_b-objaverse-pretrained.pt")
 OUT_T = "output/look/exp_b2_camera_protocol_{tag}.json"

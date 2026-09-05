@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pull the QUERY-side observations ULIP-2 / OpenShape ship per Objaverse object out of the
-ULIP-2 HF shards Kyzen downloaded on 2026-09-01 (/mnt/data1/kyzen/ulip2_objaverse_lvis).
+ULIP-2 HF shards Kyzen downloaded on 2026-09-01 (/mnt/data1/kyzen/datasets/ulip2_objaverse_lvis).
 
 Each <uid>.npy (OpenShape format) holds, in the same OpenCLIP ViT-bigG-14 space as our cache:
   thumbnail_feat (1280,)        CLIP feature of the Sketchfab THUMBNAIL  -> a target image that is not our render
@@ -23,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-SHARDS = Path("/mnt/data1/kyzen/ulip2_objaverse_lvis/ULIP-2/objaverse_lvis")
+SHARDS = Path("/mnt/data1/kyzen/datasets/ulip2_objaverse_lvis/ULIP-2/objaverse_lvis")
 META = Path("/home/kyzen/upstream/openshape-objaverse-embeddings/objaverse_meta.json")
 OUT = Path("/home/kyzen/metafind_data/outputs/_probe/ulip2_query_feats")
 

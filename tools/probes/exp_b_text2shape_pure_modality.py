@@ -18,7 +18,7 @@ WHERE EVERY INPUT COMES FROM
   split      `text2shape-data/shapenet/processed_captions_{train,val,test}.p`
              from the same site, used ONLY for split membership: train 11,921
              models, val 1,486, test 1,492, union 14,899.
-  clouds     `/mnt/data1/kyzen/shapenet-55/shapenet_pc/<synset>-<model>.npy`,
+  clouds     `/mnt/data1/kyzen/datasets/shapenet-55/shapenet_pc/<synset>-<model>.npy`,
              (8192, 3) float64, already the count this checkpoint wants.
   images     `rendered_images/<synset>-<model>/<...>_r_NNN.png`, the RGB ones;
              the `_depth0001` siblings are excluded.
@@ -64,8 +64,8 @@ import torch
 REPO = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 UPSTREAM = pathlib.Path("/home/kyzen/upstream/ULIP_run")
-T2S = pathlib.Path("/mnt/data1/kyzen/text2shape")
-SN = pathlib.Path("/mnt/data1/kyzen/shapenet-55")
+T2S = pathlib.Path("/mnt/data1/kyzen/datasets/text2shape")
+SN = pathlib.Path("/mnt/data1/kyzen/datasets/shapenet-55")
 CKPT = (REPO / "data/models/ulip2/ULIP-2/pretrained_models/"
         "ULIP-2-PointBERT-8k-xyz-pc-slip_vit_b-objaverse-pretrained.pt")
 OUT = REPO / "output" / "look" / "exp_b_text2shape_pure_modality.json"

@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # cannot lose it.
 ARMS = {
     "qwen38_27b": {
-        "model_id": "/mnt/data1/kyzen/models/Qwen3.8-27B",
+        "model_id": "/mnt/data1/kyzen/models/Qwen3.8-27B",   # DELETED 2026-09-05 (Kyzen); this arm can no longer run
         "quant": "bnb-nf4",
         "why": "56 GB of bf16 against a 32 GB card -- 4-bit is what makes it loadable at all",
     },
@@ -62,7 +62,7 @@ ARMS = {
     # Re-enable only with a bigger card or a checkpoint whose vision tower is
     # also quantised.
     "gemma4_31b_qat": {
-        "model_id": "/mnt/data1/kyzen/models/gemma-4-31B-it-qat-w4a16",
+        "model_id": "/mnt/data1/kyzen/models/gemma-4-31B-it-qat-w4a16",   # DELETED 2026-09-05 (Kyzen); this arm can no longer run
         "quant": "native-compressed-tensors",
         "why": "already w4a16 in the checkpoint -- but its vision tower is not",
         "ruled_out": "OOM on a 32 GB card; see the note above, five attempts",
