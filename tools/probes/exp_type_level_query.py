@@ -43,15 +43,29 @@ def main() -> int:
     ap.add_argument("--ckpt", default="/home/kyzen/metafind/metafind_data_attrs/outputs/checkpoints/pilotP1_attrs_singleview_prefnorm_20260903/stage1_best.pt")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--gallery-split", default="train_val")   # [D-3b] dev_val is outside train now
+    ap.add_argument("--query-split", default="dev_val",
+                    help="splits.json key for the query set (dev_val = val). `holdout` (val+test, 9,138) is the "
+                         "20%% Kyzen's diagram reports on; every read of it is recorded in the ledger.")
     ap.add_argument("--out", default="output/look/exp_type_level_query.json")
     ap.add_argument("--fields-text-cache", default="/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings",
                     help="embeddings dir whose `text` is the FIELDS form-fill (attrs_v1); used as a q_text variant")
     ap.add_argument("--no-sketchfab", action="store_true")
+    ap.add_argument("--pc-policies", default="canonical",
+                    help="comma list from exp_query_pc_observation.POLICIES; `canonical` = the gallery's own "
+                         "cloud, the rest are a SECOND surface sample of the same mesh (QueryPack) perturbed "
+                         "by metafind.data.observation.perturb_cloud. Non-canonical policies score a focused "
+                         "row subset (2026-09-06 weak-trio test).")
+    ap.add_argument("--stage2-state", default=None,
+                    help="a Stage 2 `stage2_full.pt` whose parent is --ckpt: its trained `query.fusion.*` "
+                         "weights replace the Stage 1 query fusion (the gallery tower is frozen in Stage 2, "
+                         "so the gallery stays Stage 1's). Layout branch not loaded: Objaverse assets have no "
+                         "scene, so this is the Table 1 'w/ ESSGNN' shared head with the layout term absent.")
     args = ap.parse_args()
+    policies = args.pc_policies.split(",")
     from tools.probes.exp_query_observation import load_tower
 
     sp = json.loads((paths.OUTPUTS / "splits.json").read_text())["object"]
-    g_uids, q_uids = sorted(sp[args.gallery_split]), sorted(sp["dev_val"])
+    g_uids, q_uids = sorted(sp[args.gallery_split]), sorted(sp[args.query_split])
     where = {u: i for i, u in enumerate(g_uids)}
     targets = np.array([where[u] for u in q_uids])
     anns = {u: json.loads((paths.ANNOTATIONS / f"{u}.json").read_text()) for u in q_uids}
@@ -73,6 +87,25 @@ def main() -> int:
     ck = torch.load(args.ckpt, map_location=args.device, weights_only=False)
     bb.model.load_state_dict(ck["backbone_trainable_state"], strict=False); bb.model.eval()
     model = load_tower(Path(args.ckpt), args.device)
+    if args.stage2_state:
+        import hashlib
+        s2 = torch.load(args.stage2_state, map_location=args.device, weights_only=False)
+        rec = Path(args.stage2_state).with_name("variant_ckpts.json")
+        if rec.exists():
+            parent = json.loads(rec.read_text())["full"]["stage1_checkpoint_sha256"]
+            mine = hashlib.sha256(Path(args.ckpt).read_bytes()).hexdigest()
+            if parent != mine:
+                raise SystemExit(f"{rec} descends from {parent[:12]}, not from --ckpt ({mine[:12]})")
+        fusion_keys = {k for k, _ in model.named_parameters() if k.startswith("query.fusion.")}
+        s2_fusion = {k: v for k, v in s2["trainable_state"].items() if k.startswith("query.fusion.")}
+        gap = fusion_keys - set(s2_fusion) - {k for k in fusion_keys if k.endswith("fusion.mask_tokens")}
+        if gap or (set(s2_fusion) - fusion_keys):
+            raise SystemExit(f"Stage 2 state does not match the query fusion: missing {sorted(gap)[:3]}, "
+                             f"stray {sorted(set(s2_fusion) - fusion_keys)[:3]}")
+        model.load_state_dict(s2_fusion, strict=False)
+        model.eval()
+        print(f"  Stage 2 query fusion loaded: {len(s2_fusion)} tensors from {args.stage2_state}"
+              f" (mask tokens kept from Stage 1: {'fusion.mask_tokens' in ' '.join(fusion_keys)})", flush=True)
     dev = args.device
 
     with torch.no_grad():
@@ -130,7 +163,27 @@ def main() -> int:
             G.append(model.gallery({"text": torch.from_numpy(g_text[s]).to(dev), "image": torch.from_numpy(g_img[s]).to(dev),
                                     "pc": torch.from_numpy(g_pc[s]).to(dev)}).float().cpu())
         G = normalize_for_scoring(torch.cat(G).numpy())
-        q_pc = g_pc[targets]
+        q_pcs = {"canonical": g_pc[targets]}
+        if [p for p in policies if p != "canonical"]:
+            from metafind.train.stage1 import QueryPack
+            from tools.probes.exp_query_pc_observation import perturb, encode_clouds
+            pack = QueryPack(Path("/home/kyzen/metafind/metafind_data/outputs/_probe/query_pack/query_pack.json"), n_views=12)
+            # only the pc arm is consumed here (the text variants above are built independently), so
+            # require coverage of that arm alone: the text arm refuses assets without a second caption
+            # (7 of 4,569 in val), which is irrelevant to a cloud-only draw.
+            missing_pc = [u for u in q_uids if u not in pack.rows["pc"]]
+            if missing_pc:
+                raise SystemExit(f"query pack pc arm lacks {len(missing_pc)} of {len(q_uids)} query uids, e.g. {missing_pc[:3]}")
+            for pol in policies:
+                if pol == "canonical":
+                    continue
+                clouds = []
+                for u in q_uids:
+                    v = np.asarray(pack.vector("pc", u), dtype=np.float32)
+                    clouds.append(perturb(v[:, :3], v[:, 3:6], pol, uid_seed(u) + 7))
+                q_pcs[pol] = encode_clouds(bb, clouds)
+                cos = float((normalize_for_scoring(q_pcs[pol]) * normalize_for_scoring(g_pc[targets])).sum(1).mean())
+                print(f"  query pc policy {pol}: paired cos to the gallery cloud {cos:.3f}", flush=True)
 
         combos = [("own(attrs)", "own view", "parity: P1 as evaluated"),
                   ("partner(attrs)", "partner view", "parity: 5i (partner text+image)"),
@@ -145,21 +198,31 @@ def main() -> int:
                        ("u2 blip caption", "thumbnail(own)", "BLIP caption + own thumbnail"),
                        ("u2 msft caption", "thumbnail(own)", "Azure caption + own thumbnail"),
                        ("cat_size", "thumbnail(own)", "Figure-1 fields + own thumbnail")]
-        out = {"n_query": len(q_uids), "n_gallery": len(g_uids), "paper": PAPER, "rows": {}}
-        print(f"\n{'query (text | image); pc = own':<50}" + "".join(f"{c:>9}" for c in QUERY_CONDITIONS))
+        focus = [c for c in combos if c[0] in ("own(attrs)", "partner(attrs)", "cat_size", "u2 name", "u2 blip caption")
+                 and c[1] in ("own view", "partner view", "thumbnail(own)")
+                 and not (c[0] == "own(attrs)" and c[1] == "partner view")
+                 and not (c[0] == "partner(attrs)" and c[1] != "partner view")
+                 and not (c[0] == "cat_size" and c[1] == "partner view")]
+        out = {"n_query": len(q_uids), "n_gallery": len(g_uids), "query_split": args.query_split,
+               "gallery_split": args.gallery_split, "paper": PAPER, "pc_policies": policies,
+               "ckpt": args.ckpt, "stage2_state": args.stage2_state, "rows": {}}
+        print(f"\n{'query (text | image | pc)':<50}" + "".join(f"{c:>9}" for c in QUERY_CONDITIONS))
         print(f"{'paper w/o ESSGNN':<50}" + "".join(f"{PAPER[c]:>9.1f}" for c in QUERY_CONDITIONS))
-        for tname, iname, label in combos:
-            cells = {}
-            for cond in QUERY_CONDITIONS:
-                Q = []
-                for i in range(0, len(q_uids), 512):
-                    s = slice(i, i + 512)
-                    e = {"text": torch.from_numpy(texts[tname][s]).to(dev), "image": torch.from_numpy(images[iname][s]).to(dev),
-                         "pc": torch.from_numpy(q_pc[s]).to(dev)}
-                    Q.append(model.query(e, present=condition_mask(cond, e["pc"].shape[0]).to(dev)).float().cpu())
-                cells[cond] = recall_at_k(normalize_for_scoring(torch.cat(Q).numpy()) @ G.T, targets)
-            out["rows"][f"{tname} | {iname}"] = {"label": label, "cells": cells}
-            print(f"{(tname + ' | ' + iname):<50}" + "".join(f"{cells[c]['R@1']*100:>9.1f}" for c in QUERY_CONDITIONS) + f"   {label}", flush=True)
+        for pol in policies:
+            q_pc = q_pcs[pol]
+            for tname, iname, label in (combos if pol == "canonical" else focus):
+                cells = {}
+                for cond in QUERY_CONDITIONS:
+                    Q = []
+                    for i in range(0, len(q_uids), 512):
+                        s = slice(i, i + 512)
+                        e = {"text": torch.from_numpy(texts[tname][s]).to(dev), "image": torch.from_numpy(images[iname][s]).to(dev),
+                             "pc": torch.from_numpy(q_pc[s]).to(dev)}
+                        Q.append(model.query(e, present=condition_mask(cond, e["pc"].shape[0]).to(dev)).float().cpu())
+                    cells[cond] = recall_at_k(normalize_for_scoring(torch.cat(Q).numpy()) @ G.T, targets)
+                key = f"{tname} | {iname}" + ("" if pol == "canonical" else f" | pc={pol}")
+                out["rows"][key] = {"label": label, "pc_policy": pol, "cells": cells}
+                print(f"{key:<50}" + "".join(f"{cells[c]['R@1']*100:>9.1f}" for c in QUERY_CONDITIONS) + f"   {label}", flush=True)
     Path(args.out).write_text(json.dumps(out, indent=1))
     print(f"-> {args.out}")
     return 0
