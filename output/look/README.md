@@ -18,5 +18,12 @@
 - Stage 2：`exp_stage2_procthor_retrieval*.json`（S2C／S2D arm）。
 - `pilot10.json`：10-epoch pilot 紀錄。
 
+## 2026-09-06 Table 1 最終列與診斷
+- `table1_final_{P1s,scratchbb}_{S1head,S2head}_holdout.json`：20% holdout（9,138 → 9,138）的 Table 1，兩顆 backbone × 兩個頭（Stage 1 頭＝w/o ESSGNN；Stage 2 共用頭＝w/ ESSGNN，layout 不在）× own／weak own／partner query；R@1、R@5。表在 `docs/TABLE1_REPORT_20260906_v3.md` §4.2。
+- `exp_type_level_query_{P1s,scratchbb}_val.json`：val 上「同一件、較弱觀測」三重奏（DL-101），含重取樣／去色／半掃描雲。
+- `exp_table1_stage2head_{scratchbb,P1s}_val.json`：Stage 2 頭在 Objaverse Table 1 協定上（val）。
+- `exp_mean_pool_weak_trio_val.json`：不訓融合、只平均 × 弱觀測（釋出 ULIP-2）。
+- `exp_stage2_procthor_retrieval_P1s_allhouses_20260906.json`：P1s Stage 2（9,600 屋）的 ProcTHOR S1／S2-off／S2-on。
+
 正式 Table 1 的數字不在這裡，在 `data/outputs/eval/table1_*/table1.json` 與 `docs/TABLE1_REPORT_20260904.md`。
 歸檔清單見 `ARCHIVED.md`（歸檔目錄本身已於 2026-09-05 依 Kyzen 指示刪除）。
