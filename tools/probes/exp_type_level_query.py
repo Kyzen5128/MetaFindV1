@@ -40,11 +40,11 @@ TEMPLATES = {
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--ckpt", default="/home/kyzen/metafind_data_attrs/outputs/checkpoints/pilotP1_attrs_singleview_prefnorm_20260903/stage1_best.pt")
+    ap.add_argument("--ckpt", default="/home/kyzen/metafind/metafind_data_attrs/outputs/checkpoints/pilotP1_attrs_singleview_prefnorm_20260903/stage1_best.pt")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--gallery-split", default="train_val")   # [D-3b] dev_val is outside train now
     ap.add_argument("--out", default="output/look/exp_type_level_query.json")
-    ap.add_argument("--fields-text-cache", default="/home/kyzen/metafind_data_attrs/outputs/embeddings",
+    ap.add_argument("--fields-text-cache", default="/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings",
                     help="embeddings dir whose `text` is the FIELDS form-fill (attrs_v1); used as a q_text variant")
     ap.add_argument("--no-sketchfab", action="store_true")
     args = ap.parse_args()
@@ -104,7 +104,7 @@ def main() -> int:
                   "partner view": np.stack([emb(partner[u], "views")[uid_seed(partner[u]) % 12] for u in q_uids])}
         # ULIP-2 / OpenShape per-object observations (extract_ulip2_query_feats.py): the target's OWN
         # Sketchfab thumbnail (CLIP feature), its Sketchfab name, BLIP / Azure captions -- all ViT-bigG.
-        u2p = Path("/home/kyzen/metafind_data/outputs/_probe/ulip2_query_feats/ulip2_query_feats.npz")
+        u2p = Path("/home/kyzen/metafind/metafind_data/outputs/_probe/ulip2_query_feats/ulip2_query_feats.npz")
         if u2p.exists():
             z = np.load(u2p); row = {u: i for i, u in enumerate(z["uids"].tolist())}
             idx = np.array([row[u] for u in q_uids])

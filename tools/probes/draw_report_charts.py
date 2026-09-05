@@ -61,7 +61,7 @@ ax.text(0.01, 0.97, "七個新版本 shape 都在 0.40–0.44：換架構軸不�
 fig.tight_layout(); fig.savefig(OUT / "report_fig2_level_shape.png", dpi=130); plt.close(fig)
 
 # ---- Fig 3: P1 per-epoch dev_val (C protocol) ----
-rows = [json.loads(l) for l in open("/home/kyzen/metafind_data_attrs/outputs/logs/train_stage1_dev_val.jsonl")]
+rows = [json.loads(l) for l in open("/home/kyzen/metafind/metafind_data_attrs/outputs/logs/train_stage1_dev_val.jsonl")]
 rows = [r for r in rows if "cond_full_R@1" in r]
 ep = [r["epoch"] for r in rows]
 keys = ["cond_text_R@1", "cond_image_R@1", "cond_pc_R@1", "cond_text+image_R@1",

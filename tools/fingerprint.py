@@ -18,7 +18,7 @@ from pathlib import Path
 C = ("text", "image", "pc", "text+image", "text+pc", "image+pc", "full")
 PAPER = {"R@1": dict(zip(C, (13.8, 11.7, 75.1, 17.2, 44.5, 45.8, 51.7))),
          "R@5": dict(zip(C, (23.1, 19.2, 78.0, 21.8, 71.3, 73.1, 76.5)))}
-ROOTS = ["/home/kyzen/metafind_data"] + sorted(glob.glob("/home/kyzen/metafind_data_*"))
+ROOTS = ["/home/kyzen/metafind/metafind_data"] + sorted(glob.glob("/home/kyzen/metafind/metafind_data_*"))
 LABEL = {
     "pilot10b_official_CD": "pilot10b: same_record, v2_cm text, 12-view mean, raw inputs",
     "eval_pilotP1_attrs_singleview_prefnorm_20260903": "P1: attrs_v1 text + single_view query + prefusion L2",

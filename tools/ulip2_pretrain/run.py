@@ -2,7 +2,7 @@
 import os, sys, types, runpy
 HERE = os.path.dirname(os.path.abspath(__file__))
 os.chdir(HERE); sys.path.insert(0, HERE); sys.path.insert(0, "/home/kyzen/MetaFindV1")
-os.environ.setdefault("METAFIND_DATA", "/home/kyzen/metafind_data_attrs")
+os.environ.setdefault("METAFIND_DATA", "/home/kyzen/metafind/metafind_data_attrs")
 os.environ.setdefault("METAFIND_TEXT_TEMPLATE", "attrs_v1")
 # main.py imports wandb at module level; it is only used under --wandb.
 if "wandb" not in sys.modules:

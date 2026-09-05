@@ -119,7 +119,7 @@ def main() -> int:
     # (METAFIND_DATA=..._attrs etc.) do not link `_probe`
     pack_json = paths.OUTPUTS / "_probe" / "query_pack" / "query_pack.json"
     if not pack_json.exists():
-        pack_json = Path("/home/kyzen/metafind_data/outputs/_probe/query_pack/query_pack.json")
+        pack_json = Path("/home/kyzen/metafind/metafind_data/outputs/_probe/query_pack/query_pack.json")
     pack = QueryPack(pack_json, n_views=12)
     pack.require(q_uids)
 

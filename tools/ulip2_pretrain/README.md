@@ -1,6 +1,6 @@
 # ULIP-2 from scratch on MetaFind's corpus, through ULIP's OFFICIAL main.py (unmodified)
 
-Live run directory: `/home/kyzen/metafind_data_attrs/ulip2_pretrain_run/` (main.py / models / utils are
+Live run directory: `/home/kyzen/metafind/metafind_data_attrs/ulip2_pretrain_run/` (main.py / models / utils are
 symlinks into `/home/kyzen/upstream/ULIP`; `data/` holds symlinks to the upstream dataset module,
 templates and labels, plus the files copied here). These copies are for provenance; edit the live ones.
 

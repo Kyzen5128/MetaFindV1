@@ -24,7 +24,7 @@ TOTAL=46052
 # not the run.
 MAX_PASSES="${MAX_PASSES:-6}"
 # Must fit on the card. See the note at the n05 stage.
-N05_MODEL="${N05_MODEL:-/home/kyzen/metafind_out/gemma-4-12B-it}"
+N05_MODEL="${N05_MODEL:-/home/kyzen/metafind/metafind_out/gemma-4-12B-it}"
 
 cd "$REPO" || exit 1
 eval "$($PY -m metafind.paths)"
@@ -41,7 +41,7 @@ say()  { echo "[$(date '+%F %H:%M:%S')] $*"; }
 die()  { say "STOP -- $*"; say "chain halted; nothing after this ran"; exit 1; }
 
 # -L is REQUIRED, not defensive: outputs/{pointclouds,renders,annotations} are
-# each a symlink to /home/kyzen/metafind_out/. Plain `find` refuses to descend a
+# each a symlink to /home/kyzen/metafind/metafind_out/. Plain `find` refuses to descend a
 # symlinked start point and returns EMPTY WITH NO ERROR, so every counter reads
 # 0, the stall detector calls n03 finished after two empty passes, and the 90%
 # gate kills a run that actually succeeded. Verified: find 0, find -L 7942.

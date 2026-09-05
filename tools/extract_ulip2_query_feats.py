@@ -25,7 +25,7 @@ import numpy as np
 
 SHARDS = Path("/mnt/data1/kyzen/datasets/ulip2_objaverse_lvis/ULIP-2/objaverse_lvis")
 META = Path("/home/kyzen/upstream/openshape-objaverse-embeddings/objaverse_meta.json")
-OUT = Path("/home/kyzen/metafind_data/outputs/_probe/ulip2_query_feats")
+OUT = Path("/home/kyzen/metafind/metafind_data/outputs/_probe/ulip2_query_feats")
 
 
 def pull(shard: str, wanted: set[str]) -> dict:
@@ -59,7 +59,7 @@ def pull(shard: str, wanted: set[str]) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--workers", type=int, default=6)
-    ap.add_argument("--splits", default="/home/kyzen/metafind_data/outputs/splits.json")
+    ap.add_argument("--splits", default="/home/kyzen/metafind/metafind_data/outputs/splits.json")
     args = ap.parse_args()
     sp = json.loads(Path(args.splits).read_text())["object"]
     from metafind.data.splits import corpus_uids

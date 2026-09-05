@@ -18,7 +18,7 @@ ULIP-2 encoder (no MetaFind training in the loop):
      P0-4': the paper's ULIP row has T+PC 33.9 below PC-only 97.9, which no
      text arm reproduced while the query pc was the gallery's own (98.7-99.3).
 
-Runs under the desc_v1 overlay (METAFIND_DATA=/home/kyzen/metafind_data_desc,
+Runs under the desc_v1 overlay (METAFIND_DATA=/home/kyzen/metafind/metafind_data_desc,
 METAFIND_TEXT_TEMPLATE=desc_v1): gallery text = canonical desc_v1 vector,
 query text = the pack's alternate-description vector encoded by the same
 frozen tower. Query image = the uid-seeded single view; gallery = 12-view mean.

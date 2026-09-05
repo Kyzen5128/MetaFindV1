@@ -51,7 +51,7 @@ from metafind.eval.retrieval import (QUERY_CONDITIONS, condition_mask,  # noqa: 
                                      normalize_for_scoring, rank_of_target)
 from metafind.train.gallery_index import load_promoted_index_for_checkpoint  # noqa: E402
 
-REC = Path("/home/kyzen/metafind_data/outputs/checkpoints/"
+REC = Path("/home/kyzen/metafind/metafind_data/outputs/checkpoints/"
            "qpack_ti_lr2.50e-04_s20260816/stage1_best_ckpt.json")
 OUT = REPO / "output" / "look" / "u11_absent_slots.json"
 PAPER = {"text":13.8,"image":11.7,"pc":75.1,"text+image":17.2,

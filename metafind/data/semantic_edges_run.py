@@ -89,7 +89,7 @@ from metafind.data.annotate_run import MODEL_ID as LLM_MODEL_PATH  # noqa: E402
 # and an earlier version of this line let that path into
 # `cache_key(..., llm_model, ...)`, whose sha256 then depended on where the
 # checkpoint happens to sit. That directory has already moved once
-# (/mnt/data1/kyzen/models -> /home/kyzen/metafind_out), and moving it again
+# (/mnt/data1/kyzen/models -> /home/kyzen/metafind/metafind_out), and moving it again
 # would have invalidated all 4,242 cached sentences for an unchanged model.
 # It also made `llm_model` in the record a path rather than a model identity.
 # Caught by ESSGNN ENGINEER [487717] 2026-08-28; a same-machine smoke cannot

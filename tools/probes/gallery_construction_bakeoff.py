@@ -76,7 +76,7 @@ PAPER = {"metafind_text_only": 13.8, "camera_T2S": 13.16}
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--ckpt", default="/home/kyzen/metafind_out/checkpoints/"
+    ap.add_argument("--ckpt", default="/home/kyzen/metafind/metafind_out/checkpoints/"
                                       "qpack_ti_lr2.50e-04_s20260816/stage1_best.pt")
     ap.add_argument("--batch", type=int, default=64)
     args = ap.parse_args()

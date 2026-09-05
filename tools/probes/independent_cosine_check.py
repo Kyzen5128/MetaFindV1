@@ -15,8 +15,8 @@ from metafind.train.stage1 import (Stage1Dataset, collate, split_embeds, build_m
 from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 100
-CK = Path("/home/kyzen/metafind_data_attrs/outputs/checkpoints/pilotP1s_split801010_lr1e-4_20260904")
-EV = Path("/home/kyzen/metafind_data_attrs/outputs/eval/eval_pilotP1s_split801010_lr1e-4_20260904/per_query_C_dev_selection.jsonl")
+CK = Path("/home/kyzen/metafind/metafind_data_attrs/outputs/checkpoints/pilotP1s_split801010_lr1e-4_20260904")
+EV = Path("/home/kyzen/metafind/metafind_data_attrs/outputs/eval/eval_pilotP1s_split801010_lr1e-4_20260904/per_query_C_dev_selection.jsonl")
 
 splits = json.loads((paths.OUTPUTS / "splits.json").read_text())["object"]
 uids = splits["dev_val"][:N]

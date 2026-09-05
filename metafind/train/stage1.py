@@ -2231,7 +2231,7 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         # [U-16] which reading trained this checkpoint; the evaluator builds a
         # second point path only when this says so
         "tower_sharing": training.get("tower_sharing", "shared_backbone_separate_fusion"),
-        "gallery_fusion": training.get("gallery_fusion") or training["fusion"],
+        "gallery_fusion": training.get("gallery_fusion") or training.get("fusion"),
         "freeze_gallery": bool(training.get("freeze_gallery", False)),
         "trainable_only": True,
         "n_params_saved": int(n_params),

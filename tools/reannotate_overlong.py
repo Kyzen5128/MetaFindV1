@@ -52,7 +52,7 @@ from metafind.data.encode_text_image import (  # noqa: E402
 )
 from metafind.models.resolve_stage1 import serialize_annotation  # noqa: E402
 
-SUPERSEDED = Path("/home/kyzen/metafind_out/annotations_superseded_v8")
+SUPERSEDED = Path("/home/kyzen/metafind/metafind_out/annotations_superseded_v8")
 LEDGER = paths.OUTPUTS / "reannotation_v9.json"
 UID_LIST = paths.OUTPUTS / "reannotate_v9_uids.txt"
 

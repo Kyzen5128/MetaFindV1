@@ -1,5 +1,5 @@
 NAME: MetaFindObjaverse
-DATA_ROOT: /home/kyzen/metafind_data_attrs/outputs
-SPLITS_PATH: /home/kyzen/metafind_data_attrs/outputs/splits.json
+DATA_ROOT: /home/kyzen/metafind/metafind_data_attrs/outputs
+SPLITS_PATH: /home/kyzen/metafind/metafind_data_attrs/outputs/splits.json
 SPLIT_KEY: train
 LIMIT: 0

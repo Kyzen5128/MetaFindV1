@@ -81,7 +81,7 @@ from metafind.data.annotate import (
 )
 
 NODE = "n05_annotate"
-MODEL_ID = "/home/kyzen/metafind_out/gemma-4-12B-it"  # D-2: stands in for GPT-4o.
+MODEL_ID = "/home/kyzen/metafind/metafind_out/gemma-4-12B-it"  # D-2: stands in for GPT-4o.
 # [DEVIATION D-2, re-pointed 2026-08-24 on the USER's decision -- his words,
 # verbatim: "D-2 改成 gemma"] The paper annotates with GPT-4o
 # (`2methdology.tex:28`, `neurips_2025.tex:100`). The stand-in was

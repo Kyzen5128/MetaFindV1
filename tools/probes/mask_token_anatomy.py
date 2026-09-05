@@ -64,7 +64,7 @@ CONDS = {"text": (1, 0, 0), "image": (0, 1, 0), "pc": (0, 0, 1),
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--ckpt", default="/home/kyzen/metafind_out/checkpoints/"
+    ap.add_argument("--ckpt", default="/home/kyzen/metafind/metafind_out/checkpoints/"
                                       "qpack_ti_lr2.50e-04_s20260816/stage1_best.pt")
     ap.add_argument("--index", default=None)
     ap.add_argument("-n", type=int, default=3000)

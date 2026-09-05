@@ -51,7 +51,7 @@ CONDS = {"text": (1, 0, 0), "image": (0, 1, 0), "pc": (0, 0, 1),
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--ckpt", default="/home/kyzen/metafind_out/checkpoints/"
+    ap.add_argument("--ckpt", default="/home/kyzen/metafind/metafind_out/checkpoints/"
                                       "sweep_lr/lr2.50e-4_s20260830/stage1_best.pt")
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--batches", type=int, default=40)

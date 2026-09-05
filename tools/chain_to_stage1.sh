@@ -96,7 +96,7 @@ say "=== preflight ==="
 for f in annotations/. stage1_encoding_protocol.json stage1_hyperparameters.json; do
     [ -e "$OUT/$f" ] || die "missing prerequisite: $OUT/$f"
 done
-# -L: $OUT/annotations is a symlink to /home/kyzen/metafind_out/annotations.
+# -L: $OUT/annotations is a symlink to /home/kyzen/metafind/metafind_out/annotations.
 # Without it this counted 0 and the gate below killed the chain no matter how
 # many annotations existed.
 ANN=$(count "$OUT/annotations" -maxdepth 1 -name '*.json') \
@@ -131,7 +131,7 @@ rc=$?
 [ $rc -eq 0 ] || die "n06 exited $rc -- read $LOGS/n06_full.log"
 
 # -L, same defect as the annotation count above: $OUT/embeddings is a symlink
-# to /home/kyzen/metafind_out/embeddings. The directory is still empty, so the
+# to /home/kyzen/metafind/metafind_out/embeddings. The directory is still empty, so the
 # difference is not measurable HERE -- it is measured on its sibling
 # $OUT/annotations, identical construction, which reads 0 without -L and
 # 38,849 with it. Once n06 writes its ~45,953 .npz this returned 0 and the

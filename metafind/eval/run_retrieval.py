@@ -1540,11 +1540,11 @@ def main() -> int:
     # reader does not check it again) ----
     # There is ONE outputs tree, not two. `data` is a symlink and so is one
     # directory inside it:
-    #     data                     -> /home/kyzen/metafind_data
-    #     data/outputs/checkpoints -> /home/kyzen/metafind_out/checkpoints
+    #     data                     -> /home/kyzen/metafind/metafind_data
+    #     data/outputs/checkpoints -> /home/kyzen/metafind/metafind_out/checkpoints
     # `findmnt -T` puts BOTH roots on /dev/nvme0n1p2 (ext4). So a path written
     # `data/outputs/checkpoints/...` and one written
-    # `/home/kyzen/metafind_out/checkpoints/...` are the same bytes, and a
+    # `/home/kyzen/metafind/metafind_out/checkpoints/...` are the same bytes, and a
     # reviewer quoting either is quoting the same file. This was mistaken for
     # two divergent trees once. `find` does NOT follow a symlinked start point
     # and returns the empty set silently: use `find -L`.

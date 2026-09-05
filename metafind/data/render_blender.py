@@ -80,9 +80,9 @@ VENDOR_SCRIPT = _HERE.parent / "vendor" / "openshape" / "render_single_glb.py"
 # The blenderproc CLI and the Blender tree it manages. Overridable so a
 # different machine does not need this file edited.
 BLENDERPROC = Path(os.environ.get(
-    "METAFIND_BLENDERPROC", "/home/kyzen/metafind_out/bproc_env/bin/blenderproc"))
+    "METAFIND_BLENDERPROC", "/home/kyzen/metafind/metafind_out/bproc_env/bin/blenderproc"))
 BLENDER_INSTALL = Path(os.environ.get(
-    "METAFIND_BLENDER_INSTALL", "/home/kyzen/metafind_out/blender"))
+    "METAFIND_BLENDER_INSTALL", "/home/kyzen/metafind/metafind_out/blender"))
 
 # All four are upstream's own values. `camera_dist 1.2` is the number in the
 # invocation comment at the top of their script, not argparse's 1.5 default.

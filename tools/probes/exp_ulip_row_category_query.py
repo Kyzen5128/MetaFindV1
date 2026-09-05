@@ -90,7 +90,7 @@ def main() -> int:
             return np.concatenate(out)
         print("encoding gallery pc", flush=True)
         g_pc = enc(clouds)
-        pack_json = Path("/home/kyzen/metafind_data/outputs/_probe/query_pack/query_pack.json")
+        pack_json = Path("/home/kyzen/metafind/metafind_data/outputs/_probe/query_pack/query_pack.json")
         from metafind.train.stage1 import QueryPack
         pack = QueryPack(pack_json, n_views=12); pack.require(uids)
         print("encoding resampled query pc", flush=True)

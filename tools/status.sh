@@ -62,7 +62,7 @@ count() { printf '  %-22s %s\n' "$1" "$2"; }
 # plausible and is wrong.
 #
 # -L because `data/outputs/{pointclouds,renders,annotations,embeddings}` are
-# symlinks into /home/kyzen/metafind_out. Without it find never descends: it
+# symlinks into /home/kyzen/metafind/metafind_out. Without it find never descends: it
 # tests the link itself against *.json, fails, and reports 0 -- a zero that
 # reads as "this stage has produced nothing" while 46,052 records sit on disk.
 # The two callers that pass a REAL directory (scene_graphs 12,000 and
