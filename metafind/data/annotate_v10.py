@@ -1,0 +1,297 @@
+"""PROMPT_VERSION 10 -- the paper's Figure 2 annotation, asked for in one call.
+
+# SUPPORTS-NODE: n05_annotate
+
+[DL-103, Kyzen 2026-09-06 「這次資料集處理方法直接採用論文所描述的 ... 除了 LLM
+其他一律按照論文要求」] The paper's data preparation (`2methdology.tex` §2.3):
+"Each asset is rendered from 11 orthogonal viewpoints and annotated using
+GPT-4o. These annotations provide rich textual descriptions detailing
+attributes such as object category, size dimensions, materials, and placement
+constraints." Figure 2 prints the schema (see `annotate.FIGURE_2_EXAMPLE`).
+
+What v10 does, and what each choice rests on
+--------------------------------------------
+* ONE structured call returns the whole Figure 2 object.            PAPER (Figure 2)
+  v8/v9 drew five descriptions, ranked them with CLIP-ViT-L and
+  kept the one that fit 77 tokens; the paper has one description.
+* The VLM estimates width / length / height itself (centimetres). PAPER (§2.3 "size
+  v5-v9 asked for the height only and derived the other two from   dimensions"; Figure 2
+  the mesh's exact proportions.  The mesh proportions still travel  prints 30 / 30 / 40)
+  in the record as a DIAGNOSTIC field; they are not used.
+* volume = width x length x height, computed.                       PAPER (Figure 2:
+                                                                     36000 = 30 * 30 * 40)
+* `synset` is asked of the model (Figure 2 prints it); a malformed  IMPLEMENTATION CHOICE
+  or unknown id falls back to `annotate.resolve_synset`.
+* The Objaverse-LVIS label is still shown as the catalogue identity. IMPLEMENTATION CHOICE
+  The paper does not say whether GPT-4o saw it; without it gemma      (paper silent; v7
+  misidentified ~28% of a 97-asset sample (PROMPT_VERSION 7 note).    measurement)
+* All 11 views go in one turn (`Annotator.generate`).               PAPER (§2.3)
+* Description: one sentence, English, like the Figure 2 example.    PAPER (Figure 2)
+  Length is instructed, not refused: the text encoder truncates at
+  77 tokens whatever we do, and the paper's own example is ~25 words.
+* Retries: a failed parse or validation gets a repair prompt; the   IMPLEMENTATION CHOICE
+  last attempt samples with a per-attempt seed, so "retry" is not     (fixes the 311
+  a byte-identical resend.                                            no-op retries)
+
+Units: centimetres and kilograms, as `annotate.DIMENSION_UNIT` / `MASS_UNIT`
+record (INFERENCE from Figure 2's arithmetic; see that module).
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+from typing import Any
+
+from metafind.data.annotate import (
+    DIMENSION_UNIT, FIGURE_2_EXAMPLE, MASS_UNIT, MATERIAL_SYNONYMS, MAX_DENSITY_KG_CM3,
+    MAX_DIM_CM, MAX_MASS_KG, MIN_DENSITY_KG_CM3, MIN_DIM_CM, MIN_MASS_KG, PLACEMENT_FLAGS,
+    SYNSET_PATTERN, AnnotationError, build_repair_prompt, category_relation,
+    non_english_characters, parse_annotation, resolve_synset,
+)
+
+PROMPT_VERSION = 10
+VALIDATOR_VERSION = 6
+SCHEMA_VERSION = 7
+MAX_ATTEMPTS = 3
+DESCRIPTION_WORDS_HINT = 30           # instruction to the model, not an admission rule
+MAX_DESCRIPTION_CHARS = 600           # admission: anything longer is not "one sentence"
+MAX_MATERIALS = 6
+ANNOTATION_CONTRACT_FAMILY = "metafind_annot"
+
+# The paper's field set, in Figure 2 order. `RECORD_REQUIRED_FIELDS` is what a
+# stored v10 record must carry to count as complete (the runner's contract test).
+FIGURE2_FIELDS = ("category", "synset", "width", "length", "height", "volume", "mass",
+                  "description", "materials", *PLACEMENT_FLAGS)
+RESPONSE_REQUIRED = ("category", "synset", "width", "length", "height", "mass",
+                     "description", "materials", *PLACEMENT_FLAGS)
+RECORD_REQUIRED_FIELDS = FIGURE2_FIELDS
+
+CANONICAL_N_VIEWS = 11
+CANONICAL_LVIS_CATEGORY = "chair"
+
+
+def build_prompt(n_views: int, lvis_category: str) -> str:
+    """One turn, the whole Figure 2 object. The LVIS label is the catalogue identity."""
+    return (
+        f"You are looking at {n_views} rendered views of a single 3D asset, taken from "
+        "evenly spaced directions around it.\n"
+        "\n"
+        f'This asset is catalogued in Objaverse-LVIS as: "{lvis_category}"\n'
+        "Treat that identity as correct unless the images clearly contradict it; if they "
+        "do, name what you actually see.\n"
+        "\n"
+        "Describe the asset as a structured annotation. Here is the exact format, shown "
+        "with a worked example for a different object:\n"
+        f"{FIGURE_2_EXAMPLE}\n"
+        "\n"
+        "Return ONE JSON object and nothing else, with exactly these fields in this order:\n"
+        "  category     the specific object type, in English (2-4 words at most)\n"
+        "  synset       the WordNet id of that category, like \"robot.n.01\"\n"
+        "  width        real-world width in centimetres (a number)\n"
+        "  length       real-world length / depth in centimetres (a number)\n"
+        "  height       real-world height in centimetres (a number)\n"
+        "  volume       width x length x height, in cubic centimetres\n"
+        "  mass         typical mass in kilograms (a number)\n"
+        f"  description  ONE English sentence of at most about {DESCRIPTION_WORDS_HINT} words "
+        "describing what you see: shape, parts, colours, surface, any text or marking\n"
+        "  materials    a JSON list of 1-6 English material words (e.g. \"wood\", \"metal\")\n"
+        "  onCeiling, onWall, onFloor, onObject   booleans: where this object is typically placed\n"
+        "\n"
+        "The renders are scale-normalised, so estimate the real-world size from what the "
+        "object IS, not from how large it appears. Write every text field in English only "
+        "(no Chinese, Japanese, Korean, Cyrillic or Arabic characters). Use plain numbers, "
+        "not strings, for width, length, height, volume and mass."
+    )
+
+
+def contract() -> dict[str, Any]:
+    """Everything that decides admission, hashed into the contract id."""
+    return {
+        "prompt_version": PROMPT_VERSION,
+        "validator_version": VALIDATOR_VERSION,
+        "schema_version": SCHEMA_VERSION,
+        "prompt": build_prompt(CANONICAL_N_VIEWS, CANONICAL_LVIS_CATEGORY),
+        "response_required": list(RESPONSE_REQUIRED),
+        "record_required": list(RECORD_REQUIRED_FIELDS),
+        "placement_flags": list(PLACEMENT_FLAGS),
+        "dimension_unit": DIMENSION_UNIT,
+        "mass_unit": MASS_UNIT,
+        "dim_bounds_cm": [MIN_DIM_CM, MAX_DIM_CM],
+        "mass_bounds_kg": [MIN_MASS_KG, MAX_MASS_KG],
+        "density_bounds_kg_cm3": [MIN_DENSITY_KG_CM3, MAX_DENSITY_KG_CM3],
+        "max_description_chars": MAX_DESCRIPTION_CHARS,
+        "max_materials": MAX_MATERIALS,
+        "material_synonyms": dict(sorted(MATERIAL_SYNONYMS.items())),
+        "max_attempts": MAX_ATTEMPTS,
+        "volume": "computed = width * length * height",
+    }
+
+
+def contract_id() -> str:
+    payload = json.dumps(contract(), sort_keys=True, ensure_ascii=False)
+    return f"{ANNOTATION_CONTRACT_FAMILY}_v{PROMPT_VERSION}@{hashlib.sha256(payload.encode()).hexdigest()[:16]}"
+
+
+def _number(obj: dict, key: str, lo: float, hi: float, unit: str) -> float:
+    v = obj.get(key)
+    if isinstance(v, str):
+        try:
+            v = float(v.replace(",", "").split()[0])
+        except (ValueError, IndexError):
+            raise AnnotationError(f"`{key}` must be a number, got {obj.get(key)!r}") from None
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        raise AnnotationError(f"`{key}` must be a number, got {v!r}")
+    v = float(v)
+    if not lo <= v <= hi:
+        raise AnnotationError(f"`{key}` = {v} is outside {lo}-{hi} {unit}. Re-check the unit.")
+    return v
+
+
+def validate(obj: dict[str, Any], *, lvis_category: str) -> dict[str, Any]:
+    """The model's object -> the Figure 2 fields plus what the validator decided.
+
+    Raises AnnotationError with a message the repair prompt can quote.
+    """
+    missing = [f for f in RESPONSE_REQUIRED if f not in obj]
+    if missing:
+        raise AnnotationError(f"required field(s) missing: {', '.join(missing)}")
+    for field in ("category", "description"):
+        if not isinstance(obj[field], str) or not obj[field].strip():
+            raise AnnotationError(f"`{field}` must be a non-empty string")
+        bad = non_english_characters(obj[field])
+        if bad:
+            raise AnnotationError(f"`{field}` contains non-English characters {bad[:5]!r}; write it in English")
+    category = " ".join(obj["category"].strip().lower().split())
+    if len(category.split()) > 6:
+        raise AnnotationError("`category` must be a short object type (at most a few words)")
+    description = " ".join(obj["description"].strip().split())
+    if len(description) > MAX_DESCRIPTION_CHARS:
+        raise AnnotationError(f"`description` is {len(description)} characters; write ONE sentence")
+
+    width = _number(obj, "width", MIN_DIM_CM, MAX_DIM_CM, "cm")
+    length = _number(obj, "length", MIN_DIM_CM, MAX_DIM_CM, "cm")
+    height = _number(obj, "height", MIN_DIM_CM, MAX_DIM_CM, "cm")
+    mass = _number(obj, "mass", MIN_MASS_KG, MAX_MASS_KG, "kg")
+    volume = width * length * height
+    density = mass / volume
+    if not MIN_DENSITY_KG_CM3 <= density <= MAX_DENSITY_KG_CM3:
+        raise AnnotationError(
+            f"`mass` = {mass} kg with a {width} x {length} x {height} cm box gives "
+            f"{density:.3g} kg/cm^3, which is not physical (water is 0.001). Check that the "
+            "dimensions are in CENTIMETRES and the mass in KILOGRAMS.")
+
+    materials = obj["materials"]
+    if isinstance(materials, str):
+        materials = [m for m in materials.replace(";", ",").split(",")]
+    if not isinstance(materials, list) or not materials:
+        raise AnnotationError("`materials` must be a non-empty JSON list of material words")
+    norm = []
+    for m in materials:
+        if not isinstance(m, str) or not m.strip():
+            raise AnnotationError("`materials` entries must be non-empty strings")
+        if non_english_characters(m):
+            raise AnnotationError(f"material {m!r} is not English")
+        w = " ".join(m.strip().lower().split())
+        w = MATERIAL_SYNONYMS.get(w, w)
+        if w not in norm:
+            norm.append(w)
+    materials = norm[:MAX_MATERIALS]
+
+    flags = {}
+    for f in PLACEMENT_FLAGS:
+        v = obj[f]
+        if isinstance(v, str) and v.strip().lower() in ("true", "false"):
+            v = v.strip().lower() == "true"
+        if not isinstance(v, bool):
+            raise AnnotationError(f"`{f}` must be true or false, got {obj[f]!r}")
+        flags[f] = v
+
+    synset_raw = str(obj.get("synset", "")).strip().lower()
+    if SYNSET_PATTERN.match(synset_raw):
+        synset, synset_source = synset_raw, "model"
+    else:
+        synset, synset_source = resolve_synset(category, lvis_category)
+        synset_source = f"{synset_source}_after_malformed_model_synset"
+
+    return {
+        "category": category, "synset": synset, "synset_source": synset_source,
+        "width": width, "length": length, "height": height, "volume": volume, "mass": mass,
+        "description": description, "materials": materials, **flags,
+        "lvis_category": lvis_category,
+        "category_relation": category_relation(lvis_category, category),
+    }
+
+
+def build_record(fields: dict[str, Any], *, uid: str, model_id: str, attempt: int,
+                 sampled_seed: int | None, render_rec: dict, proportions,
+                 prefix_reuse: bool, raw_response: str) -> dict[str, Any]:
+    from metafind.data.view_io import image_identity
+    return {
+        **fields,
+        "dimension_unit": DIMENSION_UNIT,
+        "mass_unit": MASS_UNIT,
+        "volume_source": "computed_width_x_length_x_height",
+        "dimensions_source": "vlm_estimate",           # v5-v9: mesh proportions x height
+        "prompt_version": PROMPT_VERSION,
+        "validator_version": VALIDATOR_VERSION,
+        "schema_version": SCHEMA_VERSION,
+        "annotation_contract": contract_id(),
+        "annotator_model": model_id,
+        "description_source": "model",
+        "uid": uid,
+        "attempts": attempt,
+        "sampled_seed": sampled_seed,                  # None = greedy attempt
+        "vision_prefix_reuse": prefix_reuse,
+        "n_views_shown": len(render_rec["view_paths"]),
+        "image_identity": image_identity(render_rec),
+        "renderer_version": render_rec.get("renderer_version"),
+        "raw_bbox_extents": render_rec.get("raw_bbox_extents"),
+        "mesh_proportions_yxz": list(proportions) if proportions is not None else None,
+        "raw_response_tail": raw_response[-400:],
+    }
+
+
+def annotate_one(ann, uid: str, render_rec: dict, *, lvis_category: str, proportions,
+                 preloaded_images=None) -> tuple[dict | None, dict | None]:
+    """One asset under v10. Returns ``(record, quarantine_entry)`` -- exactly one is None."""
+    from metafind.data.annotate_run import SharedViewPrefix, _is_cuda_oom, _release_cuda
+    from metafind.data.pointclouds import uid_seed
+
+    views = render_rec["view_paths"]
+    prompt = build_prompt(len(views), lvis_category)
+    sv = SharedViewPrefix(ann, views, [prompt], preloaded_images=preloaded_images)
+    prefix_reuse = sv.ok
+
+    def gen(p, **kw):
+        try:
+            return sv.generate(p, **kw) if sv.ok else ann.generate(views, p, **kw)
+        except Exception as exc:  # noqa: BLE001 -- an OOM must free the card before the next try
+            if _is_cuda_oom(exc):
+                _release_cuda()
+            raise
+
+    current, last_error, last_raw = prompt, "", ""
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        # attempts 1-2 greedy (the repair prompt already differs); the last one samples
+        # with a per-attempt seed so a deterministic failure is not resent byte for byte.
+        sampled_seed = (uid_seed(uid) + attempt) if attempt == MAX_ATTEMPTS else None
+        try:
+            raw = gen(current, sample=True, seed=sampled_seed) if sampled_seed is not None else gen(current)
+        except Exception as exc:  # noqa: BLE001 -- surface as quarantine, not a crash
+            return None, {"uid": uid, "failure_class": "RESOURCE" if _is_cuda_oom(exc) else "UNKNOWN",
+                          "exception_type": type(exc).__name__, "exception_msg": str(exc)[:400],
+                          "attempts": attempt, "traceback": ""}
+        last_raw = raw if isinstance(raw, str) else (raw[0] if raw else "")
+        try:
+            fields = validate(parse_annotation(last_raw), lvis_category=lvis_category)
+        except AnnotationError as exc:
+            last_error = str(exc)
+            current = build_repair_prompt(prompt, last_error, last_raw)
+            continue
+        return build_record(fields, uid=uid, model_id=ann.model_id, attempt=attempt,
+                            sampled_seed=sampled_seed, render_rec=render_rec,
+                            proportions=proportions, prefix_reuse=prefix_reuse,
+                            raw_response=last_raw), None
+    return None, {"uid": uid, "failure_class": "MODEL_RECOVERABLE", "terminated_by": "repair_budget",
+                  "attempts": MAX_ATTEMPTS, "exception_type": "AnnotationError",
+                  "exception_msg": last_error[:400], "raw_response": last_raw[:1000]}

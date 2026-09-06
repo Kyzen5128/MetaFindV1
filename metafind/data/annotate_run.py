@@ -192,6 +192,27 @@ def _record(uid: str) -> tuple[dict, str] | None:
     return (rec if isinstance(rec, dict) else {}), digest
 
 
+# [PROMPT_VERSION 10, DL-103] `--prompt-mode figure2_v10` swaps the contract the
+# completeness test compares against and the field set a complete record must
+# carry. Module-level indirection rather than a rebind of the imported names,
+# so the v9 path is byte-for-byte what it was.
+_CONTRACT_ID = annotation_contract_id
+_RECORD_REQUIRED = REQUIRED_FIELDS
+PROMPT_MODE = "v9"
+
+
+def set_prompt_mode(mode: str) -> None:
+    global _CONTRACT_ID, _RECORD_REQUIRED, PROMPT_MODE
+    if mode == "v9":
+        _CONTRACT_ID, _RECORD_REQUIRED, PROMPT_MODE = annotation_contract_id, REQUIRED_FIELDS, "v9"
+    elif mode == "figure2_v10":
+        from metafind.data import annotate_v10
+        _CONTRACT_ID, _RECORD_REQUIRED, PROMPT_MODE = (annotate_v10.contract_id,
+                                                       annotate_v10.RECORD_REQUIRED_FIELDS, mode)
+    else:
+        raise ValueError(f"unknown prompt mode {mode!r}")
+
+
 def _under_current_contract(rec: dict, image_id: str | None = None) -> bool:
     # Keyed on the ANNOTATION CONTRACT, not on prompt_version alone. A v1 sidecar
     # has every field name it shares with v2 but a different schema, and treating
@@ -210,8 +231,8 @@ def _under_current_contract(rec: dict, image_id: str | None = None) -> bool:
         return False
     if image_id is not None and rec.get("image_identity") != image_id:
         return False
-    return (all(k in rec for k in REQUIRED_FIELDS)
-            and rec.get("annotation_contract") == annotation_contract_id()
+    return (all(k in rec for k in _RECORD_REQUIRED)
+            and rec.get("annotation_contract") == _CONTRACT_ID()
             and "annotator_model" in rec)
 
 
@@ -1347,7 +1368,13 @@ def main() -> int:
                          "is not free -- see Annotator.__init__")
     ap.add_argument("--arm", help="write to data/outputs/bakeoff/<arm>/ instead "
                                   "of the corpus annotations directory")
+    ap.add_argument("--prompt-mode", default="v9", choices=["v9", "figure2_v10"],
+                    help="v9 = the anchored two-stage prompt with CLIP-ranked descriptions; "
+                         "figure2_v10 = one call returning the paper's Figure 2 object "
+                         "(DL-103, metafind/data/annotate_v10.py)")
     args = ap.parse_args()
+    set_prompt_mode(args.prompt_mode)
+    print(f"prompt mode {PROMPT_MODE}; contract {_CONTRACT_ID()}", flush=True)
 
     if args.arm:
         print(f"arm {args.arm!r} -> {use_arm(args.arm)}", flush=True)
@@ -1384,7 +1411,7 @@ def main() -> int:
         return 3
     if blocked:
         print(f"{len(blocked):,} existing annotation record(s) carry neither the "
-              f"current contract {annotation_contract_id()} nor a declaration in "
+              f"current contract {_CONTRACT_ID()} nor a declaration in "
               f"{PROVENANCE_REGISTRY}, e.g. {blocked[:3]}.\n"
               "Refusing: an unclassified record must be neither silently re-annotated "
               "nor silently skipped. Declare it "
@@ -1447,7 +1474,13 @@ def main() -> int:
             pending = (pool.submit(_preload, todo[i + 1])
                        if i + 1 < len(todo) else None)
             try:
-                rec, bad = annotate_one(
+                if PROMPT_MODE == "figure2_v10":
+                    from metafind.data import annotate_v10
+                    rec, bad = annotate_v10.annotate_one(
+                        ann, uid, renders[uid], preloaded_images=images,
+                        lvis_category=lvis_categories[uid], proportions=proportions[uid])
+                else:
+                    rec, bad = annotate_one(
                     ann, uid, renders[uid],
                     preloaded_images=images,
                     # [PROMPT_VERSION 8] The LVIS label IS supplied, and
