@@ -27,8 +27,8 @@ Objaverse gallery text (`figure2_json`):
 
 Writes `outputs/procthor_asset_annotations.json` and rewrites
 `outputs/procthor_object_text.json` with, per assetId, `text` (the figure2_json string,
-what the text tower encodes) and `relation_text` (one readable sentence, what the
-relation-sentence LLM prompt sees). `--captions <json>` merges gemma descriptions.
+what the text tower encodes) and `relation_text` (one TYPE-level sentence -- category and placement -- what the
+relation-sentence LLM prompt sees; instance details would multiply the distinct pairs). `--captions <json>` merges gemma descriptions.
 """
 from __future__ import annotations
 
@@ -114,12 +114,13 @@ def build_records(asset_ids, captions: dict | None = None) -> dict[str, dict]:
 
 
 def relation_sentence(rec: dict) -> str:
-    mats = ", ".join(rec["materials"]) if rec["materials"] else "unknown materials"
+    """TYPE-level, on purpose: the paper's semantic edges relate object kinds
+    ("microscope-lab bench"), and n08 asks the LLM once per distinct sentence pair. A
+    per-asset sentence (dimensions, caption) would turn ~4K distinct pairs into hundreds
+    of thousands of LLM calls for relations that do not depend on the instance."""
     place = ("on the wall" if rec["onWall"] else "on the floor" if rec["onFloor"]
              else "on top of other objects")
-    desc = f" {rec['description'].rstrip('.')}." if rec.get("description") else ""
-    return (f"a {rec['category']} made of {mats}, about {rec['width']:.0f} by {rec['length']:.0f} by "
-            f"{rec['height']:.0f} centimetres, typically placed {place}.{desc}")
+    return f"a {rec['category']}, typically placed {place}"
 
 
 def main() -> int:

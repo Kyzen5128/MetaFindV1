@@ -81,6 +81,13 @@ STAGE2_DECISIONS = {
     # and is not implemented. Recorded so the choice is visible, not inferred
     # from the absence of code.
     "query_modality_masking": "none",
+    # [DL-103, 2026-09-06] The unit of a scene graph and of the Stage 2 context.
+    # PAPER FACT: "layout-aware room-level datasets", "Each room configuration
+    # provides precise spatial coordinates", "single-room indoor scenes"
+    # (2methdology.tex:16,28; 3experiments.tex:8). scene_graphs BUILDER_VERSION 2
+    # draws adjacency within a room and stage2.build_context_graph keeps only the
+    # target's room; graphs without `graph_unit` (v1) are read as whole houses.
+    "graph_unit": "room",
     # [MASTER DECISION 2026-09-03, under Kyzen's explicit delegation of the four
     # open items. IMPLEMENTATION CHOICE. Reversible; he can pin a literal.]
     #
