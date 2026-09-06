@@ -56,6 +56,7 @@ paths.setup_env()
 
 from metafind.models.resolve_stage1 import (  # noqa: E402
     TEXT_TEMPLATE,
+    TEXT_TEMPLATE_NAME,
     serialization_id_for,
     serialize_annotation,
 )
@@ -104,6 +105,16 @@ def ulip2_ckpt_sha() -> str:
 # corpus's 89-token record reported 77 and looked like a boundary case rather
 # than a 12-token loss.
 TEXT_CONTEXT_LENGTH = 77
+
+# [DL-103, 2026-09-06; ULIP2 reviewer BLOCKER 1] Under the `figure2_json` template the
+# text IS the paper's Figure 2 artifact, and it exceeds 77 tokens by construction
+# (measured 137-146 on the v10 smoke, 160 mean on the v9 corpus). Refusing would
+# quarantine the whole corpus, so for THIS template only the over-length text is
+# encoded as CLIP's own tokenizer encodes it -- truncated at 77 with EOT re-inserted --
+# and the sidecar records `text_truncated: true` with the true count. IMPLEMENTATION
+# CHOICE against a paper silence (the paper never says how the JSON reached the text
+# tower); the placement flags and materials at the tail never reach the encoder.
+TRUNCATE_OVERLONG = TEXT_TEMPLATE_NAME == "figure2_json"
 
 
 def true_token_count(text: str) -> int:
@@ -587,12 +598,16 @@ def main() -> int:
                 # and ENFORCED. The raise sends the asset to quarantine with the
                 # count attached, which is the same treatment an unserializable
                 # annotation gets -- a degraded input must be visible, not quiet.
+                truncated = False
                 try:
                     n_tokens = refuse_if_overlong(text)
                 except ValueError:
-                    overlong += 1
-                    raise
-                truncated = False
+                    if not TRUNCATE_OVERLONG:
+                        overlong += 1
+                        raise
+                    n_tokens = true_token_count(text)
+                    truncated = True
+                    overlong += 1          # counted, reported as truncated below
 
                 text_vec = enc.encode_text(text)
                 view_vecs = enc.encode_views(renders[uid]["view_paths"])
@@ -652,7 +667,8 @@ def main() -> int:
                        # carries 12 views. Read it off the renderer rather than
                        # restating a literal that a version bump can strand.
                        assets_encoded=done, views_encoded=done * LIVE_N_VIEWS)
-    print(f"\n{done:,} encoded, {overlong:,} REFUSED for exceeding "
+    print(f"\n{done:,} encoded, {overlong:,} "
+          + ("TRUNCATED at" if TRUNCATE_OVERLONG else "REFUSED for exceeding ") + " "
           f"{TEXT_CONTEXT_LENGTH} true tokens -> {paths.EMBEDDINGS}")
     return 0
 

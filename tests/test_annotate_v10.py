@@ -66,3 +66,30 @@ def test_non_english_description_is_refused():
 def test_contract_id_is_versioned_and_stable():
     a, b = v10.contract_id(), v10.contract_id()
     assert a == b and a.startswith("metafind_annot_v10@") and len(a.split("@")[1]) == 16
+
+
+def test_annotations_wrapper_is_unwrapped():
+    out = v10.validate({"annotations": dict(FIG2)}, lvis_category="robot")
+    assert out["category"] == "robot" and out["volume"] == 36000.0
+
+
+def test_more_than_six_materials_is_refused_not_cut():
+    obj = dict(FIG2); obj["materials"] = ["a", "b", "c", "d", "e", "f", "g"]
+    with pytest.raises(AnnotationError, match="at most"):
+        v10.validate(obj, lvis_category="robot")
+
+
+def test_wrong_render_protocol_is_quarantined_before_the_model_is_called():
+    class NoModel:
+        model_id = "x"
+        def generate(self, *a, **k): raise AssertionError("must not be called")
+    rec12 = {"view_paths": [f"v{i}.png" for i in range(12)], "renderer_version": 6}
+    out, bad = v10.annotate_one(NoModel(), "u", rec12, lvis_category="robot", proportions=(1, 1, 1))
+    assert out is None and bad["exception_type"] == "WrongRenderProtocol"
+
+
+def test_figure2_json_string_prints_integers_like_the_figure():
+    from metafind.models.resolve_stage1 import figure2_json_string
+    s = figure2_json_string({**FIG2, "width": 30.0, "volume": 36000.0, "mass": 2.5})
+    assert '"width": 30,' in s and '"volume": 36000,' in s and '"mass": 2.5' in s and "30.0" not in s
+    assert s.startswith('{"annotations": {"category": "robot", "synset": "robot.n.01", "width": 30')

@@ -145,18 +145,26 @@ def figure2_json_string(annotation: dict) -> str:
     """The poster's structured description: dimensions rounded to whole cm,
     floats to 2 dp, the description whole (not capped), keys in Figure 2 order."""
     import json as _json
+    # [ULIP2 reviewer 2026-09-06, MAJOR 2] Figure 2 prints `30`, `36000`, `2.5` -- integers where
+    # the value is whole, no trailing `.0`. Emitting `30.0` is not the figure's string and costs
+    # ~8 of CLIP's 77 tokens per record.
+    def num(v, nd):
+        if isinstance(v, str):
+            try:
+                v = float(v)
+            except ValueError:
+                return v
+        if isinstance(v, bool) or v is None:
+            return v
+        v = round(float(v), nd)
+        return int(v) if float(v).is_integer() else v
     rec = {}
     for k in FIGURE2_JSON_KEYS:
         v = annotation.get(k)
         if k in ("width", "length", "height"):
-            v = float(round(float(v)))
-        elif isinstance(v, str) and k in ("volume", "mass"):
-            try:
-                v = round(float(v), 2)
-            except ValueError:
-                pass
-        elif isinstance(v, float):
-            v = round(v, 2)
+            v = num(v, 0)
+        elif k in ("volume", "mass"):
+            v = num(v, 2)
         elif isinstance(v, str) and v in ("True", "False"):
             v = v == "True"
         rec[k] = v

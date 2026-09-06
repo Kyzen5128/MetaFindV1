@@ -55,7 +55,14 @@ SCHEMA_VERSION = 7
 MAX_ATTEMPTS = 3
 DESCRIPTION_WORDS_HINT = 30           # instruction to the model, not an admission rule
 MAX_DESCRIPTION_CHARS = 600           # admission: anything longer is not "one sentence"
-MAX_MATERIALS = 6
+MIN_DESCRIPTION_CHARS = 12
+MAX_MATERIALS = 6                     # more than this is refused (repair), never silently cut
+REQUIRED_N_VIEWS = 11                 # PAPER 2methdology.tex:28; renderer v7 layout (DL-077 Q2)
+REQUIRED_RENDERER_VERSION = 7
+# [ULIP2 reviewer 2026-09-06, MINOR 5] the sampled retry seed is uid_seed(uid) + attempt + RETRY_SALT;
+# a re-run over v10's own quarantine passes a new salt (`annotate_run --retry-salt`) so it is not
+# the same three attempts again. Recorded in every record.
+RETRY_SALT = 0
 ANNOTATION_CONTRACT_FAMILY = "metafind_annot"
 
 # The paper's field set, in Figure 2 order. `RECORD_REQUIRED_FIELDS` is what a
@@ -85,7 +92,7 @@ def build_prompt(n_views: int, lvis_category: str) -> str:
         f"{FIGURE_2_EXAMPLE}\n"
         "\n"
         "Return ONE JSON object and nothing else, with exactly these fields in this order:\n"
-        "  category     the specific object type, in English (2-4 words at most)\n"
+        "  category     the specific object type, in English (1-4 words)\n"
         "  synset       the WordNet id of that category, like \"robot.n.01\"\n"
         "  width        real-world width in centimetres (a number)\n"
         "  length       real-world length / depth in centimetres (a number)\n"
@@ -123,6 +130,10 @@ def contract() -> dict[str, Any]:
         "max_materials": MAX_MATERIALS,
         "material_synonyms": dict(sorted(MATERIAL_SYNONYMS.items())),
         "max_attempts": MAX_ATTEMPTS,
+        "min_description_chars": MIN_DESCRIPTION_CHARS,
+        "required_n_views": REQUIRED_N_VIEWS,
+        "required_renderer_version": REQUIRED_RENDERER_VERSION,
+        "synset_existence": "wordnet lookup of a well-formed id; lookup fallback otherwise",
         "volume": "computed = width * length * height",
     }
 
@@ -130,6 +141,20 @@ def contract() -> dict[str, Any]:
 def contract_id() -> str:
     payload = json.dumps(contract(), sort_keys=True, ensure_ascii=False)
     return f"{ANNOTATION_CONTRACT_FAMILY}_v{PROMPT_VERSION}@{hashlib.sha256(payload.encode()).hexdigest()[:16]}"
+
+
+def _synset_exists(synset_id: str) -> bool:
+    """[ULIP2 reviewer MINOR 4] a well-formed id that names no WordNet synset is not a synset.
+    WordNet unavailable -> accept the shape (recorded through the source string upstream)."""
+    from metafind.data.annotate import _wordnet
+    wn = _wordnet()
+    if wn is None:
+        return True
+    try:
+        wn.synset(synset_id)
+        return True
+    except Exception:  # noqa: BLE001 -- nltk raises WordNetError / ValueError for unknown ids
+        return False
 
 
 def _number(obj: dict, key: str, lo: float, hi: float, unit: str) -> float:
@@ -152,6 +177,10 @@ def validate(obj: dict[str, Any], *, lvis_category: str) -> dict[str, Any]:
 
     Raises AnnotationError with a message the repair prompt can quote.
     """
+    # Figure 2 prints the object under an "annotations" wrapper, and the model often
+    # returns it that way; the fields are the same either way.
+    if set(obj) == {"annotations"} and isinstance(obj["annotations"], dict):
+        obj = obj["annotations"]
     missing = [f for f in RESPONSE_REQUIRED if f not in obj]
     if missing:
         raise AnnotationError(f"required field(s) missing: {', '.join(missing)}")
@@ -167,6 +196,8 @@ def validate(obj: dict[str, Any], *, lvis_category: str) -> dict[str, Any]:
     description = " ".join(obj["description"].strip().split())
     if len(description) > MAX_DESCRIPTION_CHARS:
         raise AnnotationError(f"`description` is {len(description)} characters; write ONE sentence")
+    if len(description) < MIN_DESCRIPTION_CHARS:
+        raise AnnotationError("`description` is too short to describe the object; write ONE full sentence")
 
     width = _number(obj, "width", MIN_DIM_CM, MAX_DIM_CM, "cm")
     length = _number(obj, "length", MIN_DIM_CM, MAX_DIM_CM, "cm")
@@ -195,7 +226,9 @@ def validate(obj: dict[str, Any], *, lvis_category: str) -> dict[str, Any]:
         w = MATERIAL_SYNONYMS.get(w, w)
         if w not in norm:
             norm.append(w)
-    materials = norm[:MAX_MATERIALS]
+    if len(norm) > MAX_MATERIALS:
+        raise AnnotationError(f"`materials` lists {len(norm)} entries; give at most {MAX_MATERIALS} material words")
+    materials = norm
 
     flags = {}
     for f in PLACEMENT_FLAGS:
@@ -207,11 +240,12 @@ def validate(obj: dict[str, Any], *, lvis_category: str) -> dict[str, Any]:
         flags[f] = v
 
     synset_raw = str(obj.get("synset", "")).strip().lower()
-    if SYNSET_PATTERN.match(synset_raw):
+    if SYNSET_PATTERN.match(synset_raw) and _synset_exists(synset_raw):
         synset, synset_source = synset_raw, "model"
     else:
         synset, synset_source = resolve_synset(category, lvis_category)
-        synset_source = f"{synset_source}_after_malformed_model_synset"
+        why = "malformed" if not SYNSET_PATTERN.match(synset_raw) else "unknown_to_wordnet"
+        synset_source = f"{synset_source}_after_{why}_model_synset"
 
     return {
         "category": category, "synset": synset, "synset_source": synset_source,
@@ -224,7 +258,7 @@ def validate(obj: dict[str, Any], *, lvis_category: str) -> dict[str, Any]:
 
 def build_record(fields: dict[str, Any], *, uid: str, model_id: str, attempt: int,
                  sampled_seed: int | None, render_rec: dict, proportions,
-                 prefix_reuse: bool, raw_response: str) -> dict[str, Any]:
+                 prefix_reuse: bool, raw_response: str, first_error: str = "") -> dict[str, Any]:
     from metafind.data.view_io import image_identity
     return {
         **fields,
@@ -240,7 +274,9 @@ def build_record(fields: dict[str, Any], *, uid: str, model_id: str, attempt: in
         "description_source": "model",
         "uid": uid,
         "attempts": attempt,
+        "first_error": first_error,                    # why attempt 1 was refused, if it was
         "sampled_seed": sampled_seed,                  # None = greedy attempt
+        "retry_salt": RETRY_SALT,
         "vision_prefix_reuse": prefix_reuse,
         "n_views_shown": len(render_rec["view_paths"]),
         "image_identity": image_identity(render_rec),
@@ -258,6 +294,12 @@ def annotate_one(ann, uid: str, render_rec: dict, *, lvis_category: str, proport
     from metafind.data.pointclouds import uid_seed
 
     views = render_rec["view_paths"]
+    # [ULIP2 reviewer MAJOR 3] the contract is hashed on 11 views; refuse anything else.
+    if len(views) != REQUIRED_N_VIEWS or render_rec.get("renderer_version") != REQUIRED_RENDERER_VERSION:
+        return None, {"uid": uid, "failure_class": "DETERMINISTIC_INPUT", "exception_type": "WrongRenderProtocol",
+                      "exception_msg": (f"{len(views)} views, renderer_version {render_rec.get('renderer_version')}; "
+                                        f"v10 requires {REQUIRED_N_VIEWS} views from renderer v{REQUIRED_RENDERER_VERSION}"),
+                      "attempts": 0, "traceback": ""}
     prompt = build_prompt(len(views), lvis_category)
     sv = SharedViewPrefix(ann, views, [prompt], preloaded_images=preloaded_images)
     prefix_reuse = sv.ok
@@ -270,28 +312,30 @@ def annotate_one(ann, uid: str, render_rec: dict, *, lvis_category: str, proport
                 _release_cuda()
             raise
 
-    current, last_error, last_raw = prompt, "", ""
+    current, last_error, last_raw, first_error = prompt, "", "", ""
     for attempt in range(1, MAX_ATTEMPTS + 1):
         # attempts 1-2 greedy (the repair prompt already differs); the last one samples
         # with a per-attempt seed so a deterministic failure is not resent byte for byte.
-        sampled_seed = (uid_seed(uid) + attempt) if attempt == MAX_ATTEMPTS else None
+        sampled_seed = (uid_seed(uid) + attempt + RETRY_SALT) if attempt == MAX_ATTEMPTS else None
         try:
             raw = gen(current, sample=True, seed=sampled_seed) if sampled_seed is not None else gen(current)
         except Exception as exc:  # noqa: BLE001 -- surface as quarantine, not a crash
+            import traceback as _tb
             return None, {"uid": uid, "failure_class": "RESOURCE" if _is_cuda_oom(exc) else "UNKNOWN",
                           "exception_type": type(exc).__name__, "exception_msg": str(exc)[:400],
-                          "attempts": attempt, "traceback": ""}
+                          "attempts": attempt, "traceback": _tb.format_exc()[-1500:]}
         last_raw = raw if isinstance(raw, str) else (raw[0] if raw else "")
         try:
             fields = validate(parse_annotation(last_raw), lvis_category=lvis_category)
         except AnnotationError as exc:
             last_error = str(exc)
+            first_error = first_error or last_error
             current = build_repair_prompt(prompt, last_error, last_raw)
             continue
         return build_record(fields, uid=uid, model_id=ann.model_id, attempt=attempt,
                             sampled_seed=sampled_seed, render_rec=render_rec,
                             proportions=proportions, prefix_reuse=prefix_reuse,
-                            raw_response=last_raw), None
+                            raw_response=last_raw, first_error=first_error), None
     return None, {"uid": uid, "failure_class": "MODEL_RECOVERABLE", "terminated_by": "repair_budget",
                   "attempts": MAX_ATTEMPTS, "exception_type": "AnnotationError",
                   "exception_msg": last_error[:400], "raw_response": last_raw[:1000]}

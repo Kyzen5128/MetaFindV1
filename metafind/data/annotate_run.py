@@ -1372,8 +1372,14 @@ def main() -> int:
                     help="v9 = the anchored two-stage prompt with CLIP-ranked descriptions; "
                          "figure2_v10 = one call returning the paper's Figure 2 object "
                          "(DL-103, metafind/data/annotate_v10.py)")
+    ap.add_argument("--retry-salt", type=int, default=0,
+                    help="figure2_v10 only: added to the sampled-retry seed and recorded, so a re-run "
+                         "over the previous run's quarantine draws differently")
     args = ap.parse_args()
     set_prompt_mode(args.prompt_mode)
+    if args.prompt_mode == "figure2_v10":
+        from metafind.data import annotate_v10
+        annotate_v10.RETRY_SALT = int(args.retry_salt)
     print(f"prompt mode {PROMPT_MODE}; contract {_CONTRACT_ID()}", flush=True)
 
     if args.arm:
