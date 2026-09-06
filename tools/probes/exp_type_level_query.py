@@ -133,13 +133,23 @@ def main() -> int:
             for i in range(0, len(sents), 256):
                 vecs.append(bb.encode_text(sents[i:i + 256]).float().cpu().numpy())
             texts[name] = np.concatenate(vecs)
-        images = {"own view": np.stack([emb(u, "views")[uid_seed(u) % 12] for u in q_uids]),
-                  "partner view": np.stack([emb(partner[u], "views")[uid_seed(partner[u]) % 12] for u in q_uids])}
+        def one_view(u):
+            v = emb(u, "views")                    # (n_views, D): 12 on the v6 corpus, 11 on v7
+            return v[uid_seed(u) % v.shape[0]]
+        images = {"own view": np.stack([one_view(u) for u in q_uids]),
+                  "partner view": np.stack([one_view(partner[u]) for u in q_uids])}
         # ULIP-2 / OpenShape per-object observations (extract_ulip2_query_feats.py): the target's OWN
         # Sketchfab thumbnail (CLIP feature), its Sketchfab name, BLIP / Azure captions -- all ViT-bigG.
         u2p = Path("/home/kyzen/metafind/metafind_data/outputs/_probe/ulip2_query_feats/ulip2_query_feats.npz")
+        covered = False
         if u2p.exists():
             z = np.load(u2p); row = {u: i for i, u in enumerate(z["uids"].tolist())}
+            missing = [u for u in q_uids if u not in row or partner[u] not in row]
+            covered = not missing
+            if missing:
+                print(f"  ULIP-2 feature cache lacks {len(missing)} of {len(q_uids)} query uids "
+                      f"(or their partners); thumbnail / caption rows skipped", flush=True)
+        if covered:
             idx = np.array([row[u] for u in q_uids])
             images["thumbnail(own)"] = z["thumbnail_feat"][idx].astype(np.float32)
             images["thumbnail(partner)"] = z["thumbnail_feat"][np.array([row[partner[u]] for u in q_uids])].astype(np.float32)
