@@ -77,14 +77,22 @@ def test_stripping_does_not_mutate_the_template():
 
 # --- camera layout --------------------------------------------------------
 
-def test_the_orbit_uses_n04s_constants_not_copies():
-    """[U-08b] "n04-compatible" has to be enforced by import, not by matching
-    numbers: a change to n04's elevation must move this side with it."""
-    import metafind.data.procthor_modalities as m
-    import metafind.data.renders as r
+def test_the_orbit_uses_the_live_renderers_constants_not_copies():
+    """[U-08b, BUILDER_VERSION 2] "n04-compatible" has to be enforced by import, not
+    by matching numbers -- and from the LIVE renderer (`render_blender`, v7), not the
+    retired pyrender module the v1 code imported (procthor_modalities.py header,
+    corrected 2026-09-03)."""
+    import math as _m
 
-    assert m.N_VIEWS is r.N_VIEWS
-    assert m.ORBIT_ELEVATION_DEG is r.ORBIT_ELEVATION_DEG
+    import metafind.data.procthor_modalities as m
+    import metafind.data.render_blender as rb
+
+    assert m.N_VIEWS is rb.N_VIEWS and rb.N_VIEWS == 11
+    assert m.ORBIT_ELEVATION_DEG is rb.ORBIT_ELEVATION_DEG
+    assert m.RESOLUTION is rb.RESOLUTION
+    assert m.PROJECTION == "perspective"
+    assert abs(m.RGB_FOV_DEG - _m.degrees(2 * _m.atan(16 / 35))) < 1e-9   # 35 mm lens, 32 mm sensor
+    assert abs(m.RGB_DISTANCE_FACTOR - 1.2 / 0.8) < 1e-12                # OpenShape framing
     assert len(orbit_camera_poses({"x": 0, "y": 0, "z": 0})) == N_VIEWS
 
 

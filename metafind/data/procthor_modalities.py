@@ -79,16 +79,31 @@ from pathlib import Path
 import numpy as np
 
 from metafind import paths, runlog
-from metafind.data.renders import (
+# [BUILDER_VERSION 2, DL-103 R6, DL-077 Q11 甲 "ProcTHOR rendering = the same protocol
+# as Objaverse"] The constants now come from the LIVE Objaverse renderer
+# (`render_blender`, renderer v7), not from the retired pyrender path: eleven equal
+# azimuths on one orbit 20 degrees above the horizon, 512 px, PERSPECTIVE. The
+# framing copies OpenShape's script, which our Objaverse renders use: the mesh is
+# scaled so its largest bounding-box extent is 0.8 and the camera sits 1.2 away
+# with a 35 mm lens on a 32 mm sensor -- i.e. distance = 1.5 x largest extent and a
+# 49.1-degree field of view. Same count, layout, projection, resolution and framing;
+# renderer (Unity vs Cycles), lighting and background (an opaque black skybox vs a
+# transparent alpha composited on black) differ and are recorded as such.
+from metafind.data.render_blender import (
+    CAMERA_DIST,
     N_VIEWS,
     ORBIT_ELEVATION_DEG,
-    PROJECTION,
     RESOLUTION,
 )
 from metafind.data.pointclouds import N_POINTS
 
 NODE = "n07b_procthor_asset_modalities"
-BUILDER_VERSION = 1
+BUILDER_VERSION = 2
+RENDER_PROTOCOL = "objaverse_renderer_v7_unified"
+PROJECTION = "perspective"
+RGB_FOV_DEG = math.degrees(2.0 * math.atan(32.0 / (2.0 * 35.0)))   # 35 mm lens, 32 mm sensor
+RGB_DISTANCE_FACTOR = CAMERA_DIST / 0.8                            # 1.2 / 0.8 = 1.5 x largest extent
+SKYBOX = "black"
 
 # The asset is lifted this far above the room floor so nothing else can enter
 # frame. 40 m is arbitrary and only has to exceed any room's extent; ProcTHOR
@@ -384,13 +399,14 @@ class ThorRenderer:
         largest = max(size.values())
         if largest <= 0:
             raise ValueError(f"{asset_id} reports a degenerate bounding box: {size}")
-        ortho = largest * ORTHO_MARGIN
+        ortho = largest * ORTHO_MARGIN   # kept in the record for comparison with v1
 
         frames = []
-        for pos, rot in orbit_camera_poses(centre):
+        # [BUILDER_VERSION 2] perspective RGB at OpenShape's framing, black skybox
+        for pos, rot in orbit_camera_poses(centre, radius=largest * RGB_DISTANCE_FACTOR):
             ev = self.controller.step(
                 action="AddThirdPartyCamera", position=pos, rotation=rot,
-                orthographic=True, orthographicSize=ortho, skyboxColor="white",
+                orthographic=False, fieldOfView=RGB_FOV_DEG, skyboxColor=SKYBOX,
             )
             if not ev.metadata["lastActionSuccess"]:
                 raise ValueError(f"RGB camera failed: {ev.metadata.get('errorMessage')}")
@@ -511,7 +527,14 @@ def _write_asset(asset_id: str, cap: dict, text: str,
         "image_protocol": {"n_views": N_VIEWS, "resolution": RESOLUTION,
                            "projection": PROJECTION,
                            "elevation_deg": ORBIT_ELEVATION_DEG,
-                           "orthographic_size": cap["ortho"]},
+                           "camera_layout": "metafind_eleven_azimuth_orbit",
+                           "fov_deg": RGB_FOV_DEG,
+                           "distance_factor": RGB_DISTANCE_FACTOR,
+                           "skybox": SKYBOX,
+                           "render_protocol": RENDER_PROTOCOL,
+                           "differs_from_objaverse": "Unity renderer and lighting; opaque black "
+                                                     "skybox instead of transparent alpha on black",
+                           "v1_orthographic_size": cap["ortho"]},
         "depth_protocol": {"projection": "perspective",
                            "fov_deg": DEPTH_FOV_DEG,
                            "distance_factor": DEPTH_DISTANCE_FACTOR,
