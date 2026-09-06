@@ -304,13 +304,23 @@ def build_context_graph(graph: dict, target_index: int, edge_dim: int,
     layer. That is not a zero-fill in the L1-SEMEDGE-NO-ZEROFILL sense, and the
     mask travelling beside the array is what keeps the distinction checkable.
     """
-    keep = [n for n in graph["nodes"] if n["index"] != target_index]
+    # [DL-103, scene_graphs BUILDER_VERSION 2] Under a room-unit graph the context is the
+    # target's ROOM minus the target (paper: room-level scenes). A target whose room could
+    # not be parsed gets no context, which encode_query treats as layout absent. Legacy
+    # house-unit graphs (builder_version 1, no `graph_unit`) keep the whole house, so
+    # earlier checkpoints and probes evaluate exactly as before.
+    if graph.get("graph_unit") == "room":
+        room = graph["nodes"][target_index].get("room_id")
+        keep = [n for n in graph["nodes"]
+                if n["index"] != target_index and room is not None and n.get("room_id") == room]
+    else:
+        keep = [n for n in graph["nodes"] if n["index"] != target_index]
     remap = {n["index"]: k for k, n in enumerate(keep)}
 
     pos = np.array([n["position"] for n in keep], dtype=np.float32)
     rows, cols, attrs, missing = [], [], [], []
     for i, j in graph["sem_edge_ids"]:
-        if i == target_index or j == target_index:
+        if i == target_index or j == target_index or i not in remap or j not in remap:
             continue
         ai = str(graph["nodes"][i]["asset_id"])
         aj = str(graph["nodes"][j]["asset_id"])

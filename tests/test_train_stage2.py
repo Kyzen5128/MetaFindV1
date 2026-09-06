@@ -340,3 +340,22 @@ def test_query_present_modes():
     assert all(m.shape == (1, 3) and m.any() for m in masks)
     rate = 1 - sum(m.float().mean().item() for m in masks) / len(masks)
     assert 0.15 < rate < 0.45          # ~30% absent, minus the at-least-one rule
+
+
+def test_room_unit_graph_limits_the_context_to_the_targets_room():
+    """[DL-103] The paper's scenes are single rooms; the context is the room, not the house."""
+    sem, text = data_bits()
+    g = graph()
+    g["graph_unit"] = "room"
+    for n in g["nodes"]:
+        n["room_id"] = "room|0" if n["index"] in (0, 2) else "room|1"
+    keep, pos, edge_index, _, _ = build_context_graph(g, 2, 4, sem, text)
+    assert [n["index"] for n in keep] == [0]
+    assert pos.shape == (1, 3)
+    assert edge_index.max() < len(keep) if edge_index.size else True
+
+
+def test_legacy_house_graph_keeps_the_whole_house():
+    sem, text = data_bits()
+    keep, *_ = build_context_graph(graph(), 2, 4, sem, text)
+    assert [n["index"] for n in keep] == [0, 1, 3]

@@ -69,7 +69,18 @@ import numpy as np
 from metafind import paths, runlog
 
 NODE = "n07_scene_graphs"
-BUILDER_VERSION = 1
+# [BUILDER_VERSION 2, DL-103 second check, ESSGNN reviewer MAJOR] The paper's graph
+# unit is the ROOM: "layout-aware room-level datasets", "Each room configuration
+# provides precise spatial coordinates", "our experiments currently use single-room
+# indoor scenes" (2methdology.tex:16,28; 3experiments.tex:8). v1 built one graph per
+# house and ran kNN over the whole house, so an "adjacent" pair could sit in two rooms
+# through a wall. v2 keeps one sidecar per house (the dataset's unit of storage) but
+# draws adjacency only WITHIN a room, and Stage 2 takes the target's room as the
+# context (stage2.build_context_graph). Support edges were within a room already:
+# children inherit their parent's room. Nodes whose room cannot be parsed get no
+# adjacency edges (counted in `n_nodes_without_room`).
+BUILDER_VERSION = 2
+GRAPH_UNIT = "room"
 
 # [U-05] The adjacency criterion. Travels with every artifact.
 ADJACENCY_MODE = "knn"
@@ -218,7 +229,18 @@ def build_scene_graph(house: dict, house_id: str) -> dict:
 
     # [U-19] Symmetric. Our convention, pinned by L1-SCENE-SUPPORT.
     support = sorted({(min(a, b), max(a, b)) for a, b in support_directed})
-    adjacency = [p for p in _knn_pairs(positions, ADJACENCY_K) if p not in set(support)]
+    # [BUILDER_VERSION 2] kNN inside each room, never across rooms.
+    by_room: dict[str, list[int]] = {}
+    for n in nodes:
+        if n["room_id"] is not None:
+            by_room.setdefault(n["room_id"], []).append(n["index"])
+    adjacency_set: set[tuple[int, int]] = set()
+    for members in by_room.values():
+        if len(members) < 2:
+            continue
+        local = _knn_pairs(positions[members], ADJACENCY_K)
+        adjacency_set |= {(min(members[a], members[b]), max(members[a], members[b])) for a, b in local}
+    adjacency = sorted(p for p in adjacency_set if p not in set(support))
 
     # [U-06] Semantic candidates are the physical pairs. n08 fills in the
     # sentence and the embedding; the identity of a semantic edge at this stage
@@ -229,14 +251,17 @@ def build_scene_graph(house: dict, house_id: str) -> dict:
     return {
         "house_id": house_id,
         "builder_version": BUILDER_VERSION,
+        "graph_unit": GRAPH_UNIT,
         "room_types": room_type,
+        "n_rooms_with_nodes": len(by_room),
+        "n_nodes_without_room": sum(1 for n in nodes if n["room_id"] is None),
         "nodes": nodes,
         "positions": positions.tolist(),
         "phys_edges": {
             "support": [list(p) for p in support],
             "adjacency": [list(p) for p in adjacency],
         },
-        "adjacency_criterion": {"mode": ADJACENCY_MODE, "k": ADJACENCY_K},
+        "adjacency_criterion": {"mode": ADJACENCY_MODE, "k": ADJACENCY_K, "scope": GRAPH_UNIT},
         "sem_edge_ids": [list(p) for p in sem_edge_ids],
     }
 

@@ -221,3 +221,29 @@ def test_a_house_missing_a_required_field_raises(missing):
 def test_a_house_with_no_objects_raises():
     with pytest.raises(KeyError):
         build_scene_graph({"rooms": [], "objects": []}, "h0")
+
+
+# --- room-level graphs [BUILDER_VERSION 2, DL-103] ---------------------------
+
+def _two_room_house():
+    def obj(oid, asset, x, z):
+        return {"id": oid, "assetId": asset, "position": {"x": x, "y": 0.0, "z": z},
+                "rotation": {"x": 0, "y": 0, "z": 0}, "children": []}
+    return {
+        "rooms": [{"id": "room|0", "roomType": "Kitchen"}, {"id": "room|1", "roomType": "Bedroom"}],
+        "objects": [obj("Fridge|0|0", "Fridge_1", 0.0, 0.0), obj("Toaster|0|1", "Toaster_1", 0.5, 0.0),
+                    obj("Bed|1|0", "Bed_1", 0.6, 0.0), obj("Lamp|1|1", "Lamp_1", 1.0, 0.0)],
+    }
+
+
+def test_adjacency_never_crosses_a_room_wall():
+    g = build_scene_graph(_two_room_house(), "h2")
+    room_of = {n["index"]: n["room_id"] for n in g["nodes"]}
+    assert g["graph_unit"] == "room" and g["builder_version"] == 2
+    assert g["phys_edges"]["adjacency"], "objects inside a room are still neighbours"
+    for i, j in g["phys_edges"]["adjacency"]:
+        assert room_of[i] == room_of[j], (i, j)
+    # the fridge (room 0) and the bed (room 1) are 0.6 apart, closer than fridge-toaster
+    # would be to anything in the other room; under v1 they were kNN neighbours
+    assert [0, 2] not in g["phys_edges"]["adjacency"]
+    assert g["adjacency_criterion"]["scope"] == "room" and g["n_rooms_with_nodes"] == 2
