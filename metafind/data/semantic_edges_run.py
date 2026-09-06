@@ -172,7 +172,9 @@ def collect_pairs(text_map: dict, limit: int | None = None) -> dict[str, tuple[s
             tj = text_map.get(str(nodes[j]["asset_id"]))
             if ti is None or tj is None:
                 continue
-            a, b = sorted((ti["text"], tj["text"]))
+            # [DL-103 R6] the relation prompt reads the sentence form when the map carries one
+            # (`relation_text`, tools/procthor_metadata_text.py); the encoder text stays `text`.
+            a, b = sorted((ti.get("relation_text") or ti["text"], tj.get("relation_text") or tj["text"]))
             pairs.setdefault(
                 cache_key(a, b, PROMPT_VERSION, LLM_MODEL, TEXT_ENCODER_VERSION),
                 (a, b),
