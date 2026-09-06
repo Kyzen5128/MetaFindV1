@@ -290,7 +290,7 @@ def build_record(fields: dict[str, Any], *, uid: str, model_id: str, attempt: in
 def annotate_one(ann, uid: str, render_rec: dict, *, lvis_category: str, proportions,
                  preloaded_images=None) -> tuple[dict | None, dict | None]:
     """One asset under v10. Returns ``(record, quarantine_entry)`` -- exactly one is None."""
-    from metafind.data.annotate_run import SharedViewPrefix, _is_cuda_oom, _release_cuda
+    from metafind.data.annotate_run import _is_cuda_oom, _release_cuda
     from metafind.data.pointclouds import uid_seed
 
     views = render_rec["view_paths"]
@@ -301,12 +301,15 @@ def annotate_one(ann, uid: str, render_rec: dict, *, lvis_category: str, proport
                                         f"v10 requires {REQUIRED_N_VIEWS} views from renderer v{REQUIRED_RENDERER_VERSION}"),
                       "attempts": 0, "traceback": ""}
     prompt = build_prompt(len(views), lvis_category)
-    sv = SharedViewPrefix(ann, views, [prompt], preloaded_images=preloaded_images)
-    prefix_reuse = sv.ok
+    # No SharedViewPrefix here. It exists to reuse one prefill across v9's five description
+    # draws plus the structured call; v10 makes ONE call per asset, so there is nothing to
+    # share -- and measured on the 2026-09-06 smoke, the cached-prefix path returned malformed
+    # JSON on the first call of every asset (plain `generate` returned valid JSON first time).
+    prefix_reuse = False
 
     def gen(p, **kw):
         try:
-            return sv.generate(p, **kw) if sv.ok else ann.generate(views, p, **kw)
+            return ann.generate(views, p, **kw)
         except Exception as exc:  # noqa: BLE001 -- an OOM must free the card before the next try
             if _is_cuda_oom(exc):
                 _release_cuda()
