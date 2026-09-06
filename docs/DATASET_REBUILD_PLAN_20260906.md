@@ -54,8 +54,8 @@ R2  標註 v10       gemma，11 張一次 prefill，Figure 2 十三欄，一次�
 R3  點雲           不動
 R4  編碼 v10       文字 = figure2_json；圖 = 11 張平均；約 2～3 小時                      GPU
 R5  切分           80/20 seed 20260816，資產層級
-R6  ProcTHOR 統一  AI2-THOR 重渲 1,467（小時級）→ gemma 描述（2.5 h）→ 物件文字 → 語意邊（35 分）
-                   → 節點向量 → Stage 2 索引（10 分）                                     GPU（可與 R2 交錯）
+R6  ProcTHOR 統一  房間層級場景圖（✔ 12,000 間）→ AI2-THOR 統一協定重渲 1,467（透視、49.1°、黑底；跑中）→ 上游 metadata 做成 Figure 2 記錄（✔）
+                   → gemma 一句描述補進 description → 物件文字 → 語意邊（型別層級句子，93 句）→ 節點向量 → Stage 2 索引    GPU（Stage 1 之後）
 R7  Stage 1        論文字面線（DL-077 Q4／DL-079 Q5）：兩塔同一筆紀錄、query 30% 遮罩、
                    影像＝11 張平均（兩側同一向量）；Point-BERT 微調、CLIP 凍結；lr 1e-4、10 epoch、
                    batch 64、τ 0.5、單向 InfoNCE；在 20% 上選模                          GPU 數小時
@@ -93,3 +93,6 @@ R9  Table 1        兩列（Stage 1 頭／Stage 2 頭 layout 不在）、20% →
 ULIP-2 側：BLOCKER 1（編碼器拒收超長文字 → 改成 figure2_json 模板下截斷並記錄）、MAJOR 2（JSON 數字格式 `30.0`→`30`；v10 沒檢查 11 張／renderer v7 → 加守門）、MINOR 6（synset 存在性、重試 salt、類別字數、描述下限、materials 超過 6 拒收、traceback）、INFO 4（上游渲染細節、影像聚合的上游做法、CLIP 凍結的標註、盲標註）。
 ESSGNN 側：MAJOR 1（場景圖單位應為房間）、MINOR 5（兩座 encoder 凍結的措辭、h⁰、節點文字格式未定、ProcTHOR metadata 其實存在、統一渲染路徑未實作）、INFO 4。
 全部處置寫在 ledger DL-103「Second check」條。
+
+- 15:3x–15:5x R6 準備：房間層級場景圖（BUILDER_VERSION 2，12,000 間，每個節點都有房間）；ProcTHOR 上游 metadata（asset-database、placement-annotations）→ 1,467 件 Figure 2 記錄（mass 為 null、description 待 gemma）；ProcTHOR 渲染改成 Objaverse 同協定（透視、49.13°、距離 1.5×最大邊、11 張、20°、512、黑天空盒），全量重渲跑中；`~/.ai2thor` 指到的 Unity build 在 9/5 隨 archive 被刪，改放 NVMe 重抓。
+- 排隊：R2（跑中，約 1.5 天）→ Stage 1 鏈（第一列）→ Stage 2 鏈（第二列）。
