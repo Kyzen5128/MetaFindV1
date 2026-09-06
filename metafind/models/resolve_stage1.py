@@ -135,7 +135,81 @@ TEXT_TEMPLATES = {
     # short "Platform Bed (size: ...)". Serialised by `figure2_json_string`,
     # not by str.format; the sentinel keeps the template registry one table.
     "figure2_json": "__json__",
+    # `v3_fit` [KYZEN 2026-09-06 「你沒限制的話那你不就一堆標註等於沒用」]: the v2_cm
+    # sentence with the DESCRIPTION trimmed at a word boundary until the whole string
+    # is within CLIP's 77 true tokens (SOT + BPE + EOT). Category, materials, the
+    # three dimensions and the placement clause always reach the encoder; only the
+    # description's tail is cut, deterministically, by `fit_to_context`. The
+    # 160-character cap of v2_cm does not apply -- the token budget replaces it.
+    # Serialised by `serialize_fitted`; the sentinel keeps the registry one table.
+    "v3_fit": "__fit__",
 }
+FIT_CONTEXT_TOKENS = 77          # open_clip context length; the tail is silently dropped past it
+FIT_SENTENCE = ("{description} {category} made of {materials}, "
+                "roughly {width} by {length} by {height} centimetres, {placement}.")
+FIT_SENTENCE_NO_MATERIALS = ("{description} {category}, "
+                             "roughly {width} by {length} by {height} centimetres, {placement}.")
+_FIT_TOKENIZER = None
+
+
+def true_token_count(text: str) -> int:
+    """SOT + BPE + EOT with open_clip's own tokenizer, unpadded and untruncated.
+    (Same arithmetic as encode_text_image.true_token_count; duplicated here because
+    that module imports this one.)"""
+    global _FIT_TOKENIZER
+    if _FIT_TOKENIZER is None:
+        from open_clip.tokenizer import SimpleTokenizer
+        _FIT_TOKENIZER = SimpleTokenizer()
+    return len(_FIT_TOKENIZER.encode(text)) + 2
+
+
+def fit_to_context(build, n_words: int, budget: int = FIT_CONTEXT_TOKENS) -> str:
+    """The longest prefix of the description (in whole words) whose sentence fits.
+
+    `build(k)` returns the full sentence with the first `k` description words. Token
+    count is non-decreasing in k, so a binary search finds the largest fitting k;
+    a final linear back-off guards the rare BPE merge that breaks monotonicity.
+    Raises when even k = 0 does not fit: the structured fields alone are over budget,
+    which is a malformed annotation, not something to cut further in silence.
+    """
+    if true_token_count(build(n_words)) <= budget:
+        return build(n_words)
+    lo, hi = 0, n_words
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if true_token_count(build(mid)) <= budget:
+            lo = mid
+        else:
+            hi = mid - 1
+    while lo > 0 and true_token_count(build(lo)) > budget:
+        lo -= 1
+    out = build(lo)
+    if true_token_count(out) > budget:
+        raise ValueError(f"the structured fields alone are {true_token_count(out)} tokens, "
+                         f"over the {budget}-token context; the annotation is malformed")
+    return out
+
+
+def serialize_fitted(annotation: dict) -> str:
+    """`v3_fit`: v2_cm's sentence, description trimmed to fit 77 tokens."""
+    materials = ", ".join((annotation.get("materials") or [])[:MAX_MATERIALS])
+    words = (annotation.get("description") or "").strip().split()
+    fields = dict(
+        category=_capitalise(_cap(annotation["category"], MAX_CATEGORY_CHARS).rstrip(".")),
+        materials=materials,
+        width=_dim(annotation["width"]), length=_dim(annotation["length"]),
+        height=_dim(annotation["height"]),
+        placement=placement_phrase(annotation),
+    )
+    sentence = FIT_SENTENCE if materials else FIT_SENTENCE_NO_MATERIALS
+
+    def build(k: int) -> str:
+        desc = " ".join(words[:k]).rstrip(" ,;:")
+        if desc and not desc.endswith("."):
+            desc += "."
+        return sentence.format(description=desc, **fields).strip()
+
+    return fit_to_context(build, len(words))
 FIGURE2_JSON_KEYS = ("category", "synset", "width", "length", "height", "volume",
                      "mass", "description", "materials",
                      "onCeiling", "onWall", "onFloor", "onObject")
@@ -650,6 +724,8 @@ def serialize_annotation(annotation: dict, template: str | None = None) -> str:
     # disappears the first time someone calls this function from somewhere else.
     if (template or TEXT_TEMPLATE) == "__json__":
         return figure2_json_string(annotation)
+    if (template or TEXT_TEMPLATE) == "__fit__":
+        return serialize_fitted(annotation)
     if not annotation["materials"]:
         raise ValueError("`materials` is empty; the serialized string would "
                          "be malformed rather than merely short")
@@ -761,9 +837,15 @@ def serialization_contract() -> dict:
     the constants cannot cover the CODE -- _dim(), _capitalise(), _cap() and
     placement_phrase() are logic, not values.
     """
-    return {
+    fit = ({"fit_context_tokens": FIT_CONTEXT_TOKENS, "fit_sentence": FIT_SENTENCE,
+            "fit_sentence_no_materials": FIT_SENTENCE_NO_MATERIALS,
+            "fit_rule": "description trimmed at a word boundary until true tokens <= budget; "
+                        "the 160-character cap does not apply"}
+           if TEXT_TEMPLATE == "__fit__" else {})   # only the new family carries these keys,
+    return {                                         # so no existing identity moves
         "family": TEXT_SERIALIZATION_FAMILY,
         "template": TEXT_TEMPLATE,
+        **fit,
         "max_description_chars": MAX_DESCRIPTION_CHARS,
         "max_category_chars": MAX_CATEGORY_CHARS,
         "max_materials": MAX_MATERIALS,

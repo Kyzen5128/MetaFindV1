@@ -26,8 +26,8 @@ Objaverse gallery text (`figure2_json`):
     onObject   not onFloor and not onWall (it sits on a receptacle)     INFERENCE
 
 Writes `outputs/procthor_asset_annotations.json` and rewrites
-`outputs/procthor_object_text.json` with, per assetId, `text` (the figure2_json string,
-what the text tower encodes) and `relation_text` (one TYPE-level sentence -- category and placement -- what the
+`outputs/procthor_object_text.json` with, per assetId, `text` (the v3_fit sentence within 77 tokens,
+what the text tower encodes; `text_figure2_json` kept for the literal arm) and `relation_text` (one TYPE-level sentence -- category and placement -- what the
 relation-sentence LLM prompt sees; instance details would multiply the distinct pairs). `--captions <json>` merges gemma descriptions.
 """
 from __future__ import annotations
@@ -40,7 +40,7 @@ from pathlib import Path
 
 from metafind import paths
 from metafind.data.annotate import resolve_synset
-from metafind.models.resolve_stage1 import figure2_json_string
+from metafind.models.resolve_stage1 import figure2_json_string, serialize_fitted
 
 DB = Path("/home/kyzen/upstream/procthor/procthor/databases")
 MATERIAL_WORDS = ("metal", "wood", "glass", "plastic", "fabric", "cloth", "marble", "ceramic",
@@ -133,7 +133,11 @@ def main() -> int:
     captions = json.loads(args.captions.read_text()) if args.captions else None
     recs = build_records(old.keys(), captions)
     db_sha = hashlib.sha256((DB / "asset-database.json").read_bytes() + (DB / "placement-annotations.json").read_bytes()).hexdigest()[:16]
-    new_map = {aid: {"text": figure2_json_string(r), "relation_text": relation_sentence(r),
+    # `text` is what the text tower encodes: the SAME construction as the Objaverse gallery
+    # text (`v3_fit`: the sentence within 77 tokens; Kyzen 2026-09-06). The Figure-2 JSON
+    # string is kept beside it for the literal-reading arm.
+    new_map = {aid: {"text": serialize_fitted(r), "text_figure2_json": figure2_json_string(r),
+                     "relation_text": relation_sentence(r),
                      "source": f"procthor_metadata_v{SOURCE_VERSION}@{db_sha}"
                                + ("+gemma_caption" if r.get("description") else "")}
                for aid, r in recs.items()}

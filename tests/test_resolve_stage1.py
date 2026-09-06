@@ -564,3 +564,57 @@ def test_an_explicit_override_can_still_reach_the_temperature():
                                          "learnable_temperature": True})
     assert h["values"]["init_temperature"] == 0.07
     assert h["sha256"] != build_hyperparameters("tester")["sha256"]
+
+
+# --- v3_fit: the sentence trimmed to CLIP's 77 tokens [KYZEN 2026-09-06] --------------
+
+def _fit_annotation(n_words: int) -> dict:
+    return {"category": "table lamp", "description": " ".join(["ornate"] * n_words) + ".",
+            "materials": ["ceramic", "fabric", "metal", "glass"], "width": 35.0, "length": 35.0,
+            "height": 60.0, "onCeiling": False, "onWall": False, "onFloor": False, "onObject": True}
+
+
+def test_v3_fit_keeps_every_structured_field_and_stays_within_77_tokens():
+    from metafind.models.resolve_stage1 import serialize_annotation, true_token_count
+    s = serialize_annotation(_fit_annotation(120), template="__fit__")
+    assert true_token_count(s) <= 77
+    assert s.endswith("Table lamp made of ceramic, fabric, metal, roughly 35 by 35 by 60 centimetres, "
+                      "typically placed on top of other objects.")
+    assert s.startswith("ornate ornate")
+    assert ". Table lamp" in s                      # the trimmed description still ends with a period
+
+
+def test_v3_fit_leaves_a_short_description_untouched():
+    from metafind.models.resolve_stage1 import serialize_annotation, TEXT_TEMPLATES
+    ann = _fit_annotation(12)
+    fitted = serialize_annotation(ann, template="__fit__")
+    plain = serialize_annotation(ann, template=TEXT_TEMPLATES["v2_cm"])
+    assert fitted == plain
+
+
+def test_v3_fit_is_deterministic_and_trims_at_word_boundaries():
+    from metafind.models.resolve_stage1 import serialize_annotation, true_token_count
+    ann = _fit_annotation(200)
+    a, b = serialize_annotation(ann, template="__fit__"), serialize_annotation(ann, template="__fit__")
+    assert a == b
+    head = a.split(" Table lamp")[0]
+    assert set(head.rstrip(".").split()) == {"ornate"}
+    # one more word would not fit
+    assert true_token_count(a) <= 77 < true_token_count(a.replace(". Table lamp", " ornate. Table lamp", 1))
+
+
+def test_v3_fit_without_materials_drops_the_made_of_clause():
+    from metafind.models.resolve_stage1 import serialize_annotation
+    ann = _fit_annotation(5); ann["materials"] = []
+    s = serialize_annotation(ann, template="__fit__")
+    assert "made of" not in s and "Table lamp, roughly 35 by 35 by 60 centimetres" in s
+
+
+def test_v3_fit_refuses_when_the_structured_fields_alone_overflow():
+    from metafind.models.resolve_stage1 import serialize_annotation
+    import pytest as _pt
+    ann = _fit_annotation(3)
+    # three absurd multi-word "materials": the tail alone is well over budget
+    ann["materials"] = [" ".join(f"material{i}" for i in range(40))] * 3
+    with _pt.raises(ValueError, match="structured fields alone"):
+        serialize_annotation(ann, template="__fit__")
