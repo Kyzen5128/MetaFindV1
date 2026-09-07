@@ -1,0 +1,61 @@
+{
+  "command": [
+    "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+    "-m",
+    "pytest",
+    "tests/pipeline/test_paper_chain_failure.py",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "--basetemp",
+    "/tmp/metafind_chain_wait_after_20260908"
+  ],
+  "environment": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    "CUDA_VISIBLE_DEVICES": "",
+    "HIP_VISIBLE_DEVICES": "",
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "exit_code": 0,
+  "elapsed_seconds": 19.00031805038452,
+  "source_sha256": {
+    "tools/chain_paper_stage1.sh": "0f14b536074703f8afdaf6c686b58519ac8ea170af97581b6e12b84c8f6c02d9",
+    "tools/chain_paper_stage2.sh": "f90676478ba09bf73dc8b080daa596e9e2e892941cef48483d273fd9a4da90a7",
+    "tests/pipeline/test_paper_chain_failure.py": "25ba34d11ba7a4af1535eeaf92b7d2f4a0bd95003eb6d978f09a2ab8e1ecc642"
+  },
+  "source_unchanged": true,
+  "log_sha256": "2eddb02510599961a7f01efd8c4608d080445ed4c0547f015f7d079f46aa477d",
+  "checks": [
+    {
+      "command": [
+        "bash",
+        "-n",
+        "tools/chain_paper_stage1.sh",
+        "tools/chain_paper_stage2.sh"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "tools/chain_paper_stage1.sh",
+        "tools/chain_paper_stage2.sh",
+        "tests/pipeline/test_paper_chain_failure.py"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "scope": "Repository shell wait regression plus existing producer-failure/archive/manual-exclusion tests; all test roots isolated; no live deployment."
+}

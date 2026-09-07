@@ -1,0 +1,1 @@
+{"decision": "fixture explicit rejection", "excluded_total": 1, "groups": {"manual_review_rejected": {"n": 1, "uids": [{"uid": "u000", "model": "fixture"}]}}}

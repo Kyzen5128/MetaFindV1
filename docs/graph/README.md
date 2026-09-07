@@ -272,7 +272,7 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 
 目前可執行節點、producer→artifact→consumer 與界線統一見 [DATA_FLOW](../DATA_FLOW.md)。原先此處的逐節點狀態表停留在 2026-08-30，與後來的真實 Stage 1／Stage 2／場景執行互相矛盾，已於 2026-09-08 移除；歷史 bytes 可由 Git `de6635b` 查回，原始驗證紀錄仍保留。標記數只表示來源中有宣告，不認證整條 formal graph 已實作或跑完。
 
-1182 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、
+1193 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、
 場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態。部分測試會執行真實 runner 的小型路徑並替換模型／資料邊界；不等於對正式 corpus 完整執行節點，亦不證明 paper fidelity。分組、資料依賴與實際執行命令見 [tests/README.md](../../tests/README.md)。
 （1182 = `tests/**/test_*.py` 裡頂層 `^def test_` 的數量，由 `tools/check_graph.py` 遞迴掃描並比對；不含 class method，亦不等於 pytest 展開參數後的案例數。）
 舊「492 functions／614 cases」不是目前計數。最新完整 CPU suite 的結果、排除範圍與限制見 [資料邊界審查](../audit/REPRODUCTION_CORPUS_REVIEW_20260908.md)，不以函式數推算執行案例數。

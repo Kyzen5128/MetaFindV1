@@ -1,0 +1,860 @@
+- code_dirty: true
+  code_revision: f0d0306c060aebc66ac576cd1d680048829e4840
+  criterion: "object-level leakage_count == 0 AND admitted union quarantined union\
+    \ manual_excluded == original manifest AND admitted, quarantined, manual_excluded\
+    \ are pairwise disjoint AND manual_excluded contains only approved manual_review_rejected\
+    \ UIDs AND quarantined == unique real object failure UIDs minus admitted minus\
+    \ manual_excluded AND quarantine_rate == len(quarantined) / len(original manifest)\
+    \ <= 0.02\n    -- manual_excluded_rate and total_excluded_rate are reported separately;\n\
+    \    the original manifest and the existing quarantine ceiling are unchanged\n\
+    AND both evaluation protocols are defined with explicit query and gallery scopes\
+    \ AND stage1_encoding_protocol.status == \"resolved\", with text_serialization,\n\
+    \    image_aggregation, paper_clip_train_scope, actual_clip_train_scope and\n\
+    \    missing_modality_representation each naming a choice\nAND paper_clip_train_scope_basis\
+    \ is non-empty AND paper_clip_train_scope_confidence in {low, moderate, high}\n\
+    \    -- without these two, a protocol reading `paper_clip_train_scope: frozen`\n\
+    \    with an empty basis PASSES, and n21 reaches the report with a decision\n\
+    \    it cannot cite. The scope alone does not say why.\n    (U-15, U-14, U-34\
+    \ x2, U-11)\n    [CORRECTED] This listed three fields after the channel grew to\
+    \ five.\n    A protocol missing paper_clip_train_scope or\n    missing_modality_representation\
+    \ therefore PASSED the gate and was\n    then rejected by Stage1RuntimeConfig.from_protocols.\
+    \ Failing closed\n    at the executor is right, but a gate that says PASS on something\
+    \ the\n    executor refuses is not a barrier -- it is a second opinion nobody\n\
+    \    asked for.\nAND stage1_protocol.status == \"resolved\", with fusion, tower_sharing,\n\
+    \    allow_all_masked, similarity and hyperparameter_config_hash each\n    naming\
+    \ a choice (U-13, U-16, U-23, U-24, U-22)\nAND stage1_hyperparameters.sha256 ==\
+    \ stage1_protocol.hyperparameter_config_hash,\n    and stage1_hyperparameters.values\
+    \ names every field of U-22\n    (optimizer, learning_rate, weight_decay, scheduler,\
+    \ batch_size,\n     epochs, p_mask, init_temperature, learnable_temperature,\n\
+    \     max_logit_scale, seed) -- presence of the hash is not enough,\n    because\
+    \ a hash nothing dereferences leaves the run on library\n    defaults. [CORRECTED]\
+    \ This clause used to demand a dereference G3 had\n    no channel to perform:\
+    \ the artifact existed only as a dict passed\n    into Python from outside the\
+    \ graph.\nAND stage1_hyperparameters.values.p_mask == 0.30 unless the run is a\n\
+    \    declared Table 3 modality-dropout variant\n    (paper 2.6 fixes 30%; Table\
+    \ 3 ablates 10% and 50%. Carrying p_mask\n     in the U-22 artifact made a paper-stated\
+    \ constant look like one of\n     the values the paper omits, so an artifact saying\
+    \ 0.50 would hash\n     correctly and silently run the ablation as the main line.)"
+  gate_class: G-INVALID
+  gate_id: G3_object_corpus
+  gate_source_sha256: 29934b446dbd6d3bb516094c4bab9e034d7aa783cc603eb4b0e15a1c2a6e834f
+  inputs:
+    annotation_exclusions:
+      bytes: 17391
+      path: /home/kyzen/metafind/metafind_data/outputs/annotation_exclusions.json
+      sha256: 39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058
+    approved_manual_decision:
+      bytes: 17391
+      path: /home/kyzen/MetaFindV1/workflow/annotation_exclusions_20260828.json
+      sha256: 39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058
+    eval_protocols:
+      bytes: 983
+      path: /home/kyzen/metafind/metafind_data/outputs/eval_protocols.json
+      sha256: 753591cad0fd4aa48c7b0a3075fba289f13e2d86fe06db98db8722290494e9d2
+    manifest:
+      bytes: 4052438
+      path: /home/kyzen/metafind/metafind_data/datasets/objaverse-lvis/lvis.json
+      sha256: ba1bb191e1d98252e19e59aa18185ea46b83d9955b28ba895133536974e8bf9f
+    quarantine_log_directory:
+      files:
+      - /home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n04_render_views.jsonl
+      - /home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n04_render_views.v5_intel.jsonl
+      - /home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n05_annotate.jsonl
+      - /home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n06_encode_text_image.jsonl
+      - /home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n07b_procthor_asset_modalities.jsonl
+      path: /home/kyzen/metafind/metafind_data/outputs/logs
+    quarantine_logs:
+    - bytes: 1037179
+      path: /home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n04_render_views.jsonl
+      sha256: 217d0667b9f63291dc3ce7c385b6d92d7f41f4c1d33019f27325fbcdae15aaca
+    - bytes: 74794983
+      path: /home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n04_render_views.v5_intel.jsonl
+      sha256: c2aabc1047f27e9ab31964d57b4bbc9258c44a3b57e6d783d9baef614e3223d8
+    - bytes: 490545
+      path: /home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n05_annotate.jsonl
+      sha256: c532adea7b0dfadb7a9f389cec033e3f7dcd82bfbfca045f9ec4f0e7459c9097
+    - bytes: 1768
+      path: /home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n06_encode_text_image.jsonl
+      sha256: 9e04f7ea3f39619a94775015146d4724d62aa437181c50ed709684045e1a6917
+    - bytes: 15218
+      path: /home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n07b_procthor_asset_modalities.jsonl
+      sha256: f683927ce648571433885c65825e834b64be6d04c2811a8dd4a556e98bc627da
+    specification:
+      path: /home/kyzen/MetaFindV1/docs/graph/validation_plan.yaml
+      sha256: e845d4e54df6789210af408a4773e605f2cd32f49d7cc58ba024f2f8a967d790
+    splits:
+      bytes: 4934923
+      path: /home/kyzen/metafind/metafind_data/outputs/splits.json
+      sha256: c03e898f74f612ceedf27090ad2175a507e6d0b2455faa873956e7059ce9c14b
+    stage1_encoding_protocol:
+      bytes: 5795
+      path: /home/kyzen/metafind/metafind_data/outputs/stage1_encoding_protocol.json
+      sha256: e71294a69bcbb240ad9c08737f7fd50ba650f105a0fb7a4d258b2281b4a6e0b9
+    stage1_hyperparameters:
+      bytes: 979
+      path: /home/kyzen/metafind/metafind_data/outputs/stage1_hyperparameters.json
+      sha256: b1ba34f745b1d6e6e7d717625c3bb4917c5af5c97b3745e7d87f29fa6ebd00fe
+    stage1_protocol:
+      bytes: 560
+      path: /home/kyzen/metafind/metafind_data/outputs/stage1_protocol.json
+      sha256: e322699e769ed4a9ea49b3758d2b6a47e34e62912e319678f39355353bbcfce6
+  is_terminal: true
+  observed:
+    accounting:
+      admitted_count: 45692
+      excluded_but_admitted:
+        count: 0
+        examples: []
+        sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+      manifest_count: 46052
+      manual_excluded:
+        count: 21
+        examples:
+        - 17a8134052ff47778a21cd3efcfbe916
+        - 1864864213974c57aa9eb55294a39c33
+        - 1c5a695a8bed40c2a6742f84210542f4
+        - 4179ed636e2f4d47bb82691f7f536e84
+        - 44b7cff533d04b0ea43db6afd6e67efa
+        - 49db5a9fabb54afc975c75a24f32ede1
+        - 5a5804daaa9345f48058b4b60d7a2da8
+        - 721bb93d169a4d5f9e8dd15ad45a367f
+        - 848aa81f73364d2ab0bd39c5b67eddbc
+        - 89cee4a742ef47df9769b8bc947e0d61
+        sha256: 0beff357914c84324901f66bbcc9b8d89cdc648d364fc68ca7c604ec2252a73c
+      manual_excluded_count: 21
+      manual_excluded_rate: 0.0004560062538000521
+      missing:
+        count: 0
+        examples: []
+        sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+      pairwise_disjoint: true
+      quarantine_limit: 0.02
+      quarantine_rate: 0.007361243811343699
+      quarantined_count: 339
+      set_conservation: true
+      total_excluded_rate: 0.007817250065143751
+      unexpected:
+        count: 0
+        examples: []
+        sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+      unexplained_missing:
+        count: 0
+        examples: []
+        sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    admitted:
+      count: 45692
+      examples:
+      - 000074a334c541878360457c672b6c2e
+      - 0000ecca9a234cae994be239f6fec552
+      - 00010d9634f645859d2e252d189b31d5
+      - 0002064ef02e46f9a10b4bff10bae805
+      - 0002c6eafa154e8bb08ebafb715a8d46
+      - 0002e50309b44e409c96f440202d90b3
+      - 0009a51366fb45e2876715bde6a574b7
+      - 000a00944e294f7a94f95d420fdd45eb
+      - 000a3d9fa4ff4c888e71e698694eb0b0
+      - 000a82b4e6bf4e909fbe5a3b0e6d67dc
+      sha256: f318edf33d7185d013d39edee8c3eb7475004cc26df8d60c924b7757d9893dee
+    annotation_exclusions:
+      accounting_decision_date: '2026-09-08'
+      count: 332
+      decision: "\u901921\u500B \u8DDF \u5931\u6557\u7684 311 \u5168\u90E8\u522A\u6389\
+        \ \u5176\u4ED6\u6240\u6709\u63A5\u53D7\u63A1\u7528\u6A19\u8A3B\u7D50\u679C"
+      examples:
+      - 01ad91221fed407b80184c0e28526418
+      - 0325e0b8a1654b2dba849b201e5c6ebe
+      - 06a5ae799acf4af1846b1d4b8cea20c8
+      - 0725648438b741498c2ee8260eb6e899
+      - 0879dae83dea444d97b6bbd99ce627b7
+      - 0915a9de42a040b39a570ad091021527
+      - 0927a6111a2f4da9a6483df927a6a89e
+      - 09e48a15470a42dfa9c176811b839b2e
+      - 0a135fff072846f2b27a8152dbd63eb9
+      - 0af4f2b80dce4b6ab6d6823acb124582
+      formal_accounting: A union Q union E = M; Q = true failure UIDs - A - E
+      historical_n05_ledger:
+        count: 311
+        examples:
+        - 01ad91221fed407b80184c0e28526418
+        - 0325e0b8a1654b2dba849b201e5c6ebe
+        - 06a5ae799acf4af1846b1d4b8cea20c8
+        - 0725648438b741498c2ee8260eb6e899
+        - 0879dae83dea444d97b6bbd99ce627b7
+        - 0915a9de42a040b39a570ad091021527
+        - 0927a6111a2f4da9a6483df927a6a89e
+        - 09e48a15470a42dfa9c176811b839b2e
+        - 0a135fff072846f2b27a8152dbd63eb9
+        - 0af4f2b80dce4b6ab6d6823acb124582
+        sha256: 6a13efd25f57d0f8a78e7affcff52eaf6f52262071b7b80c7afaf6b79269c9af
+      manual_count: 21
+      manual_group: manual_review_rejected
+      manual_uids:
+      - 17a8134052ff47778a21cd3efcfbe916
+      - 1864864213974c57aa9eb55294a39c33
+      - 1c5a695a8bed40c2a6742f84210542f4
+      - 4179ed636e2f4d47bb82691f7f536e84
+      - 44b7cff533d04b0ea43db6afd6e67efa
+      - 49db5a9fabb54afc975c75a24f32ede1
+      - 5a5804daaa9345f48058b4b60d7a2da8
+      - 721bb93d169a4d5f9e8dd15ad45a367f
+      - 848aa81f73364d2ab0bd39c5b67eddbc
+      - 89cee4a742ef47df9769b8bc947e0d61
+      - 8e6534b3df8c4bab973f27c67b2dac36
+      - 90c9d43d35d24cada6be59424fb59eee
+      - 9539094e99df4246a29063bfa11a8f73
+      - 99c68556d52b418c873afee06d9d9718
+      - 9c24c4cf935b43c09d3970fe89b836f9
+      - a397b648d6eb48d7909d1ee11235e78f
+      - a5c4975c97464f6985ce695dd358e876
+      - b7a7e3e9194847a99aea5828abe57c4c
+      - c696d517312a4faaa8e7e52807b1a88c
+      - cfbcb02c981e4a6c92b6c86fb5ced91d
+      - eb29a8245a31409ba42e29f40c85a3c2
+      sha256: 9e2b76b6ec7e1a320446a775091326f5481a02032f2c33fe1f594acfdfbfd3c6
+      unapproved_count: 0
+      unapproved_groups: []
+      unapproved_uids: []
+    blocked_reasons: []
+    coverage_limit: Input accounting/protocol checks only. Does not validate cache
+      tensors, actual trainer modules/optimizer execution, scene leakage, or paper
+      experimental results. No split ratio, rounded corpus size, annotation quality
+      or new promotion threshold is imposed.
+    declared_variant: null
+    evaluation_protocols:
+      A20_holdout_vs_holdout:
+        gallery_size: 9138
+        gallery_split: holdout
+        query_size: 9138
+        query_split: holdout
+      A20_test_vs_holdout:
+        gallery_size: 9138
+        gallery_split: holdout
+        query_size: 4569
+        query_split: test
+      A_test_gallery:
+        gallery_size: 4569
+        gallery_split: test
+        query_size: 4569
+        query_split: test
+      B_full_gallery:
+        gallery_size: 45692
+        gallery_split: full
+        query_size: 4569
+        query_split: test
+      C_dev_selection:
+        gallery_size: 4569
+        gallery_split: dev_val
+        query_size: 4569
+        query_split: dev_val
+      D_dev_val_vs_train:
+        gallery_size: 41123
+        gallery_split: train_val
+        query_size: 4569
+        query_split: dev_val
+    failures: []
+    hyperparameters:
+      artifact_sha256_field: 583ea2e83afe47017336be4fbf1de10241d1426e3cd98dd4b90c29066da29864
+      canonical_sha256: 583ea2e83afe47017336be4fbf1de10241d1426e3cd98dd4b90c29066da29864
+      p_mask: 0.3
+      required_fields:
+      - optimizer
+      - learning_rate
+      - weight_decay
+      - scheduler
+      - batch_size
+      - epochs
+      - max_epochs
+      - p_mask
+      - decay_mask_tokens
+      - init_temperature
+      - learnable_temperature
+      - max_logit_scale
+      - betas
+      - eps
+      - warmup_epochs
+      - lr_start
+      - lr_end
+      - seed
+      training_hash: 583ea2e83afe47017336be4fbf1de10241d1426e3cd98dd4b90c29066da29864
+      variant: null
+    leakage: {}
+    leakage_count: 0
+    manifest:
+      count: 46052
+      examples:
+      - 000074a334c541878360457c672b6c2e
+      - 0000ecca9a234cae994be239f6fec552
+      - 00010d9634f645859d2e252d189b31d5
+      - 0002064ef02e46f9a10b4bff10bae805
+      - 0002c6eafa154e8bb08ebafb715a8d46
+      - 0002e50309b44e409c96f440202d90b3
+      - 0009a51366fb45e2876715bde6a574b7
+      - 000a00944e294f7a94f95d420fdd45eb
+      - 000a3d9fa4ff4c888e71e698694eb0b0
+      - 000a82b4e6bf4e909fbe5a3b0e6d67dc
+      sha256: 03c2922d0e6b55069a421fe9e594cad8bcc0a3d7c7f9917d01dcdb5378a88042
+    manual_approval:
+      approved:
+        count: 21
+        examples:
+        - 17a8134052ff47778a21cd3efcfbe916
+        - 1864864213974c57aa9eb55294a39c33
+        - 1c5a695a8bed40c2a6742f84210542f4
+        - 4179ed636e2f4d47bb82691f7f536e84
+        - 44b7cff533d04b0ea43db6afd6e67efa
+        - 49db5a9fabb54afc975c75a24f32ede1
+        - 5a5804daaa9345f48058b4b60d7a2da8
+        - 721bb93d169a4d5f9e8dd15ad45a367f
+        - 848aa81f73364d2ab0bd39c5b67eddbc
+        - 89cee4a742ef47df9769b8bc947e0d61
+        sha256: 0beff357914c84324901f66bbcc9b8d89cdc648d364fc68ca7c604ec2252a73c
+      approved_uids:
+      - 17a8134052ff47778a21cd3efcfbe916
+      - 1864864213974c57aa9eb55294a39c33
+      - 1c5a695a8bed40c2a6742f84210542f4
+      - 4179ed636e2f4d47bb82691f7f536e84
+      - 44b7cff533d04b0ea43db6afd6e67efa
+      - 49db5a9fabb54afc975c75a24f32ede1
+      - 5a5804daaa9345f48058b4b60d7a2da8
+      - 721bb93d169a4d5f9e8dd15ad45a367f
+      - 848aa81f73364d2ab0bd39c5b67eddbc
+      - 89cee4a742ef47df9769b8bc947e0d61
+      - 8e6534b3df8c4bab973f27c67b2dac36
+      - 90c9d43d35d24cada6be59424fb59eee
+      - 9539094e99df4246a29063bfa11a8f73
+      - 99c68556d52b418c873afee06d9d9718
+      - 9c24c4cf935b43c09d3970fe89b836f9
+      - a397b648d6eb48d7909d1ee11235e78f
+      - a5c4975c97464f6985ce695dd358e876
+      - b7a7e3e9194847a99aea5828abe57c4c
+      - c696d517312a4faaa8e7e52807b1a88c
+      - cfbcb02c981e4a6c92b6c86fb5ced91d
+      - eb29a8245a31409ba42e29f40c85a3c2
+      decision: DL-106 carries the 2026-08-28 manual decision
+      matches: true
+      metadata:
+        decided_at: '2026-08-28T14:44:25+08:00'
+        decided_by: Kyzen
+        decision: "\u901921\u500B \u8DDF \u5931\u6557\u7684 311 \u5168\u90E8\u522A\
+          \u6389 \u5176\u4ED6\u6240\u6709\u63A5\u53D7\u63A1\u7528\u6A19\u8A3B\u7D50\
+          \u679C"
+        git_commit: 9e91457220fe625b3313d30c387364d592ee20a0
+      missing:
+        count: 0
+        examples: []
+        sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+      unexpected:
+        count: 0
+        examples: []
+        sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    protocols_resolved: true
+    quarantine:
+      duplicate_failure_rows: 1506
+      failure_uid_count_before_recovery: 723
+      historical_guard_decision: workflow/DECISION_LEDGER.md DL-026
+      historical_guard_prefix: implementation changed while the run was in progress
+      historical_guard_rows_excluded: 36542
+      ignored_non_object_phases:
+        n07b_procthor_asset_modalities/render: 14
+      ignored_non_object_stages:
+        n07b_procthor_asset_modalities: 14
+      manual_failure_overlap:
+        count: 2
+        examples:
+        - 9539094e99df4246a29063bfa11a8f73
+        - a397b648d6eb48d7909d1ee11235e78f
+        sha256: 14b00d176121e9942649e2e481573342d4bcedd192e4a8f41824fc6fedb326d4
+      object_rows: 38772
+      quarantined:
+        count: 339
+        examples:
+        - 01ad91221fed407b80184c0e28526418
+        - 0233b8f7235643d6ba0c1b911bc0325d
+        - 0325e0b8a1654b2dba849b201e5c6ebe
+        - 05cd30c4b0784906b98276c1977dc4c3
+        - 06a5ae799acf4af1846b1d4b8cea20c8
+        - 0725648438b741498c2ee8260eb6e899
+        - 0879dae83dea444d97b6bbd99ce627b7
+        - 0915a9de42a040b39a570ad091021527
+        - 09242ebb27164edca7c84991bcb16ae0
+        - 0927a6111a2f4da9a6483df927a6a89e
+        sha256: f68a94a46b5ff3d783dc59b1dba21b33c48398f6aa97fea4bbfa3fb565b7c372
+      quarantined_uids:
+      - 01ad91221fed407b80184c0e28526418
+      - 0233b8f7235643d6ba0c1b911bc0325d
+      - 0325e0b8a1654b2dba849b201e5c6ebe
+      - 05cd30c4b0784906b98276c1977dc4c3
+      - 06a5ae799acf4af1846b1d4b8cea20c8
+      - 0725648438b741498c2ee8260eb6e899
+      - 0879dae83dea444d97b6bbd99ce627b7
+      - 0915a9de42a040b39a570ad091021527
+      - 09242ebb27164edca7c84991bcb16ae0
+      - 0927a6111a2f4da9a6483df927a6a89e
+      - 09e48a15470a42dfa9c176811b839b2e
+      - 0a135fff072846f2b27a8152dbd63eb9
+      - 0af4f2b80dce4b6ab6d6823acb124582
+      - 0c3fdebacc224046b75d3be75aabec23
+      - 0c51d4f6f0e24e29875aeb3ff2d65587
+      - 0c6a2703ed8c47af90a68bcdb83a363f
+      - 0c7903e6269740fe98d78d55df1d280c
+      - 0d4b9df784ca4598b98ebfeecf71bdc1
+      - 0d856c423ee5419bbade2416557ec549
+      - 0d86b353930146608d02220e34f0d02d
+      - 0dfe6da2d3534e61adf3f47cfa07effa
+      - 0eab21851d2c4b79b0d8723aa154636b
+      - 0f345e4b1f0d4cac9c65cd2731b9a130
+      - 0f49497646b146daa768a17a61d65786
+      - 103069c0267b4d238e54128a724fe979
+      - 1060361948a049489e30ecfd98d0fcb0
+      - 1129b4c8f19c4c6e94c76d66f1898eed
+      - 1160561f74ce4c8b8c98031a04c815a5
+      - 1176ef62c1d94ae7b5185e6c2152d8b0
+      - 1208bb9a55904003baeb37666048c453
+      - 125496466dcc462db45d40adcfba759e
+      - 130ec74a08b2445c91aae106d738d01e
+      - 1596b8cdb2ce4160a62556a2419e5b95
+      - 160345df6cc544f2be85750ec2549708
+      - 166b4ceb676f43d086e155b10973edf4
+      - 16ec56ce50ba418a92f37f78fcab79e4
+      - 16f43dc3abdd46ed907a1a51d4840c58
+      - 17153a05f0c7488eb2e9344ce7d75445
+      - 18323f9649504fe9bfe3c182845ca0fa
+      - 1893b247c3e844cd835cbc1934595171
+      - 19d70a642a934888a931d816601ec41b
+      - 1a861f33b3924d4b86dcbe7c7d1c0884
+      - 1aa8377066894ce3bc0cca9ead6756a6
+      - 1ab2168885d34640aefb5b37e1e747aa
+      - 1ab8ec6306904ae7b934bf9b3ac7819f
+      - 1b1b5f7840074383bef7c7cfbbff9e2a
+      - 1d0ba9c302d640e29fa9df23b149e331
+      - 1dcebebd1e5f4642b309294eee8b1bd3
+      - 1fa3b6ea33324659bf133e7175870413
+      - 1fe98aa872364fd5ae3e8019695783db
+      - 21678613b7bd478abe4077682fd12002
+      - 231dfc7ece6846fb87625fdf364394c5
+      - 232fbb9cbbf64e49950788a76c9cef27
+      - 23e8a117e2374d3f8d343b9cd8bf757c
+      - 2402953e75744a2781a187ba6e6fe362
+      - 27fdadcde34640d8b60a48bea3133a3b
+      - 287e999f673846b38ab67ad366ef2aee
+      - 2923c82582af46b49bc8d15b2c51ccef
+      - 2943470a34b049a78e05898a920c1dd2
+      - 2a9505f4992d4133ab510a49d9bf7dec
+      - 2a9c2b23a4124fc29f62bb1ae2e522f6
+      - 2b07765da4be4fae8862e71efc77ef3a
+      - 2b82d90a50054a58a9ea607e1bbcb815
+      - 2b83e4197ceb4998be15be0ea8871f5a
+      - 2bd9c2ede05c48998741671e936aa9ce
+      - 2dadc239935f448688c88ab0d6fffbb7
+      - 2e82fdebaf8f449e979b56b260543ffb
+      - 2ed510f819b7483198db65f5fcd156cd
+      - 2f1b16245e5a4ee4886506ad9f2d8945
+      - 2f4380b489c14efe8ce585cbb45cb161
+      - 3026ea0181be4f2db72ff4ef5f229628
+      - 3059cef5a0d34ffe8ed1e7bcfb952930
+      - 3099c0593ded463fa750bff38be1d433
+      - 313db418155743dda0f834ca53dc4316
+      - 320d5373bd5c4e9da86683ed308345df
+      - 326f5b9fc6ac42b78bb6c5ab0da8873a
+      - 3308f98df3e9434caafd77c779c5dd2a
+      - 34725f80915f4a0cb1bd85caf0d61c93
+      - 36c0e0164dff4dfbb3bbd07e736074c8
+      - 37c3ed5fe7e44b5e8bd3ce89077cf40f
+      - 3841c5c38c5640318fe5415f8e404500
+      - 3887484570854eb2be03582b1ff6d602
+      - 389b688c710e4bb7be8817d06575c8f4
+      - 38afc4c821a845f7a667408a1e005583
+      - 38d6c242359b4b1e81cca18afe1f3095
+      - 38dc2404431e4606b1d516eadb2cd79b
+      - 3b4cce01aff84d4498cd2d405e74d970
+      - 3bcb7d141196453ca76fde5ee3a2f408
+      - 3bcff2746b5a41058b858c65ed82de66
+      - 3be9a6b52f7c4a1981db2b01be76b33d
+      - 3c4dba56b02b471d97842bf3986c0060
+      - 3d26b17e85214fc1b8f215cd613d5bb6
+      - 3ee5ad26416641d0a2c959841ba94843
+      - 3f1b9d62a822439ebff2acb9de882875
+      - 3f6c325d7cd4472d8dbafac1ef9f03d6
+      - 406fca6cbb304b7bb19da25059bcb4a4
+      - 4276245463f54fa8be7f26151aed0876
+      - 43da08b666764c5393053ad052852df8
+      - 4582170190d84ff48ab2d2156b057c88
+      - 45ce9c8bb7af4327a5b3736f7ffd60a9
+      - 468860259c0c4dfb9abac757a0b94f34
+      - 4760b84608134ca99b1695c95d4a10a7
+      - 48b23bb7989e4951a28e8b93b96b565f
+      - 4a244a906eaa4929949f9bad66b7a630
+      - 4ad89bf9d3844114bcafd6b69278865d
+      - 4b0eb59e5b074c0fbcdb996dde6a0314
+      - 4be5bee3a94249529147cc44543d1000
+      - 4c89b72896194bdba62083649248e657
+      - 4c964c346da041039d66fe17e420d382
+      - 4da772a9a88c42e4b4fc24794c757e91
+      - 4db7e76b00124e5e9a3b4e7085249ff8
+      - 4ea15989895544589276967cb1f361ad
+      - 4f5139ba94cc42bfb3dd80a0fab8746f
+      - 4f7cf10593824061bfe2e36ffd823cde
+      - 4f7d1fb61753490da5c5001ce23149a5
+      - 502f495cd5b8481db16c96097ead5cdf
+      - 518270ef732c4af2a6b088c7faaa7188
+      - 519d58fdd62143c4a01714fd05d0d1bb
+      - 52f24a83a46d41f18270dd02eff82101
+      - 53d6f6512d8346b59011610081ae8a75
+      - 542b1872814a44b797c0655c3a783178
+      - 545473d0104441d78921021ea13dd406
+      - 54b0c7906b9047478aed14eb1b697f80
+      - 54bc8318c374413fb63e12434681707a
+      - 551c57ef743e43ea8e3d66c2500dab0f
+      - 55c0d910857746fda143a527c0fed7a7
+      - 55d122a4028e405583ec808fddd019a6
+      - 57299a9fa8a54fd38601fc5d60e53b3e
+      - 57452a0488e443d7a3ec9ec046b894b1
+      - 57773420381542b7b2489cfad2d07c46
+      - 579a894150d648bcab285c05eed7c800
+      - 57cf7ca7fcb2493999d9153d7e338afc
+      - 57d4f274c1d5409ea0eb340455163a13
+      - 58015c909dbd410783f4e38b15391409
+      - 5910aeb5a9724bacb06a5d590ee1bf69
+      - 5a02969efb164ca1a8a9c68b15861aa0
+      - 5aa51730ae5e490bbca549b1d2aa0118
+      - 5cf3aef2a3eb4431bd7a70334484924e
+      - 5d1ccc8f9f134068a7423f2ba66b9613
+      - 5e05292a6c814430a2756e4921cd091d
+      - 5eed734fbd7f45f088688b7a50f8a70e
+      - 5f4b971ab0e34eb582f7642ecbcbfff6
+      - 5f9716bc030b467181e2470499df706a
+      - 60295bada9dd44b68f32da21732bd5bd
+      - 615e79f062844f22b24c57d0d776825b
+      - 61d188cefc7a46f6bfb58a8eadaadb16
+      - 62e2afa639994258aa9cb6927206f010
+      - 6430619924364a4eadf74710390540ae
+      - 64b6e624736e45d2a4a8eb193e24ad4b
+      - 65063e71454340f0a9058467258572b2
+      - 6536b723e61640c8a85c5d250985fd5a
+      - 66922cadf86d437b8fcd4433e5fbc086
+      - 67698d67326f4e57a96bace4d57e3f0b
+      - 67ceca24e6234eedb0ce7db7b3e32489
+      - 688c0525bd564087a24e55a19b45e8d0
+      - 692f8369b39740cfab7feb962f1693c3
+      - 696950080d3d41ccae64838c2feee3c1
+      - 69994077fc894249b3c9dc4c0dcb87da
+      - 6aaa37a04732404cbef22d8965ef9b4a
+      - 6b4794adf247447da75e58892b8ba48e
+      - 6b7961249e1843639da30e88b7a6bc28
+      - 6d43731dcae44371bd7917b52be2f52f
+      - 6e0ad7a287a340ed9f384dcb8c8fd81f
+      - 6e288a3c332e4191aebd591a80fca9c6
+      - 6f9e5605b41d45d1a90f1afe83420d29
+      - 70b5238278b144158b482f5359c3ee8e
+      - 70c2a47dce0448e788464b7bc6a8d476
+      - 730f9af8d2834df39c645fbfd3afac32
+      - 739f6f5fad7b4d29b28d2ef1bfaa5118
+      - 7448d91f66fe4ebeb0b3cf3a96007494
+      - 758d4832cb884f0cb2faf0caa761834b
+      - 766c46febbe14a64b968433c26410f51
+      - 768340105385426e8d650a69e8168da3
+      - 76e2fd9444ab483ea8c50bf1c1b03846
+      - 783c748a023d44c8a4e4d5e3521b4fb4
+      - 78440f26dbb64b9ea0edf1a218ab8090
+      - 7941f0aac98143e09f85119638b41b12
+      - 7ZA2tOVNoMbYbll27zJ0RWsMdxC
+      - 7a6ab41617384ab380ad3567af427a69
+      - 7b0e1a5d7dc14ced99da763061dfeb24
+      - 7c78945516654ceeaffdfaed8b60af61
+      - 7caa4ad33f2541b2b606728f7331923f
+      - 7d28879df294422ab729b6adde64c485
+      - 7df2f5dde355444cb7ffccc5156bb5ed
+      - 7f51a27c3b1c478793dda0bf5aa03231
+      - 7ff21a2134ef41a483278063f76712e4
+      - 81bb895c07d04e788eb001abd4890c46
+      - 836e3c45c76345af889cc234f083909b
+      - 84c23b63fdbe42c393fa4a96a68f4ada
+      - 85aa4f77833c41e7b2a5f03597e26eee
+      - 860a6b3d04704e2db37e1c7cdf5dfeaa
+      - 868f65876bb64a1683262170b6ceb132
+      - 8877a16ee1cb4636a6bd0e063cbf09cc
+      - 8a1a1c2e4be246d19f07be2141ace92e
+      - 8a9de1f7ddd74ffa9028afb053b236a6
+      - 8b8ab9357d6a463183e5dd47c075345e
+      - 8c564dccf3184669880b729e36541c3b
+      - 8d3c5775737a4ba6a3851e9e886caeca
+      - 8d8de6b5deba42d99d045b984d67f5d5
+      - 8e38d7da46444df7b5421c6cafaf88a6
+      - 8f5269c842b8427d8f92b13a60e98ac1
+      - 8f6debde633244219a081bf3b6ccbba7
+      - 9017bda4cdea4345a456df8cd3a5b6f5
+      - 908fac01eb2444f7b326fea96d7df761
+      - 921c4d5289644c1aa25db6ed9f047c60
+      - 924254a35e69415ca61b0791628ae095
+      - 92473dcee18545c4b7d27037ed63a35e
+      - 92a9fab2c7e64bccbc0511be0096994e
+      - 9317c3a26b00470d9a0e3cb000607a87
+      - 93810b0a321145ecbca82ec0d1d35410
+      - 947d253f3085477e969b3a6b8c095853
+      - 95c267f6e5394e7aa2e2085102b4778e
+      - 97abb07a320e463996f855ce5958ccf7
+      - 98933b602bb4468d981a64279531faea
+      - 98bcb3989faf45ac82a51a3ad7771476
+      - 98c0f32f96e547dc938769b8b6020e3c
+      - 98d47a9e4aca454d9c02eb2c690fdaee
+      - 9a1c691fac774bcca4e2ba565c4c9d9b
+      - 9c789f1f0c224ff693f346ca65540f20
+      - 9d3b0aa454e14636bb4e976ba6e2597c
+      - 9dd969f8aa0b41689aa28f7e4cdff5d0
+      - 9f32b0c013994a64bb8ceeab5425b14c
+      - 9fed86dfca4d45709a985063c341fc45
+      - a0037baf0c0249db869cd2a15826dafe
+      - a07af3b8c6c045d89a37a3b3cde7be1b
+      - a0c493acb14047a4b8524b92c829cde5
+      - a1b5a6df15a34cfda80fc8f57d5f4f05
+      - a2083b38f66b40398038f924b7fef705
+      - a218087cb6d440d8833a84950eaa1251
+      - a244ef1df5634e849609e99214e8477d
+      - a36aa6c2a0f14141b17bf7226b4e5a7f
+      - a37e58a611d64f678834416bf2a4f107
+      - a3b9971cddd0461eaf406b25d17d4309
+      - a3cfec45ce4042e5a62010b36db5df0b
+      - a593baa36e924a1891d4c16c83b28e66
+      - a5e3f4f869b84afb921d795520c2254a
+      - a64bbacc3d1a4e37861d813326198719
+      - a81bec6e40a247aa966771e5314f4d24
+      - a83e6be0775c4ed2ae7ee24fd53f49cd
+      - a8a6f31816544dc08483db7399088bcd
+      - a9eab8d1074e4802a05acf4112833bc2
+      - aa19d926c10247238a9b99d4733c1d5a
+      - ad407bfa94394449a90c6011d36b1969
+      - ae9294397cf8445880f25a4f1673023a
+      - aea414d44dbe43c79deebc3e1779c9f3
+      - af91bc81e58a4a5b8f2a460c55556464
+      - b2e629f234a94ff384fdd431fcf7a90c
+      - b47b8654942c4143a4423b3eec748a1c
+      - b49a3cd72d5a43d786ca656094d2bc4e
+      - b60e65c418a64872b0dcb236220b0bc9
+      - b768f84fcc7c4237b79be7eb317b826f
+      - b80bd27b5c9f40e19b2d8ad6565907df
+      - b860d05d20314aaf9a3131da37379712
+      - b9f55313636e4abd95193d72503aeabd
+      - ba1aff45888346dca386806022c56554
+      - ba63c51e3a084871940c5ae6fe9113de
+      - bb8b8dab8b4c4fc1ac6af310b70f1b6e
+      - bca336d30b984761806a5f247477ac2e
+      - bd20b3aaaaac4b19b65ca41b7b3ed0ed
+      - be492bc0132649e98d412e7cb6d86ff0
+      - bf3983b61dcb45d6a253a26067bbde98
+      - c123f3bf92224311979f01f5abab3304
+      - c3234af45ac946f1b8dbcbde575db693
+      - c4cb8fb7f67e4cd9a7fb555f4de214f6
+      - c56227d14b67471394519e8a5f66e51a
+      - c57676d9c0444741baf5a1154af6bc9b
+      - c5928a3fcd7b4cfb98f539e4e98b2d23
+      - c5cd4b1f34d34b4b8a78e2bc04728aa7
+      - c5dfe6059e034e75af3f527286eb38d6
+      - c6a5542ff4064875969cbbc71911d320
+      - c82a7e2bbf4c44e3ac1d1e7bac42e2b7
+      - c966bde825cd4254841a0e8b9252eee8
+      - c9bca308dac4465092847799cb55789d
+      - c9f2a2a203474765976269110c8e2c68
+      - cb2e60edf56d45e8bb99a3b4af05d514
+      - cbde775dbc734bd08f4b201fe32b4836
+      - cc2ea5ab53b447d0981e2f52edf08752
+      - cce7a8d62e4a461ab8ae35197886e362
+      - cd2a4b5fdf9b4b5b83de34c24cec1f56
+      - cea9ade48ba9443195b6646603c0f595
+      - cec19947dc6d45dc815d44927f69adc9
+      - cfa917f046264e7bab595311730bf097
+      - cfc503ced33948e1b494b52978ce3c4c
+      - d02727a13d404f988c3689d76638138b
+      - d0b10676de63490cbcd032f8d82d8b4e
+      - d0f1f586eb8c4abe87e35273913f3d97
+      - d2c2d38a151b4481b00fcd57e3b458dd
+      - d3029779c7e54ee6afa3890b42a32098
+      - d3415f837380472c88f8bb383bfdf7a9
+      - d5a9b0df4da3493688b63ce42c8a83e2
+      - d616dcf7ed704b7c9ff10c3f36cd1a2f
+      - d6b1055e1bf0498a8cd5f9e1fc226b56
+      - d8a053be9d0f40328b713d4ee13b86d4
+      - d96d62c234724d90864bbfba85307e63
+      - d9a1c88d2500475bb4d9b44eb7152f2e
+      - d9a28557d69745889c58b00b6a1f0c19
+      - da2d3ba3983449fcbb0862cd2f8dae80
+      - db76b4f8fe79426e825d6660dfac15b8
+      - db7987b1c47d461ea285c235ecc53d16
+      - db9817bc2d9b4d22887c539ab40ca4ea
+      - dc622d519f8d4b7ab1fd478815d129f8
+      - dcbabfe133014e1cb656f00620906c24
+      - dd3533e39f5d4b039b2679384c0c4706
+      - deef979eb7474db49acc74fed1c129fe
+      - defce5da76fa4b19ace3ca7777e593ea
+      - dfb56c353e0a4bc8a6d795a23cfada12
+      - e0aaf0b7368441019b9ceed6ef46ce3c
+      - e0fcb39a40ae4a79891d2b743b073416
+      - e153f445e2b24646b2e2d71832758ae5
+      - e1771d92aa6b436e8ab4d882e44bb03b
+      - e1f96691aaf648b885d927f5c3f5be61
+      - e2fb6b063fcc4a41ac32dabf5fa05258
+      - e445575a7e5846ed9869d1b9b9fe6780
+      - e44aadf5ba8341aa81e5f807a375942d
+      - e61bb54ba99e44189b08a2cd0ab8bccb
+      - e653f678018c4b5c924d9d725dde0597
+      - e8baac1c57ac4565afbd19e48c09ffda
+      - ed86f328dcdc414396c5f900004dec23
+      - edba917840424572b2db181ae57c70ab
+      - edc9119eb19e497285c027ff7a6657b7
+      - ee651ebf333b49799f46259251e2eb0d
+      - ef64ff2b81b446d488243d48c3d2871d
+      - efe3e7d2e9474ff9ac33a2af7cbae092
+      - f2cca00a043041038234363e0d6ea684
+      - f38c47a0b3cd4360b3fc5a53ee057e7c
+      - f3daf79ea4e843c8a159e8ead7af6e74
+      - f4101ff449e14643945f8cd2468207b4
+      - f5836f1fadd54919be5ce641182fd386
+      - f5baf23f59bd4c5c8f70eb8a2d8c7b1a
+      - f5c624361ae743e6b02e262289fd8374
+      - f709c5f235424631a6f90bc7f31b8e6d
+      - f7a92536c80343788c5da2d1137ea8a3
+      - fa17a4e948ac4d4ba1ffec8fa6978615
+      - fa44ddeb72614002ba960b85f4237a2c
+      - fb80ef2491214624b8ba9347e30b5c61
+      - fb99aa884587417c9f205f848611278b
+      - fc7d79e6ce5a463093e24925c7518c93
+      - fd6274d40ade4fd7bd50dabfd0d831b2
+      - fddd97e7388f453c87400408c2012918
+      recovered:
+        count: 382
+        examples:
+        - 0000ecca9a234cae994be239f6fec552
+        - 005349b8ece7424984e8b1f224a8dfe3
+        - 01531de593f3468084dab12f6515e8e1
+        - 0305b7bf2650453d8aca2639b9a3c5ca
+        - 052aaef6c5c34c5bac94607bcc12d2f9
+        - 052abc6c433440fda6dac5123c4117be
+        - 052b3143437f412fb36be6b70e9fca22
+        - 052c371216ca4e4086ca4d866368938e
+        - 052c74fdfee14ae0b53db1eb768fa3e1
+        - 052d76ff8adc4887b818bd06899458b8
+        sha256: 0578b46a1a6f0df20aa5745349f8be8443a42cad6c8dbb1cf09fe4a4050c7281
+      systemic_rows:
+      - exception_type: SystemicFailure
+        source: /home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n04_render_views.jsonl:631
+        uid: __run
+      systemic_rows_not_asset_failures: 1
+    split_pools:
+      dev_train:
+        count: 36554
+        examples:
+        - 000074a334c541878360457c672b6c2e
+        - 0000ecca9a234cae994be239f6fec552
+        - 0002e50309b44e409c96f440202d90b3
+        - 0009a51366fb45e2876715bde6a574b7
+        - 000a00944e294f7a94f95d420fdd45eb
+        - 000a3d9fa4ff4c888e71e698694eb0b0
+        - 000a82b4e6bf4e909fbe5a3b0e6d67dc
+        - 000f88bb21164319ae797d315be6bc0e
+        - 00124bcf3ca3463fbe05f28218cc0f5c
+        - 0013bdaec08345ec9fd03214030baeb2
+        sha256: 42f0b011e11f63701bcc2c54922e720ea60001fccb8213cea1e0082791bbf957
+      dev_val:
+        count: 4569
+        examples:
+        - 0002064ef02e46f9a10b4bff10bae805
+        - 0002c6eafa154e8bb08ebafb715a8d46
+        - 00130eea9e884209be92f68378a817e8
+        - 0025d57953fc4c8a80a44e59294e6841
+        - 00286954e2d54db8bc7832cc8682b6ff
+        - 002be48987e54ac0924772d6a562eb51
+        - 0051724d6efa42de84aaf8467629160f
+        - 005e3725b8d9484e94a71aeb9495aea6
+        - 00668ccda7b841c1ab3ca69f303d1b1c
+        - 008e9eacb9044b11b358a0c2bdae1934
+        sha256: 08d8ffd70eebdaa744f0e3a76adec99f51de30742df53bebf46e0036d0ea8158
+      full:
+        count: 45692
+        examples:
+        - 000074a334c541878360457c672b6c2e
+        - 0000ecca9a234cae994be239f6fec552
+        - 00010d9634f645859d2e252d189b31d5
+        - 0002064ef02e46f9a10b4bff10bae805
+        - 0002c6eafa154e8bb08ebafb715a8d46
+        - 0002e50309b44e409c96f440202d90b3
+        - 0009a51366fb45e2876715bde6a574b7
+        - 000a00944e294f7a94f95d420fdd45eb
+        - 000a3d9fa4ff4c888e71e698694eb0b0
+        - 000a82b4e6bf4e909fbe5a3b0e6d67dc
+        sha256: f318edf33d7185d013d39edee8c3eb7475004cc26df8d60c924b7757d9893dee
+      holdout:
+        count: 9138
+        examples:
+        - 00010d9634f645859d2e252d189b31d5
+        - 0002064ef02e46f9a10b4bff10bae805
+        - 0002c6eafa154e8bb08ebafb715a8d46
+        - 00130eea9e884209be92f68378a817e8
+        - 0022a3197f9646acbb9041eff2d1f55c
+        - 0025d57953fc4c8a80a44e59294e6841
+        - 00286954e2d54db8bc7832cc8682b6ff
+        - 002be48987e54ac0924772d6a562eb51
+        - 003219b0bec442d29725847969e4b6bf
+        - 0032696f5871429fbd0549d9628f812c
+        sha256: 180dbe7db9d0151d27e8c5c7f8bc9455cfc68a9e47cebf7e317f2f1b14e47904
+      test:
+        count: 4569
+        examples:
+        - 00010d9634f645859d2e252d189b31d5
+        - 0022a3197f9646acbb9041eff2d1f55c
+        - 003219b0bec442d29725847969e4b6bf
+        - 0032696f5871429fbd0549d9628f812c
+        - 003ba3e54a524999a0fbbf446573d589
+        - 003ebdf86df345d39dc166563229fb85
+        - 004fb4d72f6c4e55a15b9025a868d1a3
+        - 0056220daa7f4eae850a582e8f5cc6ad
+        - 0061cdbbceef476a98025f10e19f5d13
+        - 006387f76f684e1dab80d0a4bb705809
+        sha256: 05a511b2f203f318276263686bb6ba8acb47df7415049140b1d3393d2a61bbfe
+      train:
+        count: 36554
+        examples:
+        - 000074a334c541878360457c672b6c2e
+        - 0000ecca9a234cae994be239f6fec552
+        - 0002e50309b44e409c96f440202d90b3
+        - 0009a51366fb45e2876715bde6a574b7
+        - 000a00944e294f7a94f95d420fdd45eb
+        - 000a3d9fa4ff4c888e71e698694eb0b0
+        - 000a82b4e6bf4e909fbe5a3b0e6d67dc
+        - 000f88bb21164319ae797d315be6bc0e
+        - 00124bcf3ca3463fbe05f28218cc0f5c
+        - 0013bdaec08345ec9fd03214030baeb2
+        sha256: 42f0b011e11f63701bcc2c54922e720ea60001fccb8213cea1e0082791bbf957
+      train_val:
+        count: 41123
+        examples:
+        - 000074a334c541878360457c672b6c2e
+        - 0000ecca9a234cae994be239f6fec552
+        - 0002064ef02e46f9a10b4bff10bae805
+        - 0002c6eafa154e8bb08ebafb715a8d46
+        - 0002e50309b44e409c96f440202d90b3
+        - 0009a51366fb45e2876715bde6a574b7
+        - 000a00944e294f7a94f95d420fdd45eb
+        - 000a3d9fa4ff4c888e71e698694eb0b0
+        - 000a82b4e6bf4e909fbe5a3b0e6d67dc
+        - 000f88bb21164319ae797d315be6bc0e
+        sha256: afdf139debc8ed15dff8b6d83ecc3e3e8ade9379287f31e34cc272db2ac20118
+      val:
+        count: 4569
+        examples:
+        - 0002064ef02e46f9a10b4bff10bae805
+        - 0002c6eafa154e8bb08ebafb715a8d46
+        - 00130eea9e884209be92f68378a817e8
+        - 0025d57953fc4c8a80a44e59294e6841
+        - 00286954e2d54db8bc7832cc8682b6ff
+        - 002be48987e54ac0924772d6a562eb51
+        - 0051724d6efa42de84aaf8467629160f
+        - 005e3725b8d9484e94a71aeb9495aea6
+        - 00668ccda7b841c1ab3ca69f303d1b1c
+        - 008e9eacb9044b11b358a0c2bdae1934
+        sha256: 08d8ffd70eebdaa744f0e3a76adec99f51de30742df53bebf46e0036d0ea8158
+  rc: 0
+  record_kind: gate
+  runtime_source_sha256: 0b8b22149349703bc8e66f8934b5863a26b1de28519398ec465a9d54cd846343
+  runtime_source_status: ok
+  scope: /home/kyzen/datasets/objaverse-lvis/lvis.json
+  timestamp: 2026-09-08T03:34:12+0800
+  verdict: PASS

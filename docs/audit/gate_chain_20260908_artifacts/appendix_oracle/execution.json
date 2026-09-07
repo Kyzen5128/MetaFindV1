@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "kind": "scoped_existing_oracle_revalidation",
+  "execution_date_local": "2026-09-08",
+  "cwd": "/home/kyzen/MetaFindV1",
+  "command": "PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 CUDA_VISIBLE_DEVICES='' HIP_VISIBLE_DEVICES='' LIBGL_ALWAYS_SOFTWARE=1 MESA_LOADER_DRIVER_OVERRIDE=llvmpipe __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json PYOPENGL_PLATFORM=egl /home/kyzen/miniconda3/envs/MetaFind/bin/python -m pytest -q -p no:cacheprovider tests/models/test_essgnn.py -k appendix_layer_values_and_gradients_match_independent_numpy_oracle",
+  "exit_code": 0,
+  "observed_result": {
+    "passed": 2,
+    "deselected": 35,
+    "seconds": 0.61
+  },
+  "capture": {
+    "kind": "retrospective_stdout_excerpt",
+    "source": "completed functions.exec / exec_command tool result in /root/method_check; saved after the run without rerunning",
+    "log": "stdout_excerpt.log",
+    "full_stdout_retained": false,
+    "sha256": "ba5b92a3796f46d12055aea55c8bbe2a892130da15e2c1725af90ca95c307a60"
+  },
+  "git_head_observed": "f0d0306c060aebc66ac576cd1d680048829e4840",
+  "test_last_change_commit_observed": "de6635b",
+  "source_sha256_before_run": {
+    "tests/models/test_essgnn.py": "2618cc24d115d2c77c256227e8c1bdaf1957d24986ac11c07eddad83fb1eb061",
+    "metafind/models/essgnn.py": "1cbf2b40c4ee4c55f8fa54b8f2397384e66002ee553c6933190ca4a7303ae4d2",
+    "docs/paper/metafind_source/appendix.tex": "f7b7120e9a0b300f3a734258c8e642ae4d8613af3295861965d7db944f014036",
+    "docs/paper/metafind_source/2methdology.tex": "4504c177dd4b5a43630b197492712939037941c3dc6edec143742d3ab40a7d96"
+  },
+  "source_sha256_after_run": {
+    "tests/models/test_essgnn.py": "2618cc24d115d2c77c256227e8c1bdaf1957d24986ac11c07eddad83fb1eb061",
+    "metafind/models/essgnn.py": "1cbf2b40c4ee4c55f8fa54b8f2397384e66002ee553c6933190ca4a7303ae4d2",
+    "docs/paper/metafind_source/appendix.tex": "f7b7120e9a0b300f3a734258c8e642ae4d8613af3295861965d7db944f014036",
+    "docs/paper/metafind_source/2methdology.tex": "4504c177dd4b5a43630b197492712939037941c3dc6edec143742d3ab40a7d96"
+  },
+  "source_sha256_at_capture": {
+    "tests/models/test_essgnn.py": "2618cc24d115d2c77c256227e8c1bdaf1957d24986ac11c07eddad83fb1eb061",
+    "metafind/models/essgnn.py": "1cbf2b40c4ee4c55f8fa54b8f2397384e66002ee553c6933190ca4a7303ae4d2",
+    "docs/paper/metafind_source/appendix.tex": "f7b7120e9a0b300f3a734258c8e642ae4d8613af3295861965d7db944f014036",
+    "docs/paper/metafind_source/2methdology.tex": "4504c177dd4b5a43630b197492712939037941c3dc6edec143742d3ab40a7d96"
+  },
+  "scope": "ESSGCLShared single-layer appendix Eq.10/13/14 under the two existing MLP structures; independent NumPy forward values and central finite-difference gradients for all h/x/e/parameter scalars.",
+  "tolerances": {
+    "forward_rtol": 1e-12,
+    "forward_atol": 1e-12,
+    "gradient_rtol": 3e-06,
+    "gradient_atol": 2e-08,
+    "central_difference_epsilon": 1e-06
+  },
+  "limits": [
+    "No measured maximum floating-point error is claimed.",
+    "Not a seven-layer ESSGNN projection/pooling oracle, trained-model validation, or scientific resolution of body/appendix contradictions.",
+    "No training, external model loading, GPU, annotation or corpus mutation was performed.",
+    "The full working tree was not declared clean; only the listed source bytes were checked unchanged."
+  ]
+}

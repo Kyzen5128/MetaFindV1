@@ -1,0 +1,68 @@
+{
+  "observed_at": "2026-09-07T19:31:57.801472+00:00",
+  "syntax_checks": [
+    {
+      "command": [
+        "bash",
+        "-n",
+        "tools/chain_paper_stage1.sh"
+      ],
+      "returncode": 0,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "bash",
+        "-n",
+        "tools/chain_paper_stage2.sh"
+      ],
+      "returncode": 0,
+      "stderr": ""
+    }
+  ],
+  "live_processes": [
+    {
+      "pid": 2043422,
+      "start_ticks": "67087548",
+      "same_identity_as_initial_audit": true,
+      "state": "S",
+      "cwd": "/home/kyzen/MetaFindV1"
+    },
+    {
+      "pid": 2043427,
+      "start_ticks": "67087549",
+      "same_identity_as_initial_audit": true,
+      "state": "R",
+      "cwd": "/home/kyzen/MetaFindV1"
+    },
+    {
+      "pid": 2685619,
+      "start_ticks": "79771743",
+      "same_identity_as_initial_audit": true,
+      "state": "S",
+      "cwd": "/home/kyzen/MetaFindV1"
+    },
+    {
+      "pid": 2494552,
+      "start_ticks": "77088621",
+      "same_identity_as_initial_audit": true,
+      "state": "S",
+      "cwd": "/home/kyzen/MetaFindV1"
+    }
+  ],
+  "live_script_hashes": {
+    "/home/kyzen/metafind/metafind_data_paper/outputs/logs/r2_annotate_v10.sh": {
+      "sha256": "3196f6c0e2d7907972490848f3ca9609a25e4a6735fab3358cd8bd38d7e4a151",
+      "unchanged": true
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage1_20260906.sh": {
+      "sha256": "d18f7accff486a68cdc537ca0d35fa01545b2c8af30b0ab54387843fbda36fb6",
+      "unchanged": true
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage2_20260906.sh": {
+      "sha256": "cbd33e69e88c599876e0807fdd336bb8fea018268374c03237278441eed165a0",
+      "unchanged": true
+    }
+  },
+  "deployment": "NOT PERFORMED; repository scripts only changed; annotation and both waiting shells retained their identities."
+}

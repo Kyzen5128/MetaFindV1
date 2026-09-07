@@ -1,0 +1,433 @@
+code_dirty: true
+code_revision: f0d0306c060aebc66ac576cd1d680048829e4840
+criterion: "object-level leakage_count == 0 AND admitted union quarantined union manual_excluded\
+  \ == original manifest AND admitted, quarantined, manual_excluded are pairwise disjoint\
+  \ AND manual_excluded contains only approved manual_review_rejected UIDs AND quarantined\
+  \ == unique real object failure UIDs minus admitted minus manual_excluded AND quarantine_rate\
+  \ == len(quarantined) / len(original manifest) <= 0.02\n    -- manual_excluded_rate\
+  \ and total_excluded_rate are reported separately;\n    the original manifest and\
+  \ the existing quarantine ceiling are unchanged\nAND both evaluation protocols are\
+  \ defined with explicit query and gallery scopes AND stage1_encoding_protocol.status\
+  \ == \"resolved\", with text_serialization,\n    image_aggregation, paper_clip_train_scope,\
+  \ actual_clip_train_scope and\n    missing_modality_representation each naming a\
+  \ choice\nAND paper_clip_train_scope_basis is non-empty AND paper_clip_train_scope_confidence\
+  \ in {low, moderate, high}\n    -- without these two, a protocol reading `paper_clip_train_scope:\
+  \ frozen`\n    with an empty basis PASSES, and n21 reaches the report with a decision\n\
+  \    it cannot cite. The scope alone does not say why.\n    (U-15, U-14, U-34 x2,\
+  \ U-11)\n    [CORRECTED] This listed three fields after the channel grew to five.\n\
+  \    A protocol missing paper_clip_train_scope or\n    missing_modality_representation\
+  \ therefore PASSED the gate and was\n    then rejected by Stage1RuntimeConfig.from_protocols.\
+  \ Failing closed\n    at the executor is right, but a gate that says PASS on something\
+  \ the\n    executor refuses is not a barrier -- it is a second opinion nobody\n\
+  \    asked for.\nAND stage1_protocol.status == \"resolved\", with fusion, tower_sharing,\n\
+  \    allow_all_masked, similarity and hyperparameter_config_hash each\n    naming\
+  \ a choice (U-13, U-16, U-23, U-24, U-22)\nAND stage1_hyperparameters.sha256 ==\
+  \ stage1_protocol.hyperparameter_config_hash,\n    and stage1_hyperparameters.values\
+  \ names every field of U-22\n    (optimizer, learning_rate, weight_decay, scheduler,\
+  \ batch_size,\n     epochs, p_mask, init_temperature, learnable_temperature,\n \
+  \    max_logit_scale, seed) -- presence of the hash is not enough,\n    because\
+  \ a hash nothing dereferences leaves the run on library\n    defaults. [CORRECTED]\
+  \ This clause used to demand a dereference G3 had\n    no channel to perform: the\
+  \ artifact existed only as a dict passed\n    into Python from outside the graph.\n\
+  AND stage1_hyperparameters.values.p_mask == 0.30 unless the run is a\n    declared\
+  \ Table 3 modality-dropout variant\n    (paper 2.6 fixes 30%; Table 3 ablates 10%\
+  \ and 50%. Carrying p_mask\n     in the U-22 artifact made a paper-stated constant\
+  \ look like one of\n     the values the paper omits, so an artifact saying 0.50\
+  \ would hash\n     correctly and silently run the ablation as the main line.)"
+gate_class: G-INVALID
+gate_id: G3_object_corpus
+gate_source_sha256: 29934b446dbd6d3bb516094c4bab9e034d7aa783cc603eb4b0e15a1c2a6e834f
+inputs:
+  annotation_exclusions:
+    bytes: 158
+    path: /home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs/annotation_exclusions.json
+    sha256: 1f48a06b60d6e7cce8b304bcffadff8f7a06b6c0aa1190a28e7cef6c00a47865
+  approved_manual_decision:
+    bytes: 17391
+    path: /home/kyzen/MetaFindV1/workflow/annotation_exclusions_20260828.json
+    sha256: 39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058
+  eval_protocols:
+    bytes: 883
+    path: /home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs/eval_protocols.json
+    sha256: c0657a98bf391b2dfa8582cda530cae50b31b25f30e0401d928bdcb75bcc6149
+  manifest:
+    bytes: 2500
+    path: /home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/lvis.json
+    sha256: 63883d72c96d9550ba6f319319fcad48ef3e381303b42db0c66d78ca4ecbd933
+  quarantine_log_directory:
+    files: []
+    path: /home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs/logs
+  quarantine_logs: []
+  specification:
+    path: /home/kyzen/MetaFindV1/docs/graph/validation_plan.yaml
+    sha256: e845d4e54df6789210af408a4773e605f2cd32f49d7cc58ba024f2f8a967d790
+  splits:
+    bytes: 2514
+    path: /home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs/splits.json
+    sha256: d8eeca52ae3d100d164c20e63345a144f08a0b65a068804cd986c35cec118963
+  stage1_encoding_protocol:
+    bytes: 332
+    path: /home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs/stage1_encoding_protocol.json
+    sha256: 72b169470665b898d0037d58c75d9fb0723afbfcdf20802caa95ec72febaec7a
+  stage1_hyperparameters:
+    bytes: 460
+    path: /home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs/stage1_hyperparameters.json
+    sha256: eaf03fa63487d97fdb10f9767596817bf102567e40336dd29596b4f840b551bc
+  stage1_protocol:
+    bytes: 247
+    path: /home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs/stage1_protocol.json
+    sha256: 9e703c9030bea91485d94de9078613d19123d45ccaa4f3a7a631c07bad1261cf
+is_terminal: true
+observed:
+  accounting:
+    admitted_count: 99
+    excluded_but_admitted:
+      count: 0
+      examples: []
+      sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    manifest_count: 100
+    manual_excluded:
+      count: 1
+      examples:
+      - u000
+      sha256: 06d29c6027f064084b4a49c0b0e9e2c68f99dc9af42f6a15d03b96e73de60c54
+    manual_excluded_count: 1
+    manual_excluded_rate: 0.01
+    missing:
+      count: 0
+      examples: []
+      sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    pairwise_disjoint: true
+    quarantine_limit: 0.02
+    quarantine_rate: 0.0
+    quarantined_count: 0
+    set_conservation: true
+    total_excluded_rate: 0.01
+    unexpected:
+      count: 0
+      examples: []
+      sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    unexplained_missing:
+      count: 0
+      examples: []
+      sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  admitted:
+    count: 99
+    examples:
+    - u001
+    - u002
+    - u003
+    - u004
+    - u005
+    - u006
+    - u007
+    - u008
+    - u009
+    - u010
+    sha256: 4660a4ecfd429b54dc870b07e1b406350b2910d1261500c29c9b0420bdd6048b
+  annotation_exclusions:
+    accounting_decision_date: '2026-09-08'
+    count: 1
+    decision: fixture explicit rejection
+    examples:
+    - u000
+    formal_accounting: A union Q union E = M; Q = true failure UIDs - A - E
+    historical_n05_ledger:
+      count: 0
+      examples: []
+      sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    manual_count: 1
+    manual_group: manual_review_rejected
+    manual_uids:
+    - u000
+    sha256: 06d29c6027f064084b4a49c0b0e9e2c68f99dc9af42f6a15d03b96e73de60c54
+    unapproved_count: 0
+    unapproved_groups: []
+    unapproved_uids: []
+  blocked_reasons: []
+  coverage_limit: Input accounting/protocol checks only. Does not validate cache tensors,
+    actual trainer modules/optimizer execution, scene leakage, or paper experimental
+    results. No split ratio, rounded corpus size, annotation quality or new promotion
+    threshold is imposed.
+  declared_variant: null
+  evaluation_protocols:
+    A20_holdout_vs_holdout:
+      gallery_size: 20
+      gallery_split: holdout
+      query_size: 20
+      query_split: holdout
+    A20_test_vs_holdout:
+      gallery_size: 20
+      gallery_split: holdout
+      query_size: 10
+      query_split: test
+    A_test_gallery:
+      gallery_size: 10
+      gallery_split: test
+      query_size: 10
+      query_split: test
+    B_full_gallery:
+      gallery_size: 99
+      gallery_split: full
+      query_size: 10
+      query_split: test
+    C_dev_selection:
+      gallery_size: 10
+      gallery_split: dev_val
+      query_size: 10
+      query_split: dev_val
+    D_dev_val_vs_train:
+      gallery_size: 89
+      gallery_split: train_val
+      query_size: 10
+      query_split: dev_val
+  failures:
+  - 'manual approval: E differs from the complete pinned approved UID set (21 missing,
+    1 unexpected)'
+  hyperparameters:
+    artifact_sha256_field: bf838d7b55102cc3f6650692037e2f7e305a725fd200501e57a1f1eb27ba9795
+    canonical_sha256: bf838d7b55102cc3f6650692037e2f7e305a725fd200501e57a1f1eb27ba9795
+    p_mask: 0.3
+    required_fields:
+    - optimizer
+    - learning_rate
+    - weight_decay
+    - scheduler
+    - batch_size
+    - epochs
+    - max_epochs
+    - p_mask
+    - decay_mask_tokens
+    - init_temperature
+    - learnable_temperature
+    - max_logit_scale
+    - betas
+    - eps
+    - warmup_epochs
+    - lr_start
+    - lr_end
+    - seed
+    training_hash: bf838d7b55102cc3f6650692037e2f7e305a725fd200501e57a1f1eb27ba9795
+    variant: null
+  leakage: {}
+  leakage_count: 0
+  manifest:
+    count: 100
+    examples:
+    - u000
+    - u001
+    - u002
+    - u003
+    - u004
+    - u005
+    - u006
+    - u007
+    - u008
+    - u009
+    sha256: 2d5eaa50a93892853f98a918b645cd6f7b3121ae9ea37cea8ff561ed90486212
+  manual_approval:
+    approved:
+      count: 21
+      examples:
+      - 17a8134052ff47778a21cd3efcfbe916
+      - 1864864213974c57aa9eb55294a39c33
+      - 1c5a695a8bed40c2a6742f84210542f4
+      - 4179ed636e2f4d47bb82691f7f536e84
+      - 44b7cff533d04b0ea43db6afd6e67efa
+      - 49db5a9fabb54afc975c75a24f32ede1
+      - 5a5804daaa9345f48058b4b60d7a2da8
+      - 721bb93d169a4d5f9e8dd15ad45a367f
+      - 848aa81f73364d2ab0bd39c5b67eddbc
+      - 89cee4a742ef47df9769b8bc947e0d61
+      sha256: 0beff357914c84324901f66bbcc9b8d89cdc648d364fc68ca7c604ec2252a73c
+    approved_uids:
+    - 17a8134052ff47778a21cd3efcfbe916
+    - 1864864213974c57aa9eb55294a39c33
+    - 1c5a695a8bed40c2a6742f84210542f4
+    - 4179ed636e2f4d47bb82691f7f536e84
+    - 44b7cff533d04b0ea43db6afd6e67efa
+    - 49db5a9fabb54afc975c75a24f32ede1
+    - 5a5804daaa9345f48058b4b60d7a2da8
+    - 721bb93d169a4d5f9e8dd15ad45a367f
+    - 848aa81f73364d2ab0bd39c5b67eddbc
+    - 89cee4a742ef47df9769b8bc947e0d61
+    - 8e6534b3df8c4bab973f27c67b2dac36
+    - 90c9d43d35d24cada6be59424fb59eee
+    - 9539094e99df4246a29063bfa11a8f73
+    - 99c68556d52b418c873afee06d9d9718
+    - 9c24c4cf935b43c09d3970fe89b836f9
+    - a397b648d6eb48d7909d1ee11235e78f
+    - a5c4975c97464f6985ce695dd358e876
+    - b7a7e3e9194847a99aea5828abe57c4c
+    - c696d517312a4faaa8e7e52807b1a88c
+    - cfbcb02c981e4a6c92b6c86fb5ced91d
+    - eb29a8245a31409ba42e29f40c85a3c2
+    decision: DL-106 carries the 2026-08-28 manual decision
+    matches: false
+    metadata:
+      decided_at: '2026-08-28T14:44:25+08:00'
+      decided_by: Kyzen
+      decision: "\u901921\u500B \u8DDF \u5931\u6557\u7684 311 \u5168\u90E8\u522A\u6389\
+        \ \u5176\u4ED6\u6240\u6709\u63A5\u53D7\u63A1\u7528\u6A19\u8A3B\u7D50\u679C"
+      git_commit: 9e91457220fe625b3313d30c387364d592ee20a0
+    missing:
+      count: 21
+      examples:
+      - 17a8134052ff47778a21cd3efcfbe916
+      - 1864864213974c57aa9eb55294a39c33
+      - 1c5a695a8bed40c2a6742f84210542f4
+      - 4179ed636e2f4d47bb82691f7f536e84
+      - 44b7cff533d04b0ea43db6afd6e67efa
+      - 49db5a9fabb54afc975c75a24f32ede1
+      - 5a5804daaa9345f48058b4b60d7a2da8
+      - 721bb93d169a4d5f9e8dd15ad45a367f
+      - 848aa81f73364d2ab0bd39c5b67eddbc
+      - 89cee4a742ef47df9769b8bc947e0d61
+      sha256: 0beff357914c84324901f66bbcc9b8d89cdc648d364fc68ca7c604ec2252a73c
+    unexpected:
+      count: 1
+      examples:
+      - u000
+      sha256: 06d29c6027f064084b4a49c0b0e9e2c68f99dc9af42f6a15d03b96e73de60c54
+  protocols_resolved: true
+  quarantine:
+    duplicate_failure_rows: 0
+    failure_uid_count_before_recovery: 0
+    historical_guard_decision: workflow/DECISION_LEDGER.md DL-026
+    historical_guard_prefix: implementation changed while the run was in progress
+    ignored_non_object_phases: {}
+    ignored_non_object_stages: {}
+    manual_failure_overlap:
+      count: 0
+      examples: []
+      sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    quarantined:
+      count: 0
+      examples: []
+      sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    quarantined_uids: []
+    recovered:
+      count: 0
+      examples: []
+      sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    systemic_rows: []
+  split_pools:
+    dev_train:
+      count: 79
+      examples:
+      - u001
+      - u002
+      - u003
+      - u004
+      - u005
+      - u006
+      - u007
+      - u008
+      - u009
+      - u010
+      sha256: bebaa9bce413985605337148952bff55f288bd3a4504f53515d0bc550f8c0f03
+    dev_val:
+      count: 10
+      examples:
+      - u080
+      - u081
+      - u082
+      - u083
+      - u084
+      - u085
+      - u086
+      - u087
+      - u088
+      - u089
+      sha256: 45a4ec93e9f17c2df9605b0b37f77069abd472012d1314e2b73b932af71cb218
+    full:
+      count: 99
+      examples:
+      - u001
+      - u002
+      - u003
+      - u004
+      - u005
+      - u006
+      - u007
+      - u008
+      - u009
+      - u010
+      sha256: 4660a4ecfd429b54dc870b07e1b406350b2910d1261500c29c9b0420bdd6048b
+    holdout:
+      count: 20
+      examples:
+      - u080
+      - u081
+      - u082
+      - u083
+      - u084
+      - u085
+      - u086
+      - u087
+      - u088
+      - u089
+      sha256: 479e55544c72cd752b87d2af477159499f43ee3d410ce214013326e02f8c8541
+    test:
+      count: 10
+      examples:
+      - u090
+      - u091
+      - u092
+      - u093
+      - u094
+      - u095
+      - u096
+      - u097
+      - u098
+      - u099
+      sha256: 05e5656a1983a82c4ba7acd4a6a1346977eba09f6acff1bf24c8d0d33515d211
+    train:
+      count: 79
+      examples:
+      - u001
+      - u002
+      - u003
+      - u004
+      - u005
+      - u006
+      - u007
+      - u008
+      - u009
+      - u010
+      sha256: bebaa9bce413985605337148952bff55f288bd3a4504f53515d0bc550f8c0f03
+    train_val:
+      count: 89
+      examples:
+      - u001
+      - u002
+      - u003
+      - u004
+      - u005
+      - u006
+      - u007
+      - u008
+      - u009
+      - u010
+      sha256: b3d7e683aebd7c5f4b449ebba6b66f82dbed7e91b1e3d1a55b38b2fff1eb4701
+    val:
+      count: 10
+      examples:
+      - u080
+      - u081
+      - u082
+      - u083
+      - u084
+      - u085
+      - u086
+      - u087
+      - u088
+      - u089
+      sha256: 45a4ec93e9f17c2df9605b0b37f77069abd472012d1314e2b73b932af71cb218
+rc: 2
+record_kind: gate
+runtime_source_sha256: 0b8b22149349703bc8e66f8934b5863a26b1de28519398ec465a9d54cd846343
+runtime_source_status: ok
+scope: /home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/lvis.json
+timestamp: 2026-09-08T03:34:10+0800
+verdict: FAIL

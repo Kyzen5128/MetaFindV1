@@ -1,0 +1,1 @@
+{"status": "resolved", "text_serialization": "v3_fit@fixture", "image_aggregation": "mean", "paper_clip_train_scope": "frozen", "actual_clip_train_scope": "frozen", "missing_modality_representation": "learned_token", "paper_clip_train_scope_basis": "explicit fixture interpretation", "paper_clip_train_scope_confidence": "moderate"}

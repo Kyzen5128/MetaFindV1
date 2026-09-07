@@ -1,0 +1,40 @@
+{
+  "command": [
+    "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+    "-m",
+    "pytest",
+    "tests/pipeline/test_object_corpus_gate.py",
+    "tests/pipeline/test_gallery_freeze_gate.py",
+    "tests/pipeline/test_runlog.py",
+    "tests/pipeline/test_runlog_provenance.py",
+    "tests/data/test_splits.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "cwd": "/home/kyzen/MetaFindV1",
+  "environment": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    "OMP_NUM_THREADS": "1",
+    "CUDA_VISIBLE_DEVICES": "",
+    "HIP_VISIBLE_DEVICES": "",
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1"
+  },
+  "started_epoch": 1788809711.5617623,
+  "elapsed_seconds": 18.89176082611084,
+  "returncode": 0,
+  "source_hashes_before": {
+    "metafind/gates/g3_object_corpus.py": "29934b446dbd6d3bb516094c4bab9e034d7aa783cc603eb4b0e15a1c2a6e834f",
+    "tests/pipeline/test_object_corpus_gate.py": "e7cc006196993fad57d9ac590308e551503d4cee6d4ff18ad8089481900910d9",
+    "workflow/annotation_exclusions_20260828.json": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058"
+  },
+  "source_hashes_after": {
+    "metafind/gates/g3_object_corpus.py": "29934b446dbd6d3bb516094c4bab9e034d7aa783cc603eb4b0e15a1c2a6e834f",
+    "tests/pipeline/test_object_corpus_gate.py": "e7cc006196993fad57d9ac590308e551503d4cee6d4ff18ad8089481900910d9",
+    "workflow/annotation_exclusions_20260828.json": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058"
+  },
+  "sources_unchanged": true,
+  "log_sha256": "fd2b7b792b83af614b02da1bec1154498c449020cee6779f600f93969da88ebc"
+}

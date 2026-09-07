@@ -1,0 +1,148 @@
+{
+  "started_at": 1788809735.6901946,
+  "scope": "Replace only verified waiting S1/S2 shells",
+  "jobs": [
+    {
+      "stage": 1,
+      "before": {
+        "pid": 2685619,
+        "start_ticks": "79771743",
+        "argv": [
+          "/bin/bash",
+          "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage1_20260906.sh"
+        ],
+        "cwd": "/home/kyzen/MetaFindV1",
+        "stdout": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage1_20260906.log"
+      },
+      "old_sha256": "d18f7accff486a68cdc537ca0d35fa01545b2c8af30b0ab54387843fbda36fb6",
+      "new_sha256": "0f14b536074703f8afdaf6c686b58519ac8ea170af97581b6e12b84c8f6c02d9",
+      "backup": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/chain_paper_stage1_before_wait_fix.sh",
+      "launcher": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage1_20260906.sh",
+      "environment_preserved": {
+        "METAFIND_DATA": "/home/kyzen/metafind/metafind_data_paper",
+        "METAFIND_TEXT_TEMPLATE": null,
+        "PYTHONPATH": null
+      },
+      "terminated_wait_child": {
+        "pid": 2721506,
+        "start_ticks": "80113792",
+        "argv": [
+          "sleep",
+          "60"
+        ],
+        "cwd": "/home/kyzen/MetaFindV1",
+        "stdout": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage1_20260906.log"
+      },
+      "new_pid": 2721952,
+      "after": {
+        "pid": 2721952,
+        "start_ticks": "80116605",
+        "argv": [
+          "/bin/bash",
+          "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage1_20260906.sh"
+        ],
+        "cwd": "/home/kyzen/MetaFindV1",
+        "stdout": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage1_20260906.log"
+      },
+      "status": "verified_waiting"
+    },
+    {
+      "stage": 2,
+      "before": {
+        "pid": 2494552,
+        "start_ticks": "77088621",
+        "argv": [
+          "bash",
+          "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage2_20260906.sh"
+        ],
+        "cwd": "/home/kyzen/MetaFindV1",
+        "stdout": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage2_20260906.log"
+      },
+      "old_sha256": "cbd33e69e88c599876e0807fdd336bb8fea018268374c03237278441eed165a0",
+      "new_sha256": "f90676478ba09bf73dc8b080daa596e9e2e892941cef48483d273fd9a4da90a7",
+      "backup": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/chain_paper_stage2_before_wait_fix.sh",
+      "launcher": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage2_20260906.sh",
+      "environment_preserved": {
+        "METAFIND_DATA": "/home/kyzen/metafind/metafind_data_paper",
+        "METAFIND_TEXT_TEMPLATE": null,
+        "PYTHONPATH": null
+      },
+      "terminated_wait_child": {
+        "pid": 2721323,
+        "start_ticks": "80112888",
+        "argv": [
+          "sleep",
+          "60"
+        ],
+        "cwd": "/home/kyzen/MetaFindV1",
+        "stdout": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage2_20260906.log"
+      },
+      "new_pid": 2721958,
+      "after": {
+        "pid": 2721958,
+        "start_ticks": "80116670",
+        "argv": [
+          "/bin/bash",
+          "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage2_20260906.sh"
+        ],
+        "cwd": "/home/kyzen/MetaFindV1",
+        "stdout": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage2_20260906.log"
+      },
+      "status": "verified_waiting"
+    }
+  ],
+  "protected_before": {
+    "2043422": {
+      "pid": 2043422,
+      "start_ticks": "67087548",
+      "argv": [
+        "/bin/bash",
+        "/home/kyzen/metafind/metafind_data_paper/outputs/logs/r2_annotate_v10.sh"
+      ],
+      "cwd": "/home/kyzen/MetaFindV1",
+      "stdout": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/r2_annotate_v10.log"
+    },
+    "2043427": {
+      "pid": 2043427,
+      "start_ticks": "67087549",
+      "argv": [
+        "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+        "-m",
+        "metafind.data.annotate_run",
+        "--prompt-mode",
+        "figure2_v10"
+      ],
+      "cwd": "/home/kyzen/MetaFindV1",
+      "stdout": "pipe:[20815692]"
+    }
+  },
+  "protected_after": {
+    "2043422": {
+      "pid": 2043422,
+      "start_ticks": "67087548",
+      "argv": [
+        "/bin/bash",
+        "/home/kyzen/metafind/metafind_data_paper/outputs/logs/r2_annotate_v10.sh"
+      ],
+      "cwd": "/home/kyzen/MetaFindV1",
+      "stdout": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/r2_annotate_v10.log"
+    },
+    "2043427": {
+      "pid": 2043427,
+      "start_ticks": "67087549",
+      "argv": [
+        "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+        "-m",
+        "metafind.data.annotate_run",
+        "--prompt-mode",
+        "figure2_v10"
+      ],
+      "cwd": "/home/kyzen/MetaFindV1",
+      "stdout": "pipe:[20815692]"
+    }
+  },
+  "status": "verified_waiting",
+  "annotation_restarted": false,
+  "r2_wrapper_restarted": false,
+  "finished_at": 1788809737.0053475
+}

@@ -1,0 +1,206 @@
+FFFF..FF.........FF..                                                    [100%]
+=================================== FAILURES ===================================
+_ test_wait_propagates_explicit_failure_from_current_attempt[1-=== R2 START-=== R2 EXIT 23-=== R2 DONE] _
+
+tmp_path = PosixPath('/tmp/metafind_chain_wait_before_20260908/test_wait_propagates_explicit_0')
+stage = 1, start = '=== R2 START', failure = '=== R2 EXIT 23'
+done = '=== R2 DONE'
+
+    @pytest.mark.parametrize("stage,start,failure,done", [
+        (1, "=== R2 START", "=== R2 EXIT 23", "=== R2 DONE"),
+        (1, "=== R2 START", "=== R2 EXIT 137", "=== R2 DONE"),
+        (2, "=== 0 wait for R2", "PIPELINE FAILED at stage1", "=== DONE (row 1)"),
+        (2, "=== 0 wait for R2", "PIPELINE FAILED (line 80, exit 23)", "=== DONE (row 1)"),
+    ])
+    def test_wait_propagates_explicit_failure_from_current_attempt(tmp_path, stage, start, failure, done):
+        result = run_wait_prefix(tmp_path, stage, f"{start}\n{failure}\n")
+>       assert result.returncode == 1, result.stdout + result.stderr
+E       AssertionError: 
+E         === 0 wait for R2  2026-09-08 03:29:19
+E         WAIT_SENTINEL
+E         
+E       assert 97 == 1
+E        +  where 97 = CompletedProcess(args=['bash', '-c', 'sleep() { echo "WAIT_SENTINEL"; exit 97; }\n#!/bin/bash\n# DL-103 paper-first li..."DOWNSTREAM_REACHED"\n'], returncode=97, stdout='\n=== 0 wait for R2  2026-09-08 03:29:19\nWAIT_SENTINEL\n', stderr='').returncode
+
+tests/pipeline/test_paper_chain_failure.py:80: AssertionError
+_ test_wait_propagates_explicit_failure_from_current_attempt[1-=== R2 START-=== R2 EXIT 137-=== R2 DONE] _
+
+tmp_path = PosixPath('/tmp/metafind_chain_wait_before_20260908/test_wait_propagates_explicit_1')
+stage = 1, start = '=== R2 START', failure = '=== R2 EXIT 137'
+done = '=== R2 DONE'
+
+    @pytest.mark.parametrize("stage,start,failure,done", [
+        (1, "=== R2 START", "=== R2 EXIT 23", "=== R2 DONE"),
+        (1, "=== R2 START", "=== R2 EXIT 137", "=== R2 DONE"),
+        (2, "=== 0 wait for R2", "PIPELINE FAILED at stage1", "=== DONE (row 1)"),
+        (2, "=== 0 wait for R2", "PIPELINE FAILED (line 80, exit 23)", "=== DONE (row 1)"),
+    ])
+    def test_wait_propagates_explicit_failure_from_current_attempt(tmp_path, stage, start, failure, done):
+        result = run_wait_prefix(tmp_path, stage, f"{start}\n{failure}\n")
+>       assert result.returncode == 1, result.stdout + result.stderr
+E       AssertionError: 
+E         === 0 wait for R2  2026-09-08 03:29:19
+E         WAIT_SENTINEL
+E         
+E       assert 97 == 1
+E        +  where 97 = CompletedProcess(args=['bash', '-c', 'sleep() { echo "WAIT_SENTINEL"; exit 97; }\n#!/bin/bash\n# DL-103 paper-first li..."DOWNSTREAM_REACHED"\n'], returncode=97, stdout='\n=== 0 wait for R2  2026-09-08 03:29:19\nWAIT_SENTINEL\n', stderr='').returncode
+
+tests/pipeline/test_paper_chain_failure.py:80: AssertionError
+_ test_wait_propagates_explicit_failure_from_current_attempt[2-=== 0 wait for R2-PIPELINE FAILED at stage1-=== DONE (row 1)] _
+
+tmp_path = PosixPath('/tmp/metafind_chain_wait_before_20260908/test_wait_propagates_explicit_2')
+stage = 2, start = '=== 0 wait for R2', failure = 'PIPELINE FAILED at stage1'
+done = '=== DONE (row 1)'
+
+    @pytest.mark.parametrize("stage,start,failure,done", [
+        (1, "=== R2 START", "=== R2 EXIT 23", "=== R2 DONE"),
+        (1, "=== R2 START", "=== R2 EXIT 137", "=== R2 DONE"),
+        (2, "=== 0 wait for R2", "PIPELINE FAILED at stage1", "=== DONE (row 1)"),
+        (2, "=== 0 wait for R2", "PIPELINE FAILED (line 80, exit 23)", "=== DONE (row 1)"),
+    ])
+    def test_wait_propagates_explicit_failure_from_current_attempt(tmp_path, stage, start, failure, done):
+        result = run_wait_prefix(tmp_path, stage, f"{start}\n{failure}\n")
+>       assert result.returncode == 1, result.stdout + result.stderr
+E       AssertionError: 
+E         === 0 wait: Stage 1 chain (row 1) and the unified ProcTHOR renders  2026-09-08 03:29:19
+E         WAIT_SENTINEL
+E         
+E       assert 97 == 1
+E        +  where 97 = CompletedProcess(args=['bash', '-c', 'sleep() { echo "WAIT_SENTINEL"; exit 97; }\n#!/bin/bash\n# DL-103 R6/R8/R9: Stag...\n=== 0 wait: Stage 1 chain (row 1) and the unified ProcTHOR renders  2026-09-08 03:29:19\nWAIT_SENTINEL\n', stderr='').returncode
+
+tests/pipeline/test_paper_chain_failure.py:80: AssertionError
+_ test_wait_propagates_explicit_failure_from_current_attempt[2-=== 0 wait for R2-PIPELINE FAILED (line 80, exit 23)-=== DONE (row 1)] _
+
+tmp_path = PosixPath('/tmp/metafind_chain_wait_before_20260908/test_wait_propagates_explicit_3')
+stage = 2, start = '=== 0 wait for R2'
+failure = 'PIPELINE FAILED (line 80, exit 23)', done = '=== DONE (row 1)'
+
+    @pytest.mark.parametrize("stage,start,failure,done", [
+        (1, "=== R2 START", "=== R2 EXIT 23", "=== R2 DONE"),
+        (1, "=== R2 START", "=== R2 EXIT 137", "=== R2 DONE"),
+        (2, "=== 0 wait for R2", "PIPELINE FAILED at stage1", "=== DONE (row 1)"),
+        (2, "=== 0 wait for R2", "PIPELINE FAILED (line 80, exit 23)", "=== DONE (row 1)"),
+    ])
+    def test_wait_propagates_explicit_failure_from_current_attempt(tmp_path, stage, start, failure, done):
+        result = run_wait_prefix(tmp_path, stage, f"{start}\n{failure}\n")
+>       assert result.returncode == 1, result.stdout + result.stderr
+E       AssertionError: 
+E         === 0 wait: Stage 1 chain (row 1) and the unified ProcTHOR renders  2026-09-08 03:29:19
+E         WAIT_SENTINEL
+E         
+E       assert 97 == 1
+E        +  where 97 = CompletedProcess(args=['bash', '-c', 'sleep() { echo "WAIT_SENTINEL"; exit 97; }\n#!/bin/bash\n# DL-103 R6/R8/R9: Stag...\n=== 0 wait: Stage 1 chain (row 1) and the unified ProcTHOR renders  2026-09-08 03:29:19\nWAIT_SENTINEL\n', stderr='').returncode
+
+tests/pipeline/test_paper_chain_failure.py:80: AssertionError
+_ test_wait_uses_last_attempt_not_historical_terminal_markers[False-success-1-=== R2 START-=== R2 EXIT 23-=== R2 DONE] _
+
+tmp_path = PosixPath('/tmp/metafind_chain_wait_before_20260908/test_wait_uses_last_attempt_no2')
+stage = 1, start = '=== R2 START', failure = '=== R2 EXIT 23'
+done = '=== R2 DONE', history = 'success', current_done = False
+
+    @pytest.mark.parametrize("stage,start,failure,done", [
+        (1, "=== R2 START", "=== R2 EXIT 23", "=== R2 DONE"),
+        (2, "=== 0 wait for R2", "PIPELINE FAILED at stage1", "=== DONE (row 1)"),
+    ])
+    @pytest.mark.parametrize("history", ["failure", "success"])
+    @pytest.mark.parametrize("current_done", [False, True])
+    def test_wait_uses_last_attempt_not_historical_terminal_markers(
+            tmp_path, stage, start, failure, done, history, current_done):
+        old_terminal = failure if history == "failure" else done
+        log = f"{start} old\n{old_terminal}\n{start} new\n"
+        if current_done:
+            log += done + "\n"
+        result = run_wait_prefix(tmp_path, stage, log)
+>       assert result.returncode == (0 if current_done else 97), result.stdout + result.stderr
+E       AssertionError: 
+E         === 0 wait for R2  2026-09-08 03:29:19
+E         DOWNSTREAM_REACHED
+E         
+E       assert 0 == 97
+E        +  where 0 = CompletedProcess(args=['bash', '-c', 'sleep() { echo "WAIT_SENTINEL"; exit 97; }\n#!/bin/bash\n# DL-103 paper-first li...NSTREAM_REACHED"\n'], returncode=0, stdout='\n=== 0 wait for R2  2026-09-08 03:29:19\nDOWNSTREAM_REACHED\n', stderr='').returncode
+
+tests/pipeline/test_paper_chain_failure.py:99: AssertionError
+_ test_wait_uses_last_attempt_not_historical_terminal_markers[False-success-2-=== 0 wait for R2-PIPELINE FAILED at stage1-=== DONE (row 1)] _
+
+tmp_path = PosixPath('/tmp/metafind_chain_wait_before_20260908/test_wait_uses_last_attempt_no3')
+stage = 2, start = '=== 0 wait for R2', failure = 'PIPELINE FAILED at stage1'
+done = '=== DONE (row 1)', history = 'success', current_done = False
+
+    @pytest.mark.parametrize("stage,start,failure,done", [
+        (1, "=== R2 START", "=== R2 EXIT 23", "=== R2 DONE"),
+        (2, "=== 0 wait for R2", "PIPELINE FAILED at stage1", "=== DONE (row 1)"),
+    ])
+    @pytest.mark.parametrize("history", ["failure", "success"])
+    @pytest.mark.parametrize("current_done", [False, True])
+    def test_wait_uses_last_attempt_not_historical_terminal_markers(
+            tmp_path, stage, start, failure, done, history, current_done):
+        old_terminal = failure if history == "failure" else done
+        log = f"{start} old\n{old_terminal}\n{start} new\n"
+        if current_done:
+            log += done + "\n"
+        result = run_wait_prefix(tmp_path, stage, log)
+>       assert result.returncode == (0 if current_done else 97), result.stdout + result.stderr
+E       AssertionError: 
+E         === 0 wait: Stage 1 chain (row 1) and the unified ProcTHOR renders  2026-09-08 03:29:19
+E         DOWNSTREAM_REACHED
+E         
+E       assert 0 == 97
+E        +  where 0 = CompletedProcess(args=['bash', '-c', 'sleep() { echo "WAIT_SENTINEL"; exit 97; }\n#!/bin/bash\n# DL-103 R6/R8/R9: Stag... 0 wait: Stage 1 chain (row 1) and the unified ProcTHOR renders  2026-09-08 03:29:19\nDOWNSTREAM_REACHED\n', stderr='').returncode
+
+tests/pipeline/test_paper_chain_failure.py:99: AssertionError
+___ test_wait_without_bound_terminal_evidence_keeps_waiting[1-=== R2 DONE\n] ___
+
+tmp_path = PosixPath('/tmp/metafind_chain_wait_before_20260908/test_wait_without_bound_termin5')
+stage = 1, log = '=== R2 DONE\n'
+
+    @pytest.mark.parametrize("stage,log", [
+        (1, None), (2, None), (1, ""), (2, ""),
+        (1, "=== R2 START\n=== R2 EXIT 0\n"),
+        (1, "=== R2 DONE\n"), (2, "=== DONE (row 1)\n"),
+        (1, "=== R2 START\nexample: === R2 EXIT 23\n"),
+        (2, "=== 0 wait for R2\nexample: PIPELINE FAILED\n"),
+    ])
+    def test_wait_without_bound_terminal_evidence_keeps_waiting(tmp_path, stage, log):
+        result = run_wait_prefix(tmp_path, stage, log)
+>       assert result.returncode == 97, result.stdout + result.stderr
+E       AssertionError: 
+E         === 0 wait for R2  2026-09-08 03:29:19
+E         DOWNSTREAM_REACHED
+E         
+E       assert 0 == 97
+E        +  where 0 = CompletedProcess(args=['bash', '-c', 'sleep() { echo "WAIT_SENTINEL"; exit 97; }\n#!/bin/bash\n# DL-103 paper-first li...NSTREAM_REACHED"\n'], returncode=0, stdout='\n=== 0 wait for R2  2026-09-08 03:29:19\nDOWNSTREAM_REACHED\n', stderr='').returncode
+
+tests/pipeline/test_paper_chain_failure.py:114: AssertionError
+_ test_wait_without_bound_terminal_evidence_keeps_waiting[2-=== DONE (row 1)\n] _
+
+tmp_path = PosixPath('/tmp/metafind_chain_wait_before_20260908/test_wait_without_bound_termin6')
+stage = 2, log = '=== DONE (row 1)\n'
+
+    @pytest.mark.parametrize("stage,log", [
+        (1, None), (2, None), (1, ""), (2, ""),
+        (1, "=== R2 START\n=== R2 EXIT 0\n"),
+        (1, "=== R2 DONE\n"), (2, "=== DONE (row 1)\n"),
+        (1, "=== R2 START\nexample: === R2 EXIT 23\n"),
+        (2, "=== 0 wait for R2\nexample: PIPELINE FAILED\n"),
+    ])
+    def test_wait_without_bound_terminal_evidence_keeps_waiting(tmp_path, stage, log):
+        result = run_wait_prefix(tmp_path, stage, log)
+>       assert result.returncode == 97, result.stdout + result.stderr
+E       AssertionError: 
+E         === 0 wait: Stage 1 chain (row 1) and the unified ProcTHOR renders  2026-09-08 03:29:19
+E         DOWNSTREAM_REACHED
+E         
+E       assert 0 == 97
+E        +  where 0 = CompletedProcess(args=['bash', '-c', 'sleep() { echo "WAIT_SENTINEL"; exit 97; }\n#!/bin/bash\n# DL-103 R6/R8/R9: Stag... 0 wait: Stage 1 chain (row 1) and the unified ProcTHOR renders  2026-09-08 03:29:19\nDOWNSTREAM_REACHED\n', stderr='').returncode
+
+tests/pipeline/test_paper_chain_failure.py:114: AssertionError
+=========================== short test summary info ============================
+FAILED tests/pipeline/test_paper_chain_failure.py::test_wait_propagates_explicit_failure_from_current_attempt[1-=== R2 START-=== R2 EXIT 23-=== R2 DONE]
+FAILED tests/pipeline/test_paper_chain_failure.py::test_wait_propagates_explicit_failure_from_current_attempt[1-=== R2 START-=== R2 EXIT 137-=== R2 DONE]
+FAILED tests/pipeline/test_paper_chain_failure.py::test_wait_propagates_explicit_failure_from_current_attempt[2-=== 0 wait for R2-PIPELINE FAILED at stage1-=== DONE (row 1)]
+FAILED tests/pipeline/test_paper_chain_failure.py::test_wait_propagates_explicit_failure_from_current_attempt[2-=== 0 wait for R2-PIPELINE FAILED (line 80, exit 23)-=== DONE (row 1)]
+FAILED tests/pipeline/test_paper_chain_failure.py::test_wait_uses_last_attempt_not_historical_terminal_markers[False-success-1-=== R2 START-=== R2 EXIT 23-=== R2 DONE]
+FAILED tests/pipeline/test_paper_chain_failure.py::test_wait_uses_last_attempt_not_historical_terminal_markers[False-success-2-=== 0 wait for R2-PIPELINE FAILED at stage1-=== DONE (row 1)]
+FAILED tests/pipeline/test_paper_chain_failure.py::test_wait_without_bound_terminal_evidence_keeps_waiting[1-=== R2 DONE\n]
+FAILED tests/pipeline/test_paper_chain_failure.py::test_wait_without_bound_terminal_evidence_keeps_waiting[2-=== DONE (row 1)\n]
+8 failed, 13 passed, 30 deselected in 0.17s

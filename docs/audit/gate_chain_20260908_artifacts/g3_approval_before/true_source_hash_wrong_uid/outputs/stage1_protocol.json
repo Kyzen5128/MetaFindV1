@@ -1,0 +1,1 @@
+{"status": "resolved", "fusion": "transformer", "tower_sharing": "shared_backbone_separate_fusion", "allow_all_masked": true, "similarity": "cosine", "hyperparameter_config_hash": "bf838d7b55102cc3f6650692037e2f7e305a725fd200501e57a1f1eb27ba9795"}

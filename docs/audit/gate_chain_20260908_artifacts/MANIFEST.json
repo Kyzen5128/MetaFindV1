@@ -1,0 +1,394 @@
+{
+  "schema": "metafind.audit_archive.v1",
+  "scope": "Original execution bytes; paths remain historical. Scripts are receipts, not automatic rerun instructions. Markdown audit narrative is in the parent report.",
+  "files": [
+    {
+      "path": "appendix_oracle/execution.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/appendix_oracle/execution.json",
+      "bytes": 3489,
+      "sha256": "335aa0cf707f373977c6216c11d938a93a2e43699cff3cd683f8df9cb5f55b25"
+    },
+    {
+      "path": "appendix_oracle/stdout_excerpt.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/appendix_oracle/stdout_excerpt.log",
+      "bytes": 33,
+      "sha256": "ba5b92a3796f46d12055aea55c8bbe2a892130da15e2c1725af90ca95c307a60"
+    },
+    {
+      "path": "chain_paper_stage1_before_wait_fix.sh",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/chain_paper_stage1_before_wait_fix.sh",
+      "bytes": 7430,
+      "sha256": "d18f7accff486a68cdc537ca0d35fa01545b2c8af30b0ab54387843fbda36fb6"
+    },
+    {
+      "path": "chain_paper_stage2_before_wait_fix.sh",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/chain_paper_stage2_before_wait_fix.sh",
+      "bytes": 4973,
+      "sha256": "cbd33e69e88c599876e0807fdd336bb8fea018268374c03237278441eed165a0"
+    },
+    {
+      "path": "chain_wait_after.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/chain_wait_after.json",
+      "bytes": 1774,
+      "sha256": "5bb009bfb21742ffcf77018b65fc9d0e66d50629a17a11e129eb39b874b95baf"
+    },
+    {
+      "path": "chain_wait_after.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/chain_wait_after.log",
+      "bytes": 100,
+      "sha256": "2eddb02510599961a7f01efd8c4608d080445ed4c0547f015f7d079f46aa477d"
+    },
+    {
+      "path": "chain_wait_before.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/chain_wait_before.json",
+      "bytes": 1301,
+      "sha256": "dc9c03e3a3a75a439443bdd9fb8fa711ccb7252d9941d617c2317f3ec2f8da2a"
+    },
+    {
+      "path": "chain_wait_before.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/chain_wait_before.log",
+      "bytes": 13108,
+      "sha256": "fea9ebd13cb12923a36ef590d8218974f93507a932ba6110fdef3156c395e027"
+    },
+    {
+      "path": "chain_wait_final_checks.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/chain_wait_final_checks.json",
+      "bytes": 1871,
+      "sha256": "d66c18f54ab08622feccf5094bbf42bb46b56f2785f6456889bc4723619f1c55"
+    },
+    {
+      "path": "deploy_waiters.py",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/deploy_waiters.py",
+      "bytes": 6558,
+      "sha256": "7d660c2f1a188be1904c3263a1aaa26d57d0cc226b45603ec5d6703a816b8251"
+    },
+    {
+      "path": "g3_approval_after/group_name_only/G3_object_corpus.history.yaml",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/group_name_only/G3_object_corpus.history.yaml",
+      "bytes": 15886,
+      "sha256": "44ac6608d8ca509bf30a8fc8fc9da5a0cde360ef74b02cb9e344cfe4100a1f4b"
+    },
+    {
+      "path": "g3_approval_after/group_name_only/G3_object_corpus.yaml",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/group_name_only/G3_object_corpus.yaml",
+      "bytes": 15002,
+      "sha256": "76dcc7dd93818dc1b473211c80ec4e749f1b374545ed8a30699b81b1c4d451ec"
+    },
+    {
+      "path": "g3_approval_after/group_name_only/execution.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/group_name_only/execution.json",
+      "bytes": 4887,
+      "sha256": "fa851e8ba12a4d37bd2b65824557acc86fe4031493782dc393d12dfa4a0a6f5e"
+    },
+    {
+      "path": "g3_approval_after/group_name_only/run_progress.jsonl",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/group_name_only/run_progress.jsonl",
+      "bytes": 438,
+      "sha256": "79da22f284125dc0bd2961b241aca199382896b40184fd1f658b28e2a3bacfba"
+    },
+    {
+      "path": "g3_approval_after/group_name_only/stderr.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/group_name_only/stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "g3_approval_after/group_name_only/stdout.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/group_name_only/stdout.log",
+      "bytes": 256,
+      "sha256": "238570b54a8bda19d5cb76b9ef3ee7a77b8e5811b8e061801a2c5430c00a57b5"
+    },
+    {
+      "path": "g3_approval_after/historical/G3_object_corpus.history.yaml",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/historical/G3_object_corpus.history.yaml",
+      "bytes": 36586,
+      "sha256": "ef6875352d4a19028c3b5ea96ea12945d22be4d740d6ef5f0a383ccfe6cead4a"
+    },
+    {
+      "path": "g3_approval_after/historical/G3_object_corpus.yaml",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/historical/G3_object_corpus.yaml",
+      "bytes": 34852,
+      "sha256": "21e908d8b4ebe18f676bdc266a199b7e90cd915966b135cf5d0db0166f8a2090"
+    },
+    {
+      "path": "g3_approval_after/historical/execution.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/historical/execution.json",
+      "bytes": 4786,
+      "sha256": "bf38f32d4ad7dd399e98bfdffb2189d5951275cb75f4d33ab1cd59b38100bf82"
+    },
+    {
+      "path": "g3_approval_after/historical/run_progress.jsonl",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/historical/run_progress.jsonl",
+      "bytes": 439,
+      "sha256": "1e31ba1153c9759c32d9dee4305b3328714d4df29515f6e044b91ca90e682cbf"
+    },
+    {
+      "path": "g3_approval_after/historical/stderr.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/historical/stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "g3_approval_after/historical/stdout.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/historical/stdout.log",
+      "bytes": 147,
+      "sha256": "c4e63a364df20055182f73aa86f997180f98c7bd6804ad9a19c5733363f6a725"
+    },
+    {
+      "path": "g3_approval_after/run.py",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/run.py",
+      "bytes": 3872,
+      "sha256": "728a159ab294ba9bd8792f278cbe11bf608103a1b14cdbb664a546974cf39a0d"
+    },
+    {
+      "path": "g3_approval_after/summary.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/summary.json",
+      "bytes": 16589,
+      "sha256": "40a3e6a680a0109be8ac3533abf149bf5475716a301b83236872638dc6c7de55"
+    },
+    {
+      "path": "g3_approval_after/targeted_tests.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/targeted_tests.log",
+      "bytes": 341,
+      "sha256": "fd2b7b792b83af614b02da1bec1154498c449020cee6779f600f93969da88ebc"
+    },
+    {
+      "path": "g3_approval_after/targeted_tests_execution.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/targeted_tests_execution.json",
+      "bytes": 1618,
+      "sha256": "f73e8d2eed718cacba4a447d7fe8d2c71962d6cd5a99b3eebedc6a98a2bde252"
+    },
+    {
+      "path": "g3_approval_after/true_source_hash_wrong_uid/G3_object_corpus.history.yaml",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/true_source_hash_wrong_uid/G3_object_corpus.history.yaml",
+      "bytes": 16491,
+      "sha256": "56ff5c92d77002ef0b1449e6b0f38cde201758b087da238870397bab792929b5"
+    },
+    {
+      "path": "g3_approval_after/true_source_hash_wrong_uid/G3_object_corpus.yaml",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/true_source_hash_wrong_uid/G3_object_corpus.yaml",
+      "bytes": 15580,
+      "sha256": "17afc480c67575d8661a822fca3ac0e834af27ec6a6518ff21d9cd7d55a2d8f3"
+    },
+    {
+      "path": "g3_approval_after/true_source_hash_wrong_uid/execution.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/true_source_hash_wrong_uid/execution.json",
+      "bytes": 4931,
+      "sha256": "7fd0d71c334a54f8ee4864447c2031656f4c960f4d9eec16135ce74efcc3b013"
+    },
+    {
+      "path": "g3_approval_after/true_source_hash_wrong_uid/run_progress.jsonl",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/true_source_hash_wrong_uid/run_progress.jsonl",
+      "bytes": 434,
+      "sha256": "714636d8af46131f94a38d19f89f4aa5313a9dccbe3dfd118449303340a0b246"
+    },
+    {
+      "path": "g3_approval_after/true_source_hash_wrong_uid/stderr.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/true_source_hash_wrong_uid/stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "g3_approval_after/true_source_hash_wrong_uid/stdout.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/true_source_hash_wrong_uid/stdout.log",
+      "bytes": 267,
+      "sha256": "dbf4475a45d0f5e2d2ab37cb8fb675da88f6e5be1d54dccf60168f3a0b26e193"
+    },
+    {
+      "path": "g3_approval_before/group_name_only/lvis.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/lvis.json",
+      "bytes": 2500,
+      "sha256": "63883d72c96d9550ba6f319319fcad48ef3e381303b42db0c66d78ca4ecbd933"
+    },
+    {
+      "path": "g3_approval_before/group_name_only/outputs/annotation_exclusions.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs/annotation_exclusions.json",
+      "bytes": 158,
+      "sha256": "1f48a06b60d6e7cce8b304bcffadff8f7a06b6c0aa1190a28e7cef6c00a47865"
+    },
+    {
+      "path": "g3_approval_before/group_name_only/outputs/eval_protocols.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs/eval_protocols.json",
+      "bytes": 883,
+      "sha256": "c0657a98bf391b2dfa8582cda530cae50b31b25f30e0401d928bdcb75bcc6149"
+    },
+    {
+      "path": "g3_approval_before/group_name_only/outputs/splits.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs/splits.json",
+      "bytes": 2514,
+      "sha256": "d8eeca52ae3d100d164c20e63345a144f08a0b65a068804cd986c35cec118963"
+    },
+    {
+      "path": "g3_approval_before/group_name_only/outputs/stage1_encoding_protocol.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs/stage1_encoding_protocol.json",
+      "bytes": 332,
+      "sha256": "72b169470665b898d0037d58c75d9fb0723afbfcdf20802caa95ec72febaec7a"
+    },
+    {
+      "path": "g3_approval_before/group_name_only/outputs/stage1_hyperparameters.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs/stage1_hyperparameters.json",
+      "bytes": 460,
+      "sha256": "eaf03fa63487d97fdb10f9767596817bf102567e40336dd29596b4f840b551bc"
+    },
+    {
+      "path": "g3_approval_before/group_name_only/outputs/stage1_protocol.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs/stage1_protocol.json",
+      "bytes": 247,
+      "sha256": "9e703c9030bea91485d94de9078613d19123d45ccaa4f3a7a631c07bad1261cf"
+    },
+    {
+      "path": "g3_approval_before/group_name_only/results/G3_object_corpus.history.yaml",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/results/G3_object_corpus.history.yaml",
+      "bytes": 12973,
+      "sha256": "c9eae4be6fa59400a8b13f54ca89a4792a53f8b7dd0f7b9f5371695a18f21072"
+    },
+    {
+      "path": "g3_approval_before/group_name_only/results/G3_object_corpus.yaml",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/results/G3_object_corpus.yaml",
+      "bytes": 12240,
+      "sha256": "9368c1ea3edbb9c385b80377c2370248269f320acc8fc5a4bcc5697a58fa37fe"
+    },
+    {
+      "path": "g3_approval_before/group_name_only/stdout.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/stdout.log",
+      "bytes": 161,
+      "sha256": "47e3aa7647d301ccfc8d252b55a8c22fdca1f2024a0c0d258150c0e43a8d63df"
+    },
+    {
+      "path": "g3_approval_before/summary.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/summary.json",
+      "bytes": 1405,
+      "sha256": "f6c3713992de0109c205d2d373c7b99dbf01c238fa16934aeadf29d2b1858a74"
+    },
+    {
+      "path": "g3_approval_before/true_source_hash_wrong_uid/lvis.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/true_source_hash_wrong_uid/lvis.json",
+      "bytes": 2500,
+      "sha256": "63883d72c96d9550ba6f319319fcad48ef3e381303b42db0c66d78ca4ecbd933"
+    },
+    {
+      "path": "g3_approval_before/true_source_hash_wrong_uid/outputs/annotation_exclusions.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/true_source_hash_wrong_uid/outputs/annotation_exclusions.json",
+      "bytes": 696,
+      "sha256": "9e32414bb0d2e3d35a8e1c83d5a71622c7c3a3a138ab2349fd92d71d332917e6"
+    },
+    {
+      "path": "g3_approval_before/true_source_hash_wrong_uid/outputs/eval_protocols.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/true_source_hash_wrong_uid/outputs/eval_protocols.json",
+      "bytes": 883,
+      "sha256": "c0657a98bf391b2dfa8582cda530cae50b31b25f30e0401d928bdcb75bcc6149"
+    },
+    {
+      "path": "g3_approval_before/true_source_hash_wrong_uid/outputs/splits.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/true_source_hash_wrong_uid/outputs/splits.json",
+      "bytes": 2514,
+      "sha256": "d8eeca52ae3d100d164c20e63345a144f08a0b65a068804cd986c35cec118963"
+    },
+    {
+      "path": "g3_approval_before/true_source_hash_wrong_uid/outputs/stage1_encoding_protocol.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/true_source_hash_wrong_uid/outputs/stage1_encoding_protocol.json",
+      "bytes": 332,
+      "sha256": "72b169470665b898d0037d58c75d9fb0723afbfcdf20802caa95ec72febaec7a"
+    },
+    {
+      "path": "g3_approval_before/true_source_hash_wrong_uid/outputs/stage1_hyperparameters.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/true_source_hash_wrong_uid/outputs/stage1_hyperparameters.json",
+      "bytes": 460,
+      "sha256": "eaf03fa63487d97fdb10f9767596817bf102567e40336dd29596b4f840b551bc"
+    },
+    {
+      "path": "g3_approval_before/true_source_hash_wrong_uid/outputs/stage1_protocol.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/true_source_hash_wrong_uid/outputs/stage1_protocol.json",
+      "bytes": 247,
+      "sha256": "9e703c9030bea91485d94de9078613d19123d45ccaa4f3a7a631c07bad1261cf"
+    },
+    {
+      "path": "g3_approval_before/true_source_hash_wrong_uid/results/G3_object_corpus.history.yaml",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/true_source_hash_wrong_uid/results/G3_object_corpus.history.yaml",
+      "bytes": 13072,
+      "sha256": "adcf6487f50c3c53e06382960046e1d7f2fe5b46d2ce3ae42fa1d50c41db29b3"
+    },
+    {
+      "path": "g3_approval_before/true_source_hash_wrong_uid/results/G3_object_corpus.yaml",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/true_source_hash_wrong_uid/results/G3_object_corpus.yaml",
+      "bytes": 12339,
+      "sha256": "3870d4fb5c2079d2ff11cc7cd3afc2ef644bbcd3b3f1c4c1b075c6576e7870ce"
+    },
+    {
+      "path": "g3_approval_before/true_source_hash_wrong_uid/stdout.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/true_source_hash_wrong_uid/stdout.log",
+      "bytes": 172,
+      "sha256": "6d4c685a655a2b5ee12b05bf4b72a6ec467d096496df3f6fe68e2065a6bb01f9"
+    },
+    {
+      "path": "graph.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/graph.json",
+      "bytes": 2042,
+      "sha256": "43d735276f2373da75a93f2cca6076c6b65da8e278bbd92218df19513927b8cf"
+    },
+    {
+      "path": "graph.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/graph.log",
+      "bytes": 76,
+      "sha256": "a8df9a66590a4ef26fe8c1a7276f47708a72d700ba5178eeb2639fb9c57abac7"
+    },
+    {
+      "path": "integration_cpu.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/integration_cpu.json",
+      "bytes": 63426,
+      "sha256": "4ab99bc7cc459e45951c2e48e5d28658f875ed4dcdb4d95850016261053b5b47"
+    },
+    {
+      "path": "integration_cpu.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/integration_cpu.log",
+      "bytes": 5632,
+      "sha256": "8fde6d3d96782ce939a444ae93fefb979bd106f0c035aaefa7575d1dd9bb71c2"
+    },
+    {
+      "path": "integration_cpu_final.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/integration_cpu_final.json",
+      "bytes": 63425,
+      "sha256": "ced646afd0a4091d5a05be856704c8a94d125c2b6fb94bc42418a9a708a509b4"
+    },
+    {
+      "path": "integration_cpu_final.log",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/integration_cpu_final.log",
+      "bytes": 5622,
+      "sha256": "4770e69d5dc06fb4bb6960fc60dd6d5ee04672d1e3a9138318b4c3fd169f2fc7"
+    },
+    {
+      "path": "run_verification.py",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/run_verification.py",
+      "bytes": 2566,
+      "sha256": "6737d4a1a56ea92839c4e1beb12a84cecc1e2632c9cd6890ef8e3d1b8b00d9da"
+    },
+    {
+      "path": "run_verification_final.py",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/run_verification_final.py",
+      "bytes": 2578,
+      "sha256": "4d54240adf72971587bdff7b95d6d6460624345e4806d53d198c934ccec9581c"
+    },
+    {
+      "path": "status_after_deployment.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/status_after_deployment.json",
+      "bytes": 3138,
+      "sha256": "cf4907f4b1e3f12a28e3304150e86c426849dc1c050a8de3d21949eb4e582574"
+    },
+    {
+      "path": "waiting_chain_deployment.json",
+      "original_path": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/waiting_chain_deployment.json",
+      "bytes": 5137,
+      "sha256": "da68116ec2c638dfcbedb8b4cd6dd7ccbd3c0a14b271225361178af9d3e2a07d"
+    }
+  ],
+  "bound_source_sha256": {
+    "metafind/gates/g3_object_corpus.py": "29934b446dbd6d3bb516094c4bab9e034d7aa783cc603eb4b0e15a1c2a6e834f",
+    "tests/pipeline/test_object_corpus_gate.py": "e7cc006196993fad57d9ac590308e551503d4cee6d4ff18ad8089481900910d9",
+    "tests/pipeline/test_paper_chain_failure.py": "25ba34d11ba7a4af1535eeaf92b7d2f4a0bd95003eb6d978f09a2ab8e1ecc642",
+    "tools/chain_paper_stage1.sh": "0f14b536074703f8afdaf6c686b58519ac8ea170af97581b6e12b84c8f6c02d9",
+    "tools/chain_paper_stage2.sh": "f90676478ba09bf73dc8b080daa596e9e2e892941cef48483d273fd9a4da90a7",
+    "workflow/annotation_exclusions_20260828.json": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058",
+    "docs/graph/node_registry.yaml": "bf91d097de69feda4b04686fe056239a725075ae68eaff5d2ba4db321853935b",
+    "docs/graph/validation_plan.yaml": "e845d4e54df6789210af408a4773e605f2cd32f49d7cc58ba024f2f8a967d790"
+  }
+}

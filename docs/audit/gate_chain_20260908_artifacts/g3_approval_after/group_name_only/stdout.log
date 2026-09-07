@@ -1,0 +1,2 @@
+G3_object_corpus: FAIL (rc 2) -> /home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/group_name_only/G3_object_corpus.yaml
+  FAIL: manual approval: E differs from the complete pinned approved UID set (21 missing, 1 unexpected)

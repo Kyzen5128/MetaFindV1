@@ -1,0 +1,33 @@
+{
+  "command": [
+    "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+    "-B",
+    "tools/check_graph.py"
+  ],
+  "cwd": "/home/kyzen/MetaFindV1",
+  "exit_code": 0,
+  "started_at": 1788809995.756829,
+  "finished_at": 1788809996.143987,
+  "source_sha256_before": {
+    "docs/graph/validation_plan.yaml": "e845d4e54df6789210af408a4773e605f2cd32f49d7cc58ba024f2f8a967d790",
+    "docs/graph/graph_spec.yaml": "aec2117141f6b3845b118bca87d3eebdb012cda89ec746208884b3efbdfaa952",
+    "docs/graph/00_FINDINGS.md": "650dcb6dff95154a0d79c164f670f37c4567d64d9a66bcaeb8f4edd59ff28935",
+    "docs/graph/README.md": "0033a897e69644c752345a6e24c28fdef895985663aca4150303e4479264d088",
+    "docs/graph/02_BUILD_STEPS.md": "6b4ad1fb9d8845046048d0d83593b82372a46d3b621b93aaf313e10570833df8",
+    "docs/graph/node_registry.yaml": "bf91d097de69feda4b04686fe056239a725075ae68eaff5d2ba4db321853935b",
+    "docs/graph/01_GRAPH_SPEC.md": "b21db166957e7d45efbd6ed40298ef3799568afde59eaa435a43c24eaf2bb585",
+    "tools/check_graph.py": "70635b6294823aaff3b7089293bebc5ca0cc7a34cef4fa078c8e2197b4ae1f9b"
+  },
+  "source_sha256_after": {
+    "docs/graph/validation_plan.yaml": "e845d4e54df6789210af408a4773e605f2cd32f49d7cc58ba024f2f8a967d790",
+    "docs/graph/graph_spec.yaml": "aec2117141f6b3845b118bca87d3eebdb012cda89ec746208884b3efbdfaa952",
+    "docs/graph/00_FINDINGS.md": "650dcb6dff95154a0d79c164f670f37c4567d64d9a66bcaeb8f4edd59ff28935",
+    "docs/graph/README.md": "0033a897e69644c752345a6e24c28fdef895985663aca4150303e4479264d088",
+    "docs/graph/02_BUILD_STEPS.md": "6b4ad1fb9d8845046048d0d83593b82372a46d3b621b93aaf313e10570833df8",
+    "docs/graph/node_registry.yaml": "bf91d097de69feda4b04686fe056239a725075ae68eaff5d2ba4db321853935b",
+    "docs/graph/01_GRAPH_SPEC.md": "b21db166957e7d45efbd6ed40298ef3799568afde59eaa435a43c24eaf2bb585",
+    "tools/check_graph.py": "70635b6294823aaff3b7089293bebc5ca0cc7a34cef4fa078c8e2197b4ae1f9b"
+  },
+  "source_unchanged": true,
+  "log_sha256": "a8df9a66590a4ef26fe8c1a7276f47708a72d700ba5178eeb2639fb9c57abac7"
+}

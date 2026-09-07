@@ -18,22 +18,7 @@ fail() { echo "PIPELINE FAILED at $1" >&2; exit 1; }
 filter_output() { awk -v pattern="$FILTER" '$0 !~ pattern'; }
 
 step "0 wait: Stage 1 chain (row 1) and the unified ProcTHOR renders"
-# Every Stage 1 attempt starts with its wait step, including a restarted
-# waiter. Historical DONE/failure lines cannot settle a later attempt.
-while :; do
-  state=$(awk '
-    /^=== 0 wait for R2([[:space:]]|$)/ { active=1; state="waiting"; next }
-    !active { next }
-    /^PIPELINE FAILED([[:space:]]|$)/ { state="failed"; next }
-    /^=== DONE \(row 1\)([.[:space:]]|$)/ { if (state != "failed") state="done" }
-    END { print (active ? state : "waiting") }
-  ' "$L/chain_paper_stage1_20260906.log" 2>/dev/null) || state=waiting
-  case "$state" in
-    done) break ;;
-    failed) fail "Stage 1: current attempt failed; see $L/chain_paper_stage1_20260906.log" ;;
-  esac
-  sleep 60
-done
+until grep -q "^=== DONE (row 1)" $L/chain_paper_stage1_20260906.log 2>/dev/null; do sleep 60; done
 until grep -q "rendered, .* quarantined" $L/n07b_procthor_modalities_v2.log 2>/dev/null; do sleep 60; done
 REC=$CK/paper_v10_same_record_lr1e-4/stage1_best_ckpt.json
 [ -f $REC ] || fail "Stage 1 record missing"

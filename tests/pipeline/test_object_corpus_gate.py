@@ -20,7 +20,7 @@ def write_json(path, value):
 
 
 @pytest.fixture
-def corpus(tmp_path):
+def corpus(tmp_path, monkeypatch):
     outputs = tmp_path / "outputs"
     outputs.mkdir()
     (outputs / "logs").mkdir()
@@ -28,6 +28,20 @@ def corpus(tmp_path):
     manifest = tmp_path / "lvis.json"
     uids = [f"u{i:03}" for i in range(100)]
     write_json(manifest, {uid: f"glbs/{uid}.glb" for uid in uids})
+    approval = tmp_path / "approved_decision.json"
+
+    def approve(selected, historical=()):
+        # A synthetic decision independent of the corpus's claimed E. Only
+        # tests may replace the code-owned authority; there is no CLI override.
+        write_json(approval, {"decided_at": "2026-08-28T14:44:25+08:00",
+            "decided_by": "fixture reviewer", "decision": "fixture approved manual set",
+            "git_commit": "fixture-revision", "excluded_total": len(selected) + len(historical),
+            "groups": {"manual_review_rejected": {"n": len(selected), "uids": list(selected)},
+                       "n05_quarantine": {"n": len(historical), "uids": list(historical)}}})
+        monkeypatch.setattr(gate, "APPROVED_EXCLUSIONS_PATH", approval)
+        monkeypatch.setattr(gate, "APPROVED_EXCLUSIONS_SHA256", hashlib.sha256(approval.read_bytes()).hexdigest())
+
+    approve([])
     values = {"optimizer": "adamw", "learning_rate": 1e-4, "weight_decay": 0.01,
               "scheduler": "cosine", "batch_size": 8, "epochs": 1,
               "max_epochs": 10, "p_mask": 0.3, "decay_mask_tokens": False,
@@ -57,7 +71,8 @@ def corpus(tmp_path):
 
     admit(uids)
     return {"outputs": outputs, "manifest": manifest, "uids": uids, "admit": admit,
-            "record": tmp_path / "results/G3_object_corpus.yaml"}
+            "record": tmp_path / "results/G3_object_corpus.yaml", "approval": approval,
+            "approve": approve}
 
 
 def run(corpus, **kwargs):
@@ -238,6 +253,7 @@ def test_quarantine_uid_outside_manifest_fails(corpus):
 
 @pytest.mark.parametrize("failure_exists", [False, True])
 def test_approved_manual_exclusions_are_separate_and_not_double_counted(corpus, failure_exists):
+    corpus["approve"](["u000"])
     corpus["admit"](corpus["uids"][1:])
     manual_exclusion(corpus, "u000")
     if failure_exists:
@@ -255,6 +271,7 @@ def test_approved_manual_exclusions_are_separate_and_not_double_counted(corpus, 
 
 
 def test_readmitted_excluded_asset_is_a_definite_failure(corpus):
+    corpus["approve"](["u000"])
     manual_exclusion(corpus, "u000")
     rc, record = run(corpus)
     assert rc == 2
@@ -360,6 +377,15 @@ def test_failed_record_history_is_preserved_on_retry(corpus):
 
 
 def test_cli_rc_and_run_progress_agree_and_write_only_isolated_outputs(corpus, tmp_path):
+    # This subprocess uses the real fixed approval, not the in-process test
+    # override. Include the approved members in M and E, outside admitted A.
+    real = json.loads((gate.paths.REPO / "workflow/annotation_exclusions_20260828.json").read_bytes())
+    approved = [entry["uid"] for entry in real["groups"]["manual_review_rejected"]["uids"]]
+    manifest = json.loads(corpus["manifest"].read_bytes())
+    manifest.update({uid: f"glbs/{uid}.glb" for uid in approved})
+    write_json(corpus["manifest"], manifest)
+    write_json(corpus["outputs"] / "annotation_exclusions.json", {"excluded_total": len(approved),
+        "groups": {"manual_review_rejected": {"n": len(approved), "uids": approved}}})
     (corpus["outputs"] / "stage1_protocol.json").unlink()
     before = {path: path.read_bytes() for path in corpus["outputs"].glob("*.json")}
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", CUDA_VISIBLE_DEVICES="", HIP_VISIBLE_DEVICES="")
@@ -427,25 +453,27 @@ def test_missing_split_object_is_evidence_absence(corpus):
     assert run(corpus)[0] == 3
 
 
+@pytest.mark.parametrize("input_key", ["manifest", "approval"])
 @pytest.mark.parametrize("alias_kind", ["direct", "symlink", "hardlink", "history", "part"])
-def test_record_writer_never_overwrites_input_even_via_alias(corpus, tmp_path, alias_kind):
-    original = corpus["manifest"].read_bytes()
+def test_record_writer_never_overwrites_input_even_via_alias(corpus, tmp_path, alias_kind, input_key):
+    source = corpus[input_key]
+    original = source.read_bytes()
     record_path = tmp_path / "gate.yaml"
     if alias_kind == "direct":
-        record_path = corpus["manifest"]
+        record_path = source
     elif alias_kind == "symlink":
-        record_path.symlink_to(corpus["manifest"])
+        record_path.symlink_to(source)
     elif alias_kind == "hardlink":
-        os.link(corpus["manifest"], record_path)
+        os.link(source, record_path)
     elif alias_kind == "history":
-        record_path.with_suffix(".history.yaml").symlink_to(corpus["manifest"])
+        record_path.with_suffix(".history.yaml").symlink_to(source)
     else:
-        record_path.with_suffix(".yaml.part").symlink_to(corpus["manifest"])
+        record_path.with_suffix(".yaml.part").symlink_to(source)
     assert gate.run(corpus["outputs"], corpus["manifest"], record_path) == 3
-    assert corpus["manifest"].read_bytes() == original
+    assert source.read_bytes() == original
 
 
-@pytest.mark.parametrize("mutation", ["append", "new_log", "new_ledger", "protocol"])
+@pytest.mark.parametrize("mutation", ["append", "new_log", "new_ledger", "protocol", "approval"])
 def test_inputs_that_drift_during_read_cannot_produce_pass(corpus, monkeypatch, mutation):
     log = quarantine(corpus, [row("u000")])  # recovered, so initially valid
     real = gate._protocols
@@ -459,6 +487,9 @@ def test_inputs_that_drift_during_read_cannot_produce_pass(corpus, monkeypatch, 
             quarantine(corpus, [row("u001")], ".additional")
         elif mutation == "new_ledger":
             manual_exclusion(corpus, "u001")
+        elif mutation == "approval":
+            with corpus["approval"].open("a") as stream:
+                stream.write("\n")
         else:
             change(corpus, "stage1_protocol", lambda p: p.update(status="pending"))
 
@@ -586,6 +617,7 @@ def test_sentinel_exclusion_requires_exact_writer_signature(corpus, monkeypatch,
 
 
 def test_only_quarantine_rate_has_two_percent_limit_manual_rate_is_separate(corpus):
+    corpus["approve"](corpus["uids"][:10])
     corpus["admit"](corpus["uids"][12:])
     write_json(corpus["outputs"] / "annotation_exclusions.json", {"excluded_total": 10,
         "groups": {"manual_review_rejected": {"n": 10, "uids": corpus["uids"][:10]}}})
@@ -634,3 +666,121 @@ def test_manual_exclusion_cannot_introduce_foreign_manifest_uid(corpus):
 def test_exclusion_evidence_must_explicitly_define_groups(corpus):
     write_json(corpus["outputs"] / "annotation_exclusions.json", {})
     assert run(corpus)[0] == 3
+
+
+def bound_exclusions(corpus, members):
+    approval = json.loads(corpus["approval"].read_bytes())
+    return {"schema": "metafind.annotation_exclusions.v1", "accounting_decision": "DL-106",
+        "excluded_total": len(members),
+        "groups": {"manual_review_rejected": {"n": len(members), "uids": members}},
+        "source_ledger": {"path": "/original-machine/approved.json",
+            "sha256": hashlib.sha256(corpus["approval"].read_bytes()).hexdigest(),
+            **{key: approval[key] for key in gate.APPROVAL_METADATA}}}
+
+
+@pytest.mark.parametrize("bound", [False, True])
+def test_group_name_or_true_source_hash_cannot_approve_another_uid(corpus, bound):
+    # Before the fix both full gate.run calls returned PASS: the name alone
+    # appointed E, and source_ledger was never compared with its claimed source.
+    corpus["admit"](corpus["uids"][1:])
+    manual_exclusion(corpus, "u000")
+    if bound:
+        write_json(corpus["outputs"] / "annotation_exclusions.json", bound_exclusions(corpus, ["u000"]))
+    rc, record = run(corpus)
+    assert rc == 2
+    assert record["observed"]["accounting"]["set_conservation"]  # Counts alone cannot catch it.
+    assert record["observed"]["manual_approval"]["unexpected"]["examples"] == ["u000"]
+
+
+@pytest.mark.parametrize("approved,declared", [
+    (["u000"], ["u000", "u001"]),  # Added rejection.
+    (["u000"], ["u001"]),          # Same count, different identity.
+    (["u000", "u001"], ["u000"]), # Omitted rejection re-enters A.
+    (["u000"], []),                # Explicit empty E does not erase approval.
+])
+def test_manual_set_must_equal_the_complete_approved_set(corpus, approved, declared):
+    corpus["approve"](approved)
+    corpus["admit"]([uid for uid in corpus["uids"] if uid not in declared])
+    write_json(corpus["outputs"] / "annotation_exclusions.json", bound_exclusions(corpus, declared))
+    rc, record = run(corpus)
+    assert rc == 2 and not record["observed"]["manual_approval"]["matches"]
+    assert record["observed"]["accounting"]["set_conservation"]
+    assert record["observed"]["manual_approval"]["missing"]["count"] == len(set(approved) - set(declared))
+    assert record["observed"]["manual_approval"]["unexpected"]["count"] == len(set(declared) - set(approved))
+
+
+@pytest.mark.parametrize("declared", [[], ["u000"]])
+def test_missing_approved_manifest_member_cannot_be_hidden_by_intersection(corpus, declared):
+    corpus["approve"](["u000"])
+    manifest = json.loads(corpus["manifest"].read_bytes())
+    del manifest["u000"]
+    write_json(corpus["manifest"], manifest)
+    corpus["admit"](corpus["uids"][1:])
+    write_json(corpus["outputs"] / "annotation_exclusions.json", bound_exclusions(corpus, declared))
+    rc, record = run(corpus)
+    assert rc == 2
+    if declared:
+        assert record["observed"]["accounting"]["unexpected"]["examples"] == ["u000"]
+    else:
+        assert record["observed"]["manual_approval"]["missing"]["examples"] == ["u000"]
+
+
+def test_bound_source_only_carries_manual_members_and_records_verified_bytes(corpus):
+    corpus["approve"](["u000"], historical=["u001", "u002"])
+    corpus["admit"](corpus["uids"][1:])
+    write_json(corpus["outputs"] / "annotation_exclusions.json", bound_exclusions(corpus, ["u000"]))
+    rc, record = run(corpus)
+    assert rc == 0
+    assert record["observed"]["manual_approval"]["approved_uids"] == ["u000"]
+    assert record["observed"]["accounting"]["quarantined_count"] == 0
+    assert record["inputs"]["approved_manual_decision"]["sha256"] == gate.APPROVED_EXCLUSIONS_SHA256
+    assert record["observed"]["annotation_exclusions"]["source_ledger"]["path"] == "/original-machine/approved.json"
+
+
+@pytest.mark.parametrize("field", ["sha256", *gate.APPROVAL_METADATA])
+def test_declared_source_provenance_must_match_verified_approval(corpus, field):
+    value = bound_exclusions(corpus, [])
+    value["source_ledger"][field] = "different"
+    write_json(corpus["outputs"] / "annotation_exclusions.json", value)
+    rc, record = run(corpus)
+    assert rc == 2 and "source_ledger disagrees" in str(record["observed"]["failures"])
+
+
+@pytest.mark.parametrize("mutation", ["missing", "whitespace", "duplicate_key", "nonfinite"])
+def test_missing_or_changed_approval_blocks_before_untrusted_json_is_parsed(corpus, mutation):
+    if mutation == "missing":
+        corpus["approval"].unlink()
+    else:
+        blob = corpus["approval"].read_bytes()
+        replacement = {"whitespace": b"\n", "duplicate_key": b'{"groups":{},"groups":{}}',
+                       "nonfinite": b'{"groups":NaN}'}[mutation]
+        corpus["approval"].write_bytes(blob + replacement if mutation == "whitespace" else replacement)
+    rc, record = run(corpus)
+    assert rc == 3 and not record["observed"]["failures"]
+    assert "approved manual decision" in str(record["observed"]["blocked_reasons"])
+
+
+def test_approved_source_requires_decision_metadata_even_with_matching_pin(corpus, monkeypatch):
+    value = json.loads(corpus["approval"].read_bytes())
+    value.pop("decided_by")
+    write_json(corpus["approval"], value)
+    monkeypatch.setattr(gate, "APPROVED_EXCLUSIONS_SHA256", hashlib.sha256(corpus["approval"].read_bytes()).hexdigest())
+    assert run(corpus)[0] == 3
+
+
+@pytest.mark.parametrize("alias", ["symlink", "hardlink"])
+def test_cli_progress_cannot_overwrite_pinned_approval(corpus, monkeypatch, tmp_path, alias):
+    monkeypatch.setattr(gate.paths, "LOGS", gate.paths.LOGS)  # restore main's assignment on teardown
+    output = tmp_path / "isolated_progress"
+    output.mkdir()
+    progress = output / "run_progress.jsonl"
+    if alias == "symlink":
+        progress.symlink_to(corpus["approval"])
+    else:
+        os.link(corpus["approval"], progress)
+    before = corpus["approval"].read_bytes()
+    monkeypatch.setattr(sys, "argv", ["g3", "--outputs", str(corpus["outputs"]),
+        "--manifest", str(corpus["manifest"]), "--record", str(output / "gate.yaml")])
+    assert gate.main() == 3
+    assert corpus["approval"].read_bytes() == before
+    assert not (output / "gate.yaml").exists()

@@ -10,7 +10,7 @@
 | 資料從哪裡來、產物給誰讀、更新後哪些 cache 需重新核對 | [資料流與產物交接](docs/DATA_FLOW.md) |
 | 本 checkout 的實際程序、指定 corpus 的檔案盤點 | `bash tools/status.sh --data /absolute/path/to/data`；加 `--json` 保存快照 |
 | 同一觀測／不同觀測的七模態檢索；mean、Stage 1、Stage 2-off | [自訂評估規格與命令](docs/CUSTOM_TABLE1_EVALUATION.md) |
-| 從論文到訓練／評估的審查、修正及未完成項目 | [最新資料邊界與評分交接](docs/audit/REPRODUCTION_CORPUS_REVIEW_20260908.md)、[真實場景驗證](docs/history/REPRODUCTION_SCENE_REVIEW_20260908.md)、[真實訓練審查](docs/history/REPRODUCTION_TRAINING_REVIEW_20260908.md) |
+| 從論文到訓練／評估的審查、修正及未完成項目 | [最新批准集合與等待鏈審查](docs/audit/REPRODUCTION_GATE_CHAIN_REVIEW_20260908.md)、[資料邊界與評分交接](docs/audit/REPRODUCTION_CORPUS_REVIEW_20260908.md)、[真實場景驗證](docs/history/REPRODUCTION_SCENE_REVIEW_20260908.md)、[真實訓練審查](docs/history/REPRODUCTION_TRAINING_REVIEW_20260908.md) |
 | Algorithm 1 的逐步取回／圖更新，與完整 Table 2 的界線 | [場景檢索核心](docs/SCENE_COMPOSITION.md) |
 | I-Design → 原始查詢 → 檢索 → 實際 GLB 放置／渲染 | [planner 輸入](docs/IDesign_INPUTS.md)、[原始查詢交接](docs/RAW_SCENE_INPUTS.md)、[Blender 放置](docs/SCENE_PLACEMENT.md) |
 | 外部場景評分綁定、四維 1–5 分與缺分／失敗的分母 | [場景評分格式與命令](docs/SCENE_SCORES.md)；部分 n17／n20，未執行裁判。 |

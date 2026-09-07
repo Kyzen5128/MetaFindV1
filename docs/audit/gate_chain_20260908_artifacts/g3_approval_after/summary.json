@@ -1,0 +1,412 @@
+{
+  "scope": "Two original synthetic counterexamples replayed; one unchanged stable corpus. No formal paper corpus PASS claimed.",
+  "source_sha256": "29934b446dbd6d3bb516094c4bab9e034d7aa783cc603eb4b0e15a1c2a6e834f",
+  "approval_sha256": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058",
+  "source_and_approval_unchanged": true,
+  "cases": [
+    {
+      "case": "group_name_only",
+      "command": [
+        "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+        "-B",
+        "-m",
+        "metafind.gates.g3_object_corpus",
+        "--outputs",
+        "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/outputs",
+        "--manifest",
+        "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/lvis.json",
+        "--record",
+        "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/group_name_only/G3_object_corpus.yaml"
+      ],
+      "cwd": "/home/kyzen/MetaFindV1",
+      "started_epoch": 1788809650.1590412,
+      "elapsed_seconds": 0.8618347644805908,
+      "expected_rc": 2,
+      "actual_rc": 2,
+      "verdict": "FAIL",
+      "record_sha256": "76dcc7dd93818dc1b473211c80ec4e749f1b374545ed8a30699b81b1c4d451ec",
+      "source_sha256": "29934b446dbd6d3bb516094c4bab9e034d7aa783cc603eb4b0e15a1c2a6e834f",
+      "approval_sha256": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058",
+      "all_consumed_input_hashes_still_match": true,
+      "manual_approval": {
+        "approved": {
+          "count": 21,
+          "examples": [
+            "17a8134052ff47778a21cd3efcfbe916",
+            "1864864213974c57aa9eb55294a39c33",
+            "1c5a695a8bed40c2a6742f84210542f4",
+            "4179ed636e2f4d47bb82691f7f536e84",
+            "44b7cff533d04b0ea43db6afd6e67efa",
+            "49db5a9fabb54afc975c75a24f32ede1",
+            "5a5804daaa9345f48058b4b60d7a2da8",
+            "721bb93d169a4d5f9e8dd15ad45a367f",
+            "848aa81f73364d2ab0bd39c5b67eddbc",
+            "89cee4a742ef47df9769b8bc947e0d61"
+          ],
+          "sha256": "0beff357914c84324901f66bbcc9b8d89cdc648d364fc68ca7c604ec2252a73c"
+        },
+        "approved_uids": [
+          "17a8134052ff47778a21cd3efcfbe916",
+          "1864864213974c57aa9eb55294a39c33",
+          "1c5a695a8bed40c2a6742f84210542f4",
+          "4179ed636e2f4d47bb82691f7f536e84",
+          "44b7cff533d04b0ea43db6afd6e67efa",
+          "49db5a9fabb54afc975c75a24f32ede1",
+          "5a5804daaa9345f48058b4b60d7a2da8",
+          "721bb93d169a4d5f9e8dd15ad45a367f",
+          "848aa81f73364d2ab0bd39c5b67eddbc",
+          "89cee4a742ef47df9769b8bc947e0d61",
+          "8e6534b3df8c4bab973f27c67b2dac36",
+          "90c9d43d35d24cada6be59424fb59eee",
+          "9539094e99df4246a29063bfa11a8f73",
+          "99c68556d52b418c873afee06d9d9718",
+          "9c24c4cf935b43c09d3970fe89b836f9",
+          "a397b648d6eb48d7909d1ee11235e78f",
+          "a5c4975c97464f6985ce695dd358e876",
+          "b7a7e3e9194847a99aea5828abe57c4c",
+          "c696d517312a4faaa8e7e52807b1a88c",
+          "cfbcb02c981e4a6c92b6c86fb5ced91d",
+          "eb29a8245a31409ba42e29f40c85a3c2"
+        ],
+        "decision": "DL-106 carries the 2026-08-28 manual decision",
+        "matches": false,
+        "metadata": {
+          "decided_at": "2026-08-28T14:44:25+08:00",
+          "decided_by": "Kyzen",
+          "decision": "\u901921\u500b \u8ddf \u5931\u6557\u7684 311 \u5168\u90e8\u522a\u6389 \u5176\u4ed6\u6240\u6709\u63a5\u53d7\u63a1\u7528\u6a19\u8a3b\u7d50\u679c",
+          "git_commit": "9e91457220fe625b3313d30c387364d592ee20a0"
+        },
+        "missing": {
+          "count": 21,
+          "examples": [
+            "17a8134052ff47778a21cd3efcfbe916",
+            "1864864213974c57aa9eb55294a39c33",
+            "1c5a695a8bed40c2a6742f84210542f4",
+            "4179ed636e2f4d47bb82691f7f536e84",
+            "44b7cff533d04b0ea43db6afd6e67efa",
+            "49db5a9fabb54afc975c75a24f32ede1",
+            "5a5804daaa9345f48058b4b60d7a2da8",
+            "721bb93d169a4d5f9e8dd15ad45a367f",
+            "848aa81f73364d2ab0bd39c5b67eddbc",
+            "89cee4a742ef47df9769b8bc947e0d61"
+          ],
+          "sha256": "0beff357914c84324901f66bbcc9b8d89cdc648d364fc68ca7c604ec2252a73c"
+        },
+        "unexpected": {
+          "count": 1,
+          "examples": [
+            "u000"
+          ],
+          "sha256": "06d29c6027f064084b4a49c0b0e9e2c68f99dc9af42f6a15d03b96e73de60c54"
+        }
+      },
+      "accounting": {
+        "admitted_count": 99,
+        "excluded_but_admitted": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "manifest_count": 100,
+        "manual_excluded": {
+          "count": 1,
+          "examples": [
+            "u000"
+          ],
+          "sha256": "06d29c6027f064084b4a49c0b0e9e2c68f99dc9af42f6a15d03b96e73de60c54"
+        },
+        "manual_excluded_count": 1,
+        "manual_excluded_rate": 0.01,
+        "missing": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "pairwise_disjoint": true,
+        "quarantine_limit": 0.02,
+        "quarantine_rate": 0.0,
+        "quarantined_count": 0,
+        "set_conservation": true,
+        "total_excluded_rate": 0.01,
+        "unexpected": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "unexplained_missing": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "case": "true_source_hash_wrong_uid",
+      "command": [
+        "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+        "-B",
+        "-m",
+        "metafind.gates.g3_object_corpus",
+        "--outputs",
+        "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/true_source_hash_wrong_uid/outputs",
+        "--manifest",
+        "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/true_source_hash_wrong_uid/lvis.json",
+        "--record",
+        "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/true_source_hash_wrong_uid/G3_object_corpus.yaml"
+      ],
+      "cwd": "/home/kyzen/MetaFindV1",
+      "started_epoch": 1788809651.0210154,
+      "elapsed_seconds": 0.8395395278930664,
+      "expected_rc": 2,
+      "actual_rc": 2,
+      "verdict": "FAIL",
+      "record_sha256": "17afc480c67575d8661a822fca3ac0e834af27ec6a6518ff21d9cd7d55a2d8f3",
+      "source_sha256": "29934b446dbd6d3bb516094c4bab9e034d7aa783cc603eb4b0e15a1c2a6e834f",
+      "approval_sha256": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058",
+      "all_consumed_input_hashes_still_match": true,
+      "manual_approval": {
+        "approved": {
+          "count": 21,
+          "examples": [
+            "17a8134052ff47778a21cd3efcfbe916",
+            "1864864213974c57aa9eb55294a39c33",
+            "1c5a695a8bed40c2a6742f84210542f4",
+            "4179ed636e2f4d47bb82691f7f536e84",
+            "44b7cff533d04b0ea43db6afd6e67efa",
+            "49db5a9fabb54afc975c75a24f32ede1",
+            "5a5804daaa9345f48058b4b60d7a2da8",
+            "721bb93d169a4d5f9e8dd15ad45a367f",
+            "848aa81f73364d2ab0bd39c5b67eddbc",
+            "89cee4a742ef47df9769b8bc947e0d61"
+          ],
+          "sha256": "0beff357914c84324901f66bbcc9b8d89cdc648d364fc68ca7c604ec2252a73c"
+        },
+        "approved_uids": [
+          "17a8134052ff47778a21cd3efcfbe916",
+          "1864864213974c57aa9eb55294a39c33",
+          "1c5a695a8bed40c2a6742f84210542f4",
+          "4179ed636e2f4d47bb82691f7f536e84",
+          "44b7cff533d04b0ea43db6afd6e67efa",
+          "49db5a9fabb54afc975c75a24f32ede1",
+          "5a5804daaa9345f48058b4b60d7a2da8",
+          "721bb93d169a4d5f9e8dd15ad45a367f",
+          "848aa81f73364d2ab0bd39c5b67eddbc",
+          "89cee4a742ef47df9769b8bc947e0d61",
+          "8e6534b3df8c4bab973f27c67b2dac36",
+          "90c9d43d35d24cada6be59424fb59eee",
+          "9539094e99df4246a29063bfa11a8f73",
+          "99c68556d52b418c873afee06d9d9718",
+          "9c24c4cf935b43c09d3970fe89b836f9",
+          "a397b648d6eb48d7909d1ee11235e78f",
+          "a5c4975c97464f6985ce695dd358e876",
+          "b7a7e3e9194847a99aea5828abe57c4c",
+          "c696d517312a4faaa8e7e52807b1a88c",
+          "cfbcb02c981e4a6c92b6c86fb5ced91d",
+          "eb29a8245a31409ba42e29f40c85a3c2"
+        ],
+        "decision": "DL-106 carries the 2026-08-28 manual decision",
+        "matches": false,
+        "metadata": {
+          "decided_at": "2026-08-28T14:44:25+08:00",
+          "decided_by": "Kyzen",
+          "decision": "\u901921\u500b \u8ddf \u5931\u6557\u7684 311 \u5168\u90e8\u522a\u6389 \u5176\u4ed6\u6240\u6709\u63a5\u53d7\u63a1\u7528\u6a19\u8a3b\u7d50\u679c",
+          "git_commit": "9e91457220fe625b3313d30c387364d592ee20a0"
+        },
+        "missing": {
+          "count": 21,
+          "examples": [
+            "17a8134052ff47778a21cd3efcfbe916",
+            "1864864213974c57aa9eb55294a39c33",
+            "1c5a695a8bed40c2a6742f84210542f4",
+            "4179ed636e2f4d47bb82691f7f536e84",
+            "44b7cff533d04b0ea43db6afd6e67efa",
+            "49db5a9fabb54afc975c75a24f32ede1",
+            "5a5804daaa9345f48058b4b60d7a2da8",
+            "721bb93d169a4d5f9e8dd15ad45a367f",
+            "848aa81f73364d2ab0bd39c5b67eddbc",
+            "89cee4a742ef47df9769b8bc947e0d61"
+          ],
+          "sha256": "0beff357914c84324901f66bbcc9b8d89cdc648d364fc68ca7c604ec2252a73c"
+        },
+        "unexpected": {
+          "count": 1,
+          "examples": [
+            "u000"
+          ],
+          "sha256": "06d29c6027f064084b4a49c0b0e9e2c68f99dc9af42f6a15d03b96e73de60c54"
+        }
+      },
+      "accounting": {
+        "admitted_count": 99,
+        "excluded_but_admitted": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "manifest_count": 100,
+        "manual_excluded": {
+          "count": 1,
+          "examples": [
+            "u000"
+          ],
+          "sha256": "06d29c6027f064084b4a49c0b0e9e2c68f99dc9af42f6a15d03b96e73de60c54"
+        },
+        "manual_excluded_count": 1,
+        "manual_excluded_rate": 0.01,
+        "missing": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "pairwise_disjoint": true,
+        "quarantine_limit": 0.02,
+        "quarantine_rate": 0.0,
+        "quarantined_count": 0,
+        "set_conservation": true,
+        "total_excluded_rate": 0.01,
+        "unexpected": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "unexplained_missing": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "case": "historical",
+      "command": [
+        "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+        "-B",
+        "-m",
+        "metafind.gates.g3_object_corpus",
+        "--outputs",
+        "/home/kyzen/metafind/metafind_data/outputs",
+        "--manifest",
+        "/home/kyzen/metafind/metafind_data/datasets/objaverse-lvis/lvis.json",
+        "--record",
+        "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_after/historical/G3_object_corpus.yaml"
+      ],
+      "cwd": "/home/kyzen/MetaFindV1",
+      "started_epoch": 1788809651.860684,
+      "elapsed_seconds": 1.360065221786499,
+      "expected_rc": 0,
+      "actual_rc": 0,
+      "verdict": "PASS",
+      "record_sha256": "21e908d8b4ebe18f676bdc266a199b7e90cd915966b135cf5d0db0166f8a2090",
+      "source_sha256": "29934b446dbd6d3bb516094c4bab9e034d7aa783cc603eb4b0e15a1c2a6e834f",
+      "approval_sha256": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058",
+      "all_consumed_input_hashes_still_match": true,
+      "manual_approval": {
+        "approved": {
+          "count": 21,
+          "examples": [
+            "17a8134052ff47778a21cd3efcfbe916",
+            "1864864213974c57aa9eb55294a39c33",
+            "1c5a695a8bed40c2a6742f84210542f4",
+            "4179ed636e2f4d47bb82691f7f536e84",
+            "44b7cff533d04b0ea43db6afd6e67efa",
+            "49db5a9fabb54afc975c75a24f32ede1",
+            "5a5804daaa9345f48058b4b60d7a2da8",
+            "721bb93d169a4d5f9e8dd15ad45a367f",
+            "848aa81f73364d2ab0bd39c5b67eddbc",
+            "89cee4a742ef47df9769b8bc947e0d61"
+          ],
+          "sha256": "0beff357914c84324901f66bbcc9b8d89cdc648d364fc68ca7c604ec2252a73c"
+        },
+        "approved_uids": [
+          "17a8134052ff47778a21cd3efcfbe916",
+          "1864864213974c57aa9eb55294a39c33",
+          "1c5a695a8bed40c2a6742f84210542f4",
+          "4179ed636e2f4d47bb82691f7f536e84",
+          "44b7cff533d04b0ea43db6afd6e67efa",
+          "49db5a9fabb54afc975c75a24f32ede1",
+          "5a5804daaa9345f48058b4b60d7a2da8",
+          "721bb93d169a4d5f9e8dd15ad45a367f",
+          "848aa81f73364d2ab0bd39c5b67eddbc",
+          "89cee4a742ef47df9769b8bc947e0d61",
+          "8e6534b3df8c4bab973f27c67b2dac36",
+          "90c9d43d35d24cada6be59424fb59eee",
+          "9539094e99df4246a29063bfa11a8f73",
+          "99c68556d52b418c873afee06d9d9718",
+          "9c24c4cf935b43c09d3970fe89b836f9",
+          "a397b648d6eb48d7909d1ee11235e78f",
+          "a5c4975c97464f6985ce695dd358e876",
+          "b7a7e3e9194847a99aea5828abe57c4c",
+          "c696d517312a4faaa8e7e52807b1a88c",
+          "cfbcb02c981e4a6c92b6c86fb5ced91d",
+          "eb29a8245a31409ba42e29f40c85a3c2"
+        ],
+        "decision": "DL-106 carries the 2026-08-28 manual decision",
+        "matches": true,
+        "metadata": {
+          "decided_at": "2026-08-28T14:44:25+08:00",
+          "decided_by": "Kyzen",
+          "decision": "\u901921\u500b \u8ddf \u5931\u6557\u7684 311 \u5168\u90e8\u522a\u6389 \u5176\u4ed6\u6240\u6709\u63a5\u53d7\u63a1\u7528\u6a19\u8a3b\u7d50\u679c",
+          "git_commit": "9e91457220fe625b3313d30c387364d592ee20a0"
+        },
+        "missing": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "unexpected": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "accounting": {
+        "admitted_count": 45692,
+        "excluded_but_admitted": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "manifest_count": 46052,
+        "manual_excluded": {
+          "count": 21,
+          "examples": [
+            "17a8134052ff47778a21cd3efcfbe916",
+            "1864864213974c57aa9eb55294a39c33",
+            "1c5a695a8bed40c2a6742f84210542f4",
+            "4179ed636e2f4d47bb82691f7f536e84",
+            "44b7cff533d04b0ea43db6afd6e67efa",
+            "49db5a9fabb54afc975c75a24f32ede1",
+            "5a5804daaa9345f48058b4b60d7a2da8",
+            "721bb93d169a4d5f9e8dd15ad45a367f",
+            "848aa81f73364d2ab0bd39c5b67eddbc",
+            "89cee4a742ef47df9769b8bc947e0d61"
+          ],
+          "sha256": "0beff357914c84324901f66bbcc9b8d89cdc648d364fc68ca7c604ec2252a73c"
+        },
+        "manual_excluded_count": 21,
+        "manual_excluded_rate": 0.0004560062538000521,
+        "missing": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "pairwise_disjoint": true,
+        "quarantine_limit": 0.02,
+        "quarantine_rate": 0.007361243811343699,
+        "quarantined_count": 339,
+        "set_conservation": true,
+        "total_excluded_rate": 0.007817250065143751,
+        "unexpected": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "unexplained_missing": {
+          "count": 0,
+          "examples": [],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    }
+  ]
+}

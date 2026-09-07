@@ -1380,7 +1380,16 @@ level_3_gates:
       accounting resolves the former admitted+quarantined-only ambiguity; see
       L2-COMPLETE. Read and hash the annotation_exclusions.json ledger alongside
       the other input evidence. Unknown exclusion groups do not receive approval
-      by being present in a file. The standalone gate is an input preflight,
+      by being present in a file. The group name manual_review_rejected is not
+      approval either: E must equal the entire manual UID set in the pinned
+      workflow/annotation_exclusions_20260828.json source (SHA-256
+      39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058).
+      Missing or altered approval evidence blocks; added, substituted or omitted
+      E members fail. Every approved UID must still belong to the original M;
+      intersecting the approval with a shortened manifest is not permitted.
+      The historical 311 n05 entries in that source are not manual approvals.
+      This binds DL-106 to the existing decision without changing its UID set.
+      The standalone gate is an input preflight,
       not proof that the later trainer instantiated or optimized the declared
       modules. Its existence does not activate the live chain; implemented remains
       false pending the separate integration review.

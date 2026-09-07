@@ -17,22 +17,7 @@ fail() { echo "PIPELINE FAILED at $1" >&2; exit 1; }
 filter_output() { awk -v pattern="$FILTER" '$0 !~ pattern'; }
 
 step "0 wait for R2"
-# Logs may contain earlier attempts. Only the last R2 START can authorize
-# continuation or report failure; missing/incomplete evidence keeps waiting.
-while :; do
-  state=$(awk '
-    /^=== R2 START([[:space:]]|$)/ { active=1; state="waiting"; next }
-    !active { next }
-    /^=== R2 EXIT [1-9][0-9]*([[:space:]]|$)/ { state="failed"; next }
-    /^=== R2 DONE([[:space:]]|$)/ { if (state != "failed") state="done" }
-    END { print (active ? state : "waiting") }
-  ' "$L/r2_annotate_v10.log" 2>/dev/null) || state=waiting
-  case "$state" in
-    done) break ;;
-    failed) fail "R2: current attempt exited nonzero; see $L/r2_annotate_v10.log" ;;
-  esac
-  sleep 60
-done
+until grep -q "^=== R2 DONE" $L/r2_annotate_v10.log 2>/dev/null; do sleep 60; done
 
 step "1 apply Kyzen's 21 manual exclusions (2026-08-28) to the new corpus"
 $PY - <<'PYEOF'

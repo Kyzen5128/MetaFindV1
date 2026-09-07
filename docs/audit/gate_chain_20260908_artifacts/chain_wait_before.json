@@ -1,0 +1,36 @@
+{
+  "command": [
+    "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+    "-m",
+    "pytest",
+    "tests/pipeline/test_paper_chain_failure.py",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "-k",
+    "test_wait_",
+    "--basetemp",
+    "/tmp/metafind_chain_wait_before_20260908"
+  ],
+  "environment": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    "CUDA_VISIBLE_DEVICES": "",
+    "HIP_VISIBLE_DEVICES": "",
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "exit_code": 1,
+  "elapsed_seconds": 0.2533714771270752,
+  "source_sha256": {
+    "tools/chain_paper_stage1.sh": "d18f7accff486a68cdc537ca0d35fa01545b2c8af30b0ab54387843fbda36fb6",
+    "tools/chain_paper_stage2.sh": "cbd33e69e88c599876e0807fdd336bb8fea018268374c03237278441eed165a0",
+    "tests/pipeline/test_paper_chain_failure.py": "25ba34d11ba7a4af1535eeaf92b7d2f4a0bd95003eb6d978f09a2ab8e1ecc642"
+  },
+  "source_unchanged": true,
+  "log_sha256": "fea9ebd13cb12923a36ef590d8218974f93507a932ba6110fdef3156c395e027",
+  "scope": "Red regression against original repository waits; real extracted shell prefix with actual fixture logs; sleep bounded by explicit sentinel, no producers reachable."
+}

@@ -15,6 +15,8 @@ separate from admitted A and true quarantine Q = failure UIDs - A - E.
 A, Q and E must be pairwise disjoint and their union must equal the unchanged
 manifest M. Only Q / M has the existing 2% limit; manual and total exclusion
 rates are reported independently. Unapproved exclusion groups remain blocked.
+The complete E set is bound to the original approved decision bytes, not to
+a caller-provided group name or self-reported provenance hash.
 
 PASS certifies these input checks, not cache contents, trainer execution or
 paper-level experimental reproduction. INVALIDATED (4) is declared but has no
@@ -53,6 +55,9 @@ PASS, FAIL, BLOCKED_EVIDENCE, INVALIDATED = 0, 2, 3, 4
 RC_CONTRACT = {"PASS": PASS, "FAIL": FAIL, "BLOCKED_EVIDENCE": BLOCKED_EVIDENCE,
                "INVALIDATED": INVALIDATED}
 SPEC_PATH = paths.REPO / "docs/graph/validation_plan.yaml"
+APPROVED_EXCLUSIONS_PATH = paths.REPO / "workflow/annotation_exclusions_20260828.json"
+APPROVED_EXCLUSIONS_SHA256 = "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058"
+APPROVAL_METADATA = ("decided_at", "decided_by", "decision", "git_commit")
 HISTORICAL_GUARD_PREFIX = "implementation changed while the run was in progress"
 OBJECT_STAGES = {"n03_sample_pointclouds", "n04_render_views", "n05_annotate",
                  "n06_encode_text_image"}
@@ -193,7 +198,40 @@ def _splits(value: dict, observed: dict) -> tuple[dict[str, list[str]], set[str]
     return pools, admitted
 
 
-def _exclusions(path: Path, inputs: dict, observed: dict) -> tuple[set[str], set[str]]:
+def _approved_manual(inputs: dict, observed: dict) -> dict:
+    """DL-106 carries the original decision, including all its manual UIDs.
+
+    The trusted path/hash are code-owned; no corpus file or CLI flag can appoint
+    a new approval source. Historical n05 failures in that source are not E.
+    """
+    try:
+        blob = APPROVED_EXCLUSIONS_PATH.read_bytes()
+    except OSError as exc:
+        inputs["approved_manual_decision"] = {"path": str(APPROVED_EXCLUSIONS_PATH), "error": str(exc)}
+        raise _Blocked(f"cannot read approved manual decision: {exc}") from exc
+    digest = _sha(blob)
+    inputs["approved_manual_decision"] = {"path": str(APPROVED_EXCLUSIONS_PATH),
+        "sha256": digest, "bytes": len(blob)}
+    if digest != APPROVED_EXCLUSIONS_SHA256:
+        raise _Blocked("approved manual decision bytes differ from the pinned sha256")
+    ledger = _dict(_json(blob, "approved manual decision"), "approved manual decision")
+    metadata = {key: ledger.get(key) for key in APPROVAL_METADATA}
+    if any(not isinstance(value, str) or not value.strip() for value in metadata.values()):
+        raise _Blocked("approved manual decision lacks decision metadata")
+    group = _dict(ledger.get("groups", {}).get("manual_review_rejected"),
+                  "approved manual decision group")
+    members = [entry.get("uid") if isinstance(entry, dict) else entry
+               for entry in group.get("uids", [])]
+    _uids(members, "approved manual decision UIDs")
+    approved = ledger_excluded_uids({"groups": {"manual_review_rejected": group},
+                                     "excluded_total": group.get("n")})
+    observed["manual_approval"] = {"decision": "DL-106 carries the 2026-08-28 manual decision",
+        "metadata": metadata, "approved": _set_evidence(approved), "approved_uids": sorted(approved)}
+    return {"uids": approved, "sha256": digest, "metadata": metadata}
+
+
+def _exclusions(path: Path, inputs: dict, observed: dict,
+                approval: dict | None = None) -> tuple[set[str], set[str]]:
     if not path.exists():
         inputs["annotation_exclusions"] = {"path": str(path), "present": False}
         observed["annotation_exclusions"] = {"status": "UNKNOWN", "note": "ledger missing; E is not known to be empty"}
@@ -230,6 +268,19 @@ def _exclusions(path: Path, inputs: dict, observed: dict) -> tuple[set[str], set
         "decision": ledger.get("decision"),
         "formal_accounting": "A union Q union E = M; Q = true failure UIDs - A - E",
         "manual_group": "manual_review_rejected", "accounting_decision_date": "2026-09-08"}
+    if "source_ledger" in ledger:
+        source = _dict(ledger["source_ledger"], "annotation_exclusions.source_ledger")
+        if any(not isinstance(source.get(key), str) or not source[key].strip()
+               for key in ("path", "sha256", *APPROVAL_METADATA)):
+            raise _Blocked("annotation_exclusions.source_ledger lacks decision provenance")
+        if ledger.get("accounting_decision") != "DL-106":
+            raise _Violation("annotation_exclusions source ledger does not declare DL-106")
+        if approval is not None and (source["sha256"] != approval["sha256"]
+                or any(source[key] != approval["metadata"][key] for key in APPROVAL_METADATA)):
+            raise _Violation("annotation_exclusions source_ledger disagrees with the pinned decision")
+        # The producer's original absolute path is provenance, not permission to
+        # read a new authority file. The verified archived bytes establish it.
+        observed["annotation_exclusions"]["source_ledger"] = source
     return manual, unapproved
 
 
@@ -502,7 +553,16 @@ def run(outputs_path: Path | None = None, manifest_path: Path | None = None,
             failures.append("manifest: manifest is empty")
     split_value = check("splits", lambda: _dict(_read(outputs / "splits.json", inputs, "splits"), "splits"))
     split_result = check("splits", lambda: _splits(split_value, observed)) if split_value is not None else None
-    exclusions = check("exclusions", lambda: _exclusions(exclusions_path, inputs, observed))
+    approval = check("manual approval", lambda: _approved_manual(inputs, observed))
+    exclusions = check("exclusions", lambda: _exclusions(exclusions_path, inputs, observed, approval))
+    if approval is not None and exclusions is not None:
+        manual = exclusions[0]
+        missing_approved, unapproved_manual = approval["uids"] - manual, manual - approval["uids"]
+        observed["manual_approval"].update(matches=manual == approval["uids"],
+            missing=_set_evidence(missing_approved), unexpected=_set_evidence(unapproved_manual))
+        if missing_approved or unapproved_manual:
+            failures.append("manual approval: E differs from the complete pinned approved UID set "
+                            f"({len(missing_approved)} missing, {len(unapproved_manual)} unexpected)")
     if exclusions is not None and exclusions[1]:
         blocked.append("unapproved exclusion groups: cannot classify as manual_excluded or fabricate quarantine")
     if split_result is not None:
@@ -549,7 +609,8 @@ def run(outputs_path: Path | None = None, manifest_path: Path | None = None,
         "code_dirty": runlog.code_dirty(), "runtime_source_sha256": runlog.runtime_source_sha256(),
         "runtime_source_status": runlog.runtime_source_status(),
         "gate_source_sha256": _sha(Path(__file__).read_bytes()), "is_terminal": True}
-    source_paths = [manifest_path, exclusions_path, Path(spec_path) if spec_path else SPEC_PATH]
+    source_paths = [manifest_path, exclusions_path, APPROVED_EXCLUSIONS_PATH,
+                    Path(spec_path) if spec_path else SPEC_PATH]
     source_paths += [outputs / name for name in ("splits.json", "eval_protocols.json",
                      "stage1_encoding_protocol.json", "stage1_protocol.json", "stage1_hyperparameters.json")]
     source_paths += list(quarantine_dir.glob("quarantine_*.jsonl"))
@@ -583,7 +644,8 @@ def main() -> int:
     # --record is the output-isolation option even when --outputs is a read-only
     # corpus. run() itself writes only the gate record and its history.
     paths.LOGS = args.record.parent if args.record is not None else args.outputs / "logs"
-    sources = [args.manifest, args.exclusions or args.outputs / "annotation_exclusions.json", SPEC_PATH]
+    sources = [args.manifest, args.exclusions or args.outputs / "annotation_exclusions.json",
+               APPROVED_EXCLUSIONS_PATH, SPEC_PATH]
     sources += [args.outputs / name for name in ("splits.json", "eval_protocols.json",
                 "stage1_encoding_protocol.json", "stage1_protocol.json", "stage1_hyperparameters.json")]
     sources += list((args.quarantine_dir or args.outputs / "logs").glob("quarantine_*.jsonl"))

@@ -14,8 +14,8 @@ def run_chain(tmp_path, stage, failure, archive_missing=None):
     data = tmp_path / "data"
     logs = data / "outputs" / "logs"
     logs.mkdir(parents=True)
-    (logs / "r2_annotate_v10.log").write_text("=== R2 DONE\n")
-    (logs / "chain_paper_stage1_20260906.log").write_text("=== DONE (row 1)\n")
+    (logs / "r2_annotate_v10.log").write_text("=== R2 START\n=== R2 EXIT 0\n=== R2 DONE\n")
+    (logs / "chain_paper_stage1_20260906.log").write_text("=== 0 wait for R2\n=== DONE (row 1)\n")
     (logs / "n07b_procthor_modalities_v2.log").write_text("1467 rendered, 0 quarantined\n")
     ck = data / "outputs" / "checkpoints" / "paper_v10_same_record_lr1e-4"
     ck.mkdir(parents=True)
@@ -47,6 +47,74 @@ if os.environ["STUB_FAIL"] in args:
                             env=env, capture_output=True, text=True, timeout=10)
     seen = [json.loads(line) for line in calls.read_text().splitlines()]
     return result, seen
+
+
+def run_wait_prefix(tmp_path, stage, upstream_log):
+    """Real shell wait, real log matching, bounded sleep; no producer is reachable."""
+    root = Path(__file__).resolve().parents[2]
+    script = (root / "tools" / f"chain_paper_stage{stage}.sh").read_text()
+    end = 'step "1 apply' if stage == 1 else "REC=$CK/"
+    prefix = script.split(end, 1)[0]
+    logs = tmp_path / "data" / "outputs" / "logs"
+    logs.mkdir(parents=True)
+    name = "r2_annotate_v10.log" if stage == 1 else "chain_paper_stage1_20260906.log"
+    if upstream_log is not None:
+        (logs / name).write_text(upstream_log)
+    (logs / "n07b_procthor_modalities_v2.log").write_text("1465 rendered, 0 quarantined\n")
+    # A sentinel means the actual wait branch was reached, not that elapsed
+    # time establishes an upstream failure. It avoids leaving a real sleeper.
+    bounded_sleep = 'sleep() { echo "WAIT_SENTINEL"; exit 97; }\n'
+    env = {**os.environ, "METAFIND_REPO": str(tmp_path), "METAFIND_DATA": str(logs.parent.parent)}
+    return subprocess.run(["bash", "-c", bounded_sleep + prefix + '\necho "DOWNSTREAM_REACHED"\n'],
+                          env=env, capture_output=True, text=True, timeout=5)
+
+
+@pytest.mark.parametrize("stage,start,failure,done", [
+    (1, "=== R2 START", "=== R2 EXIT 23", "=== R2 DONE"),
+    (1, "=== R2 START", "=== R2 EXIT 137", "=== R2 DONE"),
+    (2, "=== 0 wait for R2", "PIPELINE FAILED at stage1", "=== DONE (row 1)"),
+    (2, "=== 0 wait for R2", "PIPELINE FAILED (line 80, exit 23)", "=== DONE (row 1)"),
+])
+def test_wait_propagates_explicit_failure_from_current_attempt(tmp_path, stage, start, failure, done):
+    result = run_wait_prefix(tmp_path, stage, f"{start}\n{failure}\n")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "PIPELINE FAILED" in result.stderr
+    assert "WAIT_SENTINEL" not in result.stdout
+    assert "DOWNSTREAM_REACHED" not in result.stdout
+
+
+@pytest.mark.parametrize("stage,start,failure,done", [
+    (1, "=== R2 START", "=== R2 EXIT 23", "=== R2 DONE"),
+    (2, "=== 0 wait for R2", "PIPELINE FAILED at stage1", "=== DONE (row 1)"),
+])
+@pytest.mark.parametrize("history", ["failure", "success"])
+@pytest.mark.parametrize("current_done", [False, True])
+def test_wait_uses_last_attempt_not_historical_terminal_markers(
+        tmp_path, stage, start, failure, done, history, current_done):
+    old_terminal = failure if history == "failure" else done
+    log = f"{start} old\n{old_terminal}\n{start} new\n"
+    if current_done:
+        log += done + "\n"
+    result = run_wait_prefix(tmp_path, stage, log)
+    assert result.returncode == (0 if current_done else 97), result.stdout + result.stderr
+    assert ("DOWNSTREAM_REACHED" in result.stdout) == current_done
+    assert ("WAIT_SENTINEL" in result.stdout) != current_done
+    assert "PIPELINE FAILED" not in result.stderr
+
+
+@pytest.mark.parametrize("stage,log", [
+    (1, None), (2, None), (1, ""), (2, ""),
+    (1, "=== R2 START\n=== R2 EXIT 0\n"),
+    (1, "=== R2 DONE\n"), (2, "=== DONE (row 1)\n"),
+    (1, "=== R2 START\nexample: === R2 EXIT 23\n"),
+    (2, "=== 0 wait for R2\nexample: PIPELINE FAILED\n"),
+])
+def test_wait_without_bound_terminal_evidence_keeps_waiting(tmp_path, stage, log):
+    result = run_wait_prefix(tmp_path, stage, log)
+    assert result.returncode == 97, result.stdout + result.stderr
+    assert "WAIT_SENTINEL" in result.stdout
+    assert "DOWNSTREAM_REACHED" not in result.stdout
+    assert "PIPELINE FAILED" not in result.stderr
 
 
 @pytest.mark.parametrize("failure,forbidden", [

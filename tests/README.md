@@ -2,9 +2,9 @@
 
 `tests/` 依資料流分組。測試驗證程式行為與已記錄契約；通過不代表完整復現論文、真實模型分數正確，或某個 artifact 已通過 promotion gate。只有專案明訂的 gate 能決定 promotion。
 
-2026-09-08 最新交付 CPU suite：**1,805 passed、71 warnings**，排除 `gpu/` 與 `hooks/`，沒有 skip／failure；265 個 Python／shell／patch source 的 SHA 在執行前後一致。完整輸出見 [delivery log](../docs/audit/reproduction_corpus_20260908_delivery_cpu.log)，命令、CPU／離線環境與來源快照見 [execution record](../docs/audit/reproduction_corpus_20260908_delivery_cpu_execution.json)。Warnings 包含 Transformer／timm 提示與測試刻意採用非論文 tau 的警告；本次沒有 QueueFeederThread 清理警告。
+2026-09-08 最新交付 CPU suite：**1,853 passed、71 warnings**，排除 `gpu/` 與 `hooks/`，沒有 skip／failure；286 份 Python／shell／patch source 與固定批准檔的 SHA 在執行前後一致。完整輸出見 [final log](../docs/audit/gate_chain_20260908_artifacts/integration_cpu_final.log)，命令、CPU／離線環境與來源快照見 [execution record](../docs/audit/gate_chain_20260908_artifacts/integration_cpu_final.json)。Warnings 包含 Transformer／timm 提示與測試刻意採用非論文 tau 的警告；本次沒有 QueueFeederThread 清理警告。
 
-本次包含 G3 的 DL-106 獨立人工排除計帳、來源變動與輸出衝突拒絕，真 shell heredoc 的 E ledger 發布／中斷／n09 防止重新納入，以及外部四維場景評分的來源綁定和分母。既有 ESSGNN NumPy forward／有限差分梯度、no-layout／Full checkpoint 交接與實際 Blender 頂點檢查一併保留。真實模型執行另見 [場景驗證](../docs/history/REPRODUCTION_SCENE_REVIEW_20260908.md) 與 [訓練審查](../docs/history/REPRODUCTION_TRAINING_REVIEW_20260908.md)，不包含在一般 pytest suite 中。
+本次包含 G3 的原始批准 UID 全集合綁定、最後一次 START 的等待／失敗傳遞，及既有 DL-106 獨立人工排除計帳、來源變動與輸出衝突拒絕，真 shell heredoc 的 E ledger 發布／中斷／n09 防止重新納入，以及外部四維場景評分的來源綁定和分母。既有 ESSGNN NumPy forward／有限差分梯度、no-layout／Full checkpoint 交接與實際 Blender 頂點檢查一併保留。真實模型執行另見 [場景驗證](../docs/history/REPRODUCTION_SCENE_REVIEW_20260908.md) 與 [訓練審查](../docs/history/REPRODUCTION_TRAINING_REVIEW_20260908.md)，不包含在一般 pytest suite 中。
 
 | 目錄 | 覆蓋內容 | 執行需求與界限 |
 | --- | --- | --- |

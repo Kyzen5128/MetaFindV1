@@ -530,7 +530,11 @@ nodes:
       and E. Require A union Q union E == M with pairwise disjoint sets. Only Q/M
       has the existing 2% ceiling; report manual and total exclusion rates too.
       Unapproved exclusion groups block; historical n05 ledger entries do not
-      fabricate new failures. This is input evidence, not runtime optimizer
+      fabricate new failures. The manual group must match the full approved UID
+      set in workflow/annotation_exclusions_20260828.json, whose original bytes
+      are pinned by SHA-256; its mere group name does not establish approval.
+      This approval source is read, hashed and checked for drift alongside the
+      corpus ledger. This is input evidence, not runtime optimizer
       fidelity. The standalone implementation is not yet wired into the live
       graph; channel integration and the implemented flag remain for review.
       The name G3_object_corpus promised more than this gate checked, so

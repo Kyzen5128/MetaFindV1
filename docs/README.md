@@ -13,7 +13,7 @@
 | 真 GLB 放置、保存 blend 與明示渲染 | [SCENE_PLACEMENT](SCENE_PLACEMENT.md) |
 | 匯入外部四維評分、保留缺分與失敗分母 | [SCENE_SCORES](SCENE_SCORES.md) |
 
-目前完成項目與未驗證範圍見 [最新審查與整理紀錄](audit/REPRODUCTION_CORPUS_REVIEW_20260908.md)。[專案 README](../README.md) 提供安裝／狀態入口；[測試導覽](../tests/README.md) 提供 CPU／GPU 分組命令。
+目前完成項目與未驗證範圍見 [最新批准集合與等待鏈審查](audit/REPRODUCTION_GATE_CHAIN_REVIEW_20260908.md) 與 [資料／文件整理紀錄](audit/REPRODUCTION_CORPUS_REVIEW_20260908.md)。[專案 README](../README.md) 提供安裝／狀態入口；[測試導覽](../tests/README.md) 提供 CPU／GPU 分組命令。
 
 | 證據類型 | 位置與界線 |
 |---|---|

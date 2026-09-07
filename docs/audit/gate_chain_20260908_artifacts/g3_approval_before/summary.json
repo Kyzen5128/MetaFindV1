@@ -1,0 +1,34 @@
+{
+  "scope": "Isolated CPU counterexample using real gate.run; synthetic corpus only. No production source/model/annotation/live corpus modified.",
+  "gate_source_sha256": "bfda9e24c07e65720e93e8e2afa3f3fc9416b11efd2a07c8765c2a269af57b24",
+  "test_source_sha256": "b2432566e1edf0d13dced235d0aebca57941950332003b0869913334d4792680",
+  "approved_source_sha256": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058",
+  "cases": [
+    {
+      "case": "group_name_only",
+      "rc": 0,
+      "verdict": "PASS",
+      "unapproved_uid": "u000",
+      "source_ledger_claim_supplied": false,
+      "set_conservation": true,
+      "E": [
+        "u000"
+      ],
+      "record": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/group_name_only/results/G3_object_corpus.yaml",
+      "record_sha256": "9368c1ea3edbb9c385b80377c2370248269f320acc8fc5a4bcc5697a58fa37fe"
+    },
+    {
+      "case": "true_source_hash_wrong_uid",
+      "rc": 0,
+      "verdict": "PASS",
+      "unapproved_uid": "u000",
+      "source_ledger_claim_supplied": true,
+      "set_conservation": true,
+      "E": [
+        "u000"
+      ],
+      "record": "/home/kyzen/MetaFindV1/output/validation/continuation_20260908/g3_approval_before/true_source_hash_wrong_uid/results/G3_object_corpus.yaml",
+      "record_sha256": "3870d4fb5c2079d2ff11cc7cd3afc2ef644bbcd3b3f1c4c1b075c6576e7870ce"
+    }
+  ]
+}
