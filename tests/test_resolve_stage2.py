@@ -125,8 +125,9 @@ def test_scene_dropout_is_per_batch():
 
 # --- the positive map ------------------------------------------------------
 
-def modality(tmp_path, asset_id: str, with_cloud: bool):
-    rec = {"asset_id": asset_id,
+def modality(tmp_path, asset_id: str, with_cloud: bool, text: str = "a chair", views: int = 11):
+    rec = {"asset_id": asset_id, "text": text,
+           "view_paths": [str(tmp_path / f"{asset_id}_{i}.png") for i in range(views)],
            "pointcloud_uri": str(tmp_path / f"{asset_id}.npz") if with_cloud else None,
            "pointcloud_missing_reason": None if with_cloud else "no depth returned"}
     (tmp_path / f"{asset_id}.json").write_text(json.dumps(rec))
@@ -144,30 +145,37 @@ def test_every_eligible_asset_maps_to_itself(monkeypatch, tmp_path):
     assert all(v["method"] == "identity" for v in mapping.values())
 
 
-def test_an_asset_without_a_point_cloud_gets_no_positive(monkeypatch, tmp_path):
-    """[F26] 2.6 needs a modality-complete gallery, so n11b excludes these.
-    Writing a positive here would name an id stage2_gallery_index does not
-    contain -- a loss with a name and no vector behind it."""
+def test_the_point_cloud_is_not_declared_so_its_absence_does_not_exclude(monkeypatch, tmp_path):
+    """[DL-104, Kyzen 2026-09-07] ProcTHOR assets are text + image; the 28 without
+    a depth-shell cloud are eligible again. The declaration is what n11b and the
+    trainer read, so it has to say so in the protocol too."""
     import metafind.models.resolve_stage2 as r
 
+    assert r.ASSET_MODALITIES == ("text", "image")
+    assert r.STAGE2_DECISIONS["asset_modalities"] == ["text", "image"]
+    assert r.STAGE2_DECISIONS["query_pointcloud"] == "absent"
     modality(tmp_path, "Bed_1", True)
     modality(tmp_path, "Bowl_11", False)
     monkeypatch.setattr(r.paths, "PROCTHOR_MODALITIES", tmp_path)
     mapping, skipped = build_positive_map()
-    assert "Bowl_11" not in mapping
-    assert skipped == ["Bowl_11"]
+    assert set(mapping) == {"Bed_1", "Bowl_11"}
+    assert skipped == []
 
 
-def test_the_exclusion_is_reported_not_silent(monkeypatch, tmp_path):
-    """Dropping assets quietly is how a corpus shrinks without anyone noticing."""
+def test_a_missing_DECLARED_modality_still_excludes_and_is_reported(monkeypatch, tmp_path):
+    """Dropping assets quietly is how a corpus shrinks without anyone noticing.
+    Writing a positive for an asset n11b cannot encode would name an id the
+    gallery index does not contain -- a loss with a name and no vector."""
     import metafind.models.resolve_stage2 as r
 
+    modality(tmp_path, "Bed_1", False)
     for i in range(3):
-        modality(tmp_path, f"Bowl_{i}", False)
+        modality(tmp_path, f"Bowl_{i}", False, text="")          # no text
+    modality(tmp_path, "Cup_9", False, views=0)                  # no renders
     monkeypatch.setattr(r.paths, "PROCTHOR_MODALITIES", tmp_path)
     mapping, skipped = build_positive_map()
-    assert mapping == {}
-    assert len(skipped) == 3
+    assert set(mapping) == {"Bed_1"}
+    assert sorted(skipped) == ["Bowl_0", "Bowl_1", "Bowl_2", "Cup_9"]
 
 
 # --- C1 / U-26: the protocol must carry the architecture choice --------------

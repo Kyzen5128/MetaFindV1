@@ -526,67 +526,66 @@ def main() -> int:
             print(f"\nstaged {record['count']:,} x {record['dim']} "
                   f"-> {STAGING_PATH}")
         else:
-            # [2.6] "The gallery encoder is trained to be modality-complete."
-            # 28 of the 1,467 ProcTHOR assets have no depth at all -- transparent
-            # materials are absent from Unity's depth prepass -- so they have
-            # text and images and no point cloud.
-            #
-            # 28 is defined by the SAME condition the loop below tests, and the
-            # condition is the definition: a record whose `pointcloud_uri` key is
-            # present and null. Rescanned 2026-08-30 over all 1,467 files in
-            # `procthor_modalities/` (OBSERVED DATA): 28 null, 0 with the key
-            # absent, 0 with an empty string, 1,439 non-null -- and all 1,439 of
-            # those .npz files exist on disk, so "missing file" is a different
-            # (currently empty) failure mode and is NOT what this counts. All 28
-            # carry the same `pointcloud_missing_reason`: "every view was empty;
-            # the asset never entered frame". The 24 that stood here was an
-            # earlier measurement and is superseded.
-            #
-            # They are EXCLUDED from the Stage 2 gallery rather than admitted
-            # with a gap. Admitting them would mean the gallery side runs a
-            # presence mask, which 2.6 rules out, and the alternative of
-            # zero-filling is the failure L1-SEMEDGE-NO-ZEROFILL exists to name.
-            # The cost is that those assets cannot be Stage 2 positives, hence
-            # cannot be targets: 28 of 1,467, 1.9%, recorded here rather than
-            # discovered as a mysterious KeyError inside n13.
+            # [2.6] "The gallery encoder is trained to be modality-complete." Until
+            # DL-104 that meant: the 28 ProcTHOR assets without depth (transparent
+            # materials, "every view was empty") were excluded rather than admitted
+            # with a gap, because a presence mask on the gallery side had no
+            # trained token behind it. The declaration below turns "complete" into
+            # "has every declared modality", and the absent slot is excluded from
+            # the fusion, not filled.
+            # [DL-104, Kyzen 2026-09-07] The protocol now DECLARES which modalities
+            # a ProcTHOR asset carries (`asset_modalities`, text + image). Only
+            # those are encoded, the gallery fusion runs with the other slot
+            # excluded (GalleryTower.forward(declared=...)), and an asset is
+            # excluded only when a DECLARED modality is missing. Protocols
+            # written before the field are read as all three.
+            s2_protocol = json.loads((paths.OUTPUTS / "stage2_protocol.json").read_text())
+            declared = tuple(s2_protocol.get("asset_modalities", ["text", "image", "pc"]))
             mods = sorted(paths.PROCTHOR_MODALITIES.glob("*.json"))
             if args.limit:
                 mods = mods[: args.limit]
             ids, vectors, excluded = [], [], []
-            # The three raw modality vectors are kept beside the fused gallery
-            # vector. Stage 2 freezes the whole ULIP-2 backbone, so for every
-            # asset these three numbers never change again; recomputing them
-            # per training step (11 ViT-bigG image forwards per sample) was
-            # what made one Stage 2 epoch cost days. Same backbone, same
-            # inputs, same eval mode as the fused vector below, so a lookup
-            # returns exactly what the per-step encode used to return.
-            raw = {"text": [], "image": [], "pc": []}
+            # The raw modality vectors are kept beside the fused gallery vector.
+            # Stage 2 freezes the whole ULIP-2 backbone, so for every asset these
+            # numbers never change again; recomputing them per training step (11
+            # ViT-bigG image forwards per sample) was what made one Stage 2 epoch
+            # cost days. Same backbone, same inputs, same eval mode as the fused
+            # vector below, so a lookup returns exactly what the per-step encode
+            # used to return.
+            raw = {m: [] for m in declared}
             for path in mods:
                 rec = json.loads(path.read_text())
-                if rec["pointcloud_uri"] is None:
-                    excluded.append({"asset_id": rec["asset_id"],
-                                     "reason": rec["pointcloud_missing_reason"]})
+                gaps = [m for m in declared
+                        if (m == "pc" and rec.get("pointcloud_uri") is None)
+                        or (m == "image" and not rec.get("view_paths"))
+                        or (m == "text" and not rec.get("text"))]
+                if gaps:
+                    excluded.append({"asset_id": rec["asset_id"], "missing": gaps,
+                                     "reason": rec.get("pointcloud_missing_reason")
+                                     if "pc" in gaps else None})
                     continue
-                # [P0-4] pc_norm happens INSIDE prepare_depth_shell: n07b stores
-                # world-frame points (asset lifted to y=40 m), n03 stores
-                # unit-normalised ones, and the checkpoint was trained on the
-                # latter. The grey channel is there because the shell has no
-                # colour, not because grey is a measurement.
-                cloud = np.load(rec["pointcloud_uri"])["xyz"].astype(np.float32)
-                pc = prepare_depth_shell(cloud)
                 with torch.no_grad():
-                    text_vec = backbone.encode_text([rec["text"]])
-                    view_vecs = backbone.encode_image(torch.stack([
-                        backbone.preprocess(Image.open(v).convert("RGB"))
-                        for v in rec["view_paths"]]))
-                    image_vec = view_vecs.mean(dim=0, keepdim=True)
-                    pc_vec = backbone.encode_pc(torch.from_numpy(pc))
+                    embeds = {}
+                    if "text" in declared:
+                        embeds["text"] = backbone.encode_text([rec["text"]])
+                    if "image" in declared:
+                        view_vecs = backbone.encode_image(torch.stack([
+                            backbone.preprocess(Image.open(v).convert("RGB"))
+                            for v in rec["view_paths"]]))
+                        embeds["image"] = view_vecs.mean(dim=0, keepdim=True)
+                    if "pc" in declared:
+                        # [P0-4] pc_norm happens INSIDE prepare_depth_shell: n07b
+                        # stores world-frame points (asset lifted to y=40 m), n03
+                        # stores unit-normalised ones, and the checkpoint was
+                        # trained on the latter. The grey channel is there because
+                        # the shell has no colour, not because grey is a measurement.
+                        cloud = np.load(rec["pointcloud_uri"])["xyz"].astype(np.float32)
+                        embeds["pc"] = backbone.encode_pc(torch.from_numpy(prepare_depth_shell(cloud)))
                     vectors.append(model.gallery(
-                        {"text": text_vec, "image": image_vec, "pc": pc_vec}
+                        embeds, declared=None if len(declared) == 3 else declared
                     )[0].cpu().numpy())
-                    raw["text"].append(text_vec[0].float().cpu().numpy())
-                    raw["image"].append(image_vec[0].float().cpu().numpy())
-                    raw["pc"].append(pc_vec[0].float().cpu().numpy())
+                    for m in declared:
+                        raw[m].append(embeds[m][0].float().cpu().numpy())
                 ids.append(rec["asset_id"])
                 if len(ids) % 200 == 0:
                     print(f"  [{len(ids):5d}/{len(mods)}]", flush=True)
@@ -606,8 +605,9 @@ def main() -> int:
                 "gallery_encoder_sha256": encoder_sha,
                 "gallery_encoder_hash_includes_buffers": True,
                 "modality_completeness": {
+                    "declared_modalities": list(declared),
                     "complete": len(ids),
-                    "excluded_no_pointcloud": excluded,
+                    "excluded_missing_declared": excluded,
                 },
                 # [CODEX MAJOR 2026-08-30] Stage 2's [G6] comment claimed the
                 # index and the checkpoint were compared. Nothing compared them,
@@ -616,7 +616,7 @@ def main() -> int:
             })
             _write(STAGE2_PATH, record)
             print(f"\nstage2 index: {record['n_assets']:,} assets, "
-                  f"{len(excluded)} excluded for having no point cloud "
+                  f"{len(excluded)} excluded for missing a declared modality {declared} "
                   f"-> {STAGE2_PATH}")
 
     runlog.cost_ledger(wallclock_s=round(time.time() - started, 1),

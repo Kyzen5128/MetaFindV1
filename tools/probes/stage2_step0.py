@@ -46,7 +46,8 @@ def main() -> int:
     index = json.loads((paths.OUTPUTS / "stage2_gallery_index.json").read_text())
     arr = np.load(index["uri"]); ids = arr["ids"].tolist()
     gallery_vecs = torch.from_numpy(arr["embeddings"]).to(args.device)
-    data.asset_vectors = load_asset_modality_vectors(arr)
+    data.asset_vectors = load_asset_modality_vectors(
+        arr, tuple(_s2p.get("asset_modalities", ["text", "image", "pc"])))
     row = {a: i for i, a in enumerate(ids)}
 
     backbone = ULIPBackbone(BackboneConfig(device=args.device, train_scope="point_encoder_and_fuser"))

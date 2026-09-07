@@ -60,7 +60,8 @@ def main() -> int:
     arr = np.load(index["uri"])
     ids = arr["ids"].tolist()
     gallery = torch.from_numpy(arr["embeddings"]).to(args.device)
-    data.asset_vectors = load_asset_modality_vectors(arr)
+    data.asset_vectors = load_asset_modality_vectors(
+        arr, tuple(_s2p.get("asset_modalities", ["text", "image", "pc"])))
     row = {a: i for i, a in enumerate(ids)}
 
     sp = json.loads((paths.OUTPUTS / "scene_splits.json").read_text())

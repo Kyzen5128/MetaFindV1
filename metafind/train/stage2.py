@@ -451,9 +451,21 @@ def encode_query(model, graph: dict, target_index: int, asset_id: str,
         raise ValueError("Stage2Data.asset_vectors is not set; load them with "
                          "load_asset_modality_vectors(gallery_index) first")
     vec = data.asset_vectors[asset_id]
-    text = torch.from_numpy(vec["text"]).to(device).unsqueeze(0)
-    image = torch.from_numpy(vec["image"]).to(device).unsqueeze(0)
-    pc_vec = torch.from_numpy(vec["pc"]).to(device).unsqueeze(0)
+    # [DL-104] Only the DECLARED modalities have a vector (ProcTHOR: text, image).
+    # An undeclared one is None here, which the query fusion reads as absent and
+    # fills with its Stage-1-trained mask token -- sec. 2.6's masked embedding,
+    # the same path a Stage 1 query takes when a modality is masked out.
+    embeds = {m: (torch.from_numpy(vec[m]).to(device).unsqueeze(0) if m in vec else None)
+              for m in ("text", "image", "pc")}
+    if present is not None:
+        # A caller's mask (text_only / stage1) may name a slot the asset never
+        # had; clear it, and keep the text if that empties the row.
+        present = present.clone()
+        for i, m in enumerate(("text", "image", "pc")):
+            if embeds[m] is None:
+                present[:, i] = False
+        empty = ~present.any(dim=1)
+        present[empty, 0] = True
 
     layout = None
     # `layout_encoder is None` is the "w/o Layout Context" row, and it is a
@@ -481,7 +493,6 @@ def encode_query(model, graph: dict, target_index: int, asset_id: str,
                 torch.from_numpy(edge_attr).to(device),
                 edge_missing=torch.from_numpy(edge_missing).to(device))
 
-    embeds = {"text": text, "image": image, "pc": pc_vec}
     # [2.4] the query side may drop the point cloud. `present=None` means all
     # three (the pre-2026-09-04 construction); under query_modality_masking
     # text_only / stage1 the caller passes a (1, 3) mask and the absent slots
@@ -680,7 +691,8 @@ class Stage2Data:
                 if (paths.SCENE_GRAPHS / f"{h}.json").exists()}
 
 
-def load_asset_modality_vectors(gallery_index) -> dict[str, dict[str, np.ndarray]]:
+def load_asset_modality_vectors(gallery_index, declared=("text", "image", "pc"),
+                                ) -> dict[str, dict[str, np.ndarray]]:
     """The frozen backbone's text / image / point-cloud vector for every gallery asset.
 
     Read from the Stage 2 gallery index, which stores them beside the fused
@@ -694,16 +706,16 @@ def load_asset_modality_vectors(gallery_index) -> dict[str, dict[str, np.ndarray
     function exists to stop running per step, and a refusal names the fix
     (rebuild the index) instead of hiding a days-long slowdown.
     """
-    missing = [k for k in ("text", "image", "pc") if k not in gallery_index.files]
+    declared = tuple(declared)
+    missing = [k for k in declared if k not in gallery_index.files]
     if missing:
         raise ValueError(
             f"the Stage 2 gallery index has no raw modality arrays {missing}. "
-            "It was built before they were stored; rebuild it with "
+            "It was built before they were stored, or under a different "
+            "`asset_modalities`; rebuild it with "
             "`python -m metafind.train.gallery_index stage2 ...`.")
     ids = gallery_index["ids"].tolist()
-    return {a: {"text": gallery_index["text"][i],
-                "image": gallery_index["image"][i],
-                "pc": gallery_index["pc"][i]}
+    return {a: {m: gallery_index[m][i] for m in declared}
             for i, a in enumerate(ids)}
 
 
@@ -714,7 +726,8 @@ def trainable_state_dict(model) -> dict:
             for name, p in model.named_parameters() if p.requires_grad}
 
 
-def freeze_for_stage2(model, backbone, query_modality_masking: str = "none") -> dict:
+def freeze_for_stage2(model, backbone, query_modality_masking: str = "none",
+                      asset_modalities=("text", "image", "pc")) -> dict:
     """[PAPER 2.6] Only the query fuser and the ESSGNN move.
 
     The query POINT encoder is the trap. Stage 1 trains it, so it arrives with
@@ -746,7 +759,11 @@ def freeze_for_stage2(model, backbone, query_modality_masking: str = "none") -> 
         # learn must not sit in the optimizer, where weight decay would erode
         # the values Stage 1 learned for it (measured: zero grad, nonzero
         # delta per step). It is restored from Stage 1 and left alone.
-        if query_modality_masking == "none" and name.endswith("fusion.mask_tokens"):
+        # [DL-104] With an undeclared modality (ProcTHOR has no point cloud) that
+        # slot is absent in EVERY query, its mask token is selected every step,
+        # and the token is part of the fusion layer the paper says Stage 2 trains.
+        if query_modality_masking == "none" and len(asset_modalities) == 3 \
+                and name.endswith("fusion.mask_tokens"):
             trains = False
         p.requires_grad_(trains)
     return {name: p.requires_grad for name, p in model.named_parameters()}
@@ -1036,7 +1053,8 @@ def main() -> int:
         train_houses = train_houses[: args.limit_houses]
 
     data = Stage2Data(args.device)
-    data.asset_vectors = load_asset_modality_vectors(gallery_index)
+    asset_modalities = tuple(stage2.get("asset_modalities", ["text", "image", "pc"]))
+    data.asset_vectors = load_asset_modality_vectors(gallery_index, asset_modalities)
     eligible = set(positive_map) & set(id_to_row) & set(data.modalities)
     samples = enumerate_samples(train_houses, eligible)
     if not samples:
@@ -1110,7 +1128,8 @@ def main() -> int:
                                          "query.layout_weight"))
     model.to(args.device)
     loss_fn.to(args.device)
-    grads = freeze_for_stage2(model, backbone, query_modality_masking=query_masking)
+    grads = freeze_for_stage2(model, backbone, query_modality_masking=query_masking,
+                              asset_modalities=asset_modalities)
 
     # Same optimizer construction as Stage 1: ULIP's rule puts biases, norms
     # and every 0-/1-D tensor (that includes Eq. 6's lambda and the missing-

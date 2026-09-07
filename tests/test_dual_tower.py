@@ -424,3 +424,39 @@ def test_missing_modality_representation_comes_from_the_protocol():
         _runtime(enc={"missing_modality_representation": "zero_pad"})
     with pytest.raises(ValueError, match="not one of U-11"):
         _runtime(enc={"missing_modality_representation": "something_else"})
+
+
+# --- DL-104: a catalogue with a DECLARED missing modality ---------------------
+
+def test_gallery_with_a_declared_missing_modality_excludes_that_slot():
+    """[DL-104] ProcTHOR assets have text and image and no point cloud. Declared,
+    the gallery encodes them with the pc slot EXCLUDED from the fusion (its mask
+    token was never trained), which is the fusion's own present-mask path."""
+    torch.manual_seed(0)
+    model = MetaFindDualTower(cfg()).eval()
+    e = embeds()
+    two = {"text": e["text"], "image": e["image"], "pc": None}
+    out = model.gallery(two, declared=("text", "image"))
+    present = torch.tensor([[True, True, False]]).expand(e["text"].size(0), -1)
+    ref = model.gallery.fusion(two, present, exclude_absent=True)
+    assert out.shape == (e["text"].size(0), D) and torch.allclose(out, ref)
+    # the excluded slot really is excluded: the untrained pc mask token does not move the output
+    with torch.no_grad():
+        model.gallery.fusion.mask_tokens[2].add_(10.0)
+    assert torch.allclose(out, model.gallery(two, declared=("text", "image")), atol=1e-5)
+
+
+def test_gallery_declaration_is_checked_both_ways():
+    model = MetaFindDualTower(cfg())
+    e = embeds()
+    # declared but missing -> refused, as before
+    with pytest.raises(ValueError, match="declared but"):
+        model.gallery({"text": e["text"], "image": None, "pc": None}, declared=("text", "image"))
+    # handed a modality the catalogue does not declare -> refused, not silently encoded
+    with pytest.raises(ValueError, match="declared as"):
+        model.gallery(e, declared=("text", "image"))
+    # no declaration -> the old rule stands
+    with pytest.raises(ValueError, match="modality-complete"):
+        model.gallery({**e, "pc": None})
+    with pytest.raises(ValueError):
+        model.gallery({"text": e["text"], "image": None, "pc": None}, declared=())

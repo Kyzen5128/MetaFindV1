@@ -161,7 +161,8 @@ class GalleryTower(nn.Module):
             )
         self.fusion = ModalityFusion(cfg.gallery_fusion)
 
-    def forward(self, embeds: dict[str, Tensor | None]) -> Tensor:
+    def forward(self, embeds: dict[str, Tensor | None],
+                declared: tuple[str, ...] | list[str] | None = None) -> Tensor:
         """Encode assets that have every modality available.
 
         Args:
@@ -169,17 +170,46 @@ class GalleryTower(nn.Module):
                 an incomplete gallery entry is a data error, not a supported
                 case, and silently mask-filling it would corrupt the index every
                 downstream number is computed against.
+            declared: the modalities this catalogue HAS, when it is not all
+                three. [DL-104, Kyzen 2026-09-07] ProcTHOR assets carry text and
+                images and no point cloud (the authors did not contest Reviewer
+                ZhAY's "cannot be encoded using their point cloud"). An absent
+                modality is then a property of the catalogue, not a gap in one
+                asset: it must be named here, a declared modality that is still
+                missing is refused, and the absent slot is EXCLUDED from the
+                fusion rather than filled -- the gallery's mask tokens were never
+                trained (every Stage 1 gallery entry is complete).
 
         Returns:
             ``(B, D)`` gallery embeddings.
         """
         missing = [m for m in MODALITIES if embeds.get(m) is None]
-        if missing:
+        if declared is None:
+            if missing:
+                raise ValueError(
+                    f"gallery tower is modality-complete but {missing} are absent; "
+                    "quarantine the asset instead of encoding it"
+                )
+            return self.fusion(embeds)
+        declared = tuple(declared)
+        unknown = [m for m in declared if m not in MODALITIES]
+        if unknown or not declared:
+            raise ValueError(f"declared gallery modalities must be a non-empty subset of "
+                             f"{MODALITIES}, got {declared}")
+        still_missing = [m for m in missing if m in declared]
+        if still_missing:
             raise ValueError(
-                f"gallery tower is modality-complete but {missing} are absent; "
+                f"gallery modalities {declared} are declared but {still_missing} are absent; "
                 "quarantine the asset instead of encoding it"
             )
-        return self.fusion(embeds)
+        undeclared = [m for m in MODALITIES if m not in declared and embeds.get(m) is not None]
+        if undeclared:
+            raise ValueError(f"{undeclared} handed to a gallery declared as {declared}; "
+                             "declare it or drop it, do not encode it by accident")
+        ref = next(embeds[m] for m in MODALITIES if embeds.get(m) is not None)
+        present = torch.tensor([m in declared for m in MODALITIES],
+                               device=ref.device).expand(ref.size(0), -1).clone()
+        return self.fusion(embeds, present, exclude_absent=True)
 
 
 class QueryTower(nn.Module):

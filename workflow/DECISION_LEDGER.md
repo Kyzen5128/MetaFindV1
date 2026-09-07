@@ -6898,3 +6898,17 @@ What the AUTHORS state there, and where we stand:
 | inference placement from I-Design's planners | not built (Table 2 not authorised) | n/a |
 
 No code was released; Reviewer ZhAY asked for it. The open Table 1 unknowns (query source, gallery size, why their Stage 1 pc = 75.1) are NOT answered by the thread.
+
+### DL-104 ✅ (Kyzen 2026-09-07 14:0x) -- ProcTHOR assets are text + image in Stage 2; the point cloud is not encoded
+
+Offered: (1) drop the ProcTHOR point cloud, text + image only; (2) keep it. Kyzen: ✅ on (1). Basis: authors did not contest Reviewer ZhAY's "cannot be encoded using their point cloud"; 2.3 gives ProcTHOR only coordinates and metadata. Classification: IMPLEMENTATION CHOICE on Kyzen's ruling; the paper names neither renders nor clouds for ProcTHOR, so text+image (not text-only) is his reading, recorded as such.
+
+Implemented (commit follows), all CPU-tested, 1,051 tests pass (renders / cuda / procthor_modalities files skipped as GPU-bound):
+- `resolve_stage2.py`: `ASSET_MODALITIES = ("text", "image")`; protocol gains `asset_modalities`, `query_pointcloud: absent`, `target_eligibility: has_declared_modalities`; `build_positive_map` excludes only for a missing DECLARED modality -> the 28 no-depth assets are eligible again.
+- `gallery_index.py stage2`: reads `asset_modalities` from `stage2_protocol.json` (older protocols read as all three), encodes the declared modalities only, fuses through `GalleryTower.forward(declared=...)`, stores raw arrays for the declared ones; record field `modality_completeness.excluded_missing_declared` replaces `excluded_no_pointcloud`.
+- `dual_tower.GalleryTower.forward(embeds, declared=None)`: unchanged refusal without a declaration; with one, a declared-but-missing or an undeclared-but-present modality is refused, and the absent slot is EXCLUDED from the fusion (`ModalityFusion.forward(..., exclude_absent=True)`, new flag) because the gallery's mask tokens were never selected in Stage 1 and are untrained. IMPLEMENTATION CHOICE: exclude rather than fill; the query side keeps 2.6's masked embedding.
+- `stage2.py`: `load_asset_modality_vectors(index, declared)`; `encode_query` passes `pc=None` (query fusion -> Stage-1-trained mask token) and clears a caller's mask for slots the asset never had; `freeze_for_stage2(..., asset_modalities)` lets the query mask tokens train when a modality is undeclared (the pc token is selected every step and belongs to the fusion layer 2.6 says Stage 2 trains); main reads `asset_modalities` from the protocol.
+- probes `stage2_procthor_retrieval.py`, `stage2_step0.py` pass the declaration.
+- Tests: `test_resolve_stage2` (declaration recorded; no-cloud eligible; missing declared modality excluded and reported), `test_dual_tower` (declared path equals the exclude-mask fusion and ignores the pc mask token; both-way refusals), `test_train_stage2` (declared vectors; encode_query absent handling; mask tokens train iff undeclared).
+
+Unverified until the Stage 2 chain runs (queued behind R2 and row 1): the n11b branch end to end on the real backbone, and the effect on the Stage 2 arm and the ProcTHOR probe. The chain scripts need no edit: n09b/n11b/stage2/probe import the current code at run time. n07b's renders and depth-shell clouds stay on disk unchanged. `exp_type_level_query.py --stage2-state` swaps `query.fusion.*`, which now includes trained mask tokens -- intended.

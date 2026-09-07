@@ -288,7 +288,8 @@ class ModalityFusion(nn.Module):
             cols.append(torch.where(keep, e, fill))
         return torch.stack(cols, dim=1)
 
-    def forward(self, embeds: dict[str, Tensor | None], present: Tensor | None = None) -> Tensor:
+    def forward(self, embeds: dict[str, Tensor | None], present: Tensor | None = None,
+                exclude_absent: bool = False) -> Tensor:
         """
         Args:
             embeds: ``{"text"|"image"|"pc": (B, D) or None}``. A ``None`` entry
@@ -296,6 +297,11 @@ class ModalityFusion(nn.Module):
             present: ``(B, 3)`` bool, True where the modality is available. When
                 omitted, every modality with a non-None entry is treated as
                 present.
+            exclude_absent: keep absent slots out of the aggregation whatever
+                ``include_absent_slots`` says. The GALLERY tower uses it for a
+                declared-incomplete catalogue (DL-104): its mask tokens were never
+                selected in Stage 1, so they are untrained noise, not the learned
+                masked embeddings sec. 2.6 describes for the query side.
 
         Returns:
             ``(B, D)`` fused query embedding.
@@ -320,7 +326,7 @@ class ModalityFusion(nn.Module):
             raise ValueError(f"present must be {(b, len(MODALITIES))}, got {tuple(present.shape)}")
 
         if self.cfg.image_tokens > 1:
-            return self._forward_tokens(embeds, present)
+            return self._forward_tokens(embeds, present, exclude_absent)
 
         x = self._stack(embeds, present)  # (B, 3, D)
         kind = self.cfg.kind
@@ -330,7 +336,8 @@ class ModalityFusion(nn.Module):
         # token -- otherwise sec. 2.6's "rather than zero-padding" contrast has
         # no referent, since a dropped slot has nothing to pad.
         active = (
-            torch.ones_like(present) if self.cfg.include_absent_slots else present
+            torch.ones_like(present)
+            if self.cfg.include_absent_slots and not exclude_absent else present
         )
         w = active.to(x.dtype).unsqueeze(-1)
         denom = w.sum(dim=1).clamp(min=1.0)
@@ -365,7 +372,8 @@ class ModalityFusion(nn.Module):
         h = self.head(x + self.modality_pos, src_key_padding_mask=pad)
         return (h * w).sum(dim=1) / denom
 
-    def _forward_tokens(self, embeds: dict[str, Tensor | None], present: Tensor) -> Tensor:
+    def _forward_tokens(self, embeds: dict[str, Tensor | None], present: Tensor,
+                        exclude_absent: bool = False) -> Tensor:
         """Transformer over text + K view tokens + pc. Same readout rule as the
         3-slot path: mean over the tokens that take part (all of them under
         include_absent_slots, the active ones otherwise)."""
@@ -374,7 +382,8 @@ class ModalityFusion(nn.Module):
         pos = torch.cat([self.modality_pos[0:1],
                          self.modality_pos[1:2].expand(K, -1) + self.view_pos,
                          self.modality_pos[2:3]], dim=0)      # (T, D)
-        take = torch.ones_like(act) if self.cfg.include_absent_slots else act
+        take = (torch.ones_like(act)
+                if self.cfg.include_absent_slots and not exclude_absent else act)
         w = take.to(x.dtype).unsqueeze(-1)
         denom = w.sum(dim=1).clamp(min=1.0)
         pad = ~take

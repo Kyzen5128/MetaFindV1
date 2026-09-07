@@ -359,3 +359,69 @@ def test_legacy_house_graph_keeps_the_whole_house():
     sem, text = data_bits()
     keep, *_ = build_context_graph(graph(), 2, 4, sem, text)
     assert [n["index"] for n in keep] == [0, 1, 3]
+
+
+# --- DL-104: declared ProcTHOR modalities (text + image, no point cloud) -------
+
+def test_asset_vectors_follow_the_declaration(tmp_path):
+    import numpy as np
+    from metafind.train.stage2 import load_asset_modality_vectors
+    p = tmp_path / "g.npz"
+    np.savez(p, ids=np.array(["A", "B"]), embeddings=np.zeros((2, 4), np.float32),
+             text=np.ones((2, 4), np.float32), image=2 * np.ones((2, 4), np.float32))
+    arr = np.load(p)
+    vec = load_asset_modality_vectors(arr, ("text", "image"))
+    assert set(vec["A"]) == {"text", "image"}
+    with pytest.raises(ValueError, match="asset_modalities"):
+        load_asset_modality_vectors(arr)          # default still wants all three
+
+
+def test_encode_query_treats_an_undeclared_modality_as_absent():
+    """The query fusion gets pc=None -> mask token (2.6's masked embedding); a
+    caller's presence mask cannot re-mark it present."""
+    import numpy as np, torch
+    from metafind.train import stage2 as s2
+
+    class Fusion:
+        def __init__(self):
+            self.calls = []
+        def __call__(self, embeds, present=None, layout=None):
+            self.calls.append((embeds, present))
+            return torch.zeros(1, 4)
+
+    class Query:
+        layout_encoder = None
+    model = type("M", (), {})()
+    model.query = Query(); model.query.__class__.__call__ = staticmethod(Fusion())
+    fusion = model.query.__class__.__call__
+    data = type("D", (), {})()
+    data.asset_vectors = {"A": {"text": np.ones(4, np.float32), "image": np.ones(4, np.float32)}}
+    s2.encode_query(model, {"nodes": []}, 0, "A", drop_layout=True, device="cpu", data=data)
+    embeds, present = fusion.calls[-1]
+    assert embeds["pc"] is None and present is None
+    s2.encode_query(model, {"nodes": []}, 0, "A", drop_layout=True, device="cpu", data=data,
+                    present=torch.tensor([[False, False, True]]))
+    embeds, present = fusion.calls[-1]
+    assert present.tolist() == [[True, False, False]]     # pc cleared, text kept
+
+
+def test_mask_tokens_train_when_a_modality_is_undeclared():
+    """Under `none` masking with all three declared the tokens are never selected and
+    stay out of the optimizer; with the pc undeclared its token is selected every
+    step and is part of the fusion layer Stage 2 trains."""
+    from metafind.models.dual_tower import DualTowerConfig, MetaFindDualTower
+    from metafind.models.fusion import FusionConfig
+    from metafind.train.stage2 import freeze_for_stage2
+
+    class BB:
+        def set_train_scope(self, s): pass
+        def is_frozen(self): return True
+    def build():
+        return MetaFindDualTower(DualTowerConfig(
+            dim=8, tower_sharing="fully_separate",
+            query_fusion=FusionConfig(dim=8, hidden=16, n_heads=2, n_layers=1),
+            gallery_fusion=FusionConfig(dim=8, hidden=16, n_heads=2, n_layers=1), use_layout=False))
+    g3 = freeze_for_stage2(build(), BB(), "none", asset_modalities=("text", "image", "pc"))
+    g2 = freeze_for_stage2(build(), BB(), "none", asset_modalities=("text", "image"))
+    assert g3["query.fusion.mask_tokens"] is False
+    assert g2["query.fusion.mask_tokens"] is True

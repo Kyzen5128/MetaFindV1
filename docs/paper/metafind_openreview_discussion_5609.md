@@ -1,8 +1,7 @@
 # OpenReview discussion, NeurIPS 2025 Submission 5609 (MetaFind)
 
-Source: pasted verbatim by Kyzen on 2026-09-07 from the OpenReview page. The paste was cut by
-the chat's 50,000-character limit inside Reviewer cY7o's review ("the entire architecture is
-largely built upo"); the rest of cY7o's review and the authors' reply to it are MISSING here.
+Source: pasted verbatim by Kyzen on 2026-09-07 from the OpenReview page. The chat paste was cut inside Reviewer cY7o's review; the remainder was
+recovered from the PDF `docs/paper/openreview_5609.pdf` (Kyzen, 13:48) and appended below.
 Author statements below are primary-source evidence about the method (authority tier 1,
 alongside the paper); reviewer statements are not authority about what the authors did unless
 the authors confirm them in a reply. Kept outside `metafind_source/` because that directory is
@@ -38,6 +37,11 @@ Statements that bear on the reproduction (all AUTHOR statements unless marked):
   (they use 4 views).
 - OOD scene study (conference room, gym, bar, laboratory; 5 prompts each) scored by GPT-4o and
   humans; table in Reviewer YspC's thread.
+- To cY7o: Stage 2 "omitting layout context in 30% of samples" (the paper says batches; U-32);
+  "we freeze the query/gallery encoders and train only the fusion layers and the ESSGNN";
+  the ProcTHOR data is "significantly more complex, cluttered, and scene-centric" and the
+  object-level drop is "expected due to domain shift". No Table 1 protocol detail (query source,
+  gallery size) appears anywhere in the thread.
 - No code link was given; Reviewer ZhAY asked the authors to publish code.
 
 ---
@@ -464,4 +468,190 @@ The role of ESSGNN in the proposed framework remains somewhat confusing and insu
 
 The paper substantially overstates its contributions relative to the actual novelty and technical content. Despite claiming MetaFind as a new retrieval framework, the entire architecture is largely built upo
 
-[PASTE TRUNCATED HERE by the chat's 50,000-character limit. Missing: the rest of Reviewer cY7o's review, the authors' rebuttal to cY7o, and any later comments.]
+(continued from the PDF `docs/paper/openreview_5609.pdf`, saved by Kyzen 2026-09-07 13:48; text via pdftotext)
+
+2. Questionable Contribution
+The paper substantially overstates its contributions relative to the actual novelty and technical content. Despite
+claiming MetaFind as a new retrieval framework, the entire architecture is largely built upon ULIP-2, with only the
+ESSGNN layout encoder being newly introduced. Critically, ESSGNN demonstrably harms object-level retrieval
+performance (discussed in the above weakness).
+Moreover, the experimental comparisons raise serious concerns about fairness and the validity of the reported
+improvements. The paper repeatedly compares MetaFind—based on a modified dual-tower architecture and
+iterative retrieval loop—against ULIP-2 and other single-tower baselines that are inherently not designed for
+multimodal composition or scene-aware retrieval. The resulting large performance gaps are therefore inflated by
+differences in model architecture and training scope, not solely by improved retrieval capability. The paper fails to
+properly disentangle these factors or conduct controlled comparisons, which undermines the credibility of its
+experimental claims. Overall, the actual contribution of the work, relative to prior art, appears incremental rather
+than substantial.
+Quality: 2: fair
+Clarity: 2: fair
+Significance: 2: fair
+Originality: 2: fair
+Questions:
+Has been discussed in the WEAKNESSES.
+Limitations:
+Yes.
+Rating: 3: Borderline reject: Technically solid paper where reasons to reject, e.g., limited evaluation, outweigh
+reasons to accept, e.g., good evaluation. Please use sparingly.
+Confidence: 4: You are confident in your assessment, but not absolutely certain. It is unlikely, but not impossible,
+that you did not understand some parts of the submission or that you are unfamiliar with some pieces of related
+work.
+Ethical Concerns: NO or VERY MINOR ethics concerns only
+Paper Formatting Concerns:
+The paper suffers from formatting and typographical issues that impact its presentation quality. For instance, in
+Figure 3, captions are inconsistently aligned (some left-aligned, some centered), and there are basic style errors
+such as unnecessary capitalization after semicolons. These polish issues detract from the overall professionalism
+of the submission.
+Code Of Conduct Acknowledgement: Yes
+Responsible Reviewing Acknowledgement: Yes
+Final Justification:
+The authors have addressed the questions.
+＝      Rebuttal by Authors
+  Rebuttal by Authors  30 Jul 2025, 09:37 (modified: 29 Oct 2025, 12:03)             Everyone
+ Rebuttal:
+ Thank you for recognizing the value of our work. We appreciate your acknowledgment of our focus on
+ scene-level asset retrieval for metaverse generation—moving beyond object-centric methods to
+ emphasize spatial and stylistic coherence. We also thank you for highlighting the practical flexibility of
+ our framework in supporting arbitrary combinations of text, image, point cloud, and layout context as
+ query inputs.
+ 1. Reviewer Comment:
+   Confused Role and Unclear Motivation of ESSGNN. The role of ESSGNN in the proposed framework
+   remains somewhat confusing and insufficiently justified. On the object-level retrieval task (Table 1),
+   MetaFind without ESSGNN already achieves state-of-the-art performance across all modality
+   combinations, outperforming strong baselines. However, adding ESSGNN degrades object-level retrieval
+   accuracy. In contrast, on the scene-level evaluation (Table 2), ESSGNN brings significant gains in scene
+   coherence and realism. This discrepancy raises a key question: is ESSGNN designed purely for enhancing
+   scene-level composition, at the cost of degrading general-purpose retrieval? If so, this should be made
+   clearer, as the current narrative presents ESSGNN as a broadly applicable enhancement. Moreover, the
+   motivation for introducing ESSGNN is not fully convincing—if the core retrieval pipeline already
+   outperforms baselines without it, the paper should better articulate why introducing additional
+   complexity is warranted, and in which scenarios this trade-off is acceptable.
+ Response 1:
+ Thank you for your insightful comment. We would first like to restate the core motivation of our work:
+ enabling coherent scene generation in the metaverse by retrieving 3D assets that are not only
+ semantically relevant, but also spatially and stylistically consistent with the evolving scene.
+ Existing retrieval methods are predominantly object-centric, ignoring inter-object spatial relations,
+ scene semantics, and stylistic coherence—often resulting in visually and contextually incongruent
+ compositions. To address this gap, we introduce ESSGNN, a novel scene-aware module designed to
+ incorporate scene context into the retrieval process and offer the community new insights into layout-
+ aware reasoning.
+ Importantly, ESSGNN is design for theoretically proven to be SE(3)-equivariant, ensuring that layout
+ representations remain consistent under arbitrary 3D rotations and translations (see Appendix C). This
+ property is particularly important in metaverse settings, where global coordinates may span large
+ scales or shift dynamically (e.g., in open-world environments or moving virtual scenes).
+ Regarding the concern that MetaFind achieves strong performance without ESSGNN (Table 1), we offer
+ the following clarification: the “with ESSGNN” results correspond to stage-two fine-tuning on the
+ ProcTHOR dataset, where only the fusion layer and ESSGNN are updated, and the query/gallery
+ encoders remain frozen. The observed drop in object-level performance is thus not caused by ESSGNN
+ itself, but by the fusion layer becoming partially specialized for layout-conditioned features—leading to
+ a mismatch when evaluated on layout-free datasets such as Objaverse-LVIS.
+ A straightforward solution is to maintain two fusion heads: one trained in stage one for layout-free
+ settings, and another fine-tuned in stage two with layout context. During inference, the system can
+ dynamically select the appropriate head based on the availability of scene context. Notably, using the
+ stage-one fusion layer reproduces the “w/o ESSGNN” results exactly. We initially omitted this
+ configuration to reduce redundancy, as our goal was to test whether a shared fusion layer could
+ generalize to both settings. We now clarify this detail in the revised manuscript.
+ To encourage such generalization, we also applied stochastic scene dropout during stage-two training
+ (line 202), omitting layout context in 30% of samples. While this helps reduce overfitting to layout-
+ aware inputs, a small performance gap remains due to partial feature attribution drift. We agree that
+ this trade-off between object-level precision and scene-level coherence is important and have
+ highlighted it more clearly as a direction for future work.
+ 2. Reviewer Comment:
+   Questionable Contribution The paper substantially overstates its contributions relative to the actual
+   novelty and technical content. Despite claiming MetaFind as a new retrieval framework, the entire
+   architecture is largely built upon ULIP-2, with only the ESSGNN layout encoder being newly introduced.
+   Critically, ESSGNN demonstrably harms object-level retrieval performance (discussed in the above
+   weakness). Moreover, the experimental comparisons raise serious concerns about fairness and the
+   validity of the reported improvements. The paper repeatedly compares MetaFind—based on a modified
+   dual-tower architecture and iterative retrieval loop—against ULIP-2 and other single-tower baselines that
+   are inherently not designed for multimodal composition or scene-aware retrieval. The resulting large
+   performance gaps are therefore inflated by differences in model architecture and training scope, not
+   solely by improved retrieval capability. The paper fails to properly disentangle these factors or conduct
+   controlled comparisons, which undermines the credibility of its experimental claims. Overall, the actual
+   contribution of the work, relative to prior art, appears incremental rather than substantial.
+ Response 2:
+ Thank you for your detailed feedback. We respectfully disagree with the assertion that MetaFind is not
+ a new retrieval framework. Leveraging strong pretrained encoders as backbones is a standard and
+ widely accepted practice in retrieval research, enabling efficient development without retraining from
+ scratch. MetaFind requires three-modal support (text, image, and 3D point cloud), and after careful
+ evaluation, we selected ULIP-2 (CLIP + Point-BERT) as the most suitable open-source backbone that
+ meets these requirements. Importantly, the use of a pretrained encoder should not be considered a
+ lack of novelty, as most state-of-the-art retrievers—including DPR, OpenShape, OmniBind, and Uni3D
+ —are also built on pretrained components. In fact, combining multimodal encoders is not inherently
+ difficult, but designing a system that trains effectively on top of these backbones for scene-
+ aware, coherent retrieval is the core technical challenge—and our key contribution.
+ Most prior works adopt a single-tower encoder, which imposes inherent constraints by forcing shared
+ representations for both queries and gallery assets—despite their vastly different characteristics. In
+ contrast, we propose a dual-encoder (two-tower) architecture to improve flexibility, modularity, and
+ training stability. While both encoders share the same backbone, we decouple their optimization: the
+ gallery encoder is kept fixed and efficient, while the query encoder is adapted for diverse, multimodal,
+ and potentially incomplete inputs. This design enables precomputing gallery features and supports
+ future extensibility (e.g., adding contextual modules like ESSGNN to the query side), making it highly
+ suitable for real-world metaverse applications.
+ Beyond architectural changes, we introduce ESSGNN, a novel layout-aware module that incorporates
+ spatial, semantic, and stylistic scene context—an aspect overlooked in existing retrieval works. ESSGNN
+ is also theoretically proven to be SE(3)-equivariant (Appendix C), making it particularly well-suited for
+ open-world metaverse settings with large or dynamic coordinate spaces. This enables MetaFind to
+ move beyond isolated object retrieval and support coherent scene composition, which is the core
+ motivation of our work.
+ Regarding your concern about object-level performance degradation, we refer you to Response 1,
+ where we explain the interaction between the shared fusion layer and layout conditioning. Notably, the
+ drop is not due to ESSGNN itself, but to fusion-layer adaptation during stage-two fine-tuning. A simple
+ remedy—switching back to the stage-one fusion head—restores original object-level accuracy.
+ Lastly, we respectfully disagree with the claim that our comparisons are unfair. We made significant
+ efforts to include a broad set of representative baselines, including general-purpose 3D retrieval
+ methods (ULIP, OpenShape, OmniBind, Uni3D) and several text-to-3D retrieval models (e.g., SCA3D,
+ Uni3DL). For each method, we followed the retrieval strategy explicitly described in their original
+ papers, ensuring consistency and fairness. Despite different backbone sizes or architectures, all
+ comparisons were performed under their strongest available public settings, and MetaFind
+ consistently outperforms them across arbitrary modality combinations, demonstrating the strength
+ and flexibility of our approach.
+ In summary, we believe MetaFind constitutes a meaningful advancement in 3D retrieval for scene-
+ level generation, combining architectural improvements, a novel layout-aware module, and support for
+ arbitrary multimodal queries. We hope the clarified distinctions and results can better reflect the
+ significance of our contributions.
+＝       Replying to Rebuttal by Authors
+ Official Review by Reviewer cY7o
+  Official Comment by Reviewer cY7o  04 Aug 2025, 20:18 (modified: 29 Oct 2025, 15:13)
+ Comment:
+ First, I believe that such a counterintuitive result—namely, the drop in object-level performance after
+ introducing ESSGNN—should have been addressed in the main paper, especially since it was
+ consistently noted by multiple reviewers. Second, given that you have explained some of the factors
+ contributing to this outcome (such as the query/gallery encoders remaining frozen), what is the
+ rationale behind adopting this design?
+＝       Replying to Official Review by Reviewer cY7o
+ Official Comment by Authors
+  Official Comment by Authors  04 Aug 2025, 22:32 (modified: 29 Oct 2025, 15:13)                Everyone
+ Comment:
+ Thank you for your suggestion and the valuable follow-up comments. We appreciate your insights and
+ have carefully addressed this issue in our revised version. We agree that this point should have been
+ more clearly discussed in the main paper. Specifically, we acknowledge that the observed drop in
+ object-level performance can be temporarily mitigated using a dual-head design, and we now
+ explicitly mention resolving this trade-off without increasing parameter overhead as a promising
+ future direction.
+ Our framework is trained in two stages:
+ In Stage 1, we train a dual-encoder model on the Objaverse dataset to learn strong base-level object
+ representations under clean, single-object conditions.
+ In Stage 2, we fine-tune the model on the ProcTHOR dataset, which introduces significantly more
+ complex, cluttered, and scene-centric data. This dataset differs substantially in distribution from
+ Objaverse, and as such, a moderate drop in object-level performance is expected due to domain shift.
+ To enable efficient scene-level adaptation, we freeze the query/gallery encoders and train only the
+ fusion layers and the ESSGNN encoder—similar to parameter-efficient tuning strategies seen in prior
+ work (e.g., freezing CLIP and aligning 3D encoders to its embedding space). This approach allows the
+ model to acquire scene-awareness while keeping training costs low.
+ However, during evaluation on Objaverse, which lacks rich scene context, ESSGNN cannot be applied.
+ The model must rely solely on the backbone and fusion layers that were co-trained with ESSGNN. This
+ leads to a feature attribution mismatch : the fusion layer, which was initially designed to operate on
+ clean object embeddings, is now partially adapted to layout-conditioned features, resulting in a
+ moderate performance drop in layout-free retrieval settings.
+＝       Replying to Official Comment by Authors
+ Official Review by Reviewer cY7o
+  Official Comment by Reviewer cY7o  05 Aug 2025, 22:20 (modified: 29 Oct 2025, 15:13)
+ Comment:
+ Thanks for response. I have raised my score.
+        About OpenReview (/about)                                               Contact
+                                                                                  Add: (/contact)
+                                                                                        Public Comment
+FAQ (https://docs.openreview.net/getting-                                      Hosting a Venue (/group?
+started/frequently-asked-questions)                                        id=OpenReview.net/Support)
+

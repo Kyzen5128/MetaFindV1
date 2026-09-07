@@ -56,16 +56,27 @@ POSITIVE_MAP = paths.OUTPUTS / "stage2_positive_map.json"
 EDGE_PROTOCOL = paths.OUTPUTS / "essgnn_edge_protocol.json"
 ARCH_PROTOCOL = paths.OUTPUTS / "essgnn_arch_protocol.json"
 
+# [DL-104, Kyzen 2026-09-07 ✅] Which modalities a ProcTHOR asset carries in Stage 2,
+# on BOTH sides (the Stage 2 gallery entry and the leave-one-out query). The paper
+# gives ProcTHOR "precise spatial coordinates and comprehensive semantic metadata"
+# (2.3) and never a render or a cloud; Reviewer ZhAY read it as "the objects are
+# synthetic and cannot be encoded using their point cloud", and the authors thanked
+# him for recognising exactly that (OpenReview thread, docs/paper/). Text + image:
+# Kyzen's ruling between the two readings; the depth-shell clouds n07b builds stay
+# on disk and are not encoded. The 28 assets without a cloud are no longer excluded.
+ASSET_MODALITIES = ("text", "image")
+
 # [U-08a/b/d/e] Recorded in the registry; materialised here.
 STAGE2_DECISIONS = {
     "gallery_scope": "procthor",
     "positive_identity": "same_asset_id",
     "modality_source": "ai2thor_isolated",
     "image_protocol": "n04_compatible",
-    "pointcloud_source": "multiview_depth_shell",
-    "query_pointcloud": "optional",
+    "asset_modalities": list(ASSET_MODALITIES),
+    "pointcloud_source": "multiview_depth_shell (built by n07b, not encoded; DL-104)",
+    "query_pointcloud": "absent",
     "sampling_unit": "object_instance",
-    "target_eligibility": "has_modalities_and_pointcloud",
+    "target_eligibility": "has_declared_modalities",
     "target_removed_before_essgnn": True,
     "samples_per_house": "all_eligible",
     "instance_resampling": "fixed",
@@ -205,16 +216,18 @@ ARCH_DECISIONS = {
 def build_positive_map() -> dict:
     """[U-08a] Identity. Every eligible ProcTHOR asset is its own positive.
 
-    Eligibility requires a POINT CLOUD, not merely a modality record: F26 found
-    24 transparent assets that AI2-THOR's depth prepass omits, and 2.6 needs a
-    modality-complete gallery, so those are excluded from the gallery and cannot
-    be positives. Writing them here would name a positive that
-    stage2_gallery_index does not contain -- a loss with a name and no vector.
+    Eligibility = the asset has every DECLARED modality (ASSET_MODALITIES). While
+    the point cloud was declared, F26's transparent assets (28, no depth) were
+    excluded here so that no positive names an id stage2_gallery_index lacks -- a
+    loss with a name and no vector. Under DL-104 the cloud is not declared, so a
+    missing cloud no longer excludes; a missing declared modality still does.
     """
     mapping, skipped = {}, []
     for path in sorted(glob.glob(str(paths.PROCTHOR_MODALITIES / "*.json"))):
         rec = json.loads(Path(path).read_text())
-        if rec.get("pointcloud_uri") is None:
+        if ("pc" in ASSET_MODALITIES and rec.get("pointcloud_uri") is None) \
+                or ("image" in ASSET_MODALITIES and not rec.get("view_paths")) \
+                or ("text" in ASSET_MODALITIES and not rec.get("text")):
             skipped.append(rec["asset_id"])
             continue
         mapping[rec["asset_id"]] = {
@@ -353,7 +366,7 @@ def main() -> int:
     with runlog.run_progress(NODE) as progress:
         mapping, skipped = build_positive_map()
         if not mapping:
-            print("no eligible ProcTHOR asset has a point cloud", flush=True)
+            print(f"no ProcTHOR asset has every declared modality {ASSET_MODALITIES}", flush=True)
             progress.rc = 2
             return 2
 
