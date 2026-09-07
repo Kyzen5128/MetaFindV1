@@ -57,6 +57,10 @@ def main() -> int:
     ap.add_argument("--gallery-split", default="dev_val")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out", default="output/look/exp_mean_pool_weak_trio_val.json")
+    ap.add_argument("--gallery", default="fused", choices=("fused", "pc"),
+                    help="fused = pooled(text, image, pc) as 2.4 states; pc = the canonical pc vector alone "
+                         "(DIAGNOSTIC, contradicts 2.4 and the authors' rebuttal; a peer Claude's hypothesis, 2026-09-07)")
+    ap.add_argument("--skip-resample", action="store_true", help="skip the second-sample pc arm (saves a re-encode)")
     args = ap.parse_args()
     from tools.probes.exp_query_pc_observation import encode_clouds, encode_gallery_pc, perturb
     from metafind.train.stage1 import QueryPack
@@ -103,25 +107,27 @@ def main() -> int:
             print(f"  BLIP caption missing for {int(no_blip.sum())} queries (name used), {int(still_zero.sum())} also without name (cat_size used)", flush=True)
             texts["u2 blip caption"] = blip
         pcs = {"canonical": g_pc[targets]}
-        pack = QueryPack(PACK, n_views=12)
-        missing = [u for u in q_uids if u not in pack.rows["pc"]]
+        pack = QueryPack(PACK, n_views=12) if not args.skip_resample else None
+        missing = [u for u in q_uids if u not in pack.rows["pc"]] if pack else []
         if missing:
             raise SystemExit(f"query pack pc arm lacks {len(missing)} query uids")
         clouds = []
-        for u in q_uids:
+        for u in (q_uids if pack else []):
             v = np.asarray(pack.vector("pc", u), dtype=np.float32)
             clouds.append(perturb(v[:, :3], v[:, 3:6], "resample", uid_seed(u) + 7))
-        pcs["resample"] = encode_clouds(bb, clouds)
-        print(f"  resample paired cos {float((normalize_for_scoring(pcs['resample']) * normalize_for_scoring(g_pc[targets])).sum(1).mean()):.3f}", flush=True)
+        if pack:
+            pcs["resample"] = encode_clouds(bb, clouds)
+        if pack:
+            print(f"  resample paired cos {float((normalize_for_scoring(pcs['resample']) * normalize_for_scoring(g_pc[targets])).sum(1).mean()):.3f}", flush=True)
 
     combos = [("own(attrs)", "own view"), ("cat_size", "own view"), ("cat_size", "thumbnail(own)"),
               ("u2 blip caption", "thumbnail(own)"), ("partner(attrs)", "partner view")]
     combos = [(t, i) for t, i in combos if t in texts and i in images]
     out = {"n_query": len(q_uids), "n_gallery": len(g_uids), "query_split": args.query_split,
-           "gallery_split": args.gallery_split, "paper": PAPER, "paper_ulip": PAPER_ULIP, "rows": {}}
+           "gallery_split": args.gallery_split, "gallery": args.gallery, "paper": PAPER, "paper_ulip": PAPER_ULIP, "rows": {}}
     for how in ("mean", "raw"):
-        G = pool([g_text, g_img, g_pc], how)
-        print(f"\n=== pooling = {how}; gallery = pooled(text, 12-view image, canonical pc), released ULIP-2")
+        G = pool([g_text, g_img, g_pc], how) if args.gallery == "fused" else normalize_for_scoring(g_pc)
+        print(f"\n=== pooling = {how}; gallery = {'pooled(text, 12-view image, canonical pc)' if args.gallery == 'fused' else 'canonical pc ONLY (diagnostic)'}, released ULIP-2")
         print(f"{'query (text | image | pc)':<58}" + "".join(f"{c:>9}" for c in QUERY_CONDITIONS))
         print(f"{'paper w/o ESSGNN':<58}" + "".join(f"{PAPER[c]:>9.1f}" for c in QUERY_CONDITIONS))
         print(f"{'paper ULIP baseline':<58}" + "".join(f"{PAPER_ULIP[c]:>9.1f}" for c in QUERY_CONDITIONS))
