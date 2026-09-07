@@ -6877,3 +6877,24 @@ He is right and the mainline text changes: under `figure2_json` CLIP saw ~77 of 
 - Detail audit of the queued chains (17:2x): `splits.json` and `eval_protocols.json` in the new root were symlinks to the main root; n09 writes both, so they are unlinked now (the new root gets its own). n06 enumerates the annotation directory (the 21 exclusions are moved out first). n08 frees gemma before loading the text tower (no double residency). `exp_type_level_query.py` indexed views with `% 12`; it now uses the stored view count (11 on the v7 corpus) and skips the thumbnail / caption rows when the ULIP-2 feature cache does not cover every query uid (the retried assets are new to it). Stage 1 (`same_mean`) and the official evaluator never index a single view, so they are unaffected.
 
 **Kyzen 17:4x 「我的 image 分數比較高會不會是因為我的畫素比較高?」 -- measured (`tools/probes/exp_query_image_resolution.py`, 200 val queries vs the 4,569 cached 12-view-mean gallery, frozen ViT-bigG, no fusion, CPU).** The image tower resizes everything to 224 x 224, so the source resolution acts only through resampling. Query view downsampled before that resize: 512 px R@1 96.0 / R@5 100.0 (paired cos 0.928); 128 px 91.5 / 97.0 (0.822); 64 px 83.5 / 93.0 (0.799). Sixty-four times fewer source pixels cost 12.5 points and leave the cell at 83.5, seven times the paper's 11.7. Resolution is not the lever; the identity of the observation is (own thumbnail, a different rendering: 47.1 on the holdout). Artifact `output/look/exp_query_image_resolution_val.json`.
+
+## DL-104 -- OpenReview discussion of Submission 5609 entered as a source (Kyzen pasted it 2026-09-07 13:5x)
+
+Saved verbatim at `docs/paper/metafind_openreview_discussion_5609.md` (the `metafind_source/` directory is write-guarded, so the file sits one level up; it is paper authority all the same). The paste was cut by the chat's 50,000-character limit inside Reviewer cY7o's review; cY7o's remaining text and the authors' reply to cY7o are missing and should be pasted when Kyzen has them.
+
+What the AUTHORS state there, and where we stand:
+
+| Author statement | Ours | Status |
+|---|---|---|
+| Table 1 "w/o ESSGNN" = the Stage-1 fusion head | row 1 = Stage 1 head (DL-102) | matches |
+| reported "w/ ESSGNN" = one shared head; Stage 2 freezes query+gallery encoders, updates ESSGNN + fusion; scene dropout 30% | Stage 2 arm `none_ft5e-5_allhouses_room`: both encoders frozen, fusion + ESSGNN trained, dropout 0.3 | matches |
+| the R@1 drop is "feature attribution drift in the fusion layer" after ProcTHOR | Stage 2 head: pc 96.7 -> 66.8, first same-asset construction with the paper's ordering (DL-102) | same mechanism observed |
+| Table 1 evaluated on Objaverse-LVIS, the Stage 1 training source | holdout of the 80/20 split | matches as far as stated; gallery size still unstated |
+| tau 0.5, untuned, "commonly used defaults" | 0.5 fixed | matches |
+| gallery point clouds 10,000 points | N_POINTS = 10000 | matches |
+| sparse scene graph; edges = ProcTHOR physical (support/containment) + LLM semantic on object pairs | support edges from `children` (both directions) + LLM pairs; kNN adjacency added because the paper gives no criterion (U-05) | physical + semantic match; kNN is ours, IMPLEMENTATION CHOICE, unchanged |
+| bidirectional beats unidirectional Stage 2 by 0.4 R@1 (11.4 vs 11.0, text-only) | Stage 2 loss bidirectional | matches; the ablation itself is not run |
+| Reviewer ZhAY: ProcTHOR objects "cannot be encoded using their point cloud", text descriptions used instead; authors thank him for recognising exactly that motivation | Stage 2 gallery/queries use ProcTHOR renders AND depth-shell point clouds (`pointcloud_source: multiview_depth_shell`, `target_eligibility: has_modalities_and_pointcloud`) | POSSIBLE DEVIATION. The authors did not correct the reviewer, and 2.5 gives node features as text. Whether the paper's Stage 2 query/gallery carried a ProcTHOR point cloud at all is UNKNOWN; our Stage 2 has one. Not changed; needs Kyzen's ruling before the Stage 2 chain reaches training (it is queued behind R2, ~09-09). |
+| inference placement from I-Design's planners | not built (Table 2 not authorised) | n/a |
+
+No code was released; Reviewer ZhAY asked for it. The open Table 1 unknowns (query source, gallery size, why their Stage 1 pc = 75.1) are NOT answered by the thread.
