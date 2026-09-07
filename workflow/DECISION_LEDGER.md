@@ -6991,3 +6991,13 @@ Update G3/L2-COMPLETE specification, preflight implementation and regression
 tests together. This decision does not certify cache contents or optimizer
 execution, mark the full graph implemented, or by itself connect the new
 preflight to a running training chain.
+
+## DL-106 -- Kyzen ✅ (2026-09-08 03:3x) to delete all OLD data; scheduled after the annotation finishes
+
+Order: 「舊所有資料都刪了不要留著」, ✅ on the keep/delete list below (P1s checkpoint question left unanswered -> deleted with the rest per the order; the DL-102 Table 1 and today's probe numbers survive only in this ledger, docs/TABLE1_REPORT_20260906_v3.md and output/look/*.json).
+
+KEEP (the paper line or the running annotation still reads them): metafind_data/models (ULIP-2, HF cache), metafind_data/outputs/pointclouds -> metafind_out/pointclouds (5.7 GB), metafind_data/outputs/logs/pointclouds_index.jsonl, metafind_data/outputs/reference, metafind_out/{gemma-4-12B-it, ai2thor, blender, bproc_env, nltk_data}, metafind_out/{renders_v7 66 GB, annotations_v10, embeddings_v10}, metafind_data_paper, /home/kyzen/datasets, /mnt/data1.
+
+DELETE (~150 GB): metafind_out/renders (71 GB, old 12-view), metafind_out/{annotations, annotations_excluded, annotations_superseded_v8, embeddings 1.8 GB, checkpoints 2.5 GB, _five_assets, _one_asset}; metafind_data_attrs (57 GB, incl. pilotP1s and the DL-102 eval), metafind_data_attrs_{nonorm,randview,shared,tokens}, metafind_data_desc (4.9 GB), metafind_data_json (3.0 GB); metafind_data/outputs/* except the kept entries (splits, eval, gallery indexes, scene_graphs, _probe 13 GB, manifest, protocols, old logs; symlinks into deleted trees are unlinked, symlinks into kept trees are left).
+
+Mechanism: `metafind_data_paper/outputs/logs/purge_old_data_20260908.sh` (dry run recorded in this session; refuses any path under a KEEP entry; never follows symlinks; `ionice -c3 nice -n19 rm -rf`), launched by `purge_after_r2.sh` (PID 2723573) only after `=== R2 DONE` appears in `r2_annotate_v10.log` (rc 0 only). Log: `purge_old_data_20260908.log`. Not run yet. Annotation at 24,644/46,004 (03:36), ETA 09-09 ~10:40.
