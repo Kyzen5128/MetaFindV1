@@ -1,0 +1,403 @@
+{
+  "schema": "metafind.markdown_line_link_fix.v1",
+  "recorded_at": "2026-09-07T18:55:17.142797+00:00",
+  "scope": "Only five approved Markdown files: parsed ordinary relative file:line link targets converted to file#Lline; prose, labels, line numbers, URLs, inline code and fenced code unchanged. No semantic citation relocation.",
+  "validation": {
+    "parser": "markdown_it commonmark",
+    "all_ordinary_link_targets_match_expected": true,
+    "document_line_counts_unchanged": true,
+    "total_changes": 30,
+    "all_base_files_exist": true,
+    "all_lines_in_range": true,
+    "historical_line_drift_count": 1,
+    "git_diff_check": {
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "docs/SCENE_SCORES.md",
+        "docs/history/REPRODUCTION_SCENE_REVIEW_20260908.md",
+        "docs/history/REPRODUCTION_TRAINING_REVIEW_20260908.md",
+        "docs/history/REPRODUCTION_RUNTIME_REVIEW_20260907.md",
+        "docs/graph/02_BUILD_STEPS.md"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  },
+  "files": [
+    {
+      "path": "docs/SCENE_SCORES.md",
+      "before_sha256": "e8118753e1baa9a488ff0e2c1ec0091f3c8cf15503f6109bd60cbf9e4969d024",
+      "after_sha256": "c35b2a8ecf3fc321ed59356bb18714fd5a86657263e9539d3baf93379746f6ac",
+      "changes": 4,
+      "links": [
+        {
+          "document_line": 5,
+          "old_target": "paper/metafind_source/3experiments.tex:55",
+          "new_target": "paper/metafind_source/3experiments.tex#L55",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/paper/metafind_source/3experiments.tex",
+          "referenced_line": 55,
+          "target_exists": true,
+          "target_total_lines": 143,
+          "line_in_range": true,
+          "target_line_at_validation": "To evaluate the benefit of layout-aware retrieval in realistic scenes, we assess MetaFind on a scene generation pipeline of I-Design \\cite{ccelen2024design}. It can generate a 3D scene with a given room description by designing, retrieving, and arranging.  In the original paper, they use OpenShape\\cite{liu2023openshape} to retrieve the objects. Here, we compare the performance of MetaFind with and without the ESSGNN layout encoder. No retrieval accuracy, we assess the overall quality of composed scenes using both automated and human evaluations across four key dimensions: (1) Overall Aesthetic and Atmosphere: Measures the visual appeal and mood of the composed scene; (2) Color Scheme and Material Choices: Evaluates consistency in textures, colors, and materials between newly retrieved assets and the existing scene; (3) Scene Coherence: Assesses how well the inserted assets align with the scene's spatial and semantic context; and (4) Realism and 3D Geometric Consistency: Checks for physically plausible placements, avoiding collisions or unnatural geometry. Each dimension is rated on a scale from 1 (poor) to 5 (excellent), independently by GPT-4o and five expert human annotators on a set of 200 randomly sampled scenes. For GPT-4o, we provide scene layouts and rendered views, with prompts aligned to the respective evaluation criteria. Final scores are averaged across annotators and samples."
+        },
+        {
+          "document_line": 5,
+          "old_target": "../workflow/DECISION_LEDGER.md:5624",
+          "new_target": "../workflow/DECISION_LEDGER.md#L5624",
+          "resolved_target": "/home/kyzen/MetaFindV1/workflow/DECISION_LEDGER.md",
+          "referenced_line": 5624,
+          "target_exists": true,
+          "target_total_lines": 6993,
+          "line_in_range": true,
+          "target_line_at_validation": "| 13 | Table 2 scene-quality ratings | 甲: after Stage 2, 200 scenes, gemma as the rater (recorded deviation from GPT-4o) |"
+        },
+        {
+          "document_line": 5,
+          "old_target": "graph/graph_spec.yaml:174",
+          "new_target": "graph/graph_spec.yaml#L174",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/graph/graph_spec.yaml",
+          "referenced_line": 174,
+          "target_exists": true,
+          "target_total_lines": 1938,
+          "line_in_range": true,
+          "target_line_at_validation": "    - id: D-4"
+        },
+        {
+          "document_line": 77,
+          "old_target": "../metafind/scene/placement.py:278",
+          "new_target": "../metafind/scene/placement.py#L278",
+          "resolved_target": "/home/kyzen/MetaFindV1/metafind/scene/placement.py",
+          "referenced_line": 278,
+          "target_exists": true,
+          "target_total_lines": 381,
+          "line_in_range": true,
+          "target_line_at_validation": "def load_placement(path: Path, *, expected_sha256=None) -> dict:"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/REPRODUCTION_SCENE_REVIEW_20260908.md",
+      "before_sha256": "c5843cc94e3dc47355d3154daf697a45956029a64a8497257b41eaa8975a64bc",
+      "after_sha256": "18f15511d47c68a8a5659f2d2cc8678533158977b64707b864ac876e709b8c63",
+      "changes": 6,
+      "links": [
+        {
+          "document_line": 15,
+          "old_target": "../paper/metafind_source/2methdology.tex:109",
+          "new_target": "../paper/metafind_source/2methdology.tex#L109",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/paper/metafind_source/2methdology.tex",
+          "referenced_line": 109,
+          "target_exists": true,
+          "target_total_lines": 135,
+          "line_in_range": true,
+          "target_line_at_validation": "\\subsection{Inference and Iterative Composition}"
+        },
+        {
+          "document_line": 15,
+          "old_target": "../paper/metafind_source/2methdology.tex:117",
+          "new_target": "../paper/metafind_source/2methdology.tex#L117",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/paper/metafind_source/2methdology.tex",
+          "referenced_line": 117,
+          "target_exists": true,
+          "target_total_lines": 135,
+          "line_in_range": true,
+          "target_line_at_validation": "\\begin{algorithm}[t]"
+        },
+        {
+          "document_line": 16,
+          "old_target": "../paper/metafind_source/3experiments.tex:15",
+          "new_target": "../paper/metafind_source/3experiments.tex#L15",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/paper/metafind_source/3experiments.tex",
+          "referenced_line": 15,
+          "target_exists": true,
+          "target_total_lines": 143,
+          "line_in_range": true,
+          "target_line_at_validation": "Since most existing retrieval models (e.g., ULIP, OpenShape) are not designed to handle arbitrary combinations of input modalities, we limit our baselines to pre-trained single-tower encoders that support at least one of the three modalities: text, image, and point cloud. To create a fair comparison within a dual-tower retrieval paradigm, we extend each baseline by adding a simple \\textit{mean pooling layer} to aggregate available modalities, and use these fused embeddings to retrieve from a pre-encoded gallery. For completeness, we also include our own dual-tower model with a mean fusion layer but without layout context as a direct ablation baseline. The temperature is 0.5 for all experiments."
+        },
+        {
+          "document_line": 39,
+          "old_target": "../../metafind/scene/compose.py:49",
+          "new_target": "../../metafind/scene/compose.py#L49",
+          "resolved_target": "/home/kyzen/MetaFindV1/metafind/scene/compose.py",
+          "referenced_line": 49,
+          "target_exists": true,
+          "target_total_lines": 401,
+          "line_in_range": true,
+          "target_line_at_validation": "def _slot(slot: dict) -> str:"
+        },
+        {
+          "document_line": 39,
+          "old_target": "../../metafind/scene/placement.py:40",
+          "new_target": "../../metafind/scene/placement.py#L40",
+          "resolved_target": "/home/kyzen/MetaFindV1/metafind/scene/placement.py",
+          "referenced_line": 40,
+          "target_exists": true,
+          "target_total_lines": 381,
+          "line_in_range": true,
+          "target_line_at_validation": "def _number(value, label, *, positive=False, nonnegative=False):"
+        },
+        {
+          "document_line": 43,
+          "old_target": "../../tests/eval/test_scene_composition.py:176",
+          "new_target": "../../tests/eval/test_scene_composition.py#L176",
+          "resolved_target": "/home/kyzen/MetaFindV1/tests/eval/test_scene_composition.py",
+          "referenced_line": 176,
+          "target_exists": true,
+          "target_total_lines": 491,
+          "line_in_range": true,
+          "target_line_at_validation": "def test_composed_numeric_slots_pass_the_real_placement_contract_unchanged(case, number_type):"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/REPRODUCTION_TRAINING_REVIEW_20260908.md",
+      "before_sha256": "de313532588a44b331799ad6e682d13efee54b3c6c0812a1e979eecf1f8179a1",
+      "after_sha256": "7e687e389dda24ba586691d3002ba17e3491d59a3384f0068a75b2d36a4ba086",
+      "changes": 15,
+      "links": [
+        {
+          "document_line": 13,
+          "old_target": "../paper/metafind_source/appendix.tex:32",
+          "new_target": "../paper/metafind_source/appendix.tex#L32",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/paper/metafind_source/appendix.tex",
+          "referenced_line": 32,
+          "target_exists": true,
+          "target_total_lines": 126,
+          "line_in_range": true,
+          "target_line_at_validation": "    \\rm m_{ij} = \\phi_e\\left(\\rm h_i^l, \\rm h_j^l, \\| \\rm x_i^l - \\rm x_j^l \\|^2, e_{ij} \\right)"
+        },
+        {
+          "document_line": 13,
+          "old_target": "../paper/metafind_source/appendix.tex:50",
+          "new_target": "../paper/metafind_source/appendix.tex#L50",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/paper/metafind_source/appendix.tex",
+          "referenced_line": 50,
+          "target_exists": true,
+          "target_total_lines": 126,
+          "line_in_range": true,
+          "target_line_at_validation": "    \\rm x_i^{l+1} = \\rm x_i^l + \\sum_{j \\ne i} (\\rm x_i^l - \\rm x_j^l) \\cdot \\phi_x(\\rm m_{ij})"
+        },
+        {
+          "document_line": 13,
+          "old_target": "../paper/metafind_source/appendix.tex:65",
+          "new_target": "../paper/metafind_source/appendix.tex#L65",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/paper/metafind_source/appendix.tex",
+          "referenced_line": 65,
+          "target_exists": true,
+          "target_total_lines": 126,
+          "line_in_range": true,
+          "target_line_at_validation": "    \\rm h_i^{l+1} = \\rm h_i^l + \\sum_{j \\ne i} \\phi_h(\\rm m_{ij})"
+        },
+        {
+          "document_line": 14,
+          "old_target": "../paper/metafind_source/3experiments.tex:94",
+          "new_target": "../paper/metafind_source/3experiments.tex#L94",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/paper/metafind_source/3experiments.tex",
+          "referenced_line": 94,
+          "target_exists": true,
+          "target_total_lines": 143,
+          "line_in_range": true,
+          "target_line_at_validation": "\\textbf{MetaFind (Full, bidirectional) w/ iterative retrieval \\& ESSGNN} & 11.4 & \\textbf{4.1} & \\textbf{4.2} \\\\"
+        },
+        {
+          "document_line": 14,
+          "old_target": "../paper/metafind_source/3experiments.tex:143",
+          "new_target": "../paper/metafind_source/3experiments.tex#L143",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/paper/metafind_source/3experiments.tex",
+          "referenced_line": 143,
+          "target_exists": true,
+          "target_total_lines": 143,
+          "line_in_range": true,
+          "target_line_at_validation": "We conduct ablation studies to evaluate the effectiveness of key architectural components and training strategies in MetaFind, focusing on six dimensions: layout encoding, modality fusion strategies, modality dropout robustness, fusion granularity, gallery encoder flexibility, and missing modality handling. First, removing the ESSGNN layout encoder results in drops in scene realism, underscoring the critical role of spatial context. Regarding fusion strategies, while simple mean pooling offers computational efficiency, MLP and the final selected Transformer outperform others under partial modality conditions by dynamically reweighting available inputs. We also examine modality dropout rates during training, finding that a 30\\% rate strikes the best balance between robustness and accuracy. Lower rates lead to overfitting on full-modality inputs, whereas higher rates introduce instability. Additionally, we compare fusion granularity strategies, revealing that while training only the fusion module in the query encoder improves efficiency, full encoder fine-tuning yields better performance by allowing earlier layers to adapt to modality-aware supervision. Finally, in handling missing modalities, modality masking outperforms zero-padding by preventing zero embedding interference and promoting robustness through sparsity-aware fusion. Results across these ablations, summarized in Table~\\ref{tab:ablation}, demonstrate the modularity and resilience of MetaFind under diverse design choices."
+        },
+        {
+          "document_line": 15,
+          "old_target": "../paper/metafind_source/3experiments.tex:15",
+          "new_target": "../paper/metafind_source/3experiments.tex#L15",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/paper/metafind_source/3experiments.tex",
+          "referenced_line": 15,
+          "target_exists": true,
+          "target_total_lines": 143,
+          "line_in_range": true,
+          "target_line_at_validation": "Since most existing retrieval models (e.g., ULIP, OpenShape) are not designed to handle arbitrary combinations of input modalities, we limit our baselines to pre-trained single-tower encoders that support at least one of the three modalities: text, image, and point cloud. To create a fair comparison within a dual-tower retrieval paradigm, we extend each baseline by adding a simple \\textit{mean pooling layer} to aggregate available modalities, and use these fused embeddings to retrieve from a pre-encoded gallery. For completeness, we also include our own dual-tower model with a mean fusion layer but without layout context as a direct ablation baseline. The temperature is 0.5 for all experiments."
+        },
+        {
+          "document_line": 15,
+          "old_target": "../paper/metafind_source/3experiments.tex:24",
+          "new_target": "../paper/metafind_source/3experiments.tex#L24",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/paper/metafind_source/3experiments.tex",
+          "referenced_line": 24,
+          "target_exists": true,
+          "target_total_lines": 143,
+          "line_in_range": true,
+          "target_line_at_validation": "We first evaluate the object-level retrieval performance on the annotated Objaverse-LVIS dataset, which comprises 48K high-quality 3D assets with structured textual descriptions and multi-view image renders. This evaluation focuses on the core capability of MetaFind to support flexible, modality-compositional retrieval, especially under partial modality conditions. All methods are evaluated under seven query conditions: text-only, image-only, point cloud-only, text+image, text+point cloud, image+point cloud, and full (text+image+point cloud). As shown in Table~\\ref{tab:objaverse-results}, MetaFind without ESSGNN outperforms all baseline models across different settings. Notably, since other models do not adopt a dual-tower design, their \"PC only\" performance reflects retrieval using identical embeddings for both query and gallery, leading to inflated accuracy. In contrast, our dual-tower framework introduces more cross-modality retrieval, which results in lower accuracy under the \"PC only\". Nevertheless, MetaFind demonstrates stronger performance under partial modality conditions, highlighting its capability in multimodal fusion. After integrating the ESSGNN, while the overall scene quality is improved, we observe a drop in accuracy due to the added encoded information. This reflects a temporary and explainable trade-off between object-level precision and scene-level coherence. Stage-1 pretraining on Objaverse-LVIS uses isolated assets (no layout) and no ESSGNN; Stage-2 fine-tuning introduces ESSGNN on ProcTHOR (layout-rich, different asset distribution). Although the retrieval objective is unchanged, the fusion layer becomes partially adapted to layout-conditioned features, creating a feature-attribution mismatch when evaluating on Objaverse-LVIS (which lacks layout and disables ESSGNN). A practical mitigation is to maintain two fusion heads: a layout-free head (Stage-1) and a scene-aware head (Stage-2), selected at inference by context availability. Using the Stage-1 head reproduces the “w/o ESSGNN” numbers (omitted for brevity). In our reported results, we instead explore a single shared head by freezing both encoders in Stage-2, updating only ESSGNN and the fusion, and applying stochastic scene dropout (30\\%) to expose the model to layout-free inputs; some accuracy loss remains due to residual attribution drift."
+        },
+        {
+          "document_line": 36,
+          "old_target": "../../metafind/train/stage2.py:555",
+          "new_target": "../../metafind/train/stage2.py#L555",
+          "resolved_target": "/home/kyzen/MetaFindV1/metafind/train/stage2.py",
+          "referenced_line": 555,
+          "target_exists": true,
+          "target_total_lines": 1668,
+          "line_in_range": true,
+          "target_line_at_validation": "def initialise_layout_lambda(model, stage2: dict, samples, graphs, data,"
+        },
+        {
+          "document_line": 44,
+          "old_target": "../../metafind/eval/run_retrieval.py:1084",
+          "new_target": "../../metafind/eval/run_retrieval.py#L1084",
+          "resolved_target": "/home/kyzen/MetaFindV1/metafind/eval/run_retrieval.py",
+          "referenced_line": 1084,
+          "target_exists": true,
+          "target_total_lines": 1876,
+          "line_in_range": true,
+          "target_line_at_validation": "    if fusion_only:",
+          "historical_line_drift": "The historical log citation remains within overlay_stage2_weights, but line 1084 now reads if fusion_only; current log is at lines 1089-1090. Original referenced line is preserved as requested."
+        },
+        {
+          "document_line": 62,
+          "old_target": "../../tests/models/test_essgnn.py:609",
+          "new_target": "../../tests/models/test_essgnn.py#L609",
+          "resolved_target": "/home/kyzen/MetaFindV1/tests/models/test_essgnn.py",
+          "referenced_line": 609,
+          "target_exists": true,
+          "target_total_lines": 705,
+          "line_in_range": true,
+          "target_line_at_validation": "def test_appendix_layer_values_and_gradients_match_independent_numpy_oracle(structure):"
+        },
+        {
+          "document_line": 79,
+          "old_target": "../paper/metafind_source/3experiments.tex:94",
+          "new_target": "../paper/metafind_source/3experiments.tex#L94",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/paper/metafind_source/3experiments.tex",
+          "referenced_line": 94,
+          "target_exists": true,
+          "target_total_lines": 143,
+          "line_in_range": true,
+          "target_line_at_validation": "\\textbf{MetaFind (Full, bidirectional) w/ iterative retrieval \\& ESSGNN} & 11.4 & \\textbf{4.1} & \\textbf{4.2} \\\\"
+        },
+        {
+          "document_line": 94,
+          "old_target": "../../metafind/models/resolve_stage1.py:625",
+          "new_target": "../../metafind/models/resolve_stage1.py#L625",
+          "resolved_target": "/home/kyzen/MetaFindV1/metafind/models/resolve_stage1.py",
+          "referenced_line": 625,
+          "target_exists": true,
+          "target_total_lines": 1044,
+          "line_in_range": true,
+          "target_line_at_validation": "    {\"variant_id\": \"full\", \"table3_row\": \"MetaFind (Full, bidirectional) w/ iterative & ESSGNN\","
+        },
+        {
+          "document_line": 94,
+          "old_target": "../../metafind/train/stage2.py:1001",
+          "new_target": "../../metafind/train/stage2.py#L1001",
+          "resolved_target": "/home/kyzen/MetaFindV1/metafind/train/stage2.py",
+          "referenced_line": 1001,
+          "target_exists": true,
+          "target_total_lines": 1668,
+          "line_in_range": true,
+          "target_line_at_validation": "      n10. This function CHECKS them against the loaded checkpoint rather than"
+        },
+        {
+          "document_line": 94,
+          "old_target": "../../metafind/eval/run_retrieval.py:1050",
+          "new_target": "../../metafind/eval/run_retrieval.py#L1050",
+          "resolved_target": "/home/kyzen/MetaFindV1/metafind/eval/run_retrieval.py",
+          "referenced_line": 1050,
+          "target_exists": true,
+          "target_total_lines": 1876,
+          "line_in_range": true,
+          "target_line_at_validation": "def overlay_stage2_weights(model, rec: dict, device: str, *, fusion_only: bool = False) -> None:"
+        },
+        {
+          "document_line": 94,
+          "old_target": "../../metafind/scene/compose.py:209",
+          "new_target": "../../metafind/scene/compose.py#L209",
+          "resolved_target": "/home/kyzen/MetaFindV1/metafind/scene/compose.py",
+          "referenced_line": 209,
+          "target_exists": true,
+          "target_total_lines": 401,
+          "line_in_range": true,
+          "target_line_at_validation": "    trace = []"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/REPRODUCTION_RUNTIME_REVIEW_20260907.md",
+      "before_sha256": "4754b9775ca764a0163b41806fe1d63e44fda185ab31ca6da430fa9baa6c65c5",
+      "after_sha256": "cea31d4fd28bc94daf6b4b61885f97ab36cce7e970d99180e6e4dac627a90cda",
+      "changes": 4,
+      "links": [
+        {
+          "document_line": 15,
+          "old_target": "../paper/metafind_source/3experiments.tex:15",
+          "new_target": "../paper/metafind_source/3experiments.tex#L15",
+          "resolved_target": "/home/kyzen/MetaFindV1/docs/paper/metafind_source/3experiments.tex",
+          "referenced_line": 15,
+          "target_exists": true,
+          "target_total_lines": 143,
+          "line_in_range": true,
+          "target_line_at_validation": "Since most existing retrieval models (e.g., ULIP, OpenShape) are not designed to handle arbitrary combinations of input modalities, we limit our baselines to pre-trained single-tower encoders that support at least one of the three modalities: text, image, and point cloud. To create a fair comparison within a dual-tower retrieval paradigm, we extend each baseline by adding a simple \\textit{mean pooling layer} to aggregate available modalities, and use these fused embeddings to retrieve from a pre-encoded gallery. For completeness, we also include our own dual-tower model with a mean fusion layer but without layout context as a direct ablation baseline. The temperature is 0.5 for all experiments."
+        },
+        {
+          "document_line": 16,
+          "old_target": "../../workflow/DECISION_LEDGER.md:6876",
+          "new_target": "../../workflow/DECISION_LEDGER.md#L6876",
+          "resolved_target": "/home/kyzen/MetaFindV1/workflow/DECISION_LEDGER.md",
+          "referenced_line": 6876,
+          "target_exists": true,
+          "target_total_lines": 6993,
+          "line_in_range": true,
+          "target_line_at_validation": "He is right and the mainline text changes: under `figure2_json` CLIP saw ~77 of ~140 tokens -- materials, the four placement flags and most of the description never reached the encoder, so two of the four attributes the paper names were annotated for nothing. Decision (mine, under his delegation): the mainline gallery text is `v3_fit` -- the v2_cm sentence (description, category, materials, dimensions, placement) with the description trimmed at a word boundary until the whole string is within 77 true tokens (`resolve_stage1.serialize_fitted` / `fit_to_context`; content-addressed identity `metafind_v3_fit@afcf873ebf5f482e`; contract records the budget and the rule). Every structured field always reaches the encoder; only the description tail can be cut, deterministically; the structured fields alone overflowing is refused, not trimmed. Measured on the first v10 records: 57-64 tokens, nothing trimmed (the v10 prompt asks for ~30 words). The Figure-2 JSON string stays as the LITERAL-READING ARM (a second root, same renders / annotations / clouds, own encoding and Stage 1), run after the mainline so the cost of the literal reading is a measured number. ProcTHOR node / gallery text uses the same fitted sentence (`procthor_object_text.json` `text`; the JSON kept as `text_figure2_json`; max 41 tokens). R2 (annotation) is unaffected: every field is in the record; only the encoder-side serialisation moved. Both queued chains relaunched with `METAFIND_TEXT_TEMPLATE=v3_fit`. Tests: 5 new for the fit."
+        },
+        {
+          "document_line": 57,
+          "old_target": "../../metafind/models/ulip_backbone.py:234",
+          "new_target": "../../metafind/models/ulip_backbone.py#L234",
+          "resolved_target": "/home/kyzen/MetaFindV1/metafind/models/ulip_backbone.py",
+          "referenced_line": 234,
+          "target_exists": true,
+          "target_total_lines": 542,
+          "line_in_range": true,
+          "target_line_at_validation": "        _, _, self.preprocess = open_clip.create_model_and_transforms("
+        },
+        {
+          "document_line": 57,
+          "old_target": "../../metafind/vendor/ulip/models/ULIP_models.py:352",
+          "new_target": "../../metafind/vendor/ulip/models/ULIP_models.py#L352",
+          "resolved_target": "/home/kyzen/MetaFindV1/metafind/vendor/ulip/models/ULIP_models.py",
+          "referenced_line": 352,
+          "target_exists": true,
+          "target_total_lines": 446,
+          "line_in_range": true,
+          "target_line_at_validation": "def ULIP2_PointBERT_Colored(args):"
+        }
+      ]
+    },
+    {
+      "path": "docs/graph/02_BUILD_STEPS.md",
+      "before_sha256": "3b8252387f1b331d05aa6b3ba1cdacd8c197044320ac631f6e8d0fd4bade771b",
+      "after_sha256": "6b4ad1fb9d8845046048d0d83593b82372a46d3b621b93aaf313e10570833df8",
+      "changes": 1,
+      "links": [
+        {
+          "document_line": 852,
+          "old_target": "../../workflow/DECISION_LEDGER.md:5624",
+          "new_target": "../../workflow/DECISION_LEDGER.md#L5624",
+          "resolved_target": "/home/kyzen/MetaFindV1/workflow/DECISION_LEDGER.md",
+          "referenced_line": 5624,
+          "target_exists": true,
+          "target_total_lines": 6993,
+          "line_in_range": true,
+          "target_line_at_validation": "| 13 | Table 2 scene-quality ratings | 甲: after Stage 2, 200 scenes, gemma as the rater (recorded deviation from GPT-4o) |"
+        }
+      ]
+    }
+  ]
+}

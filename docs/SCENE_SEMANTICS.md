@@ -48,4 +48,4 @@ python -m metafind.scene.semantics \
 
 [CPU tests](../tests/eval/test_scene_semantics.py) 使用真正的 tiny S1/S2 checkpoint loader、n08 `write_one`／repair／parse／validate／encoding 與 source-proof reader，只替換巨大模型的載入。它們涵蓋錯模型／錯 encoder 拒絕、來源改動、base cache 合併、去重、真實 degraded、LLM 釋放後才建 encoder，以及新 cache 接入 `prepare.semantic_inputs`。這些測試不證明真實 LLM 生成品質或論文 Table 2 分數。
 
-另行的 [2026-09-08 真場景診斷](REPRODUCTION_SCENE_REVIEW_20260908.md) 實際在 CPU 呼叫 Gemma 兩次，分別生成 cake↔pot 與兩個 cake instance 的關係；各成功一組、degraded 0，再用核驗過的真 CLIP 編碼，接回 prepare 完成場景。歷史 LLM bytes 仍標 `UNKNOWN`；生成成功不等於句子品質已通過正式評分。
+另行的 [2026-09-08 真場景診斷](history/REPRODUCTION_SCENE_REVIEW_20260908.md) 實際在 CPU 呼叫 Gemma 兩次，分別生成 cake↔pot 與兩個 cake instance 的關係；各成功一組、degraded 0，再用核驗過的真 CLIP 編碼，接回 prepare 完成場景。歷史 LLM bytes 仍標 `UNKNOWN`；生成成功不等於句子品質已通過正式評分。

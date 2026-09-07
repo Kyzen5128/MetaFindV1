@@ -20,7 +20,7 @@
 |---|---|
 | **D-1** *(條件式・`resolved_inactive`)* | ViT-bigG-14 的 CLIP 側保持凍結。**U-34 已於 2026-08-16 判定為 `frozen`**，故 `paper = actual = frozen`、`active_if` 為 false，**不列為 active deviation**。規則保留供日後重開 |
 | **D-2** | Qwen3.8-27B 取代 **GPT-4o**（**資產標註 n05**），使用者決定 U-6 |
-| **D-8** | Qwen2.5-VL 取代 **GPT-4o**（**場景評分 n17**） |
+| **D-8** | 本地模型取代 **GPT-4o**（**場景評分 n17**）；2026-09-02 DL-077 第 13 題已選 Gemma，取代早期 Qwen2.5-VL 計畫。 |
 | **D-3** | 不重跑 6 個 baseline |
 | **D-4** | 不做人工評分 |
 | **D-5** | I-Design 中**所有**設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` |
@@ -118,7 +118,7 @@ python -m metafind.data.download --only glbs        # 只抓 mesh（最慢，實
 | Objaverse-LVIS GLB | **實測 328 GB** | **保留不刪**，見下。先前寫 ~216 GB，那是下載前的估計，少報 52% |
 | ULIP-2 checkpoint | 384 MB | PointBERT／`pc_projection` 的**初始權重**（Stage 1 會繼續訓練它們），以及凍結的 CLIP 側 |
 | ViT-bigG-14 | 9.5 GB | ULIP-2 的 text/image 編碼器 |
-| `gemma-4-12B-it` | — | **實際的資產標註器**（n05）。**[已更正 2026-08-30]** 本列先前寫 `Qwen2.5-VL-7B / 16.6 GB`；45,692 筆標註產物的 `annotator_model` 全是 `gemma-4-12B-it`。Qwen2.5-VL 仍是 n17 場景評分（D-8）與 I-Design 規劃（D-5 用 `qwen2.5-7b-instruct`）的模型 |
+| `gemma-4-12B-it` | — | **實際的資產標註器**（n05）。**[已更正 2026-08-30]** 本列先前寫 `Qwen2.5-VL-7B / 16.6 GB`；當時 45,692 筆標註產物的 `annotator_model` 全是 `gemma-4-12B-it`。n17 後依 DL-077 第 13 題也選 Gemma；標註盤點不證明評分器或規劃器已實際執行。 |
 
 **GLB 不刪除。** 前一版設計「渲完就刪」是錯的：
 Algorithm 1 的 iterative composition 需要**真實幾何**才能放進場景，只有 embedding 不夠。
@@ -849,11 +849,11 @@ Algorithm 1 是 §2.7 的**推論期程序**，不是模型結構。那一列是
 至少還需要點雲、快取的 text/image embedding、語意邊、ProcTHOR 物件文字、
 以及已決議的 Stage 2 協定。那是一份**不可能被滿足的 dependency contract**，已補齊。
 
-**[偏離 D-8]** 場景評分用 Qwen2.5-VL 取代 GPT-4o。（2026-08-21 由 D-2 拆出）
+**[偏離 D-8]** 場景評分以本地模型取代 GPT-4o。（2026-08-21 由 D-2 拆出；2026-09-02 [DL-077 第 13 題](../../workflow/DECISION_LEDGER.md#L5624) 已改選 Gemma。）
 IDesign 自帶的 `gpt_v_as_evaluator.py` 是 5 個面向 1–10 分，論文 Table 2 是 4 個面向 1–5 分，
 論文沒有公佈它改過的 prompt → **[未定 U-10]**，其中 Scene Coherence 對應哪個面向不明。
 
-**換掉裁判之後，Table 2 的絕對數字與論文不再可比**，只有方向性（w/ESSGNN 是否優於 w/o）還成立。
+換掉裁判後，不能把本地 Table 2 絕對分數視為作者的同一量測。可在明示且固定的本地協定下比較方法方向，但方向是否與作者一致也需實驗驗證，不能預先保證。
 
 人工評分不做，該欄判 `INSUFFICIENT_EVIDENCE`。
 

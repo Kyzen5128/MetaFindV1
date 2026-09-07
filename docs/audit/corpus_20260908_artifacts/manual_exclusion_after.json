@@ -1,0 +1,31 @@
+{
+  "timestamp": 1788804157.1776538,
+  "scope": "Actual 21-record ledger and copied current annotations; writes only to TemporaryDirectory, no real annotation mutation",
+  "script_sha256": "77c8a588371e8d32bf2b8e88a79451f16b01bff46c114e46e7237de1c77fb8fb",
+  "ledger_path": "/home/kyzen/metafind/metafind_data/outputs/annotation_exclusions.json",
+  "ledger_sha256": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058",
+  "manual_count": 21,
+  "available_copied_and_moved": 8,
+  "copied_annotation_sha256": {
+    "44b7cff533d04b0ea43db6afd6e67efa": "9c828340a787e0d57d70883e572527d9fd2d6969f275257b22905a3f42700ad4",
+    "721bb93d169a4d5f9e8dd15ad45a367f": "9fbeee5017785ee0981e7cd963a4d7ab304cc98c5e86a7a7acb5d5f0f839fa05",
+    "4179ed636e2f4d47bb82691f7f536e84": "37a0090ab8fff61443b952efc334828c4125c624ce169bdccaecef3e8ab862ac",
+    "1864864213974c57aa9eb55294a39c33": "dda569d49fd241a486b2d7cc4ac62acf663534e12b5600e85ce7891c010b433e",
+    "49db5a9fabb54afc975c75a24f32ede1": "0d4e9c822cbc6ebd556ad9d994f4d78c12587514b5c2d5130b33971ffd4490f4",
+    "17a8134052ff47778a21cd3efcfbe916": "b88501af8346d517745012fb0cb118f9c91c04930977bfa00610bbe24c845fbf",
+    "1c5a695a8bed40c2a6742f84210542f4": "1a0cbc8b45578d61a154d39c7c061c4939b78a61211aae0d0cf93001041bf226",
+    "5a5804daaa9345f48058b4b60d7a2da8": "6397fe3e0da7d97cc1a1398ac044aad180c88571fe1dfeb8d495822a83e90393"
+  },
+  "retained_historical_failure_fixture": "01ad91221fed407b80184c0e28526418",
+  "first": {
+    "returncode": 0,
+    "stdout": "moved 8 of 21 manually rejected assets to /tmp/metafind_manual_schema_5l45cu33/outputs/annotations_v10_excluded\n",
+    "stderr": ""
+  },
+  "repeat": {
+    "returncode": 0,
+    "stdout": "moved 0 of 21 manually rejected assets to /tmp/metafind_manual_schema_5l45cu33/outputs/annotations_v10_excluded\n",
+    "stderr": ""
+  },
+  "real_annotation_written": false
+}

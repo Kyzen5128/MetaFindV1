@@ -1,0 +1,355 @@
+{
+  "schema": "metafind.evidence_archive.v1",
+  "created_at": "2026-09-07T18:46:09.893428+00:00",
+  "scope": "2026-09-08 corpus preflight, manual exclusion, score handoff, cleanup and Notion delivery. Does not certify full reproduction.",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 1876,
+      "sha256": "d5a1ed6896c9ebbbb0b2fa8b497dffba3b8d6f56757e6d81812d110e2c6146f0",
+      "source": "created for this archive"
+    },
+    {
+      "path": "approved_g3_proposal_original.md",
+      "bytes": 2209,
+      "sha256": "5f578cc828687990f8ebad5443f79cad0a39af072f98d968fb160cc4b1e83ed0",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/approved_g3_proposal_original.md"
+    },
+    {
+      "path": "chain_paper_stage1_before.sh",
+      "bytes": 3945,
+      "sha256": "9691aafa0c47dd72ef3ce3b566009ccc429dd986f65376cc5bc18e6cbf0b1152",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/chain_paper_stage1_before.sh"
+    },
+    {
+      "path": "chain_paper_stage1_before_e_ledger.sh",
+      "bytes": 4736,
+      "sha256": "77c8a588371e8d32bf2b8e88a79451f16b01bff46c114e46e7237de1c77fb8fb",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/chain_paper_stage1_before_e_ledger.sh"
+    },
+    {
+      "path": "data_cleanup.json",
+      "bytes": 196445,
+      "sha256": "4bee8cb192064dfa7efea90fb15d0de36bfd76145c4e77062bdd0698cf8b4b1d",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/data_cleanup.json"
+    },
+    {
+      "path": "deploy_waiting_stage1.py",
+      "bytes": 5870,
+      "sha256": "f4faa935a83cd9c06b49b02dc31da61847bb660da7e337195732703137831a92",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/deploy_waiting_stage1.py"
+    },
+    {
+      "path": "deploy_waiting_stage1_e_ledger.py",
+      "bytes": 5897,
+      "sha256": "6283af9a0bc9d3a0bc83be97e76429296bd37a692989efa7bd883f812dcdd2f6",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/deploy_waiting_stage1_e_ledger.py"
+    },
+    {
+      "path": "docs_cleanup.json",
+      "bytes": 39750,
+      "sha256": "d6af176130a2a261f32f3d35dab7e7548496b9447e13a45bddacb76bd204d7e3",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/docs_cleanup.json"
+    },
+    {
+      "path": "g3_final/MANIFEST.json",
+      "bytes": 4053,
+      "sha256": "1039be21604fcdf44a12a0b9ccb6a5220124472a8d150fe2491d4ed1ab9694df",
+      "source": "agent-produced archive provenance metadata"
+    },
+    {
+      "path": "g3_final/historical/G3_object_corpus.history.yaml",
+      "bytes": 34221,
+      "sha256": "dab5f73d712c39f9a6199c7ceee13dbdca89937f18aa66fd1ccb0520dc3b98a1",
+      "source": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/historical/G3_object_corpus.history.yaml"
+    },
+    {
+      "path": "g3_final/historical/G3_object_corpus.yaml",
+      "bytes": 32612,
+      "sha256": "3b199873fa28adcdf1ddd168babcbe49b88ba626bb914d83a4026e43a6ca89b6",
+      "source": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/historical/G3_object_corpus.yaml"
+    },
+    {
+      "path": "g3_final/historical/execution.json",
+      "bytes": 4795,
+      "sha256": "3e9a633061e86ed0c50226c9c31583152c463ac364b79b990b063d545902f4eb",
+      "source": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/historical/execution.json"
+    },
+    {
+      "path": "g3_final/historical/run_progress.jsonl",
+      "bytes": 439,
+      "sha256": "2cdd9bb1662e202bebc82d117f8d1d7d0def5b3c08c6e56370d4bbcdb13348ad",
+      "source": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/historical/run_progress.jsonl"
+    },
+    {
+      "path": "g3_final/historical/stdout.log",
+      "bytes": 117,
+      "sha256": "99f5a113d66f7a22a0505321b6e44fed2b7654e268c731b3dcf22f1349f11889",
+      "source": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/historical/stdout.log"
+    },
+    {
+      "path": "g3_final/paper_in_progress/G3_object_corpus.history.yaml",
+      "bytes": 7240,
+      "sha256": "0361099fe7ae43a3180bd26806f055f19acdb153486bae5d7c137d6e834ebe6a",
+      "source": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/G3_object_corpus.history.yaml"
+    },
+    {
+      "path": "g3_final/paper_in_progress/G3_object_corpus.yaml",
+      "bytes": 7023,
+      "sha256": "691a460bcbaf5506ca84b5f7daaca196016d7d5241d08cebc288c028f2fb4195",
+      "source": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/G3_object_corpus.yaml"
+    },
+    {
+      "path": "g3_final/paper_in_progress/execution.json",
+      "bytes": 4379,
+      "sha256": "aad9e90d99aee0c955c79ec20403f1ff85afd7155fda8d0c6df8057ce35c960a",
+      "source": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/execution.json"
+    },
+    {
+      "path": "g3_final/paper_in_progress/run_progress.jsonl",
+      "bytes": 438,
+      "sha256": "afa01259ada967378e0ac2d401a9b7449d52e3794bf3b289334f11350a43957d",
+      "source": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/run_progress.jsonl"
+    },
+    {
+      "path": "g3_final/paper_in_progress/stdout.log",
+      "bytes": 1305,
+      "sha256": "2ba636bd77eb96f9b7b3d7b7f3ceb7944fda05dc140c9071555356bb1b4f1702",
+      "source": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/stdout.log"
+    },
+    {
+      "path": "g3_final/summary.json",
+      "bytes": 970,
+      "sha256": "5a10e78f96d77551768a47de61f5b29e71d85536a9fe593d282419cc27d3c140",
+      "source": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/summary.json"
+    },
+    {
+      "path": "g3_initial/g3_diagnostics.json",
+      "bytes": 1576,
+      "sha256": "96c2f3a873745c68e780fe859cc58872dd83085aa34176eabb0d87448866b6b1",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/g3_diagnostics.json"
+    },
+    {
+      "path": "g3_initial/historical_stable/G3_object_corpus.history.yaml",
+      "bytes": 15745,
+      "sha256": "5d10f60e8b1e44e888d5d3606f80724fb92ac3d06d0be3ebf02e90342c34db13",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/historical_stable/G3_object_corpus.history.yaml"
+    },
+    {
+      "path": "g3_initial/historical_stable/G3_object_corpus.yaml",
+      "bytes": 15045,
+      "sha256": "118be8e780ce4bd45060ea9f62a1c796920eb34370dde7f126bbe1aa035317c0",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/historical_stable/G3_object_corpus.yaml"
+    },
+    {
+      "path": "g3_initial/historical_stable/execution.json",
+      "bytes": 1142,
+      "sha256": "e9429619ef59c14e440ed781b8e8148bf3617c530ce42a6c680844c2a53fd3c3",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/historical_stable/execution.json"
+    },
+    {
+      "path": "g3_initial/historical_stable/run_progress.jsonl",
+      "bytes": 436,
+      "sha256": "8693ec6e4320d2d8fec2b764d5d74d9cfbd0880b69ed490480632ad9123d9f3b",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/historical_stable/run_progress.jsonl"
+    },
+    {
+      "path": "g3_initial/paper_in_progress/G3_object_corpus.history.yaml",
+      "bytes": 6550,
+      "sha256": "8ad9aa6cd239f9a5e6eb53ce26bb2faee1226dad763e3b91729900e233d5e287",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/paper_in_progress/G3_object_corpus.history.yaml"
+    },
+    {
+      "path": "g3_initial/paper_in_progress/G3_object_corpus.yaml",
+      "bytes": 6352,
+      "sha256": "f8870f5d421c93f686adf017b80f5c628cc8e375ca0e8b7deb3f5135d685728e",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/paper_in_progress/G3_object_corpus.yaml"
+    },
+    {
+      "path": "g3_initial/paper_in_progress/execution.json",
+      "bytes": 1870,
+      "sha256": "8680c87b6c45fda8ecc90426facd745f5314b9ec607c50b66d26208d7d2fc971",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/paper_in_progress/execution.json"
+    },
+    {
+      "path": "g3_initial/paper_in_progress/run_progress.jsonl",
+      "bytes": 438,
+      "sha256": "e27dbadfeb6494451ad58254648fc12809bfd8895d899ac3066b949e6ad60b0b",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/paper_in_progress/run_progress.jsonl"
+    },
+    {
+      "path": "g3_initial/run_g3_diagnostics.py",
+      "bytes": 2319,
+      "sha256": "efcabc3f286358d08fed42fcd8775c65fe241834e784a8751860f2d10d407ba9",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/run_g3_diagnostics.py"
+    },
+    {
+      "path": "g3_regression/metafind_g3_manual_accounting_20260908_final_tests.log",
+      "bytes": 261,
+      "sha256": "20638ce91ccf9b865b51b3d7382fb06f7dac62e6ef4362fb2a4dd5ee0dce751c",
+      "source": "/tmp/metafind_g3_manual_accounting_20260908_final_tests.log"
+    },
+    {
+      "path": "g3_regression/metafind_g3_progress_alias_20260908_after.log",
+      "bytes": 261,
+      "sha256": "b272e51df8af45980334d0de6df1dbe78c2043061ff68da8a5c6ddbc3784734c",
+      "source": "/tmp/metafind_g3_progress_alias_20260908_after.log"
+    },
+    {
+      "path": "g3_regression/metafind_g3_progress_alias_20260908_before.log",
+      "bytes": 1933,
+      "sha256": "61c639e1b121433f1277c4652453ed01742d6e162720f29a8d2f444cc405b766",
+      "source": "/tmp/metafind_g3_progress_alias_20260908_before.log"
+    },
+    {
+      "path": "g3_regression/metafind_g3_writer_schema_20260908_tests.log",
+      "bytes": 261,
+      "sha256": "6bd4d1a199867758bcd8720297525fad93ae64d81fbfcdf98c930f32ac412b67",
+      "source": "/tmp/metafind_g3_writer_schema_20260908_tests.log"
+    },
+    {
+      "path": "manual_e_ledger_real_copy.json",
+      "bytes": 4230,
+      "sha256": "1058358d5e5a814c3d9f179ab9d7fbafbdc26de17501f19dde153714a0e5768e",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/manual_e_ledger_real_copy.json"
+    },
+    {
+      "path": "manual_exclusion_after.json",
+      "bytes": 1880,
+      "sha256": "df7366f8ac0ac23363d9958c3adc6581a4e3a7bcd5b844096c08228983dd899a",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/manual_exclusion_after.json"
+    },
+    {
+      "path": "manual_exclusion_before.json",
+      "bytes": 3615,
+      "sha256": "0455106f73ec8c4cd1870239f2a6091e7bbcaadf2e7746e2384279d86250213c",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/manual_exclusion_before.json"
+    },
+    {
+      "path": "n09_real_snapshot.json",
+      "bytes": 2081,
+      "sha256": "811001af05fd770513f2262c4feeb3f4e2ac0b92ea94b270a3086bc99c789649",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/n09_real_snapshot.json"
+    },
+    {
+      "path": "notion_expected_structure.json",
+      "bytes": 2260,
+      "sha256": "5fcfa29de5bd047a9ea584bcc21908d665ee4871b3d7e340c4fcd54764381c5c",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/notion_expected_structure.json"
+    },
+    {
+      "path": "notion_publication.json",
+      "bytes": 1273,
+      "sha256": "d0bda0e15133de56c25c384ced0c29a233b5393593ed66402cabc44d65272161",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/notion_publication.json"
+    },
+    {
+      "path": "notion_table1_stage2_published.md",
+      "bytes": 40489,
+      "sha256": "0f842a12c299123ebe57cc5ffd7c6b7217b3a7208cc1624055aadd7fc1a1afea",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/notion_table1_stage2_published.md"
+    },
+    {
+      "path": "organize_docs.py",
+      "bytes": 4763,
+      "sha256": "b7e658372eb9c3050e1a72262467afdc82b331630745b958c7c808b9e5fc9d92",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/organize_docs.py"
+    },
+    {
+      "path": "run_cpu_suite.py",
+      "bytes": 1726,
+      "sha256": "414b7e88800cb012b69fac5263e66f56d56bc92197380915a10b0bec44c48c62",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/run_cpu_suite.py"
+    },
+    {
+      "path": "run_delivery_cpu_suite.py",
+      "bytes": 3972,
+      "sha256": "57cbb5d0087c2fbd3cfcf748ff5ce632b7b3cf8ecfb401439dde26a9914e1086",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/run_delivery_cpu_suite.py"
+    },
+    {
+      "path": "run_delivery_graph.py",
+      "bytes": 3159,
+      "sha256": "b2fef6c0e129af5739abb30510756e0a36c6e0620da5fe9dd43ad390b9694a83",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/run_delivery_graph.py"
+    },
+    {
+      "path": "run_final_cpu_suite.py",
+      "bytes": 1744,
+      "sha256": "3e0eab4af207afc6d38b479ca1576913783cea7614cc034728a262530a064219",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/run_final_cpu_suite.py"
+    },
+    {
+      "path": "scene_score_handoff/command_0.json",
+      "bytes": 827,
+      "sha256": "8371d70628f9e182d2d71b5ac474b5148946d2a2b6d088e76334753a0c8f6e7b",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/command_0.json"
+    },
+    {
+      "path": "scene_score_handoff/command_1.json",
+      "bytes": 563,
+      "sha256": "7e6717df1100300f800d62011c6ccc4154114513d9b9c23f5bbb0f6ec3639142",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/command_1.json"
+    },
+    {
+      "path": "scene_score_handoff/diagnostic_protocol.json",
+      "bytes": 823,
+      "sha256": "0e17c6d421e62ff8304be368313453fc4653764247484fede6b1f978fec5d489",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/diagnostic_protocol.json"
+    },
+    {
+      "path": "scene_score_handoff/empty_submission.json",
+      "bytes": 248,
+      "sha256": "7484bbbc77a818b838dc7a628674d72a8686a20b9919f1537fc6fe9cb322eaea",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/empty_submission.json"
+    },
+    {
+      "path": "scene_score_handoff/imported.json",
+      "bytes": 4966,
+      "sha256": "336fbc36b33b5aa882c887671197a1005318e8c3bcfd03137c9f11d2c0397517",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/imported.json"
+    },
+    {
+      "path": "scene_score_handoff/manifest.json",
+      "bytes": 1304,
+      "sha256": "cb09f38be036d756383337763fcd1da27c90c2dfa56fd6d8d173fdc50c7c4757",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/manifest.json"
+    },
+    {
+      "path": "scene_score_handoff/summary.json",
+      "bytes": 3147,
+      "sha256": "1a3b67ea4152d8cfa6d28d242965b19e581e88645223da9936f08f94b1cf8e0b",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/summary.json"
+    },
+    {
+      "path": "scene_score_handoff/verification.json",
+      "bytes": 1731,
+      "sha256": "4db14a788494d5392246bc866a4b7926166830ad39baf7db709adbcf31ffb145",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/verification.json"
+    },
+    {
+      "path": "stage1_deployment.json",
+      "bytes": 3282,
+      "sha256": "a377b6741f6fd5d97122c5aba2ad4ba633a0f75d85ab6adfee485c7367c15a44",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/stage1_deployment.json"
+    },
+    {
+      "path": "stage1_e_ledger_deployment.json",
+      "bytes": 3291,
+      "sha256": "bf913f898e1773b00511a2e1b221a9cc1830db59a976eb35a4d3c9c5e3fda165",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/stage1_e_ledger_deployment.json"
+    },
+    {
+      "path": "verify_manual_e_ledger.py",
+      "bytes": 3809,
+      "sha256": "b5d87c5edd7e00f10e93441bb3732c013612774031b778ebef9a4dbb75290362",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/verify_manual_e_ledger.py"
+    },
+    {
+      "path": "verify_real_scene_handoff.py",
+      "bytes": 4610,
+      "sha256": "6819daa8c20f7e65b38598a10b22f31009275d8d09481621cf6bc03d657c0707",
+      "source": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/verify_real_scene_handoff.py"
+    }
+  ]
+}

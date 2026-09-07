@@ -1,0 +1,41 @@
+{
+  "status": "verified",
+  "timestamp": 1788804521.8256793,
+  "scope": "True prior composition/placement/GLB/annotation/Blender/render inputs; NO judge or rating",
+  "expected_counts": {
+    "n_total": 1,
+    "n_complete": 1,
+    "n_scored": 0,
+    "n_missing_scores": 1
+  },
+  "all_means_and_human": "INSUFFICIENT_EVIDENCE",
+  "judge_executed": false,
+  "source": {
+    "path": "/home/kyzen/MetaFindV1/metafind/eval/scene_scores.py",
+    "sha256": "c81fe6623f8cec62124d73e1623e29f159ba4bddf3d7658bd1b11b304fe8a70b"
+  },
+  "inputs": {
+    "diagnostic_protocol.json": {
+      "path": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/diagnostic_protocol.json",
+      "sha256": "0e17c6d421e62ff8304be368313453fc4653764247484fede6b1f978fec5d489"
+    },
+    "manifest.json": {
+      "path": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/manifest.json",
+      "sha256": "cb09f38be036d756383337763fcd1da27c90c2dfa56fd6d8d173fdc50c7c4757"
+    },
+    "empty_submission.json": {
+      "path": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/empty_submission.json",
+      "sha256": "7484bbbc77a818b838dc7a628674d72a8686a20b9919f1537fc6fe9cb322eaea"
+    }
+  },
+  "outputs": {
+    "imported.json": {
+      "path": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/imported.json",
+      "sha256": "336fbc36b33b5aa882c887671197a1005318e8c3bcfd03137c9f11d2c0397517"
+    },
+    "summary.json": {
+      "path": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/summary.json",
+      "sha256": "1a3b67ea4152d8cfa6d28d242965b19e581e88645223da9936f08f94b1cf8e0b"
+    }
+  }
+}

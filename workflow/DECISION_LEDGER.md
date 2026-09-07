@@ -6960,3 +6960,34 @@ Delta_T = 4.2, Delta_I = 0.7, Delta_P = 99.1 on the `full` cell. OBSERVED CAUSAL
 **Cosine statistics** (row A, same run; `cosine_stats` in the probe): pc query pos 0.985, mean negative 0.001, hardest negative 0.931, margin 0.054 (p10 0.007); full: pos 0.998, hard 0.939, margin 0.059; text-only: pos 0.904, hard 0.936, margin -0.032. InfoNCE at tau 0.5 with 63 random negatives = 2.37, matching the training plateau (2.40-2.48). CORRECTION of my 2026-09-07 claim that tau fixes a loss floor near 2.4: the floor for cosine in [-1,1] is log(1+63e^-4) = 0.77; the plateau is the state "positives ~1, random negatives ~0, hardest negatives ~0.93", not a bound (Kyzen's correction, verified).
 
 **pc-only-gallery and JSON-text probes**: see the previous entry and the next (JSON-text probe running, `output/look/exp_json_text_query_val.json`).
+
+## DL-106 — G3 accounts for approved manual exclusions separately (Kyzen, 2026-09-08)
+
+Classification: **IMPLEMENTATION CHOICE**, not a MetaFind paper claim.
+
+Codex proposed keeping the original LVIS manifest denominator and reporting the
+21 already-approved manual exclusions as a third set, separate from real
+processing failures. Kyzen explicitly answered: **「採用獨立 manual_excluded 計帳（建議）」**.
+The decision concerns formal G3 accounting; it does not re-authorize or change
+which 21 assets were rejected on 2026-08-28.
+
+- M is the original manifest. E is the approved `manual_review_rejected` UID set;
+  every E member must belong to M. A is the admitted set and must not overlap E.
+- Q is the set of UIDs with real object-processing exception evidence, minus A
+  and E. Retries are deduplicated, recovered assets are removed, and manually
+  rejected assets are not counted twice as processing failures.
+- Require pairwise-disjoint A, Q, E and `A ∪ Q ∪ E == M`; unexplained missing
+  results and unexpected manifest-external UIDs still fail.
+- Keep the existing project processing-failure limit `|Q| / |M| <= 0.02`.
+  Also disclose `|E| / |M|` and `(|Q| + |E|) / |M|`; no additional threshold
+  is introduced. The 2% threshold is a project contract, not a paper value.
+- Do not fabricate exception records for manual review decisions. Historical
+  `n05_quarantine` ledger entries do not substitute for actual failure evidence
+  in the current corpus; the v10 rebuild retries those historical failures.
+- Other nonempty exclusion groups need their own declared accounting basis;
+  this decision does not silently approve arbitrary groups as E.
+
+Update G3/L2-COMPLETE specification, preflight implementation and regression
+tests together. This decision does not certify cache contents or optimizer
+execution, mark the full graph implemented, or by itself connect the new
+preflight to a running training chain.

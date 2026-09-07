@@ -1,0 +1,23 @@
+{
+  "artifact_root": "/tmp/metafind_g3_approved_manual_20260908_85k_j338",
+  "source_hashes": {
+    "metafind/gates/g3_object_corpus.py": "bfda9e24c07e65720e93e8e2afa3f3fc9416b11efd2a07c8765c2a269af57b24",
+    "tests/pipeline/test_object_corpus_gate.py": "b2432566e1edf0d13dced235d0aebca57941950332003b0869913334d4792680",
+    "docs/graph/validation_plan.yaml": "d7b5f5df229cffd9df4e790c1aa9735f0333728703d5c95e2d846cc4ad5fdf9a",
+    "docs/graph/node_registry.yaml": "89f6888c55f0cca2713be59cadf3adfdf7ed9d3ba237d3aa7c17c28ceba01290"
+  },
+  "runs": [
+    {
+      "label": "historical",
+      "returncode": 0,
+      "execution": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/historical/execution.json",
+      "input_bytes_unchanged": true
+    },
+    {
+      "label": "paper_in_progress",
+      "returncode": 3,
+      "execution": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/execution.json",
+      "input_bytes_unchanged": true
+    }
+  ]
+}

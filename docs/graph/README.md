@@ -249,75 +249,33 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 
 ### 實作狀態 —— 31 個非 gate 節點裡，**有程式的是 19 個**
 
-另有 **1 個**帶 `# IMPLEMENTS-NODE:` 標記的 gate 節點：`G4_gallery_freeze`
-（`metafind/gates/g4_gallery_freeze.py`）。**兩者分開數**：上面那個 19 是
+另有 **2 個**帶 `# IMPLEMENTS-NODE:` 標記的 gate 節點：`G3_object_corpus` 與 `G4_gallery_freeze`
+（`metafind/gates/`）。G3 目前為部分 preflight，尚未接入 live chain；標記不會把 validation plan 的 implemented 狀態改成 true。**兩者分開數**：上面那個 19 是
 「非 gate 節點」這句話裡的數字，把 gate 併進去會讓那句話數到它沒有指的東西。
 兩個數字都由 `tools/check_graph.py` 分別實測比對。
 
-> ⚠ **不要相信這張表，跑檢查器。**
+> **節點標記與測試函式數由檢查器重算；執行成果另查實際紀錄。**
 >
 > ```bash
 > python tools/check_graph.py     # 節點數、已實作數、測試函式數、U 登記表全部重算
 > grep -rn "^# IMPLEMENTS-NODE:" metafind/ tools/ setup/
 > ```
 >
-> 上面那三個數字（31／19／gate 的 1）是 `tools/check_graph.py` **會實測並比對**的，所以它們寫錯會紅；
-> 但**下面那張逐節點的表格沒有任何機器在看**，它只會安靜地過期。
-> 2026-08-30 這一輪就在裡面找到四處與檔案系統不符的敘述（見各列的「[已更正]」）。
-> **需要現況時以檢查器與 `git log` 為準，不要引用這張表的措辭。**
+> 上面那三個數字（31／19／gate 的 2）是 `tools/check_graph.py` **會實測並比對**的，所以它們寫錯會紅；
+> 歷史逐節點表格的狀態沒有機器驗證，已移除；執行狀態需看實際產物與最新審查。
+> **檢查器驗證結構，執行狀態另看實際 run 證據。**
 >
 > 注：19 是**非 gate** 的 `# IMPLEMENTS-NODE:` **標記數**，不是相異節點數 ——
 > `n15_eval_retrieval` 有兩支程式（`metafind/eval/retrieval.py` 與 `run_retrieval.py`）
 > 各帶一個標記，所以相異的非 gate 節點是 **18** 個。檢查器數的是標記。
-> gate 那邊 1 個標記對 1 個相異節點，沒有這個重複。
+> gate 那邊 2 個標記對 2 個相異節點，沒有這個重複。
 
-規格完整不等於管線存在。這張表是為了讓讀者不會把前者讀成後者
-（第十九輪剛因為同一個理由修過 `L1-STAGE1-PROTOCOL-APPLIED` 的措辭）。
+目前可執行節點、producer→artifact→consumer 與界線統一見 [DATA_FLOW](../DATA_FLOW.md)。原先此處的逐節點狀態表停留在 2026-08-30，與後來的真實 Stage 1／Stage 2／場景執行互相矛盾，已於 2026-09-08 移除；歷史 bytes 可由 Git `de6635b` 查回，原始驗證紀錄仍保留。標記數只表示來源中有宣告，不認證整條 formal graph 已實作或跑完。
 
-| 節點 | 狀態 | 程式 |
-|---|---|---|
-| `n01_env_bootstrap` | **可執行** | `setup/01_storage.sh`、`02_conda_env.sh`、`03_verify_env.py`（**11 項**，`grep -c "^def t_"` 實測；含 AI2-THOR headless 渲染與 procthor-10k 載入）。**[已更正 2026-08-30]** 先前寫「10/10 通過」——**項數就錯了，而且「通過」是上一次執行的結果、不是這一版程式的性質** |
-| `n02_download` | ✅ **完成** | `metafind/data/download.py`。46,052 個 GLB（351 GB）、0 失敗 |
-| `n03_sample_pointclouds` | ✅ **完成** | `metafind/data/pointclouds.py`。46,052 朵點雲（5.6 GB）、**0 隔離**；顏色對照官方 ULIP 雲平均差 0.0021；19 條測試 |
-| `n04_render_views` | ✅ **完成** | `metafind/data/renders.py`（編排）＋ `render_blender.py`（實際畫像素）。**46,024 個資產**（`logs/renders_index.jsonl` 實數）、**12 張視圖**、512px、perspective、transparent RGBA。**[已更正 2026-08-30]** 先前寫「45,955 個資產／11 張視圖」，那是 **pyrender 世代**的數字；2026-08-23 起改用 OpenShape 的 Blender 腳本並全部重渲染（`DL-024 A1/A2/A3`，USER_APPROVED）。⚠ sidecar 自報 `n_views_source: "USER decision 2026-08-23; DEVIATION from MetaFind's stated 11"` —— **產物自己說這是偏離，而偏離登記表裡沒有它的號碼；待 MASTER 編號，本文件不自行編 D-15** |
-| `n05_annotate` | ✅ **完成** | `metafind/data/annotate.py`（schema／prompt）＋ `annotate_run.py`（生成與 C1 修復迴圈）。**全量已完成：`data/outputs/annotations/` 共 45,692 筆**，標註器全部是 **`gemma-4-12B-it`**（prompt_version 8 共 43,597、v9 共 2,095）。**[已更正 2026-08-30]** 先前寫「Qwen2.5-VL」「全量尚未跑完」，兩句都與產物不符 |
-| `n07_scene_graphs` | ✅ **完成** | `metafind/data/scene_graphs.py`。12,000 間房、0 隔離、房間對應 100%；support 邊來自 ProcTHOR 的 children 樹，座標保留原始值；16 條測試，兩條負向注入實測會失敗 |
-| `n08_semantic_edges` | **可執行** | `metafind/data/semantic_edges.py`（key／prompt／驗證，30 條測試）＋ `semantic_edges_run.py`（Qwen 關係句 ＋ 凍結 CLIP 文字編碼器）。**實測 410 萬條語意邊只有 4,242 組唯一描述配對（快取命中 99.90%）**；三條負向注入實測會失敗。LLM 階段須等 n05 讓出 GPU |
-| `n09c_build_scene_splits` | ✅ **完成** | `metafind/data/scene_splits.py`。9,600 train／2,400 test（80/20，seed 20260816）、**洩漏 0**；13 條測試，負向注入實測會失敗。語意邊覆蓋率待 n08 |
-| `n05b_resolve_stage1_encoding` | **可執行** | `metafind/models/resolve_stage1.py`。釘死 U-15 文字模板（golden-string 測試）、U-14 取 11 視圖平均、U-11 learned token；**U-34 已判定 `frozen`**，連同 basis 與 confidence 一併記錄，主線再無執行期歧義。25 條測試 |
-| `n07b_procthor_asset_modalities` | ✅ **完成** | `metafind/data/procthor_modalities.py`。**1,467 / 1,467、隔離 0、28 個無點雲**（透明材質，F26）。相機協定**由 `renders.py` import 而非抄寫**；點雲以 AI2-THOR 自報的 bounding box 驗證反投影，判準需**比例與絕對誤差同時超標**（單一判準兩個方向都誤報過，F26）|
-| `n11b_stage2_gallery_index` | **只有規格** | U-08a 判定後新增：用凍結的 Stage 1 塔編碼 ProcTHOR 資產，Stage 2 專屬索引 |
-| `n15a_resolve_eval_scene_protocol` | **只有規格** | U-27：Table 2 的 200 個 I-Design 請求，**仍需人決定** |
-| `n09_build_splits` | **可執行** | `metafind/data/splits.py`。物件 80/20 ＋ **U-09 的兩種評估協定並行**（gallery=test 與 gallery=full），gallery_size 由切分推導、不寫死；18 條測試 |
-| `n06_encode_text_image` | **可執行** | `metafind/data/encode_text_image.py`。凍結 bigG 編碼文字與 11 視角；**11 個 per-view 向量全部保留**（只存聚合後的會把 U-14 烤死在 46,052 個檔案裡）；token 數實測不假設 |
-| `n10_train_stage1` | ✅ **已執行過** | `metafind/train/stage1.py`。**[已更正 2026-08-30]** 產物在 `data/outputs/ladder/`（e5 → e10 → e25 的輪數階梯，`e25_500w/stage1_ckpt.json` 記到 `epoch: 24`、`n_params_saved: 80,738,946`、`clip_train_scope: "frozen"`）與 `data/outputs/checkpoints/sweep_lr/lr7.50e-4_s20260830`（LR sweep 一組）。⚠ 那些 ckpt 記錄 `code_dirty: true`，且**沒有記錄 GPU 型號或顯存**，所以不能當成乾淨可重現的科學執行。凍結 CLIP 的向量走 n06 快取、**點雲即時編碼**（PointBERT 在 optimizer 裡，快取等於變成 fuser-only ablation）；checkpoint 只存 requires_grad 參數（F27）；17 條測試 |
-| `n11` ＋ `n12` ＋ `n11b` | **可執行** | `metafind/train/gallery_index.py`。三個節點同一支程式，因為它們是同一個操作套在不同語料上，而**不能漂移的正是編碼器** —— 拆開會有三份「載入、凍結、雜湊」，而那個雜湊就是重點。Stage 1 的 Objaverse 索引與 Stage 2 的 ProcTHOR 索引**永不合併** |
-| `n09b_resolve_stage2_protocol` | **可執行** | `metafind/models/resolve_stage2.py`。把 U-08a/b/d/e 與四個 ESSGNN 選擇寫成 n13 讀得到的形式，並在寫入前**用 `ESSGNNConfig.from_protocol` 驗一遍** —— 一個 Literal 打錯要在一秒內失敗，不是等 Stage 1 訓練完 |
-| `n15_eval_retrieval` | **可執行** | **[2026-08-30 新增 —— 這一列先前整個不存在]** `metafind/eval/retrieval.py` ＋ `metafind/eval/run_retrieval.py`，兩支各帶一個 `# IMPLEMENTS-NODE: n15_eval_retrieval` 標記。**[已更正 2026-08-30 稍晚]** 先前這一列寫「檢查器目前對它報三條失敗」（registry 宣告它寫 `retrieval_metrics`／`run_progress`／`cost_ledger`，原始碼一個都沒提到）。**那三條當時是真的，現在一條都沒有** —— n15 那一輪把三個 channel 都寫出來了，檢查器實測 `all pass`。這一列是同一天寫的、同一天就過期的，**敘述沒有跟著程式改** |
-| `n13_train_stage2` | **有程式、從未執行** | **[2026-08-30 新增]** `metafind/train/stage2.py` 存在且迴圈完整（樣本建構／batching／context graph／forward／Eq. 7-8／backward／checkpoint）。它**刻意不帶 `IMPLEMENTS-NODE` 標記**，因為標記是一個宣稱、而實作數是從它算出來的；程式自己的 docstring 就寫它需要 `stage1_ckpt` 與 `sem_edge_cache` 才跑得起來 |
-| 其餘 **十二個**節點 | **只有規格** | 無 |
-
-另有兩塊不對應任何節點、但已可執行：
-
-| 元件 | 用途 |
-|---|---|
-| `tools/check_graph.py` | 六份規格文件的一致性檢查（跑一次就知道項數，此處不寫死） |
-| `setup/04_idesign_env.sh` ＋ `tools/idesign_generate.py` ＋ 三個 patch | I-Design 場景生成，R-01 的量測對象。**目前 0 個場景完成**（見 **F18**） |
-
-`metafind/models/`（`essgnn` / `dual_tower` / `fusion` / `losses` / `ulip_backbone` /
-`stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身。
-
-> **[2026-08-30 的歷史更正；現況見最新復現審查]** 先前這裡寫「`n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer」——
-> 兩個都有。** `metafind/train/stage1.py` 不只存在，還跑過 5→10→25 的輪數階梯與一組 LR sweep
-> （產物在 `data/outputs/ladder/` 與 `data/outputs/checkpoints/sweep_lr/`）；
-> `metafind/train/stage2.py` 也存在；當時記錄尚未執行，缺 `stage1_ckpt` 與 `sem_edge_cache`。此為當日狀態，不描述現在的 checkpoint 或實驗。
-> 這句話同時和本表 `n10_train_stage1` 那一列自相矛盾，**在同一份檔案裡**，
-> 而沒有任何檢查器在比對散文與表格。
-
-1110 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、
+1182 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、
 場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態。部分測試會執行真實 runner 的小型路徑並替換模型／資料邊界；不等於對正式 corpus 完整執行節點，亦不證明 paper fidelity。分組、資料依賴與實際執行命令見 [tests/README.md](../../tests/README.md)。
-（1110 = `tests/**/test_*.py` 裡頂層 `^def test_` 的數量，由 `tools/check_graph.py` 遞迴掃描並比對；不含 class method，亦不等於 pytest 展開參數後的案例數。）
-舊「492 functions／614 cases」不是目前計數。最新完整 CPU suite 的結果、排除範圍與限制見 [真實訓練審查](../REPRODUCTION_TRAINING_REVIEW_20260908.md)，不以函式數推算執行案例數。
+（1182 = `tests/**/test_*.py` 裡頂層 `^def test_` 的數量，由 `tools/check_graph.py` 遞迴掃描並比對；不含 class method，亦不等於 pytest 展開參數後的案例數。）
+舊「492 functions／614 cases」不是目前計數。最新完整 CPU suite 的結果、排除範圍與限制見 [資料邊界審查](../audit/REPRODUCTION_CORPUS_REVIEW_20260908.md)，不以函式數推算執行案例數。
 
 ---
 

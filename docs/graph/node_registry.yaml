@@ -523,6 +523,16 @@ nodes:
       partial_failure_semantics: halt
       rollback: N/A
     notes: >
+      [USER-APPROVED IMPLEMENTATION CHOICE 2026-09-08] The standalone preflight
+      additionally reads and hashes outputs/annotation_exclusions.json (or an
+      explicit ledger path). M remains the original manifest, E is approved
+      manual_review_rejected, and Q is unique real object failure UIDs minus A
+      and E. Require A union Q union E == M with pairwise disjoint sets. Only Q/M
+      has the existing 2% ceiling; report manual and total exclusion rates too.
+      Unapproved exclusion groups block; historical n05 ledger entries do not
+      fabricate new failures. This is input evidence, not runtime optimizer
+      fidelity. The standalone implementation is not yet wired into the live
+      graph; channel integration and the implemented flag remain for review.
       The name G3_object_corpus promised more than this gate checked, so
       scene-corpus validity is checked by G6_stage2_ready, which guards the
       spend that actually depends on it. (The "[RENAMED from G3_object_corpus]"

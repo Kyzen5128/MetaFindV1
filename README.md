@@ -10,12 +10,13 @@
 | 資料從哪裡來、產物給誰讀、更新後哪些 cache 需重新核對 | [資料流與產物交接](docs/DATA_FLOW.md) |
 | 本 checkout 的實際程序、指定 corpus 的檔案盤點 | `bash tools/status.sh --data /absolute/path/to/data`；加 `--json` 保存快照 |
 | 同一觀測／不同觀測的七模態檢索；mean、Stage 1、Stage 2-off | [自訂評估規格與命令](docs/CUSTOM_TABLE1_EVALUATION.md) |
-| 從論文到訓練／評估的審查、修正及未完成項目 | [最新場景驗證與交付](docs/REPRODUCTION_SCENE_REVIEW_20260908.md)、[真實訓練審查](docs/REPRODUCTION_TRAINING_REVIEW_20260908.md)、[執行路徑審查](docs/REPRODUCTION_RUNTIME_REVIEW_20260907.md) |
+| 從論文到訓練／評估的審查、修正及未完成項目 | [最新資料邊界與評分交接](docs/audit/REPRODUCTION_CORPUS_REVIEW_20260908.md)、[真實場景驗證](docs/history/REPRODUCTION_SCENE_REVIEW_20260908.md)、[真實訓練審查](docs/history/REPRODUCTION_TRAINING_REVIEW_20260908.md) |
 | Algorithm 1 的逐步取回／圖更新，與完整 Table 2 的界線 | [場景檢索核心](docs/SCENE_COMPOSITION.md) |
 | I-Design → 原始查詢 → 檢索 → 實際 GLB 放置／渲染 | [planner 輸入](docs/IDesign_INPUTS.md)、[原始查詢交接](docs/RAW_SCENE_INPUTS.md)、[Blender 放置](docs/SCENE_PLACEMENT.md) |
+| 外部場景評分綁定、四維 1–5 分與缺分／失敗的分母 | [場景評分格式與命令](docs/SCENE_SCORES.md)；部分 n17／n20，未執行裁判。 |
 | CPU、GPU、hook 測試分組、環境要求與驗證界線 | [測試導覽](tests/README.md) |
-| 本次測試搬移、失效程式刪除與 Markdown 更正 | [整理紀錄](docs/CLEANUP_REPORT_20260907.md)、[文件導覽](docs/README.md) |
-| 2026-09-07 修正的程式問題與當次驗證 | [程式修正紀錄](docs/CODE_REPAIR_REPORT_20260907.md) |
+| 測試整理、失效程式刪除、文件搬移與 outputs 清理 | [本輪整理紀錄](docs/audit/REPRODUCTION_CORPUS_REVIEW_20260908.md)、[先前測試整理](docs/history/CLEANUP_REPORT_20260907.md)、[文件導覽](docs/README.md) |
+| 2026-09-07 修正的程式問題與當次驗證 | [程式修正紀錄](docs/history/CODE_REPAIR_REPORT_20260907.md) |
 | 論文逐條公式與證據 | [原始公式清單](docs/audit/A_FORMULA_INVENTORY.md)、[本輪公式／梯度審查](docs/audit/formula_review_20260907.md)，回查 [paper source](docs/paper/metafind_source/) |
 | 衍生規格、gate 與已記錄決策 | [graph 文件導覽](docs/graph/README.md)、[Decision Ledger](workflow/DECISION_LEDGER.md) |
 

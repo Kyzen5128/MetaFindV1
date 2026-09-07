@@ -21,18 +21,74 @@ until grep -q "^=== R2 DONE" $L/r2_annotate_v10.log 2>/dev/null; do sleep 60; do
 
 step "1 apply Kyzen's 21 manual exclusions (2026-08-28) to the new corpus"
 $PY - <<'PYEOF'
-import json, shutil
+import hashlib, json, os, re, shutil, stat
 from pathlib import Path
 from metafind import paths
-ex = json.load(open("/home/kyzen/metafind/metafind_data/outputs/annotation_exclusions.json"))
-uids = ex["groups"]["manual_review_rejected"]["uids"]
-ann = paths.ANNOTATIONS.resolve(); out = ann.parent / "annotations_v10_excluded"; out.mkdir(exist_ok=True)
-moved = 0
-for u in uids:
-    p = ann / f"{u}.json"
-    if p.exists():
-        shutil.move(str(p), str(out / p.name)); moved += 1
+from metafind.data.splits import ledger_excluded_uids
+from metafind.scene.placement import _publish
+
+def unique_object(pairs):
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate exclusion ledger key: {key}")
+        value[key] = item
+    return value
+
+source = Path(os.environ.get("METAFIND_EXCLUSION_LEDGER", "/home/kyzen/metafind/metafind_data/outputs/annotation_exclusions.json")).resolve(strict=True)
+source_bytes = source.read_bytes()
+ex = json.loads(source_bytes, object_pairs_hook=unique_object)
+group = ex["groups"]["manual_review_rejected"]
+# Only the approved manual group survives this corpus rebuild. The old n05
+# failures are retried by v10; do not copy all 332 historical exclusions.
+uids = sorted(ledger_excluded_uids({"groups": {"manual_review_rejected": group},
+                                  "excluded_total": group["n"]}))
+if any(re.fullmatch(r"[0-9a-f]{32}", uid) is None for uid in uids):
+    raise ValueError("manual exclusions must contain explicit Objaverse UIDs")
+provenance = {key: ex[key] for key in ("decided_at", "decided_by", "decision", "git_commit")}
+if any(not isinstance(value, str) or not value.strip() for value in provenance.values()):
+    raise ValueError("source exclusion ledger lacks explicit decision provenance")
+ledger = paths.OUTPUTS.resolve(strict=True) / "annotation_exclusions.json"
+payload = {
+    "schema": "metafind.annotation_exclusions.v1", "accounting_decision": "DL-106",
+    "decision": "DL-106: carry approved manual exclusions separately from processing failures",
+    "excluded_total": len(uids),
+    "groups": {"manual_review_rejected": {"n": len(uids), "uids": uids}},
+    "source_ledger": {"path": str(source), "sha256": hashlib.sha256(source_bytes).hexdigest(), **provenance},
+}
+part = ledger.with_name(ledger.name + ".part")
+if ledger.is_symlink() or ledger.resolve() == source or (ledger.exists() and ledger.samefile(source)):
+    raise FileExistsError("destination exclusion ledger aliases another file or the source")
+if part.exists() or part.is_symlink():
+    raise FileExistsError("refusing existing exclusion ledger publication temporary file")
+existing = ledger.exists()
+if existing:
+    info = ledger.stat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise FileExistsError("destination exclusion ledger must be an independent regular file")
+    if json.loads(ledger.read_bytes(), object_pairs_hook=unique_object) != payload:
+        raise FileExistsError("destination exclusion ledger conflicts with the bound manual decision")
+ann = paths.ANNOTATIONS.resolve(strict=True); out = ann.parent / "annotations_v10_excluded"
+if not ann.is_dir() or (out.exists() and not out.is_dir()):
+    raise FileExistsError("annotation source/archive must be directories")
+pending = [ann / f"{uid}.json" for uid in uids if (ann / f"{uid}.json").exists()]
+if any((ann / f"{uid}.json").is_symlink() for uid in uids) or any(not p.is_file() for p in pending):
+    raise FileExistsError("manual annotation sources must be regular files")
+if out.is_symlink() or any((out / p.name).exists() or (out / p.name).is_symlink() for p in pending):
+    raise FileExistsError("refusing to overwrite previously excluded annotations")
+if source.read_bytes() != source_bytes:
+    raise ValueError("source exclusion ledger changed during preflight")
+# Persist E before moving annotations: interruption cannot remove n09's second
+# defence against a restored/reannotated rejected asset. No old corpus counts
+# or historical n05 failures are copied into the rebuilt corpus.
+if not existing:
+    _publish(ledger, payload)
+out.mkdir(exist_ok=True)
+for p in pending:
+    shutil.move(str(p), str(out / p.name))
+moved = len(pending)
 print(f"moved {moved} of {len(uids)} manually rejected assets to {out}")
+print(f"manual exclusion ledger: {ledger} (DL-106; source {payload['source_ledger']['sha256']})")
 PYEOF
 $PY -c "
 from metafind.data.annotate_run import rebuild_index; from metafind import paths

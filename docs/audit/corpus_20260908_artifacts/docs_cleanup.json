@@ -1,0 +1,1074 @@
+{
+  "timestamp": 1788805539.2598345,
+  "scope": "User authorized docs cleanup; paper/protected content and frozen validation archives retained",
+  "root_markdown_before": 37,
+  "active_guides": [
+    "CUSTOM_TABLE1_EVALUATION.md",
+    "DATA_FLOW.md",
+    "IDesign_INPUTS.md",
+    "RAW_SCENE_INPUTS.md",
+    "README.md",
+    "SCENE_COMPOSITION.md",
+    "SCENE_PLACEMENT.md",
+    "SCENE_SCORES.md",
+    "SCENE_SEMANTICS.md"
+  ],
+  "moves": [
+    {
+      "from": "docs/TABLE1_REPORT_20260904.md",
+      "to": "docs/history/TABLE1_REPORT_20260904.md",
+      "original_sha256": "982fa9a58c66c3d02739b403a63c047994cac75c2eadaa1129316c51d8e1c05c",
+      "new_sha256": "982fa9a58c66c3d02739b403a63c047994cac75c2eadaa1129316c51d8e1c05c",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/NOTE_20260905_METAFIND_PAPER_FULL_READ.md",
+      "to": "docs/history/NOTE_20260905_METAFIND_PAPER_FULL_READ.md",
+      "original_sha256": "ffd7654c0667870b5d30427a3b26ccc11f5aa525c66daa9b902dfe03583a4a5d",
+      "new_sha256": "ffd7654c0667870b5d30427a3b26ccc11f5aa525c66daa9b902dfe03583a4a5d",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/REPRODUCTION_SCENE_REVIEW_20260908.md",
+      "to": "docs/history/REPRODUCTION_SCENE_REVIEW_20260908.md",
+      "original_sha256": "fb0034b8a05332ff99b71d04623b8075b4b23ad9a83e2d1723291423c3865f5a",
+      "new_sha256": "c5843cc94e3dc47355d3154daf697a45956029a64a8497257b41eaa8975a64bc",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/REPRODUCTION_CONTINUATION_20260907.md",
+      "to": "docs/history/REPRODUCTION_CONTINUATION_20260907.md",
+      "original_sha256": "23f96255922f96dd8a81bb05f70ec997755a1517cff2885d8d0cc64b8fe48180",
+      "new_sha256": "651d07b042ee83ee4c26b8aa2e4f48ee914766c6206d2ea6e9ba24e8f5d388e2",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/NOTE_20260904_ULIP2_CHECK_AND_STAGE_SUMMARY.md",
+      "to": "docs/history/NOTE_20260904_ULIP2_CHECK_AND_STAGE_SUMMARY.md",
+      "original_sha256": "c9794f8014bd4fa89567d731ab589003beca298fca02b9656a216fbcc5300d32",
+      "new_sha256": "c9794f8014bd4fa89567d731ab589003beca298fca02b9656a216fbcc5300d32",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/ESSGNN_DIM_REVIEW.md",
+      "to": "docs/history/ESSGNN_DIM_REVIEW.md",
+      "original_sha256": "edeaf0406952dbe2383e7f4b70db48d9dc2ac560a8e934409af9f5431c09b66c",
+      "new_sha256": "edeaf0406952dbe2383e7f4b70db48d9dc2ac560a8e934409af9f5431c09b66c",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/STAGE1_ARCHITECTURE_EQUATIONS_20260905.md",
+      "to": "docs/history/STAGE1_ARCHITECTURE_EQUATIONS_20260905.md",
+      "original_sha256": "f699f19fa31ac15c2f7812c245f34aebaa67085236fd54690cca0950293fb5e4",
+      "new_sha256": "f699f19fa31ac15c2f7812c245f34aebaa67085236fd54690cca0950293fb5e4",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/_rules_preamble.md",
+      "to": "docs/history/_rules_preamble.md",
+      "original_sha256": "ea7c56c13798273c76cfd06258b51588ecf9978f28dc8f6a1924bbf7ce228c7e",
+      "new_sha256": "ea7c56c13798273c76cfd06258b51588ecf9978f28dc8f6a1924bbf7ce228c7e",
+      "content_policy": "exact bytes preserved"
+    },
+    {
+      "from": "docs/METAFIND_NOTEBOOK.md",
+      "to": "docs/history/METAFIND_NOTEBOOK.md",
+      "original_sha256": "c47523525e0a64d9510078b945382aca3ef2ef251812ca50824a03fb753cfad7",
+      "new_sha256": "3e4d80dca9c9e4924439d74a5e571de80eac07e684ead803b6d3d61644f4c2e4",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/CODEX_REVIEW_BRIEF_20260828.md",
+      "to": "docs/history/CODEX_REVIEW_BRIEF_20260828.md",
+      "original_sha256": "dc6a4cebebe53a91d12cb5b9062e1ca19008159810d722974979672b302970cd",
+      "new_sha256": "dc6a4cebebe53a91d12cb5b9062e1ca19008159810d722974979672b302970cd",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/PROGRESS.md",
+      "to": "docs/history/PROGRESS.md",
+      "original_sha256": "ec5ed39e2cc01c93d1f12f85c2a0bcfead9b67abe2e94d613c30bafcb013bcf0",
+      "new_sha256": "a52396cb344be36e35c2430e7ad7f302b54a37be3025c5d0db86e521888abcda",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/REVIEW_BRIEF_20260902.md",
+      "to": "docs/history/REVIEW_BRIEF_20260902.md",
+      "original_sha256": "8a64011e791c0715f8744add0298ee67053bc6b5e5ff27d9baccf7cf4f2bbb32",
+      "new_sha256": "8a64011e791c0715f8744add0298ee67053bc6b5e5ff27d9baccf7cf4f2bbb32",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/TABLE1_REPORT_20260905_v2.md",
+      "to": "docs/history/TABLE1_REPORT_20260905_v2.md",
+      "original_sha256": "6fc37ce008d9795433300eec96631fed1f4efa29627c3ef5aade0fb52cb2f8f4",
+      "new_sha256": "4a67e05c223c73aa513efbb59f1a797338428cc91d44feafd754cc57a2ee6963",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/NOTE_20260904_TEXT2SHAPE_READ.md",
+      "to": "docs/history/NOTE_20260904_TEXT2SHAPE_READ.md",
+      "original_sha256": "b017d07d8b0a81ae69b024845e610b4aba0440d652e912efcf86f91f54b16924",
+      "new_sha256": "b017d07d8b0a81ae69b024845e610b4aba0440d652e912efcf86f91f54b16924",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/CLEANUP_REPORT_20260907.md",
+      "to": "docs/history/CLEANUP_REPORT_20260907.md",
+      "original_sha256": "2349b0a9cdbd319331330e3b69e2948fe573c2d44d30746f2c6ad747ca6ce03a",
+      "new_sha256": "e6a70eccb01290b10ad11fd11c39dfa6ddd5063cc94f0707c4b84175e6ffa320",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/NOTE_20260905_OTHER_PAPERS_RETRIEVAL_PROTOCOLS.md",
+      "to": "docs/history/NOTE_20260905_OTHER_PAPERS_RETRIEVAL_PROTOCOLS.md",
+      "original_sha256": "a63428d277f239f57492c936c9aba9e158ec641ca839e685bd1a6769da7ee8b6",
+      "new_sha256": "b3aa6e44d9c0869e0293e36c18a9e9b6a8202599e867b178fb0fd12ea3fbc910",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/REPRODUCTION_TRAINING_REVIEW_20260908.md",
+      "to": "docs/history/REPRODUCTION_TRAINING_REVIEW_20260908.md",
+      "original_sha256": "e8e05cadc2533fa7fdcc43949531d8c365721f6d6f224e447498ec8f4b967790",
+      "new_sha256": "de313532588a44b331799ad6e682d13efee54b3c6c0812a1e979eecf1f8179a1",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/NOTE_20260904_ULIP2_FULL_READ.md",
+      "to": "docs/history/NOTE_20260904_ULIP2_FULL_READ.md",
+      "original_sha256": "d2083545fb057674a8e25eac6da6d1e156a1ada2bf9f5136c1545c3203e0c7fa",
+      "new_sha256": "d2083545fb057674a8e25eac6da6d1e156a1ada2bf9f5136c1545c3203e0c7fa",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/TABLE1_REPORT_20260906_v3.md",
+      "to": "docs/history/TABLE1_REPORT_20260906_v3.md",
+      "original_sha256": "8678a51c12830c8c7a63008527e984d0ed5d4b595cb1814a20cfd3deadb1d491",
+      "new_sha256": "1d1fec300b67181e887b3909074a6753bc651f1b69069db3e161f15020013c75",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/DATASET_REBUILD_PLAN_20260906.md",
+      "to": "docs/history/DATASET_REBUILD_PLAN_20260906.md",
+      "original_sha256": "46c5f2c773e901cf79573a452d2d8273c78d404b8395acde6e85ec5bb9faf337",
+      "new_sha256": "46c5f2c773e901cf79573a452d2d8273c78d404b8395acde6e85ec5bb9faf337",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/REPRODUCTION_REVIEW_20260907.md",
+      "to": "docs/history/REPRODUCTION_REVIEW_20260907.md",
+      "original_sha256": "883d062870c25de6f6055d293154ce8f310de11e5704918610a7760d13c67780",
+      "new_sha256": "327f38d9ec7434daaead26d737d96e8d8624be0b3a2b4787ec7761fd27870c64",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/REPRODUCTION_RUNTIME_REVIEW_20260907.md",
+      "to": "docs/history/REPRODUCTION_RUNTIME_REVIEW_20260907.md",
+      "original_sha256": "2fb9b02c111c249486bf11cf07d6e447dbbbdf5399cd3891fb6b19027a81e476",
+      "new_sha256": "4754b9775ca764a0163b41806fe1d63e44fda185ab31ca6da430fa9baa6c65c5",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/PAPER_PIPELINE_FULL_20260905.md",
+      "to": "docs/history/PAPER_PIPELINE_FULL_20260905.md",
+      "original_sha256": "a7a597c88026f271c45355d35fbcd9cf6c4d512db326b9a09008049533074f81",
+      "new_sha256": "a7a597c88026f271c45355d35fbcd9cf6c4d512db326b9a09008049533074f81",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/RULES_SNAPSHOT.md",
+      "to": "docs/history/RULES_SNAPSHOT.md",
+      "original_sha256": "ad01559852fd0b73dea5654b01bb27318cf16b1cefc62364bb8e7a6a08220c6f",
+      "new_sha256": "ad01559852fd0b73dea5654b01bb27318cf16b1cefc62364bb8e7a6a08220c6f",
+      "content_policy": "exact bytes preserved"
+    },
+    {
+      "from": "docs/NOTE_20260905_TABLE1_WHAT_IT_MEASURES.md",
+      "to": "docs/history/NOTE_20260905_TABLE1_WHAT_IT_MEASURES.md",
+      "original_sha256": "05dda69563e19e928122dba20b2b47112c401067ef540af4510d2a264fab1fef",
+      "new_sha256": "77ea1f565842b841310f9b7ab157c52f2d452b84e30f03df16059fd75e7c06c6",
+      "content_policy": "only relative Markdown destinations updated"
+    },
+    {
+      "from": "docs/CODE_REPAIR_REPORT_20260907.md",
+      "to": "docs/history/CODE_REPAIR_REPORT_20260907.md",
+      "original_sha256": "3f2bbbbaf57ed30692a98944839b082bccd53686c63a93a89a17c712fc249bc4",
+      "new_sha256": "2b1c6c75bd35aa512682d909ce5df718990cf630293a0f5a5fb497d300bebf39",
+      "content_policy": "only relative Markdown destinations updated"
+    }
+  ],
+  "deletions": [
+    {
+      "path": "docs/NOTE_20260904_ULIP2_TRAINING_READ.md",
+      "sha256": "16bc3d2fab98d871e079fcd149bb5e58a60147fdf9f62b11283bfe8e038fff0c",
+      "bytes": 6654,
+      "reason": "Covered by NOTE_20260904_ULIP2_FULL_READ.md; both explicitly identify the latter as replacement."
+    },
+    {
+      "path": "docs/G3_MANUAL_EXCLUSION_PROPOSAL.md",
+      "sha256": "5f578cc828687990f8ebad5443f79cad0a39af072f98d968fb160cc4b1e83ed0",
+      "bytes": 2209,
+      "reason": "Proposal approved by user; exact decision and formal accounting retained in workflow/DECISION_LEDGER.md DL-106."
+    }
+  ],
+  "link_updates": [
+    {
+      "path": "docs/CUSTOM_TABLE1_EVALUATION.md",
+      "changes": [
+        {
+          "old": "REPRODUCTION_RUNTIME_REVIEW_20260907.md",
+          "new": "history/REPRODUCTION_RUNTIME_REVIEW_20260907.md"
+        },
+        {
+          "old": "REPRODUCTION_TRAINING_REVIEW_20260908.md",
+          "new": "history/REPRODUCTION_TRAINING_REVIEW_20260908.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/REPRODUCTION_SCENE_REVIEW_20260908.md",
+      "changes": [
+        {
+          "old": "CLEANUP_REPORT_20260907.md",
+          "new": "CLEANUP_REPORT_20260907.md"
+        },
+        {
+          "old": "REPRODUCTION_REVIEW_20260907.md",
+          "new": "REPRODUCTION_REVIEW_20260907.md"
+        },
+        {
+          "old": "REPRODUCTION_RUNTIME_REVIEW_20260907.md",
+          "new": "REPRODUCTION_RUNTIME_REVIEW_20260907.md"
+        },
+        {
+          "old": "REPRODUCTION_TRAINING_REVIEW_20260908.md",
+          "new": "REPRODUCTION_TRAINING_REVIEW_20260908.md"
+        },
+        {
+          "old": "paper/metafind_source/2methdology.tex:109",
+          "new": "../paper/metafind_source/2methdology.tex:109"
+        },
+        {
+          "old": "paper/metafind_source/2methdology.tex:117",
+          "new": "../paper/metafind_source/2methdology.tex:117"
+        },
+        {
+          "old": "paper/metafind_source/3experiments.tex:15",
+          "new": "../paper/metafind_source/3experiments.tex:15"
+        },
+        {
+          "old": "../metafind/scene/compose.py:49",
+          "new": "../../metafind/scene/compose.py:49"
+        },
+        {
+          "old": "../metafind/scene/placement.py:40",
+          "new": "../../metafind/scene/placement.py:40"
+        },
+        {
+          "old": "audit/reproduction_scene_real_20260908_cpu.log",
+          "new": "../audit/reproduction_scene_real_20260908_cpu.log"
+        },
+        {
+          "old": "audit/reproduction_scene_real_20260908_cpu_execution.json",
+          "new": "../audit/reproduction_scene_real_20260908_cpu_execution.json"
+        },
+        {
+          "old": "../tests/eval/test_scene_composition.py:176",
+          "new": "../../tests/eval/test_scene_composition.py:176"
+        },
+        {
+          "old": "audit/reproduction_scene_real_20260908_graph.log",
+          "new": "../audit/reproduction_scene_real_20260908_graph.log"
+        },
+        {
+          "old": "audit/reproduction_scene_real_20260908_final_checks.json",
+          "new": "../audit/reproduction_scene_real_20260908_final_checks.json"
+        },
+        {
+          "old": "audit/scene_real_20260908_artifacts/README.md",
+          "new": "../audit/scene_real_20260908_artifacts/README.md"
+        },
+        {
+          "old": "audit/scene_real_20260908_artifacts/GALLERY_DIAGNOSTIC.md",
+          "new": "../audit/scene_real_20260908_artifacts/GALLERY_DIAGNOSTIC.md"
+        },
+        {
+          "old": "audit/scene_real_20260908_artifacts/independent_geometry/verified_geometry.json",
+          "new": "../audit/scene_real_20260908_artifacts/independent_geometry/verified_geometry.json"
+        },
+        {
+          "old": "audit/scene_real_20260908_artifacts/verification.json",
+          "new": "../audit/scene_real_20260908_artifacts/verification.json"
+        },
+        {
+          "old": "audit/scene_real_20260908_artifacts/blender_output/view_000.png",
+          "new": "../audit/scene_real_20260908_artifacts/blender_output/view_000.png"
+        },
+        {
+          "old": "paper/metafind_source/SOURCE_MANIFEST.json",
+          "new": "../paper/metafind_source/SOURCE_MANIFEST.json"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/README.md",
+          "new": "../audit/validation_artifacts_20260907_08/README.md"
+        },
+        {
+          "old": "audit/scene_real_20260908_artifacts/README.md",
+          "new": "../audit/scene_real_20260908_artifacts/README.md"
+        },
+        {
+          "old": "audit/reproduction_scene_real_20260908_publication_checks.json",
+          "new": "../audit/reproduction_scene_real_20260908_publication_checks.json"
+        },
+        {
+          "old": "audit/reproduction_scene_real_20260908_status.json",
+          "new": "../audit/reproduction_scene_real_20260908_status.json"
+        },
+        {
+          "old": "audit/reproduction_scene_real_20260908_final_checks.json",
+          "new": "../audit/reproduction_scene_real_20260908_final_checks.json"
+        }
+      ]
+    },
+    {
+      "path": "docs/DATA_FLOW.md",
+      "changes": [
+        {
+          "old": "REPRODUCTION_SCENE_REVIEW_20260908.md",
+          "new": "history/REPRODUCTION_SCENE_REVIEW_20260908.md"
+        },
+        {
+          "old": "CODE_REPAIR_REPORT_20260907.md",
+          "new": "history/CODE_REPAIR_REPORT_20260907.md"
+        },
+        {
+          "old": "REPRODUCTION_TRAINING_REVIEW_20260908.md",
+          "new": "history/REPRODUCTION_TRAINING_REVIEW_20260908.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/REPRODUCTION_CONTINUATION_20260907.md",
+      "changes": [
+        {
+          "old": "REPRODUCTION_REVIEW_20260907.md",
+          "new": "REPRODUCTION_REVIEW_20260907.md"
+        },
+        {
+          "old": "audit/formula_review_20260907.md",
+          "new": "../audit/formula_review_20260907.md"
+        },
+        {
+          "old": "IDesign_INPUTS.md",
+          "new": "../IDesign_INPUTS.md"
+        },
+        {
+          "old": "RAW_SCENE_INPUTS.md",
+          "new": "../RAW_SCENE_INPUTS.md"
+        },
+        {
+          "old": "SCENE_SEMANTICS.md",
+          "new": "../SCENE_SEMANTICS.md"
+        },
+        {
+          "old": "SCENE_COMPOSITION.md",
+          "new": "../SCENE_COMPOSITION.md"
+        },
+        {
+          "old": "SCENE_PLACEMENT.md",
+          "new": "../SCENE_PLACEMENT.md"
+        },
+        {
+          "old": "audit/scene_pipeline_20260907.md",
+          "new": "../audit/scene_pipeline_20260907.md"
+        },
+        {
+          "old": "audit/reproduction_continuation_20260907_cpu_final.log",
+          "new": "../audit/reproduction_continuation_20260907_cpu_final.log"
+        },
+        {
+          "old": "audit/reproduction_continuation_20260907_graph_final.log",
+          "new": "../audit/reproduction_continuation_20260907_graph_final.log"
+        },
+        {
+          "old": "audit/reproduction_continuation_20260907_checks.json",
+          "new": "../audit/reproduction_continuation_20260907_checks.json"
+        },
+        {
+          "old": "audit/scene_pipeline_20260907_artifacts/view_000.png",
+          "new": "../audit/scene_pipeline_20260907_artifacts/view_000.png"
+        },
+        {
+          "old": "audit/scene_pipeline_20260907_artifacts/scene.blend",
+          "new": "../audit/scene_pipeline_20260907_artifacts/scene.blend"
+        },
+        {
+          "old": "audit/scene_pipeline_20260907_artifacts/result.json",
+          "new": "../audit/scene_pipeline_20260907_artifacts/result.json"
+        },
+        {
+          "old": "audit/scene_pipeline_20260907_artifacts/blend_geometry.json",
+          "new": "../audit/scene_pipeline_20260907_artifacts/blend_geometry.json"
+        },
+        {
+          "old": "audit/scene_pipeline_20260907_artifacts/evidence.json",
+          "new": "../audit/scene_pipeline_20260907_artifacts/evidence.json"
+        },
+        {
+          "old": "audit/reproduction_continuation_20260907_cpu.log",
+          "new": "../audit/reproduction_continuation_20260907_cpu.log"
+        },
+        {
+          "old": "CUSTOM_TABLE1_EVALUATION.md",
+          "new": "../CUSTOM_TABLE1_EVALUATION.md"
+        },
+        {
+          "old": "CUSTOM_TABLE1_EVALUATION.md",
+          "new": "../CUSTOM_TABLE1_EVALUATION.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/METAFIND_NOTEBOOK.md",
+      "changes": [
+        {
+          "old": "DATA_FLOW.md",
+          "new": "../DATA_FLOW.md"
+        },
+        {
+          "old": "CUSTOM_TABLE1_EVALUATION.md",
+          "new": "../CUSTOM_TABLE1_EVALUATION.md"
+        },
+        {
+          "old": "CLEANUP_REPORT_20260907.md",
+          "new": "CLEANUP_REPORT_20260907.md"
+        },
+        {
+          "old": "audit/STAGE1_FRESH_AUDIT_20260903.md",
+          "new": "../audit/STAGE1_FRESH_AUDIT_20260903.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/SCENE_PLACEMENT.md",
+      "changes": [
+        {
+          "old": "REPRODUCTION_SCENE_REVIEW_20260908.md",
+          "new": "history/REPRODUCTION_SCENE_REVIEW_20260908.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/PROGRESS.md",
+      "changes": [
+        {
+          "old": "DATA_FLOW.md",
+          "new": "../DATA_FLOW.md"
+        },
+        {
+          "old": "CUSTOM_TABLE1_EVALUATION.md",
+          "new": "../CUSTOM_TABLE1_EVALUATION.md"
+        },
+        {
+          "old": "CLEANUP_REPORT_20260907.md",
+          "new": "CLEANUP_REPORT_20260907.md"
+        },
+        {
+          "old": "../AGENTS.md",
+          "new": "../../AGENTS.md"
+        },
+        {
+          "old": "paper/metafind_source/3experiments.tex",
+          "new": "../paper/metafind_source/3experiments.tex"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/TABLE1_REPORT_20260905_v2.md",
+      "changes": [
+        {
+          "old": "CUSTOM_TABLE1_EVALUATION.md",
+          "new": "../CUSTOM_TABLE1_EVALUATION.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/README.md",
+      "changes": [
+        {
+          "old": "REPRODUCTION_REVIEW_20260907.md",
+          "new": "history/REPRODUCTION_REVIEW_20260907.md"
+        },
+        {
+          "old": "REPRODUCTION_CONTINUATION_20260907.md",
+          "new": "history/REPRODUCTION_CONTINUATION_20260907.md"
+        },
+        {
+          "old": "REPRODUCTION_RUNTIME_REVIEW_20260907.md",
+          "new": "history/REPRODUCTION_RUNTIME_REVIEW_20260907.md"
+        },
+        {
+          "old": "REPRODUCTION_TRAINING_REVIEW_20260908.md",
+          "new": "history/REPRODUCTION_TRAINING_REVIEW_20260908.md"
+        },
+        {
+          "old": "REPRODUCTION_SCENE_REVIEW_20260908.md",
+          "new": "history/REPRODUCTION_SCENE_REVIEW_20260908.md"
+        },
+        {
+          "old": "REPRODUCTION_CORPUS_REVIEW_20260908.md",
+          "new": "audit/REPRODUCTION_CORPUS_REVIEW_20260908.md"
+        },
+        {
+          "old": "CLEANUP_REPORT_20260907.md",
+          "new": "history/CLEANUP_REPORT_20260907.md"
+        },
+        {
+          "old": "PROGRESS.md",
+          "new": "history/PROGRESS.md"
+        },
+        {
+          "old": "METAFIND_NOTEBOOK.md",
+          "new": "history/METAFIND_NOTEBOOK.md"
+        },
+        {
+          "old": "CODE_REPAIR_REPORT_20260907.md",
+          "new": "history/CODE_REPAIR_REPORT_20260907.md"
+        },
+        {
+          "old": "NOTE_20260905_OTHER_PAPERS_RETRIEVAL_PROTOCOLS.md",
+          "new": "history/NOTE_20260905_OTHER_PAPERS_RETRIEVAL_PROTOCOLS.md"
+        },
+        {
+          "old": "NOTE_20260905_TABLE1_WHAT_IT_MEASURES.md",
+          "new": "history/NOTE_20260905_TABLE1_WHAT_IT_MEASURES.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/CLEANUP_REPORT_20260907.md",
+      "changes": [
+        {
+          "old": "../tests/README.md",
+          "new": "../../tests/README.md"
+        },
+        {
+          "old": "../tools/probes/README.md",
+          "new": "../../tools/probes/README.md"
+        },
+        {
+          "old": "../README.md",
+          "new": "../../README.md"
+        },
+        {
+          "old": "README.md",
+          "new": "../README.md"
+        },
+        {
+          "old": "DATA_FLOW.md",
+          "new": "../DATA_FLOW.md"
+        },
+        {
+          "old": "audit/cleanup_20260907_checks.json",
+          "new": "../audit/cleanup_20260907_checks.json"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/NOTE_20260905_OTHER_PAPERS_RETRIEVAL_PROTOCOLS.md",
+      "changes": [
+        {
+          "old": "paper/openshape_source/sections/experiments.tex",
+          "new": "../paper/openshape_source/sections/experiments.tex"
+        },
+        {
+          "old": "paper/metafind_source/3experiments.tex",
+          "new": "../paper/metafind_source/3experiments.tex"
+        },
+        {
+          "old": "paper/metafind_source/2methdology.tex",
+          "new": "../paper/metafind_source/2methdology.tex"
+        },
+        {
+          "old": "CUSTOM_TABLE1_EVALUATION.md",
+          "new": "../CUSTOM_TABLE1_EVALUATION.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/REPRODUCTION_TRAINING_REVIEW_20260908.md",
+      "changes": [
+        {
+          "old": "REPRODUCTION_RUNTIME_REVIEW_20260907.md",
+          "new": "REPRODUCTION_RUNTIME_REVIEW_20260907.md"
+        },
+        {
+          "old": "paper/metafind_source/appendix.tex:32",
+          "new": "../paper/metafind_source/appendix.tex:32"
+        },
+        {
+          "old": "paper/metafind_source/appendix.tex:50",
+          "new": "../paper/metafind_source/appendix.tex:50"
+        },
+        {
+          "old": "paper/metafind_source/appendix.tex:65",
+          "new": "../paper/metafind_source/appendix.tex:65"
+        },
+        {
+          "old": "paper/metafind_source/3experiments.tex:94",
+          "new": "../paper/metafind_source/3experiments.tex:94"
+        },
+        {
+          "old": "paper/metafind_source/3experiments.tex:143",
+          "new": "../paper/metafind_source/3experiments.tex:143"
+        },
+        {
+          "old": "paper/metafind_source/3experiments.tex:15",
+          "new": "../paper/metafind_source/3experiments.tex:15"
+        },
+        {
+          "old": "paper/metafind_source/3experiments.tex:24",
+          "new": "../paper/metafind_source/3experiments.tex:24"
+        },
+        {
+          "old": "../metafind/train/stage2.py:555",
+          "new": "../../metafind/train/stage2.py:555"
+        },
+        {
+          "old": "audit/reproduction_training_20260908_cpu.log",
+          "new": "../audit/reproduction_training_20260908_cpu.log"
+        },
+        {
+          "old": "audit/reproduction_training_20260908_graph.log",
+          "new": "../audit/reproduction_training_20260908_graph.log"
+        },
+        {
+          "old": "../metafind/eval/run_retrieval.py:1084",
+          "new": "../../metafind/eval/run_retrieval.py:1084"
+        },
+        {
+          "old": "audit/reproduction_training_20260908_overlay.log",
+          "new": "../audit/reproduction_training_20260908_overlay.log"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/stage1_cpu_real_20260908/execution.json",
+          "new": "../audit/validation_artifacts_20260907_08/stage1_cpu_real_20260908/execution.json"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/stage1_cpu_real_20260908/execution.log",
+          "new": "../audit/validation_artifacts_20260907_08/stage1_cpu_real_20260908/execution.log"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/stage1_cpu_real_20260908/verification.json",
+          "new": "../audit/validation_artifacts_20260907_08/stage1_cpu_real_20260908/verification.json"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/stage2_cpu_real_20260908/README.md",
+          "new": "../audit/validation_artifacts_20260907_08/stage2_cpu_real_20260908/README.md"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/stage2_cpu_real_20260908/optimizer_observation.json",
+          "new": "../audit/validation_artifacts_20260907_08/stage2_cpu_real_20260908/optimizer_observation.json"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/stage2_cpu_real_20260908/restore_result.json",
+          "new": "../audit/validation_artifacts_20260907_08/stage2_cpu_real_20260908/restore_result.json"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/custom_table1_cpu_new_stages_20260908/execution.json",
+          "new": "../audit/validation_artifacts_20260907_08/custom_table1_cpu_new_stages_20260908/execution.json"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/custom_table1_cpu_new_stages_20260908/evaluation/table.md",
+          "new": "../audit/validation_artifacts_20260907_08/custom_table1_cpu_new_stages_20260908/evaluation/table.md"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/custom_table1_cpu_new_stages_20260908/verification.json",
+          "new": "../audit/validation_artifacts_20260907_08/custom_table1_cpu_new_stages_20260908/verification.json"
+        },
+        {
+          "old": "../tests/models/test_essgnn.py:609",
+          "new": "../../tests/models/test_essgnn.py:609"
+        },
+        {
+          "old": "audit/formula_review_20260907.md",
+          "new": "../audit/formula_review_20260907.md"
+        },
+        {
+          "old": "paper/metafind_source/3experiments.tex:94",
+          "new": "../paper/metafind_source/3experiments.tex:94"
+        },
+        {
+          "old": "../metafind/models/resolve_stage1.py:625",
+          "new": "../../metafind/models/resolve_stage1.py:625"
+        },
+        {
+          "old": "../metafind/train/stage2.py:1001",
+          "new": "../../metafind/train/stage2.py:1001"
+        },
+        {
+          "old": "../metafind/eval/run_retrieval.py:1050",
+          "new": "../../metafind/eval/run_retrieval.py:1050"
+        },
+        {
+          "old": "../metafind/scene/compose.py:209",
+          "new": "../../metafind/scene/compose.py:209"
+        },
+        {
+          "old": "audit/reproduction_training_20260908_checks.json",
+          "new": "../audit/reproduction_training_20260908_checks.json"
+        },
+        {
+          "old": "audit/reproduction_training_20260908_status.json",
+          "new": "../audit/reproduction_training_20260908_status.json"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/TABLE1_REPORT_20260906_v3.md",
+      "changes": [
+        {
+          "old": "CUSTOM_TABLE1_EVALUATION.md",
+          "new": "../CUSTOM_TABLE1_EVALUATION.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/RAW_SCENE_INPUTS.md",
+      "changes": [
+        {
+          "old": "REPRODUCTION_SCENE_REVIEW_20260908.md",
+          "new": "history/REPRODUCTION_SCENE_REVIEW_20260908.md"
+        },
+        {
+          "old": "REPRODUCTION_SCENE_REVIEW_20260908.md",
+          "new": "history/REPRODUCTION_SCENE_REVIEW_20260908.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/SCENE_COMPOSITION.md",
+      "changes": [
+        {
+          "old": "REPRODUCTION_SCENE_REVIEW_20260908.md",
+          "new": "history/REPRODUCTION_SCENE_REVIEW_20260908.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/REPRODUCTION_REVIEW_20260907.md",
+      "changes": [
+        {
+          "old": "REPRODUCTION_CONTINUATION_20260907.md",
+          "new": "REPRODUCTION_CONTINUATION_20260907.md"
+        },
+        {
+          "old": "CLEANUP_REPORT_20260907.md",
+          "new": "CLEANUP_REPORT_20260907.md"
+        },
+        {
+          "old": "paper/metafind_source/neurips_2025.tex",
+          "new": "../paper/metafind_source/neurips_2025.tex"
+        },
+        {
+          "old": "paper/metafind_source/2methdology.tex",
+          "new": "../paper/metafind_source/2methdology.tex"
+        },
+        {
+          "old": "paper/metafind_source/3experiments.tex",
+          "new": "../paper/metafind_source/3experiments.tex"
+        },
+        {
+          "old": "paper/metafind_source/4backgound.tex",
+          "new": "../paper/metafind_source/4backgound.tex"
+        },
+        {
+          "old": "paper/metafind_source/appendix.tex",
+          "new": "../paper/metafind_source/appendix.tex"
+        },
+        {
+          "old": "graph/graph_spec.yaml",
+          "new": "../graph/graph_spec.yaml"
+        },
+        {
+          "old": "../data/outputs/essgnn_edge_protocol.json",
+          "new": "../../../metafind/metafind_data/outputs/essgnn_edge_protocol.json"
+        },
+        {
+          "old": "DATA_FLOW.md",
+          "new": "../DATA_FLOW.md"
+        },
+        {
+          "old": "audit/reproduction_20260907_checks.json",
+          "new": "../audit/reproduction_20260907_checks.json"
+        },
+        {
+          "old": "../tests/models/test_essgnn.py",
+          "new": "../../tests/models/test_essgnn.py"
+        },
+        {
+          "old": "audit/reproduction_20260907_cpu.log",
+          "new": "../audit/reproduction_20260907_cpu.log"
+        },
+        {
+          "old": "audit/reproduction_20260907_graph.log",
+          "new": "../audit/reproduction_20260907_graph.log"
+        },
+        {
+          "old": "CUSTOM_TABLE1_EVALUATION.md",
+          "new": "../CUSTOM_TABLE1_EVALUATION.md"
+        },
+        {
+          "old": "../README.md",
+          "new": "../../README.md"
+        },
+        {
+          "old": "audit/reproduction_20260907_checks.json",
+          "new": "../audit/reproduction_20260907_checks.json"
+        },
+        {
+          "old": "../AGENTS.md",
+          "new": "../../AGENTS.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/REPRODUCTION_RUNTIME_REVIEW_20260907.md",
+      "changes": [
+        {
+          "old": "REPRODUCTION_CONTINUATION_20260907.md",
+          "new": "REPRODUCTION_CONTINUATION_20260907.md"
+        },
+        {
+          "old": "paper/metafind_source/3experiments.tex:15",
+          "new": "../paper/metafind_source/3experiments.tex:15"
+        },
+        {
+          "old": "../workflow/DECISION_LEDGER.md:6876",
+          "new": "../../workflow/DECISION_LEDGER.md:6876"
+        },
+        {
+          "old": "audit/reproduction_runtime_20260907_cpu.log",
+          "new": "../audit/reproduction_runtime_20260907_cpu.log"
+        },
+        {
+          "old": "audit/reproduction_runtime_20260907_graph.log",
+          "new": "../audit/reproduction_runtime_20260907_graph.log"
+        },
+        {
+          "old": "audit/reproduction_runtime_20260907_checks.json",
+          "new": "../audit/reproduction_runtime_20260907_checks.json"
+        },
+        {
+          "old": "audit/reproduction_runtime_20260907_gallery_sources.json",
+          "new": "../audit/reproduction_runtime_20260907_gallery_sources.json"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/custom_table1_cpu_real_20260907/execution.json",
+          "new": "../audit/validation_artifacts_20260907_08/custom_table1_cpu_real_20260907/execution.json"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/custom_table1_cpu_real_20260907/protocol/protocol.json",
+          "new": "../audit/validation_artifacts_20260907_08/custom_table1_cpu_real_20260907/protocol/protocol.json"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/custom_table1_cpu_real_20260907/evaluation/results.json",
+          "new": "../audit/validation_artifacts_20260907_08/custom_table1_cpu_real_20260907/evaluation/results.json"
+        },
+        {
+          "old": "audit/validation_artifacts_20260907_08/custom_table1_cpu_real_20260907/execution.log",
+          "new": "../audit/validation_artifacts_20260907_08/custom_table1_cpu_real_20260907/execution.log"
+        },
+        {
+          "old": "../metafind/models/ulip_backbone.py:234",
+          "new": "../../metafind/models/ulip_backbone.py:234"
+        },
+        {
+          "old": "../metafind/vendor/ulip/models/ULIP_models.py:352",
+          "new": "../../metafind/vendor/ulip/models/ULIP_models.py:352"
+        },
+        {
+          "old": "../tools/status.py",
+          "new": "../../tools/status.py"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/NOTE_20260905_TABLE1_WHAT_IT_MEASURES.md",
+      "changes": [
+        {
+          "old": "CUSTOM_TABLE1_EVALUATION.md",
+          "new": "../CUSTOM_TABLE1_EVALUATION.md"
+        },
+        {
+          "old": "NOTE_20260905_OTHER_PAPERS_RETRIEVAL_PROTOCOLS.md",
+          "new": "NOTE_20260905_OTHER_PAPERS_RETRIEVAL_PROTOCOLS.md"
+        },
+        {
+          "old": "CUSTOM_TABLE1_EVALUATION.md",
+          "new": "../CUSTOM_TABLE1_EVALUATION.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/history/CODE_REPAIR_REPORT_20260907.md",
+      "changes": [
+        {
+          "old": "../tests/README.md",
+          "new": "../../tests/README.md"
+        },
+        {
+          "old": "CLEANUP_REPORT_20260907.md",
+          "new": "CLEANUP_REPORT_20260907.md"
+        },
+        {
+          "old": "audit/code_repair_20260907_checks.json",
+          "new": "../audit/code_repair_20260907_checks.json"
+        },
+        {
+          "old": "../metafind/train/stage1.py",
+          "new": "../../metafind/train/stage1.py"
+        },
+        {
+          "old": "../metafind/train/gallery_index.py",
+          "new": "../../metafind/train/gallery_index.py"
+        },
+        {
+          "old": "../metafind/data/semantic_edges.py",
+          "new": "../../metafind/data/semantic_edges.py"
+        },
+        {
+          "old": "../metafind/train/stage2.py",
+          "new": "../../metafind/train/stage2.py"
+        },
+        {
+          "old": "../metafind/eval/run_retrieval.py",
+          "new": "../../metafind/eval/run_retrieval.py"
+        },
+        {
+          "old": "../metafind/data/encode_text_image.py",
+          "new": "../../metafind/data/encode_text_image.py"
+        },
+        {
+          "old": "../tools/make_query_pack.py",
+          "new": "../../tools/make_query_pack.py"
+        },
+        {
+          "old": "../metafind/models/fusion.py",
+          "new": "../../metafind/models/fusion.py"
+        },
+        {
+          "old": "../metafind/data/pointclouds.py",
+          "new": "../../metafind/data/pointclouds.py"
+        },
+        {
+          "old": "../tools/materialize_split_dirs.py",
+          "new": "../../tools/materialize_split_dirs.py"
+        },
+        {
+          "old": "../tools/probes/exp_type_level_query.py",
+          "new": "../../tools/probes/exp_type_level_query.py"
+        },
+        {
+          "old": "../tools/build_dataset_manifest.py",
+          "new": "../../tools/build_dataset_manifest.py"
+        },
+        {
+          "old": "../tools/write_archive_manifest.py",
+          "new": "../../tools/write_archive_manifest.py"
+        },
+        {
+          "old": "../tools/chain_paper_stage1.sh",
+          "new": "../../tools/chain_paper_stage1.sh"
+        },
+        {
+          "old": "../tools/chain_paper_stage2.sh",
+          "new": "../../tools/chain_paper_stage2.sh"
+        },
+        {
+          "old": "paper/metafind_source/3experiments.tex",
+          "new": "../paper/metafind_source/3experiments.tex"
+        },
+        {
+          "old": "paper/metafind_source/2methdology.tex",
+          "new": "../paper/metafind_source/2methdology.tex"
+        }
+      ]
+    },
+    {
+      "path": "docs/SCENE_SEMANTICS.md",
+      "changes": [
+        {
+          "old": "REPRODUCTION_SCENE_REVIEW_20260908.md",
+          "new": "history/REPRODUCTION_SCENE_REVIEW_20260908.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/graph/README.md",
+      "changes": [
+        {
+          "old": "../REPRODUCTION_CORPUS_REVIEW_20260908.md",
+          "new": "../audit/REPRODUCTION_CORPUS_REVIEW_20260908.md"
+        }
+      ]
+    },
+    {
+      "path": "docs/audit/scene_pipeline_20260907.md",
+      "changes": [
+        {
+          "old": "../REPRODUCTION_RUNTIME_REVIEW_20260907.md",
+          "new": "../history/REPRODUCTION_RUNTIME_REVIEW_20260907.md"
+        }
+      ]
+    },
+    {
+      "path": "README.md",
+      "changes": [
+        {
+          "old": "docs/REPRODUCTION_CORPUS_REVIEW_20260908.md",
+          "new": "docs/audit/REPRODUCTION_CORPUS_REVIEW_20260908.md"
+        },
+        {
+          "old": "docs/REPRODUCTION_SCENE_REVIEW_20260908.md",
+          "new": "docs/history/REPRODUCTION_SCENE_REVIEW_20260908.md"
+        },
+        {
+          "old": "docs/REPRODUCTION_TRAINING_REVIEW_20260908.md",
+          "new": "docs/history/REPRODUCTION_TRAINING_REVIEW_20260908.md"
+        },
+        {
+          "old": "docs/CLEANUP_REPORT_20260907.md",
+          "new": "docs/history/CLEANUP_REPORT_20260907.md"
+        },
+        {
+          "old": "docs/CODE_REPAIR_REPORT_20260907.md",
+          "new": "docs/history/CODE_REPAIR_REPORT_20260907.md"
+        }
+      ]
+    },
+    {
+      "path": "tests/README.md",
+      "changes": [
+        {
+          "old": "../docs/REPRODUCTION_SCENE_REVIEW_20260908.md",
+          "new": "../docs/history/REPRODUCTION_SCENE_REVIEW_20260908.md"
+        },
+        {
+          "old": "../docs/REPRODUCTION_TRAINING_REVIEW_20260908.md",
+          "new": "../docs/history/REPRODUCTION_TRAINING_REVIEW_20260908.md"
+        }
+      ]
+    },
+    {
+      "path": "tools/probes/README.md",
+      "changes": [
+        {
+          "old": "../../docs/METAFIND_NOTEBOOK.md",
+          "new": "../../docs/history/METAFIND_NOTEBOOK.md"
+        }
+      ]
+    }
+  ],
+  "root_markdown_after": 9
+}

@@ -87,7 +87,7 @@ python -m metafind.scene.compose --manifest /path/to/manifest.json \
 
 [CPU 整合測試](../tests/eval/test_scene_composition.py) 使用真實的小型 QueryTower、fusion、ESSGNN 與手算期望，覆蓋逐步 context 改變檢索結果、singleton／empty context、U-30、cache 缺失、slot 身分、gallery 不變及 CLI 完整權重還原。它們不是實際 ULIP-2／200 scenes 的執行結果。
 
-下面的 model-only exporter 已接入 [原始查詢 exporter](RAW_SCENE_INPUTS.md)；另有 [I-Design JSON adapter](IDesign_INPUTS.md) 與 [GLB placement／CPU render](SCENE_PLACEMENT.md)。2026-09-08 已另跑真 ULIP／Gemma 的三 slot、六候選完整場景鏈，含 iterative／parallel／layout-off 對照，見 [執行證據](REPRODUCTION_SCENE_REVIEW_20260908.md)。正式 U-27 的 200 prompts／尺寸／物件數、judge 與 human 評分仍需各自處理；固定 slots 的檢索、已渲染和已正式評分是不同狀態。
+下面的 model-only exporter 已接入 [原始查詢 exporter](RAW_SCENE_INPUTS.md)；另有 [I-Design JSON adapter](IDesign_INPUTS.md) 與 [GLB placement／CPU render](SCENE_PLACEMENT.md)。2026-09-08 已另跑真 ULIP／Gemma 的三 slot、六候選完整場景鏈，含 iterative／parallel／layout-off 對照，見 [執行證據](history/REPRODUCTION_SCENE_REVIEW_20260908.md)。正式 U-27 的 200 prompts／尺寸／物件數、judge 與 human 評分仍需各自處理；固定 slots 的檢索、已渲染和已正式評分是不同狀態。
 
 ## 從既有 S1／S2 records 匯出模型
 

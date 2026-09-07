@@ -1,0 +1,27 @@
+{
+  "schema": "metafind.scene_judge_protocol.v1",
+  "status": "frozen",
+  "dimensions": [
+    "overall_aesthetic_and_atmosphere",
+    "color_scheme_and_material_choices",
+    "scene_coherence",
+    "realism_and_3d_geometric_consistency"
+  ],
+  "score_range": [
+    1,
+    5
+  ],
+  "model": {
+    "id": "gemma-4-12B-it",
+    "revision": "NOT_EXECUTED: artifact validation fixture only"
+  },
+  "prompt": "DIAGNOSTIC ONLY. No judge request is made. No prompt or rubric for formal evaluation is selected.",
+  "generation": {
+    "executed": false
+  },
+  "view_policy": "Artifact validation fixture: enumerate existing renders; no image is sent to a judge.",
+  "provenance": {
+    "classification": "IMPLEMENTATION CHOICE",
+    "scope": "Non-evaluation CLI diagnostic with zero ratings, not a research protocol decision."
+  }
+}

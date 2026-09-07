@@ -1,0 +1,79 @@
+{
+  "draft_sha256": "44b678bf66f30a048ab4474dd00b0ffc1ae74ffd8570de556213c25779fe8fe4",
+  "published_sha256": "0f842a12c299123ebe57cc5ffd7c6b7217b3a7208cc1624055aadd7fc1a1afea",
+  "table_shapes": [
+    {
+      "rows": 4,
+      "columns": 3
+    },
+    {
+      "rows": 8,
+      "columns": 4
+    },
+    {
+      "rows": 4,
+      "columns": 3
+    },
+    {
+      "rows": 8,
+      "columns": 3
+    },
+    {
+      "rows": 5,
+      "columns": 8
+    },
+    {
+      "rows": 5,
+      "columns": 5
+    },
+    {
+      "rows": 4,
+      "columns": 4
+    },
+    {
+      "rows": 9,
+      "columns": 3
+    },
+    {
+      "rows": 6,
+      "columns": 3
+    },
+    {
+      "rows": 12,
+      "columns": 3
+    }
+  ],
+  "headings": [
+    "## 1. 先分清楚三件事",
+    "## 2. 新自訂 Table 1：兩種觀測 × 三列模型 × 七種模態",
+    "### 2.1 七欄只改 query 可見模態",
+    "### 2.2 三列模型",
+    "### 2.3 兩個觀測版本",
+    "## 3. 固定 UID、GT、R@k 與同分規則",
+    "## 4. T＋I、T＋PC 為何偏高：目前能證明與不能證明的事",
+    "### 4.1 先保留真正的舊分數與條件",
+    "### 4.2 已有證據支持的機制",
+    "### 4.3 另一份單因素替換診斷支持到哪裡",
+    "### 4.4 仍然 UNKNOWN",
+    "## 5. 可以照做的 custom prepare → check → run",
+    "### 5.1 決定輸入檔，固定後再看分數",
+    "### 5.2 設定明確路徑",
+    "### 5.3 Prepare：CPU 準備觀測並凍結來源",
+    "### 5.4 Stage 1 完成後：先 check-only，再跑 mean＋S1",
+    "### 5.5 Stage 2 完成後：同一 protocol 跑三列",
+    "## 6. Stage 1 完成後，不只是一個 `.pt` 檔",
+    "## 7. 兩條自動等待鏈實際做了什麼",
+    "### 7.1 Stage 1 chain",
+    "### 7.2 A20 與 B 並非「同一批 query，只改 gallery 大小」",
+    "### 7.3 Stage 2 chain",
+    "## 8. Stage 2 資料依賴與訓練契約",
+    "### 8.1 不把 Objaverse UID 與 ProcTHOR assetId 混在一起",
+    "### 8.2 實際 S2 訓練設定",
+    "## 9. S2 完成後的兩條評估支線",
+    "### 9.1 Objaverse：S2-off 物件檢索",
+    "### 9.2 ProcTHOR：layout 的檢索診斷",
+    "## 10. 已完成的真實小型驗證，支持到哪裡",
+    "## 11. 下一步與驗收清單"
+  ],
+  "code_blocks": 8
+}

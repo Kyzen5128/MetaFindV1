@@ -12,7 +12,7 @@
 
 使用真 `no_layout` child；full ESSGNN 語義路徑由其他測試涵蓋。此測試不執行 I-Design planner／LLM、不訓練模型、不評量 retrieval quality，也不是完整 MetaFind／Table 2 實驗。
 
-上述是第一個 no-layout／Blender case 的範圍。2026-09-07 接續新增同檔第二個 **full-layout** case：真 tiny OpenCLIP tokenizer／forward／identity、實際 SG2 repair／degraded cache、缺 pair 拒發布、真 S1／S2 loader 與 manifest、ESSGNN 和三步 iterative retrieval。LLM 邊界仍為受控回應，沒有呼叫真 LLM；此 case 不再執行 Blender。成功 relation vector 與耗盡後 checkpoint 的 missing-edge token 會導致第三步 query embedding 差異，且同權重 layout-off 為另一個明確 counterfactual。最新整合證據見 [正式執行路徑審查](../REPRODUCTION_RUNTIME_REVIEW_20260907.md)。
+上述是第一個 no-layout／Blender case 的範圍。2026-09-07 接續新增同檔第二個 **full-layout** case：真 tiny OpenCLIP tokenizer／forward／identity、實際 SG2 repair／degraded cache、缺 pair 拒發布、真 S1／S2 loader 與 manifest、ESSGNN 和三步 iterative retrieval。LLM 邊界仍為受控回應，沒有呼叫真 LLM；此 case 不再執行 Blender。成功 relation vector 與耗盡後 checkpoint 的 missing-edge token 會導致第三步 query embedding 差異，且同權重 layout-off 為另一個明確 counterfactual。最新整合證據見 [正式執行路徑審查](../history/REPRODUCTION_RUNTIME_REVIEW_20260907.md)。
 
 斷言覆蓋：
 

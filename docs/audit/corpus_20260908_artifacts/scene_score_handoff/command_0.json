@@ -1,0 +1,20 @@
+{
+  "command": [
+    "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+    "-m",
+    "metafind.eval.scene_scores",
+    "import",
+    "--manifest",
+    "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/manifest.json",
+    "--protocol",
+    "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/diagnostic_protocol.json",
+    "--records",
+    "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/empty_submission.json",
+    "--out",
+    "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/imported.json"
+  ],
+  "returncode": 0,
+  "stdout": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/imported.json\n",
+  "stderr": "",
+  "elapsed_seconds": 0.08257818222045898
+}

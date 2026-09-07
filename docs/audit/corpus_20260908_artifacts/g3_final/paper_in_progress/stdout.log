@@ -1,0 +1,6 @@
+G3_object_corpus: BLOCKED_EVIDENCE (rc 3) -> /tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/G3_object_corpus.yaml
+  BLOCKED: splits: cannot read splits at /home/kyzen/metafind/metafind_data_paper/outputs/splits.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/splits.json'
+  BLOCKED: exclusions: annotation_exclusions ledger missing: /home/kyzen/metafind/metafind_data_paper/outputs/annotation_exclusions.json; explicit empty groups required when E is empty
+  BLOCKED: stage1_encoding_protocol: cannot read stage1_encoding_protocol at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json'
+  BLOCKED: stage1_protocol: cannot read stage1_protocol at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json'
+  BLOCKED: stage1_hyperparameters: cannot read stage1_hyperparameters at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json'

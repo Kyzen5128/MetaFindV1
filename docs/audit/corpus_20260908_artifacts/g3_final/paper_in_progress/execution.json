@@ -1,0 +1,48 @@
+{
+  "label": "paper_in_progress",
+  "command": [
+    "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+    "-B",
+    "-m",
+    "metafind.gates.g3_object_corpus",
+    "--outputs",
+    "/home/kyzen/metafind/metafind_data_paper/outputs",
+    "--manifest",
+    "/home/kyzen/metafind/metafind_data_paper/datasets/objaverse-lvis/lvis.json",
+    "--record",
+    "/tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/G3_object_corpus.yaml"
+  ],
+  "returncode": 3,
+  "elapsed_seconds": 0.838119858992286,
+  "stdout": "G3_object_corpus: BLOCKED_EVIDENCE (rc 3) -> /tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/G3_object_corpus.yaml\n  BLOCKED: splits: cannot read splits at /home/kyzen/metafind/metafind_data_paper/outputs/splits.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/splits.json'\n  BLOCKED: exclusions: annotation_exclusions ledger missing: /home/kyzen/metafind/metafind_data_paper/outputs/annotation_exclusions.json; explicit empty groups required when E is empty\n  BLOCKED: stage1_encoding_protocol: cannot read stage1_encoding_protocol at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json'\n  BLOCKED: stage1_protocol: cannot read stage1_protocol at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json'\n  BLOCKED: stage1_hyperparameters: cannot read stage1_hyperparameters at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json'\n",
+  "stderr": "",
+  "source_hashes": {
+    "metafind/gates/g3_object_corpus.py": "bfda9e24c07e65720e93e8e2afa3f3fc9416b11efd2a07c8765c2a269af57b24",
+    "tests/pipeline/test_object_corpus_gate.py": "b2432566e1edf0d13dced235d0aebca57941950332003b0869913334d4792680",
+    "docs/graph/validation_plan.yaml": "d7b5f5df229cffd9df4e790c1aa9735f0333728703d5c95e2d846cc4ad5fdf9a",
+    "docs/graph/node_registry.yaml": "89f6888c55f0cca2713be59cadf3adfdf7ed9d3ba237d3aa7c17c28ceba01290"
+  },
+  "input_hashes_before": {
+    "/home/kyzen/metafind/metafind_data_paper/datasets/objaverse-lvis/lvis.json": "ba1bb191e1d98252e19e59aa18185ea46b83d9955b28ba895133536974e8bf9f",
+    "/home/kyzen/metafind/metafind_data_paper/outputs/splits.json": null,
+    "/home/kyzen/metafind/metafind_data_paper/outputs/eval_protocols.json": null,
+    "/home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json": null,
+    "/home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json": null,
+    "/home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json": null,
+    "/home/kyzen/metafind/metafind_data_paper/outputs/annotation_exclusions.json": null,
+    "/home/kyzen/metafind/metafind_data_paper/outputs/logs/quarantine_n04_render_views.jsonl": "aa301d14e40f81075451977d593c09b777ecce76a2ba1b31a5d8109831d96773",
+    "/home/kyzen/metafind/metafind_data_paper/outputs/logs/quarantine_n05_annotate.jsonl": "cf20a568597ae2139d4738da25836159a1d3eaba72e555a37805dc8ba3c87d16"
+  },
+  "input_hashes_after": {
+    "/home/kyzen/metafind/metafind_data_paper/datasets/objaverse-lvis/lvis.json": "ba1bb191e1d98252e19e59aa18185ea46b83d9955b28ba895133536974e8bf9f",
+    "/home/kyzen/metafind/metafind_data_paper/outputs/splits.json": null,
+    "/home/kyzen/metafind/metafind_data_paper/outputs/eval_protocols.json": null,
+    "/home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json": null,
+    "/home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json": null,
+    "/home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json": null,
+    "/home/kyzen/metafind/metafind_data_paper/outputs/annotation_exclusions.json": null,
+    "/home/kyzen/metafind/metafind_data_paper/outputs/logs/quarantine_n04_render_views.jsonl": "aa301d14e40f81075451977d593c09b777ecce76a2ba1b31a5d8109831d96773",
+    "/home/kyzen/metafind/metafind_data_paper/outputs/logs/quarantine_n05_annotate.jsonl": "cf20a568597ae2139d4738da25836159a1d3eaba72e555a37805dc8ba3c87d16"
+  },
+  "input_bytes_unchanged": true
+}

@@ -1,0 +1,136 @@
+{
+  "observed_at": "2026-09-07T17:55:17.169870+00:00",
+  "source": "/home/kyzen/metafind/metafind_data/outputs/annotation_exclusions.json",
+  "source_sha256": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058",
+  "script_sha256": "9691aafa0c47dd72ef3ce3b566009ccc429dd986f65376cc5bc18e6cbf0b1152",
+  "manual_count": 21,
+  "observed": [
+    {
+      "uid": "44b7cff533d04b0ea43db6afd6e67efa",
+      "entry_type": "dict",
+      "real_file_exists": true,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "8e6534b3df8c4bab973f27c67b2dac36",
+      "entry_type": "dict",
+      "real_file_exists": false,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "b7a7e3e9194847a99aea5828abe57c4c",
+      "entry_type": "dict",
+      "real_file_exists": false,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "99c68556d52b418c873afee06d9d9718",
+      "entry_type": "dict",
+      "real_file_exists": false,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "90c9d43d35d24cada6be59424fb59eee",
+      "entry_type": "dict",
+      "real_file_exists": false,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "c696d517312a4faaa8e7e52807b1a88c",
+      "entry_type": "dict",
+      "real_file_exists": false,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "cfbcb02c981e4a6c92b6c86fb5ced91d",
+      "entry_type": "dict",
+      "real_file_exists": false,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "a397b648d6eb48d7909d1ee11235e78f",
+      "entry_type": "dict",
+      "real_file_exists": false,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "a5c4975c97464f6985ce695dd358e876",
+      "entry_type": "dict",
+      "real_file_exists": false,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "eb29a8245a31409ba42e29f40c85a3c2",
+      "entry_type": "dict",
+      "real_file_exists": false,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "5a5804daaa9345f48058b4b60d7a2da8",
+      "entry_type": "dict",
+      "real_file_exists": true,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "9c24c4cf935b43c09d3970fe89b836f9",
+      "entry_type": "dict",
+      "real_file_exists": false,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "9539094e99df4246a29063bfa11a8f73",
+      "entry_type": "dict",
+      "real_file_exists": false,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "89cee4a742ef47df9769b8bc947e0d61",
+      "entry_type": "dict",
+      "real_file_exists": false,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "1864864213974c57aa9eb55294a39c33",
+      "entry_type": "dict",
+      "real_file_exists": true,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "4179ed636e2f4d47bb82691f7f536e84",
+      "entry_type": "dict",
+      "real_file_exists": true,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "721bb93d169a4d5f9e8dd15ad45a367f",
+      "entry_type": "dict",
+      "real_file_exists": true,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "49db5a9fabb54afc975c75a24f32ede1",
+      "entry_type": "dict",
+      "real_file_exists": true,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "848aa81f73364d2ab0bd39c5b67eddbc",
+      "entry_type": "dict",
+      "real_file_exists": false,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "1c5a695a8bed40c2a6742f84210542f4",
+      "entry_type": "dict",
+      "real_file_exists": true,
+      "bug_path_exists": false
+    },
+    {
+      "uid": "17a8134052ff47778a21cd3efcfbe916",
+      "entry_type": "dict",
+      "real_file_exists": true,
+      "bug_path_exists": false
+    }
+  ],
+  "annotations_modified": false
+}

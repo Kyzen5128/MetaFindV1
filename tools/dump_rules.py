@@ -10,7 +10,7 @@ Run it after editing any rule file:
 
     python3 tools/dump_rules.py
 
-Output: docs/RULES_SNAPSHOT.md, which carries a sha256 prefix per source file so
+Output: docs/history/RULES_SNAPSHOT.md, which carries a sha256 prefix per source file so
 a reader can tell whether the snapshot still matches the live rules.
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "docs" / "RULES_SNAPSHOT.md"
+OUT = ROOT / "docs" / "history" / "RULES_SNAPSHOT.md"
 
 SOURCES = [
     ("專案指令", "CLAUDE.md"),
@@ -35,7 +35,7 @@ SOURCES = [
 # Prose that is not mechanically derivable from the source files. Regenerating
 # the snapshot must not silently drop it, so it lives here rather than being
 # hand-pasted into the output each time.
-PREAMBLE = ROOT / "docs" / "_rules_preamble.md"
+PREAMBLE = ROOT / "docs" / "history" / "_rules_preamble.md"
 
 
 def head_sha() -> str:

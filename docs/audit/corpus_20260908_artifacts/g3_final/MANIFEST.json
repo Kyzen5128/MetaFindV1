@@ -1,0 +1,85 @@
+{
+  "schema": "metafind.inspection_archive.v1",
+  "created_at": "2026-09-07T18:37:15.771014+00:00",
+  "source_root": "/tmp/metafind_g3_approved_manual_20260908_85k_j338",
+  "archive_root": "docs/audit/corpus_20260908_artifacts/g3_final",
+  "inspection_only": true,
+  "note": "Byte-identical inspection copies of final G3 diagnostic evidence. Source paths, input hashes and as-executed commands are unchanged. External corpus and repository dependencies are not archived; this is not a standalone reproduction bundle.",
+  "file_count": 11,
+  "copied_bytes": 93539,
+  "files": [
+    {
+      "source_path": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/historical/G3_object_corpus.history.yaml",
+      "archive_path": "historical/G3_object_corpus.history.yaml",
+      "sha256": "dab5f73d712c39f9a6199c7ceee13dbdca89937f18aa66fd1ccb0520dc3b98a1",
+      "bytes": 34221
+    },
+    {
+      "source_path": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/historical/G3_object_corpus.yaml",
+      "archive_path": "historical/G3_object_corpus.yaml",
+      "sha256": "3b199873fa28adcdf1ddd168babcbe49b88ba626bb914d83a4026e43a6ca89b6",
+      "bytes": 32612
+    },
+    {
+      "source_path": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/historical/execution.json",
+      "archive_path": "historical/execution.json",
+      "sha256": "3e9a633061e86ed0c50226c9c31583152c463ac364b79b990b063d545902f4eb",
+      "bytes": 4795
+    },
+    {
+      "source_path": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/historical/run_progress.jsonl",
+      "archive_path": "historical/run_progress.jsonl",
+      "sha256": "2cdd9bb1662e202bebc82d117f8d1d7d0def5b3c08c6e56370d4bbcdb13348ad",
+      "bytes": 439
+    },
+    {
+      "source_path": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/historical/stdout.log",
+      "archive_path": "historical/stdout.log",
+      "sha256": "99f5a113d66f7a22a0505321b6e44fed2b7654e268c731b3dcf22f1349f11889",
+      "bytes": 117
+    },
+    {
+      "source_path": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/G3_object_corpus.history.yaml",
+      "archive_path": "paper_in_progress/G3_object_corpus.history.yaml",
+      "sha256": "0361099fe7ae43a3180bd26806f055f19acdb153486bae5d7c137d6e834ebe6a",
+      "bytes": 7240
+    },
+    {
+      "source_path": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/G3_object_corpus.yaml",
+      "archive_path": "paper_in_progress/G3_object_corpus.yaml",
+      "sha256": "691a460bcbaf5506ca84b5f7daaca196016d7d5241d08cebc288c028f2fb4195",
+      "bytes": 7023
+    },
+    {
+      "source_path": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/execution.json",
+      "archive_path": "paper_in_progress/execution.json",
+      "sha256": "aad9e90d99aee0c955c79ec20403f1ff85afd7155fda8d0c6df8057ce35c960a",
+      "bytes": 4379
+    },
+    {
+      "source_path": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/run_progress.jsonl",
+      "archive_path": "paper_in_progress/run_progress.jsonl",
+      "sha256": "afa01259ada967378e0ac2d401a9b7449d52e3794bf3b289334f11350a43957d",
+      "bytes": 438
+    },
+    {
+      "source_path": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/paper_in_progress/stdout.log",
+      "archive_path": "paper_in_progress/stdout.log",
+      "sha256": "2ba636bd77eb96f9b7b3d7b7f3ceb7944fda05dc140c9071555356bb1b4f1702",
+      "bytes": 1305
+    },
+    {
+      "source_path": "/tmp/metafind_g3_approved_manual_20260908_85k_j338/summary.json",
+      "archive_path": "summary.json",
+      "sha256": "5a10e78f96d77551768a47de61f5b29e71d85536a9fe593d282419cc27d3c140",
+      "bytes": 970
+    }
+  ],
+  "current_source_sha256": {
+    "metafind/gates/g3_object_corpus.py": "bfda9e24c07e65720e93e8e2afa3f3fc9416b11efd2a07c8765c2a269af57b24",
+    "tests/pipeline/test_object_corpus_gate.py": "b2432566e1edf0d13dced235d0aebca57941950332003b0869913334d4792680"
+  },
+  "current_source_matches_execution": true,
+  "original_inputs_unchanged_recorded": true,
+  "copy_hashes_verified": true
+}

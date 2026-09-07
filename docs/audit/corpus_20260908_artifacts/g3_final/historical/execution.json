@@ -1,0 +1,54 @@
+{
+  "label": "historical",
+  "command": [
+    "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+    "-B",
+    "-m",
+    "metafind.gates.g3_object_corpus",
+    "--outputs",
+    "/home/kyzen/metafind/metafind_data/outputs",
+    "--manifest",
+    "/home/kyzen/metafind/metafind_data/datasets/objaverse-lvis/lvis.json",
+    "--record",
+    "/tmp/metafind_g3_approved_manual_20260908_85k_j338/historical/G3_object_corpus.yaml"
+  ],
+  "returncode": 0,
+  "elapsed_seconds": 1.3233092980226502,
+  "stdout": "G3_object_corpus: PASS (rc 0) -> /tmp/metafind_g3_approved_manual_20260908_85k_j338/historical/G3_object_corpus.yaml\n",
+  "stderr": "",
+  "source_hashes": {
+    "metafind/gates/g3_object_corpus.py": "bfda9e24c07e65720e93e8e2afa3f3fc9416b11efd2a07c8765c2a269af57b24",
+    "tests/pipeline/test_object_corpus_gate.py": "b2432566e1edf0d13dced235d0aebca57941950332003b0869913334d4792680",
+    "docs/graph/validation_plan.yaml": "d7b5f5df229cffd9df4e790c1aa9735f0333728703d5c95e2d846cc4ad5fdf9a",
+    "docs/graph/node_registry.yaml": "89f6888c55f0cca2713be59cadf3adfdf7ed9d3ba237d3aa7c17c28ceba01290"
+  },
+  "input_hashes_before": {
+    "/home/kyzen/metafind/metafind_data/datasets/objaverse-lvis/lvis.json": "ba1bb191e1d98252e19e59aa18185ea46b83d9955b28ba895133536974e8bf9f",
+    "/home/kyzen/metafind/metafind_data/outputs/splits.json": "c03e898f74f612ceedf27090ad2175a507e6d0b2455faa873956e7059ce9c14b",
+    "/home/kyzen/metafind/metafind_data/outputs/eval_protocols.json": "753591cad0fd4aa48c7b0a3075fba289f13e2d86fe06db98db8722290494e9d2",
+    "/home/kyzen/metafind/metafind_data/outputs/stage1_encoding_protocol.json": "e71294a69bcbb240ad9c08737f7fd50ba650f105a0fb7a4d258b2281b4a6e0b9",
+    "/home/kyzen/metafind/metafind_data/outputs/stage1_protocol.json": "e322699e769ed4a9ea49b3758d2b6a47e34e62912e319678f39355353bbcfce6",
+    "/home/kyzen/metafind/metafind_data/outputs/stage1_hyperparameters.json": "b1ba34f745b1d6e6e7d717625c3bb4917c5af5c97b3745e7d87f29fa6ebd00fe",
+    "/home/kyzen/metafind/metafind_data/outputs/annotation_exclusions.json": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058",
+    "/home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n04_render_views.jsonl": "217d0667b9f63291dc3ce7c385b6d92d7f41f4c1d33019f27325fbcdae15aaca",
+    "/home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n04_render_views.v5_intel.jsonl": "c2aabc1047f27e9ab31964d57b4bbc9258c44a3b57e6d783d9baef614e3223d8",
+    "/home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n05_annotate.jsonl": "c532adea7b0dfadb7a9f389cec033e3f7dcd82bfbfca045f9ec4f0e7459c9097",
+    "/home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n06_encode_text_image.jsonl": "9e04f7ea3f39619a94775015146d4724d62aa437181c50ed709684045e1a6917",
+    "/home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n07b_procthor_asset_modalities.jsonl": "f683927ce648571433885c65825e834b64be6d04c2811a8dd4a556e98bc627da"
+  },
+  "input_hashes_after": {
+    "/home/kyzen/metafind/metafind_data/datasets/objaverse-lvis/lvis.json": "ba1bb191e1d98252e19e59aa18185ea46b83d9955b28ba895133536974e8bf9f",
+    "/home/kyzen/metafind/metafind_data/outputs/splits.json": "c03e898f74f612ceedf27090ad2175a507e6d0b2455faa873956e7059ce9c14b",
+    "/home/kyzen/metafind/metafind_data/outputs/eval_protocols.json": "753591cad0fd4aa48c7b0a3075fba289f13e2d86fe06db98db8722290494e9d2",
+    "/home/kyzen/metafind/metafind_data/outputs/stage1_encoding_protocol.json": "e71294a69bcbb240ad9c08737f7fd50ba650f105a0fb7a4d258b2281b4a6e0b9",
+    "/home/kyzen/metafind/metafind_data/outputs/stage1_protocol.json": "e322699e769ed4a9ea49b3758d2b6a47e34e62912e319678f39355353bbcfce6",
+    "/home/kyzen/metafind/metafind_data/outputs/stage1_hyperparameters.json": "b1ba34f745b1d6e6e7d717625c3bb4917c5af5c97b3745e7d87f29fa6ebd00fe",
+    "/home/kyzen/metafind/metafind_data/outputs/annotation_exclusions.json": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058",
+    "/home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n04_render_views.jsonl": "217d0667b9f63291dc3ce7c385b6d92d7f41f4c1d33019f27325fbcdae15aaca",
+    "/home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n04_render_views.v5_intel.jsonl": "c2aabc1047f27e9ab31964d57b4bbc9258c44a3b57e6d783d9baef614e3223d8",
+    "/home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n05_annotate.jsonl": "c532adea7b0dfadb7a9f389cec033e3f7dcd82bfbfca045f9ec4f0e7459c9097",
+    "/home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n06_encode_text_image.jsonl": "9e04f7ea3f39619a94775015146d4724d62aa437181c50ed709684045e1a6917",
+    "/home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n07b_procthor_asset_modalities.jsonl": "f683927ce648571433885c65825e834b64be6d04c2811a8dd4a556e98bc627da"
+  },
+  "input_bytes_unchanged": true
+}

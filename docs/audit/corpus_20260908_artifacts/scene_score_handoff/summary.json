@@ -1,0 +1,72 @@
+{
+  "schema": "metafind.scene_score_summary.v1",
+  "classification": "OBSERVED DATA",
+  "scope": "Conditional imported scores, not formal Table 2 or judge-quality evidence",
+  "scores_artifact": {
+    "path": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/imported.json",
+    "sha256": "336fbc36b33b5aa882c887671197a1005318e8c3bcfd03137c9f11d2c0397517"
+  },
+  "protocol_sha256": "0e17c6d421e62ff8304be368313453fc4653764247484fede6b1f978fec5d489",
+  "manifest_sha256": "cb09f38be036d756383337763fcd1da27c90c2dfa56fd6d8d173fdc50c7c4757",
+  "submission_sha256": "7484bbbc77a818b838dc7a628674d72a8686a20b9919f1537fc6fe9cb322eaea",
+  "dimensions": [
+    "overall_aesthetic_and_atmosphere",
+    "color_scheme_and_material_choices",
+    "scene_coherence",
+    "realism_and_3d_geometric_consistency"
+  ],
+  "scene_ids": [
+    "real-model-diagnostic-three-slots"
+  ],
+  "methods": {
+    "diagnostic_real_one_step_s1_s2": {
+      "status": "partial",
+      "n_total": 1,
+      "n_complete": 1,
+      "n_incomplete": 0,
+      "completion_rate": 1.0,
+      "n_scored": 0,
+      "n_judge_failed": 0,
+      "n_missing_scores": 1,
+      "mean_over_scored": {
+        "overall_aesthetic_and_atmosphere": "INSUFFICIENT_EVIDENCE",
+        "color_scheme_and_material_choices": "INSUFFICIENT_EVIDENCE",
+        "scene_coherence": "INSUFFICIENT_EVIDENCE",
+        "realism_and_3d_geometric_consistency": "INSUFFICIENT_EVIDENCE"
+      },
+      "mean_over_complete": {
+        "overall_aesthetic_and_atmosphere": "INSUFFICIENT_EVIDENCE",
+        "color_scheme_and_material_choices": "INSUFFICIENT_EVIDENCE",
+        "scene_coherence": "INSUFFICIENT_EVIDENCE",
+        "realism_and_3d_geometric_consistency": "INSUFFICIENT_EVIDENCE"
+      },
+      "human": {
+        "overall_aesthetic_and_atmosphere": "INSUFFICIENT_EVIDENCE",
+        "color_scheme_and_material_choices": "INSUFFICIENT_EVIDENCE",
+        "scene_coherence": "INSUFFICIENT_EVIDENCE",
+        "realism_and_3d_geometric_consistency": "INSUFFICIENT_EVIDENCE"
+      },
+      "failures": [
+        {
+          "method_id": "diagnostic_real_one_step_s1_s2",
+          "scene_id": "real-model-diagnostic-three-slots",
+          "composition_status": "complete",
+          "score_status": "missing",
+          "inputs": {
+            "composition_sha256": "a2f6106849295b1a64f26ec5290b238d5b92ade607159e7d1b6c9edd0c8a8277",
+            "placement_sha256": "b9a664d1df643cd67e2bcfa68a9237a12e4555188cc7573e9706dffcd9ea594a",
+            "result_sha256": "d6bcdd1ac4f1622436a7500daed03dda7730b106f0c6aeebe8242afc85be4e41",
+            "renders": {
+              "diagnostic-perspective": "5553649625d3958893cf5db61368ada04388227db6d68ce32360bd6cd1de46dd"
+            },
+            "judged_camera_ids": [
+              "diagnostic-perspective"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "human_policy": "D-4: no human evaluation; INSUFFICIENT_EVIDENCE",
+  "aggregation": "Arithmetic mean per dimension. mean_over_complete is unavailable if any completed scene lacks a valid score; mean_over_scored is explicitly conditional. Incomplete scenes are never imputed."
+}

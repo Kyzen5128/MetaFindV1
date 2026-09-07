@@ -2,7 +2,9 @@
 
 `tests/` 依資料流分組。測試驗證程式行為與已記錄契約；通過不代表完整復現論文、真實模型分數正確，或某個 artifact 已通過 promotion gate。只有專案明訂的 gate 能決定 promotion。
 
-2026-09-08 補上 ESSGNN 單層的獨立 NumPy forward／有限差分梯度、no-layout／Full × pinned／ratio λ 的真 checkpoint 交接，以及 compose→placement 的 slot 數值契約。最新完整 CPU suite **1,599 passed** 與真場景驗證見 [本輪交付](../docs/REPRODUCTION_SCENE_REVIEW_20260908.md)，真實模型訓練見 [訓練審查](../docs/REPRODUCTION_TRAINING_REVIEW_20260908.md)；大型模型執行不包含在一般 pytest suite 中。
+2026-09-08 最新交付 CPU suite：**1,805 passed、71 warnings**，排除 `gpu/` 與 `hooks/`，沒有 skip／failure；265 個 Python／shell／patch source 的 SHA 在執行前後一致。完整輸出見 [delivery log](../docs/audit/reproduction_corpus_20260908_delivery_cpu.log)，命令、CPU／離線環境與來源快照見 [execution record](../docs/audit/reproduction_corpus_20260908_delivery_cpu_execution.json)。Warnings 包含 Transformer／timm 提示與測試刻意採用非論文 tau 的警告；本次沒有 QueueFeederThread 清理警告。
+
+本次包含 G3 的 DL-106 獨立人工排除計帳、來源變動與輸出衝突拒絕，真 shell heredoc 的 E ledger 發布／中斷／n09 防止重新納入，以及外部四維場景評分的來源綁定和分母。既有 ESSGNN NumPy forward／有限差分梯度、no-layout／Full checkpoint 交接與實際 Blender 頂點檢查一併保留。真實模型執行另見 [場景驗證](../docs/history/REPRODUCTION_SCENE_REVIEW_20260908.md) 與 [訓練審查](../docs/history/REPRODUCTION_TRAINING_REVIEW_20260908.md)，不包含在一般 pytest suite 中。
 
 | 目錄 | 覆蓋內容 | 執行需求與界限 |
 | --- | --- | --- |

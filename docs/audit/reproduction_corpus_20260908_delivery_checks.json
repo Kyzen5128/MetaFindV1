@@ -1,0 +1,80 @@
+{
+  "timestamp": "2026-09-07T18:55:36.872611+00:00",
+  "driver_path": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/verify_delivery.py",
+  "driver_sha256": "ceb23098547edd262b266e65011c7e604306fbe5ff00a021b1c9ef205be13d01",
+  "cpu": {
+    "returncode": 0,
+    "current_snapshot_matches": true,
+    "snapshot_files": 265,
+    "log_sha256": "3ce15856a1e03912e82ac1183a6c3bee92fa8bd7dfa7037dbea6e2f1ac9c33d9"
+  },
+  "graph": {
+    "returncode": 0,
+    "current_snapshot_matches": true,
+    "snapshot_files": 270,
+    "log_sha256": "a8df9a66590a4ef26fe8c1a7276f47708a72d700ba5178eeb2639fb9c57abac7"
+  },
+  "archive": {
+    "bound_files": 58,
+    "bytes": 512302,
+    "all_match": true,
+    "manifest_sha256": "b1fece2ad94057d5aebff77027a86c7f51b53211a5c82b65d1de5112d6f37bad"
+  },
+  "markdown_links": {
+    "files": 45,
+    "local_targets_checked": 425,
+    "missing_targets": [],
+    "scope": "ordinary inline Markdown links; fragments and frozen historical audit metadata not rewritten"
+  },
+  "protected_and_prior_frozen_archives": {
+    "tracked_diff_from_base": "",
+    "paths": [
+      "docs/paper",
+      "metafind/vendor",
+      "CLAUDE.md",
+      ".claude",
+      "docs/audit/validation_artifacts_20260907_08",
+      "docs/audit/scene_real_20260908_artifacts"
+    ]
+  },
+  "live_processes": {
+    "2685619": {
+      "pid": 2685619,
+      "start_ticks": "79771743",
+      "argv": [
+        "/bin/bash",
+        "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage1_20260906.sh"
+      ],
+      "cwd": "/home/kyzen/MetaFindV1",
+      "stdout": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage1_20260906.log"
+    },
+    "2043427": {
+      "pid": 2043427,
+      "start_ticks": "67087549",
+      "argv": [
+        "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+        "-m",
+        "metafind.data.annotate_run",
+        "--prompt-mode",
+        "figure2_v10"
+      ],
+      "cwd": "/home/kyzen/MetaFindV1",
+      "stdout": "pipe:[20815692]"
+    },
+    "2494552": {
+      "pid": 2494552,
+      "start_ticks": "77088621",
+      "argv": [
+        "bash",
+        "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage2_20260906.sh"
+      ],
+      "cwd": "/home/kyzen/MetaFindV1",
+      "stdout": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage2_20260906.log"
+    }
+  },
+  "stage1_live_sha256": "d18f7accff486a68cdc537ca0d35fa01545b2c8af30b0ab54387843fbda36fb6",
+  "r2_done_marker": false,
+  "paper_manual_ledger_exists": false,
+  "docs_root_markdown": 9,
+  "status": "PASS"
+}

@@ -468,6 +468,17 @@ def admitted_uids() -> list[str]:
     ledger = paths.OUTPUTS / "annotation_exclusions.json"
     if ledger.exists():
         admitted -= ledger_excluded_uids(json.loads(ledger.read_text()))
+    # Agreement between three producer indices does not establish corpus
+    # membership. The filtering report starts from the LVIS manifest; admitting
+    # an external UID here would train on a different set than that report.
+    # Refuse the discrepancy rather than silently shrinking the admitted set.
+    manifest = set(json.loads(paths.LVIS_MANIFEST.read_text()))
+    unexpected = admitted - manifest
+    if unexpected:
+        raise ValueError(
+            f"{len(unexpected)} admitted UID(s) are outside the LVIS manifest "
+            f"{paths.LVIS_MANIFEST}, e.g. {sorted(unexpected)[:5]}. "
+            "Repair the input indices or manifest before building splits.")
     return sorted(admitted)
 
 

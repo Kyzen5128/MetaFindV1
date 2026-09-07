@@ -110,6 +110,6 @@ Blender glTF importer 將 `(x,y,z)` 轉成 `(x,-z,y)`，並對 glTF node transfo
 
 [測試](../tests/eval/test_scene_placement.py) 使用真多 mesh GLB，涵蓋原始與凍結來源篡改、錯 UID、frame、room、slot、未知 render config，以及兩個獨立 instance 的 90°／45° 旋轉、實際 bounds、獨立重新開啟 `.blend`、64×64／2-sample CPU render。沒有 canonical 資料、GPU、模型或 LLM 參與。缺 Blender 時 integration tests 明確 skip；不可把 skip 說成已驗證 Blender。
 
-2026-09-08 另執行 [真模型場景鏈](REPRODUCTION_SCENE_REVIEW_20260908.md)，以真 Objaverse GLB 完成三個 instance 與 512² CPU render；獨立從原 GLB 與保存的 evaluated vertices 雙向核對 136,925 個頂點，最大差約 4×10⁻⁷ m。這是額外執行證據，不是正式場景品質評分。
+2026-09-08 另執行 [真模型場景鏈](history/REPRODUCTION_SCENE_REVIEW_20260908.md)，以真 Objaverse GLB 完成三個 instance 與 512² CPU render；獨立從原 GLB 與保存的 evaluated vertices 雙向核對 136,925 個頂點，最大差約 4×10⁻⁷ m。這是額外執行證據，不是正式場景品質評分。
 
 獨立 review 發現原有兩個 box-mesh smoke 無法識別旋轉過的非盒形 mesh：raw Y 軸旋轉 45° 的四面體，舊 local-AABB 寫法雖回報寬 2 m、中心置中，保存的實際頂點只有 1.333333 m 寬且 slot-frame 中心偏移 −0.333333 m。修正後新增四面體 regression，從 raw GLB 頂點獨立推導 C 座標轉換、node rotation、actual-vertex scale/center 和 yaw + 180°，再重新開啟 `.blend` 比對全部實際頂點；不以 production helper 或 result 中的自報 bounds 作 oracle。

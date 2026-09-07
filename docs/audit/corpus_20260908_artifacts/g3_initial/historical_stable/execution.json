@@ -1,0 +1,20 @@
+{
+  "label": "historical_stable",
+  "command": [
+    "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+    "-m",
+    "metafind.gates.g3_object_corpus",
+    "--outputs",
+    "/home/kyzen/metafind/metafind_data/outputs",
+    "--manifest",
+    "/home/kyzen/metafind/metafind_data/datasets/objaverse-lvis/lvis.json",
+    "--record",
+    "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/historical_stable/G3_object_corpus.yaml"
+  ],
+  "returncode": 3,
+  "stdout": "G3_object_corpus: BLOCKED_EVIDENCE (rc 3) -> /home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/historical_stable/G3_object_corpus.yaml\n  BLOCKED: manual exclusions: formal G3 admitted/quarantined accounting is unresolved; no exceptions fabricated\n  BLOCKED: quarantine: /home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n07b_procthor_asset_modalities.jsonl:1 has unknown quarantine stage 'render'\n",
+  "stderr": "",
+  "elapsed_seconds": 1.308877944946289,
+  "gate_source_sha256": "2bdcde5bbcd9914b3a541bf5fa6893c63c464180997e300c8e18433d4a373871",
+  "gate_record_sha256": "118be8e780ce4bd45060ea9f62a1c796920eb34370dde7f126bbe1aa035317c0"
+}

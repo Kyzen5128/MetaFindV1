@@ -24,7 +24,7 @@
 
 **歷史缺陷記錄**：原共用 gallery 路徑將零點雲向量當成存在的 PC 模態送入 fusion，並非使用真正的 gallery 點雲特徵。其私有 scorer 又把相似度同分算作有利於模型，使用 float32，與專案共用 scorer 的 float64／不利同分規則不同。因此不能引用這組結果來判定觀測、gallery 大小或文字內容已解釋論文差距。
 
-撤回後，`gallery_vectors`、`recall`、`main` 已改成拒跑 stub；另外三支仍呼叫這些 stub，無法完成評估。此次刪除不恢復其結果的有效性，也不刪除歷史資料產物。既有說明見[研究筆記的撤回記錄](../../docs/METAFIND_NOTEBOOK.md)。
+撤回後，`gallery_vectors`、`recall`、`main` 已改成拒跑 stub；另外三支仍呼叫這些 stub，無法完成評估。此次刪除不恢復其結果的有效性，也不刪除歷史資料產物。既有說明見[研究筆記的撤回記錄](../../docs/history/METAFIND_NOTEBOOK.md)。
 
 原 `load_tower` 不屬於上述評估缺陷，已搬至 [`metafind.eval.custom_models.load_fusion_tower`](../../metafind/eval/custom_models.py)。它只還原 Stage 1 的兩個 fusion heads；呼叫端仍須供應匹配的 backbone 特徵。它不是完整 checkpoint 載入器。
 

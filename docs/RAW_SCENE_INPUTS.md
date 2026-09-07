@@ -47,7 +47,7 @@ python -m metafind.scene.compose --manifest /path/to/new-bundle/manifest.json \
   --out /path/to/new-composition.json
 ```
 
-`--device cpu` 是預設，使用真 ULIP／CLIP 時仍需相應記憶體與本機權重。GPU 空閒時可明確選 `--device cuda`。2026-09-08 已另行執行真 ULIP／CLIP 的三 query CPU 診斷，见 [真場景紀錄](REPRODUCTION_SCENE_REVIEW_20260908.md)；不是一般 pytest 的 tiny seam。
+`--device cpu` 是預設，使用真 ULIP／CLIP 時仍需相應記憶體與本機權重。GPU 空閒時可明確選 `--device cuda`。2026-09-08 已另行執行真 ULIP／CLIP 的三 query CPU 診斷，见 [真場景紀錄](history/REPRODUCTION_SCENE_REVIEW_20260908.md)；不是一般 pytest 的 tiny seam。
 
 只有實際 CPU composition replay 通過、所有輸入再驗 hash 後，才發布 `manifest.json`。另存 `inputs.pt`、完整 query model、`validation_composition.json`。輸出必須為新目錄；失敗可能留下中間檔，沒有 `manifest.json` 就不是已完成 bundle。全部 bytes、原 request、encoder／gallery 身分及工具 source hash 進 provenance；不更改原 checkpoint 或 canonical corpus。
 
@@ -61,4 +61,4 @@ python -m metafind.scene.compose --manifest /path/to/new-bundle/manifest.json \
 
 [CPU 測試](../tests/eval/test_scene_prepare.py) 覆蓋原始文字、兩 view 平均、separate point path、真 n08 schema／source guards、語義與 query 不混用、真小型 checkpoint exporter→manifest→composition、來源替換、缺關係輸出與排他發布。大型 backbone constructor 使用 tiny seam；這些結果不是已執行正式 ULIP-2、生成正式 200 scenes 或重現 Table 2 分數的證據。
 
-另行的 [真場景驗證](REPRODUCTION_SCENE_REVIEW_20260908.md) 使用兩個真單步訓練 checkpoint、六筆 promoted gallery，經兩次真 Gemma 補關係後完成三 slot。prepare 的 validation composition 與另一程序的公開 CLI replay JSON 完全相同；完整正式場景評分仍未完成。
+另行的 [真場景驗證](history/REPRODUCTION_SCENE_REVIEW_20260908.md) 使用兩個真單步訓練 checkpoint、六筆 promoted gallery，經兩次真 Gemma 補關係後完成三 slot。prepare 的 validation composition 與另一程序的公開 CLI replay JSON 完全相同；完整正式場景評分仍未完成。

@@ -147,6 +147,6 @@ $PY -m metafind.eval.custom_table1 \
 GPU smoke 與 Claude-only hook 測試未執行。共 69 個 warnings，包含 transformer 設定、刻意測試的 temperature 偏差、套件 deprecated API，以及一項 multiprocessing QueueFeederThread 清理警告；此次未修改這些既有子系統。
 逐檔身分與驗證摘要另存於 `docs/audit/custom_table1_20260907_checks.json`。
 
-2026-09-07 接續已有真實 ULIP-2／既有 Stage 1 checkpoint 的 CPU smoke：固定 2 query／6 gallery、兩觀測與七模態共 28 組完成，模型／loader／scorer 沒有替換；影像使用原有 per-view cache。這是小樣本執行驗證，分數不代表模型品質或論文復現。舊 Stage 2 record 缺 embedded metadata，預檢按設計拒絕，未納入成功 run。當輪完整回歸 **1,552 passed**，命令／scope／真模型 artifacts 見 [執行路徑審查](REPRODUCTION_RUNTIME_REVIEW_20260907.md)。
+2026-09-07 接續已有真實 ULIP-2／既有 Stage 1 checkpoint 的 CPU smoke：固定 2 query／6 gallery、兩觀測與七模態共 28 組完成，模型／loader／scorer 沒有替換；影像使用原有 per-view cache。這是小樣本執行驗證，分數不代表模型品質或論文復現。舊 Stage 2 record 缺 embedded metadata，預檢按設計拒絕，未納入成功 run。當輪完整回歸 **1,552 passed**，命令／scope／真模型 artifacts 見 [執行路徑審查](history/REPRODUCTION_RUNTIME_REVIEW_20260907.md)。
 
-2026-09-08 再以新產生的 Stage 1／Stage 2 單步診斷 checkpoint 跑通三種模型列：**42 組、84 筆 query records**，CPU 51.32 秒，Stage 2 gallery 不變性通過，未放寬 legacy 檢查。沿用 2×6 protocol，其中一個 query 曾參與新 parent 的 selection，所以只能作執行診斷。完整回歸與真訓練／評估證據見 [接續審查](REPRODUCTION_TRAINING_REVIEW_20260908.md)。
+2026-09-08 再以新產生的 Stage 1／Stage 2 單步診斷 checkpoint 跑通三種模型列：**42 組、84 筆 query records**，CPU 51.32 秒，Stage 2 gallery 不變性通過，未放寬 legacy 檢查。沿用 2×6 protocol，其中一個 query 曾參與新 parent 的 selection，所以只能作執行診斷。完整回歸與真訓練／評估證據見 [接續審查](history/REPRODUCTION_TRAINING_REVIEW_20260908.md)。

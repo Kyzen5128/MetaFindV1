@@ -1,0 +1,29 @@
+{
+  "page_id": "3d4fb0e7-4e5b-80c8-b141-e686994fef70",
+  "url": "https://app.notion.com/p/3d4fb0e74e5b80c8b141e686994fef70?pvs=204",
+  "page_last_edited_at": "2026-09-07T18:43:56.145Z",
+  "properties": {
+    "date:日期:is_datetime": 0,
+    "date:日期:start": "2026-09-08",
+    "url": "https://app.notion.com/p/3d4fb0e74e5b80c8b141e686994fef70",
+    "名稱": "MetaFind｜Table 1 自訂評估與 Stage 2 執行指南",
+    "文字": "固定 query/gallery 的七模態評估、融合高分證據、操作命令與 Stage 2 資料／訓練／場景驗收。",
+    "狀態": "進行中"
+  },
+  "write_tasks": [
+    "task_d3fb6aa4b40541a0be711b241e3b9858",
+    "task_70af7b299ebd4164886bc1778de6307d"
+  ],
+  "verification": {
+    "heading_count": 30,
+    "headings_exact": true,
+    "bash_count": 8,
+    "bash_exact": true,
+    "table_count": 10,
+    "table_cells_exact": true,
+    "body_equal_ignoring_whitespace_and_bold_serialization": true,
+    "unknown_blocks_present": false,
+    "truncated": "not_reported"
+  },
+  "note": "Fetched after structural update and separate property update; metadata fields were not applied by content command. Readback serializes one bold+code span into adjacent bold spans; all prose matches after bold marker/whitespace normalization."
+}

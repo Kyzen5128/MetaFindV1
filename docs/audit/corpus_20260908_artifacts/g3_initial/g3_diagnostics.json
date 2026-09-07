@@ -1,0 +1,26 @@
+[
+  {
+    "label": "paper_in_progress",
+    "returncode": 3,
+    "verdict": "BLOCKED_EVIDENCE",
+    "accounting": null,
+    "failures": [],
+    "blocked": [
+      "splits: cannot read splits at /home/kyzen/metafind/metafind_data_paper/outputs/splits.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/splits.json'",
+      "stage1_encoding_protocol: cannot read stage1_encoding_protocol at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json'",
+      "stage1_protocol: cannot read stage1_protocol at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json'",
+      "stage1_hyperparameters: cannot read stage1_hyperparameters at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json'"
+    ]
+  },
+  {
+    "label": "historical_stable",
+    "returncode": 3,
+    "verdict": "BLOCKED_EVIDENCE",
+    "accounting": null,
+    "failures": [],
+    "blocked": [
+      "manual exclusions: formal G3 admitted/quarantined accounting is unresolved; no exceptions fabricated",
+      "quarantine: /home/kyzen/metafind/metafind_data/outputs/logs/quarantine_n07b_procthor_asset_modalities.jsonl:1 has unknown quarantine stage 'render'"
+    ]
+  }
+]

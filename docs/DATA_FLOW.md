@@ -1,6 +1,6 @@
 # 資料流與產物交接
 
-本頁整理目前程式的 **producer → artifact → consumer**，協助定位資料從哪裡來、哪個步驟會讀它，以及修改後哪些產物需要重新驗證。讀碼日期：2026-09-07。資料數量、執行狀態與分數以各次 run 的紀錄為準。
+本頁整理目前程式的 **producer → artifact → consumer**，協助定位資料從哪裡來、哪個步驟會讀它，以及修改後哪些產物需要重新驗證。更新日期：2026-09-08。資料數量、執行狀態與分數以各次 run 的紀錄為準。
 
 ## 1. 論文要求與實作選擇
 
@@ -108,10 +108,14 @@ flowchart TD
 | [annotate_run](../metafind/data/annotate_run.py)（n05） | 讀 render index、幾何與類別資料；`--prompt-mode` 選 v9 或 [figure2_v10](../metafind/data/annotate_v10.py)，`--model` 選本地模型。 | `annotations/<uid>.json`、`logs/annotations_index.jsonl`、annotation provenance／quarantine | n06 的文字來源。`figure2_v10` 是標註 prompt/schema 名，不等於文字塔使用 `figure2_json`。 |
 | [resolve_stage1](../metafind/models/resolve_stage1.py)（n05b） | 固定文字 serializer、view aggregation、CLIP scope、超參數與模型 variant。 | `stage1_encoding_protocol.json`、`stage1_hyperparameters.json`、`variant_registry.json` | n06、n09、n10。`paper_clip_train_scope` 是專案判讀；`actual_clip_train_scope` 才是執行設定。 |
 | [encode_text_image](../metafind/data/encode_text_image.py)（n06） | 按 protocol 序列化 annotation，用 frozen CLIP 編碼 text 與每 view，再產 image aggregate。 | `embeddings/<uid>.npz`：`text (D,)`、`image (D,)`、`views (N,D)`；JSON sidecar 記全文、token/truncation、views、序列化與 encoder 身分。 | Stage1Dataset、Objaverse gallery builder。失敗回非零並退役不能沿用的 cache；不把失敗的新輸入配到舊 embedding。 |
-| [splits](../metafind/data/splits.py)（n09） | 交集 pointcloud/render/annotation indexes，再套 exclusion ledger。**不是以 embedding 目錄存在與否認證 n06。** | `splits.json`、`split_lists/`、`stage1_protocol.json`、`eval_protocols.json` | n10／n11／n15；目前 code 為 80/10/10，保留 holdout 及 dev aliases。實際選模集合看 checkpoint/run record。 |
+| [splits](../metafind/data/splits.py)（n09） | 交集 pointcloud/render/annotation indexes，再套 exclusion ledger，拒絕仍不在 LVIS manifest 的 UID。**不是以 embedding 目錄存在與否認證 n06。** | `splits.json`、`split_lists/`、`stage1_protocol.json`、`eval_protocols.json` | n10／n11／n15；目前 code 為 80/10/10，保留 holdout 及 dev aliases。實際選模集合看 checkpoint/run record。 |
 | [stage1](../metafind/train/stage1.py)（n10） | `Stage1Dataset` 讀 cached text/image 與 raw PC；PC 經當次 backbone。套 query observation、masking、fusion、contrastive loss。 | run `--out-dir` 下的 checkpoint、`stage1_best_ckpt.json` 等 records、metrics | n11／n11b／n13／retrieval。載入須還原 checkpoint 綁定的 model inputs、初始化、tower state；不能以目前預設配置代替歷史配置。 |
 
 目前 n10 預設路徑訓練 point encoder 與 fusion，另有 `fuser_only` 等設定；不能以「Stage 1」三個字推定某個 checkpoint 究竟訓練了哪些參數。現有 trainer 對 `train_scope=full` 明確拒絕，不能把設定欄位存在寫成已支援全 CLIP 訓練。
+
+[G3 object-corpus preflight](../metafind/gates/g3_object_corpus.py) 檢查物件 split、manifest 集合守恆、真實 quarantine 記錄及已解析的 Stage 1／eval protocols。[DL-106](../workflow/DECISION_LEDGER.md) 已由 Kyzen 批准：人工排除獨立列為 E，檢查 `A ∪ Q ∪ E == M` 及兩兩不重疊；Q 扣掉成功重試與 E，原始 manifest 不變。既有 2% 只計 Q/M，另外揭露人工與合計排除率；2% 是專案門檻，不是論文數字。缺明示 exclusion ledger 會 `BLOCKED_EVIDENCE`，不捏造 exception。這個部分實作尚未接入 live chain，也不證明 embedding bytes 或 optimizer 實際執行正確；規格的完整 implemented 狀態未改。
+
+目前 paper Stage 1 等待鏈在 R2 完成後，先發布只含 21 筆人工排除的 `annotation_exclusions.json`，綁定原 ledger SHA／決策來源與 DL-106，再搬開對應 annotation、重建 index，接續 n05b → n06 → n09。清單中的人工 entries 是含 `uid` 的 objects；2026-09-08 修正了把 object 當 UID 字串的錯誤。持久化的 E 清單讓 n09 即使遇到恢復／重新標註的 sidecar，仍能套用人工排除。歷史 311 筆 n05 失敗依 v10 重試流程處理，不帶入新 ledger；衝突先拒絕，重跑保留同值 ledger。已更新仍在等待的 Stage 1 shell，本輪沒有提前執行真實 annotation 移動；部署與隔離副本證據見 [本輪紀錄](audit/REPRODUCTION_CORPUS_REVIEW_20260908.md)。G3 需要 n09 產物，應在這些資料齊全後另跑 preflight；目前等待鏈並未自動呼叫它。
 
 文字模板也是實驗身分：例如 `v3_fit` 將描述裁到 context budget，`figure2_json` 保存結構化全文但 n06 記錄 CLIP 截斷。全文不同不保證送進 tokenizer 後不同；模板或 annotation 改變，必須核對 n06 cache 與後續 checkpoint 的相容性。
 
@@ -202,11 +206,16 @@ flowchart LR
   PL --> BL[Blender 實際頂點放置與blend]
   RC[明確camera light render config] --> BL
   BL --> IM[CPU渲染圖片]
+  IM --> SI[scene_scores import 核對外部評分與產物]
+  EX[外部protocol 全場景manifest 評分紀錄] --> SI
+  SI --> SU[aggregate 保留缺分與失敗分母]
 ```
 
-[IDesign adapter](IDesign_INPUTS.md) 分離六個 room priors、保留真 slot 順序，fresh scene 的 G0 明確為空；[raw prepare](RAW_SCENE_INPUTS.md) 使用正確 query point path、raw text／mean images，嚴格驗 node／edge text encoder 身分，缺關係輸出實際 UID pairs；[placement](SCENE_PLACEMENT.md) 按 raw GLB frame、實際 evaluated mesh 頂點與已指定 slot 放置。render config 缺省時只存 `.blend`，不猜相機或燈光。小型 CPU 測試與另外的真 ULIP／Gemma 三 slot 執行均已穿過真 Blender，見 [場景驗證](REPRODUCTION_SCENE_REVIEW_20260908.md)；真 planner 輸入與正式場景品質仍未完成。
+[IDesign adapter](IDesign_INPUTS.md) 分離六個 room priors、保留真 slot 順序，fresh scene 的 G0 明確為空；[raw prepare](RAW_SCENE_INPUTS.md) 使用正確 query point path、raw text／mean images，嚴格驗 node／edge text encoder 身分，缺關係輸出實際 UID pairs；[placement](SCENE_PLACEMENT.md) 按 raw GLB frame、實際 evaluated mesh 頂點與已指定 slot 放置。render config 缺省時只存 `.blend`，不猜相機或燈光。小型 CPU 測試與另外的真 ULIP／Gemma 三 slot 執行均已穿過真 Blender，見 [場景驗證](history/REPRODUCTION_SCENE_REVIEW_20260908.md)；真 planner 輸入與正式場景品質仍未完成。
 
 [scene.semantics](SCENE_SEMANTICS.md) 接缺少的 pairs，重用 n08 SG2，先釋放 LLM 才載 text encoder，另建相容 cache；用新 cache 重播 prepare，直到當前 trajectory 完整。cache 命中不再載入模型；未知 key 不能視為既有 degraded。這是明確的分步命令交接；2026-09-08 真模型診斷曾走過兩次補關係再重播，尚無自動循環命令。
+
+[scene_scores](SCENE_SCORES.md) 接外部凍結的 scene×method manifest、judge protocol 與評分紀錄，核對 composition／placement／render／response bytes；四維各為 1–5 分。`aggregate` 保留未完成、評分失敗及缺分，只有完成場景都取得有效分數時才給 `mean_over_complete`。它不執行 LLM、不驗證 raw response 到分數的抄錄，也不替代正式場景與 judge 協定；人評固定 `INSUFFICIENT_EVIDENCE`。
 
 ## 8. 修改後如何追查影響
 
@@ -230,8 +239,8 @@ flowchart LR
 | Stage 2 checkpoint | parent Stage 1 與 ProcTHOR index 身分、protocol、graph scope、samples 與輸入 hashes；換 parent 或 corpus 後不得只換 record 路徑。 |
 | 自訂 `protocol.json` | `load_protocol(..., verify=True)` 全量驗來源與輸出 hashes；runner 再核 checkpoint／cache 相容性與有效 token。檔名相同或 `--check-only` 成功不代表正式模型評估完成。 |
 
-實作／CPU 測試的近期範圍見 [CODE_REPAIR_REPORT_20260907.md](CODE_REPAIR_REPORT_20260907.md) 與 [自訂評估驗證](CUSTOM_TABLE1_EVALUATION.md#產物與可驗證範圍)。歷史 `TABLE1_REPORT_*`、`NOTE_*` 與 handoff 記錄當時的觀測或推論；引用前需核對其原始 artifact、設定及後續更正。
+實作／CPU 測試的近期範圍見 [CODE_REPAIR_REPORT_20260907.md](history/CODE_REPAIR_REPORT_20260907.md) 與 [自訂評估驗證](CUSTOM_TABLE1_EVALUATION.md#產物與可驗證範圍)。歷史 `TABLE1_REPORT_*`、`NOTE_*` 與 handoff 記錄當時的觀測或推論；引用前需核對其原始 artifact、設定及後續更正。
 
 測試依 [tests/README.md](../tests/README.md) 分成七組；一般 CPU suite 排除 `tests/gpu` 與 `tests/hooks`。通過 fixture／mock 測試，不代表上述真實 corpus 產物已逐一查驗。
 
-2026-09-07 整理時未对正式 corpus 啟動 producer、修改 annotation 或執行訓練；當時的 producer 小型隔離 CPU 接縫與真 Blender smoke 另有記錄。2026-09-08 接續增加隔離資料下的真實模型訓練與 checkpoint 驗證，見 [本輪訓練審查](REPRODUCTION_TRAINING_REVIEW_20260908.md)。annotation process 維持原狀；各入口的存在、某次 exit code 或測試數量，不等於所有圖中步驟已跑完。
+2026-09-07 整理時未对正式 corpus 啟動 producer、修改 annotation 或執行訓練；當時的 producer 小型隔離 CPU 接縫與真 Blender smoke 另有記錄。2026-09-08 接續增加隔離資料下的真實模型訓練與 checkpoint 驗證，見 [本輪訓練審查](history/REPRODUCTION_TRAINING_REVIEW_20260908.md)。annotation process 維持原狀；各入口的存在、某次 exit code 或測試數量，不等於所有圖中步驟已跑完。

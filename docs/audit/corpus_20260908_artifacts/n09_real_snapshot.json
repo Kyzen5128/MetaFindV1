@@ -1,0 +1,82 @@
+[
+  {
+    "label": "historical_stable",
+    "root": "/home/kyzen/metafind/metafind_data",
+    "timestamp": 1788804938.4220905,
+    "scope": "read-only snapshot; indices may be incomplete while annotation is running",
+    "count": 45692,
+    "uid_set_sha256": "f318edf33d7185d013d39edee8c3eb7475004cc26df8d60c924b7757d9893dee",
+    "ladder": {
+      "raw_assets": 46052,
+      "stages": [
+        {
+          "stage": "n03_pointclouds",
+          "before": 46052,
+          "removed": 0,
+          "after": 46052
+        },
+        {
+          "stage": "n04_renders",
+          "before": 46052,
+          "removed": 28,
+          "after": 46024
+        },
+        {
+          "stage": "n05_annotate",
+          "before": 46024,
+          "removed": 332,
+          "after": 45692
+        },
+        {
+          "stage": "exclusion_ledger",
+          "before": 45692,
+          "removed": 0,
+          "after": 45692
+        }
+      ],
+      "usable_assets": 45692,
+      "ledger_uids_parsed": 332
+    },
+    "manifest_membership_verified": true
+  },
+  {
+    "label": "paper_in_progress",
+    "root": "/home/kyzen/metafind/metafind_data_paper",
+    "timestamp": 1788804940.6777272,
+    "scope": "read-only snapshot; indices may be incomplete while annotation is running",
+    "count": 8,
+    "uid_set_sha256": "4f391bad139c24c8dd48dafcf235bcda2b05cafbd04d58e3ffd52778a169b8bd",
+    "ladder": {
+      "raw_assets": 46052,
+      "stages": [
+        {
+          "stage": "n03_pointclouds",
+          "before": 46052,
+          "removed": 0,
+          "after": 46052
+        },
+        {
+          "stage": "n04_renders",
+          "before": 46052,
+          "removed": 40,
+          "after": 46012
+        },
+        {
+          "stage": "n05_annotate",
+          "before": 46012,
+          "removed": 46004,
+          "after": 8
+        },
+        {
+          "stage": "exclusion_ledger",
+          "before": 8,
+          "removed": 0,
+          "after": 8
+        }
+      ],
+      "usable_assets": 8,
+      "ledger_uids_parsed": 0
+    },
+    "manifest_membership_verified": true
+  }
+]

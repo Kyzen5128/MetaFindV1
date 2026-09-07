@@ -1,0 +1,78 @@
+{
+  "scope": "real source bytes; all writes isolated in TemporaryDirectory; no actual annotation mutation",
+  "timestamp": 1788806275.0129101,
+  "script_sha256": "d18f7accff486a68cdc537ca0d35fa01545b2c8af30b0ab54387843fbda36fb6",
+  "source_path": "/home/kyzen/metafind/metafind_data/outputs/annotation_exclusions.json",
+  "source_sha256": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058",
+  "manual_count": 21,
+  "copied_annotation_sha256": {
+    "17a8134052ff47778a21cd3efcfbe916": "b88501af8346d517745012fb0cb118f9c91c04930977bfa00610bbe24c845fbf",
+    "1864864213974c57aa9eb55294a39c33": "dda569d49fd241a486b2d7cc4ac62acf663534e12b5600e85ce7891c010b433e",
+    "1c5a695a8bed40c2a6742f84210542f4": "1a0cbc8b45578d61a154d39c7c061c4939b78a61211aae0d0cf93001041bf226",
+    "4179ed636e2f4d47bb82691f7f536e84": "37a0090ab8fff61443b952efc334828c4125c624ce169bdccaecef3e8ab862ac",
+    "44b7cff533d04b0ea43db6afd6e67efa": "9c828340a787e0d57d70883e572527d9fd2d6969f275257b22905a3f42700ad4",
+    "49db5a9fabb54afc975c75a24f32ede1": "0d4e9c822cbc6ebd556ad9d994f4d78c12587514b5c2d5130b33971ffd4490f4",
+    "5a5804daaa9345f48058b4b60d7a2da8": "6397fe3e0da7d97cc1a1398ac044aad180c88571fe1dfeb8d495822a83e90393",
+    "721bb93d169a4d5f9e8dd15ad45a367f": "9fbeee5017785ee0981e7cd963a4d7ab304cc98c5e86a7a7acb5d5f0f839fa05",
+    "848aa81f73364d2ab0bd39c5b67eddbc": "7a3b5e4eba284c78f1d1c925ba237ddfb464e2d16a22767559d5c80e92651ce3"
+  },
+  "first": {
+    "returncode": 0,
+    "stdout": "moved 9 of 21 manually rejected assets to /tmp/metafind_manual_e_ledger_jzwjdarq/outputs/annotations_v10_excluded\nmanual exclusion ledger: /tmp/metafind_manual_e_ledger_jzwjdarq/outputs/annotation_exclusions.json (DL-106; source 39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058)\n",
+    "stderr": ""
+  },
+  "repeat": {
+    "returncode": 0,
+    "stdout": "moved 0 of 21 manually rejected assets to /tmp/metafind_manual_e_ledger_jzwjdarq/outputs/annotations_v10_excluded\nmanual exclusion ledger: /tmp/metafind_manual_e_ledger_jzwjdarq/outputs/annotation_exclusions.json (DL-106; source 39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058)\n",
+    "stderr": ""
+  },
+  "published_ledger": {
+    "schema": "metafind.annotation_exclusions.v1",
+    "accounting_decision": "DL-106",
+    "decision": "DL-106: carry approved manual exclusions separately from processing failures",
+    "excluded_total": 21,
+    "groups": {
+      "manual_review_rejected": {
+        "n": 21,
+        "uids": [
+          "17a8134052ff47778a21cd3efcfbe916",
+          "1864864213974c57aa9eb55294a39c33",
+          "1c5a695a8bed40c2a6742f84210542f4",
+          "4179ed636e2f4d47bb82691f7f536e84",
+          "44b7cff533d04b0ea43db6afd6e67efa",
+          "49db5a9fabb54afc975c75a24f32ede1",
+          "5a5804daaa9345f48058b4b60d7a2da8",
+          "721bb93d169a4d5f9e8dd15ad45a367f",
+          "848aa81f73364d2ab0bd39c5b67eddbc",
+          "89cee4a742ef47df9769b8bc947e0d61",
+          "8e6534b3df8c4bab973f27c67b2dac36",
+          "90c9d43d35d24cada6be59424fb59eee",
+          "9539094e99df4246a29063bfa11a8f73",
+          "99c68556d52b418c873afee06d9d9718",
+          "9c24c4cf935b43c09d3970fe89b836f9",
+          "a397b648d6eb48d7909d1ee11235e78f",
+          "a5c4975c97464f6985ce695dd358e876",
+          "b7a7e3e9194847a99aea5828abe57c4c",
+          "c696d517312a4faaa8e7e52807b1a88c",
+          "cfbcb02c981e4a6c92b6c86fb5ced91d",
+          "eb29a8245a31409ba42e29f40c85a3c2"
+        ]
+      }
+    },
+    "source_ledger": {
+      "path": "/home/kyzen/metafind/metafind_data/outputs/annotation_exclusions.json",
+      "sha256": "39eff095ea6283601d57db7618d39ba2355db694e16b711ca82d5ddc59ef3058",
+      "decided_at": "2026-08-28T14:44:25+08:00",
+      "decided_by": "Kyzen",
+      "decision": "這21個 跟 失敗的 311 全部刪掉 其他所有接受採用標註結果",
+      "git_commit": "9e91457220fe625b3313d30c387364d592ee20a0"
+    }
+  },
+  "ledger_sha256": "80d4c155d133fa9c0f868084096db1709a53c3f9e12f950904c9b8d89cdeaa38",
+  "repeated_ledger_identity_unchanged": true,
+  "available_copied_and_moved": 9,
+  "historical_failure_retained": true,
+  "real_inputs_unchanged": true,
+  "real_annotation_written": false,
+  "status": "PASS"
+}

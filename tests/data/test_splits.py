@@ -404,10 +404,44 @@ def test_the_filter_ladder_reports_before_removed_after_for_every_stage(
     ]
     assert lad["usable_assets"] == 6
     assert lad["ledger_uids_parsed"] == 1
+    assert sp.admitted_uids() == manifest[1:7]
     # Every stage's `after` must be the next stage's `before`, or the ladder is
     # describing four unrelated measurements rather than one pipeline.
     for a, b in zip(lad["stages"], lad["stages"][1:]):
         assert a["after"] == b["before"]
+
+
+@pytest.mark.parametrize("rogue_state", ["admitted", "explicitly_excluded", "incomplete"])
+def test_admission_refuses_manifest_external_assets_without_silently_trimming(
+        monkeypatch, tmp_path, rogue_state):
+    """Three agreeing indices cannot expand LVIS; approved exclusions still apply."""
+    import json
+    from metafind.data import splits as sp
+
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    manifest = tmp_path / "lvis.json"
+    manifest.write_text(json.dumps(["valid"]))
+    for name in ("pointclouds_index.jsonl", "renders_index.jsonl", "annotations_index.jsonl"):
+        ids = (["valid"] if rogue_state == "incomplete" and name == "annotations_index.jsonl"
+               else ["valid", "rogue"])
+        (logs / name).write_text("".join(json.dumps({"uid": uid}) + "\n" for uid in ids))
+    if rogue_state == "explicitly_excluded":
+        (tmp_path / "annotation_exclusions.json").write_text(json.dumps({
+            "excluded_total": 1,
+            "groups": {"manual_review_rejected": {"n": 1, "uids": [{"uid": "rogue"}]}}}))
+    monkeypatch.setattr(sp.paths, "LOGS", logs)
+    monkeypatch.setattr(sp.paths, "OUTPUTS", tmp_path)
+    monkeypatch.setattr(sp.paths, "LVIS_MANIFEST", manifest)
+    before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+
+    if rogue_state == "admitted":
+        with pytest.raises(ValueError, match="1 admitted UID.*outside.*manifest.*rogue"):
+            sp.admitted_uids()
+    else:
+        assert sp.admitted_uids() == ["valid"]
+    assert sp.filter_ladder()["usable_assets"] == 1
+    assert {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()} == before
 
 
 def test_the_whole_20_percent_protocol_queries_and_ranks_the_holdout():

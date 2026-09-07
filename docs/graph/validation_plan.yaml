@@ -1058,7 +1058,7 @@ level_2:
   - id: L2-COMPLETE
     kind: structural
     seam: "every fan-out -> reduce"
-    asserts: "admitted + quarantined == len(manifest); no duplicates; no unexpected members"
+    asserts: "A union Q union E == M; A, Q, E pairwise disjoint; no duplicates; no unexpected members (M=original manifest, A=admitted, E=approved manual_excluded, Q=unique real failure UIDs minus A minus E)"
     method: "set algebra over uids"
     tolerance: exact
     sample: full
@@ -1067,6 +1067,22 @@ level_2:
     verified_blocks: false
     cited_by_gate: G3_object_corpus
     note: >
+      [USER-APPROVED IMPLEMENTATION CHOICE 2026-09-08] The original manifest M
+      is unchanged. E contains only the explicitly approved
+      annotation_exclusions.groups.manual_review_rejected UIDs. E is not an
+      exception and is never fabricated as quarantine. Q is the unique UID set
+      from real object failure records minus both A and E. Other unapproved
+      exclusion groups remain BLOCKED_EVIDENCE. Missing exclusion-ledger evidence
+      is BLOCKED_EVIDENCE, not an implicit E=empty; an empty E must be explicit.
+      The historical n05_quarantine
+      ledger alone supplies neither a real exception nor a manual exclusion;
+      recovered UIDs remain in A. Report Q/M, E/M and (Q+E)/M separately; only
+      Q/M is subject to the existing 0.02 ceiling. Historical runtime-guard
+      refusals (DL-026), documented run/batch sentinels and scene-stage records
+      do not represent object failures. Missing unexplained UIDs must never be
+      auto-filled into Q to close the equality.
+      The following measurement predates E and still explains why retry rows
+      and recovered UIDs must not inflate Q.
       [MEASURED 2026-08-16] `quarantined` here means UNIQUE uids MINUS the
       admitted set, and both subtractions are load-bearing. The quarantine
       channel is append-only and written as failures happen, so n04's file holds
@@ -1316,8 +1332,13 @@ level_3_gates:
     position: "between n09_build_splits and n10_train_stage1"
     criterion: >
       object-level leakage_count == 0
-      AND admitted + quarantined == len(manifest)
-      AND quarantine_rate <= 0.02
+      AND admitted union quarantined union manual_excluded == original manifest
+      AND admitted, quarantined, manual_excluded are pairwise disjoint
+      AND manual_excluded contains only approved manual_review_rejected UIDs
+      AND quarantined == unique real object failure UIDs minus admitted minus manual_excluded
+      AND quarantine_rate == len(quarantined) / len(original manifest) <= 0.02
+          -- manual_excluded_rate and total_excluded_rate are reported separately;
+          the original manifest and the existing quarantine ceiling are unchanged
       AND both evaluation protocols are defined with explicit query and gallery scopes
       AND stage1_encoding_protocol.status == "resolved", with text_serialization,
           image_aggregation, paper_clip_train_scope, actual_clip_train_scope and
@@ -1355,6 +1376,14 @@ level_3_gates:
            correctly and silently run the ablation as the main line.)
     evidence: [L2-LEAK-OBJECT, L2-COMPLETE, L1-PROTOCOLS-DEFINED, L1-QUAR-REASON, L1-STAGE1-PROTOCOL-APPLIED]
     scope_note: >
+      [USER-APPROVED IMPLEMENTATION CHOICE 2026-09-08] Independent manual_excluded
+      accounting resolves the former admitted+quarantined-only ambiguity; see
+      L2-COMPLETE. Read and hash the annotation_exclusions.json ledger alongside
+      the other input evidence. Unknown exclusion groups do not receive approval
+      by being present in a file. The standalone gate is an input preflight,
+      not proof that the later trainer instantiated or optimized the declared
+      modules. Its existence does not activate the live chain; implemented remains
+      false pending the separate integration review.
       [CORRECTED] The criterion said "at object and house level" and cited
       L2-LEAK, a check that no longer exists -- it was split into
       L2-LEAK-OBJECT and L2-LEAK-SCENE when the Objaverse and ProcTHOR branches

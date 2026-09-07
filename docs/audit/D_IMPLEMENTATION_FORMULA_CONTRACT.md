@@ -34,7 +34,7 @@ follow it, including where following it is worse (Stage 1's asymmetry, C7).
 | `MF-2` | feature update (2.5, competing) | `ESSGCL` | `[PAPER]` |
 | `MF-3` | coordinate update | [essgnn.py](../../metafind/models/essgnn.py) | `[PAPER CONTRADICTION]` — C3 |
 | `MF-U4` | `e_layout = Pooling(...)` | [essgnn.py](../../metafind/models/essgnn.py) | `[IMPLEMENTATION CHOICE]` — S2 |
-| `MF-4` | SE(3) equivariance | [test_essgnn.py](../../tests/test_essgnn.py), [test_cuda_smoke.py](../../tests/test_cuda_smoke.py) | tested, CPU and CUDA |
+| `MF-4` | SE(3) equivariance | [test_essgnn.py](../../tests/models/test_essgnn.py), [test_cuda_smoke.py](../../tests/gpu/test_cuda_smoke.py) | tested, CPU and CUDA |
 | `MF-5` | Stage 1 loss | [losses.py](../../metafind/models/losses.py) | `[PAPER]` |
 | `MF-6` | Eq. 6 residual fusion | [dual_tower.py](../../metafind/models/dual_tower.py) | `[PAPER]` |
 | `MF-7` | q2g and g2q | [losses.py](../../metafind/models/losses.py) | `[PAPER]`, g2q via transpose |

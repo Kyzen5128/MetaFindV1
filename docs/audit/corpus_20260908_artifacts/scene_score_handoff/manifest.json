@@ -1,0 +1,36 @@
+{
+  "schema": "metafind.scene_evaluation_manifest.v1",
+  "status": "frozen",
+  "scene_ids": [
+    "real-model-diagnostic-three-slots"
+  ],
+  "method_ids": [
+    "diagnostic_real_one_step_s1_s2"
+  ],
+  "provenance": {
+    "source": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908",
+    "scope": "Previous actual 3-slot CPU render; zero scores; no generalization claim."
+  },
+  "outcomes": [
+    {
+      "method_id": "diagnostic_real_one_step_s1_s2",
+      "scene_id": "real-model-diagnostic-three-slots",
+      "status": "complete",
+      "composition": {
+        "path": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/composition.json",
+        "sha256": "a2f6106849295b1a64f26ec5290b238d5b92ade607159e7d1b6c9edd0c8a8277"
+      },
+      "placement": {
+        "path": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/placement_bundle/placement.json",
+        "sha256": "b9a664d1df643cd67e2bcfa68a9237a12e4555188cc7573e9706dffcd9ea594a"
+      },
+      "result": {
+        "path": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/blender_output/result.json",
+        "sha256": "d6bcdd1ac4f1622436a7500daed03dda7730b106f0c6aeebe8242afc85be4e41"
+      },
+      "judged_camera_ids": [
+        "diagnostic-perspective"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "label": "paper_in_progress",
+  "command": [
+    "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+    "-m",
+    "metafind.gates.g3_object_corpus",
+    "--outputs",
+    "/home/kyzen/metafind/metafind_data_paper/outputs",
+    "--manifest",
+    "/home/kyzen/metafind/metafind_data_paper/datasets/objaverse-lvis/lvis.json",
+    "--record",
+    "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/paper_in_progress/G3_object_corpus.yaml"
+  ],
+  "returncode": 3,
+  "stdout": "G3_object_corpus: BLOCKED_EVIDENCE (rc 3) -> /home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/paper_in_progress/G3_object_corpus.yaml\n  BLOCKED: splits: cannot read splits at /home/kyzen/metafind/metafind_data_paper/outputs/splits.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/splits.json'\n  BLOCKED: stage1_encoding_protocol: cannot read stage1_encoding_protocol at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json'\n  BLOCKED: stage1_protocol: cannot read stage1_protocol at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json'\n  BLOCKED: stage1_hyperparameters: cannot read stage1_hyperparameters at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json: [Errno 2] No such file or directory: '/home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json'\n",
+  "stderr": "",
+  "elapsed_seconds": 0.8525586128234863,
+  "gate_source_sha256": "2bdcde5bbcd9914b3a541bf5fa6893c63c464180997e300c8e18433d4a373871",
+  "gate_record_sha256": "f8870f5d421c93f686adf017b80f5c628cc8e375ca0e8b7deb3f5135d685728e"
+}

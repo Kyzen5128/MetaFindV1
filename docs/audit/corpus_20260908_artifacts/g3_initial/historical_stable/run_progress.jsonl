@@ -1,0 +1,2 @@
+{"stage": "G3_object_corpus", "status": "RUNNING", "started_at": 1788804834.3845115, "ended_at": null, "attempt": 1, "rc": null, "stdout_broken": false, "code_revision": "de6635b4f001f266f1bb4aacce73c17f85fa2b06"}
+{"stage": "G3_object_corpus", "status": "FAILED", "started_at": 1788804834.3845115, "ended_at": 1788804834.92839, "attempt": 1, "rc": 3, "stdout_broken": false, "code_revision": "de6635b4f001f266f1bb4aacce73c17f85fa2b06"}

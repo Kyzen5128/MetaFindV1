@@ -1,0 +1,23 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_cli_new_progress_record_collision_is_refused_before_creating_logs ____
+
+corpus = {'outputs': PosixPath('/tmp/pytest-of-kyzen/pytest-354/test_cli_new_progress_record_c0/outputs'), 'manifest': PosixPat...'u000', 'u001', 'u002', 'u003', 'u004', 'u005', ...], 'admit': <function corpus.<locals>.admit at 0x78be7770e200>, ...}
+tmp_path = PosixPath('/tmp/pytest-of-kyzen/pytest-354/test_cli_new_progress_record_c0')
+
+    def test_cli_new_progress_record_collision_is_refused_before_creating_logs(corpus, tmp_path):
+        record = tmp_path / "new_outputs/run_progress.jsonl"
+        result = subprocess.run([sys.executable, "-B", "-m", "metafind.gates.g3_object_corpus",
+            "--outputs", str(corpus["outputs"]), "--manifest", str(corpus["manifest"]),
+            "--record", str(record)], capture_output=True, text=True,
+            env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1", CUDA_VISIBLE_DEVICES="", HIP_VISIBLE_DEVICES=""))
+>       assert result.returncode == 3, result.stdout + result.stderr
+E       AssertionError: G3_object_corpus: PASS (rc 0) -> /tmp/pytest-of-kyzen/pytest-354/test_cli_new_progress_record_c0/new_outputs/run_progress.jsonl
+E         
+E       assert 0 == 3
+E        +  where 0 = CompletedProcess(args=['/home/kyzen/miniconda3/envs/MetaFind/bin/python', '-B', '-m', 'metafind.gates.g3_object_corpus...(rc 0) -> /tmp/pytest-of-kyzen/pytest-354/test_cli_new_progress_record_c0/new_outputs/run_progress.jsonl\n', stderr='').returncode
+
+tests/pipeline/test_object_corpus_gate.py:490: AssertionError
+=========================== short test summary info ============================
+FAILED tests/pipeline/test_object_corpus_gate.py::test_cli_new_progress_record_collision_is_refused_before_creating_logs
+1 failed, 97 deselected in 1.46s

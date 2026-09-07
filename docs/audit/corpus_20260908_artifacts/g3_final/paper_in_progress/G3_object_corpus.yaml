@@ -1,0 +1,105 @@
+code_dirty: true
+code_revision: de6635b4f001f266f1bb4aacce73c17f85fa2b06
+criterion: "object-level leakage_count == 0 AND admitted union quarantined union manual_excluded\
+  \ == original manifest AND admitted, quarantined, manual_excluded are pairwise disjoint\
+  \ AND manual_excluded contains only approved manual_review_rejected UIDs AND quarantined\
+  \ == unique real object failure UIDs minus admitted minus manual_excluded AND quarantine_rate\
+  \ == len(quarantined) / len(original manifest) <= 0.02\n    -- manual_excluded_rate\
+  \ and total_excluded_rate are reported separately;\n    the original manifest and\
+  \ the existing quarantine ceiling are unchanged\nAND both evaluation protocols are\
+  \ defined with explicit query and gallery scopes AND stage1_encoding_protocol.status\
+  \ == \"resolved\", with text_serialization,\n    image_aggregation, paper_clip_train_scope,\
+  \ actual_clip_train_scope and\n    missing_modality_representation each naming a\
+  \ choice\nAND paper_clip_train_scope_basis is non-empty AND paper_clip_train_scope_confidence\
+  \ in {low, moderate, high}\n    -- without these two, a protocol reading `paper_clip_train_scope:\
+  \ frozen`\n    with an empty basis PASSES, and n21 reaches the report with a decision\n\
+  \    it cannot cite. The scope alone does not say why.\n    (U-15, U-14, U-34 x2,\
+  \ U-11)\n    [CORRECTED] This listed three fields after the channel grew to five.\n\
+  \    A protocol missing paper_clip_train_scope or\n    missing_modality_representation\
+  \ therefore PASSED the gate and was\n    then rejected by Stage1RuntimeConfig.from_protocols.\
+  \ Failing closed\n    at the executor is right, but a gate that says PASS on something\
+  \ the\n    executor refuses is not a barrier -- it is a second opinion nobody\n\
+  \    asked for.\nAND stage1_protocol.status == \"resolved\", with fusion, tower_sharing,\n\
+  \    allow_all_masked, similarity and hyperparameter_config_hash each\n    naming\
+  \ a choice (U-13, U-16, U-23, U-24, U-22)\nAND stage1_hyperparameters.sha256 ==\
+  \ stage1_protocol.hyperparameter_config_hash,\n    and stage1_hyperparameters.values\
+  \ names every field of U-22\n    (optimizer, learning_rate, weight_decay, scheduler,\
+  \ batch_size,\n     epochs, p_mask, init_temperature, learnable_temperature,\n \
+  \    max_logit_scale, seed) -- presence of the hash is not enough,\n    because\
+  \ a hash nothing dereferences leaves the run on library\n    defaults. [CORRECTED]\
+  \ This clause used to demand a dereference G3 had\n    no channel to perform: the\
+  \ artifact existed only as a dict passed\n    into Python from outside the graph.\n\
+  AND stage1_hyperparameters.values.p_mask == 0.30 unless the run is a\n    declared\
+  \ Table 3 modality-dropout variant\n    (paper 2.6 fixes 30%; Table 3 ablates 10%\
+  \ and 50%. Carrying p_mask\n     in the U-22 artifact made a paper-stated constant\
+  \ look like one of\n     the values the paper omits, so an artifact saying 0.50\
+  \ would hash\n     correctly and silently run the ablation as the main line.)"
+gate_class: G-INVALID
+gate_id: G3_object_corpus
+gate_source_sha256: bfda9e24c07e65720e93e8e2afa3f3fc9416b11efd2a07c8765c2a269af57b24
+inputs:
+  annotation_exclusions:
+    path: /home/kyzen/metafind/metafind_data_paper/outputs/annotation_exclusions.json
+    present: false
+  manifest:
+    bytes: 4052438
+    path: /home/kyzen/metafind/metafind_data_paper/datasets/objaverse-lvis/lvis.json
+    sha256: ba1bb191e1d98252e19e59aa18185ea46b83d9955b28ba895133536974e8bf9f
+  specification:
+    path: /home/kyzen/MetaFindV1/docs/graph/validation_plan.yaml
+    sha256: d7b5f5df229cffd9df4e790c1aa9735f0333728703d5c95e2d846cc4ad5fdf9a
+  splits:
+    error: '[Errno 2] No such file or directory: ''/home/kyzen/metafind/metafind_data_paper/outputs/splits.json'''
+    path: /home/kyzen/metafind/metafind_data_paper/outputs/splits.json
+  stage1_encoding_protocol:
+    error: '[Errno 2] No such file or directory: ''/home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json'''
+    path: /home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json
+  stage1_hyperparameters:
+    error: '[Errno 2] No such file or directory: ''/home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json'''
+    path: /home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json
+  stage1_protocol:
+    error: '[Errno 2] No such file or directory: ''/home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json'''
+    path: /home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json
+is_terminal: true
+observed:
+  annotation_exclusions:
+    note: ledger missing; E is not known to be empty
+    status: UNKNOWN
+  blocked_reasons:
+  - 'splits: cannot read splits at /home/kyzen/metafind/metafind_data_paper/outputs/splits.json:
+    [Errno 2] No such file or directory: ''/home/kyzen/metafind/metafind_data_paper/outputs/splits.json'''
+  - 'exclusions: annotation_exclusions ledger missing: /home/kyzen/metafind/metafind_data_paper/outputs/annotation_exclusions.json;
+    explicit empty groups required when E is empty'
+  - 'stage1_encoding_protocol: cannot read stage1_encoding_protocol at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json:
+    [Errno 2] No such file or directory: ''/home/kyzen/metafind/metafind_data_paper/outputs/stage1_encoding_protocol.json'''
+  - 'stage1_protocol: cannot read stage1_protocol at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json:
+    [Errno 2] No such file or directory: ''/home/kyzen/metafind/metafind_data_paper/outputs/stage1_protocol.json'''
+  - 'stage1_hyperparameters: cannot read stage1_hyperparameters at /home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json:
+    [Errno 2] No such file or directory: ''/home/kyzen/metafind/metafind_data_paper/outputs/stage1_hyperparameters.json'''
+  coverage_limit: Input accounting/protocol checks only. Does not validate cache tensors,
+    actual trainer modules/optimizer execution, scene leakage, or paper experimental
+    results. No split ratio, rounded corpus size, annotation quality or new promotion
+    threshold is imposed.
+  declared_variant: null
+  failures: []
+  manifest:
+    count: 46052
+    examples:
+    - 000074a334c541878360457c672b6c2e
+    - 0000ecca9a234cae994be239f6fec552
+    - 00010d9634f645859d2e252d189b31d5
+    - 0002064ef02e46f9a10b4bff10bae805
+    - 0002c6eafa154e8bb08ebafb715a8d46
+    - 0002e50309b44e409c96f440202d90b3
+    - 0009a51366fb45e2876715bde6a574b7
+    - 000a00944e294f7a94f95d420fdd45eb
+    - 000a3d9fa4ff4c888e71e698694eb0b0
+    - 000a82b4e6bf4e909fbe5a3b0e6d67dc
+    sha256: 03c2922d0e6b55069a421fe9e594cad8bcc0a3d7c7f9917d01dcdb5378a88042
+rc: 3
+record_kind: gate
+runtime_source_sha256: 122f43855f69bb208a342d9e76dbac7833c88b4cb385fc126d005c7ad5d75b58
+runtime_source_status: ok
+scope: /home/kyzen/datasets/objaverse-lvis/lvis.json
+timestamp: 2026-09-08T02:25:38+0800
+verdict: BLOCKED_EVIDENCE

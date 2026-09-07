@@ -1,0 +1,120 @@
+{
+  "schema": "metafind.scene_scores.v1",
+  "status": "validated",
+  "classification": "OBSERVED DATA",
+  "scope": "External rating import; no judge execution or rating-quality attestation; partial n17/n20 only",
+  "sources": {
+    "manifest": {
+      "path": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/manifest.json",
+      "sha256": "cb09f38be036d756383337763fcd1da27c90c2dfa56fd6d8d173fdc50c7c4757",
+      "content": {
+        "schema": "metafind.scene_evaluation_manifest.v1",
+        "status": "frozen",
+        "scene_ids": [
+          "real-model-diagnostic-three-slots"
+        ],
+        "method_ids": [
+          "diagnostic_real_one_step_s1_s2"
+        ],
+        "provenance": {
+          "source": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908",
+          "scope": "Previous actual 3-slot CPU render; zero scores; no generalization claim."
+        },
+        "outcomes": [
+          {
+            "method_id": "diagnostic_real_one_step_s1_s2",
+            "scene_id": "real-model-diagnostic-three-slots",
+            "status": "complete",
+            "composition": {
+              "path": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/composition.json",
+              "sha256": "a2f6106849295b1a64f26ec5290b238d5b92ade607159e7d1b6c9edd0c8a8277"
+            },
+            "placement": {
+              "path": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/placement_bundle/placement.json",
+              "sha256": "b9a664d1df643cd67e2bcfa68a9237a12e4555188cc7573e9706dffcd9ea594a"
+            },
+            "result": {
+              "path": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/blender_output/result.json",
+              "sha256": "d6bcdd1ac4f1622436a7500daed03dda7730b106f0c6aeebe8242afc85be4e41"
+            },
+            "judged_camera_ids": [
+              "diagnostic-perspective"
+            ]
+          }
+        ]
+      }
+    },
+    "protocol": {
+      "path": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/diagnostic_protocol.json",
+      "sha256": "0e17c6d421e62ff8304be368313453fc4653764247484fede6b1f978fec5d489",
+      "content": {
+        "schema": "metafind.scene_judge_protocol.v1",
+        "status": "frozen",
+        "dimensions": [
+          "overall_aesthetic_and_atmosphere",
+          "color_scheme_and_material_choices",
+          "scene_coherence",
+          "realism_and_3d_geometric_consistency"
+        ],
+        "score_range": [
+          1,
+          5
+        ],
+        "model": {
+          "id": "gemma-4-12B-it",
+          "revision": "NOT_EXECUTED: artifact validation fixture only"
+        },
+        "prompt": "DIAGNOSTIC ONLY. No judge request is made. No prompt or rubric for formal evaluation is selected.",
+        "generation": {
+          "executed": false
+        },
+        "view_policy": "Artifact validation fixture: enumerate existing renders; no image is sent to a judge.",
+        "provenance": {
+          "classification": "IMPLEMENTATION CHOICE",
+          "scope": "Non-evaluation CLI diagnostic with zero ratings, not a research protocol decision."
+        }
+      }
+    },
+    "submission": {
+      "path": "/home/kyzen/MetaFindV1/output/validation/corpus_guard_20260908/scene_score_handoff/empty_submission.json",
+      "sha256": "7484bbbc77a818b838dc7a628674d72a8686a20b9919f1537fc6fe9cb322eaea",
+      "content": {
+        "schema": "metafind.scene_score_submission.v1",
+        "protocol_sha256": "0e17c6d421e62ff8304be368313453fc4653764247484fede6b1f978fec5d489",
+        "manifest_sha256": "cb09f38be036d756383337763fcd1da27c90c2dfa56fd6d8d173fdc50c7c4757",
+        "records": []
+      }
+    }
+  },
+  "scene_ids": [
+    "real-model-diagnostic-three-slots"
+  ],
+  "method_ids": [
+    "diagnostic_real_one_step_s1_s2"
+  ],
+  "cases": [
+    {
+      "method_id": "diagnostic_real_one_step_s1_s2",
+      "scene_id": "real-model-diagnostic-three-slots",
+      "composition_status": "complete",
+      "score_status": "missing",
+      "inputs": {
+        "composition_sha256": "a2f6106849295b1a64f26ec5290b238d5b92ade607159e7d1b6c9edd0c8a8277",
+        "placement_sha256": "b9a664d1df643cd67e2bcfa68a9237a12e4555188cc7573e9706dffcd9ea594a",
+        "result_sha256": "d6bcdd1ac4f1622436a7500daed03dda7730b106f0c6aeebe8242afc85be4e41",
+        "renders": {
+          "diagnostic-perspective": "5553649625d3958893cf5db61368ada04388227db6d68ce32360bd6cd1de46dd"
+        },
+        "judged_camera_ids": [
+          "diagnostic-perspective"
+        ]
+      }
+    }
+  ],
+  "limitations": [
+    "Method labels and judge identity/execution are external declarations.",
+    "Raw response bytes are bound, not interpreted or certified as the source of scores.",
+    "No formal 200-scene protocol or paper metric reproduction is certified."
+  ],
+  "implementation_sha256": "c81fe6623f8cec62124d73e1623e29f159ba4bddf3d7658bd1b11b304fe8a70b"
+}
