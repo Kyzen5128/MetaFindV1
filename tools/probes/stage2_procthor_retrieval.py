@@ -13,7 +13,7 @@ If S2-on >> S2-off the layout branch carries the retrieval; if S2-off << S1
 the fine-tuning wrecked the layout-free head (the paper's 'feature-attribution
 mismatch', measured on the training distribution itself rather than on
 Objaverse). Query construction is the trainer's own: the target's full
-T/I/P from the gallery index plus the house minus the target.
+the target's DECLARED modalities (stage2_protocol asset_modalities) from the gallery index plus the house minus the target.
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def main() -> int:
     ap.add_argument("--houses", type=int, default=300, help="test houses to query from")
     ap.add_argument("--query-mode", default="none", choices=("none", "text_only"),
                     help="how the query is built, matching the Stage 2 run's "
-                         "query_modality_masking: none = the target's T/I/P; "
+                         "query_modality_masking: none = the target's declared modalities; "
                          "text_only = text alone, image and pc as mask tokens")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out", default="output/look/exp_stage2_procthor_retrieval.json")

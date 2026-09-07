@@ -2,8 +2,10 @@
 
 Two towers over a shared ULIP-2 embedding space:
 
-* **Gallery tower** -- modality-complete: every asset has text, image and point
-  cloud. Frozen after Stage 1 (sec. 2.6: "the gallery encoder is frozen").
+* **Gallery tower** -- modality-complete: every Objaverse asset has text, image
+  and point cloud. Frozen after Stage 1 (sec. 2.6: "the gallery encoder is
+  frozen"). A catalogue with a DECLARED missing modality (ProcTHOR: text +
+  image, DL-104) is encoded with that slot excluded; see GalleryTower.forward.
 * **Query tower** -- accepts any modality subset, plus optional layout context,
   and implements Eq. 6::
 

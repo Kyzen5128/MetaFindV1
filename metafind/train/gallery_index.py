@@ -537,10 +537,14 @@ def main() -> int:
             # a ProcTHOR asset carries (`asset_modalities`, text + image). Only
             # those are encoded, the gallery fusion runs with the other slot
             # excluded (GalleryTower.forward(declared=...)), and an asset is
-            # excluded only when a DECLARED modality is missing. Protocols
-            # written before the field are read as all three.
+            # excluded only when a DECLARED modality is missing. A protocol
+            # without the field is refused (ESSGNN REVIEWER MAJOR 1).
             s2_protocol = json.loads((paths.OUTPUTS / "stage2_protocol.json").read_text())
-            declared = tuple(s2_protocol.get("asset_modalities", ["text", "image", "pc"]))
+            if "asset_modalities" not in s2_protocol:
+                raise ValueError(f"{paths.OUTPUTS / 'stage2_protocol.json'} carries no "
+                                 "`asset_modalities`; it predates DL-104. Re-run n09b "
+                                 "(resolve_stage2) before building the Stage 2 index.")
+            declared = tuple(s2_protocol["asset_modalities"])
             mods = sorted(paths.PROCTHOR_MODALITIES.glob("*.json"))
             if args.limit:
                 mods = mods[: args.limit]

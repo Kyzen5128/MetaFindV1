@@ -154,7 +154,12 @@ def load_stage2_protocols() -> tuple[dict, dict, dict]:
     # Until now the protocol was loaded and never compared, so editing it
     # changed nothing while the run went on citing it. Refuse any value the
     # code does not implement.
+    from metafind.models.resolve_stage2 import ASSET_MODALITIES
     implemented = {
+        # [DL-104] A protocol without `asset_modalities` predates Kyzen's ruling
+        # and would default n11b and this trainer back to encoding the ProcTHOR
+        # cloud with no error; refuse it, like every other field the code fixes.
+        "asset_modalities": (list(ASSET_MODALITIES), stage2),
         "scene_dropout_granularity": ("batch", stage2),
         "target_removed_before_essgnn": (True, stage2),
         "batch_positive_uniqueness": (True, stage2),
@@ -465,7 +470,8 @@ def encode_query(model, graph: dict, target_index: int, asset_id: str,
             if embeds[m] is None:
                 present[:, i] = False
         empty = ~present.any(dim=1)
-        present[empty, 0] = True
+        first = next(i for i, m in enumerate(("text", "image", "pc")) if embeds[m] is not None)
+        present[empty, first] = True
 
     layout = None
     # `layout_encoder is None` is the "w/o Layout Context" row, and it is a
@@ -1028,6 +1034,18 @@ def main() -> int:
             f"the gallery index was built from checkpoint {built_from[:16]}... "
             f"but this run loads {ckpt['sha256'][:16]}.... Queries and gallery "
             "would come from different encoders. Rebuild the index.")
+    # [DL-104, ESSGNN REVIEWER MAJOR 1] The index must also have been built under
+    # the SAME modality declaration: a three-array index (gallery fused WITH the
+    # cloud) under a text+image protocol passes every sha check and trains a
+    # pc-absent query against pc-bearing gallery vectors. An index written before
+    # the field is read as all three.
+    asset_modalities = tuple(stage2["asset_modalities"])
+    index_declared = tuple(index_record.get("modality_completeness", {})
+                           .get("declared_modalities", ["text", "image", "pc"]))
+    if index_declared != asset_modalities:
+        raise ValueError(
+            f"the gallery index was built with asset_modalities {index_declared} but "
+            f"the protocol declares {asset_modalities}. Rebuild the index (n11b).")
     weights = Path(ckpt["uri"])
     actual = hashlib.sha256(weights.read_bytes()).hexdigest()
     if actual != ckpt["sha256"]:
@@ -1053,7 +1071,6 @@ def main() -> int:
         train_houses = train_houses[: args.limit_houses]
 
     data = Stage2Data(args.device)
-    asset_modalities = tuple(stage2.get("asset_modalities", ["text", "image", "pc"]))
     data.asset_vectors = load_asset_modality_vectors(gallery_index, asset_modalities)
     eligible = set(positive_map) & set(id_to_row) & set(data.modalities)
     samples = enumerate_samples(train_houses, eligible)
@@ -1146,15 +1163,22 @@ def main() -> int:
                             values["weight_decay"],
                             # [ULIP2 REVIEWER MINOR 4] Was omitted, so Stage 2
                             # took the default while Stage 1 read the artifact.
-                            # Inert today -- freeze_for_stage2 freezes the mask
-                            # tokens under query_modality_masking "none" and
-                            # frozen parameters never reach a group -- and live
-                            # the moment that becomes p_mask, at which point the
-                            # two stages would silently disagree.
+                            # LIVE since DL-104: with the pc undeclared the mask
+                            # tokens train, only the pc row ever gets a gradient,
+                            # and decay would erode the text/image rows with
+                            # nothing pushing back (checked below).
                             decay_mask_tokens=bool(
                                 values["decay_mask_tokens"])),
         lr=values["learning_rate"], betas=tuple(values["betas"]),
         eps=values["eps"])
+
+    if grads.get("query.fusion.mask_tokens") and query_masking == "none" \
+            and bool(values["decay_mask_tokens"]):
+        raise ValueError(
+            "decay_mask_tokens is true while the mask tokens train under "
+            "query_modality_masking none: the rows never selected (text, image) "
+            "have an exactly-zero gradient and would only shrink. Set it false "
+            "in the Stage 2 hyperparameters or mask those modalities too.")
 
     graphs = data.graphs_for({h for h, _, _ in samples})
 

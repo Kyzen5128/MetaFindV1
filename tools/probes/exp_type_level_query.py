@@ -104,8 +104,9 @@ def main() -> int:
                              f"stray {sorted(set(s2_fusion) - fusion_keys)[:3]}")
         model.load_state_dict(s2_fusion, strict=False)
         model.eval()
+        s2_has_tokens = any(k.endswith("fusion.mask_tokens") for k in s2_fusion)
         print(f"  Stage 2 query fusion loaded: {len(s2_fusion)} tensors from {args.stage2_state}"
-              f" (mask tokens kept from Stage 1: {'fusion.mask_tokens' in ' '.join(fusion_keys)})", flush=True)
+              f" (mask tokens: {'from Stage 2' if s2_has_tokens else 'kept from Stage 1'})", flush=True)
     dev = args.device
 
     with torch.no_grad():

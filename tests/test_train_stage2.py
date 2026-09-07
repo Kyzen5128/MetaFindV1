@@ -425,3 +425,25 @@ def test_mask_tokens_train_when_a_modality_is_undeclared():
     g2 = freeze_for_stage2(build(), BB(), "none", asset_modalities=("text", "image"))
     assert g3["query.fusion.mask_tokens"] is False
     assert g2["query.fusion.mask_tokens"] is True
+
+
+def test_a_protocol_without_the_modality_declaration_is_refused(tmp_path, monkeypatch):
+    """[DL-104, ESSGNN REVIEWER MAJOR 1] A pre-ruling protocol would default the
+    trainer and n11b back to encoding the ProcTHOR cloud with no error."""
+    import json
+    from metafind.models import resolve_stage2 as r
+    from metafind.train import stage2 as s2
+
+    def write(stage2_fields):
+        (tmp_path / "stage2_protocol.json").write_text(json.dumps({"status": "resolved", **stage2_fields}))
+        (tmp_path / "essgnn_edge_protocol.json").write_text(json.dumps({"status": "resolved", **r.EDGE_DECISIONS}))
+        (tmp_path / "essgnn_arch_protocol.json").write_text(json.dumps({"status": "resolved", **r.ARCH_DECISIONS}))
+    monkeypatch.setattr(s2.paths, "OUTPUTS", tmp_path)
+    write(r.STAGE2_DECISIONS)
+    assert s2.load_stage2_protocols()[0]["asset_modalities"] == ["text", "image"]
+    write({k: v for k, v in r.STAGE2_DECISIONS.items() if k != "asset_modalities"})
+    with pytest.raises(ValueError, match="asset_modalities"):
+        s2.load_stage2_protocols()
+    write({**r.STAGE2_DECISIONS, "asset_modalities": ["text", "image", "pc"]})
+    with pytest.raises(ValueError, match="asset_modalities"):
+        s2.load_stage2_protocols()

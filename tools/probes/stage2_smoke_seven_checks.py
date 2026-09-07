@@ -128,7 +128,8 @@ def main() -> int:
     train_houses = scene_splits["train_houses"][: args.houses]
 
     data = Stage2Data(args.device)
-    data.asset_vectors = load_asset_modality_vectors(gallery_index)
+    declared = tuple(_stage2["asset_modalities"])
+    data.asset_vectors = load_asset_modality_vectors(gallery_index, declared)
     eligible = set(positive_map) & set(id_to_row) & set(data.modalities)
     samples = enumerate_samples(train_houses, eligible)
     if not samples:
@@ -229,8 +230,8 @@ def main() -> int:
             for idx in batch[:16]:
                 house_id, target_index, asset_id = samples[idx]
                 vec = data.asset_vectors[asset_id]
-                e = {k: torch.from_numpy(vec[k]).to(args.device).unsqueeze(0)
-                     for k in ("text", "image", "pc")}
+                e = {k: (torch.from_numpy(vec[k]).to(args.device).unsqueeze(0)
+                         if k in vec else None) for k in ("text", "image", "pc")}
                 fused = model.query.fusion(e)
                 keep, pos, ei, ea, em = build_context_graph(
                     graphs[house_id], target_index, data.edge_dim,

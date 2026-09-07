@@ -386,7 +386,8 @@ def main() -> int:
 
     print(f"Stage 2 protocols materialised by {decided_by}")
     print(f"  positives      {len(mapping):,} assets, identity mapping")
-    print(f"  excluded       {len(skipped)} with no point cloud (F26)")
+    print(f"  modalities     {ASSET_MODALITIES} (DL-104)")
+    print(f"  excluded       {len(skipped)} missing a declared modality")
     print(f"  gallery_scope  {STAGE2_DECISIONS['gallery_scope']}")
     print(f"  sampling       {STAGE2_DECISIONS['sampling_unit']}, "
           f"target removed = {STAGE2_DECISIONS['target_removed_before_essgnn']}, "
