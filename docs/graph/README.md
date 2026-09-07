@@ -120,7 +120,9 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 **不下載**：ULIP-2 預先取樣的點雲（185 GB）、ULIP-2 的渲染圖（474 GB，而且不是論文要的
 11 正交視角）、ShapeNet triplets（409 GB）。
 
-### 十三項偏離（D-2…D-14）＋一項條件式（D-1，已判定不啟用）
+### 已登記偏離：D-2…D-14 與條件式 D-1
+
+> **2026-09-07 時效更正：** 下表混合不同日期的決策、corpus 量測與解讀，保留原始紀錄供追溯。D-1 是否啟用需核對該次 protocol／run 的實際條件；下表的「不啟用」、標註模型、語料數、背景與版本不是對所有 corpus 的永久判定。現行 producer／consumer 見 [DATA_FLOW.md](../DATA_FLOW.md)。未記載的作者設定保留 UNKNOWN。
 
 | id | 偏離 | 影響 |
 |---|---|---|
@@ -134,9 +136,9 @@ G1 宣稱檢查 ProcTHOR 卻看不到它那個 bug 的來源。
 | **D-7** | I-Design 的 **JSON-constrained decoding 未重現**。補充材料 §7：*"All agents utilize GPT-4's JSON mode to restrict outputs exclusively to valid JSON"*，而我們的 vLLM 沒開任何 guided decoding。**與 D-5 不同**——D-5 是誰回答，D-7 是回答受不受結構約束。Qwen 因此**可能吐出結構上不合法的 JSON，GPT-4 在那個模式下不可能**，那會落進 Engineer 的 schema 驗證重試迴圈。分開編號是因為兩者可獨立修復：開了 guided JSON 就能退掉 D-7，D-5 原封不動  影響同 D-5：Table 2 全部與 Table 3 場景欄；Table 1 不受影響 |
 | **D-9** | **n05 把 Objaverse-LVIS 真值類別餵給標註器當錨定身分**（`DL-007`），模型只能向下細化、不能橫向替換 | **論文是讓 VLM「產生」類別**（`2methdology.tex:28`、`neurips_2025.tex:100`、Figure 2 caption）。**餵標籤進去是departure，永遠不得寫成 paper-faithful。** 影響每一筆標註、每一個 Stage 1 文字向量、Table 1 每一個文字條件欄。**未解：`D0-010` 的證據稽核從未做過**，設計是靠批准通過的；`U-AB` 要求該稽核（ULIP2 `W-6`）必須在全量標註前完成 |
 | **D-10** | **Stage 1 對比負樣本只有單卡 batch**，上游是 8 卡 all-gather 的 512（`F-N10-1`） | UPSTREAM FACT：`upstream/ULIP models/losses.py:38-40` 呼叫 `all_gather_batch`。**梯度累積補不回來** —— 每個 micro-batch 仍各自形成對比矩陣。負樣本數是對比目標的一階項，是 Table 1 落差的候選解釋。實際值在 batch size 定下來後**量測**，不是選的 |
-| **D-11** | ~~**n04 渲染背景為白色**~~ →ct **實際是 `transparent_rgba`**（OpenShape `film_transparent=True`，逐筆 sidecar 的 `background` 欄）。ULIP-2 官方渲染是黑色（`U-W`，USER 決定 2026-08-22）。**[已更正 2026-08-30]** 白背景是 **pyrender 世代**的決定；2026-08-23 換成 OpenShape 的 Blender 腳本後背景變成透明 RGBA，本格與下面那筆白 vs 黑的量測**都是在被取代的渲染器上做的** | 量測而非假設：對 ULIP-2 自己的 `image_feat`，全部 286 個重疊資產，白 R@1 **97.2%**／matched 0.9141／gap 0.3689，黑 95.8%／0.8783／0.3406，n=100 重現同號同量級。`S-5` 是本里程碑自選的判準，**判準不能贏的時候算、輸的時候不算**。影響 n04 語料與其所有影像向量；**不影響與論文的可比性**（論文未提背景） |
+| **D-11** | ~~**n04 渲染背景為白色**~~ →ct **實際是 `transparent_rgba`**（OpenShape `film_transparent=True`，逐筆 sidecar 的 `background` 欄）。ULIP-2 官方渲染是黑色（`U-W`，USER 決定 2026-08-22）。**[已更正 2026-08-30]** 白背景是 **pyrender 世代**的決定；2026-08-23 換成 OpenShape 的 Blender 腳本後背景變成透明 RGBA，本格與下面那筆白 vs 黑的量測**都是在被取代的渲染器上做的** | 量測而非假設：對 ULIP-2 自己的 `image_feat`，全部 286 個重疊資產，白 R@1 **97.2%**／matched 0.9141／gap 0.3689，黑 95.8%／0.8783／0.3406，n=100 重現同號同量級。`S-5` 是本里程碑自選的判準，**判準不能贏的時候算、輸的時候不算**。影響 n04 語料與其所有影像向量；**與作者背景設定的可比性尚未證實**；論文未提背景不能證明背景差異沒有影響 |
 | **D-12** | **`COLOR_0` 從 `texture` 類別撤回**，牴觸 glTF 2.0（`R-12`） | glTF 2.0 定義 `COLOR_0` 為 base colour 的線性乘子，而 base colour = `baseColorFactor × baseColorTexture`，**涵蓋 texture 類**。全量測（n=37，該類與 ULIP 的完整重疊）：調變使 **37/37 變暗**，平均亮度 −0.2076，對 ULIP 自有點雲的 cosine 0.9005 → 0.8980。`SAMPLER_VERSION 6`，影響約 995 個資產的 rgb 通道。⚠️ **16/37 落在雜訊內**（37 次擲幣為 18.5±3），未做配對顯著性檢定；`R-12` 自己寫「變暗是確定的，『因此更差』不是」。此撤回**靠的是 `R-11` 的預設對齊上游規則，不是顯著量測**，而 `R-8` 已確立上游**根本沒有發布點雲上色程序** —— 只有產物，沒有行為可對齊。**永遠不得寫成「ULIP-2 就是這樣做的」** |
-| **D-13** | **語料 46,052，論文說「約 48,000」**（`U-01`，2026-08-22 登記） | **不可避免，不是選的** —— 可取得的 Objaverse-LVIS manifest 就是 46,052 個 uid，且**全部都成功解析**（GLB 覆蓋率 100.00%，兩向差集皆為 0）。論文那份 48K 拿不到。`paper-reproduction.md` §9 要求不可避免的差異也要登記。**影響每一個分母**：依論文 80/20 切分，少約 1,558 個訓練資產與約 390 個測試資產 —— 這**不只是評估集不同**，因為 ULIP-2 是在 Objaverse-LVIS 上「評估」，MetaFind 是在上面「訓練」（`2methdology.tex:75`、`3experiments.tex:24`，皆 PAPER FACT）。依 `O-2` 當成 Table 1 的限制帶著；登記不代表重開該決定。manifest sha256 已補記於 `graph_spec.yaml`（`U-01` 自己寫的 resolution 從來沒被執行過） |
+| **D-13** | **語料 46,052，論文說「約 48,000」**（`U-01`，2026-08-22 登記） | **這是該次 manifest／解析量測的差異** —— 當時取得 46,052 個 uid，且全數解析成功（GLB 覆蓋率 100.00%，兩向差集皆為 0）。作者精確 UID 清單未提供；論文的約 48K 不能當成精確可相減的母數，也不能據此證明差異不可避免。`paper-reproduction.md` §9 要求不可避免的差異也要登記。**影響每一個分母**：若僅把約 48K 當 48,000 試算，80/20 差為約 1,558／390；這不是作者實際缺失 UID 的量測 —— 這**不只是評估集不同**，因為 ULIP-2 是在 Objaverse-LVIS 上「評估」，MetaFind 是在上面「訓練」（`2methdology.tex:75`、`3experiments.tex:24`，皆 PAPER FACT）。依 `O-2` 當成 Table 1 的限制帶著；登記不代表重開該決定。manifest sha256 已補記於 `graph_spec.yaml`（`U-01` 自己寫的 resolution 從來沒被執行過） |
 | **D-14** | **ESSGNN 用 `h⁰ = t_i`；論文 §2.5 字面是 `h_i^(0) = Concat(x_i, t_i)`**（`h0_mode="semantic"`，2026-08-22 登記） | 程式自己的註解就寫「**CONTRADICTS 2.5's literal**」。依 `C2` 採附錄 C 的前提，字面讀法保留為 `RA-1`。影響每個節點的初始狀態 → `e_layout` → Stage 2 → Table 2，而且它正是等變性測試拿來做負向注入的開關（`test_essgnn.py:138`）。**不是靜默風險**：`from_protocol` 不管協定寫什麼都強制它（Master 用敵意協定實測），兩個測試也在斷言。缺的只是登記。⚠️ `PRIMARY_INTERPRETATION` 另外三個值**不是偏離**，它們**遵循**論文：`coords_agg="sum"` 對應 `2methdology.tex:51-52` 的 `\sum`（偏離的是參考 EGNN 的 mean 預設，而依 `U-O` 論文有講就聽論文）、`edge_proj_dim=None`、`normalize_coord_diff=False`。**這三個「打開」才是偏離。** |
 
 ### 論文自身的四個矛盾
@@ -305,29 +307,28 @@ Stage 1 與 Table 1 不經過 G6/G7，可以照常進行。
 `metafind/models/`（`essgnn` / `dual_tower` / `fusion` / `losses` / `ulip_backbone` /
 `stage1_config`）是 `n10`／`n13` **會用到的元件**，不是那兩個節點本身。
 
-> 🔴 **[已更正 2026-08-30] 先前這裡寫「`n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer」——
+> **[2026-08-30 的歷史更正；現況見最新復現審查]** 先前這裡寫「`n10_train_stage1` 與 `n13_train_stage2` 都還沒有 trainer」——
 > 兩個都有。** `metafind/train/stage1.py` 不只存在，還跑過 5→10→25 的輪數階梯與一組 LR sweep
 > （產物在 `data/outputs/ladder/` 與 `data/outputs/checkpoints/sweep_lr/`）；
-> `metafind/train/stage2.py` 也存在，迴圈完整但**從未執行**（缺 `stage1_ckpt` 與 `sem_edge_cache`）。
+> `metafind/train/stage2.py` 也存在；當時記錄尚未執行，缺 `stage1_ckpt` 與 `sem_edge_cache`。此為當日狀態，不描述現在的 checkpoint 或實驗。
 > 這句話同時和本表 `n10_train_stage1` 那一列自相矛盾，**在同一份檔案裡**，
 > 而沒有任何檢查器在比對散文與表格。
 
-777 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、
-場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態，**沒有一條涵蓋任何節點的執行**。
-（766 = `tests/test_*.py` 裡 `^def test_` 的數量，由 `tools/check_graph.py` 實測並比對。）
-**[已更正 2026-08-30]** 先前寫「492 個測試函式…展開成 614 個 case」；492 已過期，
-而「614 個 case」是 pytest 參數化後的展開數、**本輪未重量，標 UNVERIFIED**。
+1110 個測試函式涵蓋六個模型模組、取樣器、渲染器、標註 schema、場景圖建構、語意邊、
+場景切分、Stage 1 編碼協定與 ProcTHOR 資產模態。部分測試會執行真實 runner 的小型路徑並替換模型／資料邊界；不等於對正式 corpus 完整執行節點，亦不證明 paper fidelity。分組、資料依賴與實際執行命令見 [tests/README.md](../../tests/README.md)。
+（1110 = `tests/**/test_*.py` 裡頂層 `^def test_` 的數量，由 `tools/check_graph.py` 遞迴掃描並比對；不含 class method，亦不等於 pytest 展開參數後的案例數。）
+舊「492 functions／614 cases」不是目前計數。最新完整 CPU suite 的結果、排除範圍與限制見 [真實訓練審查](../REPRODUCTION_TRAINING_REVIEW_20260908.md)，不以函式數推算執行案例數。
 
 ---
 
 ### 其他重大未解項
 
-**R-01：已部分實測。** I-Design **裝得起來**（README 要的 MinkowskiEngine／dgl／torch 1.12
+**R-01：以下是舊 Qwen 執行時的部分實測。** 2026-09-07 已補 Gemma model filter／累積 patch 檢查與 raw scene adapter，尚未重跑真 planner；現況見 [IDesign_INPUTS](../IDesign_INPUTS.md)。I-Design **裝得起來**（README 要的 MinkowskiEngine／dgl／torch 1.12
 都不需要，`requirements.txt` 的 `ag2==0.2.0` 在 PyPI 上不存在），
 `create_initial_design` **會成功**，但 Qwen2.5-7B 跑 5 次**0 個場景完成**，每次失敗路徑不同。
 
 **沒有基準，所以不能斷定那是缺陷** —— I-Design 沒用原版規劃器在本機跑過。
-`setup/patches/` 的三個 patch 沒有論文依據，其中兩個會改變場景與完成率。
+當時 `setup/patches/` 的三個 patch 沒有論文依據，其中兩個會改變場景與完成率；現新增第 04 個 model configuration patch，不據此宣稱場景品質已改善。
 
 **[讀 I-Design 原論文後修正]** §5.2 把「物件多、房間小就可能放不下」列為**第一項已知限制**，
 而先前的 smoke 設定（15 件放進 16 m²）正好落在那個區間。仍然沒有完成率基準，

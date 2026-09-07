@@ -360,6 +360,17 @@ def usable_batches(batches: list[list[int]], min_size: int = MIN_BATCH):
     return kept, len(dropped), sum(len(b) for b in dropped)
 
 
+def training_batches(samples, batch_size: int, rng):
+    """Keep the established sampler/tail policy, but require an actual update."""
+    batches, dropped, dropped_samples = usable_batches(
+        unique_positive_batches(samples, batch_size, rng))
+    if not batches:
+        raise ValueError(f"Stage 2 has no usable batches (minimum {MIN_BATCH}); "
+                         f"{len(samples)} samples would produce zero optimizer steps. "
+                         "Increase the sample pool or batch size before training.")
+    return batches, dropped, dropped_samples
+
+
 def unique_positive_batches(samples: list[tuple[str, int, str]], batch_size: int,
                             rng: np.random.Generator) -> list[list[int]]:
     """[U-08e] Batches in which no assetId appears twice.
@@ -541,6 +552,38 @@ def derive_init_lambda(model, samples, graphs, data, ratio: float,
             "sample_is_a_positional_prefix": True}
 
 
+def initialise_layout_lambda(model, stage2: dict, samples, graphs, data,
+                             device: str, *, arch_protocol: dict) -> dict | None:
+    """Initialise Eq. 6 after parent restore, or record no scalar without layout."""
+    import torch
+
+    # A shared protocol can pin lambda for the Full arm. The no-layout arm
+    # has no such parameter, so it must not publish an initializer for one.
+    if model.query.layout_encoder is None:
+        return None
+
+    pinned = stage2.get("init_lambda")
+    if pinned is None:
+        record = derive_init_lambda(
+            model, samples, graphs, data,
+            float(stage2["init_lambda_ratio"]), device,
+            arch_protocol=arch_protocol)
+        print(f"lambda_0 = {record['init_lambda']:.4f} "
+              f"= {record['init_lambda_ratio']} x median ||Fusion|| "
+              f"{record['fused_query_norm_median']:.2f} "
+              f"(n={record['fused_query_norm_n']}, range "
+              f"{record['fused_query_norm_min']:.2f}"
+              f"-{record['fused_query_norm_max']:.2f})", flush=True)
+    else:
+        record = {"init_lambda": float(pinned), "init_lambda_ratio": None,
+                  "basis": "pinned literal in stage2_protocol.json; no "
+                           "measurement taken"}
+        print(f"lambda_0 = {pinned} (pinned literal, not derived)", flush=True)
+    with torch.no_grad():
+        model.query.layout_weight.fill_(float(record["init_lambda"]))
+    return record
+
+
 def encode_query(model, graph: dict, target_index: int, asset_id: str,
                  drop_layout: bool, device: str, data: "Stage2Data",
                  present=None):
@@ -627,9 +670,14 @@ class Stage2Data:
     found them, not the interpreter.
     """
 
-    def __init__(self, device: str, *, graph_unit: str = "room") -> None:
+    def __init__(self, device: str, *, graph_unit: str = "room",
+                 allow_legacy_semantic_inputs: bool = False) -> None:
+        import io
         import numpy as np
         from metafind.data.semantic_edges import relation_text_for
+        from metafind.data.semantic_provenance import (read_verified_node_source,
+                                                       read_verified_edge_source)
+        from metafind.train.gallery_index import verified_source_bytes
 
         validate_graph_unit(graph_unit)
         self.graph_unit = graph_unit
@@ -643,12 +691,15 @@ class Stage2Data:
             self.modalities[rec["asset_id"]] = rec
 
         node = json.loads((paths.OUTPUTS / "procthor_node_embeddings.json").read_text())
-        # The record carries the array's sha256; verify it like the gallery
-        # index is verified, so a rewritten node file cannot be read under an
-        # older record's identity.
-        verify_recorded_artifact(node, "node embeddings",
-                                 "Re-run the semantic-edge job.")
-        arr = np.load(node["uri"])
+        # Consume exactly the hashed bytes: reopening the path after a digest
+        # check could load replaced vectors under the earlier file's identity.
+        if not node.get("uri") or not node.get("sha256"):
+            raise ValueError("node embedding record requires uri and sha256; re-run n08")
+        with np.load(io.BytesIO(verified_source_bytes(node)), allow_pickle=False) as stored:
+            arr = dict(stored)
+        text = json.loads((paths.OUTPUTS / "procthor_object_text.json").read_text())
+        node_source = read_verified_node_source(
+            node, text, arr, allow_legacy=allow_legacy_semantic_inputs)
         self.node_vectors = {a: v for a, v in
                              zip(arr["ids"].tolist(), arr["embeddings"])}
         # t_i's width and e_ij's width are read from the two artifacts SEPARATELY
@@ -665,7 +716,32 @@ class Stage2Data:
                 f"array is {arr['embeddings'].shape[1]}-d")
 
         cache = json.loads((paths.OUTPUTS / "sem_edge_cache.json").read_text())
-        emb = np.load(paths.OUTPUTS / "sem_edge_embeddings.npz")
+        edge_path = paths.OUTPUTS / "sem_edge_embeddings.npz"
+        if cache.get("source_identity") is not None:
+            artifact = cache.get("embedding_artifact")
+            if not isinstance(artifact, dict) or not artifact.get("uri") or not artifact.get("sha256") \
+                    or Path(artifact["uri"]).resolve() != edge_path.resolve():
+                raise ValueError("semantic edge embedding artifact does not identify the loaded file")
+            edge_bytes = verified_source_bytes(artifact)
+        else:
+            # Legacy source policy stays explicit below; reading once does not
+            # manufacture a source digest for an unbound historical artifact.
+            edge_bytes = edge_path.read_bytes()
+        with np.load(io.BytesIO(edge_bytes), allow_pickle=False) as stored:
+            emb = dict(stored)
+        edge_source = read_verified_edge_source(
+            cache, emb, allow_legacy=allow_legacy_semantic_inputs)
+        if node_source["status"] == "verified" and edge_source["status"] == "verified" \
+                and node_source["encoder_identity"] != edge_source["encoder_identity"]:
+            raise ValueError("node and edge semantic caches use different text encoders")
+        self.semantic_source_status = {
+            "node": node_source["status"], "edge": edge_source["status"],
+            "encoder_match": ("verified" if node_source["status"] == edge_source["status"] == "verified"
+                              else "legacy_unbound"),
+        }
+        self.semantic_encoder_identity = (node_source["encoder_identity"]
+                                         if self.semantic_source_status["encoder_match"] == "verified"
+                                         else None)
         vecs = emb["embeddings"]
         self.edge_dim = int(cache["edge_dim"])
         if vecs.shape[1] != self.edge_dim:
@@ -677,7 +753,7 @@ class Stage2Data:
         # also stores the key of every row; compare them, so a cache written
         # against a different embedding file (a crash between the two writes
         # in the semantic-edge run) is caught here rather than served.
-        emb_keys = emb["keys"].tolist() if "keys" in emb.files else None
+        emb_keys = emb["keys"].tolist() if "keys" in emb else None
         for key, entry in cache["entries"].items():
             if entry.get("degraded") or entry.get("embedding_uri") is None:
                 continue
@@ -689,7 +765,6 @@ class Stage2Data:
                     "The cache and the embeddings are from different runs.")
             self.sem_cache[key] = vecs[row]
 
-        text = json.loads((paths.OUTPUTS / "procthor_object_text.json").read_text())
         # Relation cache descriptions and node-encoder text are separate inputs.
         # Node vectors above retain rec["text"]; cache lookup follows its producer.
         self.text_map = {a: relation_text_for(rec) for a, rec in text.items()}
@@ -1053,6 +1128,63 @@ def build_stage2_model(encoding: dict, training: dict, hyperparameters: dict,
         init_lambda=float(init_lambda)))
 
 
+def restore_stage1_for_stage2(backbone, model, parent_values: dict,
+                              stage2_values: dict, checkpoint_path, *,
+                              query_backbone=None):
+    """Restore the parent's loss scope before applying the child's temperature.
+
+    ``parent_values`` must come from ``effective_stage1_model_inputs`` for the
+    verified parent checkpoint. Fixed Stage 1 losses have no trainable state,
+    so restoring directly into a learnable child incorrectly requires a new
+    parameter in the parent. Conversely, loading a learned parent directly into
+    a fixed child silently overwrites that child's requested fixed temperature.
+
+    A learnable child retains the existing parent-initialisation choice (raw
+    scale, before either stage's clamp). A fixed child always uses its own
+    recipe. Both the requested and the effective initial temperatures are
+    recorded so that a clamped inherited scale cannot impersonate the recipe.
+    """
+    import torch
+    from metafind.models.losses import ContrastiveConfig, MetaFindContrastiveLoss
+    from metafind.train.stage1 import load_stage1_checkpoint
+
+    keys = ("learnable_temperature", "init_temperature", "max_logit_scale")
+    for name, values in (("Stage 1", parent_values), ("Stage 2", stage2_values)):
+        if missing := [key for key in keys if key not in values or values[key] is None]:
+            raise ValueError(f"{name} lacks bound temperature settings: {missing}")
+    parent_loss = MetaFindContrastiveLoss(ContrastiveConfig(
+        bidirectional=False, **{key: parent_values[key] for key in keys}))
+    parent_fixed_scale = parent_loss.logit_scale.detach().clone()
+    load_stage1_checkpoint(
+        backbone, model, parent_loss, checkpoint_path,
+        new_prefixes=("query.layout_encoder", "query.layout_weight"),
+        query_backbone=query_backbone)
+    if (not parent_loss.cfg.learnable_temperature
+            and not torch.equal(parent_loss.logit_scale, parent_fixed_scale)):
+        raise ValueError("Stage 1 fixed temperature state disagrees with its bound recipe")
+    child_loss = MetaFindContrastiveLoss(ContrastiveConfig(
+        bidirectional=True, **{key: stage2_values[key] for key in keys}))
+    source = "stage2_recipe"
+    if child_loss.cfg.learnable_temperature:
+        with torch.no_grad():
+            child_loss.logit_scale.copy_(parent_loss.logit_scale)
+        source = ("stage1_checkpoint" if parent_loss.cfg.learnable_temperature
+                  else "stage1_fixed_recipe")
+    scale = child_loss.logit_scale.detach().exp()
+    effective_scale = (scale.clamp(max=child_loss.cfg.max_logit_scale)
+                       if child_loss.cfg.learnable_temperature else scale)
+    temperature_init = {
+        "source": source,
+        "requested_init_temperature": stage2_values["init_temperature"],
+        "raw_initial_temperature": scale.reciprocal().item(),
+        "effective_initial_temperature": effective_scale.reciprocal().item(),
+        "initial_logit_scale": child_loss.logit_scale.detach().item(),
+        "learnable_temperature": child_loss.cfg.learnable_temperature,
+        "max_logit_scale": child_loss.cfg.max_logit_scale,
+    }
+    return child_loss, temperature_init
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", default="full")
@@ -1063,8 +1195,11 @@ def main() -> int:
                     help="Stage 1 checkpoint record to initialise from. "
                          "Defaults to the canonical stage1_ckpt.json.")
     ap.add_argument("--allow-legacy-gallery-index", action="store_true",
-                    help="explicitly accept a v1 encoder hash after checking the "
-                         "parent configuration; v1 cannot prove producer forward flags")
+                    help="explicitly accept missing legacy source identity or a v1 "
+                         "encoder hash; incomplete producer provenance is recorded")
+    ap.add_argument("--allow-legacy-semantic-inputs", action="store_true",
+                    help="explicitly accept n08 node/edge caches without bound source identity; "
+                         "records legacy_unbound instead of verified provenance")
     # Stage 2's training recipe (optimizer, learning rate, weight decay, batch
     # size, epochs, seed, temperature, scene dropout) used to be read from the
     # STAGE 1 hyperparameter artifact without anyone saying so: the paper gives
@@ -1090,20 +1225,13 @@ def main() -> int:
     args = ap.parse_args()
 
     import torch
-    # [BUG FIX 2026-08-28] `load_stage1_checkpoint` was called at the bottom of
-    # this function and imported nowhere -- a NameError the moment Stage 2
-    # reached it. It survived because this module has never executed that far
-    # (it needs stage1_ckpt, and n10 has not run), so no test and no run could
-    # touch the line. `gallery_index.py` imports all three from the same module.
-    # Found by MASTER, confirmed here by grep: two hits for the name in this
-    # file, both at the call site, zero in any import.
     from metafind.train.stage1 import (
-        effective_stage1_model_inputs, load_protocols, load_stage1_checkpoint,
+        effective_stage1_model_inputs, load_protocols,
         load_stage1_model_config, model_input_snapshot, stage1_backbone_kwargs)
-    from metafind.models.losses import ContrastiveConfig, MetaFindContrastiveLoss
     from metafind.models.ulip_backbone import (
         BackboneConfig, ULIPBackbone, prepare_depth_shell)
-    from metafind.train.gallery_index import verified_stage2_index, verify_gallery_encoder
+    from metafind.train.gallery_index import (verified_stage2_index, verify_gallery_encoder,
+                                              verify_stage2_gallery_sources)
 
     # Stage 1's encoding and training protocols still decide the fusion
     # architecture Stage 2 restores into; only the RECIPE comes from the file
@@ -1209,11 +1337,13 @@ def main() -> int:
     # old digest AND the producer checkpoint -- so the linkage check above would
     # pass over bytes neither of them describes.
     gallery_ids, gallery_embeddings, gallery_index = verified_stage2_index(
-        index_record, ckpt["sha256"], asset_modalities)
+        index_record, ckpt["sha256"], asset_modalities,
+        allow_legacy_sources=args.allow_legacy_gallery_index)
     id_to_row = {a: i for i, a in enumerate(gallery_ids)}
     gallery_vecs = torch.from_numpy(gallery_embeddings).to(args.device)
 
-    data = Stage2Data(args.device, graph_unit=stage2["graph_unit"])
+    data = Stage2Data(args.device, graph_unit=stage2["graph_unit"],
+                      allow_legacy_semantic_inputs=args.allow_legacy_semantic_inputs)
     data.asset_vectors = load_asset_modality_vectors(gallery_index, asset_modalities)
     eligible = set(positive_map) & set(id_to_row) & set(data.modalities)
     samples = enumerate_samples(train_houses, eligible, graph_unit=stage2["graph_unit"])
@@ -1228,6 +1358,9 @@ def main() -> int:
     seed = values["seed"]
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
+    # Validate the first real partition before allocating the large backbone.
+    # Reuse it in epoch zero so validation does not consume an extra RNG draw.
+    first_batches = training_batches(samples, values["batch_size"], rng)
 
     # Restore the parent's actual trainable subset. A fuser-only checkpoint has
     # no fine-tuned point state; requiring it would reject a valid parent.
@@ -1252,49 +1385,20 @@ def main() -> int:
     # literal stays expressible. Otherwise lambda_0 is derived below, after the
     # model exists, from the ratio and a norm measured on this checkpoint.
     pinned = stage2.get("init_lambda")
-    lambda_record = None
     model = build_stage2_model(encoding, training, hyperparameters, arch_proto,
                                node_feat_dim=data.node_dim,
                                edge_feat_dim=data.edge_dim,
                                use_layout=use_layout,
                                init_lambda=float(pinned) if pinned is not None
                                else 1.0)
-    loss_fn = MetaFindContrastiveLoss(ContrastiveConfig(
-        # [Eq. 7/8] symmetric, unlike Stage 1's Eq. 5
-        bidirectional=True,
-        learnable_temperature=values["learnable_temperature"],
-        init_temperature=values["init_temperature"],
-        max_logit_scale=values["max_logit_scale"]))
     if training["freeze_gallery"]:
         model.freeze_gallery(True)
 
-    # Restore into all three, INCLUDING loss_fn: Stage 1's learned temperature
-    # carries into Stage 2 as its initialisation. The paper says nothing about
-    # tau across stages, so this is [IMPLEMENTATION CHOICE] -- but it is the one
-    # that makes Stage 2 a fine-tune rather than a restart, and starting from
-    # 0.07 again would discard a value Stage 1 spent its whole run learning.
-    # The ESSGNN and lambda are new here and correctly absent from the
-    # checkpoint; load_stage1_checkpoint checks coverage per module, so their
-    # absence from a Stage 1 file is not mistaken for a dropped tensor.
-    load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]),
-                           # [BUG FIX 2026-09-02] "layout_weight", not
-                           # "query.layout_weight". The parameter is registered
-                           # on the QUERY tower (dual_tower.py:207), so its name
-                           # is `query.layout_weight`, and the coverage gate
-                           # matches with `startswith` -- which the short form
-                           # never satisfies. Every Stage 2 run would have died
-                           # on this line with "does not cover 1 trainable
-                           # parameter(s)". It survived because Stage 2 has
-                           # never executed: found the first time the seven-check
-                           # smoke reached the restore.
-                           #
-                           # `freeze_for_stage2` uses `endswith("layout_weight")`
-                           # for the same parameter, which is why the two never
-                           # disagreed in review -- they are different tests of
-                           # the same name and only one of them was wrong.
-                           new_prefixes=("query.layout_encoder",
-                                         "query.layout_weight"),
-                           query_backbone=backbone_q)
+    # Eq. 7/8 changes directionality, not the fixed Stage 2 recipe. Only a
+    # learnable child inherits the parent's raw scale as an implementation choice.
+    loss_fn, temperature_init = restore_stage1_for_stage2(
+        backbone, model, _stage1_hyperparameters["values"], values,
+        Path(ckpt["uri"]), query_backbone=backbone_q)
     model.to(args.device)
     loss_fn.to(args.device)
     grads = freeze_for_stage2(model, backbone, query_modality_masking=query_masking,
@@ -1344,24 +1448,9 @@ def main() -> int:
     # Placed here rather than beside `build_stage2_model` because it needs the
     # restored weights and the graphs; the model was built with a placeholder
     # and the parameter is overwritten in place below.
-    if pinned is None and use_layout:
-        lambda_record = derive_init_lambda(
-            model, samples, graphs, data,
-            float(stage2["init_lambda_ratio"]), args.device,
-            arch_protocol=arch_proto)
-        with torch.no_grad():
-            model.query.layout_weight.fill_(float(lambda_record["init_lambda"]))
-        print(f"lambda_0 = {lambda_record['init_lambda']:.4f} "
-              f"= {lambda_record['init_lambda_ratio']} x median ||Fusion|| "
-              f"{lambda_record['fused_query_norm_median']:.2f} "
-              f"(n={lambda_record['fused_query_norm_n']}, range "
-              f"{lambda_record['fused_query_norm_min']:.2f}"
-              f"-{lambda_record['fused_query_norm_max']:.2f})", flush=True)
-    elif pinned is not None:
-        lambda_record = {"init_lambda": float(pinned), "init_lambda_ratio": None,
-                         "basis": "pinned literal in stage2_protocol.json; no "
-                                  "measurement taken"}
-        print(f"lambda_0 = {pinned} (pinned literal, not derived)", flush=True)
+    lambda_record = initialise_layout_lambda(
+        model, stage2, samples, graphs, data, args.device,
+        arch_protocol=arch_proto)
 
     # [P1] NOT values["p_mask"]. Both rates are 30% in the paper, which is
     # exactly what made the alias invisible -- but they are different
@@ -1395,13 +1484,14 @@ def main() -> int:
     started, step = time.time(), 0
     with runlog.run_progress(NODE):
         for epoch in range(epochs):
+            epoch_start_step = step
             # The QUERY tower only. `model.train()` recursed into the gallery
             # tower and undid freeze_gallery's eval(); harmless while the loop
             # never calls the gallery, but a promise in freeze_gallery's
             # docstring that the code then broke.
             model.query.train()
-            batches = unique_positive_batches(samples, values["batch_size"], rng)
-            batches, n_small, n_small_samples = usable_batches(batches)
+            batches, n_small, n_small_samples = (first_batches if epoch == 0 else
+                training_batches(samples, values["batch_size"], rng))
             if epoch == 0:
                 print(f"  {len(batches):,} batches kept; {n_small} with fewer than "
                       f"{MIN_BATCH} samples dropped ({n_small_samples:,} samples, the "
@@ -1458,7 +1548,7 @@ def main() -> int:
                         loss_q2g=round(out["loss_q2g"].item(), 6),
                         loss_g2q=round(out["loss_g2q"].item(), 6),
                         acc_q2g=round(out.get("acc_q2g", torch.tensor(0.0)).item(), 6),
-                        tau=round(loss_fn.temperature.item(), 6),
+                        tau=round(out["temperature"].item(), 6),
                         # Eq. 6's learnable scalar. Watching it is the cheapest
                         # read on whether the layout branch is contributing at
                         # all: if lambda decays toward zero the model is
@@ -1469,11 +1559,14 @@ def main() -> int:
                         layout_dropped=int(drop))
                 if step % 50 == 0:
                     print(f"  epoch {epoch} step {step}: loss {out['loss'].item():.4f}, "
-                          f"tau {loss_fn.temperature.item():.4f}, "
+                          f"tau {out['temperature'].item():.4f}, "
                           f"layout {'dropped' if drop else 'used'}", flush=True)
 
+            if step == epoch_start_step:
+                raise RuntimeError("Stage 2 epoch performed no optimizer steps; refusing checkpoint")
             record = {
                 "variant_id": args.variant,
+                "use_layout": use_layout,
                 "uri": str(CKPT_DIR / f"stage2_{args.variant}.pt"),
                 "trainable_only": True,
                 # What this run actually trained with, so a later reader does
@@ -1484,6 +1577,10 @@ def main() -> int:
                     encoding, training, _stage1_hyperparameters, model),
                 "gallery_index_sha256": index_record["sha256"],
                 "allow_legacy_gallery_index": args.allow_legacy_gallery_index,
+                "allow_legacy_semantic_inputs": args.allow_legacy_semantic_inputs,
+                "semantic_source_status": data.semantic_source_status,
+                "gallery_source_status": ("verified" if index_record.get("source_identity")
+                                          else "legacy_unbound"),
                 "layout_input_dims": {"node_feat_dim": data.node_dim,
                                       "edge_feat_dim": data.edge_dim},
                 "graph_unit": stage2["graph_unit"],
@@ -1496,6 +1593,7 @@ def main() -> int:
                 "hyperparameters_sha256": hp_sha256,
                 "hyperparameters": hyperparameters,
                 "hyperparameters_are_stage1_artifact": hp_is_stage1,
+                "temperature_init": temperature_init,
                 "effective_values": {
                     "learning_rate": values["learning_rate"],
                     "weight_decay": values["weight_decay"],
@@ -1506,7 +1604,7 @@ def main() -> int:
                     "warmup_frac": warmup_frac,
                     "lr_start": lr_start if warmup_frac > 0 else None,
                     "lr_end": lr_end if warmup_frac > 0 else None,
-                    "init_temperature": values["init_temperature"],
+                    "init_temperature": temperature_init["effective_initial_temperature"],
                     "learnable_temperature": values["learnable_temperature"],
                 },
                 # Eq. 6's starting lambda AND how it was obtained. Without the
@@ -1541,6 +1639,10 @@ def main() -> int:
         record["code_revision"] = runlog.code_revision()
         record["code_dirty"] = runlog.code_dirty()
         record["steps"] = step
+        # Source files can change during a long training run. Never publish a
+        # fresh checkpoint claiming that a stale gallery matches current inputs.
+        verify_stage2_gallery_sources(index_record, gallery_index,
+                                      allow_legacy=args.allow_legacy_gallery_index)
         torch.save(stage2_checkpoint_payload(model, loss_fn, record), record["uri"])
         record["sha256"] = hashlib.sha256(Path(record["uri"]).read_bytes()).hexdigest()
         record["size_bytes"] = Path(record["uri"]).stat().st_size

@@ -1002,16 +1002,16 @@ def load_stage2_over_stage1(record_path: str, stage1_ckpt: dict,
                             variant: str = "full", *, allow_legacy_inputs: bool = False) -> dict:
     """Read a Stage 2 record, refuse a wrong parent, build the tower it fits.
 
-    The tower is built WITH the ESSGNN branch (`use_layout=True`) so the Stage 2
-    state's `query.layout_encoder.*` and `query.layout_weight` have somewhere to
-    land; evaluation then passes no layout, which is exactly what sec. 3.2
-    describes for the w/ ESSGNN row. The loss module is the Stage 1 one, built
-    only so `load_stage1_checkpoint` can restore its temperature buffer.
+    A layout-trained tower includes ESSGNN so those saved tensors can land;
+    evaluation passes no layout as in sec. 3.2. The no-layout ablation builds
+    only the parent's fusion architecture. The loss module is the Stage 1 one,
+    built only so `load_stage1_checkpoint` can restore its temperature state.
     """
     from metafind.train.stage1 import (build_model, load_stage1_model_config,
                                        effective_stage1_model_inputs)
     from metafind.train.stage1 import load_protocols as load_stage1_protocols
-    from metafind.train.gallery_index import load_stage2_checkpoint_record
+    from metafind.train.gallery_index import (load_stage2_checkpoint_record,
+                                              stage2_layout_settings)
     from metafind.train.stage2 import (Stage2Data, build_stage2_model,
                                        load_stage2_protocols)
 
@@ -1021,27 +1021,28 @@ def load_stage2_over_stage1(record_path: str, stage1_ckpt: dict,
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     parent = rec.get("stage1_checkpoint_sha256")
+    use_layout, initial_lambda = stage2_layout_settings(rec)
     bound = load_stage1_model_config(stage1_ckpt["uri"], stage1_ckpt)
     encoding, training, hyperparameters = effective_stage1_model_inputs(bound, *load_stage1_protocols())
     arch_proto = rec.get("arch_protocol")
     dims = rec.get("layout_input_dims")
-    if not arch_proto or not dims:
+    if use_layout and (not arch_proto or not dims):
         if not allow_legacy_inputs:
             raise SystemExit("Stage 2 record lacks bound architecture/dimensions; "
                              "legacy reconstruction requires --allow-legacy-stage2-inputs")
         if not arch_proto:
             _, _, arch_proto = load_stage2_protocols()
-        data = Stage2Data("cpu", graph_unit="house")
+        data = Stage2Data("cpu", graph_unit="house", allow_legacy_semantic_inputs=True)
         dims = {"node_feat_dim": data.node_dim, "edge_feat_dim": data.edge_dim}
-    model = build_stage2_model(encoding, training, hyperparameters, arch_proto,
-                               **dims,
-                               use_layout=True,
-                               init_lambda=float(rec["lambda_init"]["init_lambda"]))
+    model, loss_fn = build_model(encoding, training, hyperparameters)
+    if use_layout:
+        model = build_stage2_model(encoding, training, hyperparameters, arch_proto,
+                                   **dims, use_layout=True, init_lambda=initial_lambda)
     if training.get("freeze_gallery"):
         model.freeze_gallery(True)
-    _, loss_fn = build_model(encoding, training, hyperparameters)
+    layout_detail = f"lambda_0 {initial_lambda:.4f}" if use_layout else "layout disabled"
     print(f"stage2 record {record_path}\n  variant {rec.get('variant_id')}  "
-          f"parent {str(parent)[:16]}  lambda_0 {rec['lambda_init']['init_lambda']:.4f}  "
+          f"parent {str(parent)[:16]}  {layout_detail}  "
           f"steps {rec.get('steps')}", flush=True)
     return {"record": rec, "model": model, "loss_fn": loss_fn}
 
@@ -1054,6 +1055,10 @@ def overlay_stage2_weights(model, rec: dict, device: str, *, fusion_only: bool =
     from metafind.train.gallery_index import verified_checkpoint_bytes
     state = torch.load(io.BytesIO(verified_checkpoint_bytes(rec)), map_location=device,
                        weights_only=False)["trainable_state"]
+    if (rec.get("use_layout") is False or rec.get("variant_id") == "no_layout") and any(
+            name.startswith("query.layout_encoder.") or name == "query.layout_weight"
+            for name in state):
+        raise SystemExit("Stage 2 no-layout record carries layout weights")
     stray = {n for n in state if not n.startswith(("query.fusion.", "query.layout_encoder."))
              and n != "query.layout_weight"}
     if stray:
@@ -1078,9 +1083,11 @@ def overlay_stage2_weights(model, rec: dict, device: str, *, fusion_only: bool =
         raise SystemExit(f"Stage 2 state has keys the tower lacks: {sorted(unexpected)[:5]}")
     if fusion_only:
         return
-    lam = float(model.query.layout_weight.item())
+    lam = model.query.layout_weight
+    layout_detail = (f"lambda {float(lam.item()):.4f}"
+                     if lam is not None else "layout disabled")
     print(f"  Stage 2 query weights laid over the Stage 1 parent: {len(state)} tensors, "
-          f"lambda {lam:.4f} (unused at evaluation: layout=None)", flush=True)
+          f"{layout_detail}", flush=True)
 
 
 def _construction_kwargs(observation, image_tokens: int, partner=None, text_override=None) -> dict:
@@ -1136,10 +1143,10 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
               "with an unfiltered run of the same protocol.", flush=True)
 
     # [MASTER ruling 2026-08-31] Assets with no second observation are dropped
-    # from the QUERY pool only. The GALLERY keeps every uid, so the denominator
-    # -- the thing an R@1 is a fraction of -- is unchanged and this protocol
-    # stays comparable to the same protocol without a pack on that axis. What
-    # changes is `n_query`, which is recorded below.
+    # from the QUERY pool only. The GALLERY keeps every uid, preserving the
+    # candidate set. The R@k denominator is n_query, so dropping queries changes
+    # the measured population; record that change and reject it for reported
+    # protocols below.
     dropped_queries = []
     if query_pack is not None:
         query_uids, dropped_queries = query_pack.covered(query_uids)

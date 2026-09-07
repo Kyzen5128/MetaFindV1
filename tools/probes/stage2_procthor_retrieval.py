@@ -33,7 +33,8 @@ from metafind.train.stage2 import (Stage2Data, build_stage2_model, encode_query,
                                    enumerate_samples, load_asset_modality_vectors,
                                    verify_stage2_input_identity)
 from metafind.train.gallery_index import (load_checkpoint_record, load_stage2_checkpoint_record,
-                                          verified_stage2_index, verify_gallery_encoder)
+                                          verified_stage2_index, verify_gallery_encoder,
+                                          verify_stage2_gallery_sources, stage2_layout_settings)
 from metafind.eval.run_retrieval import overlay_stage2_weights
 from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
 
@@ -45,7 +46,8 @@ def main() -> int:
     ap.add_argument("--variant", default="full")
     ap.add_argument("--allow-legacy-stage2-inputs", action="store_true",
                     help="explicitly replay old house graphs without bound input provenance")
-    ap.add_argument("--allow-legacy-gallery-index", action="store_true")
+    ap.add_argument("--allow-legacy-gallery-index", action="store_true",
+                    help="accept explicitly unbound legacy source/encoder provenance")
     ap.add_argument("--houses", type=int, default=300, help="test houses to query from")
     ap.add_argument("--query-mode", default="none", choices=("none", "text_only"),
                     help="how the query is built, matching the Stage 2 run's "
@@ -59,6 +61,7 @@ def main() -> int:
     ckpt = load_stage1_model_config(ckpt["uri"], ckpt)
     s2 = load_stage2_checkpoint_record(args.stage2_record, ckpt, args.variant,
                                        allow_legacy=args.allow_legacy_stage2_inputs)
+    use_layout, initial_lambda = stage2_layout_settings(s2)
     encoding, training, hyper = effective_stage1_model_inputs(ckpt, *load_stage1_protocols())
     if "input_identity" in s2:
         identity = verify_stage2_input_identity(s2, current_inputs=True)
@@ -73,12 +76,14 @@ def main() -> int:
     else:
         raise SystemExit("Stage 2 record has no input identity; explicit legacy replay is required")
 
-    data = Stage2Data(args.device, graph_unit=graph_unit)
+    data = Stage2Data(args.device, graph_unit=graph_unit,
+                      allow_legacy_semantic_inputs=args.allow_legacy_stage2_inputs)
     index = json.loads((paths.OUTPUTS / "stage2_gallery_index.json").read_text())
     declared = tuple(_s2p["asset_modalities"])
     if training["tower_sharing"] == "fully_separate" and "pc" in declared:
         raise SystemExit("legacy pc-bearing gallery caches do not contain the separate query point path")
-    ids, embeddings, arr = verified_stage2_index(index, ckpt["sha256"], declared)
+    ids, embeddings, arr = verified_stage2_index(index, ckpt["sha256"], declared,
+        allow_legacy_sources=args.allow_legacy_gallery_index)
     if s2.get("gallery_index_sha256") and s2["gallery_index_sha256"] != index["sha256"]:
         raise SystemExit("Stage 2 checkpoint was trained against a different gallery index")
     gallery = torch.from_numpy(embeddings).to(args.device)
@@ -101,8 +106,8 @@ def main() -> int:
                       if training["tower_sharing"] == "fully_separate" else None)
     model = build_stage2_model(encoding, training, hyper, arch,
                                node_feat_dim=data.node_dim, edge_feat_dim=data.edge_dim,
-                               use_layout=True,
-                               init_lambda=float(s2["lambda_init"]["init_lambda"])).to(args.device)
+                               use_layout=use_layout,
+                               init_lambda=initial_lambda if use_layout else 1.0).to(args.device)
     from metafind.train.stage1 import build_model
     _, loss_fn = build_model(encoding, training, hyper)
     if training["freeze_gallery"]:
@@ -133,8 +138,11 @@ def main() -> int:
         return r
 
     out = {"n_query": len(samples), "n_gallery": len(ids), "query_mode": args.query_mode,
+           "semantic_source_status": data.semantic_source_status,
            "checkpoint_sha256": ckpt["sha256"], "stage2_sha256": s2["sha256"],
            "gallery_index_sha256": index["sha256"], "graph_unit": graph_unit,
+           "gallery_source_status": ("verified" if index.get("source_identity")
+                                     else "legacy_unbound"),
            "runtime_source_sha256": runlog.runtime_source_sha256(),
            "runtime_source_status": runlog.runtime_source_status(),
            "allow_legacy_stage2_inputs": args.allow_legacy_stage2_inputs,
@@ -144,16 +152,22 @@ def main() -> int:
     out["heads"]["S1_no_layout"] = run("S1", drop_layout=True)
     overlay_stage2_weights(model, s2, args.device)
     out["heads"]["S2_no_layout"] = run("S2-off", drop_layout=True)
-    out["heads"]["S2_with_layout"] = run("S2-on", drop_layout=False)
-    lam = float(model.query.layout_weight.item())
-    out["lambda"] = lam
-    # how big is the layout term relative to the fused query, after training?
-    with torch.no_grad():
-        h, t, a = samples[0]
-        q_off = encode_query(model, graphs[h], t, a, True, args.device, data, present=present).float()
-        q_on = encode_query(model, graphs[h], t, a, False, args.device, data, present=present).float()
-    out["norm_fused"] = float(q_off.norm()); out["norm_layout_term"] = float((q_on - q_off).norm())
-    print(f"  lambda {lam:.3f}; |Fusion| {out['norm_fused']:.1f}  |lambda*e_layout| {out['norm_layout_term']:.1f} (one sample)")
+    out["use_layout"] = use_layout
+    out["layout_status"] = "available" if use_layout else "disabled_by_checkpoint"
+    out["lambda"] = None
+    if use_layout:
+        out["heads"]["S2_with_layout"] = run("S2-on", drop_layout=False)
+        lam = float(model.query.layout_weight.item())
+        out["lambda"] = lam
+        # How big is the layout term relative to the fused query, after training?
+        with torch.no_grad():
+            h, t, a = samples[0]
+            q_off = encode_query(model, graphs[h], t, a, True, args.device, data, present=present).float()
+            q_on = encode_query(model, graphs[h], t, a, False, args.device, data, present=present).float()
+        out["norm_fused"] = float(q_off.norm())
+        out["norm_layout_term"] = float((q_on - q_off).norm())
+        print(f"  lambda {lam:.3f}; |Fusion| {out['norm_fused']:.1f}  |lambda*e_layout| {out['norm_layout_term']:.1f} (one sample)")
+    verify_stage2_gallery_sources(index, arr, allow_legacy=args.allow_legacy_gallery_index)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(out, indent=1))
     print(f"-> {args.out}")

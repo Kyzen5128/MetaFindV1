@@ -1,0 +1,9 @@
+..............................................................           [100%]
+=============================== warnings summary ===============================
+tests/eval/test_eval_stage2_row.py: 1 warning
+tests/eval/test_custom_models.py: 13 warnings
+  /home/kyzen/MetaFindV1/metafind/models/fusion.py:202: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+    self.head = nn.TransformerEncoder(layer, num_layers=cfg.n_layers)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+62 passed, 14 warnings in 1.00s

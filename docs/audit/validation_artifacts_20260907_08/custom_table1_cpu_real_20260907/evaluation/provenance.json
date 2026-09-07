@@ -1,0 +1,276 @@
+{
+  "protocol_sha256": "ac407520896b1f89e2bf9b3ed7ad92b43ed05a377a3523e281cd06a6fe412959",
+  "stage1": {
+    "base_hyperparameter_sha256": "583ea2e83afe47017336be4fbf1de10241d1426e3cd98dd4b90c29066da29864",
+    "checkpoint_schema": 4,
+    "seed": 20260816,
+    "epoch": 9,
+    "run_id": "1788512103-3220119-8ac6f9",
+    "code_revision": "1c3c654e4b911d182b47597be5d516190501d35c",
+    "code_dirty": false,
+    "runtime_source_sha256": "951c76787d0777d4ab43aef272a14a02c916d0db396f7aa50ade8d5a55b764fc",
+    "runtime_source_status": "ok",
+    "arm_config_hash": "6edf172adc02515fba7420fba2e399df233f6c04be0455225adbb2e55aa5d538",
+    "arm_config": {
+      "optimizer": "adamw",
+      "decay_mask_tokens": false,
+      "learning_rate": 0.0001,
+      "weight_decay": 0.1,
+      "scheduler": "cosine",
+      "batch_size": 64,
+      "epochs": 10,
+      "p_mask": 0.3,
+      "init_temperature": 0.5,
+      "learnable_temperature": false,
+      "max_logit_scale": 100.0,
+      "betas": [
+        0.9,
+        0.98
+      ],
+      "eps": 1e-08,
+      "warmup_epochs": 1,
+      "lr_start": 1e-06,
+      "lr_end": 1e-05,
+      "training.fusion": "transformer",
+      "training.tower_sharing": "shared_backbone_separate_fusion",
+      "training.allow_all_masked": true,
+      "training.similarity": "cosine",
+      "training.prefusion_norm": true,
+      "encoding.text_serialization": "metafind_attrs_v1@b1ac384839305720",
+      "encoding.text_serialization_family": "metafind_attrs_v1",
+      "encoding.text_serialization_contract": {
+        "family": "metafind_attrs_v1",
+        "template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+        "max_description_chars": 160,
+        "max_category_chars": 40,
+        "max_materials": 3,
+        "placement_phrases": {
+          "onCeiling": "typically mounted on a ceiling",
+          "onFloor": "typically placed on the floor",
+          "onFloor+onObject": "typically placed on the floor or on other objects",
+          "onObject": "typically placed on top of other objects",
+          "onWall": "typically mounted on a wall"
+        },
+        "no_placement_phrase": "with no typical placement"
+      },
+      "encoding.text_template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+      "encoding.text_serialization_probes": [
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, with no typical placement.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor or on other objects.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on top of other objects.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a wall.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall or on the floor or on top of other objects.",
+        "A very long category name a very long made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+        "LED made of metal, plastic, glass, roughly 1000 by 1 by 0 centimetres, typically placed on top of other objects."
+      ],
+      "encoding.image_aggregation": "mean",
+      "encoding.view_aggregation": {
+        "n_views": 12,
+        "selected_view_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "view_selection_policy": "all",
+        "pre_normalize_each_view": false,
+        "method": "mean",
+        "post_normalize": false,
+        "aggregation_version": 1
+      },
+      "encoding.actual_clip_train_scope": "frozen",
+      "encoding.missing_modality_representation": "learned_token",
+      "lr_horizon": 10,
+      "phase": "dev",
+      "train_scope": "point_encoder_and_fuser"
+    },
+    "repeat_index": null,
+    "argv": [
+      "--query-observation",
+      "second_observation",
+      "--query-image-policy",
+      "single_view",
+      "--lr",
+      "1e-4",
+      "--epochs",
+      "10",
+      "--out-dir",
+      "pilotP1s_split801010_lr1e-4_20260904"
+    ],
+    "hardware": {
+      "device": "cuda",
+      "gpu": "NVIDIA GeForce RTX 5090",
+      "torch": "2.12.1+cu132",
+      "cuda": "13.2",
+      "tf32_matmul": false,
+      "cudnn_tf32": true
+    },
+    "lr_horizon": 10,
+    "epoch_count": 10,
+    "preload": false,
+    "num_workers": 4,
+    "query_construction": null,
+    "query_observation": "second_observation",
+    "query_image_policy": "single_view",
+    "query_pc_perturb": "none",
+    "amp": "off",
+    "query_partner": "none",
+    "query_text_override": null,
+    "query_text_override_sha256": null,
+    "prefusion_norm": true,
+    "image_tokens": 1,
+    "text_template": "attrs_v1",
+    "embeddings_dir": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings",
+    "train_scope": "point_encoder_and_fuser",
+    "tower_sharing": "shared_backbone_separate_fusion",
+    "trainable_only": true,
+    "n_params_saved": 80738946,
+    "n_params_by_section": {
+      "backbone_trainable_state": 33483394,
+      "tower_trainable_state": 47255552,
+      "loss_trainable_state": 0
+    },
+    "clip_train_scope": "frozen",
+    "inputs": {
+      "train_uid_sequence_sha256": "68b579571e0f911c53f8fad10bcf4f50d82d81e3fd574170277b352d4492862d",
+      "train_uid_set_sha256": "68b579571e0f911c53f8fad10bcf4f50d82d81e3fd574170277b352d4492862d",
+      "selection_uid_sequence_sha256": "1a9b768ff3474d33dd2c7f19cef7df86a6781c4678cc4872fb1290e24072d0c9",
+      "selection_uid_set_sha256": "1a9b768ff3474d33dd2c7f19cef7df86a6781c4678cc4872fb1290e24072d0c9",
+      "n_train": 36554,
+      "n_selection": 4569,
+      "train_content": {
+        "content_sha256": "5c1af603d2fdae76920fc52c1c4a0ff195b632dce71659b393a71c678a94eb06",
+        "n_assets": 36554,
+        "n_missing_pointcloud_sidecar": 0,
+        "n_missing_embedding_npz": 0,
+        "n_pointcloud_sidecar_mismatch": 0,
+        "pointcloud_digest_source": "sha256 of the .npz bytes; the n07 sidecar's claim is checked against it",
+        "embedding_digest_source": "sha256 of the .npz bytes"
+      },
+      "selection_content": {
+        "content_sha256": "598da5577ea39532a1be48d238ec9a4ae444149b8fc0ce08f887e2a8b2ddb769",
+        "n_assets": 4569,
+        "n_missing_pointcloud_sidecar": 0,
+        "n_missing_embedding_npz": 0,
+        "n_pointcloud_sidecar_mismatch": 0,
+        "pointcloud_digest_source": "sha256 of the .npz bytes; the n07 sidecar's claim is checked against it",
+        "embedding_digest_source": "sha256 of the .npz bytes"
+      }
+    },
+    "initializers": {
+      "ulip2": {
+        "uri": "/home/kyzen/metafind/metafind_data_attrs/models/ulip2/ULIP-2/pretrained_models/ULIP-2-PointBERT-10k-xyzrgb-pc-vit_g-objaverse_shapenet-pretrained.pt",
+        "sha256": "a4b5ed9799d5841a1646e0fb7d24cb8dcdd3b3e6fab2e2575de2531f71274adb",
+        "size_bytes": 402018241
+      },
+      "open_clip": {
+        "model": "ViT-bigG-14",
+        "pretrained": "laion2b_s39b_b160k",
+        "package_version": "3.3.0",
+        "hf_repo": "laion/CLIP-ViT-bigG-14-laion2B-39B-b160k",
+        "hf_cache": "/home/kyzen/metafind/metafind_data_attrs/models/hf-cache/hub/models--laion--CLIP-ViT-bigG-14-laion2B-39B-b160k",
+        "hf_revision": "743c27bd53dfe508a0ade0f50698f99b39d03bec",
+        "weight_file": "open_clip_model.safetensors",
+        "weight_blob_sha256": "db71bd27925917762c506c1b8a08e191d236e5586b5cd99f77d11aced578ec34",
+        "weight_size_bytes": 10158382892
+      }
+    },
+    "uri": "/home/kyzen/metafind/metafind_data_attrs/outputs/checkpoints/pilotP1s_split801010_lr1e-4_20260904/stage1_best.pt",
+    "sha256": "074f8d98e33a4faccb7147fa78369277be60b2c8da50849b2f7d46219db08f48",
+    "size_bytes": 323046260,
+    "selected_on": "dev_val mean_R@1, tie mean_R@5 [D-3]",
+    "phase": "dev",
+    "limit": null,
+    "n_train": 36554,
+    "n_dev_val": 4569,
+    "pools_sha256": "dfe869c8e7baadcb8cf0fed5a69270a987b8bc5da972dc0e580b291f23034220",
+    "dev_val": {
+      "text": {
+        "R@1": 0.338367257605603,
+        "R@5": 0.6730137885751806,
+        "n_query": 4569,
+        "n_gallery": 4569
+      },
+      "image": {
+        "R@1": 0.6574742832129569,
+        "R@5": 0.8533595972860583,
+        "n_query": 4569,
+        "n_gallery": 4569
+      },
+      "pc": {
+        "R@1": 0.9789888378200919,
+        "R@5": 0.9989056686364631,
+        "n_query": 4569,
+        "n_gallery": 4569
+      },
+      "text+image": {
+        "R@1": 0.85905012037645,
+        "R@5": 0.9737360472751149,
+        "n_query": 4569,
+        "n_gallery": 4569
+      },
+      "text+pc": {
+        "R@1": 0.9973736047275115,
+        "R@5": 1.0,
+        "n_query": 4569,
+        "n_gallery": 4569
+      },
+      "image+pc": {
+        "R@1": 0.9851170934558985,
+        "R@5": 0.9989056686364631,
+        "n_query": 4569,
+        "n_gallery": 4569
+      },
+      "full": {
+        "R@1": 0.9975924710002189,
+        "R@5": 1.0,
+        "n_query": 4569,
+        "n_gallery": 4569
+      },
+      "mean_R@1": 0.8305662383141045,
+      "mean_R@5": 0.9282743957727543,
+      "n_gallery": 4569
+    }
+  },
+  "stage2": null,
+  "command": [
+    "/home/kyzen/MetaFindV1/metafind/eval/custom_table1.py",
+    "--protocol",
+    "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/protocol/protocol.json",
+    "--stage1-record",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/checkpoints/pilotP1s_split801010_lr1e-4_20260904/stage1_best_ckpt.json",
+    "--out-dir",
+    "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/evaluation",
+    "--device",
+    "cpu",
+    "--batch-size",
+    "2",
+    "--block",
+    "4",
+    "--seed",
+    "20260907"
+  ],
+  "seed": 20260907,
+  "device": "cpu",
+  "batch_size": 2,
+  "block": 4,
+  "code_revision": "87ccfbbf460cfd2bcc518f654e1b7d0fd3e506d8",
+  "code_dirty": true,
+  "runtime_source_sha256": "3666ea2905feaef367673c8b67f0a472af11658c014a0a8fa742398d5bc9e19d",
+  "python": "3.11.15",
+  "numpy": "2.4.6",
+  "torch": "2.12.1+cu132",
+  "cuda": "13.2",
+  "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.43"
+}

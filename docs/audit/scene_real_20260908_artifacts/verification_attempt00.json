@@ -1,0 +1,6 @@
+{
+  "exit_code": 1,
+  "script_sha256": "4d09ad2c54af61c4d016480d397789aaa9ebf824c32a9af353cf3701f02b08a2",
+  "failure": "diagnostic checker used gallery_embeddings; production frozen input key is gallery",
+  "production_changes": false
+}

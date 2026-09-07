@@ -1,5 +1,7 @@
 # Stage 1 逐項裁決計畫（2026-09-03 晚間）
 
+> **2026-09-07 evidence correction:** this is a historical plan, not the current evaluation contract. OpenShape examples cannot establish MetaFind query sources. A figure showing annotation JSON or a query label does not specify the actual CLIP serializer, token sequence or every Table 1 query. Treat those deductions below as historical hypotheses, not PAPER FACT. Current implementation choice: [custom evaluation](../docs/CUSTOM_TABLE1_EVALUATION.md).
+
 Kyzen：「這些評估你都應該重視……逐步不排除及修正。」
 
 最高權威：`docs/paper/metafind_source/metafind_arxiv_v1.html`（`arXiv:2510.04057v1`，檔頭核對過）。
@@ -275,7 +277,7 @@ Clone：`/home/kyzen/upstream/OpenShape_code`（abe5aa4）、`/home/kyzen/upstre
 ### 5n. OpenShape 論文的檢索怎麼做（arXiv 2305.10764v2，UPSTREAM FACT；2026-09-04 15:20）
 
 §4.4 Cross-Modal Applications：「we retrieve 3D shapes … by calculating the cosine similarity between input embedding(s) and 3D shape embeddings and performing kNN」。輸入是**單一**圖片、文字或點雲；全部是**定性圖例**（Figure 11、12、14、15），**沒有 R@k**、沒有測試集。兩個點雲同時查詢的做法是 argmax_i min(h_i·h_a, h_i·h_b)，取「對兩者都近」，**不是平均**。附錄 6.1：圖片查詢的輸入圖來自 unsplash.com（真實照片，不是渲染圖）。附錄 6.3.1：Objaverse 的 raw text = 該 shape 的 **name**（Sketchfab 名稱），再經 GPT-4 過濾、BLIP／Azure 描述、LAION 檢索文字補強。
-含意：(1) MetaFind Table 1 的 OpenShape 列不可能來自 OpenShape 官方碼，是 MetaFind 自己加 mean pooling 算的；(2) 上游做圖片查詢時用真實照片而非渲染圖，與「MetaFind 的 q_image 不是渲染圖」一致；(3) 上游的 raw text 就是名稱，支持 Figure 1「Platform Bed」= 名稱的讀法。
+更正：MetaFind §3.1 明寫對基線另加 mean pooling（PAPER FACT）；這不代表完全未重用 OpenShape 程式。上游使用真實照片或名稱只描述 OpenShape，不能證明 MetaFind 的 query image／text 來源。
 檔案：論文 HTML 放在 docs/paper 下的 openshape_source 目錄。
 
 
@@ -283,9 +285,9 @@ Clone：`/home/kyzen/upstream/OpenShape_code`（abe5aa4）、`/home/kyzen/upstre
 
 來源：https://neurips.cc/media/PosterPDFs/NeurIPS%202025/115513.png（存檔 `docs/reference/metafind_neurips2025_poster.png`）。OpenReview 論壇與 PDF 被驗證頁擋住，抓不到審稿意見；arXiv 只有 v1；沒有程式碼連結。
 
-兩個新事實：
-1. **gallery 文字是標註 JSON 本身**。海報右上「Structured Detailed Description」印的是 `{"annotations": {"category": "robot", "synset": "robot.n.01", "width": 30, "length": 30, "height": 40, "volume": 36000, "mass": 2.5, "description": "A small cubic-shaped robot …", "materials": ["metal","glass","plastic"], "onCeiling": false, "onWall": false, "onFloor": true, "onObject": true}}`。這串超過 CLIP 的 77 token（我們的資產約 120 token），CLIP 會截尾。
-2. **query 文字是 `Platform Bed (size: ……)`**（框架圖），只有類別＋尺寸。q_image 畫的是一張床的渲染圖，q_pc 一朵點雲。
+圖示觀察與界線（2026-09-07 補正）：
+1. **圖中展示結構化標註 JSON；實際 gallery CLIP 字串仍未由圖確定**。海報右上「Structured Detailed Description」印的是 `{"annotations": {"category": "robot", "synset": "robot.n.01", "width": 30, "length": 30, "height": 40, "volume": 36000, "mass": 2.5, "description": "A small cubic-shaped robot …", "materials": ["metal","glass","plastic"], "onCeiling": false, "onWall": false, "onFloor": true, "onObject": true}}`。這串超過 CLIP 的 77 token（我們的資產約 120 token），CLIP 會截尾。
+2. **框架圖的 query 示意文字是 `Platform Bed (size: ……)`**；這個例子不能證明 Table 1 每筆 query 都只有類別與尺寸。q_image 畫的是一張床的渲染圖，q_pc 一朵點雲。
 
 Table 1 全表（海報版，多了幾列基線）：
 

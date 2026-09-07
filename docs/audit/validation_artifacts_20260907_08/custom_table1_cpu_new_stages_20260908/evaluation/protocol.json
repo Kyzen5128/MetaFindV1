@@ -1,0 +1,662 @@
+{
+  "schema": "metafind.custom_table1.v1",
+  "status": "complete",
+  "classification": "IMPLEMENTATION CHOICE",
+  "query_uids": [
+    "00010d9634f645859d2e252d189b31d5",
+    "0002064ef02e46f9a10b4bff10bae805"
+  ],
+  "gallery_uids": [
+    "0025d57953fc4c8a80a44e59294e6841",
+    "0022a3197f9646acbb9041eff2d1f55c",
+    "00130eea9e884209be92f68378a817e8",
+    "0002c6eafa154e8bb08ebafb715a8d46",
+    "0002064ef02e46f9a10b4bff10bae805",
+    "00010d9634f645859d2e252d189b31d5"
+  ],
+  "data_root": "/home/kyzen/metafind/metafind_data_attrs",
+  "n_views": 12,
+  "encoding_protocol": {
+    "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/stage1_encoding_protocol.json",
+    "sha256": "da7e981fae759d56cba98d81df082474b6b573d124d668c80d35a8b86f940eb1",
+    "content": {
+      "status": "resolved",
+      "text_serialization": "metafind_attrs_v1@b1ac384839305720",
+      "text_serialization_family": "metafind_attrs_v1",
+      "text_serialization_contract": {
+        "family": "metafind_attrs_v1",
+        "template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+        "max_description_chars": 160,
+        "max_category_chars": 40,
+        "max_materials": 3,
+        "placement_phrases": {
+          "onCeiling": "typically mounted on a ceiling",
+          "onFloor": "typically placed on the floor",
+          "onFloor+onObject": "typically placed on the floor or on other objects",
+          "onObject": "typically placed on top of other objects",
+          "onWall": "typically mounted on a wall"
+        },
+        "no_placement_phrase": "with no typical placement"
+      },
+      "text_template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+      "text_serialization_probes": [
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, with no typical placement.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor or on other objects.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on top of other objects.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a wall.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall or on the floor or on top of other objects.",
+        "A very long category name a very long made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+        "LED made of metal, plastic, glass, roughly 1000 by 1 by 0 centimetres, typically placed on top of other objects."
+      ],
+      "image_aggregation": "mean",
+      "view_aggregation": {
+        "n_views": 12,
+        "selected_view_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "view_selection_policy": "all",
+        "pre_normalize_each_view": false,
+        "method": "mean",
+        "post_normalize": false,
+        "aggregation_version": 1
+      },
+      "paper_clip_train_scope": "frozen",
+      "paper_clip_train_scope_basis": "MetaFind does not state a per-module freeze scope for OpenCLIP anywhere. This reproduction follows ULIP-2's design because MetaFind explicitly builds on ULIP-2, ULIP-2 3.3 states 'We adopt the largest version of encoders from OpenCLIP (ViT-G/14) ... and freeze it during pre-training', and MetaFind never states that it changes that policy. The three sentences that read otherwise do not carry it: 2.6's 'Both query and gallery encoders are trained' describes the TOWERS, which train under a frozen CLIP because the point encoder, the projection and the fuser are all in the optimizer; 3.4's 'Fine-tuning the entire encoder outperformed training the fuser only' separates the full model from the fuser-only ablation, a separation the trainable point encoder already produces; and 2.4's 'gallery encoder is frozen after pretraining' versus 2.6's 'is trained' is the Stage 1 / Stage 2 boundary, not a Stage 1 contradiction. Reopen if MetaFind's code or its authors show an optimizer update reaching OpenCLIP's parameters.",
+      "paper_clip_train_scope_confidence": "moderate",
+      "actual_clip_train_scope": "frozen",
+      "missing_modality_representation": "learned_token",
+      "decided_by": "MASTER, under Kyzen's full delegation 2026-09-03 (fresh audit A5/C8)",
+      "decided_at": "2026-09-03T10:28:15.068564+00:00"
+    }
+  },
+  "provenance": {
+    "purpose": "REAL PRETRAINED CPU EXECUTION SMOKE; scores from 2 queries / 6 candidates are not a research comparison",
+    "selection_rule": "First 6 lexicographically sorted holdout UIDs; first 2 are queries; gallery order reversed to exercise non-diagonal UID mapping.",
+    "split_source": {
+      "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/splits.json",
+      "sha256": "c03e898f74f612ceedf27090ad2175a507e6d0b2455faa873956e7059ce9c14b"
+    },
+    "query_text_source": "Existing per-asset annotation.description from the older attrs_v1 corpus; same annotation producer as canonical attributes, NOT independent annotation.",
+    "input_files": {
+      "query_uids": {
+        "path": "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/query_uids.json",
+        "sha256": "de03bb2030952d53567a403e64831fa49fe3af8ee48114e8f07dd96522788cd3"
+      },
+      "gallery_uids": {
+        "path": "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/gallery_uids.json",
+        "sha256": "5fa92070fb5486da206ed66b41f25c1da57c2d43aa6c9458d271993f316545c8"
+      },
+      "query_texts": {
+        "path": "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/query_texts.json",
+        "sha256": "f4b771cd538d830dbaafda344b3795c95c87375955587862ccb4884cf89c9a90"
+      }
+    },
+    "gpu": "CUDA/HIP hidden; CPU only; no live v10 corpus writes"
+  },
+  "choices": {
+    "positive": "same_uid",
+    "same_observations": "canonical text, cached mean image, canonical cloud on both sides",
+    "different_observations": "external query text, one UID-fixed query view, remaining views for gallery, resampled query cloud",
+    "query_view_rule": "uid_seed(uid) % n_views",
+    "gallery_view_rule": "all indices except each gallery UID's own query_view",
+    "subset_image_aggregation": "float32 arithmetic mean of cached view vectors; no per-view normalization",
+    "query_pc": {
+      "seed_offset": 1000003,
+      "n_points": 10000,
+      "sampler_version": 9,
+      "sampler_source": {
+        "path": "/home/kyzen/MetaFindV1/metafind/data/pointclouds.py",
+        "sha256": "afa0c9c94de23ca38733c4562b6e1588d55cdd276b5802afbdb1ee38f0a6db61"
+      },
+      "meshload_source": {
+        "path": "/home/kyzen/MetaFindV1/metafind/data/meshload.py",
+        "sha256": "a45e737eb7ca9f9468ca587740476599ecd0f10179735097354a9243e456a54d"
+      },
+      "normalization": "pointclouds.pc_norm(float64 xyz) -> float32; RGB unchanged"
+    },
+    "effective_text_tokens": "runtime_required: compare canonical/query tokens using the loaded backbone tokenizer; reject equality",
+    "caveat": "A new surface sample does not prove that only the seed differs from historical canonical sampling."
+  },
+  "records": {
+    "0025d57953fc4c8a80a44e59294e6841": {
+      "embedding": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0025d57953fc4c8a80a44e59294e6841.npz",
+        "sha256": "e26423f6f988ad54538aadfadc5dcf3729d07bec600b36bfeb6af8c2c45a4b5a"
+      },
+      "cloud": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0025d57953fc4c8a80a44e59294e6841.npz",
+        "sha256": "d4e13c660e5abbe9ab9214d176bf6ad85822857e11b6215eed507214529d69b6"
+      },
+      "annotation": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/0025d57953fc4c8a80a44e59294e6841.json",
+        "sha256": "eab0fccaa58b9102fc39930ef90750206b44695bd6b905944a580e80a7725ead"
+      },
+      "mesh": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/datasets/objaverse-lvis/glbs/glbs/000-000/0025d57953fc4c8a80a44e59294e6841.glb",
+        "sha256": "306989b91f06e67c819c10461ee2a6bf48f52b5290946f35b2236a9afc4a48a1"
+      },
+      "embedding_sidecar": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0025d57953fc4c8a80a44e59294e6841.json",
+        "sha256": "22d3040f197c96f84871a34bf540d339b7ac325ddbbae1ddf40c7648f847ad66",
+        "content": {
+          "uid": "0025d57953fc4c8a80a44e59294e6841",
+          "encoder_version": 2,
+          "ulip2_ckpt_sha": "a4b5ed9799d5841a1646e0fb7d24cb8dcdd3b3e6fab2e2575de2531f71274adb",
+          "embedding_uri": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0025d57953fc4c8a80a44e59294e6841.npz",
+          "text": "Globe made of plastic, paper, roughly 30 by 28.5 by 30 centimetres, typically placed on top of other objects.",
+          "text_tokens": 31,
+          "text_truncated": false,
+          "n_views": 12,
+          "aggregation": "mean",
+          "embedding_dim": 1280,
+          "text_serialization": "metafind_attrs_v1@b1ac384839305720",
+          "clip_train_scope": "frozen",
+          "image_identity": "e281d0d0a2f6cb21",
+          "view_io_version": 1,
+          "renderer_version": 6,
+          "reencoded_text_from": "/home/kyzen/metafind_out/embeddings"
+        }
+      },
+      "canonical_text": "Globe made of plastic, paper, roughly 30 by 28.5 by 30 centimetres, typically placed on top of other objects.",
+      "query_view": 5,
+      "gallery_views": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "canonical_cloud_provenance": "UNKNOWN unless recorded in cloud_sidecar; source mesh identity may be absent",
+      "cloud_sidecar": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0025d57953fc4c8a80a44e59294e6841.json",
+        "sha256": "31a10d8fd4f7d92ca2d4cf0f1f7d96e66bbfef8007917c05d4337723f8a2008a",
+        "content": {
+          "uid": "0025d57953fc4c8a80a44e59294e6841",
+          "path": "/home/kyzen/MetaFindV1/data/outputs/pointclouds/0025d57953fc4c8a80a44e59294e6841.npz",
+          "sha256": "d4e13c660e5abbe9ab9214d176bf6ad85822857e11b6215eed507214529d69b6",
+          "n_points": 10000,
+          "seed": 3292197353,
+          "sampler_version": 8,
+          "frame_correction": "yaw180_about_y@ulip2_frame",
+          "color0_modulated": false,
+          "rgb_scale": "unit",
+          "colour_source": "texture",
+          "coloured_point_fraction": 1.0,
+          "raw_bbox_extents": [
+            1.9021157026290894,
+            2.0,
+            1.9999998807907104
+          ],
+          "raw_bbox_volume": 7.608462357016634,
+          "centroid_offset": 1.7133279470726847e-10,
+          "max_radius": 0.999999985893984,
+          "per_axis_variance": [
+            0.3005798503137817,
+            0.30082537102328877,
+            0.3025133706500264
+          ]
+        }
+      }
+    },
+    "0022a3197f9646acbb9041eff2d1f55c": {
+      "embedding": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0022a3197f9646acbb9041eff2d1f55c.npz",
+        "sha256": "51f25c9da76406fe708d884617939305e4403eca3c95c7300e379fad240bd0d3"
+      },
+      "cloud": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0022a3197f9646acbb9041eff2d1f55c.npz",
+        "sha256": "beaf3dc8c2a7dfe6afff0aa3c2a87c2cd03b57dad16649ca27b8dd04b03b0b98"
+      },
+      "annotation": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/0022a3197f9646acbb9041eff2d1f55c.json",
+        "sha256": "e31e18a1f4249744b280464ee558415a3782d4cc53d239cc401a737491843f69"
+      },
+      "mesh": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/datasets/objaverse-lvis/glbs/glbs/000-000/0022a3197f9646acbb9041eff2d1f55c.glb",
+        "sha256": "5d995617f01bc3a289cbe76a869709604e557dd76c4f7cccb66dc1a08767317b"
+      },
+      "embedding_sidecar": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0022a3197f9646acbb9041eff2d1f55c.json",
+        "sha256": "33549e7e54781e0c40b46b8fa0091e870600d379a360b5a7f751d2e11e6cbae3",
+        "content": {
+          "uid": "0022a3197f9646acbb9041eff2d1f55c",
+          "encoder_version": 2,
+          "ulip2_ckpt_sha": "a4b5ed9799d5841a1646e0fb7d24cb8dcdd3b3e6fab2e2575de2531f71274adb",
+          "embedding_uri": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0022a3197f9646acbb9041eff2d1f55c.npz",
+          "text": "Armoire made of wood, roughly 103.7 by 52.3 by 180 centimetres, typically placed on the floor.",
+          "text_tokens": 33,
+          "text_truncated": false,
+          "n_views": 12,
+          "aggregation": "mean",
+          "embedding_dim": 1280,
+          "text_serialization": "metafind_attrs_v1@b1ac384839305720",
+          "clip_train_scope": "frozen",
+          "image_identity": "018855c7202a934b",
+          "view_io_version": 1,
+          "renderer_version": 6,
+          "reencoded_text_from": "/home/kyzen/metafind_out/embeddings"
+        }
+      },
+      "canonical_text": "Armoire made of wood, roughly 103.7 by 52.3 by 180 centimetres, typically placed on the floor.",
+      "query_view": 5,
+      "gallery_views": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "canonical_cloud_provenance": "UNKNOWN unless recorded in cloud_sidecar; source mesh identity may be absent",
+      "cloud_sidecar": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0022a3197f9646acbb9041eff2d1f55c.json",
+        "sha256": "79e1b53f95c80df2485e2c7b916c6b2d8d361f2659477246cc5a9997bdc8fdf8",
+        "content": {
+          "uid": "0022a3197f9646acbb9041eff2d1f55c",
+          "path": "/home/kyzen/MetaFindV1/data/outputs/pointclouds/0022a3197f9646acbb9041eff2d1f55c.npz",
+          "sha256": "beaf3dc8c2a7dfe6afff0aa3c2a87c2cd03b57dad16649ca27b8dd04b03b0b98",
+          "n_points": 10000,
+          "seed": 2916685457,
+          "sampler_version": 8,
+          "frame_correction": "yaw180_about_y@ulip2_frame",
+          "color0_modulated": false,
+          "rgb_scale": "unit",
+          "colour_source": "texture",
+          "coloured_point_fraction": 1.0,
+          "raw_bbox_extents": [
+            121.80000305175781,
+            211.5,
+            61.400001525878956
+          ],
+          "raw_bbox_volume": 1581707.058938143,
+          "centroid_offset": 6.52710150461644e-10,
+          "max_radius": 0.999999997670718,
+          "per_axis_variance": [
+            0.09566797953682979,
+            0.29716019360780166,
+            0.030894358664782108
+          ]
+        }
+      }
+    },
+    "00130eea9e884209be92f68378a817e8": {
+      "embedding": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/00130eea9e884209be92f68378a817e8.npz",
+        "sha256": "235abb2e0aa587ea1f458cd9cd288b6cc4f1c054fa2938bc84851aac84d49bdc"
+      },
+      "cloud": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/00130eea9e884209be92f68378a817e8.npz",
+        "sha256": "74242ad18a2f449fd99b7848adaadbcbb34132bbf47470a8214fca9a7208425e"
+      },
+      "annotation": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/00130eea9e884209be92f68378a817e8.json",
+        "sha256": "a9292a3d351402fde129a26a1ab4a9e669065de8511c5fde01cf4684d1ff1ccf"
+      },
+      "mesh": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/datasets/objaverse-lvis/glbs/glbs/000-000/00130eea9e884209be92f68378a817e8.glb",
+        "sha256": "8b2cd6d623a355a4ba7098cf5739e9c862a986f4aa39c49c27c732fd87c2c39e"
+      },
+      "embedding_sidecar": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/00130eea9e884209be92f68378a817e8.json",
+        "sha256": "629e7c3f8a5848edf16c7216eceddb82af1c81349fc507a296587617daf949c6",
+        "content": {
+          "uid": "00130eea9e884209be92f68378a817e8",
+          "encoder_version": 2,
+          "ulip2_ckpt_sha": "a4b5ed9799d5841a1646e0fb7d24cb8dcdd3b3e6fab2e2575de2531f71274adb",
+          "embedding_uri": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/00130eea9e884209be92f68378a817e8.npz",
+          "text": "Rubber duck made of rubber, plastic, roughly 12.3 by 14 by 10 centimetres, typically placed on the floor or on other objects.",
+          "text_tokens": 34,
+          "text_truncated": false,
+          "n_views": 12,
+          "aggregation": "mean",
+          "embedding_dim": 1280,
+          "text_serialization": "metafind_attrs_v1@b1ac384839305720",
+          "clip_train_scope": "frozen",
+          "image_identity": "4a5c3dd8e855ac05",
+          "view_io_version": 1,
+          "renderer_version": 6,
+          "reencoded_text_from": "/home/kyzen/metafind_out/embeddings"
+        }
+      },
+      "canonical_text": "Rubber duck made of rubber, plastic, roughly 12.3 by 14 by 10 centimetres, typically placed on the floor or on other objects.",
+      "query_view": 4,
+      "gallery_views": [
+        0,
+        1,
+        2,
+        3,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "canonical_cloud_provenance": "UNKNOWN unless recorded in cloud_sidecar; source mesh identity may be absent",
+      "cloud_sidecar": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/00130eea9e884209be92f68378a817e8.json",
+        "sha256": "f9de8b759508dc0253e91f2c363fa37dbc89e6caf97159bbc1605a4a343471e7",
+        "content": {
+          "uid": "00130eea9e884209be92f68378a817e8",
+          "path": "/home/kyzen/MetaFindV1/data/outputs/pointclouds/00130eea9e884209be92f68378a817e8.npz",
+          "sha256": "74242ad18a2f449fd99b7848adaadbcbb34132bbf47470a8214fca9a7208425e",
+          "n_points": 10000,
+          "seed": 1448306404,
+          "sampler_version": 8,
+          "frame_correction": "yaw180_about_y@ulip2_frame",
+          "color0_modulated": false,
+          "rgb_scale": "unit",
+          "colour_source": "flat",
+          "coloured_point_fraction": 1.0,
+          "raw_bbox_extents": [
+            3.326165556907654,
+            2.701952740550041,
+            3.7802600860595703
+          ],
+          "raw_bbox_volume": 33.97373472718352,
+          "centroid_offset": 5.806585249956697e-10,
+          "max_radius": 1.0000000192927185,
+          "per_axis_variance": [
+            0.15544743865823596,
+            0.13016761521258766,
+            0.2134652751152727
+          ]
+        }
+      }
+    },
+    "0002c6eafa154e8bb08ebafb715a8d46": {
+      "embedding": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002c6eafa154e8bb08ebafb715a8d46.npz",
+        "sha256": "d8287055bfc89c06672344ad1452b211cc8c6cd0757397ffdc4072e2379986b3"
+      },
+      "cloud": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0002c6eafa154e8bb08ebafb715a8d46.npz",
+        "sha256": "a3be0107e664255346d23651a79573bab32b79766808d6d8dff9ea4218ac5842"
+      },
+      "annotation": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/0002c6eafa154e8bb08ebafb715a8d46.json",
+        "sha256": "5619e7251bf7361deb478fbd2a062f4e0da8f08eb11459aefa7875fb4b8ba799"
+      },
+      "mesh": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/datasets/objaverse-lvis/glbs/glbs/000-000/0002c6eafa154e8bb08ebafb715a8d46.glb",
+        "sha256": "240e6c3d2117eb4bb2c1995bd197c574cec8e492940f84984ac35e5dca582121"
+      },
+      "embedding_sidecar": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002c6eafa154e8bb08ebafb715a8d46.json",
+        "sha256": "de71d6eec06b5b7cbeaa64bc83093de7e03ab328a51ac93c5f73eee1b42e3d77",
+        "content": {
+          "uid": "0002c6eafa154e8bb08ebafb715a8d46",
+          "encoder_version": 2,
+          "ulip2_ckpt_sha": "a4b5ed9799d5841a1646e0fb7d24cb8dcdd3b3e6fab2e2575de2531f71274adb",
+          "embedding_uri": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002c6eafa154e8bb08ebafb715a8d46.npz",
+          "text": "Birthday cake made of frosting, sponge cake, chocolate, roughly 34 by 34 by 15 centimetres, typically placed on top of other objects.",
+          "text_tokens": 33,
+          "text_truncated": false,
+          "n_views": 12,
+          "aggregation": "mean",
+          "embedding_dim": 1280,
+          "text_serialization": "metafind_attrs_v1@b1ac384839305720",
+          "clip_train_scope": "frozen",
+          "image_identity": "299029f2c6a36dab",
+          "view_io_version": 1,
+          "renderer_version": 6,
+          "reencoded_text_from": "/home/kyzen/metafind_out/embeddings"
+        }
+      },
+      "canonical_text": "Birthday cake made of frosting, sponge cake, chocolate, roughly 34 by 34 by 15 centimetres, typically placed on top of other objects.",
+      "query_view": 9,
+      "gallery_views": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        10,
+        11
+      ],
+      "canonical_cloud_provenance": "UNKNOWN unless recorded in cloud_sidecar; source mesh identity may be absent",
+      "cloud_sidecar": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0002c6eafa154e8bb08ebafb715a8d46.json",
+        "sha256": "9b2fd2c2566172b3111a013718d6222ef7e1c5df8ce8af8060a295e96604cc24",
+        "content": {
+          "uid": "0002c6eafa154e8bb08ebafb715a8d46",
+          "path": "/home/kyzen/MetaFindV1/data/outputs/pointclouds/0002c6eafa154e8bb08ebafb715a8d46.npz",
+          "sha256": "a3be0107e664255346d23651a79573bab32b79766808d6d8dff9ea4218ac5842",
+          "n_points": 10000,
+          "seed": 616389849,
+          "sampler_version": 8,
+          "frame_correction": "yaw180_about_y@ulip2_frame",
+          "color0_modulated": false,
+          "rgb_scale": "unit",
+          "colour_source": "flat",
+          "coloured_point_fraction": 1.0,
+          "raw_bbox_extents": [
+            2.8289529944577936,
+            1.2488245542908007,
+            2.8289529944577936
+          ],
+          "raw_bbox_volume": 9.994311743387346,
+          "centroid_offset": 1.9369254005141555e-10,
+          "max_radius": 1.0000000174361858,
+          "per_axis_variance": [
+            0.20307803695092388,
+            0.07600011728759061,
+            0.20750304539103068
+          ]
+        }
+      }
+    },
+    "0002064ef02e46f9a10b4bff10bae805": {
+      "embedding": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002064ef02e46f9a10b4bff10bae805.npz",
+        "sha256": "338d5cb020e207728ad52d284f7caa7ee49bc6f88d44e3c6f04b33c76d6def70"
+      },
+      "cloud": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0002064ef02e46f9a10b4bff10bae805.npz",
+        "sha256": "3896dc15408d693b1a6a709541a4b0a600dc2ee5d31d5ce29484af67dfe1a83c"
+      },
+      "annotation": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/0002064ef02e46f9a10b4bff10bae805.json",
+        "sha256": "cd3988904b9fa0f425161ae918f206073c61872be981c5e460705ff3ea43e62f"
+      },
+      "mesh": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/datasets/objaverse-lvis/glbs/glbs/000-000/0002064ef02e46f9a10b4bff10bae805.glb",
+        "sha256": "f6c9aa06168caa60bce5981accd88b9373c889236632390e46a617a8f5ee3085"
+      },
+      "embedding_sidecar": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002064ef02e46f9a10b4bff10bae805.json",
+        "sha256": "25d345a896c1b69010db55a3b7bce945483c18155d104eb1dfd38ad880395081",
+        "content": {
+          "uid": "0002064ef02e46f9a10b4bff10bae805",
+          "encoder_version": 2,
+          "ulip2_ckpt_sha": "a4b5ed9799d5841a1646e0fb7d24cb8dcdd3b3e6fab2e2575de2531f71274adb",
+          "embedding_uri": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002064ef02e46f9a10b4bff10bae805.npz",
+          "text": "Terracotta pot made of terracotta, stone, foliage, roughly 28.4 by 26.4 by 25 centimetres, typically placed on the floor or on other objects.",
+          "text_tokens": 38,
+          "text_truncated": false,
+          "n_views": 12,
+          "aggregation": "mean",
+          "embedding_dim": 1280,
+          "text_serialization": "metafind_attrs_v1@b1ac384839305720",
+          "clip_train_scope": "frozen",
+          "image_identity": "46041fdcd1df3353",
+          "view_io_version": 1,
+          "renderer_version": 6,
+          "reencoded_text_from": "/home/kyzen/metafind_out/embeddings"
+        }
+      },
+      "canonical_text": "Terracotta pot made of terracotta, stone, foliage, roughly 28.4 by 26.4 by 25 centimetres, typically placed on the floor or on other objects.",
+      "query_view": 11,
+      "gallery_views": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "canonical_cloud_provenance": "UNKNOWN unless recorded in cloud_sidecar; source mesh identity may be absent",
+      "cloud_sidecar": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0002064ef02e46f9a10b4bff10bae805.json",
+        "sha256": "5a92c272877e8bff46483a561bc1be0f26b1e430be187c819aeac7a1e4ee72da",
+        "content": {
+          "uid": "0002064ef02e46f9a10b4bff10bae805",
+          "path": "/home/kyzen/MetaFindV1/data/outputs/pointclouds/0002064ef02e46f9a10b4bff10bae805.npz",
+          "sha256": "3896dc15408d693b1a6a709541a4b0a600dc2ee5d31d5ce29484af67dfe1a83c",
+          "n_points": 10000,
+          "seed": 2171677115,
+          "sampler_version": 8,
+          "frame_correction": "yaw180_about_y@ulip2_frame",
+          "color0_modulated": false,
+          "rgb_scale": "unit",
+          "colour_source": "texture",
+          "coloured_point_fraction": 1.0,
+          "raw_bbox_extents": [
+            3.7864850759506226,
+            3.3365377034057864,
+            3.5219266629975907
+          ],
+          "raw_bbox_volume": 44.49514175097818,
+          "centroid_offset": 2.0633028725569602e-10,
+          "max_radius": 0.9999999928613152,
+          "per_axis_variance": [
+            0.14064114408412584,
+            0.1607167223550083,
+            0.1419244762642059
+          ]
+        }
+      },
+      "query_text": "This is a rustic, terracotta-colored clay pot with a weathered, matte finish and a slightly irregular, handmade shape. It sits atop a flat, grey stone base and contains a cluster of large, crumpled green and white leaves.",
+      "query_cloud": {
+        "path": "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/protocol/query_pc/0002064ef02e46f9a10b4bff10bae805.npy",
+        "sha256": "497ce4a1bfac51c50582da2b3b4b3ce7d88f1f8a1d5c9b6c4bdfe259941ffd27"
+      }
+    },
+    "00010d9634f645859d2e252d189b31d5": {
+      "embedding": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/00010d9634f645859d2e252d189b31d5.npz",
+        "sha256": "2c2c2608fa721ec64c60975de5c67f6b4028b70b912914696139224d2b217f22"
+      },
+      "cloud": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/00010d9634f645859d2e252d189b31d5.npz",
+        "sha256": "9ee67664d8d29357052b5f9b8d34ad880f41e5f449e425fa0167ed756f8688aa"
+      },
+      "annotation": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/00010d9634f645859d2e252d189b31d5.json",
+        "sha256": "d29802fa9bf867e130186fd8c934de6e1359197dd9d9e74f985b53c1db0338c5"
+      },
+      "mesh": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/datasets/objaverse-lvis/glbs/glbs/000-000/00010d9634f645859d2e252d189b31d5.glb",
+        "sha256": "8ac5dbf4ce7b8c360715d727d4ca874316a833cf1fd63e7ab35cbfcfcffad13e"
+      },
+      "embedding_sidecar": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/00010d9634f645859d2e252d189b31d5.json",
+        "sha256": "168a07be6a3dacfb2635a85b061970dda36550b6f3bcc681b67c36d5b745181f",
+        "content": {
+          "uid": "00010d9634f645859d2e252d189b31d5",
+          "encoder_version": 2,
+          "ulip2_ckpt_sha": "a4b5ed9799d5841a1646e0fb7d24cb8dcdd3b3e6fab2e2575de2531f71274adb",
+          "embedding_uri": "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/00010d9634f645859d2e252d189b31d5.npz",
+          "text": "Blanket made of fabric, polyester, roughly 431.7 by 400.9 by 150 centimetres, typically placed on the floor or on other objects.",
+          "text_tokens": 38,
+          "text_truncated": false,
+          "n_views": 12,
+          "aggregation": "mean",
+          "embedding_dim": 1280,
+          "text_serialization": "metafind_attrs_v1@b1ac384839305720",
+          "clip_train_scope": "frozen",
+          "image_identity": "d78ad90e1904c1d5",
+          "view_io_version": 1,
+          "renderer_version": 6,
+          "reencoded_text_from": "/home/kyzen/metafind_out/embeddings"
+        }
+      },
+      "canonical_text": "Blanket made of fabric, polyester, roughly 431.7 by 400.9 by 150 centimetres, typically placed on the floor or on other objects.",
+      "query_view": 9,
+      "gallery_views": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        10,
+        11
+      ],
+      "canonical_cloud_provenance": "UNKNOWN unless recorded in cloud_sidecar; source mesh identity may be absent",
+      "cloud_sidecar": {
+        "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/00010d9634f645859d2e252d189b31d5.json",
+        "sha256": "e76d6d52c50a6873823e4accdc83ae6863c9077c944e56a6275462779e0fbff2",
+        "content": {
+          "uid": "00010d9634f645859d2e252d189b31d5",
+          "path": "/home/kyzen/MetaFindV1/data/outputs/pointclouds/00010d9634f645859d2e252d189b31d5.npz",
+          "sha256": "9ee67664d8d29357052b5f9b8d34ad880f41e5f449e425fa0167ed756f8688aa",
+          "n_points": 10000,
+          "seed": 4131783777,
+          "sampler_version": 8,
+          "frame_correction": "yaw180_about_y@ulip2_frame",
+          "color0_modulated": false,
+          "rgb_scale": "unit",
+          "colour_source": "texture",
+          "coloured_point_fraction": 1.0,
+          "raw_bbox_extents": [
+            2.5266682889361007,
+            0.8779748728844015,
+            2.3465212265015887
+          ],
+          "raw_bbox_volume": 5.205408342421798,
+          "centroid_offset": 4.700996214523912e-11,
+          "max_radius": 1.0000000219839267,
+          "per_axis_variance": [
+            0.17878545435556054,
+            0.007143670019146025,
+            0.15198121891970423
+          ]
+        }
+      },
+      "query_text": "This is a ruffled, blue blanket featuring white cloud patterns and a pile of colorful, patterned pillows and a floral blanket on top. The scene is presented as a 3D scan with rough, irregular edges against a black background.",
+      "query_cloud": {
+        "path": "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/protocol/query_pc/00010d9634f645859d2e252d189b31d5.npy",
+        "sha256": "7e62322d66564c48b4d156e45410d32f42e7ddd95c7201dcb8a8707712578e27"
+      }
+    }
+  }
+}

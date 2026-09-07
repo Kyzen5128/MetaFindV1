@@ -248,7 +248,7 @@ def main() -> int:
     arms = args.arm or list(ARMS)
 
     from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
-    from tools.probes.exp_query_observation import load_tower
+    from metafind.eval.custom_models import load_fusion_tower
 
     sp = json.loads((paths.OUTPUTS / "splits.json").read_text())["object"]
     g_uids, q_uids = sorted(sp[args.gallery_split]), sorted(sp[args.query_split])
@@ -264,7 +264,7 @@ def main() -> int:
                                      train_scope="pointbert_and_fuser"))
     ck = torch.load(args.ckpt, map_location=args.device, weights_only=False)
     bb.model.load_state_dict(ck["backbone_trainable_state"], strict=False)
-    model = load_tower(Path(args.ckpt), args.device)
+    model = load_fusion_tower(Path(args.ckpt), args.device)
     enc, _, _ = load_protocols()
 
     # --- image and point cloud, encoded ONCE and shared by every arm ---------

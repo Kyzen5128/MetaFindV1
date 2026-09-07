@@ -1,46 +1,39 @@
-# 其他論文的 3D 檢索是怎麼定 query／gallery 的（2026-09-05）
+# 其他論文的檢索協定：2026-09-07 更正
 
-Kyzen：「你去找其他篇論文怎麼做的」。看的是 MetaFind Table 1 的基線與同領域的 3D 檢索工作，只問一件事：
-**query 拿的是什麼、gallery 裝的是什麼、正解怎麼定、指標多少。**
-來源：本機的論文原檔／官方 repo（OpenShape、Uni3D、TriCoLo、Parts2Words、text2shape），以及 arXiv HTML（SCA3D 2502.19128、COM3D 2405.04103、Uni3DL 2312.03026、OmniBind 2407.11895）。arXiv 部分是網頁摘取，引句以其為準，未逐字讀全文。
+這份筆記更正 9 月 5 日把有限文獻觀察推成「整個領域規則」的錯誤。上游可以提供可借用的評估方法，不能補成 MetaFind 作者未公開的 Table 1 設定。本文不是新的研究決策。
 
-## 1. 一覽
+## 可確認的差別
 
-| 論文 | 資料集 | query | gallery | 正解 | 指標與數字 |
-|---|---|---|---|---|---|
-| Text2Shape (2018) | ShapeNet 椅桌，Text2Shape 描述 | **一句人寫的描述**（每形狀約 5 句） | 形狀（體素／形狀編碼器），**gallery 裡沒有文字** | 描述所屬的那個形狀 | text→shape RR@1 0.40／RR@5 2.37（我們 9/4 逐字讀過） |
-| TriCoLo (2022) | 同上 | 同上 | 同上（三模態對比訓練，檢索時形狀端） | 同上 | 官方 README 表列 RR@1／RR@5／NDCG@5；評估碼改自 Text2Shape |
-| Parts2Words (2023) | 同上 | 同上 | 同上 | 同上 | text→shape RR@1 12.7／RR@5 33.0（Uni3DL 表引） |
-| COM3D (2024) | 同上，測試 1,434 形狀 ×~5 句 | 同上 | 同上 | 同上 | T→S RR@1 13.12／RR@5 33.48／NDCG@5 23.89；S→T 20.03／48.32／15.62；**沒用 Objaverse** |
-| SCA3D (2025) | 同上（train 11,498／test 1,434） | 同上 | 同上 | 同上 | T→S RR@1 16.67／RR@5 38.90／NDCG@5 28.17；S→T 27.22／55.56／19.04 |
-| Uni3DL (2023) | Text2Shape；另有 **Cap3D-Objaverse**（660K 生成描述，**80/20 隨機切**） | Cap3D 生成的描述 | 形狀 | 描述所屬形狀 | Text2Shape T→S R@1 5.8／R@5 19.7；Cap3D 部分表內數字同為 5.8／19.7（網頁摘取，無基線） |
-| OmniBind (2024) | Objaverse-LVIS **46,205** 件 | **影像**（資料集的渲染圖） | 3D 物件 | 同一件 | 3D-image retrieval R@1 **46.55**／R@5 69.92；zero-shot 分類 top-1 64.67 |
-| OpenShape (2023) | Objaverse 全集 | 一張圖／一段文字／一朵點雲 | 形狀向量，cosine kNN | — | **只有定性圖**；原文：「these input texts are typically not present in the raw texts of the retrieved shapes」 |
-| Uni3D (2024) | — | 圖／文字 | 形狀 | — | README 只有定性圖 |
-| ULIP-2 (2024) | — | — | — | — | 沒有檢索實驗，只有 zero-shot 分類 |
+| 來源與分類 | 實際任務／方法 | 對 MetaFind Table 1 的界限 |
+| --- | --- | --- |
+| ULIP-2、OpenShape、Uni3D 官方分類入口（UPSTREAM FACT） | 點雲與類別文字 prototype 比相似度，以類別 label 算 top-k accuracy。OpenShape 的 LVIS reader 使用 1,156 類。 | 類別分類的 top-1/top-5 不等於找回指定 UID 的 R@1/R@5，不能直接搬來填七格檢索表。 |
+| OpenShape 檢索段（UPSTREAM FACT） | 文字、圖片或點雲 query 對 shape embedding 做 cosine kNN；還展示兩個 shape query，以兩個相似度的最小值排名。 | 原文有 P→P 與組合輸入示例，但不是 MetaFind 的七種模態、mean pooling、固定正解 UID 評估協定。 |
+| Uni3DL（UPSTREAM FACT） | Text2Shape 的 text→shape R@1/R@5 為 5.8/19.7；另用 Cap3D 做預訓練與任務消融。 | 舊表把 5.8/19.7 再貼給 Cap3D，是錯誤歸屬；Cap3D Table 5 報的是 T2S R@1 5.5、S2T R@1 8.0，不能混成 R@1/R@5。 |
+| OmniBind（UPSTREAM FACT） | Table 1 的 3D–Image retrieval 有 46,205 items，Full 的 R@1/R@5 為 46.55/69.92；另展示 embedding 加減的組合理解。 | 分類表的 46,832 與檢索表的 46,205 是不同任務分母。檢索方向、配對 UID 與 query 視角不能只憑表頭自行補出。 |
+| MetaFind（PAPER FACT） | 作者另加 mean pooling 適配基線；自家 gallery 使用 T/I/P，query 評估七種模態組合，報 R@1/R@5。 | 不能假設基線原始論文的 gallery 配置就是 MetaFind 適配後的配置；作者未完整指定的部分仍為 UNKNOWN。 |
 
-## 2. 共通規則（整個領域）
+來源：
 
-1. **gallery 只有形狀。** 沒有任何一篇把「形狀自己的文字」或「形狀自己的圖」放進 gallery 向量。檢索一律是跨模態：文字→形狀、圖→形狀。
-2. **query 文字是形狀「之外」的東西**：人寫的描述（Text2Shape 系）或另外生成的描述（Cap3D）。同一形狀有多句，任何一句都可當 query；沒有一篇拿「建 gallery 用的那份文字」回頭當 query。
-3. **正解 = 同一個形狀（instance）**，不是同類別。
-4. **數字量級**：人寫描述→形狀，1,434 個候選，R@1 落在 **13～17**（SCA3D 最高 16.7）；生成描述→形狀（Cap3D，大候選池）R@1 **5.8**；渲染圖→形狀，46,205 個候選，R@1 **46.6**（OmniBind）。
+- ULIP-2 官方分類入口：[main.py](https://github.com/salesforce/ULIP/blob/main/main.py)；本機 `/home/kyzen/upstream/ULIP/main.py`。
+- OpenShape：[檢索原文](paper/openshape_source/sections/experiments.tex)，Multi-modal 3D Shape Retrieval 段；[官方分類程式](https://github.com/colin97/OpenShape_code/blob/master/src/train.py)，`test_objaverse_lvis`。本機 `/home/kyzen/upstream/OpenShape_code/src/train.py`。
+- Uni3D：[官方評估入口](https://github.com/baaivision/Uni3D/blob/main/main.py)。
+- Uni3DL：[原文 §4.1、Table 3、Table 5](https://arxiv.org/html/2312.03026v1)。
+- OmniBind：[原文 §4、Table 1–2、§4.3](https://arxiv.org/html/2407.11895v1)。
+- MetaFind：[§3.1–3.2](paper/metafind_source/3experiments.tex)、[§2.2–2.4](paper/metafind_source/2methdology.tex)。
 
-## 3. 對 MetaFind Table 1 的意義
+Text2Shape 系的描述→形狀 retrieval 也可作為自訂評估參考，但需逐篇固定 query、候選集、配對正解與 scoring。不能把不同資料集上的 13～17% 當作 MetaFind text-only 應落入的範圍。本輪沒有重跑這些上游模型。
 
-- MetaFind 的 **text-only 13.8** 正好落在「一句描述→形狀」的領域水準（13～17）。這不像「gallery 裡含同一份文字」的分數（我們自己那份文字當 query 是 34～52）。**推論**：論文的 query 文字是一份 gallery 沒見過的描述——跟整個領域一樣。
-- MetaFind 的 **image-only 11.7** 遠低於 OmniBind 用渲染圖查 46,205 件的 46.6（我們釋出 ULIP-2 在 4,569 件是 70.4）。**推論**：論文的 query 圖不是標準的物件渲染圖，或它的影像塔被改弱了。
-- MetaFind 的 **pc-only 75.1**：全領域沒有「點雲查點雲」的檢索基準（大家都當它是平凡的自己找自己，論文基線列的 98 也這樣說）；論文自己的解釋是雙塔混合。
-- MetaFind 的 gallery 含三模態、query 是子集，這個設計**全領域沒有先例**；所以「query 文字要跟 gallery 文字不同」這條領域規則，在 MetaFind 裡沒有現成寫法可抄。
-- 11 個視角 × GPT-4o：論文說「rendered from 11 views and processed with GPT-4o」。若是**每個視角各一份描述**，就天然有 11 份文字可供「gallery 用一份、query 用另一份」，跟領域做法一致。我們只有一份標註（Gemma），所以做不到這一層；這是資料層的缺口，不是程式。
+## 撤回的舊推論
 
-## 4. 我們試過的對應
+1. **「整個領域 gallery 只有形狀、沒有 P 查 P」：撤回。** OpenShape 原文已有 point-cloud query，MetaFind 自家 gallery 明確含三模態。不同研究的任務需分別陳述。
+2. **「沒有任何組合 query 先例」：撤回。** OpenShape 有雙 shape input，OmniBind 有 embedding arithmetic；這些示例仍不等於 MetaFind 的七欄 benchmark。
+3. **「因為 text-only 數字接近 Text2Shape，作者一定用了另一份描述」：撤回。** 候選數、模型、資料分布和正解定義不同；數字接近不能辨識 query 來源。
+4. **「image-only 很低，證明作者 query 不是標準渲染圖或影像塔較弱」：撤回。** 這些只能是待檢驗假說；尚未有控制其他條件的證據。
+5. **「11 個視角代表 11 份可輪流當 query 的 caption」：撤回。** MetaFind 說明 11 views 與結構化標註，沒有定義逐視角 caption 數量與 query/gallery caption 分配。
+6. **「同物件模態融合必定增加準確率」：撤回。** 同 UID 不保證向量融合後排名單調；需對固定模型、觀測與候選集實測。
 
-- P5：另一份「同一份標註的不同寫法」＋另一張視角 → full 99.1（文字 cos 0.80，太像；點雲仍是自己的）。
-- 掃描（DL-098）：換掉文字（描述句／類別尺寸／名稱）動不了合併格；只有換圖才動。
-- 領域做法沒有 query 帶點雲的例子，所以「query 點雲＝gallery 點雲」造成的 98 沒有前例可對。
+## 本專案採用的可評估範圍
 
-## 5. 來源
+[自訂七模態評估](CUSTOM_TABLE1_EVALUATION.md) 明確凍結 UID pool、觀測、checkpoint 與 scoring，分別比較 canonical 觀測和同物件的另一份觀測，並包含 mean baseline、Stage 1 和可選 Stage 2 head。這是 **IMPLEMENTATION CHOICE**，能比較本專案的方法，不能宣稱已找回作者的原始 Table 1 協定。
 
-- SCA3D: https://arxiv.org/abs/2502.19128 ；COM3D: https://arxiv.org/abs/2405.04103 ；Uni3DL: https://arxiv.org/abs/2312.03026 ；OmniBind: https://arxiv.org/abs/2407.11895
-- 本機：`docs/paper/openshape_source/sections/experiments.tex`（Multi-modal 3D Shape Retrieval 段）、`/home/kyzen/upstream/Uni3D/README.md`、`/home/kyzen/upstream/tricolo/README.md`、`/home/kyzen/upstream/Parts2Words/README.md`、`docs/NOTE_20260904_TEXT2SHAPE_READ.md`。
+舊 P5、DL-098 等量測仍留在原始 JSON 與歷史報告；本次沒有更改那些分數。其效力限於當時測過的配置，不能拿來排除所有其他觀測或架構。

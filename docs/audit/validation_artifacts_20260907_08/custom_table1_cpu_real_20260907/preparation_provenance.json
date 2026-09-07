@@ -1,0 +1,24 @@
+{
+  "purpose": "REAL PRETRAINED CPU EXECUTION SMOKE; scores from 2 queries / 6 candidates are not a research comparison",
+  "selection_rule": "First 6 lexicographically sorted holdout UIDs; first 2 are queries; gallery order reversed to exercise non-diagonal UID mapping.",
+  "split_source": {
+    "path": "/home/kyzen/metafind/metafind_data_attrs/outputs/splits.json",
+    "sha256": "c03e898f74f612ceedf27090ad2175a507e6d0b2455faa873956e7059ce9c14b"
+  },
+  "query_text_source": "Existing per-asset annotation.description from the older attrs_v1 corpus; same annotation producer as canonical attributes, NOT independent annotation.",
+  "input_files": {
+    "query_uids": {
+      "path": "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/query_uids.json",
+      "sha256": "de03bb2030952d53567a403e64831fa49fe3af8ee48114e8f07dd96522788cd3"
+    },
+    "gallery_uids": {
+      "path": "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/gallery_uids.json",
+      "sha256": "5fa92070fb5486da206ed66b41f25c1da57c2d43aa6c9458d271993f316545c8"
+    },
+    "query_texts": {
+      "path": "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/query_texts.json",
+      "sha256": "f4b771cd538d830dbaafda344b3795c95c87375955587862ccb4884cf89c9a90"
+    }
+  },
+  "gpu": "CUDA/HIP hidden; CPU only; no live v10 corpus writes"
+}

@@ -153,7 +153,9 @@ class MetaFindContrastiveLoss(nn.Module):
                 positive for query ``i``.
             labels: optional ``(B,)`` positive indices. Defaults to
                 ``arange(B)``; supply explicitly when the batch has been
-                gathered across processes.
+                gathered across processes. Must be a long tensor on the query
+                device; bidirectional loss requires a permutation of all
+                gallery rows, because each gallery needs exactly one positive.
 
         Returns:
             ``loss`` plus per-direction losses, accuracies and the temperature.
@@ -162,6 +164,20 @@ class MetaFindContrastiveLoss(nn.Module):
             raise ValueError(f"query {tuple(query.shape)} != gallery {tuple(gallery.shape)}")
         if query.dim() != 2:
             raise ValueError(f"expected (B, D), got {tuple(query.shape)}")
+
+        if labels is None:
+            labels = torch.arange(query.size(0), device=query.device)
+        else:
+            if not isinstance(labels, Tensor) or labels.dtype != torch.long:
+                raise ValueError("labels must be a torch.long tensor")
+            if labels.shape != (query.size(0),):
+                raise ValueError(f"labels must have shape ({query.size(0)},)")
+            if labels.device != query.device:
+                raise ValueError("labels must be on the query device")
+            if ((labels < 0) | (labels >= gallery.size(0))).any():
+                raise ValueError("labels must index gallery rows in [0, B)")
+            if self.cfg.bidirectional and labels.unique().numel() != query.size(0):
+                raise ValueError("bidirectional labels must be a permutation of gallery rows")
 
         q = F.normalize(query, dim=-1)
         g = F.normalize(gallery, dim=-1)
@@ -174,9 +190,6 @@ class MetaFindContrastiveLoss(nn.Module):
             # the configured value.
             scale = scale.clamp(max=self.cfg.max_logit_scale)
         logits_q2g = scale * q @ g.t()
-
-        if labels is None:
-            labels = torch.arange(q.size(0), device=q.device)
 
         loss_q2g = F.cross_entropy(logits_q2g, labels)
         out = {
@@ -194,7 +207,7 @@ class MetaFindContrastiveLoss(nn.Module):
         # is the same set of items; with a decoupled gallery this would need its
         # own logits. Under a non-identity `labels`, gallery row g's positive is
         # the query q with labels[q] == g, i.e. the INVERSE permutation; using
-        # `labels` directly here was wrong for every labels != arange.
+        # `labels` directly here was wrong for non-self-inverse permutations.
         inverse = torch.empty_like(labels)
         inverse[labels] = torch.arange(labels.numel(), device=labels.device)
         loss_g2q = F.cross_entropy(logits_q2g.t(), inverse)

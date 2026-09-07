@@ -1,0 +1,63 @@
+{
+  "started_at": "2026-09-07T17:29:09.783776+00:00",
+  "classification": "Independent actual evaluated-vertex geometry diagnostic; no production helper/model/GPU",
+  "environment": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "CUDA_VISIBLE_DEVICES": "",
+    "HIP_VISIBLE_DEVICES": "",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "LIBGL_ALWAYS_SOFTWARE": "1",
+    "MESA_LOADER_DRIVER_OVERRIDE": "llvmpipe",
+    "__EGL_VENDOR_LIBRARY_FILENAMES": "/usr/share/glvnd/egl_vendor.d/50_mesa.json"
+  },
+  "inputs": {
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/blender_output/scene.blend": "180501c5c838076f654507751cc87026bea35270937201c5b115645dec04f127",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/placement_bundle/placement.json": "b9a664d1df643cd67e2bcfa68a9237a12e4555188cc7573e9706dffcd9ea594a",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/blender_output/result.json": "d6bcdd1ac4f1622436a7500daed03dda7730b106f0c6aeebe8242afc85be4e41",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/composition.json": "a2f6106849295b1a64f26ec5290b238d5b92ade607159e7d1b6c9edd0c8a8277",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/inspect_saved_blend.py": "add26bf29962960bf32c0b9b9958527d132e2c456c65e64f03de7e33d0789b66",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/check_saved_geometry.py": "5faf04f4fa2dc5c737176fff5e3e2aac336d6324929d2ecdb80b0c8f286e0d2d",
+    "/home/kyzen/metafind/metafind_out/blender/blender-4.2.1-linux-x64/blender": "db35e2b580763f528ea9d49d7029a3f6cd816160220da7a83ac327c0bf2c958f"
+  },
+  "commands": [
+    [
+      "inspect",
+      [
+        "nice",
+        "-n",
+        "10",
+        "/home/kyzen/metafind/metafind_out/blender/blender-4.2.1-linux-x64/blender",
+        "--background",
+        "--disable-autoexec",
+        "--threads",
+        "1",
+        "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/blender_output/scene.blend",
+        "--python-exit-code",
+        "3",
+        "--python",
+        "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/inspect_saved_blend.py",
+        "--",
+        "--out-dir",
+        "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/independent_geometry"
+      ]
+    ],
+    [
+      "check",
+      [
+        "nice",
+        "-n",
+        "10",
+        "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+        "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/check_saved_geometry.py",
+        "--manifest",
+        "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/placement_bundle/placement.json",
+        "--placement-result",
+        "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/blender_output/result.json",
+        "--inspection",
+        "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/independent_geometry"
+      ]
+    ]
+  ]
+}

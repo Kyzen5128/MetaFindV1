@@ -1,0 +1,18 @@
+CLI ['/home/kyzen/miniconda3/envs/MetaFind/bin/python', '-m', 'metafind.train.gallery_index', 'stage2', '--device', 'cpu', '--stage1-ckpt-record', '/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/parent_record.json']
+/home/kyzen/miniconda3/envs/MetaFind/lib/python3.11/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+WARNING:root:No pretrained weights loaded for model 'ViT-bigG-14'. Model initialized randomly.
+/home/kyzen/MetaFindV1/metafind/models/fusion.py:202: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.head = nn.TransformerEncoder(layer, num_layers=cfg.n_layers)
+Get openclip model:
+Finished loading the openclip model.
+training from scratch for pointbert.
+model size:
+32.50M
+
+stage2 index: 8 assets, 0 excluded for missing a declared modality ('text', 'image') -> /home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/stage2_gallery_index.json
+CLI ['/home/kyzen/miniconda3/envs/MetaFind/bin/python', '-m', 'metafind.data.scene_splits', '--seed', '20260816']
+1 train / 0 test houses (seed 20260816) -> /home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/scene_splits.json
+  train: 1.0000 of 28 semantic edges carry an embedding
+  test: 0.0000 of 0 semantic edges carry an embedding
+{"phase": "gallery", "status": "complete", "seconds": 345.0875747203827}

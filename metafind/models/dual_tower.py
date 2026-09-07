@@ -302,6 +302,7 @@ class MetaFindDualTower(nn.Module):
     def __init__(self, cfg: DualTowerConfig) -> None:
         super().__init__()
         self.cfg = cfg
+        self._gallery_frozen = False
         self.query = QueryTower(cfg)
         self.gallery = GalleryTower(cfg)
         if cfg.tower_sharing == "fully_shared":
@@ -316,7 +317,16 @@ class MetaFindDualTower(nn.Module):
         """Whether the two towers' fusion parameters are the same tensors."""
         qs = list(self.query.fusion.parameters())
         gs = list(self.gallery.fusion.parameters())
-        return len(qs) == len(gs) and all(q is g for q, g in zip(qs, gs))
+        return self.query.fusion is self.gallery.fusion or (
+            bool(qs) and len(qs) == len(gs) and all(q is g for q, g in zip(qs, gs))
+        )
+
+    def train(self, mode: bool = True) -> MetaFindDualTower:
+        """Keep a frozen gallery deterministic when training the query tower."""
+        super().train(mode)
+        if self._gallery_frozen:
+            self.gallery.eval()
+        return self
 
     def freeze_gallery(self, frozen: bool = True) -> None:
         """Freeze or unfreeze the gallery tower.
@@ -342,11 +352,13 @@ class MetaFindDualTower(nn.Module):
             )
         for p in self.gallery.parameters():
             p.requires_grad_(not frozen)
-        self.gallery.train(not frozen)
+        self._gallery_frozen = frozen
+        self.gallery.train(self.training and not frozen)
 
     def gallery_is_frozen(self) -> bool:
-        params = list(self.gallery.parameters())
-        return bool(params) and not any(p.requires_grad for p in params)
+        return (self._gallery_frozen
+                and not any(p.requires_grad for p in self.gallery.parameters())
+                and not any(m.training for m in self.gallery.modules()))
 
     def trainable_parameters(self) -> list[nn.Parameter]:
         return [p for p in self.parameters() if p.requires_grad]

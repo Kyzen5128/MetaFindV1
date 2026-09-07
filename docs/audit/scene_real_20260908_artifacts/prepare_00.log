@@ -1,0 +1,37 @@
+/home/kyzen/miniconda3/envs/MetaFind/lib/python3.11/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+WARNING:root:No pretrained weights loaded for model 'ViT-bigG-14'. Model initialized randomly.
+/home/kyzen/MetaFindV1/metafind/models/fusion.py:202: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.head = nn.TransformerEncoder(layer, num_layers=cfg.n_layers)
+Get openclip model:
+Finished loading the openclip model.
+training from scratch for pointbert.
+model size:
+32.50M
+stage2 record /home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/variant_ckpts.json
+  variant full  parent df4e81fee9da89bc  lambda_0 2.3415  steps 1
+  Stage 2 query weights laid over the Stage 1 parent: 109 tensors, lambda 2.3415
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/kyzen/MetaFindV1/metafind/scene/prepare.py", line 284, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/kyzen/MetaFindV1/metafind/scene/prepare.py", line 279, in main
+    print(prepare(args.request, args.out_dir, device=args.device))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kyzen/MetaFindV1/metafind/scene/prepare.py", line 255, in prepare
+    result = run_manifest(candidate)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kyzen/MetaFindV1/metafind/scene/compose.py", line 310, in run_manifest
+    result = compose(tower, **inputs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kyzen/miniconda3/envs/MetaFind/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kyzen/MetaFindV1/metafind/scene/compose.py", line 212, in compose
+    tensors, graph_record = _graph(context, node_vectors, asset_texts,
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kyzen/MetaFindV1/metafind/scene/compose.py", line 111, in _graph
+    raise MissingSemanticPairsError(absent_pairs, absent_keys)
+metafind.scene.compose.MissingSemanticPairsError: "semantic cache lacks 1 pair(s): [['0002c6eafa154e8bb08ebafb715a8d46', '0002064ef02e46f9a10b4bff10bae805']]; prepare n08 evidence first"

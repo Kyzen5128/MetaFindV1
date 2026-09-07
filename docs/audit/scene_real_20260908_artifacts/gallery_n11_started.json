@@ -1,0 +1,44 @@
+{
+  "phase": "n11",
+  "command": [
+    "nice",
+    "-n",
+    "10",
+    "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+    "-m",
+    "metafind.train.gallery_index",
+    "stage1",
+    "--device",
+    "cpu",
+    "--stage1-ckpt-record",
+    "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/checkpoints/actual_cpu_step/stage1_best_ckpt.json"
+  ],
+  "environment": {
+    "METAFIND_DATA": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data",
+    "METAFIND_TEXT_TEMPLATE": "attrs_v1",
+    "PYTHONPATH": "/home/kyzen/MetaFindV1",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "CUDA_VISIBLE_DEVICES": "",
+    "HIP_VISIBLE_DEVICES": "",
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1",
+    "HF_HOME": "/home/kyzen/metafind/metafind_data_attrs/models/hf-cache",
+    "TORCH_HOME": "/home/kyzen/metafind/metafind_data_attrs/models/hf-cache/torch",
+    "OMP_NUM_THREADS": "2",
+    "MKL_NUM_THREADS": "2",
+    "OPENBLAS_NUM_THREADS": "2"
+  },
+  "started_at": "2026-09-07T17:11:12.126085+00:00",
+  "driver_sha256": "b020dd291506e911d7912cda0cc1bfe6f4d5c3f1118174cca4146da52f39cd83",
+  "production_sources": {
+    "metafind/train/gallery_index.py": "a81000c1dc19555df3029185402089ec798625fa2589c7502387a16211531292",
+    "metafind/gates/g4_gallery_freeze.py": "3c8afded8081ec93cfe07fa70b9ffdeafe6d0e98a94d925b972a1785f649b2ed",
+    "metafind/train/stage1.py": "8b7416abe7bb8c63d516dcb826864ead5355abb93a8d1943ecf1e16b11b64ba8",
+    "metafind/eval/retrieval.py": "db8da8e70545d53ee5c1861fd30ed5302ce5282fb5e95aa32a13a5fa436388cd",
+    "metafind/eval/run_retrieval.py": "2eb5c61c523f1b136b17baf88e6fd39f84bbea508cdd540d10a6eaf4ada58dc9",
+    "metafind/models/ulip_backbone.py": "ceb93e14e3b8fdbe8795fd0c1e4cb77fd6d0786a47c44460d25ba497a1bf7e1e",
+    "metafind/models/fusion.py": "2ee5ab70f715b5ef352aaa74ce046f1f1d1ebe38e39686783715154268f63db7",
+    "metafind/models/dual_tower.py": "7019629f0a1eafdf0a5b6b6c0a3a84cf96955fb0be827a66d858baba03e50dd2",
+    "docs/graph/validation_plan.yaml": "7ec2e6a94830c769ce85f8babbc023c854bd73d9bbac9b440670e270969a21af"
+  }
+}

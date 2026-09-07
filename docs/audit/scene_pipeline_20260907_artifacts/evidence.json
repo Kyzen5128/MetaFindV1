@@ -1,0 +1,15 @@
+{
+  "classification": "CPU SYNTHETIC INTEGRATION EVIDENCE",
+  "source_test": "tests/eval/test_scene_pipeline.py",
+  "original_test_directory": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0",
+  "files_sha256": {
+    "composition.json": "0e811986a7a200e79b741290d3a4e554ee5046b0fe9cc9642d400808cf4f2a8a",
+    "placement.json": "123bab7d4d41b98fb364ab9611477c123bcb121efc551f2ea01cd42fc05a348c",
+    "blend_geometry.json": "6670f7fa7ef436d107d636031a149daf6437a1ef3ddcf42ce3078a50782546e0",
+    "result.json": "dde2f4f9c686474b6582a7e6d0d1198b224bb43bc4ba538aa680a224930ae0d9",
+    "view_000.png": "da36c801513182ff06361779515ef52efe9e4b32abb9008b14e99c82cd765c8a",
+    "blender.log": "95e006d007c910d7dc5ea7fd0d31f27f28da381cb6d6570fc0ef008d846b222a",
+    "scene.blend": "a428d22f68ad3d3ebdd966e53fbef62b44b9ec9cef99962f6a45ed68cff12623"
+  },
+  "portability": "Render/blend/result/geometry preserved. Original input paths in placement/composition retain temporary provenance; not a portable trained-model bundle."
+}

@@ -1262,7 +1262,7 @@ registry 說 n03 寫 `run_progress`，channel 說 writers 包含 n03，兩邊完
 
 ### 2026-08-15 第二十三輪（外部審查，11 份 docs 再次全讀 ＋ 首次讀實作）
 
-審查者這輪把 `metafind/data/pointclouds.py` 與 `tests/test_pointclouds.py`
+審查者這輪把 `metafind/data/pointclouds.py` 與 `tests/data/test_pointclouds.py`
 一起讀了。**最重的兩項都不是文件問題，是我實作的問題，而且其中一個當場就發生了。**
 
 | # | 問題 | 現在 | 嚴重度 |

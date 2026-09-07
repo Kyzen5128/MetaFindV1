@@ -1,0 +1,155 @@
+{
+  "prompt_version": 1,
+  "llm_model": "gemma-4-12B-it",
+  "text_encoder_version": "open-clip-vit-bigg-14-ulip2-tower",
+  "text_encoder": "open_clip:ViT-bigG-14",
+  "edge_dim": 1280,
+  "entries": {
+    "0003b9763da61b9b6eaf5f789376548a6949ca94ba2e04eddd7ccc0a4d112d2c": {
+      "sentence": "A sink and a toilet are fixtures in a bathroom.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#0",
+      "degraded": false
+    },
+    "0582d6e2617bfb87058570316305aa9f06015456299c84ca1342e95babe80799": {
+      "sentence": "A painting hangs on a wall in a room where a plunger is kept for maintenance.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#1",
+      "degraded": false
+    },
+    "1150f162ac67b0f01abc002417cd05ad5671091264d3a5689dc52964a39df4c5": {
+      "sentence": "A plunger is used to clear a clogged sink.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#2",
+      "degraded": false
+    },
+    "3c5ffa68a8da52b1385e1792c0170f46b6df3109674e6535d84f5d32c47d5d40": {
+      "sentence": "A plunger is used to clear a clog in a toilet.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#3",
+      "degraded": false
+    },
+    "5fbcd2553e48e57010af3e84fa66d89f6ed6bc62d3b7c982834fe9b6f18f8425": {
+      "sentence": "Paintings are displayed as a collection on a wall.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#4",
+      "degraded": false
+    },
+    "6fe1c3a71c993fc8c3db2a888e039e6a257063ec4a9027c4730e4456004a1a28": {
+      "sentence": "A plunger is used to clear a clogged drain connected to a faucet.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#5",
+      "degraded": false
+    },
+    "7377c8b60c724663c01b3e07d07dd2ad72475db1d2cc266acb25f011d3633941": {
+      "sentence": "A painting decorates a room containing a sink.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#6",
+      "degraded": false
+    },
+    "7d951e1761a44a9631a16c6985cd84aa10b4205ac6ebca52a8ad6910a00557eb": {
+      "sentence": "A faucet is used to provide water to a sink.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#7",
+      "degraded": false
+    },
+    "7eecd138f27a5737bfde6bf9db44bf22acdcd93ce71186a7800ce8364057ca62": {
+      "sentence": "A spray bottle is used to clean a toilet.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#8",
+      "degraded": false
+    },
+    "9e05707b40cc8ac2b5a020d77bcaacf4d81d29427a06b96066e9d5c7bf6e2daf": {
+      "sentence": "The cake and the clay pot are decorative elements in a festive celebration setting.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#9",
+      "degraded": false
+    },
+    "a1175a20960851f1874d64dafe69058c1567209cd0c2643486c653bc84237ccf": {
+      "sentence": "A faucet provides water for a sink in a room decorated with a painting.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#10",
+      "degraded": false
+    },
+    "a757c7d1678711d229ef57005c08ce7d46bc0351b5458a1506138a348196c292": {
+      "sentence": "A spray bottle is used to clean a faucet.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#11",
+      "degraded": false
+    },
+    "aa7b0c886eb7baea759568e2c19ae58bdf4b73449ff593167c9ae40921f25528": {
+      "sentence": "A spray bottle is used to clean a painting.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#12",
+      "degraded": false
+    },
+    "c17dddeec95a08c110191ff1295e80db25cbf13042a7cbeb5b5913fd8b919073": {
+      "sentence": "A faucet provides water for a toilet.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#13",
+      "degraded": false
+    },
+    "ca9edd656f99cc93518c2e66a9f0402b0e8d890a5843cdf176f418ede88c5aeb": {
+      "sentence": "A spray bottle is used to apply cleaning solution for a plunger to clean a toilet.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#14",
+      "degraded": false
+    },
+    "f07bd4547e62d85be682bc23e76ca475d3e24a865a1fe3b31f557c50a5f2cc44": {
+      "sentence": "A painting decorates a bathroom.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#15",
+      "degraded": false
+    },
+    "f385de768479638f117d32a53999203564175221dfc8c700752a455180099adc": {
+      "sentence": "These are identical items displayed as part of a set.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#16",
+      "degraded": false
+    },
+    "fbadf83f64c8f80bfb5e1f27b1dd32404e6d0e51acb2d512fc231929a5272962": {
+      "sentence": "A spray bottle is used to clean a sink.",
+      "embedding_uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz#17",
+      "degraded": false
+    }
+  },
+  "source_identity": {
+    "version": 1,
+    "kind": "edge_sentence",
+    "keys": [
+      "0003b9763da61b9b6eaf5f789376548a6949ca94ba2e04eddd7ccc0a4d112d2c",
+      "0582d6e2617bfb87058570316305aa9f06015456299c84ca1342e95babe80799",
+      "1150f162ac67b0f01abc002417cd05ad5671091264d3a5689dc52964a39df4c5",
+      "3c5ffa68a8da52b1385e1792c0170f46b6df3109674e6535d84f5d32c47d5d40",
+      "5fbcd2553e48e57010af3e84fa66d89f6ed6bc62d3b7c982834fe9b6f18f8425",
+      "6fe1c3a71c993fc8c3db2a888e039e6a257063ec4a9027c4730e4456004a1a28",
+      "7377c8b60c724663c01b3e07d07dd2ad72475db1d2cc266acb25f011d3633941",
+      "7d951e1761a44a9631a16c6985cd84aa10b4205ac6ebca52a8ad6910a00557eb",
+      "7eecd138f27a5737bfde6bf9db44bf22acdcd93ce71186a7800ce8364057ca62",
+      "9e05707b40cc8ac2b5a020d77bcaacf4d81d29427a06b96066e9d5c7bf6e2daf",
+      "a1175a20960851f1874d64dafe69058c1567209cd0c2643486c653bc84237ccf",
+      "a757c7d1678711d229ef57005c08ce7d46bc0351b5458a1506138a348196c292",
+      "aa7b0c886eb7baea759568e2c19ae58bdf4b73449ff593167c9ae40921f25528",
+      "c17dddeec95a08c110191ff1295e80db25cbf13042a7cbeb5b5913fd8b919073",
+      "ca9edd656f99cc93518c2e66a9f0402b0e8d890a5843cdf176f418ede88c5aeb",
+      "f07bd4547e62d85be682bc23e76ca475d3e24a865a1fe3b31f557c50a5f2cc44",
+      "f385de768479638f117d32a53999203564175221dfc8c700752a455180099adc",
+      "fbadf83f64c8f80bfb5e1f27b1dd32404e6d0e51acb2d512fc231929a5272962"
+    ],
+    "texts_sha256": "8167d755c36cd4f35cfa285f075624fbe95b806a1ccc0a39ca8b44bfb8e74372",
+    "encoder_identity": {
+      "version": 1,
+      "kind": "open_clip_loaded_text_tower",
+      "state_sha256": "f60e9d869f23e7c0e2631b746bb68662da1a7001d07fcb846ace3f9b6890ce49",
+      "tokenizer_sha256": "e0a124d1b19e5492cef53507d52cdb6df561c91fa73680ff38651f840b4c6a9f",
+      "architecture_sha256": "133467964857df0fbcf350fa3d5f413741c8044aead2e3cb02ed497cdf10b797",
+      "implementation": {
+        "class": "open_clip.model.CLIP",
+        "open_clip_version": "3.3.0",
+        "torch_version": "2.12.1+cu132",
+        "clip_module_sha256": "5b98f51f8fb03073f5f9bcb49bca4c867990164427524142803f0a881c3362f1",
+        "text_forward_sha256": "93138e5fa8c04a02f0da71c0a888c3b61decdcc36292caee107f0dd8ebdd20e1",
+        "wrapper_forward_sha256": "6caa6ba78cb5d48a1021d381465a2c0cfab1466ab8b0320d7a75e87ea2d23e6d",
+        "ulip_forward_sha256": "9c437a3a085389dcc55362663853cd59da7ca7a88e2eb00f4be329c30eb621be",
+        "text_module_sha256": {
+          "open_clip.transformer": "4e860ad042e0a7d6afeeba2fc9e5f160f7847de38b262360aa9bedf92f69595f",
+          "torch.nn.modules.activation": "89c774e9d0d6fc06a3d8cbf06036f32e0fc7fbd18b80436b6d462c398d4d1a8b",
+          "torch.nn.modules.container": "0478b94a43b507276cc4dcd85cfbdff7fc83807f30226f575aaac69d416b658a",
+          "torch.nn.modules.linear": "1961ad1a1f650e104b3c7f78d19af2d21bf977e7af6c3fdf2420aad563c9e202",
+          "torch.nn.modules.sparse": "4897b5402c35e49c830edaee1eacc1b1c3f802ddc8e7ddf4112a71c78bea81f5"
+        }
+      },
+      "output": {
+        "normalization": "l2",
+        "dtype": "float32"
+      }
+    }
+  },
+  "embedding_artifact": {
+    "uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_02/sem_edge_embeddings.npz",
+    "sha256": "9c54f5d6d17db2cb03c70c1634c725fb0ed3181a4dd94c0fe2c1cf10b6a43b87"
+  }
+}

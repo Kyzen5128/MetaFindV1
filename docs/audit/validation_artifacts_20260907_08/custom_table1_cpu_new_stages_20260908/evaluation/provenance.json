@@ -1,0 +1,872 @@
+{
+  "protocol_sha256": "ac407520896b1f89e2bf9b3ed7ad92b43ed05a377a3523e281cd06a6fe412959",
+  "stage1": {
+    "base_hyperparameter_sha256": "f686cd7556ab829d4ae2482249b19627f6ff96d0849124c30186f5e5e925144d",
+    "checkpoint_schema": 5,
+    "model_inputs": {
+      "version": 1,
+      "encoding": {
+        "status": "resolved",
+        "text_serialization": "metafind_attrs_v1@b1ac384839305720",
+        "text_serialization_family": "metafind_attrs_v1",
+        "text_serialization_contract": {
+          "family": "metafind_attrs_v1",
+          "template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+          "max_description_chars": 160,
+          "max_category_chars": 40,
+          "max_materials": 3,
+          "placement_phrases": {
+            "onCeiling": "typically mounted on a ceiling",
+            "onFloor": "typically placed on the floor",
+            "onFloor+onObject": "typically placed on the floor or on other objects",
+            "onObject": "typically placed on top of other objects",
+            "onWall": "typically mounted on a wall"
+          },
+          "no_placement_phrase": "with no typical placement"
+        },
+        "text_template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+        "text_serialization_probes": [
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, with no typical placement.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor or on other objects.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on top of other objects.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a wall.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall or on the floor or on top of other objects.",
+          "A very long category name a very long made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+          "LED made of metal, plastic, glass, roughly 1000 by 1 by 0 centimetres, typically placed on top of other objects."
+        ],
+        "image_aggregation": "mean",
+        "view_aggregation": {
+          "n_views": 12,
+          "selected_view_ids": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "view_selection_policy": "all",
+          "pre_normalize_each_view": false,
+          "method": "mean",
+          "post_normalize": false,
+          "aggregation_version": 1
+        },
+        "paper_clip_train_scope": "frozen",
+        "paper_clip_train_scope_basis": "MetaFind does not state a per-module freeze scope for OpenCLIP anywhere. This reproduction follows ULIP-2's design because MetaFind explicitly builds on ULIP-2, ULIP-2 3.3 states 'We adopt the largest version of encoders from OpenCLIP (ViT-G/14) ... and freeze it during pre-training', and MetaFind never states that it changes that policy. The three sentences that read otherwise do not carry it: 2.6's 'Both query and gallery encoders are trained' describes the TOWERS, which train under a frozen CLIP because the point encoder, the projection and the fuser are all in the optimizer; 3.4's 'Fine-tuning the entire encoder outperformed training the fuser only' separates the full model from the fuser-only ablation, a separation the trainable point encoder already produces; and 2.4's 'gallery encoder is frozen after pretraining' versus 2.6's 'is trained' is the Stage 1 / Stage 2 boundary, not a Stage 1 contradiction. Reopen if MetaFind's code or its authors show an optimizer update reaching OpenCLIP's parameters.",
+        "paper_clip_train_scope_confidence": "moderate",
+        "actual_clip_train_scope": "frozen",
+        "missing_modality_representation": "learned_token",
+        "decided_by": "MASTER, under Kyzen's full delegation 2026-09-03 (fresh audit A5/C8)",
+        "decided_at": "2026-09-03T10:28:15.068564+00:00"
+      },
+      "training": {
+        "fusion": "transformer",
+        "tower_sharing": "shared_backbone_separate_fusion",
+        "train_scope": "point_encoder_and_fuser",
+        "prefusion_norm": true,
+        "query_fusion_config": {
+          "dim": 1280,
+          "kind": "transformer",
+          "hidden": 2048,
+          "n_heads": 8,
+          "n_layers": 2,
+          "zero_pad": false,
+          "include_absent_slots": true,
+          "dropout": 0.0,
+          "prefusion_norm": true,
+          "image_tokens": 1
+        },
+        "gallery_fusion_config": {
+          "dim": 1280,
+          "kind": "transformer",
+          "hidden": 2048,
+          "n_heads": 8,
+          "n_layers": 2,
+          "zero_pad": false,
+          "include_absent_slots": true,
+          "dropout": 0.0,
+          "prefusion_norm": true,
+          "image_tokens": 1
+        }
+      },
+      "hyperparameter_values": {
+        "optimizer": "adamw",
+        "decay_mask_tokens": false,
+        "learning_rate": 0.0005,
+        "weight_decay": 0.1,
+        "scheduler": "cosine",
+        "batch_size": 2,
+        "epochs": 1,
+        "max_epochs": 250,
+        "p_mask": 0.3,
+        "init_temperature": 0.5,
+        "learnable_temperature": false,
+        "max_logit_scale": 100.0,
+        "betas": [
+          0.9,
+          0.98
+        ],
+        "eps": 1e-08,
+        "warmup_epochs": 1,
+        "lr_start": 1e-06,
+        "lr_end": 1e-05,
+        "seed": 20260816
+      },
+      "loss_values": {
+        "learnable_temperature": false,
+        "init_temperature": 0.5,
+        "max_logit_scale": 100.0
+      }
+    },
+    "seed": 20260816,
+    "epoch": 0,
+    "run_id": "1788799026-2633378-b6c3ce",
+    "code_revision": "87ccfbbf460cfd2bcc518f654e1b7d0fd3e506d8",
+    "code_dirty": true,
+    "runtime_source_sha256": "3666ea2905feaef367673c8b67f0a472af11658c014a0a8fa742398d5bc9e19d",
+    "runtime_source_status": "ok",
+    "arm_config_hash": "3ef6fcdb7dd7b20e3298b9740f1db978003e98213e6a3b5273695dc19986a1dc",
+    "arm_config_version": 2,
+    "arm_config": {
+      "optimizer": "adamw",
+      "decay_mask_tokens": false,
+      "learning_rate": 0.0005,
+      "weight_decay": 0.1,
+      "scheduler": "cosine",
+      "batch_size": 2,
+      "epochs": 1,
+      "p_mask": 0.3,
+      "init_temperature": 0.5,
+      "learnable_temperature": false,
+      "max_logit_scale": 100.0,
+      "betas": [
+        0.9,
+        0.98
+      ],
+      "eps": 1e-08,
+      "warmup_epochs": 1,
+      "lr_start": 1e-06,
+      "lr_end": 1e-05,
+      "training.fusion": "transformer",
+      "training.tower_sharing": "shared_backbone_separate_fusion",
+      "training.allow_all_masked": true,
+      "training.similarity": "cosine",
+      "training.prefusion_norm": true,
+      "training.diagnostic_parent_protocol_sha256": "90e0456987315702facf47064a4af7f12c1a7b53ebece9bcd37186f15d2e5850",
+      "encoding.text_serialization": "metafind_attrs_v1@b1ac384839305720",
+      "encoding.text_serialization_family": "metafind_attrs_v1",
+      "encoding.text_serialization_contract": {
+        "family": "metafind_attrs_v1",
+        "template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+        "max_description_chars": 160,
+        "max_category_chars": 40,
+        "max_materials": 3,
+        "placement_phrases": {
+          "onCeiling": "typically mounted on a ceiling",
+          "onFloor": "typically placed on the floor",
+          "onFloor+onObject": "typically placed on the floor or on other objects",
+          "onObject": "typically placed on top of other objects",
+          "onWall": "typically mounted on a wall"
+        },
+        "no_placement_phrase": "with no typical placement"
+      },
+      "encoding.text_template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+      "encoding.text_serialization_probes": [
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, with no typical placement.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor or on other objects.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on top of other objects.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a wall.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall or on the floor or on top of other objects.",
+        "A very long category name a very long made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+        "LED made of metal, plastic, glass, roughly 1000 by 1 by 0 centimetres, typically placed on top of other objects."
+      ],
+      "encoding.image_aggregation": "mean",
+      "encoding.view_aggregation": {
+        "n_views": 12,
+        "selected_view_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "view_selection_policy": "all",
+        "pre_normalize_each_view": false,
+        "method": "mean",
+        "post_normalize": false,
+        "aggregation_version": 1
+      },
+      "encoding.actual_clip_train_scope": "frozen",
+      "encoding.missing_modality_representation": "learned_token",
+      "lr_horizon": 1,
+      "phase": "dev",
+      "train_scope": "point_encoder_and_fuser",
+      "query_observation": "same_record",
+      "query_image_policy": "same_mean",
+      "query_pc_perturb": "none"
+    },
+    "repeat_index": null,
+    "argv": [
+      "--device",
+      "cpu",
+      "--epochs",
+      "1",
+      "--preload",
+      "--amp",
+      "off",
+      "--phase",
+      "dev",
+      "--selection-split",
+      "dev_val",
+      "--query-observation",
+      "same_record",
+      "--query-image-policy",
+      "same_mean",
+      "--train-scope",
+      "point_encoder_and_fuser",
+      "--out-dir",
+      "actual_cpu_step"
+    ],
+    "hardware": {
+      "device": "cpu",
+      "gpu": null,
+      "torch": "2.12.1+cu132",
+      "cuda": "13.2",
+      "tf32_matmul": false,
+      "cudnn_tf32": true
+    },
+    "lr_horizon": 1,
+    "epoch_count": 1,
+    "preload": true,
+    "num_workers": 0,
+    "query_construction": null,
+    "query_observation": "same_record",
+    "query_image_policy": "same_mean",
+    "query_pc_perturb": "none",
+    "amp": "off",
+    "query_partner": "none",
+    "query_text_override": null,
+    "query_text_override_sha256": null,
+    "prefusion_norm": true,
+    "image_tokens": 1,
+    "text_template": "attrs_v1",
+    "embeddings_dir": "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/embeddings",
+    "train_scope": "point_encoder_and_fuser",
+    "tower_sharing": "shared_backbone_separate_fusion",
+    "gallery_fusion": "transformer",
+    "freeze_gallery": false,
+    "trainable_only": true,
+    "tower_state_includes_frozen_gallery": false,
+    "n_params_saved": 80738946,
+    "n_params_by_section": {
+      "backbone_trainable_state": 33483394,
+      "tower_trainable_state": 47255552,
+      "loss_trainable_state": 0
+    },
+    "clip_train_scope": "frozen",
+    "inputs": {
+      "train_uid_sequence_sha256": "979dd860e96d9e3c0e41cff681e602ed707df5275c31973a3b6052ee65f5315c",
+      "train_uid_set_sha256": "979dd860e96d9e3c0e41cff681e602ed707df5275c31973a3b6052ee65f5315c",
+      "selection_uid_sequence_sha256": "24d30f3ae5511d8f44aaca237af23bcdc9f047bb7d3972e665b5bc87eb1ad8cb",
+      "selection_uid_set_sha256": "24d30f3ae5511d8f44aaca237af23bcdc9f047bb7d3972e665b5bc87eb1ad8cb",
+      "n_train": 2,
+      "n_selection": 2,
+      "train_content": {
+        "content_sha256": "ef37501ec2c9fcd478c19f259adb62668c181929900fcd81ae2e2ebf88b505cd",
+        "n_assets": 2,
+        "n_missing_pointcloud_sidecar": 0,
+        "n_missing_embedding_npz": 0,
+        "n_pointcloud_sidecar_mismatch": 0,
+        "pointcloud_digest_source": "sha256 of the .npz bytes; the n07 sidecar's claim is checked against it",
+        "embedding_digest_source": "sha256 of the .npz bytes"
+      },
+      "selection_content": {
+        "content_sha256": "e9c4222a13b09497bed77764eac365171ec95ce466d3aa95590f63fdda4472a1",
+        "n_assets": 2,
+        "n_missing_pointcloud_sidecar": 0,
+        "n_missing_embedding_npz": 0,
+        "n_pointcloud_sidecar_mismatch": 0,
+        "pointcloud_digest_source": "sha256 of the .npz bytes; the n07 sidecar's claim is checked against it",
+        "embedding_digest_source": "sha256 of the .npz bytes"
+      }
+    },
+    "initializers": {
+      "ulip2": {
+        "uri": "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/models/ulip2/ULIP-2/pretrained_models/ULIP-2-PointBERT-10k-xyzrgb-pc-vit_g-objaverse_shapenet-pretrained.pt",
+        "sha256": "a4b5ed9799d5841a1646e0fb7d24cb8dcdd3b3e6fab2e2575de2531f71274adb",
+        "size_bytes": 402018241
+      },
+      "open_clip": {
+        "model": "ViT-bigG-14",
+        "pretrained": "laion2b_s39b_b160k",
+        "package_version": "3.3.0",
+        "hf_repo": "laion/CLIP-ViT-bigG-14-laion2B-39B-b160k",
+        "hf_cache": "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/models/hf-cache/hub/models--laion--CLIP-ViT-bigG-14-laion2B-39B-b160k",
+        "hf_revision": "743c27bd53dfe508a0ade0f50698f99b39d03bec",
+        "weight_file": "open_clip_model.safetensors",
+        "weight_blob_sha256": "db71bd27925917762c506c1b8a08e191d236e5586b5cd99f77d11aced578ec34",
+        "weight_size_bytes": 10158382892
+      }
+    },
+    "uri": "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/checkpoints/actual_cpu_step/stage1_best.pt",
+    "sha256": "df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532",
+    "size_bytes": 323049588,
+    "selected_on": "dev_val mean_R@1, tie mean_R@5 [D-3]",
+    "selection_split": "dev_val",
+    "phase": "dev",
+    "limit": null,
+    "n_train": 2,
+    "n_dev_val": 2,
+    "pools_sha256": "c432bc53e93a12c1f72da2811a537f0b87a836f04cd1c90c2403765b065b5abf",
+    "dev_val": {
+      "text": {
+        "R@1": 0.5,
+        "R@5": 1.0,
+        "n_query": 2,
+        "n_gallery": 2
+      },
+      "image": {
+        "R@1": 0.5,
+        "R@5": 1.0,
+        "n_query": 2,
+        "n_gallery": 2
+      },
+      "pc": {
+        "R@1": 0.5,
+        "R@5": 1.0,
+        "n_query": 2,
+        "n_gallery": 2
+      },
+      "text+image": {
+        "R@1": 0.5,
+        "R@5": 1.0,
+        "n_query": 2,
+        "n_gallery": 2
+      },
+      "text+pc": {
+        "R@1": 0.5,
+        "R@5": 1.0,
+        "n_query": 2,
+        "n_gallery": 2
+      },
+      "image+pc": {
+        "R@1": 0.5,
+        "R@5": 1.0,
+        "n_query": 2,
+        "n_gallery": 2
+      },
+      "full": {
+        "R@1": 0.5,
+        "R@5": 1.0,
+        "n_query": 2,
+        "n_gallery": 2
+      },
+      "mean_R@1": 0.5,
+      "mean_R@5": 1.0,
+      "n_gallery": 2
+    }
+  },
+  "stage2": {
+    "variant_id": "full",
+    "use_layout": true,
+    "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/checkpoints/stage2_full.pt",
+    "trainable_only": true,
+    "stage1_checkpoint_sha256": "df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532",
+    "stage1_checkpoint_uri": "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/checkpoints/actual_cpu_step/stage1_best.pt",
+    "stage1_model_inputs": {
+      "version": 1,
+      "encoding": {
+        "status": "resolved",
+        "text_serialization": "metafind_attrs_v1@b1ac384839305720",
+        "text_serialization_family": "metafind_attrs_v1",
+        "text_serialization_contract": {
+          "family": "metafind_attrs_v1",
+          "template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+          "max_description_chars": 160,
+          "max_category_chars": 40,
+          "max_materials": 3,
+          "placement_phrases": {
+            "onCeiling": "typically mounted on a ceiling",
+            "onFloor": "typically placed on the floor",
+            "onFloor+onObject": "typically placed on the floor or on other objects",
+            "onObject": "typically placed on top of other objects",
+            "onWall": "typically mounted on a wall"
+          },
+          "no_placement_phrase": "with no typical placement"
+        },
+        "text_template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+        "text_serialization_probes": [
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, with no typical placement.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor or on other objects.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on top of other objects.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a wall.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall.",
+          "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall or on the floor or on top of other objects.",
+          "A very long category name a very long made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+          "LED made of metal, plastic, glass, roughly 1000 by 1 by 0 centimetres, typically placed on top of other objects."
+        ],
+        "image_aggregation": "mean",
+        "view_aggregation": {
+          "n_views": 12,
+          "selected_view_ids": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "view_selection_policy": "all",
+          "pre_normalize_each_view": false,
+          "method": "mean",
+          "post_normalize": false,
+          "aggregation_version": 1
+        },
+        "paper_clip_train_scope": "frozen",
+        "paper_clip_train_scope_basis": "MetaFind does not state a per-module freeze scope for OpenCLIP anywhere. This reproduction follows ULIP-2's design because MetaFind explicitly builds on ULIP-2, ULIP-2 3.3 states 'We adopt the largest version of encoders from OpenCLIP (ViT-G/14) ... and freeze it during pre-training', and MetaFind never states that it changes that policy. The three sentences that read otherwise do not carry it: 2.6's 'Both query and gallery encoders are trained' describes the TOWERS, which train under a frozen CLIP because the point encoder, the projection and the fuser are all in the optimizer; 3.4's 'Fine-tuning the entire encoder outperformed training the fuser only' separates the full model from the fuser-only ablation, a separation the trainable point encoder already produces; and 2.4's 'gallery encoder is frozen after pretraining' versus 2.6's 'is trained' is the Stage 1 / Stage 2 boundary, not a Stage 1 contradiction. Reopen if MetaFind's code or its authors show an optimizer update reaching OpenCLIP's parameters.",
+        "paper_clip_train_scope_confidence": "moderate",
+        "actual_clip_train_scope": "frozen",
+        "missing_modality_representation": "learned_token",
+        "decided_by": "MASTER, under Kyzen's full delegation 2026-09-03 (fresh audit A5/C8)",
+        "decided_at": "2026-09-03T10:28:15.068564+00:00"
+      },
+      "training": {
+        "fusion": "transformer",
+        "tower_sharing": "shared_backbone_separate_fusion",
+        "train_scope": "point_encoder_and_fuser",
+        "gallery_fusion": "transformer",
+        "freeze_gallery": false,
+        "prefusion_norm": true,
+        "image_tokens": 1,
+        "query_fusion_config": {
+          "dim": 1280,
+          "kind": "transformer",
+          "hidden": 2048,
+          "n_heads": 8,
+          "n_layers": 2,
+          "zero_pad": false,
+          "include_absent_slots": true,
+          "dropout": 0.0,
+          "prefusion_norm": true,
+          "image_tokens": 1
+        },
+        "gallery_fusion_config": {
+          "dim": 1280,
+          "kind": "transformer",
+          "hidden": 2048,
+          "n_heads": 8,
+          "n_layers": 2,
+          "zero_pad": false,
+          "include_absent_slots": true,
+          "dropout": 0.0,
+          "prefusion_norm": true,
+          "image_tokens": 1
+        }
+      },
+      "hyperparameter_values": {
+        "optimizer": "adamw",
+        "decay_mask_tokens": false,
+        "learning_rate": 0.0005,
+        "weight_decay": 0.1,
+        "scheduler": "cosine",
+        "batch_size": 2,
+        "epochs": 1,
+        "max_epochs": 250,
+        "p_mask": 0.3,
+        "init_temperature": 0.5,
+        "learnable_temperature": false,
+        "max_logit_scale": 100.0,
+        "betas": [
+          0.9,
+          0.98
+        ],
+        "eps": 1e-08,
+        "warmup_epochs": 1,
+        "lr_start": 1e-06,
+        "lr_end": 1e-05,
+        "seed": 20260816
+      },
+      "loss_values": {
+        "learnable_temperature": false,
+        "init_temperature": 0.5,
+        "max_logit_scale": 100.0
+      }
+    },
+    "gallery_index_sha256": "9660652599c35957d009d06f1760313d5b4170029fd95623722a3fa2cb74e56d",
+    "allow_legacy_gallery_index": false,
+    "allow_legacy_semantic_inputs": false,
+    "semantic_source_status": {
+      "node": "verified",
+      "edge": "verified",
+      "encoder_match": "verified"
+    },
+    "gallery_source_status": "verified",
+    "layout_input_dims": {
+      "node_feat_dim": 1280,
+      "edge_feat_dim": 1280
+    },
+    "graph_unit": "room",
+    "stage2_protocol": {
+      "status": "resolved",
+      "gallery_scope": "procthor",
+      "positive_identity": "same_asset_id",
+      "modality_source": "ai2thor_isolated",
+      "image_protocol": "n04_compatible",
+      "asset_modalities": [
+        "text",
+        "image"
+      ],
+      "pointcloud_source": "multiview_depth_shell (built by n07b, not encoded; DL-104)",
+      "query_pointcloud": "absent",
+      "sampling_unit": "object_instance",
+      "target_eligibility": "has_declared_modalities",
+      "target_removed_before_essgnn": true,
+      "samples_per_house": "all_eligible",
+      "instance_resampling": "fixed",
+      "epoch_definition": "one pass over the enumerated leave-one-out samples",
+      "batch_positive_uniqueness": true,
+      "scene_dropout_granularity": "batch",
+      "query_modality_masking": "none",
+      "graph_unit": "room",
+      "init_lambda_ratio": 0.1,
+      "init_lambda": null,
+      "decided_by": "isolated CPU diagnostic; existing resolved decisions",
+      "decided_at": "2026-09-07T16:42:47.962233+00:00"
+    },
+    "edge_protocol": {
+      "status": "resolved",
+      "topology": "support_union_adjacency",
+      "physical_relation_encoding": "neighbourhood_only",
+      "semantic_missing_representation": "learned_missing_token",
+      "directionality": "symmetric",
+      "decided_by": "isolated CPU diagnostic; existing resolved decisions",
+      "decided_at": "2026-09-07T16:42:47.962233+00:00"
+    },
+    "input_identity": {
+      "version": 1,
+      "graph_unit": "room",
+      "train_houses": [
+        "test_00757"
+      ],
+      "protocols": {
+        "stage2": {
+          "status": "resolved",
+          "gallery_scope": "procthor",
+          "positive_identity": "same_asset_id",
+          "modality_source": "ai2thor_isolated",
+          "image_protocol": "n04_compatible",
+          "asset_modalities": [
+            "text",
+            "image"
+          ],
+          "pointcloud_source": "multiview_depth_shell (built by n07b, not encoded; DL-104)",
+          "query_pointcloud": "absent",
+          "sampling_unit": "object_instance",
+          "target_eligibility": "has_declared_modalities",
+          "target_removed_before_essgnn": true,
+          "samples_per_house": "all_eligible",
+          "instance_resampling": "fixed",
+          "epoch_definition": "one pass over the enumerated leave-one-out samples",
+          "batch_positive_uniqueness": true,
+          "scene_dropout_granularity": "batch",
+          "query_modality_masking": "none",
+          "graph_unit": "room",
+          "init_lambda_ratio": 0.1,
+          "init_lambda": null,
+          "decided_by": "isolated CPU diagnostic; existing resolved decisions",
+          "decided_at": "2026-09-07T16:42:47.962233+00:00"
+        },
+        "edge": {
+          "status": "resolved",
+          "topology": "support_union_adjacency",
+          "physical_relation_encoding": "neighbourhood_only",
+          "semantic_missing_representation": "learned_missing_token",
+          "directionality": "symmetric",
+          "decided_by": "isolated CPU diagnostic; existing resolved decisions",
+          "decided_at": "2026-09-07T16:42:47.962233+00:00"
+        },
+        "arch": {
+          "status": "resolved",
+          "architecture_family": "appendix_shared_msg",
+          "use_io_projections": true,
+          "distance": "squared",
+          "coord_feat": "current",
+          "layer_sharing": "independent",
+          "pooling": "normalised_sum",
+          "hidden_dim": 128,
+          "n_layers": 7,
+          "mlp_structure": "egnn_appendix",
+          "decided_by": "isolated CPU diagnostic; existing resolved decisions",
+          "decided_at": "2026-09-07T16:42:47.962233+00:00"
+        }
+      },
+      "artifacts": {
+        "stage2": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/stage2_protocol.json",
+          "sha256": "37e3c342efdc8bb0319bbe491effa7a4056c1a5d472375a103826d6d86c877e6"
+        },
+        "edge": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/essgnn_edge_protocol.json",
+          "sha256": "888d99ea9589256e60d682737f19a1445c16a61f683b1dd45f5870dea2bdb8bb"
+        },
+        "arch": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/essgnn_arch_protocol.json",
+          "sha256": "3cf9147a6f3cc3a04f3d01692ba26457720309e790ea08a3a63c072b866dbf26"
+        },
+        "scene_splits": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/scene_splits.json",
+          "sha256": "e40672f78502a884e2bcc4e0d7aca8b4ac0cfbafd9f33141e033482127984fce"
+        },
+        "positive_map": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/stage2_positive_map.json",
+          "sha256": "ca85d981bb633dbd1d2458990ee01417348b556db797d41745e79fe539aeb3a5"
+        },
+        "object_text": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_object_text.json",
+          "sha256": "0375d1306c072d0cd8b6e4387289d0fdcdbaecd749901b46528c095e042ab848"
+        },
+        "node_record": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_node_embeddings.json",
+          "sha256": "9819336676ca31244ae2359b2e2ffe4fb4aca9095d657f6dc72d1315268d3ef7"
+        },
+        "semantic_cache": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/sem_edge_cache.json",
+          "sha256": "98d90eef75d38130fef63757dfa14fdbff5d8a784b5ad90347b37ded6440fd25"
+        },
+        "semantic_embeddings": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/sem_edge_embeddings.npz",
+          "sha256": "5b42c842fab70039ff5088ec5d1f2a5b46da7b0d887fb40a62fc559592f03f7e"
+        },
+        "gallery_record": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/stage2_gallery_index.json",
+          "sha256": "cc1a01699d6fa0098938d0aaf25a03d3059359c2f1695562815ba9844ddb3792"
+        },
+        "node_embeddings": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_node_embeddings.npz",
+          "sha256": "d72c3de99ae900d48d1c0a5f46718965d079acfe517e9344bd89a4597f7ddf38"
+        }
+      },
+      "graphs": {
+        "test_00757": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/scene_graphs/test_00757.json",
+          "sha256": "0f425ccd9f8ac4ce006be4d4afd8528913e8db4649b23dbeec41fee3f5f01691"
+        }
+      },
+      "modality_records_root": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_modalities",
+      "modality_records": {
+        "Bathroom_Faucet_3": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_modalities/Bathroom_Faucet_3.json",
+          "sha256": "1b420d19c15c072649f164454d7daedabb487596f290bbeaacb9c6887225bfe0"
+        },
+        "Plunger_1": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_modalities/Plunger_1.json",
+          "sha256": "fb7eab4c6fa10d1f05874f55cfd2637b8888235dd9359ab6c4a3129f58420f23"
+        },
+        "Sink_4": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_modalities/Sink_4.json",
+          "sha256": "3203f270d75ff475296f73d8334ad16a5e567ab846287da1df2d0a088aff8f54"
+        },
+        "Spray_Bottle_5": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_modalities/Spray_Bottle_5.json",
+          "sha256": "f946bea6a90f03dd8be82e6bea5508e4901de815ec76f28ecaea9ad3ff97e41d"
+        },
+        "Toilet_2": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_modalities/Toilet_2.json",
+          "sha256": "6c3a59619de4c0045897444ee6533954e53b517d2802ffe1a9945f0bc1583cfd"
+        },
+        "Wall_Decor_Photo_2V": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_modalities/Wall_Decor_Photo_2V.json",
+          "sha256": "56a136d116ba01066d92a6a893d84db53e061c1639427bc1570d815bf842c449"
+        },
+        "Wall_Decor_Photo_5": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_modalities/Wall_Decor_Photo_5.json",
+          "sha256": "c23ddc8ebd7fa9a1bed3465783d39cf8fcb06f5487d62561d49fb5111a2725e7"
+        },
+        "Wall_Decor_Photo_8": {
+          "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_modalities/Wall_Decor_Photo_8.json",
+          "sha256": "2d0a6264156634f993c70a0b17fe9ae33c61e08470ffdefeadcce2e6c62ea764"
+        }
+      }
+    },
+    "samples_sha256": "933e0843f9f81fbce9a04fdbd064fa1c302c40cb9f99f85f297b4adae4ea3b9d",
+    "hyperparameters_uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/stage2_hyperparameters.json",
+    "hyperparameters_sha256": "5dbf9c5a389b4c030056eb701f1af5e8330265e4a30dd7f45d799e2c422676b4",
+    "hyperparameters": {
+      "what": "Stage 2 fine-tuning recipe: the Stage 1 recipe with the rate lowered 10x and Stage 1's warmup + cosine shape restored.",
+      "why": "Pilots 1 and 2 (P1 parent, Stage 1 recipe at a FLAT 5e-4, no warmup) moved the query fusion by a median relative distance of 0.55 and cost the probe batch 11 points of in-batch top-1 within 50 steps; the layout-free head fell from 82.4 to 24.2 R@1 on ProcTHOR. Sec. 2.6 calls Stage 2 'fine-tuning' and gives no rate or schedule. IMPLEMENTATION CHOICE; one arm changes only this against pilot 2.",
+      "values": {
+        "optimizer": "adamw",
+        "decay_mask_tokens": false,
+        "learning_rate": 5e-05,
+        "weight_decay": 0.1,
+        "scheduler": "cosine",
+        "batch_size": 8,
+        "epochs": 1,
+        "max_epochs": 250,
+        "p_mask": 0.3,
+        "init_temperature": 0.5,
+        "learnable_temperature": false,
+        "max_logit_scale": 100.0,
+        "betas": [
+          0.9,
+          0.98
+        ],
+        "eps": 1e-08,
+        "warmup_epochs": 1,
+        "lr_start": 1e-06,
+        "lr_end": 1e-06,
+        "seed": 20260816,
+        "warmup_frac": 0.1,
+        "scene_dropout": 0.3
+      },
+      "basis": "Stage 1 recipe (stage1_hyperparameters.json values) with these overrides: {\"learning_rate\": 5e-05, \"epochs\": 1, \"warmup_frac\": 0.1, \"lr_start\": 1e-06, \"lr_end\": 1e-06, \"scene_dropout\": 0.3}",
+      "diagnostic": {
+        "purpose": "exactly one actual CPU optimizer step; no research metric",
+        "overrides": {
+          "batch_size": {
+            "from": 64,
+            "to": 8
+          }
+        },
+        "effective_single_step_lr": 1e-06,
+        "reason": "warmup_frac .1 over one step uses lr_start",
+        "source_hyperparameters": "/home/kyzen/MetaFindV1/workflow/stage2_hyperparameters_ft_lr5e-5.json"
+      }
+    },
+    "hyperparameters_are_stage1_artifact": false,
+    "temperature_init": {
+      "source": "stage2_recipe",
+      "requested_init_temperature": 0.5,
+      "raw_initial_temperature": 0.5,
+      "effective_initial_temperature": 0.5,
+      "initial_logit_scale": 0.6931471824645996,
+      "learnable_temperature": false,
+      "max_logit_scale": 100.0
+    },
+    "effective_values": {
+      "learning_rate": 5e-05,
+      "weight_decay": 0.1,
+      "batch_size": 8,
+      "epochs": 1,
+      "seed": 20260816,
+      "scene_dropout": 0.3,
+      "warmup_frac": 0.1,
+      "lr_start": 1e-06,
+      "lr_end": 1e-06,
+      "init_temperature": 0.5,
+      "learnable_temperature": false
+    },
+    "lambda_init": {
+      "init_lambda": 2.3415285110473634,
+      "init_lambda_ratio": 0.1,
+      "fused_query_norm_median": 23.415285110473633,
+      "fused_query_norm_n": 8,
+      "fused_query_norm_min": 23.203824996948242,
+      "fused_query_norm_max": 23.876115798950195,
+      "pooling": "normalised_sum",
+      "layout_norm_assumed": 1.0,
+      "derived_at": "stage2_start",
+      "basis": "median over the first 8 samples of this run, drop_layout=True, no_grad",
+      "sample_is_a_positional_prefix": true
+    },
+    "samples_per_epoch": 8,
+    "min_batch_size": 8,
+    "small_batches_dropped_per_epoch": 0,
+    "small_batch_samples_dropped_per_epoch": 0,
+    "train_houses": 1,
+    "n_params_saved": 25799425,
+    "arch_protocol": {
+      "architecture_family": "appendix_shared_msg",
+      "coord_feat": "current",
+      "distance": "squared",
+      "hidden_dim": 128,
+      "layer_sharing": "independent",
+      "mlp_structure": "egnn_appendix",
+      "n_layers": 7,
+      "pooling": "normalised_sum",
+      "status": "resolved",
+      "use_io_projections": true
+    },
+    "primary_interpretation": {
+      "h0_mode": "semantic",
+      "coords_agg": "sum",
+      "edge_proj_dim": null,
+      "normalize_coord_diff": false
+    },
+    "query_modality_masking": "none",
+    "code_revision": "87ccfbbf460cfd2bcc518f654e1b7d0fd3e506d8",
+    "code_dirty": true,
+    "steps": 1,
+    "diagnostic": {
+      "purpose": "one real CPU optimizer update; no benchmark result",
+      "source_manifest": {
+        "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/source_manifest.json",
+        "sha256": "519c1107dc354dbe8206fa536fe90b0033946131cb9e76589d50827d27d9805b"
+      },
+      "driver": {
+        "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/driver.py",
+        "sha256": "56d0f26c329683b78cdcb2211429acffb0959636ed228e74113c20de8f66a241"
+      }
+    },
+    "sha256": "c4347b8c09ec28f2d932749498be04dde04cf3b8769f953bf4f51d4461e0e5ad",
+    "size_bytes": 103251569
+  },
+  "command": [
+    "/home/kyzen/MetaFindV1/metafind/eval/custom_table1.py",
+    "--protocol",
+    "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/protocol/protocol.json",
+    "--stage1-record",
+    "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/checkpoints/actual_cpu_step/stage1_best_ckpt.json",
+    "--stage2-record",
+    "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/variant_ckpts.json",
+    "--out-dir",
+    "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_new_stages_20260908/evaluation",
+    "--device",
+    "cpu",
+    "--batch-size",
+    "2",
+    "--block",
+    "4",
+    "--seed",
+    "20260908"
+  ],
+  "seed": 20260908,
+  "device": "cpu",
+  "batch_size": 2,
+  "block": 4,
+  "code_revision": "87ccfbbf460cfd2bcc518f654e1b7d0fd3e506d8",
+  "code_dirty": true,
+  "runtime_source_sha256": "a57f49cd10bfd06fc2048be9972e17fc8793f838861cbc01dc6cff3409fc3d7e",
+  "python": "3.11.15",
+  "numpy": "2.4.6",
+  "torch": "2.12.1+cu132",
+  "cuda": "13.2",
+  "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.43"
+}

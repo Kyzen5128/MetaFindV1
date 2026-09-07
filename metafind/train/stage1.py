@@ -1529,12 +1529,11 @@ def evaluate_dev_val(backbone, model, dev_val_uids, aggregation, device,
 #   preload,
 #   num_workers,
 #   device      -- [CODEX 2026-08-30] execution facts, not treatment. Under the
-#                  resolved `mean` aggregation nothing in `__getitem__` draws, so
-#                  the worker count cannot change what the model sees. THIS IS
-#                  CONDITIONAL: under `random_single_view` `random` is seeded per
-#                  worker and these become arm-effective. The assertion below
-#                  fails if that protocol is ever resolved, rather than letting
-#                  the exclusion quietly stop being true.
+#                  deterministic mean query policy, the worker count cannot
+#                  change what the model sees. The supported `random_view`
+#                  query policy instead records the effective worker/RNG policy
+#                  as `query_image_rng` below. Non-mean cache aggregation is
+#                  still unsupported and explicitly refused.
 #                  These three are named here even though nothing merges them
 #                  into `values` today: [ULIP2 REVIEWER 2026-08-30] the error
 #                  message below sends the reader to ARM_EXCLUDED, and this
@@ -1760,6 +1759,24 @@ def arm_config_hash(values: dict, training: dict, encoding: dict,
     resolved["query_observation"] = training.get("_query_observation", "same_record")
     resolved["query_image_policy"] = training.get("_query_image_policy", "same_mean")
     resolved["query_pc_perturb"] = training.get("_query_pc_perturb", "none")
+    if resolved["query_image_policy"] == "random_view":
+        workers = training.get("_num_workers")
+        if type(workers) is not int or workers < 0:
+            raise UnsupportedProtocol(
+                "random_view requires the effective nonnegative integer "
+                "_num_workers to identify its observation RNG policy.")
+        # view_indices draws from Python's RNG. With zero workers it uses
+        # seed_training's continuing stream; workers instead get PyTorch's
+        # worker seeds and are recreated for each epoch. Preloading selects
+        # zero workers in main, so it changes this treatment only for draws.
+        resolved["query_image_rng"] = {
+            "version": 1,
+            "generator": "python.random",
+            "num_workers": workers,
+            "seed_source": ("training_seed" if workers == 0
+                            else "torch_dataloader_worker_seed"),
+            "stream_lifetime": "run" if workers == 0 else "epoch",
+        }
     blob = json.dumps(resolved, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode()).hexdigest(), resolved
 
@@ -3067,6 +3084,16 @@ def main() -> int:
         # belongs to neither the smoke nor the real protocol.
         dev_val_uids = dev_val_uids[: args.limit]
 
+    batch_size = values["batch_size"]
+    if type(batch_size) is not int or batch_size <= 0:
+        raise SystemExit("batch_size must be a positive integer")
+    if len(train_uids) < batch_size:
+        raise SystemExit(
+            f"training pool has {len(train_uids)} assets after observation "
+            f"coverage and --limit, fewer than batch_size={batch_size}. "
+            "drop_last=True would yield no training batches; refusing before "
+            "loading the backbone.")
+
     seed = values["seed"]
     seed_training(seed)
     generator = torch.Generator(device="cpu").manual_seed(seed)
@@ -3383,7 +3410,9 @@ def main() -> int:
                         "stage1", epoch=epoch, step=step,
                         loss=round(out["loss"].item(), 6),
                         acc_q2g=round(out.get("acc_q2g", torch.tensor(0.0)).item(), 6),
-                        tau=round(loss_fn.temperature.item(), 6),
+                        # The scale used for this loss, including its clamp;
+                        # the parameter may already have changed at opt.step().
+                        tau=round(out["temperature"].item(), 6),
                         # [FIXED 2026-08-28] `sched.get_last_lr()[0]` and
                         # `params` stood here and NEITHER NAME EXISTS. They were
                         # left behind on 2026-08-27 when the torch scheduler was
@@ -3415,7 +3444,7 @@ def main() -> int:
                 if step % 100 == 0:
                     print(f"  epoch {epoch} step {step}: loss {out['loss'].item():.4f}, "
                           f"acc {out.get('acc_q2g', torch.tensor(0.0)).item():.3f}, "
-                          f"tau {loss_fn.temperature.item():.4f}", flush=True)
+                          f"tau {out['temperature'].item():.4f}", flush=True)
 
             record = save_checkpoint(backbone, model, loss_fn, hyperparameters,
                                      encoding, training, seed, epoch, run_paths,

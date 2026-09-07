@@ -1,0 +1,27 @@
+{
+  "classification": "OBSERVED DATA; read-only capture of current inputs, no vectors encoded or index published",
+  "observed_at": "2026-09-07T15:18:12.995880+00:00",
+  "data": "/home/kyzen/metafind/metafind_data_paper",
+  "source_identity_version": 2,
+  "source_identity_sha256": "fe833c33daee352fb779a0a9876b1d2178a0d601e347f3e1c61ca5e1f67c22d6",
+  "source_capture_implementation_sha256": "a81000c1dc19555df3029185402089ec798625fa2589c7502387a16211531292",
+  "text_source": {
+    "artifact": {
+      "uri": "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_object_text.json",
+      "sha256": "a993a2d1bd4cb37bff09116a3c5d8543c85022971196974e90bac3fb96426d19"
+    },
+    "annotation_artifact": {
+      "uri": "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_asset_annotations.json",
+      "sha256": "7e98efa53a4118d678f4caaab804eaf2457ea485ed76161048701e5edacbe608"
+    },
+    "field": "text",
+    "template": "v3_fit",
+    "serializer": "metafind.models.resolve_stage1.serialize_fitted"
+  },
+  "modality_records": 1467,
+  "eligible_assets": 1467,
+  "old_renderer_text_differs": 1467,
+  "verified_image_references": 16137,
+  "canonical_metadata_serialization": "Every selected canonical sentence matched serialize_fitted(metadata annotation) inside capture.",
+  "elapsed_seconds": 4.545594749972224
+}

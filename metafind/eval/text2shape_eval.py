@@ -24,7 +24,7 @@ Kevin Chen, clone at /home/kyzen/upstream/text2shape @ 2f62ebc):
   * Top-k is `np.argpartition` on the similarities: TIES are broken by the
     partition's arbitrary order, not against the model as ours are.
 
-The three functions below are copied unchanged from that file (comments and
+The two functions below are copied unchanged from that file (comments and
 dead branches included) so a reader can diff them against upstream. Only the
 wrapper `text2shape_metrics` is ours: it feeds our (query, gallery, target)
 triple through them with the gallery as `fit` and one label per gallery row.
@@ -146,7 +146,7 @@ N_NEIGHBORS = 5     # Text2Shape reports RR@1, RR@5, NDCG@5 (Table 1 of the pape
 
 
 def text2shape_metrics(query: np.ndarray, gallery: np.ndarray, targets: np.ndarray,
-                       n_neighbors: int = N_NEIGHBORS) -> dict:
+                       n_neighbors: int = N_NEIGHBORS, *, query_block_size: int = 256) -> dict:
     """RR@1, RR@5, NDCG@5 (and precision@k) as Text2Shape computes them.
 
     `query` (n_q, D) are the queries, `gallery` (n_g, D) the fit matrix,
@@ -158,15 +158,38 @@ def text2shape_metrics(query: np.ndarray, gallery: np.ndarray, targets: np.ndarr
     Pass the vectors you mean: unit vectors give cosine, raw tower outputs give
     the unnormalised dot product upstream actually runs. Both are reported by
     `run_retrieval`.
+
+    Our adapter batches query rows before calling the unchanged upstream
+    nearest-neighbor function. Its dense similarities and partition indices
+    then require O(query_block_size * n_g) memory, instead of O(n_q * n_g).
+    Only the small top-k index table is kept for the single upstream metric
+    aggregation. Upstream's arbitrary tie behavior is retained; this diagnostic
+    does not provide the canonical scorer's pessimistic tie guarantee.
     """
     q = np.asarray(query, dtype=np.float64)
     g = np.asarray(gallery, dtype=np.float64)
-    t = np.asarray(targets, dtype=np.int64)
-    if q.shape[0] != t.shape[0]:
+    t = np.asarray(targets)
+    if q.ndim != 2 or g.ndim != 2 or q.shape[1] != g.shape[1] or q.shape[1] == 0:
+        raise ValueError("query and gallery must be matrices of the same nonzero width")
+    if t.ndim != 1 or not np.issubdtype(t.dtype, np.integer):
+        raise ValueError("targets must be a one-dimensional integer row-index array")
+    if q.shape[0] == 0 or q.shape[0] != t.shape[0]:
         raise ValueError(f"{q.shape[0]} queries but {t.shape[0]} targets")
+    if not np.isfinite(q).all() or not np.isfinite(g).all():
+        raise ValueError("query and gallery must contain finite values")
+    if np.any(t < 0) or np.any(t >= g.shape[0]):
+        raise ValueError("target row is outside the gallery")
+    for name, value in (("n_neighbors", n_neighbors), ("query_block_size", query_block_size)):
+        if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)) or value < 1:
+            raise ValueError(f"{name} must be a positive integer")
+    t = t.astype(np.int64, copy=False)
     if g.shape[0] < n_neighbors:
         raise ValueError(f"gallery of {g.shape[0]} rows cannot yield top-{n_neighbors}")
-    indices = _compute_nearest_neighbors_cosine(g, q, n_neighbors, fit_eq_query=False)
+    indices = np.empty((q.shape[0], n_neighbors), dtype=np.intp)
+    for start in range(0, q.shape[0], query_block_size):
+        stop = min(start + query_block_size, q.shape[0])
+        indices[start:stop] = _compute_nearest_neighbors_cosine(
+            g, q[start:stop], n_neighbors, fit_eq_query=False)
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):       # upstream prints its table; keep it, quietly
         m = compute_pr_at_k(indices, t, n_neighbors, q.shape[0],
@@ -176,4 +199,5 @@ def text2shape_metrics(query: np.ndarray, gallery: np.ndarray, targets: np.ndarr
             f"NDCG@{n_neighbors}": float(m.ndcg[n_neighbors - 1]),
             "precision@1": float(m.precision[0]),
             "n_neighbors": int(n_neighbors),
+            "query_block_size": int(query_block_size),
             "upstream_table": buf.getvalue().strip().splitlines()}

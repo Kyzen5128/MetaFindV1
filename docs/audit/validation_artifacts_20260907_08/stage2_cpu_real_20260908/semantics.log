@@ -1,0 +1,9 @@
+/home/kyzen/miniconda3/envs/MetaFind/lib/python3.11/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+WARNING:root:No pretrained weights loaded for model 'ViT-bigG-14'. Model initialized randomly.
+Get openclip model:
+Finished loading the openclip model.
+training from scratch for pointbert.
+model size:
+32.50M
+{"phase": "semantics", "status": "complete", "seconds": 28.992071866989136}

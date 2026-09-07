@@ -1,6 +1,6 @@
 # MetaFind 復現筆記（Master 說明書）
 
-**v5 — 2026-09-03 全面重整。** 這一版是**現行版本**；v4 及更早的全文原封保留在本檔末尾的「附錄 A」，其中的裁決（DL 編號、✅ 核可）仍然有效，只是句子被本版重新分類。與附錄衝突處，以本版為準；本版列出了它取代的每一句（§12）。
+**v5 — 2026-09-03 研究筆記；2026-09-07 補正狀態。** 本檔含不同日期的歷史推論與量測，不能作為當前實作清單。v4 及更早的內容保留於「附錄 A」；歷史核可須查原始決策、日期與後續是否取代，不能由本檔一概宣告仍然有效。現行程式入口與資料流見 [DATA_FLOW.md](DATA_FLOW.md)，評估見 [CUSTOM_TABLE1_EVALUATION.md](CUSTOM_TABLE1_EVALUATION.md)，本輪修正見 [CLEANUP_REPORT_20260907.md](CLEANUP_REPORT_20260907.md)。
 
 撰寫：Master（Claude）。依 Kyzen 2026-09-03 的指令重整：「把 HTML 當 A0 最高權威」「重新定義三個 reproduction target」「論文明講／論文沒講／我們自己選的／有 bug 的探針，四件事分開」。
 
@@ -11,20 +11,20 @@
 ### 0.1 權威順序
 
 ```
-A0   docs/paper/metafind_source/metafind_arxiv_v1.html      ← 唯一最高權威，含 Figure 1 / Figure 2
-A1   同目錄的 .tex                                          ← 只用來定位原文；與 HTML 衝突時以 HTML 為準
-A2   上游論文與官方程式碼（ULIP-2 / EGNN / OpenShape / ProcTHOR）
-A3   本 repo 的程式碼與量測
-A4   舊設計說明、Claude/Codex 的結論、對話記憶
+論文內容權威：docs/paper/metafind_source/**（HTML、TeX、圖等原始材料）
+上游來源：只在 MetaFind 明確繼承的範圍適用，不填補 MetaFind 沒寫的設定
+推導規格：docs/audit/**、docs/graph/**、決策紀錄（不得覆蓋原文）
+實作與驗證：repo 程式、測試、產物（各自只支持其可觀察範圍）
+工作記憶：舊筆記、Claude/Codex 結論、handoff（不作為論文證據）
 ```
 
-本版引用論文一律**逐字英文**，附章節。凡是「論文說…」而底下沒有逐字引文的，都不算 PAPER FACT。
+以上依現行 `AGENTS.md`；若原始材料間有實質矛盾，保留差異並請使用者決定，不能用筆記自行消除。PAPER FACT 需有可定位的原文支持；逐字引文與忠實釋義均需保留来源。
 
 ### 0.2 標籤（Kyzen 2026-09-03 定的四類，加三個量測類）
 
 | 標籤 | 意思 |
 |---|---|
-| `PAPER FACT` | HTML 正文或圖直接支持，附逐字引文 |
+| `PAPER FACT` | paper source 正文、公式或圖直接支持，附可定位的來源 |
 | `AUTHOR EVIDENCE / MAINLINE` | 正文沒完全講清楚，但 Figure 或作者材料提供強證據，主線採用 |
 | `UNRESOLVED` | 論文、Figure、作者材料都不足以唯一確定 |
 | `IMPLEMENTATION CHOICE / MAINLINE` | 為了能實作，我們目前選的；不得寫成作者公布的設定 |
@@ -37,7 +37,7 @@ A4   舊設計說明、Claude/Codex 的結論、對話記憶
 
 ```
 第一層  論文 hard facts             不准因為數字不好看就改（§4）
-第二層  論文沒講的 protocol         用受控實驗＋整張表的 fingerprint 選（§5）
+第二層  論文沒講的 protocol         受控實驗記錄敏感度；自訂選擇不冒充作者設定（§5）
 第三層  偏離與 bug                  不能假裝是 MetaFind 的 protocol（§6）
 ```
 
@@ -47,7 +47,7 @@ A4   舊設計說明、Claude/Codex 的結論、對話記憶
 
 | 目標 | 要復現什麼 | 正確理解 |
 |---|---|---|
-| **ULIP** | Table 1 的 ULIP 七格 | **baseline evaluator**，不是 MetaFind Stage 1。文獻 [30] = **ULIP-2**（HTML 參考文獻逐字：「Le Xue … Ulip-2: Towards scalable multimodal pre-training for 3d understanding」），所以它用的就是我們載入的那顆釋出權重 |
+| **ULIP** | Table 1 的 ULIP 七格 | **baseline evaluator**，不是 MetaFind Stage 1。文獻 [30] 指 ULIP-2；引用模型論文不能證明作者用了本機同一顆 checkpoint，其具體權重 identity 仍需作者證據。 |
 | **MetaFind w/o ESSGNN** | Table 1 `13.8 / 11.7 / 75.1 / 17.2 / 44.5 / 45.8 / 51.7` | **Stage 1 Objaverse 模型**，layout-free |
 | **MetaFind w/ ESSGNN** | Table 1 `11.3 / 10.5 / 63.2 / 15.9 / 41.2 / 42.0 / 48.2` | **Stage 2 訓完的模型，回 Objaverse 做 layout-free 評估**（Objaverse 沒有 layout，ESSGNN 項為 None）。它量的是 Stage 2 讓 query fusion 漂移多少，**不是** ESSGNN 的正面效果 |
 | **ESSGNN 的正面效果** | Table 2 場景品質 | ProcTHOR / I-Design 場景組合，layout 真的進 ESSGNN |
@@ -64,7 +64,7 @@ MetaFind w/  ESSGNN Table 1 = Stage-2 checkpoint + layout = None（ESSGNN 不參
 ESSGNN 的正面效果          = Table 2，≠ Table 1 w/ ESSGNN
 ```
 
-`OBSERVED IMPLEMENTATION`：`metafind/models/dual_tower.py` 的 query tower `forward` 在 `layout is None` 時直接 `return fused`，Eq. 6 的 λ 項整個省略——這條路存在。**但 `metafind/eval/run_retrieval.py` 目前沒有載入 Stage 2 checkpoint 的路徑**（全檔無 `stage2` / `layout`），所以「w/ ESSGNN 的 Table 1」現在**跑不了**，是待辦（§10 第 7 步）。
+`OBSERVED IMPLEMENTATION`（2026-09-07 更正）：`dual_tower.py` 在 `layout is None` 時返回 fused。`metafind/eval/run_retrieval.py` 已有 `load_stage2_over_stage1`、`overlay_stage2_weights` 與 CLI Stage 2 載入路徑；新 `custom_table1.py` 也支援 Stage 2 head／layout-off 評估。原先「尚未實作」是 9 月 3 日快照，不再描述現況。路徑存在不等於作者的 query／gallery 協定已重建。
 
 ---
 
@@ -112,7 +112,7 @@ Stage 2 全段 **沒有** "mask" 一字（DL-091 第 5 題）。
 
 > "Notably, since other models do not adopt a dual-tower design, their 'PC only' performance reflects retrieval using **identical embeddings for both query and gallery, leading to inflated accuracy**. In contrast, our dual-tower framework introduces more cross-modality retrieval, which results in lower accuracy under the 'PC only'."
 
-這句話講的是**別人**的模型；它證明 Table 1 是 exact-instance（自己找自己），也證明論文認為「雙塔本身」是把 PC-only 從 98 壓到 75 的機制——**不是**「查詢用另一份觀測」。
+這句話講的是**基線**的相同 embedding，作者以雙塔與跨模態檢索解釋自家較低 PC-only 分數（PAPER FACT）。exact-UID 是相容的實作解讀（INFERENCE），但這句話沒有提供正解檔，也不能單獨排除觀測差異、訓練或其他設定的影響。
 
 ### 2.7 Table 1（逐字，R@1 / R@5）
 
@@ -340,7 +340,7 @@ Gemma 版可用來 debug 架構，不能當最終 strict reproduction。做法�
 
 ### 6.3 零點雲畫廊的探針（`RETRACTED`，2026-09-03）
 
-`tools/probes/exp_query_observation.py` 把 `"pc": torch.zeros_like(g_text)` 餵給 modality-complete 的畫廊塔（零張量被當成**存在**的第三模態），同時自己寫 recall（同分算模型贏、float32）。三支探針繼承它。**以下結論全部撤回**：「observation 已排除」「gallery size 已排除」「text content 是主因」「5.6x 是均勻倍數」「77.2 / 73.3 / 96.5 代表 MetaFind」。三個壞函式已刪除本體改成拒跑 stub，`tests/test_probe_gallery_parity.py` 掃描任何探針把零點雲餵進 `.gallery()`。退稿全文 `output/look/RETRACTED_20260903.md`。Kyzen 與 ULIP2 側同日獨立發現。
+`tools/probes/exp_query_observation.py` 把 `"pc": torch.zeros_like(g_text)` 餵給 modality-complete 的畫廊塔（零張量被當成**存在**的第三模態），同時自己寫 recall（同分算模型贏、float32）。三支探針繼承它。**以下結論全部撤回**：「observation 已排除」「gallery size 已排除」「text content 是主因」「5.6x 是均勻倍數」「77.2 / 73.3 / 96.5 代表 MetaFind」。當時三個壞函式改為拒跑 stub；2026-09-07 已刪除四支撤回程式並抽出仍使用的 fusion loader，見 `tools/probes/README.md`。`tests/eval/test_probe_gallery_parity.py` 保留零點雲 gallery 與 scorer 的回歸檢查。退稿全文 `output/look/RETRACTED_20260903.md`。Kyzen 與 ULIP2 側同日獨立發現。
 
 ### 6.4 語料 45,692 vs 48K（`DEVIATION`，不可補齊）
 
@@ -364,7 +364,7 @@ C_dev_selection      4,569     78.4   95.0  92.1  98.8  99.9  98.7 100.0
 D_dev_val_vs_train  36,554     58.0   84.6  78.8  96.5  99.6  94.1 100.0
 ```
 
-（`data/outputs/eval/pilot10b_official_CD/table1.json`；`tests/test_probe_gallery_parity.py` 釘住。）checkpoint：`pilot10b_20260903/stage1_best.pt`，10 輪、官方 ULIP-2 初始化、`same_record`、`code_revision 516351e`。dev_val 4,569 **不在** dev_train 31,985 裡（run record `n_train 31985`，`stage1.py:2466` 檢查重疊）——是誠實的留出評估。
+（`data/outputs/eval/pilot10b_official_CD/table1.json`；`tests/eval/test_probe_gallery_parity.py` 釘住。）checkpoint：`pilot10b_20260903/stage1_best.pt`，10 輪、官方 ULIP-2 初始化、`same_record`、`code_revision 516351e`。dev_val 4,569 **不在** dev_train 31,985 裡（run record `n_train 31985`，`stage1.py:2466` 檢查重疊）——是誠實的留出評估。
 
 ### 7.2 MetaFind w/o ESSGNN 對論文（協定 D）
 
@@ -424,10 +424,10 @@ normalize_for_scoring（float64）→ rank_of_target（同分算輸）→ R@1 / 
 ```
 
 規則：
-1. 任何探針不准自己寫 gallery 或 recall（`tests/test_probe_gallery_parity.py`）。
+1. 任何探針不准自己寫 gallery 或 recall（`tests/eval/test_probe_gallery_parity.py`）。
 2. 每支探針先過 parity gate：canonical 設定的結果 == `run_retrieval.py`；不等就停。
 3. 訓練與 checkpoint 選擇只用 dev_train / dev_val；20% test 封存到正式期最後一次。
-4. `w/ ESSGNN` 的 Table 1 = Stage 2 checkpoint + `layout=None` + **同一份凍結的 Stage 1 gallery**；`run_retrieval.py` 尚無此路徑（§10 第 7 步）。
+4. `w/ ESSGNN` 的 Table 1 對應 Stage 2 checkpoint、停用 layout、同一份凍結的 Stage 1 gallery。`run_retrieval.py` 與 `custom_table1.py` 現有此實作路徑（2026-09-07 更正）；具體 `layout=None` 是本專案表達停用 layout 的方式。
 
 ---
 
@@ -1380,7 +1380,7 @@ metafind/train/stage2.py:504   from metafind.train.stage1 import build_model, lo
 
 ### 修法值得記下來：補的是規則，不是那個 case
 
-ULIP2 沒有只補一個測試。他加了 `tests/test_train_stage1.py` 的 AST 走訪：
+ULIP2 沒有只補一個測試。他加了 `tests/train/test_train_stage1.py` 的 AST 走訪：
 **訓練模組裡任何函式都不得讀取「非參數、非本函式賦值、非模組層級、非 builtin」的名字。**
 靜態檢查，因為它保護的迴圈進不去。**把 `sched` 那行種回去 → 紅並指名；拿掉 → 綠。474 passed。**
 他用它掃八個檔，只有 stage1（已修）與 stage2（ESSGNN 線）中招。
@@ -1416,7 +1416,7 @@ ESSGNN Engineer 想把這條規則推廣，**自寫了一支 AST 掃描器，掃
 🔴 **但校準過程中查出第三件，而且是我們三個都沒想到的**：
 
 ```
-tests/test_train_stage1.py:472
+tests/train/test_train_stage1.py:472
     src = (repo / "metafind" / "train" / "stage1.py").read_text()
     ← **路徑硬寫死。committed 的那支測試只掃這一個檔。**
 ```
@@ -1738,7 +1738,7 @@ SUCCESS  ended   1787901162  rc=0           歷時 1.93 秒
 
 ### 這次的實例
 
-`tests/test_essgnn.py:255`：
+`tests/models/test_essgnn.py:255`：
 
 ```python
 for seed in range(6):                              # seed 從未被使用
@@ -1974,7 +1974,7 @@ bbox 取到小數三位，1mm 差異就算不同幾何，在噪音上過度分�
 🔴 **獨立發現**：`<Mesh>_<N>` 變體不保證同幾何（`TV_Stand_206` 1.20m vs 1.89m）。
 **其餘要量的**：**成功標準不是「1,467 筆都有文字」**，要重新量：不同字串數、同類別內的不同比例、顏色／材質／風格屬性的多樣性、空值、幻覺抽樣 |
 | **n07c 的輸出位置** | ✅ **USER-APPROVED 2026-08-27：另存新檔，舊檔保留。** 不覆蓋 `procthor_object_text.json`。理由兩條：(1) n07c 是 **DEVIATION D-4**，偏離的前後對照要留得住，否則無法證明「換了之後真的比較好」；(2) 該檔同時是 **n07 的產物**（`node_registry` 的 n07 `writes` 含它），覆蓋 = 兩個節點寫同一個 channel，且舊值不可回溯 —— 正是 §9.6 那族「誰改了什麼看不出來」的形狀（INTEGRATOR 提出）。**成本：下游改一行指到新檔，協定要記讀哪一個。** |
-| **U-20（ESSGNN 節點／邊文字編碼器）** | ✅ **USER-APPROVED 2026-08-27：改用 OpenCLIP ViT-bigG-14，1280 維。** 取代 8/17 由 Claude 自選、且理由已被程式碼推翻的 `ViT-B/32 / 512`。<br>**分類：IMPLEMENTATION CHOICE，不是 PAPER FACT 也不是 UPSTREAM FACT。**<br>· 論文只寫 `a frozen text encoder (**e.g.** CLIP or BERT)`（`2methdology.tex:47`），而且那句講的是**邊**；**節點的 `t_i` 論文連例子都沒有**。<br>· **上游答不了**：ULIP-2 沒有場景圖、沒有節點特徵這個位置，問題在上游提不出來。<br>**Kyzen 的理由：一致性。** Stage 1 的 ViT-bigG-14 是被 ULIP-2 checkpoint 逼的（`ulip_backbone.py:90` `EMBED_DIM = 1280`，投影層形狀 `(768,1280)`），沒得選；**同一個專案不要兩套文字理解**。而 n07c 反正要重跑，此時換成本最低。<br>⚠ **時序**：`n07c 換文字 → U-20（本條）→ n08 跑一次`。本條不定，n08 不能跑；定了，n08 只跑一次。<br>⚠ **邊的寬度另計**：我先前用「EGNN 的 `in_edge_nf` 是 0/2 所以邊該窄」論證過，**那條已撤回**（Type C，推不出架構原則）。邊要不要也用 1280、還是用較窄的，**目前無依據，待後續。**<br><br>🟠 **2026-08-28 補交叉指標（ESSGNN Engineer 提出，我查證後修正了它的範圍）。**<br>他提的事本身成立：**U-20 把 e_ij 定在 1280，而 §3.4 的 F8 量到的正是「加寬語意邊會壓掉幾何訊號」。**[OBSERVED DATA `docs/graph/00_FINDINGS.md:270-280`，2026-08-15 固定種子]：`|∂e_layout/∂pos|max`，語意邊全部置零，`edge_feat_dim=16 → 50.9`、`1280 → 1.14`，**約 45 倍**。<br>🔴 **但那組數字不能直接套在我們身上，他引用時沒帶這個限定。** [OBSERVED IMPLEMENTATION `tests/test_essgnn.py:233-247`] 該測試自己的 docstring 逐字：「**F8 MEASURED, and it belongs to the TWO-MLP layer specifically**」，🔴 **但那份 docstring 宣稱的「六個種子」是假的，我自己重跑過（見下），所以它的中位數與範圍都不要引用。**同檔還有一個具名測試 `test_f8_does_not_generalise_to_the_appendix_layer` 專門釘住這件事。<br>**我們的架構家族是 `appendix_shared_msg`**（`data/outputs/essgnn_arch_protocol.json`）。<br>🔴 **以下整段（原本寫「加寬讓幾何變強、我們是 ratio > 1 的那一支」）已被 §9.13 前的重測取代，不要引用。**原文保留在本文件 §「9.8 續」與 `:1262` 一帶，連同它為什麼錯：**那個 `ratio 2.990560` 是單一 seed 0 × 測試檔自己的配置（hidden 32 / n_layers 3），不是協定配置。**<br>✅ **現行結論（協定配置 `appendix_shared_msg` hidden 128 / n_layers 4，六 seed，真的有傳 seed）：**<br>　中位數 **0.3066** · 範圍 `[0.1349, 0.8591]` · **ratio > 1 的次數 0/6**<br>　→ **方向一致為壓制。** 對照 `two_mlp` 同配置中位數 `0.1037`：我們較輕，但同向，不是免疫。<br>　⚠ **不要寫成「壓制 3.3 倍」** —— 範圍最大值是最小值的 6.4 倍，而該離散度**尚未歸因**（ESSGNN Reviewer 指出：兩次呼叫在第一個依賴 `edge_feat_dim` 的層之後 RNG 流分岔，下游層抽樣不同）。**正確措辭：「六 seed 中位數 0.3066、0/6 例外、方向一致為壓制；離散度未歸因」。**（我先前對 Kyzen 講過「3.3 倍」，此處收窄。）<br>　同一顆 seed 0 只換配置就翻向：`32/3` → `2.990560`；`128/4` → `0.316257`。**配置是這裡的決定性變數，不是 seed。**<br>🔴 **同時查出那個具名測試本身壞了（ESSGNN Engineer 發現，我逐行驗證並重現）：**`tests/test_essgnn.py:255` 的 `for seed in range(6):` 迴圈裡，**`seed` 從頭到尾沒有被使用**；`geometric_sensitivity()`（`:204`）沒有 seed 參數，內部呼叫 `make_scene(n, cfg)`，而 `make_scene`（`:38`）的 `seed: int = 0` 每次都 `torch.manual_seed(0)`。**六次呼叫回傳位元相同的值**（我實測六次全部 `1.250882e-01`）。**它宣稱量了六個種子，實際上把同一件事量了六次。**<br>　連帶：docstring 的 `median 0.126 / range 0.031–2.278` **這份程式碼產不出來**（實測單點 2.99，落在它自己宣稱的範圍之外）；`docs/graph/00_FINDINGS.md:277` 的 `16 → 50.9 / 1280 → 1.14` 也對不上我重跑的 `44.63 / 1.89`。**那些數字來自某個沒有留下的更早版本或臨時執行，目前不可重現。**<br>　修法不是改一行：`geometric_sensitivity()` 要加 seed 並往下傳，兩個 F8 測試的 docstring 數字要重測，§3.4 與本條要跟著更新。**它是 F8 範圍主張的唯一守門員，屬研究關鍵測試，走三道閘，列入 n13 前置。**<br>→ **不重開 U-20**（有 USER 核可、理由清楚、Rule 13）。要記的是那條承諾的出口：§3.4 寫的「量測回報、不悄悄修正（`edge_proj_dim` 旗標保留）」，目前 `edge_proj_dim = None`（`essgnn.py:202`）。**Stage 2 有數字後，這是唯一的緩解位置，而它不需要重跑 n08。**<br>（記這一條的理由：那組數字先前只活在對話與 `00_FINDINGS.md` 裡，U-20 條目本身看不到它。這正是 §9.6 那族「兩份文件之間掉下去」。） |
+| **U-20（ESSGNN 節點／邊文字編碼器）** | ✅ **USER-APPROVED 2026-08-27：改用 OpenCLIP ViT-bigG-14，1280 維。** 取代 8/17 由 Claude 自選、且理由已被程式碼推翻的 `ViT-B/32 / 512`。<br>**分類：IMPLEMENTATION CHOICE，不是 PAPER FACT 也不是 UPSTREAM FACT。**<br>· 論文只寫 `a frozen text encoder (**e.g.** CLIP or BERT)`（`2methdology.tex:47`），而且那句講的是**邊**；**節點的 `t_i` 論文連例子都沒有**。<br>· **上游答不了**：ULIP-2 沒有場景圖、沒有節點特徵這個位置，問題在上游提不出來。<br>**Kyzen 的理由：一致性。** Stage 1 的 ViT-bigG-14 是被 ULIP-2 checkpoint 逼的（`ulip_backbone.py:90` `EMBED_DIM = 1280`，投影層形狀 `(768,1280)`），沒得選；**同一個專案不要兩套文字理解**。而 n07c 反正要重跑，此時換成本最低。<br>⚠ **時序**：`n07c 換文字 → U-20（本條）→ n08 跑一次`。本條不定，n08 不能跑；定了，n08 只跑一次。<br>⚠ **邊的寬度另計**：我先前用「EGNN 的 `in_edge_nf` 是 0/2 所以邊該窄」論證過，**那條已撤回**（Type C，推不出架構原則）。邊要不要也用 1280、還是用較窄的，**目前無依據，待後續。**<br><br>🟠 **2026-08-28 補交叉指標（ESSGNN Engineer 提出，我查證後修正了它的範圍）。**<br>他提的事本身成立：**U-20 把 e_ij 定在 1280，而 §3.4 的 F8 量到的正是「加寬語意邊會壓掉幾何訊號」。**[OBSERVED DATA `docs/graph/00_FINDINGS.md:270-280`，2026-08-15 固定種子]：`|∂e_layout/∂pos|max`，語意邊全部置零，`edge_feat_dim=16 → 50.9`、`1280 → 1.14`，**約 45 倍**。<br>🔴 **但那組數字不能直接套在我們身上，他引用時沒帶這個限定。** [OBSERVED IMPLEMENTATION `tests/models/test_essgnn.py:233-247`] 該測試自己的 docstring 逐字：「**F8 MEASURED, and it belongs to the TWO-MLP layer specifically**」，🔴 **但那份 docstring 宣稱的「六個種子」是假的，我自己重跑過（見下），所以它的中位數與範圍都不要引用。**同檔還有一個具名測試 `test_f8_does_not_generalise_to_the_appendix_layer` 專門釘住這件事。<br>**我們的架構家族是 `appendix_shared_msg`**（`data/outputs/essgnn_arch_protocol.json`）。<br>🔴 **以下整段（原本寫「加寬讓幾何變強、我們是 ratio > 1 的那一支」）已被 §9.13 前的重測取代，不要引用。**原文保留在本文件 §「9.8 續」與 `:1262` 一帶，連同它為什麼錯：**那個 `ratio 2.990560` 是單一 seed 0 × 測試檔自己的配置（hidden 32 / n_layers 3），不是協定配置。**<br>✅ **現行結論（協定配置 `appendix_shared_msg` hidden 128 / n_layers 4，六 seed，真的有傳 seed）：**<br>　中位數 **0.3066** · 範圍 `[0.1349, 0.8591]` · **ratio > 1 的次數 0/6**<br>　→ **方向一致為壓制。** 對照 `two_mlp` 同配置中位數 `0.1037`：我們較輕，但同向，不是免疫。<br>　⚠ **不要寫成「壓制 3.3 倍」** —— 範圍最大值是最小值的 6.4 倍，而該離散度**尚未歸因**（ESSGNN Reviewer 指出：兩次呼叫在第一個依賴 `edge_feat_dim` 的層之後 RNG 流分岔，下游層抽樣不同）。**正確措辭：「六 seed 中位數 0.3066、0/6 例外、方向一致為壓制；離散度未歸因」。**（我先前對 Kyzen 講過「3.3 倍」，此處收窄。）<br>　同一顆 seed 0 只換配置就翻向：`32/3` → `2.990560`；`128/4` → `0.316257`。**配置是這裡的決定性變數，不是 seed。**<br>🔴 **同時查出那個具名測試本身壞了（ESSGNN Engineer 發現，我逐行驗證並重現）：**`tests/models/test_essgnn.py:255` 的 `for seed in range(6):` 迴圈裡，**`seed` 從頭到尾沒有被使用**；`geometric_sensitivity()`（`:204`）沒有 seed 參數，內部呼叫 `make_scene(n, cfg)`，而 `make_scene`（`:38`）的 `seed: int = 0` 每次都 `torch.manual_seed(0)`。**六次呼叫回傳位元相同的值**（我實測六次全部 `1.250882e-01`）。**它宣稱量了六個種子，實際上把同一件事量了六次。**<br>　連帶：docstring 的 `median 0.126 / range 0.031–2.278` **這份程式碼產不出來**（實測單點 2.99，落在它自己宣稱的範圍之外）；`docs/graph/00_FINDINGS.md:277` 的 `16 → 50.9 / 1280 → 1.14` 也對不上我重跑的 `44.63 / 1.89`。**那些數字來自某個沒有留下的更早版本或臨時執行，目前不可重現。**<br>　修法不是改一行：`geometric_sensitivity()` 要加 seed 並往下傳，兩個 F8 測試的 docstring 數字要重測，§3.4 與本條要跟著更新。**它是 F8 範圍主張的唯一守門員，屬研究關鍵測試，走三道閘，列入 n13 前置。**<br>→ **不重開 U-20**（有 USER 核可、理由清楚、Rule 13）。要記的是那條承諾的出口：§3.4 寫的「量測回報、不悄悄修正（`edge_proj_dim` 旗標保留）」，目前 `edge_proj_dim = None`（`essgnn.py:202`）。**Stage 2 有數字後，這是唯一的緩解位置，而它不需要重跑 n08。**<br>（記這一條的理由：那組數字先前只活在對話與 `00_FINDINGS.md` 裡，U-20 條目本身看不到它。這正是 §9.6 那族「兩份文件之間掉下去」。） |
 | **[已被上一列取代 — 保留供追溯，勿引用] U-20 原始登記** | 🔴 **這一列是舊登記，現行結論在上一列。** 先前只用刪除線標記，而**刪除線在 `grep` 與長表格瀏覽下不可見**，INTEGRATOR 因此把它讀成現行值（2026-08-29，同族第二次）。**⚠ 標「已解決」但有兩個缺陷。** `DECISION_LEDGER.md:557` 記錄現況為 `laion/CLIP-ViT-B-32-laion2B-s34B-b79K`、512 維（實測 `procthor_node_embeddings.json` 的 `text_encoder_version` 相符）。**缺陷一**：它是十個 RESOLVED 條目中**唯一 `decided_by` 沒有 USER 的**（`DECISION_LEDGER.md:564`）。**缺陷二**：ESSGNN Engineer 2026-08-22 證明它的理由被程式碼推翻（`:585`）—— 原理由稱「共用編碼器才能共用語意空間」，但 `essgnn.py:456` 的 `use_io_projections` 已把 `t_i` 投影成學出來的 128 維，`:471` 的 `e_ij` 則原始 512 維進入，**兩者本來就不在同一空間**。**待 Kyzen 裁決** |
 
 **（2026-08-27）注意**：Stage 1 骨幹是 ViT-bigG-14 / 1280 維（`ulip_backbone.py:90`），

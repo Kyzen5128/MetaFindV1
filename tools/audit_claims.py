@@ -1,6 +1,7 @@
 """Every change this session reported as done, checked against the file itself.
 
-[MASTER 2026-08-28] Required to run before every review submission.
+[HISTORICAL 2026-08-28] Fixed-text audit of that session's reported changes.
+This is retained for provenance, not a current behaviour check or promotion gate.
 
 Why it exists: a `str.replace` with no `assert` silently did nothing, and the
 change was reported as complete, then used to rebut a third party's correct
@@ -41,8 +42,8 @@ CLAIMS = [
     ("tools/build_lowclip_sheets.py", "load_view_rgb", "接觸表改黑底"),
     ("tools/build_lowclip_sheets.py", "fill    n/a", "NaN 覆蓋率用琥珀色"),
     ("tools/label_duel.py", '"provenance"', "對決產物帶出處"),
-    ("tests/test_train_stage1.py", '"data")', "AST 掃描含 metafind/data"),
-    ("tests/test_train_stage1.py", "WHAT THIS CHECK DOES NOT ESTABLISH", "斷言訊息列出盲點"),
+    ("tests/train/test_train_stage1.py", '"data")', "AST 掃描含 metafind/data"),
+    ("tests/train/test_train_stage1.py", "WHAT THIS CHECK DOES NOT ESTABLISH", "斷言訊息列出盲點"),
 ]
 
 

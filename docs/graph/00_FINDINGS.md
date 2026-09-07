@@ -283,7 +283,7 @@ edge MLP 的輸入維度 = `2×hidden_nf + 1 + in_edge_nf`。
 **幾何訊號只佔 1/1537。** ESSGNN 可能退化成「語意圖神經網路」，
 Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 
-### 2026-08-15 實測（`tests/test_essgnn.py`，固定種子）
+### 2026-08-15 實測（`tests/models/test_essgnn.py`，固定種子）
 
 用 `|∂e_layout/∂pos|max` 量幾何敏感度，語意邊全部置零：
 
@@ -300,7 +300,7 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 > 1. **重測對不上。** 2026-08-28 依同一條路徑重跑 `two_mlp` 得到 **44.63 / 1.89**，
 >    不是 50.9 / 1.14。原數字來自某個沒有留下的更早版本或臨時執行。
 >    出處：`docs/METAFIND_NOTEBOOK.md`（見該檔 §9.13 一帶與 `:1298`）。
-> 2. **產生它的測試有缺陷。** `tests/test_essgnn.py` 的
+> 2. **產生它的測試有缺陷。** `tests/models/test_essgnn.py` 的
 >    `for seed in range(6):` 迴圈裡 **`seed` 從頭到尾沒有被使用**；
 >    `geometric_sensitivity()` 沒有 seed 參數，內部的 `make_scene` 每次都
 >    `torch.manual_seed(0)`。**六次呼叫回傳位元相同的值** ——
@@ -335,7 +335,7 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 （`edge_proj_dim=None`）。
 
 投影保留為 config flag 但預設關閉，理由是它讓「有沒有退化」變成可量測的對照，
-而不是只能猜。真正的偵測器是 `tests/test_essgnn.py::test_geometry_still_distinguishes_layouts_without_semantic_edges`：
+而不是只能猜。真正的偵測器是 `tests/models/test_essgnn.py::test_geometry_still_distinguishes_layouts_without_semantic_edges`：
 把語意邊全部置零，兩個幾何不同的 layout 仍須產生不同的 `e_layout`。
 
 **若照論文做真的退化了，那是論文設計的性質，要報告出來，不是偷偷修掉。**
@@ -371,7 +371,7 @@ Table 3 想證明的「ESSGNN 優於 GAT 是因為等變性」就無法歸因。
 是因為第 `l+1` 層會用更新後的 `x` 重算 `‖x_i − x_j‖²`。最後一層沒有下一層，
 它更新出來的 `x` 沒有任何消費者。
 
-實測（`tests/test_essgnn.py::test_gradients_reach_every_parameter_except_the_final_f_x`）：
+實測（`tests/models/test_essgnn.py::test_gradients_reach_every_parameter_except_the_final_f_x`）：
 `layers.{L-1}.f_x.*` 的梯度全為 `None`，其餘參數都有梯度。
 
 論文只寫 "After $L$ layers"，**沒有給 L 的值**（`L=4` 是先前草稿自己填的）。

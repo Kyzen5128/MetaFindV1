@@ -1,0 +1,291 @@
+........................................................................ [  4%]
+........................................................................ [  9%]
+........................................................................ [ 14%]
+........................................................................ [ 19%]
+.....................................F.F................................ [ 23%]
+........................................................................ [ 28%]
+........................................................................ [ 33%]
+........................................................................ [ 38%]
+........................................................................ [ 42%]
+........................................................................ [ 47%]
+........................................................................ [ 52%]
+........................................................................ [ 57%]
+........................................................................ [ 61%]
+........................................................................ [ 66%]
+........................................................................ [ 71%]
+........................................................................ [ 76%]
+........................................................................ [ 80%]
+........................................................................ [ 85%]
+........................................................................ [ 90%]
+........................................................................ [ 95%]
+........................................................................ [ 99%]
+.                                                                        [100%]
+=================================== FAILURES ===================================
+___________________ test_record_carries_the_channel_contract ___________________
+
+tmp_path = PosixPath('/tmp/metafind_continuation_20260907_cpu/test_record_carries_the_channe0')
+
+    def test_record_carries_the_channel_contract(tmp_path):
+        """The renders channel type names these; producing images without them
+        defers G2/G3's checks to something that cannot perform them."""
+        from metafind.data import render_blender
+        from metafind.data.renders import LIVE_N_VIEWS
+    
+>       rec = process_one("u", _asset(tmp_path), tmp_path / "out")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/data/test_renders.py:271: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+metafind/data/renders.py:770: in process_one
+    paths_out = render_blender.render_asset(glb, asset_dir)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+glb = PosixPath('/tmp/metafind_continuation_20260907_cpu/test_record_carries_the_channe0/a.glb')
+asset_dir = PosixPath('/tmp/metafind_continuation_20260907_cpu/test_record_carries_the_channe0/out/u')
+timeout = 900
+
+    def render_asset(glb: Path, asset_dir: Path, *, timeout: int = 900) -> list[Path]:
+        """Render one GLB into ``asset_dir`` as ``view_00.png`` .. ``view_11.png``.
+    
+        Blender writes into a private temporary directory and the results are moved
+        into place only once all `N_VIEWS` exist. A crashed or killed Blender
+        therefore leaves `asset_dir` untouched rather than half-populated, which is
+        what lets the caller treat "the sidecar exists" as "the asset is finished".
+    
+        Raises on a non-zero exit or a short view count, with Blender's own stderr
+        tail attached -- a silent retry on a systematically broken asset would spend
+        the run rediscovering the same failure.
+        """
+        if not BLENDERPROC.exists():
+            raise FileNotFoundError(f"blenderproc not found at {BLENDERPROC}")
+    
+        asset_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="mf_render_") as tmp:
+            tmp = Path(tmp)
+            script = _patched_script(tmp / "render_metafind.py")
+            out = tmp / "views"
+            out.mkdir()
+            cmd = [
+                str(BLENDERPROC), "run",
+                "--blender-install-path", str(BLENDER_INSTALL),
+                str(script),
+                "--object_path", str(glb),
+                "--output_dir", str(out),
+                "--engine", ENGINE,
+                "--num_images", str(N_VIEWS),
+                "--camera_dist", str(CAMERA_DIST),
+            ]
+            try:
+                proc = subprocess.run(cmd, capture_output=True, text=True,
+                                      timeout=timeout, cwd=tmp)
+            except subprocess.TimeoutExpired as exc:
+                # [ADDED 2026-08-24, Codex] `TimeoutExpired` propagated before the
+                # failure tail below was built, so the caller's message-based
+                # classifier saw only "Command ... timed out" and filed a resource
+                # failure as a broken mesh. Re-raise with the word the classifier
+                # can read, and with whatever the process managed to say.
+                out = (exc.stdout or b"")[-400:]
+                err = (exc.stderr or b"")[-400:]
+                if isinstance(out, bytes):
+                    out, err = out.decode(errors="replace"), err.decode(errors="replace")
+                raise RuntimeError(
+                    f"blender timed out after {timeout}s for {glb.name} -- "
+                    f"out of time, not out of geometry.\nSTDERR:\n{err}\nSTDOUT:\n{out}"
+                ) from exc
+            produced = sorted(out.glob("[0-9][0-9][0-9].png"))
+            if proc.returncode != 0 or len(produced) != N_VIEWS:
+                # Upstream's `__main__` swallows exceptions and prints "Failed to
+                # render", so a zero exit code does NOT mean success -- the view
+                # count is the real check and is tested first-class here.
+                # [FIXED 2026-08-24] Was `proc.stderr or proc.stdout`. Upstream's
+                # `__main__` CATCHES its exception and prints it to STDOUT
+                # (`render_single_glb.py`), while Blender writes warnings to stderr
+                # on almost every asset -- so `or` discarded the actual cause
+                # whenever any warning existed, and `failure_class` then classified
+                # a resource failure from evidence that never mentioned it.
+                tail = ("STDERR:\n" + (proc.stderr or "")[-600:]
+                        + "\nSTDOUT:\n" + (proc.stdout or "")[-600:])
+>               raise RuntimeError(
+                    f"blender produced {len(produced)}/{N_VIEWS} views for {glb.name} "
+                    f"(exit {proc.returncode}): {tail}")
+E               RuntimeError: blender produced 0/11 views for a.glb (exit 0): STDERR:
+E               22:34:14 | INFO: Data are loaded, start creating Blender stuff
+E               22:34:14 | INFO: Blender create Mesh node geometry_0
+E               22:34:14 | INFO: Blender create Mesh node geometry_1
+E               22:34:14 | INFO: glTF import finished in 0.00s
+E               
+E               STDOUT:
+E               Selecting render devices...
+E               Using only the CPU for rendering
+E               Failed to render /tmp/metafind_continuation_20260907_cpu/test_record_carries_the_channe0/a.glb
+E               bpy_struct: item.attr = val: enum "OPTIX" not found in ('OPENIMAGEDENOISE')
+E               Blender 4.2.1 LTS (hash 396f546c9d82 built 2024-08-19 23:32:23)
+E               
+E               Blender quit
+E               Using blender in /home/kyzen/metafind/metafind_out/blender/blender-4.2.1-linux-x64
+E               Using temporary directory: /dev/shm/blender_proc_192c04a45ef041629ffc7dfde2b533e7
+E               Cleaning temporary directory
+
+metafind/data/render_blender.py:325: RuntimeError
+_____________________ test_a_stale_sidecar_is_not_complete _____________________
+
+tmp_path = PosixPath('/tmp/metafind_continuation_20260907_cpu/test_a_stale_sidecar_is_not_co1')
+
+    def test_a_stale_sidecar_is_not_complete(tmp_path):
+        """[ADDED 2026-08-22] A render from an older renderer must not count as done.
+    
+        EXPECTED-TRUTH SOURCE: the question a resumable run actually asks. It is not
+        "is there an intact render here" -- it is "is there an intact render that
+        THIS code produced". Those differ the moment the renderer changes, and the
+        difference is silent: every stale sidecar stays internally consistent.
+    
+        Found by the Reviewer before the 3.3-hour regeneration. Without the version
+        gate, all 45,955 v2 sidecars classified as complete, so a bare re-run would
+        have skipped the entire corpus and exited reporting success.
+        """
+        import json
+    
+        from metafind.data.renders import RENDERER_VERSION, is_complete, process_one
+    
+        asset = _asset(tmp_path)
+        out = tmp_path / "out"
+>       process_one("deadbeef", asset, out)
+
+tests/data/test_renders.py:357: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+metafind/data/renders.py:770: in process_one
+    paths_out = render_blender.render_asset(glb, asset_dir)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+glb = PosixPath('/tmp/metafind_continuation_20260907_cpu/test_a_stale_sidecar_is_not_co1/a.glb')
+asset_dir = PosixPath('/tmp/metafind_continuation_20260907_cpu/test_a_stale_sidecar_is_not_co1/out/deadbeef')
+timeout = 900
+
+    def render_asset(glb: Path, asset_dir: Path, *, timeout: int = 900) -> list[Path]:
+        """Render one GLB into ``asset_dir`` as ``view_00.png`` .. ``view_11.png``.
+    
+        Blender writes into a private temporary directory and the results are moved
+        into place only once all `N_VIEWS` exist. A crashed or killed Blender
+        therefore leaves `asset_dir` untouched rather than half-populated, which is
+        what lets the caller treat "the sidecar exists" as "the asset is finished".
+    
+        Raises on a non-zero exit or a short view count, with Blender's own stderr
+        tail attached -- a silent retry on a systematically broken asset would spend
+        the run rediscovering the same failure.
+        """
+        if not BLENDERPROC.exists():
+            raise FileNotFoundError(f"blenderproc not found at {BLENDERPROC}")
+    
+        asset_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="mf_render_") as tmp:
+            tmp = Path(tmp)
+            script = _patched_script(tmp / "render_metafind.py")
+            out = tmp / "views"
+            out.mkdir()
+            cmd = [
+                str(BLENDERPROC), "run",
+                "--blender-install-path", str(BLENDER_INSTALL),
+                str(script),
+                "--object_path", str(glb),
+                "--output_dir", str(out),
+                "--engine", ENGINE,
+                "--num_images", str(N_VIEWS),
+                "--camera_dist", str(CAMERA_DIST),
+            ]
+            try:
+                proc = subprocess.run(cmd, capture_output=True, text=True,
+                                      timeout=timeout, cwd=tmp)
+            except subprocess.TimeoutExpired as exc:
+                # [ADDED 2026-08-24, Codex] `TimeoutExpired` propagated before the
+                # failure tail below was built, so the caller's message-based
+                # classifier saw only "Command ... timed out" and filed a resource
+                # failure as a broken mesh. Re-raise with the word the classifier
+                # can read, and with whatever the process managed to say.
+                out = (exc.stdout or b"")[-400:]
+                err = (exc.stderr or b"")[-400:]
+                if isinstance(out, bytes):
+                    out, err = out.decode(errors="replace"), err.decode(errors="replace")
+                raise RuntimeError(
+                    f"blender timed out after {timeout}s for {glb.name} -- "
+                    f"out of time, not out of geometry.\nSTDERR:\n{err}\nSTDOUT:\n{out}"
+                ) from exc
+            produced = sorted(out.glob("[0-9][0-9][0-9].png"))
+            if proc.returncode != 0 or len(produced) != N_VIEWS:
+                # Upstream's `__main__` swallows exceptions and prints "Failed to
+                # render", so a zero exit code does NOT mean success -- the view
+                # count is the real check and is tested first-class here.
+                # [FIXED 2026-08-24] Was `proc.stderr or proc.stdout`. Upstream's
+                # `__main__` CATCHES its exception and prints it to STDOUT
+                # (`render_single_glb.py`), while Blender writes warnings to stderr
+                # on almost every asset -- so `or` discarded the actual cause
+                # whenever any warning existed, and `failure_class` then classified
+                # a resource failure from evidence that never mentioned it.
+                tail = ("STDERR:\n" + (proc.stderr or "")[-600:]
+                        + "\nSTDOUT:\n" + (proc.stdout or "")[-600:])
+>               raise RuntimeError(
+                    f"blender produced {len(produced)}/{N_VIEWS} views for {glb.name} "
+                    f"(exit {proc.returncode}): {tail}")
+E               RuntimeError: blender produced 0/11 views for a.glb (exit 0): STDERR:
+E               22:34:15 | INFO: Data are loaded, start creating Blender stuff
+E               22:34:15 | INFO: Blender create Mesh node geometry_0
+E               22:34:15 | INFO: Blender create Mesh node geometry_1
+E               22:34:15 | INFO: glTF import finished in 0.00s
+E               
+E               STDOUT:
+E               Selecting render devices...
+E               Using only the CPU for rendering
+E               Failed to render /tmp/metafind_continuation_20260907_cpu/test_a_stale_sidecar_is_not_co1/a.glb
+E               bpy_struct: item.attr = val: enum "OPTIX" not found in ('OPENIMAGEDENOISE')
+E               Blender 4.2.1 LTS (hash 396f546c9d82 built 2024-08-19 23:32:23)
+E               
+E               Blender quit
+E               Using blender in /home/kyzen/metafind/metafind_out/blender/blender-4.2.1-linux-x64
+E               Using temporary directory: /dev/shm/blender_proc_90e0f98202364156a841a3e97be40005
+E               Cleaning temporary directory
+
+metafind/data/render_blender.py:325: RuntimeError
+=============================== warnings summary ===============================
+tests/eval/test_custom_models.py: 13 warnings
+tests/eval/test_eval_stage2_row.py: 1 warning
+tests/eval/test_retrieval_checkpoint_identity.py: 9 warnings
+tests/models/test_dual_tower.py: 19 warnings
+tests/models/test_fusion_losses.py: 6 warnings
+tests/models/test_image_tokens.py: 3 warnings
+tests/models/test_prefusion_norm.py: 3 warnings
+tests/train/test_model_recipe_restore.py: 5 warnings
+tests/train/test_stage2_input_identity.py: 1 warning
+tests/train/test_train_stage2.py: 2 warnings
+  /home/kyzen/MetaFindV1/metafind/models/fusion.py:202: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+    self.head = nn.TransformerEncoder(layer, num_layers=cfg.n_layers)
+
+tests/models/test_fusion_losses.py::test_perfect_alignment_drives_loss_down
+  /home/kyzen/MetaFindV1/tests/models/test_fusion_losses.py:244: UserWarning: tau deviates from the paper: MetaFind fixes it at 0.5 for all experiments (3experiments.tex:15), this run uses init_temperature=0.07 learnable=False. Record it as a DEVIATION if the results are compared with the paper's tables.
+    sharp = MetaFindContrastiveLoss(ContrastiveConfig(
+
+tests/models/test_fusion_losses.py::test_temperature_defaults_to_the_paper_and_is_learnable_when_asked
+  /home/kyzen/MetaFindV1/tests/models/test_fusion_losses.py:284: UserWarning: tau deviates from the paper: MetaFind fixes it at 0.5 for all experiments (3experiments.tex:15), this run uses init_temperature=0.5 learnable=True. Record it as a DEVIATION if the results are compared with the paper's tables.
+    learn = MetaFindContrastiveLoss(ContrastiveConfig(learnable_temperature=True))
+
+tests/models/test_fusion_losses.py::test_temperature_defaults_to_the_paper_and_is_learnable_when_asked
+  /home/kyzen/MetaFindV1/tests/models/test_fusion_losses.py:289: UserWarning: tau deviates from the paper: MetaFind fixes it at 0.5 for all experiments (3experiments.tex:15), this run uses init_temperature=0.07 learnable=False. Record it as a DEVIATION if the results are compared with the paper's tables.
+    clip_like = MetaFindContrastiveLoss(ContrastiveConfig(
+
+tests/models/test_grad_checkpointing.py::test_grad_checkpointing_changes_no_gradient
+  /home/kyzen/miniconda3/envs/MetaFind/lib/python3.11/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+
+tests/train/test_train_stage1.py::test_stage1_loss_is_query_to_gallery_only
+tests/train/test_train_stage1.py::test_the_loss_actually_computes_one_direction
+tests/train/test_train_stage1.py::test_the_trainer_uses_the_recorded_fusion_and_sharing
+tests/train/test_train_stage1.py::test_the_missing_modality_rule_comes_from_the_encoding_protocol[learned_token-False]
+tests/train/test_train_stage1.py::test_the_missing_modality_rule_comes_from_the_encoding_protocol[zero_pad-True]
+  /home/kyzen/MetaFindV1/metafind/train/stage1.py:2700: UserWarning: tau deviates from the paper: MetaFind fixes it at 0.5 for all experiments (3experiments.tex:15), this run uses init_temperature=0.07 learnable=True. Record it as a DEVIATION if the results are compared with the paper's tables.
+    loss = MetaFindContrastiveLoss(ContrastiveConfig(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/data/test_renders.py::test_record_carries_the_channel_contract
+FAILED tests/data/test_renders.py::test_a_stale_sidecar_is_not_complete - Run...
+2 failed, 1511 passed, 71 warnings in 25.57s

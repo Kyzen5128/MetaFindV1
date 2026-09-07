@@ -1,8 +1,13 @@
-# MetaFindV1 — Project State
+# MetaFindV1 — Historical Project State (2026-08-22)
 
-> Master maintains this file. It is the single place to look for **where the project is**.
-> It is not scientific authority: the paper, the upstream sources, `DECISION_LEDGER.md`, and
-> the artifacts on disk all outrank it.
+> **2026-09-07 correction:** the state below is an August 22 snapshot, not current project status.
+> Its zero checkpoints, absent evaluator, GPU state, corpus counts and block assignments must
+> not be used as present-day facts or as new restrictions on the user's current instructions.
+> Current code and data-flow entry points: [README](../README.md),
+> [DATA_FLOW](../docs/DATA_FLOW.md), [custom evaluation](../docs/CUSTOM_TABLE1_EVALUATION.md).
+> [Cleanup record](../docs/CLEANUP_REPORT_20260907.md) records this correction and fresh checks.
+> Historical decisions remain traceable in `DECISION_LEDGER.md`; this banner makes no new
+> research decision. Scientific authority follows `AGENTS.md` and the relevant paper source.
 >
 > Structure and rules: `workflow/BLOCKS.md` · Method: `workflow/SKILLS.md`
 >

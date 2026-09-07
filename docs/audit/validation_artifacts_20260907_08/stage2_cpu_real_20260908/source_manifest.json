@@ -1,0 +1,437 @@
+{
+  "kind": "diagnostic_only_not_current_canonical_relation_research_run",
+  "graph_sha256": "0f425ccd9f8ac4ce006be4d4afd8528913e8db4649b23dbeec41fee3f5f01691",
+  "house_id": "test_00757",
+  "assets": [
+    "Bathroom_Faucet_3",
+    "Plunger_1",
+    "Sink_4",
+    "Spray_Bottle_5",
+    "Toilet_2",
+    "Wall_Decor_Photo_2V",
+    "Wall_Decor_Photo_5",
+    "Wall_Decor_Photo_8"
+  ],
+  "n_images": 88,
+  "n_semantic_edges": 28,
+  "n_distinct_relation_pairs": 16,
+  "node_gallery_text": "unchanged paper canonical v3_fit metadata",
+  "relation_text": "explicit historical category descriptions from original source map",
+  "semantic_embeddings": "not copied; all 8 node and 16 edge vectors must be recomputed by real frozen OpenCLIP",
+  "historical_llm_weight_bytes": "UNKNOWN; existing source sentences reused exactly; no new LLM claim",
+  "split": "one original test house used only for diagnostic optimizer smoke, no reported benchmark metrics",
+  "sources": {
+    "/home/kyzen/metafind/metafind_data_paper/outputs/scene_graphs/test_00757.json": {
+      "sha256": "0f425ccd9f8ac4ce006be4d4afd8528913e8db4649b23dbeec41fee3f5f01691",
+      "size_bytes": 2722
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_object_text.json": {
+      "sha256": "a993a2d1bd4cb37bff09116a3c5d8543c85022971196974e90bac3fb96426d19",
+      "size_bytes": 834691
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_asset_annotations.json": {
+      "sha256": "7e98efa53a4118d678f4caaab804eaf2457ea485ed76161048701e5edacbe608",
+      "size_bytes": 831006
+    },
+    "/home/kyzen/metafind/metafind_data/outputs/procthor_object_text.json": {
+      "sha256": "ebe6855a5f8b30ba1201b44388806ee2c46c6fa11730c5d8ba02b2d7b8046d0e",
+      "size_bytes": 102968
+    },
+    "/home/kyzen/metafind/metafind_data/outputs/sem_edge_cache.json": {
+      "sha256": "a5e1638386899284bb37e37a15f35185ca8f3f0455d3949adb5415f4478b90a6",
+      "size_bytes": 1054564
+    },
+    "/home/kyzen/metafind/metafind_data/outputs/sem_edge_sentences.jsonl": {
+      "sha256": "50d5d331e4faaab76ed224890cee1bbfed64558a368eb78e91ec550c95c4518b",
+      "size_bytes": 923358
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Bathroom_Faucet_3.json": {
+      "sha256": "8f23116cfb391a286eac3763c479d8fb7b6525c23aac196c76ca3166ecbe4209",
+      "size_bytes": 2873
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Bathroom_Faucet_3/view_00.png": {
+      "sha256": "f995a44bfeb8c3aba5473f2ef5c53975721b70547654ab789afc4b82f68cbc60",
+      "size_bytes": 17759
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Bathroom_Faucet_3/view_01.png": {
+      "sha256": "0c20a1a813d48974ddba0496a13bb5612a5b89abaa30f917fd6a85c49ed1d1f9",
+      "size_bytes": 21366
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Bathroom_Faucet_3/view_02.png": {
+      "sha256": "d244b0cf3faf04b77a1ac540ce6c9468e8d9e9239cfe176e6c69126662e47446",
+      "size_bytes": 24304
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Bathroom_Faucet_3/view_03.png": {
+      "sha256": "0e9aa0d9347b8327fe59d75878d90cd171ae3537088150cebe755b6678b585d0",
+      "size_bytes": 20822
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Bathroom_Faucet_3/view_04.png": {
+      "sha256": "e7f607e34def61616cab431e8d8ca3851e59da2b1022580a8a384bfba7434c75",
+      "size_bytes": 28080
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Bathroom_Faucet_3/view_05.png": {
+      "sha256": "8bbfcfe31da0732afd192c3ec29d99441190182da008a88276497854e002484e",
+      "size_bytes": 26711
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Bathroom_Faucet_3/view_06.png": {
+      "sha256": "f2d4f2659d7fcd59db7a0c58858bbd629362bd3bacd60a2eac133a0eaf3a7c70",
+      "size_bytes": 26385
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Bathroom_Faucet_3/view_07.png": {
+      "sha256": "e46acb2be67b0416e5025a7459d3f2b7374628123cffa4bad6a0d3ab360ef560",
+      "size_bytes": 28609
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Bathroom_Faucet_3/view_08.png": {
+      "sha256": "1b76a90dbe5a63a7d73a10b5f98049f93a813fdc6153434856bd063d758b547a",
+      "size_bytes": 20569
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Bathroom_Faucet_3/view_09.png": {
+      "sha256": "bf3b795e18ed3630626405e9a83684adfe87961249b23987fd1a670b002da2b7",
+      "size_bytes": 22902
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Bathroom_Faucet_3/view_10.png": {
+      "sha256": "7fe5b35e176ab3f2ec20872f988e6e52e6857a306d47cf16af2b2f002cce57af",
+      "size_bytes": 20750
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Plunger_1.json": {
+      "sha256": "c40f9bd20414456b33c4a66a8e4263b3a5537f93cdd49d02ad87e949fd72abaf",
+      "size_bytes": 2789
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Plunger_1/view_00.png": {
+      "sha256": "854e6e5497296dc45d13b7a645cb858ede11d3c379d31f52b78b05cfaf90181d",
+      "size_bytes": 13234
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Plunger_1/view_01.png": {
+      "sha256": "38feabfde10694c28beed30596eafd4ddbcba048cde78c0855dfbc062f66e74b",
+      "size_bytes": 13075
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Plunger_1/view_02.png": {
+      "sha256": "4e006b9377c23ce915fc4390a5161edb98a644f6292f14217b9021e825f00a91",
+      "size_bytes": 12608
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Plunger_1/view_03.png": {
+      "sha256": "2524e01d524b1a0d544cd1112415b13af521202ebe4b7568e361172b3fae6c07",
+      "size_bytes": 12603
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Plunger_1/view_04.png": {
+      "sha256": "f0633470714a5eea40c87b1835ede6f6d98c7d0769ed9dcc00aac950acfd49cd",
+      "size_bytes": 12643
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Plunger_1/view_05.png": {
+      "sha256": "45ad8ad54b8834c4fb44d381ec297665174af5dde3fbac867e13d1a8406021c0",
+      "size_bytes": 13293
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Plunger_1/view_06.png": {
+      "sha256": "0807fd6f473c8fa78fb5469d6e486eaee39238c791ad6a50de1fc5287b1f1e84",
+      "size_bytes": 13343
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Plunger_1/view_07.png": {
+      "sha256": "fc8b0954cfe3579b490a6a7c880e123e640fe3ffed49655c1f44d8efa4d72e85",
+      "size_bytes": 13546
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Plunger_1/view_08.png": {
+      "sha256": "799e3c3d08a7c036df725b23aaec6d04d70dfc2fc797cf3a0004cd68073a1748",
+      "size_bytes": 13760
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Plunger_1/view_09.png": {
+      "sha256": "945df392635dc97e35ceb992002ab91600ad2927f5c4c5f1fbea7b5d3290a071",
+      "size_bytes": 13386
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Plunger_1/view_10.png": {
+      "sha256": "46a47bbe5f82d16ea535882da7f825f2d0874bdd2af083ade2b471fa3641b0d6",
+      "size_bytes": 13052
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Sink_4.json": {
+      "sha256": "f81dc0d4f80bab639078ccd199497b44008ded63f0f991939ae6ad184b694d33",
+      "size_bytes": 2729
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Sink_4/view_00.png": {
+      "sha256": "c7c22af488d75409c9902f0223f9cfaa6e769eafc60d7327d9cd0f434e524f5e",
+      "size_bytes": 95151
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Sink_4/view_01.png": {
+      "sha256": "6fd58e2ddee0d690d7c75778d2e03cc20dfa1c1d786295a58cf9b0076da40a3d",
+      "size_bytes": 93654
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Sink_4/view_02.png": {
+      "sha256": "6f6b890898235e837c2f7ee0775cfdc5c6915ce5c1f66b8d64d5285920c68018",
+      "size_bytes": 89244
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Sink_4/view_03.png": {
+      "sha256": "3cee77fac7521d17e9ca8aedb0e4d279face3becdc9e62a77857daa45bdc645d",
+      "size_bytes": 85967
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Sink_4/view_04.png": {
+      "sha256": "0dab9384bd120c7b90c9400b050fd982d2d62a41b8cceac35d8dad90d1b4e379",
+      "size_bytes": 93659
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Sink_4/view_05.png": {
+      "sha256": "9904411a610d20ba54be24989a1da205aae8431e7dc492b7b231e9d4d86e17bc",
+      "size_bytes": 100619
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Sink_4/view_06.png": {
+      "sha256": "aa02122106e2d0919e1ecd4a6b253306a729b8ec5ac1790c0d7a1545b29725a2",
+      "size_bytes": 103933
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Sink_4/view_07.png": {
+      "sha256": "3a59377720d66f5b019c855d0d6e1c78411f9ec0b8086346d6589ca0cff4ac5e",
+      "size_bytes": 106837
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Sink_4/view_08.png": {
+      "sha256": "752ebb2f8f1f4f71d3c31d2d78f29e9163aa7c043b8c4b298d7eca38e8b9b953",
+      "size_bytes": 104110
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Sink_4/view_09.png": {
+      "sha256": "2a0592dc555c29705a1ccbb0a31c0fe1b7b85f69bba739501d7e01cc767806e3",
+      "size_bytes": 107051
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Sink_4/view_10.png": {
+      "sha256": "33277aabe4bd185e589bba077a241e0534f665a7551a9379ba5d1999e88fef23",
+      "size_bytes": 102369
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Spray_Bottle_5.json": {
+      "sha256": "87138c98ecfb16a5dd9a2215904e46df7d33434ed4f9ff0bd1fbbb66cff27853",
+      "size_bytes": 2844
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Spray_Bottle_5/view_00.png": {
+      "sha256": "d01a708eda24a6d8abee3ab8d2c285f28ebd8a0502b75bd92ccfc187d6c5e611",
+      "size_bytes": 22353
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Spray_Bottle_5/view_01.png": {
+      "sha256": "0079a3c2b3e46cbf7c0a4e88269d1127e758b7456457baa833c7bfbca9c0d8ce",
+      "size_bytes": 32200
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Spray_Bottle_5/view_02.png": {
+      "sha256": "161ae3bea079f209d43784ccb568207557cdba3b335b71f3debb59833a232144",
+      "size_bytes": 36367
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Spray_Bottle_5/view_03.png": {
+      "sha256": "22b38a244f2259908456885b4b248d78ccf1ee39363b1b663682e1fd05ef10c9",
+      "size_bytes": 37715
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Spray_Bottle_5/view_04.png": {
+      "sha256": "69df1225b912e669091f3107a13964f41d74a3bbaf841761ceb653c033c7d342",
+      "size_bytes": 30986
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Spray_Bottle_5/view_05.png": {
+      "sha256": "830de459f344e5eb9527d4dc64972a28cf34aab20ab6c8489b6d76260bf91eec",
+      "size_bytes": 25884
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Spray_Bottle_5/view_06.png": {
+      "sha256": "da409aa5dcb41f79579dc02980b7b0d415d764a1e94942188450e2082c0240b9",
+      "size_bytes": 27649
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Spray_Bottle_5/view_07.png": {
+      "sha256": "b8e3d18eb634195c104ee0b36b3fec683ab6b8947488c5702e7e697b03958d40",
+      "size_bytes": 42119
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Spray_Bottle_5/view_08.png": {
+      "sha256": "e8bea518e8cb8092a72a0651e7b55c4fdc45ab8ecb837d81e1117882fcf11860",
+      "size_bytes": 49529
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Spray_Bottle_5/view_09.png": {
+      "sha256": "b24a68083944f87df71c47b96e8483966a4def43e30217dcadcc706ac7987786",
+      "size_bytes": 47193
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Spray_Bottle_5/view_10.png": {
+      "sha256": "12abe727d0d39b386852aa22aea6cb0664b20ac7495824041d798a9caaec4ead",
+      "size_bytes": 37963
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Toilet_2.json": {
+      "sha256": "08b19fda09e167a0aca076061c504acd528c9bd36e6b4774e0a336f872f14a7a",
+      "size_bytes": 2758
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Toilet_2/view_00.png": {
+      "sha256": "dd87a1098b064333b1e166161dd11ae2d852628d25f786745976f276aeefcaf7",
+      "size_bytes": 55988
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Toilet_2/view_01.png": {
+      "sha256": "8b15597c7833f2e9e71df86d00aaee2bb4dfd5c4f9ce8c847f3379cfd95b05f1",
+      "size_bytes": 62132
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Toilet_2/view_02.png": {
+      "sha256": "d8ba2578859ec522d83dff070292d4bf7c6b6ba35f0fc41a8ed5d0e6acee34cf",
+      "size_bytes": 61008
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Toilet_2/view_03.png": {
+      "sha256": "7505c64ed882355f365193db79211e56fa79b61c55a22224f02359a4e89421c4",
+      "size_bytes": 53100
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Toilet_2/view_04.png": {
+      "sha256": "f90d468eb0ce9fac6596c14950a01b28b1c973e2844dd1d27834e47cc527dc13",
+      "size_bytes": 47819
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Toilet_2/view_05.png": {
+      "sha256": "0883caa7c06fec6af1b71801fd808356dee6ab83d979dab42b50e5838d486e88",
+      "size_bytes": 47415
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Toilet_2/view_06.png": {
+      "sha256": "f175d6574b0ad971043884be9ce6ac650e85f023704cb51ea3a9998cb25ce2b8",
+      "size_bytes": 52787
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Toilet_2/view_07.png": {
+      "sha256": "147b966f147b099fb170a7106689f2f8f8b185a4d6aa9705df07be28798a6044",
+      "size_bytes": 62725
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Toilet_2/view_08.png": {
+      "sha256": "0a710153fade24caf45abde9ae2fd2bb8f06009f5347f73ebf0e8710da5d25c5",
+      "size_bytes": 56416
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Toilet_2/view_09.png": {
+      "sha256": "ef152781b8609d70256849590d619b09a0d693a95b7f760dde4c7b35160b496f",
+      "size_bytes": 61754
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Toilet_2/view_10.png": {
+      "sha256": "7e7a60058c77d039121c0c9b01ef05adc80cb473114c1e7b891f507842f6d04f",
+      "size_bytes": 59796
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_2V.json": {
+      "sha256": "2b80a05af41b33ce045b773dc93c32303011e64dad77e6bec3e92ae7de070e2c",
+      "size_bytes": 2911
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_2V/view_00.png": {
+      "sha256": "a44fe46faab0dea282efca8a3f3f3ed716fe665fe99f13304786f7b28405ba2e",
+      "size_bytes": 120654
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_2V/view_01.png": {
+      "sha256": "9b854192993dc78328d319b867a718fa530761e7a9727eae5028b249f832ce3d",
+      "size_bytes": 108616
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_2V/view_02.png": {
+      "sha256": "7c69aa5778c481e681bc752ef8c397b7a073d546c79a35d3860eeebb237f22b4",
+      "size_bytes": 50450
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_2V/view_03.png": {
+      "sha256": "ae9b98c0c06134e0d4ec827d90f8c9adc3f9b55e4db2b25e76453b7488be1295",
+      "size_bytes": 6155
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_2V/view_04.png": {
+      "sha256": "34da757b71d48f386a7649b309ac6b5310706f2cc6d239bfb8f59aa5fa5a680f",
+      "size_bytes": 7618
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_2V/view_05.png": {
+      "sha256": "0734ee130ebcc63f89caaf293486aebc88c57d5135747b6053b9f622748b26c2",
+      "size_bytes": 8479
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_2V/view_06.png": {
+      "sha256": "a34b880d5f0c9db740633f201e87e4af124807a0cc4ab145c0683aca706e4aa9",
+      "size_bytes": 10448
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_2V/view_07.png": {
+      "sha256": "234faa5190bbe2989f098f93e0577e2bb1e09bde65c728390a66002c63b356db",
+      "size_bytes": 10389
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_2V/view_08.png": {
+      "sha256": "c10f7c4058d23c17ff18cda1f6097501d07d93208dca896a61efef39f0a3eb55",
+      "size_bytes": 6730
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_2V/view_09.png": {
+      "sha256": "3d81fd0899c7fdacf3eaf1af777a9c33f2c813b089ce483c25a8b47d417346c2",
+      "size_bytes": 47601
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_2V/view_10.png": {
+      "sha256": "b250e83a7baa84d52d830b5f185fd38122d8dda8f357dc6927b3c93ec0ca8b7d",
+      "size_bytes": 105335
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_5.json": {
+      "sha256": "921d1b69ff0d8004a95f59491ad5469ab6196dda9db66bb26e93cd377b5def80",
+      "size_bytes": 2901
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_5/view_00.png": {
+      "sha256": "85270ecf7fc26deba9cd7188046c2c1517314f0f52f8de4a2e1a24aecf4ea199",
+      "size_bytes": 77044
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_5/view_01.png": {
+      "sha256": "d8351cf5519257a2c325d47b61f98f2c5b4a749bd77cf38fffab9dbf20abb2c2",
+      "size_bytes": 75479
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_5/view_02.png": {
+      "sha256": "1740b4cc960982f31c4c522e2d9ad12349338d5eb248c10c2073943dde701d82",
+      "size_bytes": 43713
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_5/view_03.png": {
+      "sha256": "82bfda75247003db164835f69fb095d7e03d8cd0ce06392b94f8b47ad471c500",
+      "size_bytes": 16852
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_5/view_04.png": {
+      "sha256": "ad1cb0b212ec96261257c0d3e947dae90f2e0fbf6051409d998a135ca095e30d",
+      "size_bytes": 46076
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_5/view_05.png": {
+      "sha256": "84fbbdc8b5fe532f5ef6d69ccce9a674decd45f0f470fab14ca9e12c9dd6c74f",
+      "size_bytes": 61638
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_5/view_06.png": {
+      "sha256": "fcc5291007cbacc138117e0c7cba575ba7be527e90dfcbef385516a2a8a56fbe",
+      "size_bytes": 59380
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_5/view_07.png": {
+      "sha256": "c0d10d5a65b5db8aafe0bcd10b2853cf30e7d2b2c7f6e21de04dae48e9fcdae8",
+      "size_bytes": 44213
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_5/view_08.png": {
+      "sha256": "77440b2408c36d13859bbd8f9fa37c7d73edccaef4a7aeb7081688186e5c871f",
+      "size_bytes": 17204
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_5/view_09.png": {
+      "sha256": "39c7bf78918a9cdff0d178c7fc55a1f95db7131b2f25b9b30f6b69e7dca2ff8b",
+      "size_bytes": 48205
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_5/view_10.png": {
+      "sha256": "7ff8f20a13d114721de10fbe21f33bc8e831c4952373a42b6fdb2f567443ac4f",
+      "size_bytes": 79650
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_8.json": {
+      "sha256": "234e036fbe168b5fe82ed002c51f082da9414d9f6c703b01b7f5bb0cf856a1b2",
+      "size_bytes": 2902
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_8/view_00.png": {
+      "sha256": "f548703c4f4fce64588e687c56650b66579edac971a1f1f2e072021f894577ed",
+      "size_bytes": 99761
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_8/view_01.png": {
+      "sha256": "7f5f4fc2e02c553c22457bcd16af2aa93cf03852c4c0c974de15abec6b736257",
+      "size_bytes": 85681
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_8/view_02.png": {
+      "sha256": "f2d54e2a862acec45b171f17b90418c3d5b86d07d4b2071dd62dbe394343ca42",
+      "size_bytes": 45848
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_8/view_03.png": {
+      "sha256": "1fc5362219358ac25735cdf27aa00e18b237521a503a8d7c8e2d2d2f81b79140",
+      "size_bytes": 13704
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_8/view_04.png": {
+      "sha256": "7d6a701fcae706a60cdee2c202c5835a2f70ea2f8fbcdf0f29b644b49ffce9ab",
+      "size_bytes": 39574
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_8/view_05.png": {
+      "sha256": "1203158765eba2ffbb2409da729b0d1309937c2f0730684f77f56b4357b7e308",
+      "size_bytes": 56963
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_8/view_06.png": {
+      "sha256": "55d92319719679a867ff332738a2d2b651c7a051cd9b4a254f205877ffc8d090",
+      "size_bytes": 55920
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_8/view_07.png": {
+      "sha256": "5248e24923d46dfb4e665188308bf92450dc0b2f57b36823e41b10df8d07c4a5",
+      "size_bytes": 38352
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_8/view_08.png": {
+      "sha256": "c5326131ff2aadec7bfcb97ef659446e0cabd099856f4d19a658da40470e71aa",
+      "size_bytes": 13500
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_8/view_09.png": {
+      "sha256": "8777aa55cc729f4796663e65608a46ce6363604dd9562294291ca11d31fd66aa",
+      "size_bytes": 46816
+    },
+    "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities/Wall_Decor_Photo_8/view_10.png": {
+      "sha256": "9bbf181f63733af685c75deffdc7392f6b70f44449e420e8c28a842a48a8b8d8",
+      "size_bytes": 88194
+    },
+    "/home/kyzen/MetaFindV1/workflow/stage2_hyperparameters_ft_lr5e-5.json": {
+      "sha256": "3067edbd69b76ee6f86bad7c3d520f6f52b2a2d6a9b5cd24f6b0654a5f7309fd",
+      "size_bytes": 1292
+    }
+  }
+}

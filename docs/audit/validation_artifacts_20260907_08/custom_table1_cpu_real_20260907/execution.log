@@ -1,0 +1,53 @@
+/home/kyzen/miniconda3/envs/MetaFind/lib/python3.11/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+WARNING:root:No pretrained weights loaded for model 'ViT-bigG-14'. Model initialized randomly.
+Get openclip model:
+Finished loading the openclip model.
+training from scratch for pointbert.
+model size:
+32.50M
+gallery observations 2/6
+gallery observations 4/6
+gallery observations 6/6
+query observations 2/2
+ulip2_available_mean same_observation text: 100.00/100.00
+ulip2_available_mean same_observation image: 100.00/100.00
+ulip2_available_mean same_observation pc: 100.00/100.00
+ulip2_available_mean same_observation text+image: 100.00/100.00
+ulip2_available_mean same_observation text+pc: 100.00/100.00
+ulip2_available_mean same_observation image+pc: 100.00/100.00
+ulip2_available_mean same_observation full: 100.00/100.00
+ulip2_available_mean different_observations text: 100.00/100.00
+ulip2_available_mean different_observations image: 100.00/100.00
+ulip2_available_mean different_observations pc: 100.00/100.00
+ulip2_available_mean different_observations text+image: 100.00/100.00
+ulip2_available_mean different_observations text+pc: 100.00/100.00
+ulip2_available_mean different_observations image+pc: 100.00/100.00
+ulip2_available_mean different_observations full: 100.00/100.00
+WARNING:root:No pretrained weights loaded for model 'ViT-bigG-14'. Model initialized randomly.
+/home/kyzen/MetaFindV1/metafind/models/fusion.py:202: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.head = nn.TransformerEncoder(layer, num_layers=cfg.n_layers)
+Get openclip model:
+Finished loading the openclip model.
+training from scratch for pointbert.
+model size:
+32.50M
+gallery observations 2/6
+gallery observations 4/6
+gallery observations 6/6
+query observations 2/2
+stage1 same_observation text: 100.00/100.00
+stage1 same_observation image: 100.00/100.00
+stage1 same_observation pc: 100.00/100.00
+stage1 same_observation text+image: 100.00/100.00
+stage1 same_observation text+pc: 100.00/100.00
+stage1 same_observation image+pc: 100.00/100.00
+stage1 same_observation full: 100.00/100.00
+stage1 different_observations text: 100.00/100.00
+stage1 different_observations image: 100.00/100.00
+stage1 different_observations pc: 100.00/100.00
+stage1 different_observations text+image: 100.00/100.00
+stage1 different_observations text+pc: 100.00/100.00
+stage1 different_observations image+pc: 100.00/100.00
+stage1 different_observations full: 100.00/100.00
+Completed custom evaluation: /home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/evaluation/table.md

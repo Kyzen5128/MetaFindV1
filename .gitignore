@@ -10,7 +10,9 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 
-# Artifacts that must never enter git (they belong under /data)
+# Runtime artifacts belong under /data or ignored output/.
+# Small numerical inspection evidence under docs/audit may be explicitly staged
+# after review; never blanket force-add data or checkpoints.
 *.pt
 *.pth
 *.ckpt
@@ -42,9 +44,10 @@ credentials.json
 # graphify skill scratch (incomplete run; regenerable)
 graphify-out/
 
-# arXiv source: the .tex and SOURCE_MANIFEST.json are the formula authority and
-# ARE tracked. The figures are not -- they are tens of MB of PDF/PNG and are
-# regenerable from the .gz archives beside them, which are tracked and hashed.
+# Paper text sources and SOURCE_MANIFEST.json are tracked; the manifest is
+# provenance metadata, not paper-content authority. Binary figures are excluded.
+# Verify each manifest's archive path and hash before claiming that a fresh clone
+# can regenerate the figures: an archive reference alone does not ensure availability.
 docs/paper/*_source/**/*.pdf
 docs/paper/*_source/**/*.png
 docs/paper/*_source/**/*.jpg

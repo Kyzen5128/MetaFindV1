@@ -1,0 +1,30 @@
+{
+  "status": "passed",
+  "scope": "Independent NumPy float64 cosine rescoring of saved queries and actual promoted gallery; UID/top5/context-prefix/planned-slot checks; not a new model run or retrieval-quality claim",
+  "composition_sha256": "a2f6106849295b1a64f26ec5290b238d5b92ade607159e7d1b6c9edd0c8a8277",
+  "request_sha256": "b3cd13dc8c047d25bc94f5a39b539d1f7f72ae55ba9c0e40a99f84575fd0184a",
+  "gallery_sha256": "7e2f94854aa533b20a8b04f580a13a8e318af4ee542e1c10fe12e7e3ef3ec90a",
+  "trace": [
+    {
+      "step": 0,
+      "context_nodes": 0,
+      "selected_uid": "0002c6eafa154e8bb08ebafb715a8d46",
+      "max_rescored_top5_error": 0.0,
+      "layout_norm": 0.0
+    },
+    {
+      "step": 1,
+      "context_nodes": 1,
+      "selected_uid": "0002064ef02e46f9a10b4bff10bae805",
+      "max_rescored_top5_error": 0.0,
+      "layout_norm": 0.9999999403953552
+    },
+    {
+      "step": 2,
+      "context_nodes": 2,
+      "selected_uid": "0002c6eafa154e8bb08ebafb715a8d46",
+      "max_rescored_top5_error": 1.0408340855860843e-17,
+      "layout_norm": 1.0
+    }
+  ]
+}

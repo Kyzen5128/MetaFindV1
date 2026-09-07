@@ -1,0 +1,78 @@
+diff --git a/agents.py b/agents.py
+--- a/agents.py
++++ b/agents.py
+@@ -1,4 +1,10 @@
+ import autogen
++import os
++
++# [MetaFind compatibility] Never mislabel the actual served planner model.
++_PLANNER_MODEL = os.environ.get("METAFIND_IDESIGN_MODEL", "").strip()
++if not _PLANNER_MODEL:
++    raise RuntimeError("METAFIND_IDESIGN_MODEL must name the actual served I-Design model")
+ from autogen.agentchat.agent import Agent
+ from autogen.agentchat.user_proxy_agent import UserProxyAgent
+ from autogen.agentchat.assistant_agent import AssistantAgent
+@@ -11,7 +17,7 @@
+ config_list_gpt4_prev = autogen.config_list_from_json(
+     "OAI_CONFIG_LIST.json",
+     filter_dict={
+-        "model": ["qwen2.5-7b-instruct"],
++        "model": [_PLANNER_MODEL],
+     },
+ )
+ 
+@@ -19,7 +25,7 @@
+ config_list_gpt4 = autogen.config_list_from_json(
+     "OAI_CONFIG_LIST.json",
+     filter_dict={
+-        "model": ["qwen2.5-7b-instruct"],
++        "model": [_PLANNER_MODEL],
+     },
+ )
+ 
+diff --git a/corrector_agents.py b/corrector_agents.py
+--- a/corrector_agents.py
++++ b/corrector_agents.py
+@@ -1,4 +1,10 @@
+ import autogen
++import os
++
++# [MetaFind compatibility] Never mislabel the actual served planner model.
++_PLANNER_MODEL = os.environ.get("METAFIND_IDESIGN_MODEL", "").strip()
++if not _PLANNER_MODEL:
++    raise RuntimeError("METAFIND_IDESIGN_MODEL must name the actual served I-Design model")
+ from autogen.agentchat.groupchat import GroupChat
+ from autogen.agentchat.agent import Agent
+ from autogen.agentchat.user_proxy_agent import UserProxyAgent
+@@ -43,7 +49,7 @@
+ config_list_gpt4 = autogen.config_list_from_json(
+     "OAI_CONFIG_LIST.json",
+     filter_dict={
+-        "model": ["qwen2.5-7b-instruct"],
++        "model": [_PLANNER_MODEL],
+     },
+ )
+ 
+diff --git a/refiner_agents.py b/refiner_agents.py
+--- a/refiner_agents.py
++++ b/refiner_agents.py
+@@ -1,4 +1,10 @@
+ import autogen
++import os
++
++# [MetaFind compatibility] Never mislabel the actual served planner model.
++_PLANNER_MODEL = os.environ.get("METAFIND_IDESIGN_MODEL", "").strip()
++if not _PLANNER_MODEL:
++    raise RuntimeError("METAFIND_IDESIGN_MODEL must name the actual served I-Design model")
+ from autogen.agentchat.groupchat import GroupChat
+ from autogen.agentchat.agent import Agent
+ from autogen.agentchat.user_proxy_agent import UserProxyAgent
+@@ -40,7 +46,7 @@
+ config_list_gpt4 = autogen.config_list_from_json(
+     "OAI_CONFIG_LIST.json",
+     filter_dict={
+-        "model": ["qwen2.5-7b-instruct"],
++        "model": [_PLANNER_MODEL],
+     },
+ )
+ 

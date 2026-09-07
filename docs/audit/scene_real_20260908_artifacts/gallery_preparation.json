@@ -1,0 +1,118 @@
+{
+  "classification": "Actual n11/G4/n12 diagnostic on six fixed Objaverse UIDs; no formal G3 or 1000-sample claim",
+  "gallery_uids": [
+    "0025d57953fc4c8a80a44e59294e6841",
+    "0022a3197f9646acbb9041eff2d1f55c",
+    "00130eea9e884209be92f68378a817e8",
+    "0002c6eafa154e8bb08ebafb715a8d46",
+    "0002064ef02e46f9a10b4bff10bae805",
+    "00010d9634f645859d2e252d189b31d5"
+  ],
+  "parent_checkpoint": "df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532",
+  "sources": {
+    "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/protocol/protocol.json": "ac407520896b1f89e2bf9b3ed7ad92b43ed05a377a3523e281cd06a6fe412959",
+    "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/checkpoints/actual_cpu_step/stage1_best_ckpt.json": "eee0047726e91b2cb2d91af69c8b7d7605eec9d95eb5c3fe16150efb206d61f2",
+    "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/checkpoints/actual_cpu_step/stage1_best.pt": "df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/splits.json": "c03e898f74f612ceedf27090ad2175a507e6d0b2455faa873956e7059ce9c14b",
+    "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/splits.json": "4f2d431842628253c40244350ada346dbf8518bf45c5ec562f7a758964a9db3f",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0025d57953fc4c8a80a44e59294e6841.json": "22d3040f197c96f84871a34bf540d339b7ac325ddbbae1ddf40c7648f847ad66",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0025d57953fc4c8a80a44e59294e6841.npz": "e26423f6f988ad54538aadfadc5dcf3729d07bec600b36bfeb6af8c2c45a4b5a",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0022a3197f9646acbb9041eff2d1f55c.json": "33549e7e54781e0c40b46b8fa0091e870600d379a360b5a7f751d2e11e6cbae3",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0022a3197f9646acbb9041eff2d1f55c.npz": "51f25c9da76406fe708d884617939305e4403eca3c95c7300e379fad240bd0d3",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/00130eea9e884209be92f68378a817e8.json": "629e7c3f8a5848edf16c7216eceddb82af1c81349fc507a296587617daf949c6",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/00130eea9e884209be92f68378a817e8.npz": "235abb2e0aa587ea1f458cd9cd288b6cc4f1c054fa2938bc84851aac84d49bdc",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002c6eafa154e8bb08ebafb715a8d46.json": "de71d6eec06b5b7cbeaa64bc83093de7e03ab328a51ac93c5f73eee1b42e3d77",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002c6eafa154e8bb08ebafb715a8d46.npz": "d8287055bfc89c06672344ad1452b211cc8c6cd0757397ffdc4072e2379986b3",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002064ef02e46f9a10b4bff10bae805.json": "25d345a896c1b69010db55a3b7bce945483c18155d104eb1dfd38ad880395081",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002064ef02e46f9a10b4bff10bae805.npz": "338d5cb020e207728ad52d284f7caa7ee49bc6f88d44e3c6f04b33c76d6def70",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/00010d9634f645859d2e252d189b31d5.json": "168a07be6a3dacfb2635a85b061970dda36550b6f3bcc681b67c36d5b745181f",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/00010d9634f645859d2e252d189b31d5.npz": "2c2c2608fa721ec64c60975de5c67f6b4028b70b912914696139224d2b217f22",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0025d57953fc4c8a80a44e59294e6841.json": "31a10d8fd4f7d92ca2d4cf0f1f7d96e66bbfef8007917c05d4337723f8a2008a",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0025d57953fc4c8a80a44e59294e6841.npz": "d4e13c660e5abbe9ab9214d176bf6ad85822857e11b6215eed507214529d69b6",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0022a3197f9646acbb9041eff2d1f55c.json": "79e1b53f95c80df2485e2c7b916c6b2d8d361f2659477246cc5a9997bdc8fdf8",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0022a3197f9646acbb9041eff2d1f55c.npz": "beaf3dc8c2a7dfe6afff0aa3c2a87c2cd03b57dad16649ca27b8dd04b03b0b98",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/00130eea9e884209be92f68378a817e8.json": "f9de8b759508dc0253e91f2c363fa37dbc89e6caf97159bbc1605a4a343471e7",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/00130eea9e884209be92f68378a817e8.npz": "74242ad18a2f449fd99b7848adaadbcbb34132bbf47470a8214fca9a7208425e",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0002c6eafa154e8bb08ebafb715a8d46.json": "9b2fd2c2566172b3111a013718d6222ef7e1c5df8ce8af8060a295e96604cc24",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0002c6eafa154e8bb08ebafb715a8d46.npz": "a3be0107e664255346d23651a79573bab32b79766808d6d8dff9ea4218ac5842",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0002064ef02e46f9a10b4bff10bae805.json": "5a92c272877e8bff46483a561bc1be0f26b1e430be187c819aeac7a1e4ee72da",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0002064ef02e46f9a10b4bff10bae805.npz": "3896dc15408d693b1a6a709541a4b0a600dc2ee5d31d5ce29484af67dfe1a83c",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/00010d9634f645859d2e252d189b31d5.json": "e76d6d52c50a6873823e4accdc83ae6863c9077c944e56a6275462779e0fbff2",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/00010d9634f645859d2e252d189b31d5.npz": "9ee67664d8d29357052b5f9b8d34ad880f41e5f449e425fa0167ed756f8688aa",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/0025d57953fc4c8a80a44e59294e6841.json": "eab0fccaa58b9102fc39930ef90750206b44695bd6b905944a580e80a7725ead",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/0022a3197f9646acbb9041eff2d1f55c.json": "e31e18a1f4249744b280464ee558415a3782d4cc53d239cc401a737491843f69",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/00130eea9e884209be92f68378a817e8.json": "a9292a3d351402fde129a26a1ab4a9e669065de8511c5fde01cf4684d1ff1ccf",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/0002c6eafa154e8bb08ebafb715a8d46.json": "5619e7251bf7361deb478fbd2a062f4e0da8f08eb11459aefa7875fb4b8ba799",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/0002064ef02e46f9a10b4bff10bae805.json": "cd3988904b9fa0f425161ae918f206073c61872be981c5e460705ff3ea43e62f",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/00010d9634f645859d2e252d189b31d5.json": "d29802fa9bf867e130186fd8c934de6e1359197dd9d9e74f985b53c1db0338c5",
+    "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/stage1_encoding_protocol.json": "da7e981fae759d56cba98d81df082474b6b573d124d668c80d35a8b86f940eb1",
+    "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/stage1_protocol.json": "3732af08c02bb46eef55803702280e4311d73c76b49d4be7ddbe8911c28d2bd3",
+    "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/stage1_hyperparameters.json": "73728d6109f880c1a31a58ff0ec23315f2fc10e4d9c2b0994353ec106b000e64"
+  },
+  "inputs": {
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/annotations/00010d9634f645859d2e252d189b31d5.json": "d29802fa9bf867e130186fd8c934de6e1359197dd9d9e74f985b53c1db0338c5",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/annotations/0002064ef02e46f9a10b4bff10bae805.json": "cd3988904b9fa0f425161ae918f206073c61872be981c5e460705ff3ea43e62f",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/annotations/0002c6eafa154e8bb08ebafb715a8d46.json": "5619e7251bf7361deb478fbd2a062f4e0da8f08eb11459aefa7875fb4b8ba799",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/annotations/00130eea9e884209be92f68378a817e8.json": "a9292a3d351402fde129a26a1ab4a9e669065de8511c5fde01cf4684d1ff1ccf",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/annotations/0022a3197f9646acbb9041eff2d1f55c.json": "e31e18a1f4249744b280464ee558415a3782d4cc53d239cc401a737491843f69",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/annotations/0025d57953fc4c8a80a44e59294e6841.json": "eab0fccaa58b9102fc39930ef90750206b44695bd6b905944a580e80a7725ead",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/embeddings/00010d9634f645859d2e252d189b31d5.json": "168a07be6a3dacfb2635a85b061970dda36550b6f3bcc681b67c36d5b745181f",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/embeddings/00010d9634f645859d2e252d189b31d5.npz": "2c2c2608fa721ec64c60975de5c67f6b4028b70b912914696139224d2b217f22",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/embeddings/0002064ef02e46f9a10b4bff10bae805.json": "25d345a896c1b69010db55a3b7bce945483c18155d104eb1dfd38ad880395081",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/embeddings/0002064ef02e46f9a10b4bff10bae805.npz": "338d5cb020e207728ad52d284f7caa7ee49bc6f88d44e3c6f04b33c76d6def70",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/embeddings/0002c6eafa154e8bb08ebafb715a8d46.json": "de71d6eec06b5b7cbeaa64bc83093de7e03ab328a51ac93c5f73eee1b42e3d77",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/embeddings/0002c6eafa154e8bb08ebafb715a8d46.npz": "d8287055bfc89c06672344ad1452b211cc8c6cd0757397ffdc4072e2379986b3",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/embeddings/00130eea9e884209be92f68378a817e8.json": "629e7c3f8a5848edf16c7216eceddb82af1c81349fc507a296587617daf949c6",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/embeddings/00130eea9e884209be92f68378a817e8.npz": "235abb2e0aa587ea1f458cd9cd288b6cc4f1c054fa2938bc84851aac84d49bdc",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/embeddings/0022a3197f9646acbb9041eff2d1f55c.json": "33549e7e54781e0c40b46b8fa0091e870600d379a360b5a7f751d2e11e6cbae3",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/embeddings/0022a3197f9646acbb9041eff2d1f55c.npz": "51f25c9da76406fe708d884617939305e4403eca3c95c7300e379fad240bd0d3",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/embeddings/0025d57953fc4c8a80a44e59294e6841.json": "22d3040f197c96f84871a34bf540d339b7ac325ddbbae1ddf40c7648f847ad66",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/embeddings/0025d57953fc4c8a80a44e59294e6841.npz": "e26423f6f988ad54538aadfadc5dcf3729d07bec600b36bfeb6af8c2c45a4b5a",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/pointclouds/00010d9634f645859d2e252d189b31d5.json": "e76d6d52c50a6873823e4accdc83ae6863c9077c944e56a6275462779e0fbff2",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/pointclouds/00010d9634f645859d2e252d189b31d5.npz": "9ee67664d8d29357052b5f9b8d34ad880f41e5f449e425fa0167ed756f8688aa",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/pointclouds/0002064ef02e46f9a10b4bff10bae805.json": "5a92c272877e8bff46483a561bc1be0f26b1e430be187c819aeac7a1e4ee72da",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/pointclouds/0002064ef02e46f9a10b4bff10bae805.npz": "3896dc15408d693b1a6a709541a4b0a600dc2ee5d31d5ce29484af67dfe1a83c",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/pointclouds/0002c6eafa154e8bb08ebafb715a8d46.json": "9b2fd2c2566172b3111a013718d6222ef7e1c5df8ce8af8060a295e96604cc24",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/pointclouds/0002c6eafa154e8bb08ebafb715a8d46.npz": "a3be0107e664255346d23651a79573bab32b79766808d6d8dff9ea4218ac5842",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/pointclouds/00130eea9e884209be92f68378a817e8.json": "f9de8b759508dc0253e91f2c363fa37dbc89e6caf97159bbc1605a4a343471e7",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/pointclouds/00130eea9e884209be92f68378a817e8.npz": "74242ad18a2f449fd99b7848adaadbcbb34132bbf47470a8214fca9a7208425e",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/pointclouds/0022a3197f9646acbb9041eff2d1f55c.json": "79e1b53f95c80df2485e2c7b916c6b2d8d361f2659477246cc5a9997bdc8fdf8",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/pointclouds/0022a3197f9646acbb9041eff2d1f55c.npz": "beaf3dc8c2a7dfe6afff0aa3c2a87c2cd03b57dad16649ca27b8dd04b03b0b98",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/pointclouds/0025d57953fc4c8a80a44e59294e6841.json": "31a10d8fd4f7d92ca2d4cf0f1f7d96e66bbfef8007917c05d4337723f8a2008a",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/pointclouds/0025d57953fc4c8a80a44e59294e6841.npz": "d4e13c660e5abbe9ab9214d176bf6ad85822857e11b6215eed507214529d69b6",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/splits.json": "e3a66faad14022a1abc8959acfc61e7a3e1846c630d0f362b6b590f0ecadbd39",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/stage1_encoding_protocol.json": "da7e981fae759d56cba98d81df082474b6b573d124d668c80d35a8b86f940eb1",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/stage1_hyperparameters.json": "73728d6109f880c1a31a58ff0ec23315f2fc10e4d9c2b0994353ec106b000e64",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/stage1_protocol.json": "3732af08c02bb46eef55803702280e4311d73c76b49d4be7ddbe8911c28d2bd3"
+  },
+  "raw_glbs": {
+    "0022a3197f9646acbb9041eff2d1f55c": {
+      "path": "/home/kyzen/datasets/objaverse-lvis/glbs/glbs/000-000/0022a3197f9646acbb9041eff2d1f55c.glb",
+      "sha256": "5d995617f01bc3a289cbe76a869709604e557dd76c4f7cccb66dc1a08767317b"
+    },
+    "00130eea9e884209be92f68378a817e8": {
+      "path": "/home/kyzen/datasets/objaverse-lvis/glbs/glbs/000-000/00130eea9e884209be92f68378a817e8.glb",
+      "sha256": "8b2cd6d623a355a4ba7098cf5739e9c862a986f4aa39c49c27c732fd87c2c39e"
+    },
+    "00010d9634f645859d2e252d189b31d5": {
+      "path": "/home/kyzen/datasets/objaverse-lvis/glbs/glbs/000-000/00010d9634f645859d2e252d189b31d5.glb",
+      "sha256": "8ac5dbf4ce7b8c360715d727d4ca874316a833cf1fd63e7ab35cbfcfcffad13e"
+    },
+    "0002c6eafa154e8bb08ebafb715a8d46": {
+      "path": "/home/kyzen/datasets/objaverse-lvis/glbs/glbs/000-000/0002c6eafa154e8bb08ebafb715a8d46.glb",
+      "sha256": "240e6c3d2117eb4bb2c1995bd197c574cec8e492940f84984ac35e5dca582121"
+    },
+    "0002064ef02e46f9a10b4bff10bae805": {
+      "path": "/home/kyzen/datasets/objaverse-lvis/glbs/glbs/000-000/0002064ef02e46f9a10b4bff10bae805.glb",
+      "sha256": "f6c9aa06168caa60bce5981accd88b9373c889236632390e46a617a8f5ee3085"
+    },
+    "0025d57953fc4c8a80a44e59294e6841": {
+      "path": "/home/kyzen/datasets/objaverse-lvis/glbs/glbs/000-000/0025d57953fc4c8a80a44e59294e6841.glb",
+      "sha256": "306989b91f06e67c819c10461ee2a6bf48f52b5290946f35b2236a9afc4a48a1"
+    }
+  },
+  "text_image_rule": "Original attrs_v1 frozen-CLIP cached text and 12-view mean, copied byte-for-byte",
+  "point_rule": "Actual restored new Stage1 PointBERT re-encodes copied original 10000-point xyzrgb; cached PC embedding is not used",
+  "gate_rule": "Unchanged CLI defaults: sample_size=1000; existing implementation samples min(1000,N)=6. All admitted assets encoded, no --limit.",
+  "corpus_limitation": "G3 remains unimplemented and this diagnostic does not claim its corpus certification. Parent split is unchanged."
+}

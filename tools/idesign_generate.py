@@ -9,26 +9,25 @@ on disk, so they never need to share an interpreter.
     conda activate IDesign
     PYTHONPATH=<idesign_repo> python tools/idesign_generate.py --n-scenes 2
 
-The LLM is Qwen served over an OpenAI-compatible endpoint (deviation D-5).
+The default planner is Gemma served under its actual model ID, following the
+recorded all-LLM Gemma decision (workflow/DECISION_LEDGER.md:2087). This remains
+a deviation from upstream GPT-4. Patches 01--03 carry the previously selected
+model/graph/retry adaptations; patch 04 makes all model filters configurable.
 
 Two properties of the upstream setup, checked against I-Design's paper 4.1:
 
 * temperature 0.7 and top_p 1.0 are what the paper specifies, and I-Design's
   own agents.py already sets both, so they are inherited rather than assumed.
-* GPT-4's "JSON mode" is NOT inherited. Supplementary 7 says "All agents
-  utilize GPT-4's JSON mode to restrict outputs exclusively to valid JSON".
-  Our vLLM endpoint is launched without any guided-decoding equivalent, so
-  Qwen may emit non-conforming JSON where GPT-4 structurally could not. That
-  lands in the Engineer's schema-validation retry loop, which is one of the
-  paths our runs fail on -- see finding F18. This is part of D-5 and was not
-  recorded until the I-Design paper was read.
+* Upstream requests response_format=json_object. Whether a particular local
+  endpoint honours it requires runtime evidence; setting that field alone
+  does not establish constrained decoding or valid scene output.
 
 An earlier version served Qwen under the alias `gpt-4` so that I-Design's
 hardcoded `filter_dict={"model": ["gpt-4"]}` would resolve without touching its
 source. That was a bad trade: every log line and config file then said `gpt-4`
 while nothing of the sort was running, and it misled a reader within minutes.
-I-Design is patched instead -- setup/patches/idesign-01-qwen-model-name.patch,
-four filter sites across three files -- so the model name is honest end to end.
+I-Design is patched instead: patch 04 reads METAFIND_IDESIGN_MODEL at all four
+filter sites. Config, endpoint, and sidecar use the same real model name.
 """
 
 from __future__ import annotations
@@ -37,18 +36,23 @@ import argparse
 import hashlib
 import random
 import json
+import math
 import traceback
 import os
-import shutil
 import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+# A direct script invocation puts tools/, rather than the checkout, on sys.path.
+# Keep the documented IDesign-only PYTHONPATH invocation usable from any CWD.
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO))
 from metafind import paths
 
 DEFAULT_OUT = paths.OUTPUTS / "idesign"
+DEFAULT_IDESIGN_REPO = Path(os.environ.get("IDESIGN_REPO", REPO.parent / "upstream" / "IDesign"))
 
 # [CORRECTED] These used to be "A creative vibrant livingroom" and "An aged
 # archive room" at [4.0, 4.0, 2.5] with n=15 and n=12 -- invented, while the
@@ -61,7 +65,7 @@ DEFAULT_OUT = paths.OUTPUTS / "idesign"
 #
 # Still UNKNOWN, and still not invented here:
 #   * MetaFind 3.3's "200 randomly sampled scenes" is NOT this list -- the paper
-#     publishes 60 prompts in total. Where MetaFind's 200 came from is U-21.
+#     publishes 60 prompts in total. Where MetaFind's 200 came from is U-27.
 #   * `n`, the object count I-Design requires, is given nowhere. Table 1 reports
 #     NObj (12.7 bedroom, 23.6 living room) as an OUTPUT of the runs, not an
 #     input to them. The values below are ours and are labelled as such.
@@ -86,31 +90,14 @@ def endpoint_model_id(base_url: str) -> str:
 
 
 def verify_patches(patch_dir: Path, repo: Path) -> list[dict]:
-    """Which patches are ACTUALLY applied in the external checkout.
+    """Verify cumulative pinned source states, including superseded patches."""
+    from tools.idesign_patches import inspect_chain
 
-    Listing the .patch files in this repository says what we ship, not what the
-    clone contains -- a sidecar built from that would claim provenance the
-    artifacts may not have. `git apply --reverse --check` succeeds only if the
-    change is already present, so it answers the question that matters. The
-    hash is recorded too, because a patch file can change under a stable name.
-    """
-    out = []
-    for patch in sorted(patch_dir.glob("idesign-*.patch")):
-        applied = (
-            subprocess.run(
-                ["git", "-C", str(repo), "apply", "--reverse", "--check", str(patch)],
-                capture_output=True,
-            ).returncode
-            == 0
-        )
-        out.append(
-            {
-                "name": patch.stem,
-                "applied": applied,
-                "sha256": hashlib.sha256(patch.read_bytes()).hexdigest(),
-            }
-        )
-    return out
+    try:
+        return inspect_chain(repo, patch_dir)["patches"]
+    except (OSError, ValueError) as exc:
+        print(f"I-Design patch chain refused: {exc}", file=sys.stderr)
+        return []
 
 
 def write_config(workdir: Path, base_url: str, api_key: str, model: str) -> None:
@@ -139,12 +126,14 @@ def run_one(
 
     # Imported here, after the CWD is correct, because agents.py loads the
     # config at module scope.
+    previous_path = sys.path[:]
     sys.path.insert(0, str(idesign_repo))
     prev_cwd = Path.cwd()
     os.chdir(workdir)
     try:
         from IDesign import IDesign  # noqa: PLC0415
         import agents  # noqa: PLC0415
+        from utils import ROOM_LAYOUT_ELEMENTS  # noqa: PLC0415
 
         if seed is not None:
             # What this does and does not control.
@@ -175,30 +164,76 @@ def run_one(
         design.to_json("scene_graph.json")
     finally:
         os.chdir(prev_cwd)
+        sys.path[:] = previous_path
 
     scene = json.loads((workdir / "scene_graph.json").read_text())
-    placed = [o for o in scene if isinstance(o, dict) and "position" in o]
+    if not isinstance(scene, list) or any(not isinstance(o, dict) for o in scene):
+        raise ValueError("planner scene_graph must be an object list")
+    objects = [o for o in scene if o.get("new_object_id") not in ROOM_LAYOUT_ELEMENTS]
+    placed = [o for o in objects if "position" in o]
+    if not objects or len(placed) != len(objects):
+        raise ValueError("planner did not position every returned object")
     return {
         "prompt": prompt,
         "room_dimensions": dims,
         "n_objects_requested": n_objects,
-        "n_objects_returned": len(scene),
+        "n_objects_returned": len(objects),
         "n_objects_positioned": len(placed),
+        "n_room_priors": len(scene) - len(objects),
+        "n_scene_nodes": len(scene),
         "wallclock_s": round(time.time() - started, 1),
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
-def main() -> int:
+def scene_specs(path: Path | None, n_scenes: int) -> list[dict]:
+    """Validate the complete requested batch before creating files or calling a model."""
+    if n_scenes < 1:
+        raise ValueError("--n-scenes must be a positive integer")
+    if path is None:
+        if n_scenes > len(SMOKE_PROMPTS):
+            raise ValueError(
+                f"--n-scenes {n_scenes} exceeds the {len(SMOKE_PROMPTS)} smoke prompts; "
+                "pass --scene-spec-file with explicit prompt, room_dimensions, n_objects, seed, source"
+            )
+        return [{"prompt": p, "room_dimensions": d[:], "n_objects": n, "seed": None,
+                 "source": "smoke"} for p, d, n in SMOKE_PROMPTS[:n_scenes]]
+    specs = []
+    required = {"prompt", "room_dimensions", "n_objects", "seed", "source"}
+    for line_no, line in enumerate(path.read_text().splitlines(), 1):
+        if not line.strip():
+            continue
+        spec = json.loads(line)
+        if not isinstance(spec, dict) or not required <= spec.keys():
+            raise ValueError(f"spec line {line_no}: requires {sorted(required)}")
+        if any(not isinstance(spec[k], str) or not spec[k].strip() for k in ("prompt", "source")):
+            raise ValueError(f"spec line {line_no}: prompt/source must be nonempty strings")
+        dims = spec["room_dimensions"]
+        if not isinstance(dims, list) or len(dims) != 3 or any(
+            isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x) or x <= 0
+            for x in dims
+        ):
+            raise ValueError(f"spec line {line_no}: room_dimensions needs three finite positive numbers")
+        if type(spec["n_objects"]) is not int or spec["n_objects"] < 1:
+            raise ValueError(f"spec line {line_no}: n_objects must be a positive integer")
+        if spec["seed"] is not None and type(spec["seed"]) is not int:
+            raise ValueError(f"spec line {line_no}: seed must be an integer or null")
+        specs.append(spec)
+    if len(specs) < n_scenes:
+        raise ValueError(f"--n-scenes {n_scenes} but {path} has {len(specs)} specs; refusing to truncate")
+    return specs[:n_scenes]
+
+
+def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--idesign-repo", type=Path, default=Path("/home/kyzen/IDesign"))
+    ap.add_argument("--idesign-repo", type=Path, default=DEFAULT_IDESIGN_REPO)
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--base-url", default="http://127.0.0.1:8000/v1")
     ap.add_argument("--api-key", default="local-vllm")
     ap.add_argument(
         "--model",
-        default="qwen2.5-7b-instruct",
-        help="Must match both the patched filter_dict and vLLM --served-model-name.",
+        default="gemma-4-12B-it",
+        help="Real endpoint model ID; patch 04 reads the same name for all agents.",
     )
     ap.add_argument("--n-scenes", type=int, default=len(SMOKE_PROMPTS))
     ap.add_argument(
@@ -206,7 +241,21 @@ def main() -> int:
         type=Path,
         help="JSONL of scene specs; required for anything larger than a smoke run.",
     )
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
+    args.model = args.model.strip()
+    if not args.model:
+        print("--model must name the actual served model", file=sys.stderr)
+        return 2
+    try:
+        specs = scene_specs(args.scene_spec_file, args.n_scenes)
+    except (OSError, ValueError) as exc:
+        print(f"Invalid scene specification: {exc}", file=sys.stderr)
+        return 2
+    args.idesign_repo = args.idesign_repo.resolve()
+    args.out = args.out.resolve()
+    if args.out.exists():
+        print(f"Refusing to overwrite existing output: {args.out}", file=sys.stderr)
+        return 2
 
     if not (args.idesign_repo / "IDesign.py").exists():
         print(f"I-Design not found at {args.idesign_repo}", file=sys.stderr)
@@ -220,12 +269,10 @@ def main() -> int:
     applied_patches = verify_patches(
         Path(__file__).resolve().parents[1] / "setup" / "patches", args.idesign_repo
     )
-    served = endpoint_model_id(args.base_url)
-    print(f"I-Design {revision[:8]} | endpoint serves: {served}")
     for rec in applied_patches:
         mark = "applied" if rec["applied"] else "NOT APPLIED"
         print(f"  patch {rec['name']}: {mark} ({rec['sha256'][:12]}...)")
-    if not all(r["applied"] for r in applied_patches):
+    if not applied_patches or not all(r["applied"] for r in applied_patches):
         print(
             "Refusing to generate: the clone is missing patches this repo ships. "
             "Run setup/04_idesign_env.sh.",
@@ -233,50 +280,11 @@ def main() -> int:
         )
         return 2
 
-    args.out.mkdir(parents=True, exist_ok=True)
+    served = endpoint_model_id(args.base_url)
+    print(f"I-Design {revision[:8]} | endpoint serves: {served}")
+    args.out.mkdir(parents=True, exist_ok=False)
     records, failures = [], 0
-
-    if args.scene_spec_file:
-        specs = [
-            json.loads(line)
-            for line in args.scene_spec_file.read_text().splitlines()
-            if line.strip()
-        ]
-        required = {"prompt", "room_dimensions", "n_objects", "seed", "source"}
-        for i, d in enumerate(specs):
-            if missing := required - d.keys():
-                print(f"spec line {i}: missing {sorted(missing)}", file=sys.stderr)
-                return 2
-        # Never silently deliver fewer scenes than asked for. Paper 3.3's figure
-        # is 200; a run that quietly produced 150 and reported a mean would be
-        # answering a different question.
-        if len(specs) < args.n_scenes:
-            print(
-                f"--n-scenes {args.n_scenes} but {args.scene_spec_file} has "
-                f"{len(specs)} specs. Refusing to truncate.",
-                file=sys.stderr,
-            )
-            return 2
-        specs = specs[: args.n_scenes]
-    else:
-        # Refuse to stretch two smoke prompts into an evaluation set. Cycling
-        # them would hand back 100 copies of each and call it "200 randomly
-        # sampled scenes" (paper 3.3), which it is not. The real list is part of
-        # the composition protocol decision (U-21/U-27) and is not invented here.
-        if args.n_scenes > len(SMOKE_PROMPTS):
-            print(
-                f"--n-scenes {args.n_scenes} exceeds the {len(SMOKE_PROMPTS)} smoke "
-                "prompts. Pass --scene-spec-file with one JSON object per line "
-                '({"prompt", "room_dimensions", "n_objects", "seed", "source"}) '
-                "derived from the resolved composition_protocol.",
-                file=sys.stderr,
-            )
-            return 2
-        specs = [
-            {"prompt": p, "room_dimensions": d, "n_objects": n, "seed": None,
-             "source": "smoke"}
-            for p, d, n in SMOKE_PROMPTS[: args.n_scenes]
-        ]
+    os.environ["METAFIND_IDESIGN_MODEL"] = args.model
 
     for i, spec in enumerate(specs):
         prompt, dims, n_obj = spec["prompt"], spec["room_dimensions"], spec["n_objects"]
@@ -308,7 +316,7 @@ def main() -> int:
             "idesign_patches": applied_patches,
             "scene_source": spec["source"],
             "seed": spec["seed"],
-            # D-5: I-Design's planner is GPT-4 upstream; here it is Qwen.
+            # Planner replacement follows the recorded all-LLM Gemma decision.
             "planner_model": args.model,
             "planner_endpoint_serves": served,
         }
@@ -320,8 +328,14 @@ def main() -> int:
         )
 
     (args.out / "index.json").write_text(json.dumps(records, indent=2))
+    (args.out / "run_status.json").write_text(json.dumps({
+        "schema": "metafind.idesign_batch.v1",
+        "status": "complete" if not failures else "incomplete",
+        "requested": len(specs), "succeeded": len(records), "failed": failures,
+        "scene_ids": [r["scene_id"] for r in records],
+    }, indent=2))
     print(f"\n{len(records)} generated, {failures} failed -> {args.out}")
-    return 1 if failures and not records else 0
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

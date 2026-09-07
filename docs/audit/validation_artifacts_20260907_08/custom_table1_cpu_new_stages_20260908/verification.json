@@ -1,0 +1,14 @@
+{
+  "classification": "Independent bookkeeping check of emitted ranks and exact UID target mapping; does not re-encode inputs or independently recompute cosine scores.",
+  "combinations": 42,
+  "query_records": 84,
+  "all_reported_recalls_match_emitted_ranks": true,
+  "target_columns": [
+    5,
+    4
+  ],
+  "stage2_parent_gallery": "unchanged",
+  "query_selection_overlap": [
+    "0002064ef02e46f9a10b4bff10bae805"
+  ]
+}

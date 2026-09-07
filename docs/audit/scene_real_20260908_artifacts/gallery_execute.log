@@ -1,0 +1,9 @@
+{"phase": "n11", "exit_code": 0, "seconds": 23.640946903964505, "source_changed": []}
+{"phase": "g4", "exit_code": 0, "seconds": 1.1289847329026088, "source_changed": []}
+{"phase": "n12", "exit_code": 0, "seconds": 0.07100211596116424, "source_changed": []}
+Traceback (most recent call last):
+  File "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/gallery_driver.py", line 160, in <module>
+    globals()[args.phase]()
+  File "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/gallery_driver.py", line 142, in execute
+    from metafind.train.gallery_index import load_promoted_index_for_checkpoint
+ModuleNotFoundError: No module named 'metafind'

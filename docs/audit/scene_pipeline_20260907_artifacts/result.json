@@ -1,0 +1,396 @@
+{
+  "schema": "metafind.scene_placement.v1",
+  "status": "complete",
+  "manifest_sha256": "123bab7d4d41b98fb364ab9611477c123bcb121efc551f2ea01cd42fc05a348c",
+  "classification": "IMPLEMENTATION CHOICE",
+  "instances": [
+    {
+      "asset_id": "A",
+      "slot_id": "chair_2",
+      "slot": {
+        "new_object_id": "chair_2",
+        "position": {
+          "x": 1.0,
+          "y": 2.0,
+          "z": 0.5
+        },
+        "rotation": {
+          "z_angle": 0.0
+        },
+        "size_in_meters": {
+          "length": 1.0,
+          "width": 1.0,
+          "height": 1.0
+        },
+        "style": "original planned style",
+        "material": "wood",
+        "is_on_the_floor": true,
+        "placement": {
+          "objects_in_room": [
+            {
+              "object_id": "table_1",
+              "preposition": "on"
+            }
+          ],
+          "room_layout_elements": [
+            {
+              "layout_element_id": "south_wall",
+              "preposition": "on"
+            }
+          ]
+        }
+      },
+      "root": "instance_00000",
+      "imported_objects": [
+        "left",
+        "right"
+      ],
+      "mesh_objects": [
+        "left",
+        "right"
+      ],
+      "raw_blender_bbox": [
+        [
+          1.5,
+          -0.5,
+          2.0
+        ],
+        [
+          4.5,
+          0.5,
+          4.0
+        ]
+      ],
+      "scale_factors": [
+        0.3333333432674408,
+        1.0,
+        0.5
+      ],
+      "matrix_world": [
+        [
+          -0.3333333432674408,
+          -8.742277657347586e-08,
+          0.0,
+          2.0
+        ],
+        [
+          2.91409261166109e-08,
+          -1.0,
+          0.0,
+          1.9999998807907104
+        ],
+        [
+          0.0,
+          0.0,
+          0.5,
+          -1.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "placed_local_bbox": [
+        [
+          -0.4999999701976776,
+          -0.5000001192092896,
+          -0.5
+        ],
+        [
+          0.5000000596046448,
+          0.4999999403953552,
+          0.5
+        ]
+      ],
+      "actual_bbox": [
+        [
+          0.49999988079071045,
+          1.5,
+          0.0
+        ],
+        [
+          1.5,
+          2.5,
+          1.0
+        ]
+      ],
+      "yaw_degrees": 180.0
+    },
+    {
+      "asset_id": "B",
+      "slot_id": "table_1",
+      "slot": {
+        "new_object_id": "table_1",
+        "position": {
+          "x": 3.0,
+          "y": 2.0,
+          "z": 0.5
+        },
+        "rotation": {
+          "z_angle": 0.0
+        },
+        "size_in_meters": {
+          "length": 1.0,
+          "width": 1.0,
+          "height": 1.0
+        },
+        "style": "original planned style",
+        "material": "wood",
+        "is_on_the_floor": true,
+        "placement": {
+          "objects_in_room": [],
+          "room_layout_elements": [
+            {
+              "layout_element_id": "south_wall",
+              "preposition": "on"
+            }
+          ]
+        }
+      },
+      "root": "instance_00001",
+      "imported_objects": [
+        "geometry_0"
+      ],
+      "mesh_objects": [
+        "geometry_0"
+      ],
+      "raw_blender_bbox": [
+        [
+          -0.4253253936767578,
+          -0.4253253936767578,
+          -0.4253253936767578
+        ],
+        [
+          0.4253253936767578,
+          0.4253253936767578,
+          0.4253253936767578
+        ]
+      ],
+      "scale_factors": [
+        1.1755704879760742,
+        1.1755704879760742,
+        1.1755704879760742
+      ],
+      "matrix_world": [
+        [
+          -1.1755704879760742,
+          -1.0277163653427124e-07,
+          0.0,
+          3.0
+        ],
+        [
+          1.0277163653427124e-07,
+          -1.1755704879760742,
+          0.0,
+          2.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.1755704879760742,
+          0.5
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "placed_local_bbox": [
+        [
+          -0.5000000596046448,
+          -0.5,
+          -0.4999999701976776
+        ],
+        [
+          0.4999999403953552,
+          0.4999999403953552,
+          0.4999999701976776
+        ]
+      ],
+      "actual_bbox": [
+        [
+          2.5,
+          1.5,
+          2.9802322387695312e-08
+        ],
+        [
+          3.5,
+          2.5,
+          1.0
+        ]
+      ],
+      "yaw_degrees": 180.0
+    }
+  ],
+  "room": {
+    "room_id": "scene_0007",
+    "dimensions": [
+      4.0,
+      5.0,
+      3.0
+    ],
+    "provenance": {
+      "sidecar_sha256": "64c101e2a1b443c52593f67f10afac047b3f9abc7ac984cf5899b7d702fc98b9"
+    },
+    "surfaces": [
+      {
+        "id": "floor",
+        "vertices": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            4.0,
+            0.0,
+            0.0
+          ],
+          [
+            4.0,
+            5.0,
+            0.0
+          ],
+          [
+            0.0,
+            5.0,
+            0.0
+          ]
+        ],
+        "rgba": [
+          0.6,
+          0.6,
+          0.6,
+          1.0
+        ],
+        "roughness": 0.7
+      }
+    ]
+  },
+  "render_config": {
+    "provenance": {
+      "source": "test-only CPU render"
+    },
+    "engine": "CYCLES",
+    "device": "CPU",
+    "threads": 1,
+    "samples": 2,
+    "seed": 17,
+    "resolution": [
+      64,
+      64
+    ],
+    "transparent": false,
+    "world": {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "strength": 0.2
+    },
+    "color_management": {
+      "view_transform": "Standard",
+      "look": "None",
+      "exposure": 0.0,
+      "gamma": 1.0
+    },
+    "cameras": [
+      {
+        "id": "test-top",
+        "matrix_world": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            2.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            2.5
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            7.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "lens_mm": 32.0,
+        "sensor_width_mm": 36.0,
+        "clip_start": 0.01,
+        "clip_end": 100.0
+      }
+    ],
+    "lights": [
+      {
+        "id": "test-area",
+        "type": "AREA",
+        "shape": "DISK",
+        "matrix_world": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            2.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            2.5
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            7.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "energy": 600.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "size": 5.0
+      }
+    ]
+  },
+  "renders": [
+    {
+      "camera_id": "test-top",
+      "path": "view_000.png",
+      "sha256": "da36c801513182ff06361779515ef52efe9e4b32abb9008b14e99c82cd765c8a"
+    }
+  ],
+  "blend": {
+    "path": "scene.blend",
+    "sha256": "a428d22f68ad3d3ebdd966e53fbef62b44b9ec9cef99962f6a45ed68cff12623"
+  },
+  "blender_version": "4.2.1 LTS",
+  "blender_build_hash": "396f546c9d82",
+  "device": "CPU",
+  "implementation": {
+    "placement_sha256": "f2c016eeb8ba3fe58c4f7fd05aea57f60c13f7ef43644001ddab1a46214f1def",
+    "blender_place_sha256": "4771a482ee7505e552d5fd3eabbb8b9e659f2e15afcad0944ccd10652ed70f9f"
+  }
+}

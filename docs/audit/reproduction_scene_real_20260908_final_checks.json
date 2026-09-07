@@ -1,0 +1,102 @@
+{
+  "schema": "metafind.scene_delivery_checks.v1",
+  "checked_at": "2026-09-07T17:42:07.630259+00:00",
+  "scope": "Final source/doc/archive check before the authorized Git commit and push; not research metric certification",
+  "base_head": "87ccfbbf460cfd2bcc518f654e1b7d0fd3e506d8",
+  "branch": "main",
+  "cpu_execution_sha256": "f5ba532c2c48020a7aa048673d2678ba67e4ee45097babded5e9ce658cb12c65",
+  "cpu_source_count": 249,
+  "cpu_sources_match": true,
+  "archives": [
+    {
+      "path": "docs/audit/validation_artifacts_20260907_08",
+      "files_verified": 123,
+      "source_and_copy_sha_match": true,
+      "manifest_sha256": "2c3f0dfea853d1479270b48c62f87e431a8173be2ecd1a02423300fdf60726c5",
+      "total_bytes": 588820
+    },
+    {
+      "path": "docs/audit/scene_real_20260908_artifacts",
+      "files_verified": 102,
+      "source_and_copy_sha_match": true,
+      "manifest_sha256": "b90ece190f8a840a9413d82f027a3b1dd6ad9f97f17729535476fb603f689c26",
+      "total_bytes": 2234538
+    }
+  ],
+  "explicitly_reviewed_ignored_evidence_files": [
+    "docs/audit/validation_artifacts_20260907_08/stage2_cpu_real_20260908/before_save_queries.npz",
+    "docs/audit/scene_real_20260908_artifacts/data/outputs/gallery_index.json",
+    "docs/audit/scene_real_20260908_artifacts/data/outputs/gallery_index_staging.json",
+    "docs/audit/scene_real_20260908_artifacts/data/outputs/logs/gates/G4_gallery_freeze.yaml"
+  ],
+  "previous_publication_checks_sha256": "d307a99e96d04aedbc870952c343e131c18417956ba36da358023b9e3098ba7e",
+  "paper_sources_still_match": true,
+  "upstream_still_pinned_clean": true,
+  "ignore_patterns_unchanged": true,
+  "final_live_snapshot": {
+    "path": "docs/audit/reproduction_scene_real_20260908_final_status.json",
+    "sha256": "7b67142e636f1f6fa08b448ce34fd2046443e1077324232742087862bf78e9d7"
+  },
+  "publication_status": "precommit; actual commit and remote verification are recorded in Git and the delivery response",
+  "active_document_links": {
+    "scope": "Local path existence only, not fragments; preserved as-executed archived documents are not rewritten",
+    "documents_sha256": {
+      "README.md": "43b544b6d79e5213cd76ad91a9e581e2986da68bd7e2c6734945a3f2a8ebafdb",
+      "docs/CLEANUP_REPORT_20260907.md": "2349b0a9cdbd319331330e3b69e2948fe573c2d44d30746f2c6ad747ca6ce03a",
+      "docs/CUSTOM_TABLE1_EVALUATION.md": "73928188fb5f54f2d7dbdd2b6c5e784ade84dd96187d543313692e98a56dbc5c",
+      "docs/DATA_FLOW.md": "e5e929f7634b1cc97eb7c11c1ac0d013b3c4b1dd46e508af744e260b00d5d64b",
+      "docs/IDesign_INPUTS.md": "83fa7e2d5d04e2ff91d7ab36f09af07fd21e7dd574c9ae4f3c082dbbb3b0411a",
+      "docs/RAW_SCENE_INPUTS.md": "45ff16e67b175da1de63c82954aad3648220f85ee205ef02af4904774948a451",
+      "docs/README.md": "b3be9a9eb2e50473d06d4c7c588a10b6d197f1d89b9ad311f6c423fd15b371f7",
+      "docs/REPRODUCTION_CONTINUATION_20260907.md": "23f96255922f96dd8a81bb05f70ec997755a1517cff2885d8d0cc64b8fe48180",
+      "docs/REPRODUCTION_REVIEW_20260907.md": "883d062870c25de6f6055d293154ce8f310de11e5704918610a7760d13c67780",
+      "docs/REPRODUCTION_RUNTIME_REVIEW_20260907.md": "2fb9b02c111c249486bf11cf07d6e447dbbbdf5399cd3891fb6b19027a81e476",
+      "docs/REPRODUCTION_SCENE_REVIEW_20260908.md": "fb0034b8a05332ff99b71d04623b8075b4b23ad9a83e2d1723291423c3865f5a",
+      "docs/REPRODUCTION_TRAINING_REVIEW_20260908.md": "e8e05cadc2533fa7fdcc43949531d8c365721f6d6f224e447498ec8f4b967790",
+      "docs/SCENE_COMPOSITION.md": "627dfaf7a633ce3d1372a6cb57049048bf342de2c7a600414c0deeab17cb4bd9",
+      "docs/SCENE_PLACEMENT.md": "d9132a0e1cb48228a96182f26239426dc9ec9615ccbeb2eca65f8674ea024384",
+      "docs/SCENE_SEMANTICS.md": "5492288b9f455852f55bbb8eb81d9b9cef85af9d5118419214ec67535af95bea",
+      "docs/audit/scene_pipeline_20260907.md": "0ba1521848b43c1ea059ad53e6c0a65a10300c743568e8ded7dc37d715c04e69",
+      "docs/audit/scene_real_20260908_artifacts/README.md": "73e33701ce50a2a0da075192020aad0f459b877ef46fa6fd490d3a7f7aef4765",
+      "docs/audit/validation_artifacts_20260907_08/README.md": "6b29fa88a9d7d1c7b76693cebc37841cbb02445f3110f0b8996df5a4e2274618",
+      "docs/graph/README.md": "28505d80da48e05eef551d024a0232b49aca61819de1f8362463acffe3da2481",
+      "tests/README.md": "be04ac8161ae101a1c6c9a31de1f74167b83c9a984b3e70cb1d2ffbcc9f11e0e",
+      "tools/probes/README.md": "70eeff2192af7649b2ceb6f00b56882041fdb1cc76392778a54c92ceb73eb951"
+    },
+    "count": 347,
+    "missing": []
+  },
+  "unstaged_tracked_diff_check": "PASS",
+  "staged_whitespace_checks": {
+    "full": {
+      "command": [
+        "git",
+        "diff",
+        "--cached",
+        "--check"
+      ],
+      "exit_code": 2,
+      "stdout": "docs/audit/reproduction_continuation_20260907_cpu.log:33: trailing whitespace.\n+    \ndocs/audit/reproduction_continuation_20260907_cpu.log:37: trailing whitespace.\n+tests/data/test_renders.py:271: \ndocs/audit/reproduction_continuation_20260907_cpu.log:38: trailing whitespace.\n+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \ndocs/audit/reproduction_continuation_20260907_cpu.log:42: trailing whitespace.\n+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \ndocs/audit/reproduction_continuation_20260907_cpu.log:50: trailing whitespace.\n+    \ndocs/audit/reproduction_continuation_20260907_cpu.log:55: trailing whitespace.\n+    \ndocs/audit/reproduction_continuation_20260907_cpu.log:62: trailing whitespace.\n+    \ndocs/audit/reproduction_continuation_20260907_cpu.log:117: trailing whitespace.\n+E               \ndocs/audit/reproduction_continuation_20260907_cpu.log:124: trailing whitespace.\n+E               \ndocs/audit/reproduction_continuation_20260907_cpu.log:137: trailing whitespace.\n+    \ndocs/audit/reproduction_continuation_20260907_cpu.log:142: trailing whitespace.\n+    \ndocs/audit/reproduction_continuation_20260907_cpu.log:148: trailing whitespace.\n+    \ndocs/audit/reproduction_continuation_20260907_cpu.log:150: trailing whitespace.\n+    \ndocs/audit/reproduction_continuation_20260907_cpu.log:155: trailing whitespace.\n+tests/data/test_renders.py:357: \ndocs/audit/reproduction_continuation_20260907_cpu.log:156: trailing whitespace.\n+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \ndocs/audit/reproduction_continuation_20260907_cpu.log:160: trailing whitespace.\n+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \ndocs/audit/reproduction_continuation_20260907_cpu.log:168: trailing whitespace.\n+    \ndocs/audit/reproduction_continuation_20260907_cpu.log:173: trailing whitespace.\n+    \ndocs/audit/reproduction_continuation_20260907_cpu.log:180: trailing whitespace.\n+    \ndocs/audit/reproduction_continuation_20260907_cpu.log:235: trailing whitespace.\n+E               \ndocs/audit/reproduction_continuation_20260907_cpu.log:242: trailing whitespace.\n+E               \nsetup/patches/idesign-04-configurable-model.patch:23: trailing whitespace.\n+ \nsetup/patches/idesign-04-configurable-model.patch:32: trailing whitespace.\n+ \nsetup/patches/idesign-04-configurable-model.patch:55: trailing whitespace.\n+ \nsetup/patches/idesign-04-configurable-model.patch:78: trailing whitespace.\n+ \nsetup/patches/idesign-04-configurable-model.patch:78: new blank line at EOF.\n",
+      "stderr": ""
+    },
+    "scoped": {
+      "command": [
+        "git",
+        "diff",
+        "--cached",
+        "--check",
+        "--",
+        ".",
+        ":(exclude)docs/audit/reproduction_continuation_20260907_cpu.log",
+        ":(exclude)setup/patches/idesign-04-configurable-model.patch"
+      ],
+      "exit_code": 0,
+      "stdout": ""
+    },
+    "excluded_files": [
+      "docs/audit/reproduction_continuation_20260907_cpu.log",
+      "setup/patches/idesign-04-configurable-model.patch"
+    ],
+    "reason": "Preserve raw historical failure-log bytes and valid patch blank context lines; no production or evidence changes to silence whitespace diagnostics."
+  }
+}

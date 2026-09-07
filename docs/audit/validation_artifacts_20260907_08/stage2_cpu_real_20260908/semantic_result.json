@@ -1,0 +1,47 @@
+{
+  "node": {
+    "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_node_embeddings.npz",
+    "sha256": "d72c3de99ae900d48d1c0a5f46718965d079acfe517e9344bd89a4597f7ddf38"
+  },
+  "edge": {
+    "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/sem_edge_embeddings.npz",
+    "sha256": "5b42c842fab70039ff5088ec5d1f2a5b46da7b0d887fb40a62fc559592f03f7e"
+  },
+  "node_status": "verified",
+  "edge_status": "verified",
+  "encoder_identity": {
+    "version": 1,
+    "kind": "open_clip_loaded_text_tower",
+    "state_sha256": "f60e9d869f23e7c0e2631b746bb68662da1a7001d07fcb846ace3f9b6890ce49",
+    "tokenizer_sha256": "e0a124d1b19e5492cef53507d52cdb6df561c91fa73680ff38651f840b4c6a9f",
+    "architecture_sha256": "133467964857df0fbcf350fa3d5f413741c8044aead2e3cb02ed497cdf10b797",
+    "implementation": {
+      "class": "open_clip.model.CLIP",
+      "open_clip_version": "3.3.0",
+      "torch_version": "2.12.1+cu132",
+      "clip_module_sha256": "5b98f51f8fb03073f5f9bcb49bca4c867990164427524142803f0a881c3362f1",
+      "text_forward_sha256": "93138e5fa8c04a02f0da71c0a888c3b61decdcc36292caee107f0dd8ebdd20e1",
+      "wrapper_forward_sha256": "6caa6ba78cb5d48a1021d381465a2c0cfab1466ab8b0320d7a75e87ea2d23e6d",
+      "ulip_forward_sha256": "9c437a3a085389dcc55362663853cd59da7ca7a88e2eb00f4be329c30eb621be",
+      "text_module_sha256": {
+        "open_clip.transformer": "4e860ad042e0a7d6afeeba2fc9e5f160f7847de38b262360aa9bedf92f69595f",
+        "torch.nn.modules.activation": "89c774e9d0d6fc06a3d8cbf06036f32e0fc7fbd18b80436b6d462c398d4d1a8b",
+        "torch.nn.modules.container": "0478b94a43b507276cc4dcd85cfbdff7fc83807f30226f575aaac69d416b658a",
+        "torch.nn.modules.linear": "1961ad1a1f650e104b3c7f78d19af2d21bf977e7af6c3fdf2420aad563c9e202",
+        "torch.nn.modules.sparse": "4897b5402c35e49c830edaee1eacc1b1c3f802ddc8e7ddf4112a71c78bea81f5"
+      }
+    },
+    "output": {
+      "normalization": "l2",
+      "dtype": "float32"
+    }
+  },
+  "node_shape": [
+    8,
+    1280
+  ],
+  "edge_shape": [
+    16,
+    1280
+  ]
+}

@@ -1,0 +1,13 @@
+/home/kyzen/miniconda3/envs/MetaFind/lib/python3.11/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+WARNING:root:No pretrained weights loaded for model 'ViT-bigG-14'. Model initialized randomly.
+/home/kyzen/MetaFindV1/metafind/models/fusion.py:202: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.head = nn.TransformerEncoder(layer, num_layers=cfg.n_layers)
+Get openclip model:
+Finished loading the openclip model.
+training from scratch for pointbert.
+model size:
+32.50M
+preloading 2 assets into RAM (no per-step file I/O, no dataloader workers)
+preloaded 2 assets, 0.0 GB resident
+{"all_saved_tensors_exactly_restored_and_finite": true, "effective_temperature": 0.5, "elapsed_seconds": 25.403790308046155}

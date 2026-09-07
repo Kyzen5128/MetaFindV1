@@ -1,0 +1,217 @@
+{
+  "classification": "OBSERVED DATA: finite real-model three-slot execution; not quality or formal Table2 evidence",
+  "script_sha256": "f86e4581e4a55639f1d2dcb5c909096765008b8771c3ce99b8057244c791c6fd",
+  "groups": {
+    "iterative": {
+      "selected": [
+        "0002c6eafa154e8bb08ebafb715a8d46",
+        "0002064ef02e46f9a10b4bff10bae805",
+        "0002c6eafa154e8bb08ebafb715a8d46"
+      ],
+      "context_sizes": [
+        0,
+        1,
+        2
+      ],
+      "residual_norms": [
+        0.0,
+        2.3415274620056152,
+        2.3415274620056152
+      ],
+      "delta_from_iterative": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "sha256": "a2f6106849295b1a64f26ec5290b238d5b92ade607159e7d1b6c9edd0c8a8277"
+    },
+    "parallel": {
+      "selected": [
+        "0002c6eafa154e8bb08ebafb715a8d46",
+        "0002064ef02e46f9a10b4bff10bae805",
+        "0002c6eafa154e8bb08ebafb715a8d46"
+      ],
+      "context_sizes": [
+        0,
+        0,
+        0
+      ],
+      "residual_norms": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "delta_from_iterative": [
+        0.0,
+        2.3415272583478166,
+        2.3415275643293967
+      ],
+      "sha256": "bbe788607ab85e1958c00d3ff208bf9ded0016090768844c222a3ed1dfa7198c"
+    },
+    "layout_off": {
+      "selected": [
+        "0002c6eafa154e8bb08ebafb715a8d46",
+        "0002064ef02e46f9a10b4bff10bae805",
+        "0002c6eafa154e8bb08ebafb715a8d46"
+      ],
+      "context_sizes": [
+        0,
+        1,
+        2
+      ],
+      "residual_norms": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "delta_from_iterative": [
+        0.0,
+        2.3415272583478166,
+        2.3415275643293967
+      ],
+      "sha256": "701daa72ed96cf35b6ac79a2243136154f8cd41194335006a8f86d80ee118f59"
+    }
+  },
+  "phase_results": {
+    "compose_02": {
+      "exit_code": 0,
+      "elapsed_seconds": 0.9793299569282681
+    },
+    "control_layout_off": {
+      "exit_code": 0,
+      "elapsed_seconds": 1.0295518320053816
+    },
+    "control_parallel": {
+      "exit_code": 0,
+      "elapsed_seconds": 0.9755142850335687
+    },
+    "placement_prepare": {
+      "exit_code": 0,
+      "elapsed_seconds": 0.055815080064348876
+    },
+    "placement_run": {
+      "exit_code": 0,
+      "elapsed_seconds": 2.3778790049254894
+    },
+    "prepare_00": {
+      "exit_code": 1,
+      "elapsed_seconds": 32.994304573046975
+    },
+    "prepare_01": {
+      "exit_code": 1,
+      "elapsed_seconds": 34.4322297309991
+    },
+    "prepare_02": {
+      "exit_code": 0,
+      "elapsed_seconds": 37.47227860498242
+    },
+    "semantics_01": {
+      "exit_code": 0,
+      "elapsed_seconds": 195.12441188003868
+    },
+    "semantics_02": {
+      "exit_code": 0,
+      "elapsed_seconds": 107.81812817696482
+    }
+  },
+  "three_composition_score_tallies": "PASS",
+  "prepare_publication_fail_closed": "PASS",
+  "original_replay_exact": true,
+  "control_input_differences_only_declared": true,
+  "cpu_sources_verified": 249,
+  "cpu_source_changed": [],
+  "image": {
+    "sha256": "5553649625d3958893cf5db61368ada04388227db6d68ce32360bd6cd1de46dd",
+    "size": [
+      512,
+      512
+    ]
+  },
+  "independent_geometry_sha256": "cf114aae83dd5cbf4ed713a3c244181c16d37a86d029a0a8e13f42527a7538f3",
+  "geometry_summary": {
+    "status": "passed",
+    "classification": "Independent actual saved vertex geometry check, not visual quality or paper-scene validation",
+    "checker_sha256": "5faf04f4fa2dc5c737176fff5e3e2aac336d6324929d2ecdb80b0c8f286e0d2d",
+    "manifest_sha256": "b9a664d1df643cd67e2bcfa68a9237a12e4555188cc7573e9706dffcd9ea594a",
+    "blend_sha256": "180501c5c838076f654507751cc87026bea35270937201c5b115645dec04f127",
+    "oracle": "trimesh glTF hierarchy -> C(x,y,z)=(x,-z,y) -> actual vertex bbox center/peraxis fit -> Rz(slot_yaw+180) -> slot center; bidirectional nearest-vertex comparison",
+    "no_production_bounds_or_transform_imports": true,
+    "instances": [
+      {
+        "slot_id": "diagnostic_slot_1",
+        "asset_id": "0002c6eafa154e8bb08ebafb715a8d46",
+        "actual_vertex_count": 19379,
+        "source_vertex_count": 19379,
+        "slot_frame_center": [
+          0.0,
+          -2.9802322387695312e-08,
+          -4.246830942467028e-08
+        ],
+        "slot_frame_size": [
+          0.7999999523162842,
+          0.7999998927116394,
+          0.7999998703598976
+        ],
+        "expected_size": [
+          0.8,
+          0.8,
+          0.8
+        ],
+        "yaw_degrees": 180.0,
+        "max_actual_to_source_distance": 2.6449798909561083e-07,
+        "max_source_to_actual_distance": 2.6449798909561083e-07,
+        "absolute_tolerance": 1e-05
+      },
+      {
+        "slot_id": "diagnostic_slot_2",
+        "asset_id": "0002064ef02e46f9a10b4bff10bae805",
+        "actual_vertex_count": 98167,
+        "source_vertex_count": 98167,
+        "slot_frame_center": [
+          2.9802322387695312e-08,
+          0.0,
+          2.465599491241477e-08
+        ],
+        "slot_frame_size": [
+          0.800000011920929,
+          0.7999997138977051,
+          0.7999998553205785
+        ],
+        "expected_size": [
+          0.8,
+          0.8,
+          0.8
+        ],
+        "yaw_degrees": 270.0,
+        "max_actual_to_source_distance": 3.999968197042164e-07,
+        "max_source_to_actual_distance": 3.999968197042164e-07,
+        "absolute_tolerance": 3.0000000000000004e-05
+      },
+      {
+        "slot_id": "diagnostic_slot_3",
+        "asset_id": "0002c6eafa154e8bb08ebafb715a8d46",
+        "actual_vertex_count": 19379,
+        "source_vertex_count": 19379,
+        "slot_frame_center": [
+          -5.1619136576253055e-08,
+          -2.9802322387695312e-08,
+          -4.246830942467028e-08
+        ],
+        "slot_frame_size": [
+          0.80000014015305,
+          0.7999996516242964,
+          0.7999998703598976
+        ],
+        "expected_size": [
+          0.8,
+          0.8,
+          0.8
+        ],
+        "yaw_degrees": 210.0,
+        "max_actual_to_source_distance": 3.0288472011639794e-07,
+        "max_source_to_actual_distance": 3.0288472011639794e-07,
+        "absolute_tolerance": 3.0000000000000004e-05
+      }
+    ]
+  }
+}

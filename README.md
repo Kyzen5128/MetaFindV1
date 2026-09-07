@@ -1,89 +1,113 @@
-# MetaFind 復現
+# MetaFindV1
 
-復現 *MetaFind: Scene-Aware 3D Asset Retrieval for Coherent Metaverse Scene Generation*
-論文權威是作者的 arXiv TeX source：[`docs/paper/metafind_source/`](docs/paper/metafind_source/)
-（公式逐條清單見 [`docs/audit/A_FORMULA_INVENTORY.md`](docs/audit/A_FORMULA_INVENTORY.md)）。
-PDF 轉出的 Markdown 副本已刪除 —— 轉檔會把 LaTeX 反斜線當成 C 跳脫字元，
-留著就是留一套會靜默出錯的競爭權威。
+復現 *MetaFind: Scene-Aware 3D Asset Retrieval for Coherent Metaverse Scene Generation*。
+論文內容權威是作者的 [arXiv TeX source](docs/paper/metafind_source/)。本 repo 包含資料處理、Stage 1／Stage 2 訓練、gallery 建立及檢索評估；程式可執行、測試通過與論文數值復現，是需要分別驗證的狀態。
 
-單張 24GB 以上的 GPU（本機實測為 RTX 5090 32GB）。**Stage 1 訓練 PointBERT + fusion**，只有 ViT-bigG-14 凍結；本地 Qwen 取代 GPT-4o／GPT-4。
+## 從這裡開始
 
-## 快速開始
+| 要找的內容 | 入口 |
+|---|---|
+| 資料從哪裡來、產物給誰讀、更新後哪些 cache 需重新核對 | [資料流與產物交接](docs/DATA_FLOW.md) |
+| 本 checkout 的實際程序、指定 corpus 的檔案盤點 | `bash tools/status.sh --data /absolute/path/to/data`；加 `--json` 保存快照 |
+| 同一觀測／不同觀測的七模態檢索；mean、Stage 1、Stage 2-off | [自訂評估規格與命令](docs/CUSTOM_TABLE1_EVALUATION.md) |
+| 從論文到訓練／評估的審查、修正及未完成項目 | [最新場景驗證與交付](docs/REPRODUCTION_SCENE_REVIEW_20260908.md)、[真實訓練審查](docs/REPRODUCTION_TRAINING_REVIEW_20260908.md)、[執行路徑審查](docs/REPRODUCTION_RUNTIME_REVIEW_20260907.md) |
+| Algorithm 1 的逐步取回／圖更新，與完整 Table 2 的界線 | [場景檢索核心](docs/SCENE_COMPOSITION.md) |
+| I-Design → 原始查詢 → 檢索 → 實際 GLB 放置／渲染 | [planner 輸入](docs/IDesign_INPUTS.md)、[原始查詢交接](docs/RAW_SCENE_INPUTS.md)、[Blender 放置](docs/SCENE_PLACEMENT.md) |
+| CPU、GPU、hook 測試分組、環境要求與驗證界線 | [測試導覽](tests/README.md) |
+| 本次測試搬移、失效程式刪除與 Markdown 更正 | [整理紀錄](docs/CLEANUP_REPORT_20260907.md)、[文件導覽](docs/README.md) |
+| 2026-09-07 修正的程式問題與當次驗證 | [程式修正紀錄](docs/CODE_REPAIR_REPORT_20260907.md) |
+| 論文逐條公式與證據 | [原始公式清單](docs/audit/A_FORMULA_INVENTORY.md)、[本輪公式／梯度審查](docs/audit/formula_review_20260907.md)，回查 [paper source](docs/paper/metafind_source/) |
+| 衍生規格、gate 與已記錄決策 | [graph 文件導覽](docs/graph/README.md)、[Decision Ledger](workflow/DECISION_LEDGER.md) |
+
+自訂評估是 **IMPLEMENTATION CHOICE**：固定同一批 query/gallery UID，比較觀測構法。它不補定作者未交代的 Table 1 query 細節，也不把其分數標成論文復現結果。歷史 `TABLE1_REPORT_*`、`NOTE_*`、audit 與 handoff 須連同原始 artifact、實驗配置及後續更正閱讀。
+
+## 環境與資料位置
+
+新環境可依序執行：
 
 ```bash
-bash setup/01_storage.sh          # 建資料目錄（預設 <repo>/data，可用 METAFIND_DATA 覆寫）
-bash setup/02_conda_env.sh        # 建 conda 環境 MetaFind
+# 如需外部資料根目錄，先 export METAFIND_DATA=/absolute/path/to/data。
+bash setup/01_storage.sh
+bash setup/02_conda_env.sh
 conda activate MetaFind
-python setup/03_verify_env.py     # 驗證環境（加 --full 會下載 10GB 的 ViT-bigG-14）
-python -m pytest tests/ -q        # 單元測試
+python -m metafind.paths
+python setup/03_verify_env.py
 ```
 
-## 目錄結構
+`METAFIND_DATA` 預設為 `<repo>/data`，必須在啟動 Python 前設定。已有環境應先核對列出的資料位置，再選擇需要的建置步驟；`01_storage.sh` 會建立目錄並設定 repo 的 data 連結。環境驗證加 `--full` 會包含約 10GB 的 ViT-bigG-14 權重下載；環境驗證不代表資料前處理已完成。
 
-```
-metafind/            我們寫的程式
-  models/            ESSGNN、模態融合、雙塔對比 loss、雙塔模型、ULIP-2 backbone 封裝
-  data/              資料抓取、完整性驗證、ProcTHOR 場景圖
-  compat/            ULIP 在現代 PyTorch 上的 runtime 修補（不改上游原始碼）
-  vendor/            上游第三方原始碼（ULIP、EGNN）→ 見 vendor/README.md
-setup/               環境建置與驗證
-tests/               單元測試
-docs/
-  paper/             論文：*.gz 是 arXiv 原始壓縮檔，*_source/ 是解壓後的 TeX（唯一權威）
-  audit/             公式稽核 A–F → 見 audit/A_FORMULA_INVENTORY.md
-  graph/             設計文件 → 見 graph/README.md
-data/                資料根目錄，或指向 METAFIND_DATA 的 symlink（不進 git）
-scratch/             參考用的雜項腳本
+目前標註使用的 paper corpus 可唯讀觀察：
+
+```bash
+bash tools/status.sh --data /home/kyzen/metafind/metafind_data_paper
 ```
 
-## 設計文件
+status 以 `/proc` 核對 cwd 為本 checkout 的 Python module／shell chain，列出各程序初始環境宣告的 corpus；不把繼承的 `METAFIND_REPO` 當 Python import 來源。從同一 corpus 的 live annotation 推斷 v9／v10；沒有 live annotation 時可明確加 `--prompt-mode figure2_v10`，否則只列契約分布。它不啟動模型、不使用 GPU、不重建 index；檔案存在或契約標記相符只表示盤點結果，不代表完成、來源驗證或 gate 通過。
 
-`docs/graph/` 是用 graph-engineering 方法產出的完整規格：
+一般 CPU 測試可使用以下命令；GPU／hook 另行執行，詳細需求見 [測試導覽](tests/README.md)。
 
-| 檔案 | 內容 |
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 OMP_NUM_THREADS=1 \
+CUDA_VISIBLE_DEVICES='' HIP_VISIBLE_DEVICES='' PYOPENGL_PLATFORM=egl \
+LIBGL_ALWAYS_SOFTWARE=1 MESA_LOADER_DRIVER_OVERRIDE=llvmpipe \
+__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json \
+python -m pytest tests -q -ra -p no:cacheprovider \
+  --ignore=tests/gpu --ignore=tests/hooks
+```
+
+上例的 Mesa vendor JSON 是本機已驗證路徑；其他機器需依實際軟體 OpenGL 安裝設定。只隱藏 CUDA 不足以隔離舊 PyRender 的 EGL backend，詳見 [測試導覽](tests/README.md)。
+
+## 程式與文件目錄
+
+```text
+metafind/
+  data/       GLB／點雲／render／annotation、文字與影像 cache、splits、場景圖
+  models/     ULIP-2 封裝、fusion、DualTower、ESSGNN、protocol 解析
+  train/      Stage 1、Stage 2、gallery index 建立與 promotion
+  eval/       retrieval、diagnostics、自訂觀測 protocol 與七模態評估
+  scene/      planner／原始查詢交接、逐步場景檢索、語義準備、GLB 放置與 CPU 渲染
+  gates/      明訂的驗證與 promotion gate
+  compat/     上游 runtime 相容修補
+  vendor/     保留原始上游程式與各自授權
+tools/        資料準備、實驗工具與指定流程的 shell 串接
+setup/        環境建置與驗證
+tests/        data／models／train／eval／pipeline／gpu／hooks 七組
+docs/         資料流、操作規格、paper source、衍生 audit 與歷史報告
+workflow/     決策、任務與工作狀態紀錄
+data/         預設資料根目錄，亦可能是外部資料的連結
+```
+
+## 實驗身分與證據
+
+- **PAPER FACT** 從 [MetaFind source](docs/paper/metafind_source/) 核對。其他論文與 upstream 實作只在 MetaFind 明確繼承的範圍內適用。
+- **OBSERVED IMPLEMENTATION／DATA** 需記錄資料根目錄、UID 清單、檔案 hashes、文字模板、view／sampler 版本、checkpoint 與實際 forward 設定。
+- **IMPLEMENTATION CHOICE／DEVIATION** 以該次 resolved protocol、決策與 run record 為準。例如 CLIP 訓練範圍、標註模型、可用模態及選模集合，不能只從「Stage 1／Stage 2」名稱判定。
+- **UNKNOWN／INFERENCE** 保留其界線。相同 UID 不足以證明 train/test contamination；某批融合分數偏高也不足以確定唯一成因。CPU 測試、G4、數值 parity 各自只證明其檢查範圍。
+
+目前 Stage 1 trainer 的預設路徑訓練 point encoder 與 fusion，text/image cache 使用 frozen CLIP；另有 `fuser_only` 等設定。這是目前實作，不是 MetaFind 已逐模組指定凍結策略的宣告。具體 checkpoint 是否符合研究決策，須核對其 record，不能沿用舊 README 的固定偏離數量或永久啟用／停用狀態。
+
+## 已登記的偏離議題
+
+以下是 [graph registry](docs/graph/graph_spec.yaml) 的完整議題索引，保留追溯性；不表示全部仍啟用，也不把歷史 corpus 數或模型名稱當成目前狀態。每次實驗應回查相應決策與實際 run record。
+
+| id | 已登記範圍 |
 |---|---|
-| [`00_FINDINGS.md`](docs/graph/00_FINDINGS.md) | 實際檢查論文與程式碼後的硬事實，**包含論文的多處自相矛盾** |
-| [`01_GRAPH_SPEC.md`](docs/graph/01_GRAPH_SPEC.md) | 節點、state、邊、路由、迴圈、失敗政策、gate、可觀測性 |
-| [`02_BUILD_STEPS.md`](docs/graph/02_BUILD_STEPS.md) | 逐步驟做什麼、每步的通過條件 |
-| `*.yaml` | 結構化規格（可程式化檢查） |
-
-## 已知偏離論文之處
-
-**正式偏離十二項（D-2…D-13）＋條件式一項（D-1，已判定 `resolved_inactive`）** —— D-9…D-13 於 2026-08-22 依 `U-Z` 補登記（`DL-012`），編號以
-[`docs/graph/graph_spec.yaml`](docs/graph/graph_spec.yaml) 為準：D-2…D-8 在
-`boundary.deviations`，D-1 在 `boundary.conditional_deviations`，
-`active_if: paper_clip_train_scope == 'trainable' AND actual_clip_train_scope == 'frozen'`。
-
-| id | 內容 |
-|---|---|
-| **D-1** *(條件式・`resolved_inactive`)* | ViT-bigG-14 的 CLIP 側保持凍結。**U-34 已於 2026-08-16 判定為 `frozen`**，故 `paper = actual = frozen`、`active_if` 為 false，**不列為 active deviation**。判讀依據：MetaFind 明確建立於 ULIP-2；ULIP-2 §3.3 明文 "freeze it during pre-training"；MetaFind 全文未逐 module 聲明改變此策略。**不得寫成「MetaFind 明文說 OpenCLIP frozen」**。 規則保留供日後重開 |
-| **D-2** | Qwen3.8-27B 取代 **GPT-4o**（**資產標註 n05**）。使用者決定 U-6，2026-08-21。GPT-4o 可用性為 **UNRESOLVED**，非已證實不可得 |
-| **D-8** | Qwen2.5-VL 取代 **GPT-4o**（**場景評分 n17**） |
-| **D-3** | 不重跑 6 個 baseline |
-| **D-4** | 不做人工評分 |
-| **D-5** | I-Design 中所有設為 `gpt-4`／`gpt-4-1106-preview` 的 LLM 路徑改導向 `qwen2.5-7b-instruct` |
-| **D-6** | 對 I-Design 的**行為性**修改（patch 02／03）：偏離的是**公開實作**，不是「論文所做的事」 |
-| **D-7** | I-Design 的 **JSON-constrained decoding 未重現**。補充材料 §7：*"All agents utilize GPT-4's JSON mode to restrict outputs exclusively to valid JSON"*，而我們的 vLLM 沒開任何 guided decoding。**與 D-5 不同**——D-5 是誰回答，D-7 是回答受不受結構約束。Qwen 因此**可能吐出結構上不合法的 JSON，GPT-4 在那個模式下不可能**，那會落進 Engineer 的 schema 驗證重試迴圈。分開編號是因為兩者可獨立修復：開了 guided JSON 就能退掉 D-7，D-5 原封不動 |
-| **D-9** | **n05 以 Objaverse-LVIS 真值類別錨定標註身分**（`DL-007`，2026-08-22 登記）。論文是讓 VLM **產生**類別（`2methdology.tex:28`、`neurips_2025.tex:100`），**餵標籤進去是 departure，不得寫成 paper-faithful**。`D0-010` 證據稽核從未執行；`U-AB` 要求全量標註前補完 |
-| **D-10** | **Stage 1 對比負樣本只有單卡 batch**，ULIP-2 是 8 卡 `all_gather_batch` 的 512（`F-N10-1`）。**梯度累積補不回來**。負樣本數是對比目標的一階項，是 Table 1 落差的候選解釋 |
-| **D-11** | **n04 渲染背景為白色**，ULIP-2 官方為黑色（`U-W`，USER 決定）。量測依據：對 ULIP-2 自有 `image_feat`，n=286，白 R@1 97.2% vs 黑 95.8%。不影響與論文的可比性 |
-| **D-12** | **`COLOR_0` 從 `texture` 類撤回**，牴觸 glTF 2.0 的線性乘子定義（`R-12`）。n=37 全數變暗（−0.2076），但**勝負 16/37 落在雜訊內、未做顯著性檢定**。依據是 `R-11` 的預設對齊規則；`R-8` 已確立上游**未發布任何點雲上色程序**，故**不得寫成「ULIP-2 就是這樣做的」** |
-| **D-13** | **語料 46,052，論文稱「約 48,000」**（`U-01`）。**不可避免** —— 可取得的 manifest 就是 46,052，且全數解析成功。ULIP-2 在此集**評估**，MetaFind 在此集**訓練**，故依 80/20 切分少約 1,558 訓練／390 測試資產。依 `O-2` 當成 Table 1 的明述限制帶著 |
-| **D-14** | **ESSGNN 的 `h⁰ = t_i`；論文 §2.5 字面是 `Concat(x_i, t_i)`**（`h0_mode="semantic"`）。程式註解自承與字面矛盾；依 `C2` 採附錄 C 前提，字面讀法保留為 `RA-1`。影響每個節點初始狀態與整條 Stage 2。**`from_protocol` 會強制此值**（實測），缺的只是登記 |
-
-> **兩次更正記在這裡。**
-> 早期這張表寫「D2＝frozen backbone 全部預先快取、訓練只在 1280-d 向量上」——
-> 那正是 Table 3 的 `Train fuser only`（8.7 vs Full 11.4），與 §2.6 相反。
->
-> 後來 D-1 被寫成「已確立的偏離」，理由是 ULIP-2 公開程式沒有凍 CLIP。
-> **那個推論已撤回**：ULIP-2 §3.3 明文 "freeze it during the pre-training"，
-> 公開程式沒設 `requires_grad=False` 是它自己對不上論文，不是設計如此。
-> D-1 之後改為條件式，繫於 **U-34**；U-34 已於 2026-08-16 判定為 `frozen`，D-1 因此不啟用。
-
-論文自身的矛盾（F 系列、RA 系列）另見 [`docs/graph/00_FINDINGS.md`](docs/graph/00_FINDINGS.md)
-與 [`01_GRAPH_SPEC.md` §11](docs/graph/01_GRAPH_SPEC.md)。
+| **D-1** | CLIP 訓練範圍與條件式偏離判讀 |
+| **D-2** | 資產標註模型 |
+| **D-3** | 基線重跑範圍 |
+| **D-4** | 人工場景評分範圍 |
+| **D-5** | I-Design 規劃模型替換 |
+| **D-6** | I-Design 行為修改 |
+| **D-7** | JSON decoding 約束 |
+| **D-8** | 場景評分模型 |
+| **D-9** | 類別標籤參與標註 |
+| **D-10** | 對比學習負樣本／batch 範圍 |
+| **D-11** | 渲染背景與影像處理 |
+| **D-12** | 點雲顏色與 `COLOR_0` 處理 |
+| **D-13** | 取得、解析與 admitted 語料數差異 |
+| **D-14** | ESSGNN 初始節點表示的原文歧義與已選解讀 |
 
 ## 授權
 
-MetaFind 復現程式碼見本 repo。`metafind/vendor/` 下的第三方程式碼各自沿用原授權
-（ULIP: BSD-3-Clause，EGNN: MIT）。
+`metafind/vendor/` 下的第三方程式各自沿用原授權，見 [vendor 說明](metafind/vendor/README.md)（ULIP：BSD-3-Clause；EGNN：MIT）。

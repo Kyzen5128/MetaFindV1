@@ -1,0 +1,25 @@
+{
+  "observed_at": 1788799757.322754,
+  "pid": 2637376,
+  "nice": 10,
+  "command": [
+    "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+    "-m",
+    "metafind.train.gallery_index",
+    "stage2",
+    "--device",
+    "cpu",
+    "--stage1-ckpt-record",
+    "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/parent_record.json"
+  ],
+  "environment": {
+    "METAFIND_DATA": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data",
+    "CUDA_VISIBLE_DEVICES": "",
+    "HIP_VISIBLE_DEVICES": "",
+    "OMP_NUM_THREADS": "2",
+    "MKL_NUM_THREADS": "2",
+    "OPENBLAS_NUM_THREADS": "2",
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1"
+  }
+}

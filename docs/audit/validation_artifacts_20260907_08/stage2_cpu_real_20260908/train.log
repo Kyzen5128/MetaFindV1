@@ -1,0 +1,21 @@
+query_modality_masking 'none' (protocol) overridden by --query-modality-masking 'none'; recorded
+hyperparameters /home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/stage2_hyperparameters.json  sha256 5dbf9c5a389b
+  text/edge agreement: 0 of 28 sampled edges missing (0.000%) over 1 houses
+/home/kyzen/miniconda3/envs/MetaFind/lib/python3.11/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+WARNING:root:No pretrained weights loaded for model 'ViT-bigG-14'. Model initialized randomly.
+/home/kyzen/MetaFindV1/metafind/models/fusion.py:202: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.head = nn.TransformerEncoder(layer, num_layers=cfg.n_layers)
+Get openclip model:
+Finished loading the openclip model.
+training from scratch for pointbert.
+model size:
+32.50M
+lambda_0 = 2.3415 = 0.1 x median ||Fusion|| 23.42 (n=8, range 23.20-23.88)
+8 samples over 1 houses, 109 trainable tensors
+  1 batches kept; 0 with fewer than 8 samples dropped (0 samples, the over-placed assets' leftovers)
+  lr schedule: warmup 1 steps from 1e-06, cosine 5e-05 -> 1e-06 over 1 steps
+  text/edge agreement: 0 of 28 sampled edges missing (0.000%) over 1 houses
+
+full: 25,799,425 params, 103 MB -> /home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/checkpoints/stage2_full.pt
+{"phase": "train", "status": "complete", "seconds": 21.929250240325928}

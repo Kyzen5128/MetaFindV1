@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import os
 import time
@@ -303,7 +304,7 @@ def append_sentence(rec: dict) -> None:
 
 # --- phase 3: encode ------------------------------------------------------
 
-def encode_sentences(sentences: list[str]) -> np.ndarray:
+def encode_sentences(sentences: list[str], *, backbone) -> np.ndarray:
     """[PAPER 2.5] The frozen text encoder that produces e_ij.
 
     Frozen means no gradients and no training here; the embeddings are computed
@@ -320,18 +321,14 @@ def encode_sentences(sentences: list[str]) -> np.ndarray:
     # to share a name. Tokenisation is open_clip's 77-token context, applied by
     # `ULIPBackbone.encode_text`; truncation past 77 is CLIP's documented
     # behaviour and applies equally to every sentence.
-    from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
-
-    backbone = ULIPBackbone(BackboneConfig(device="cuda", train_scope="fuser_only"))
+    if not sentences:
+        return np.empty((0, EDGE_DIM), dtype=np.float32)
     out = []
     with torch.no_grad():
         for start in range(0, len(sentences), ENCODE_BATCH):
             emb = backbone.encode_text(sentences[start : start + ENCODE_BATCH])
             out.append(torch.nn.functional.normalize(emb, dim=-1).float().cpu().numpy())
     embeddings = np.concatenate(out, axis=0)
-    del backbone
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
     # F8 makes e a load-bearing number, so a model swap that silently changed it
     # would change how much geometry survives message passing without anything
     # saying so.
@@ -368,7 +365,7 @@ def build_cache(settled: dict[str, dict], embeddings_uri: str) -> dict[str, dict
     Lives here rather than inline in ``main`` so the test exercises the code
     that actually runs, not a second copy of it.
     """
-    good = [(k, r) for k, r in settled.items() if not r["degraded"]]
+    good = [(k, r) for k, r in sorted(settled.items()) if not r["degraded"]]
     cache = {
         key: {"sentence": rec["sentence"],
               "embedding_uri": f"{embeddings_uri}#{idx}",
@@ -434,19 +431,25 @@ def main() -> int:
         del gen  # the encoder needs the memory back
 
     settled = load_sentences()
-    good = [(k, r) for k, r in settled.items() if not r["degraded"]]
+    good = [(k, r) for k, r in sorted(settled.items()) if not r["degraded"]]
     if args.skip_encode:
         print(f"{len(good):,} sentences, encoding skipped")
         return 0
 
-    embeddings = encode_sentences([r["sentence"] for _, r in good])
-    np.savez_compressed(
-        EMBEDDINGS_PATH,
-        keys=np.array([k for k, _ in good]),
-        embeddings=embeddings.astype(np.float32),
+    from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
+    from metafind.data.semantic_provenance import (
+        build_node_source, build_edge_source, source_identity_sha256,
+        text_encoder_identity,
     )
-
+    backbone = ULIPBackbone(BackboneConfig(device="cuda", train_scope="fuser_only"))
+    backbone.eval()
+    encoder_identity = text_encoder_identity(backbone)
+    node_source = build_node_source(text_map, encoder_identity)
+    # The sentence batch, array keys and cache pointers share sorted key order.
+    settled = dict(sorted(settled.items()))
     cache = build_cache(settled, str(EMBEDDINGS_PATH))
+    edge_source = build_edge_source(cache, encoder_identity)
+    embeddings = encode_sentences([r["sentence"] for _, r in good], backbone=backbone)
 
     # [U-20] `procthor_node_embeddings`: ESSGNN's t_i, encoded HERE because this
     # is the node that already holds the encoder e_ij uses. Encoding them
@@ -455,18 +458,33 @@ def main() -> int:
     # and edge features in unrelated spaces with nothing to signal it.
     node_texts = {a: rec["text"] for a, rec in text_map.items()}
     node_ids = sorted(node_texts)
-    node_vecs = encode_sentences([node_texts[a] for a in node_ids])
+    node_vecs = encode_sentences([node_texts[a] for a in node_ids], backbone=backbone)
+    del backbone
+    # Bind the inputs actually encoded, and refuse publication if either source
+    # changed during encoding. JSON key reordering is not a source change.
+    if build_node_source(json.loads(text_path.read_text()), encoder_identity) != node_source:
+        raise ValueError("node source text changed during semantic encoding; refusing publication")
+    current_cache = build_cache(dict(sorted(load_sentences().items())), str(EMBEDDINGS_PATH))
+    if build_edge_source(current_cache, encoder_identity) != edge_source:
+        raise ValueError("edge sentences changed during semantic encoding; refusing publication")
+    tmp_edge = EMBEDDINGS_PATH.with_suffix(".part.npz")
+    np.savez_compressed(tmp_edge, keys=np.array([k for k, _ in good]),
+                        embeddings=embeddings.astype(np.float32),
+                        source_identity_sha256=np.array(source_identity_sha256(edge_source)))
+    tmp_edge.replace(EMBEDDINGS_PATH)
     tmp_np = NODE_EMB_PATH.with_suffix(".part.npz")
     np.savez_compressed(tmp_np, ids=np.array(node_ids),
-                        embeddings=node_vecs.astype(np.float32))
+                        embeddings=node_vecs.astype(np.float32),
+                        source_identity_sha256=np.array(source_identity_sha256(node_source)))
     tmp_np.replace(NODE_EMB_PATH)
     _write_json(NODE_EMB_RECORD, {
         "uri": str(NODE_EMB_PATH),
-        "sha256": __import__("hashlib").sha256(NODE_EMB_PATH.read_bytes()).hexdigest(),
+        "sha256": hashlib.sha256(NODE_EMB_PATH.read_bytes()).hexdigest(),
         "asset_ids": node_ids,
         "embedding_dim": int(node_vecs.shape[1]),
         "text_encoder_version": TEXT_ENCODER_VERSION,
         "n_assets": len(node_ids),
+        "source_identity": node_source,
     })
     print(f"{len(node_ids):,} node embeddings (t_i) at {node_vecs.shape[1]}-d "
           f"-> {NODE_EMB_PATH}", flush=True)
@@ -476,7 +494,10 @@ def main() -> int:
         json.dump({"llm_model": LLM_MODEL, "text_encoder": TEXT_ENCODER,
                    "text_encoder_version": TEXT_ENCODER_VERSION,
                    "prompt_version": PROMPT_VERSION, "edge_dim": int(embeddings.shape[1]),
-                   "entries": cache}, fh, ensure_ascii=False)
+                   "entries": cache, "source_identity": edge_source,
+                   "embedding_artifact": {"uri": str(EMBEDDINGS_PATH),
+                       "sha256": hashlib.sha256(EMBEDDINGS_PATH.read_bytes()).hexdigest()}},
+                  fh, ensure_ascii=False)
         fh.flush()
         os.fsync(fh.fileno())
     tmp.replace(CACHE_PATH)

@@ -1,5 +1,7 @@
 # 2026-09-07 程式修正與 Claude 交接
 
+> 本檔記錄較早一輪修正完成當時的狀態；PID、git 狀態、測試路徑及檔案 SHA 都是當時快照。後續 `tests/` 已按領域搬移，最新執行命令見 [tests/README.md](../tests/README.md)，本輪整理見 [CLEANUP_REPORT_20260907.md](CLEANUP_REPORT_20260907.md)。下列歷史測試數與驗證 JSON 不改寫成新結果。
+
 本次是在 Kyzen 明確授權修改後，修復唯讀審查確認的執行與重現性缺陷。程式修正、交叉審查及 CPU 回歸驗證已完成；**沒有重新訓練模型、重算 Table 1 或改寫既有研究結果，也不能據此宣稱論文已復現。**
 
 基準 revision：`785a2d9`。本次修改尚未 commit。逐檔 SHA、完整測試命令、實際 checkpoint 驗證與排程資訊見 [驗證紀錄](audit/code_repair_20260907_checks.json)。

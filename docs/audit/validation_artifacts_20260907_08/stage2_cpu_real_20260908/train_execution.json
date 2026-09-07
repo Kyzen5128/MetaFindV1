@@ -1,0 +1,46 @@
+{
+  "phase": "train",
+  "start": 1788800032.0780582,
+  "environment": {
+    "CUDA_VISIBLE_DEVICES": "",
+    "HIP_VISIBLE_DEVICES": "",
+    "OMP_NUM_THREADS": "2",
+    "MKL_NUM_THREADS": "2",
+    "OPENBLAS_NUM_THREADS": "2",
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1",
+    "METAFIND_DATA": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data",
+    "METAFIND_TEXT_TEMPLATE": "v3_fit",
+    "HF_HOME": "/home/kyzen/metafind/metafind_data/models/hf-cache"
+  },
+  "driver": {
+    "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/driver.py",
+    "sha256": "56d0f26c329683b78cdcb2211429acffb0959636ed228e74113c20de8f66a241"
+  },
+  "production_sources": {
+    "metafind/train/stage2.py": {
+      "uri": "/home/kyzen/MetaFindV1/metafind/train/stage2.py",
+      "sha256": "19b38145f2fb1ac56ffa2a1457e9b7a7222f172081859fdd86a85f6635b166b7"
+    },
+    "metafind/train/stage1.py": {
+      "uri": "/home/kyzen/MetaFindV1/metafind/train/stage1.py",
+      "sha256": "8b7416abe7bb8c63d516dcb826864ead5355abb93a8d1943ecf1e16b11b64ba8"
+    },
+    "metafind/train/gallery_index.py": {
+      "uri": "/home/kyzen/MetaFindV1/metafind/train/gallery_index.py",
+      "sha256": "a81000c1dc19555df3029185402089ec798625fa2589c7502387a16211531292"
+    },
+    "metafind/models/ulip_backbone.py": {
+      "uri": "/home/kyzen/MetaFindV1/metafind/models/ulip_backbone.py",
+      "sha256": "ceb93e14e3b8fdbe8795fd0c1e4cb77fd6d0786a47c44460d25ba497a1bf7e1e"
+    },
+    "metafind/models/fusion.py": {
+      "uri": "/home/kyzen/MetaFindV1/metafind/models/fusion.py",
+      "sha256": "2ee5ab70f715b5ef352aaa74ce046f1f1d1ebe38e39686783715154268f63db7"
+    },
+    "metafind/models/essgnn.py": {
+      "uri": "/home/kyzen/MetaFindV1/metafind/models/essgnn.py",
+      "sha256": "1cbf2b40c4ee4c55f8fa54b8f2397384e66002ee553c6933190ca4a7303ae4d2"
+    }
+  }
+}

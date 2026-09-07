@@ -441,7 +441,7 @@ for nid, body in impl_src.items():
 
 test_count = sum(
     len(re.findall(r"^def test_", p.read_text(), re.M))
-    for p in (DOCS.parents[1] / "tests").glob("test_*.py")
+    for p in (DOCS.parents[1] / "tests").rglob("test_*.py")
 )
 m2 = re.search(r"(\d+) 個測試函式涵蓋", readme_txt)
 check("README unit-test count", m2 is not None and int(m2.group(1)) == test_count,
@@ -894,7 +894,7 @@ for f in sorted(DOCS.glob("*.md")) + sorted(DOCS.glob("*.yaml")):
 # modalities masked" while the registry's U-08 meant "how Stage 2 samples are
 # built". Same identifier, different fact, in two places an agent will grep.
 CODE = DOCS.parents[1]
-for f in sorted(CODE.glob("metafind/**/*.py")) + sorted(CODE.glob("tests/*.py")):
+for f in sorted(CODE.glob("metafind/**/*.py")) + sorted(CODE.glob("tests/**/*.py")):
     if "vendor" in f.parts or "third_party" in f.parts:
         continue
     for uid in set(re.findall(r"\bU-[0-9]{2}[ab]?\b", f.read_text())):

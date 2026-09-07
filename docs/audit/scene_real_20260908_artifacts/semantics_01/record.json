@@ -1,0 +1,94 @@
+{
+  "schema": "metafind.scene_semantics.v1",
+  "status": "complete",
+  "classification": "IMPLEMENTATION CHOICE",
+  "sources": {
+    "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/checkpoints/actual_cpu_step/stage1_best_ckpt.json": "eee0047726e91b2cb2d91af69c8b7d7605eec9d95eb5c3fe16150efb206d61f2",
+    "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/variant_ckpts.json": "62cb7807e25904a0cfe85ee19397ec42a869a90ab2da841514809bf43f3b6666",
+    "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/checkpoints/actual_cpu_step/stage1_best.pt": "df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532",
+    "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/checkpoints/stage2_full.pt": "c4347b8c09ec28f2d932749498be04dde04cf3b8769f953bf4f51d4461e0e5ad",
+    "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_node_embeddings.json": "9819336676ca31244ae2359b2e2ffe4fb4aca9095d657f6dc72d1315268d3ef7",
+    "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_object_text.json": "0375d1306c072d0cd8b6e4387289d0fdcdbaecd749901b46528c095e042ab848",
+    "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/procthor_node_embeddings.npz": "d72c3de99ae900d48d1c0a5f46718965d079acfe517e9344bd89a4597f7ddf38",
+    "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/sem_edge_cache.json": "98d90eef75d38130fef63757dfa14fdbff5d8a784b5ad90347b37ded6440fd25",
+    "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/sem_edge_embeddings.npz": "5b42c842fab70039ff5088ec5d1f2a5b46da7b0d887fb40a62fc559592f03f7e",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/asset_texts.json": "bed27043585c7729fff32be06fe30df81ca52665343cec83f9d7cf2ced96b598",
+    "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/bundle_00/required_pairs.json": "3edf8a36bf26e001f0b6f25156ccff2e8c324e12ee4445807bcc5f30b6b5ecc6"
+  },
+  "stage1_checkpoint_sha256": "df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532",
+  "stage2_checkpoint_sha256": "c4347b8c09ec28f2d932749498be04dde04cf3b8769f953bf4f51d4461e0e5ad",
+  "requested_pairs": [
+    {
+      "asset_ids": [
+        "0002c6eafa154e8bb08ebafb715a8d46",
+        "0002064ef02e46f9a10b4bff10bae805"
+      ],
+      "key": "9e05707b40cc8ac2b5a020d77bcaacf4d81d29427a06b96066e9d5c7bf6e2daf",
+      "descriptions": [
+        "This is a 3D-rendered birthday cake featuring a light yellow base with white frosting that drips down the sides. It is decorated with whipped cream dollops, several reddish-brown spherical ornaments, and a chocolate plaque that reads \"Happy Birthday.\"",
+        "This is a rustic, terracotta-colored clay pot with a weathered, matte finish and a slightly irregular, handmade shape. It sits atop a flat, grey stone base and contains a cluster of large, crumpled green and white leaves."
+      ]
+    }
+  ],
+  "distinct_required_keys": 1,
+  "generated_keys": [
+    "9e05707b40cc8ac2b5a020d77bcaacf4d81d29427a06b96066e9d5c7bf6e2daf"
+  ],
+  "generated_successes": 1,
+  "generated_degraded": 0,
+  "base_cache": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/data/outputs/sem_edge_cache.json",
+  "text_encoder_status": "verified_loaded_text_tower",
+  "text_encoder_identity": {
+    "version": 1,
+    "kind": "open_clip_loaded_text_tower",
+    "state_sha256": "f60e9d869f23e7c0e2631b746bb68662da1a7001d07fcb846ace3f9b6890ce49",
+    "tokenizer_sha256": "e0a124d1b19e5492cef53507d52cdb6df561c91fa73680ff38651f840b4c6a9f",
+    "architecture_sha256": "133467964857df0fbcf350fa3d5f413741c8044aead2e3cb02ed497cdf10b797",
+    "implementation": {
+      "class": "open_clip.model.CLIP",
+      "open_clip_version": "3.3.0",
+      "torch_version": "2.12.1+cu132",
+      "clip_module_sha256": "5b98f51f8fb03073f5f9bcb49bca4c867990164427524142803f0a881c3362f1",
+      "text_forward_sha256": "93138e5fa8c04a02f0da71c0a888c3b61decdcc36292caee107f0dd8ebdd20e1",
+      "wrapper_forward_sha256": "6caa6ba78cb5d48a1021d381465a2c0cfab1466ab8b0320d7a75e87ea2d23e6d",
+      "ulip_forward_sha256": "9c437a3a085389dcc55362663853cd59da7ca7a88e2eb00f4be329c30eb621be",
+      "text_module_sha256": {
+        "open_clip.transformer": "4e860ad042e0a7d6afeeba2fc9e5f160f7847de38b262360aa9bedf92f69595f",
+        "torch.nn.modules.activation": "89c774e9d0d6fc06a3d8cbf06036f32e0fc7fbd18b80436b6d462c398d4d1a8b",
+        "torch.nn.modules.container": "0478b94a43b507276cc4dcd85cfbdff7fc83807f30226f575aaac69d416b658a",
+        "torch.nn.modules.linear": "1961ad1a1f650e104b3c7f78d19af2d21bf977e7af6c3fdf2420aad563c9e202",
+        "torch.nn.modules.sparse": "4897b5402c35e49c830edaee1eacc1b1c3f802ddc8e7ddf4112a71c78bea81f5"
+      }
+    },
+    "output": {
+      "normalization": "l2",
+      "dtype": "float32"
+    }
+  },
+  "llm": {
+    "model_id": "/home/kyzen/metafind/metafind_out/gemma-4-12B-it",
+    "cache_key_name": "gemma-4-12B-it",
+    "invoked": true,
+    "historical_weight_byte_equivalence": "UNKNOWN",
+    "binding": "existing n08 configured path and cache-key model name"
+  },
+  "sg2": {
+    "max_attempts": 2,
+    "max_new_tokens": 64,
+    "producer_sha256": "791bdcc4fad3067dc7db921f20a196b12e388a98de2840b2e37bbe462a4ed8cb"
+  },
+  "device": "cpu",
+  "cache": {
+    "uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_01/sem_edge_cache.json",
+    "sha256": "c0ae20e4840b68e9f3dd88a628d0b290c7a54c5ba5bc300727f366effdbbd9cb"
+  },
+  "embeddings": {
+    "uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_01/sem_edge_embeddings.npz",
+    "sha256": "64597846586a44c5d9f9449d31018a4faab8bac508d570d83c5ac39e3c5a481e"
+  },
+  "sentences": {
+    "uri": "/home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/semantics_01/sentences.jsonl",
+    "sha256": "a1c3945d4e42d3dcb619b22c9a4f8386c5de6671e3187a3b85afef9a210a9ed8"
+  },
+  "implementation_sha256": "e24e4d6df3d987a2c57ac521e4ef80ac38c3ab5bdc349a05c8d05ffefb76513b"
+}

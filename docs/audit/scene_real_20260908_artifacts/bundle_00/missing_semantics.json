@@ -1,0 +1,14 @@
+{
+  "status": "incomplete",
+  "pairs": [
+    [
+      "0002c6eafa154e8bb08ebafb715a8d46",
+      "0002064ef02e46f9a10b4bff10bae805"
+    ]
+  ],
+  "keys": [
+    "9e05707b40cc8ac2b5a020d77bcaacf4d81d29427a06b96066e9d5c7bf6e2daf"
+  ],
+  "request_sha256": "5489765623092700d8072b93f8a0b39653ec8fb21120d6e61daecad6e2048295",
+  "reason": "current trajectory requires relations not present in the supplied cache"
+}

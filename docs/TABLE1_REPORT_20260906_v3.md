@@ -1,5 +1,7 @@
 # Table 1 報告 v3（2026-09-06）—— 兩列都做：Stage 1 頭（w/o ESSGNN）與 Stage 2 共用頭（w/ ESSGNN）
 
+> **2026-09-07 更正：** 本檔為歷史量測報告，表格與原始 JSON 保留，未重跑。「觀測全部試完」及不同 Stage 1 parent 的 Stage 2 比較能單獨證明訓練長度影響等說法超出證據，§5 已收窄。現在的自訂協定見 [CUSTOM_TABLE1_EVALUATION.md](CUSTOM_TABLE1_EVALUATION.md)。
+
 接續 `docs/TABLE1_REPORT_20260905_v2.md`。本檔是 Kyzen 2026-09-06 04:3x 三道命令之後的成果：
 「完成 table 1 之前不准停下」「可以先完成 stage 2 再回來測」「我全程不參與，你自己想辦法」。
 所以這裡每一個選擇都是我下的，全部標成 IMPLEMENTATION CHOICE / DEVIATION，不會寫成論文規定。
@@ -263,11 +265,11 @@ weak own ＝ 類別＋尺寸文字、自己的 Sketchfab 縮圖、自己那朵�
 
 ## 5. 判讀
 
-1. **第一列（w/o ESSGNN，Stage 1 頭）對不上，而且 val 上已經把「同一件的觀測」全部試完。** 自己那句／類別＋尺寸／BLIP 短句／Sketchfab 名字；自己的一張圖／自己的縮圖；自己那朵雲／再取樣的雲——不論融合是訓過 10 epoch 的 Transformer 還是完全不訓的平均，Stage 1 頭的合併格都 ≥ pc（pc 96.7）。弱文字最多讓 T+PC 掉 3～5 點（論文掉 30）。論文的排序只在 query 文字與圖來自另一件時出現，而那時 text／image 單獨只剩 1～4（論文 13.8／11.7）。這一列的差距是 query 觀測來源（論文沒寫）加上 pc 對應強度（論文 75、我們 97）；兩者都不是再多跑實驗能補的。
+1. **第一列（w/o ESSGNN，Stage 1 頭）尚未對上。** 本次比較了 attrs、類別尺寸、BLIP、名称、單張 view、縮圖、canonical／重採樣 PC 等配置；這是有限集合，不能稱「同物件觀測全部試完」。表列數字沒有定位作者差距的唯一原因，也不排除用受控自訂實驗繼續診斷。
 2. **第二列（w/ ESSGNN，Stage 2 共用頭）是今天的新結果。** Stage 2 在 9,600 間屋上微調之後，query 頭被推離 gallery 頭：pc 96.7 → 66.8（論文第二列 63.2）。pc 的對應一鬆，弱文字就真的拖累：weak own 列 pc 66.8 > I+PC 63.4 > full 59.6 ≈ T+PC 59.5 > T+I 25.4 ≈ image 24.5 > text 7.0——**第一次用同一件資產自己的觀測做出論文的排序**。用自己的文字和圖時，合併格在 pc 之上 2～4 點（69～71）。還沒對上的：image 31.5（論文 10.5）、T+I 46.0（15.9）、合併格比論文高 10～30 點；R@5 的 pc 是 90.4（論文 66.5，論文的 pc 從 R@1 到 R@5 幾乎不漲，我們漲 24 點——論文那 1/3 找不到的 query 是「完全找不到」，我們是「差一點」）。
-3. **漂移量跟 Stage 2 的長度有關。** scratchbb 的 Stage 2 只有 1,500 屋（約 1,600 步），pc 只掉到 76.9、合併格仍 ≥ pc；P1s 的 9,600 屋（約 10,200 步）掉到 66.8、合併格 ≤ pc。這跟論文自己的話一致：「the fusion layer becomes partially adapted to layout-conditioned features ... residual attribution drift」。但論文的**第一列**（還沒 Stage 2）就已經是 pc 75、合併格在 pc 下面；他們的 Stage 1 頭為什麼沒把 pc 對到 97，論文沒寫，我們沒有材料能重現（DL-099 的融合梯已排除「訓太少」）。
+3. **Stage 2 長度的因果影響尚未分離（UNKNOWN）。** scratchbb 的 1,500 屋與 P1s 的 9,600 屋，同時改變 Stage 1 parent、資料量與訓練步數；pc 76.9 與 66.8 的差異不能單獨歸因於長度。要量長度效應，須固定 parent、輸入與評估配置再比較。作者對 attribution drift 的文字說明不能替這個跨 parent 比較消除混雜。
 4. **Kyzen 的問題「是不是要做完 Stage 2 才符合 Table 1」**：論文的第一列不是 Stage 2 的產物（§1），但**論文的形狀**在我們這裡確實要到 Stage 2 之後才出現；他的直覺對了一半，而且是有用的那一半。
-5. **怎麼讀我們的 Table 1**：own 是正式定義（跟領域裡單模態檢索一致：Ex-MCR 用自己的一張視角圖）；weak own 是唯一同時符合「同一件」與「論文排序」的構造，但只在 Stage 2 頭上成立；partner 排序對、單模態格對不上。狀態：協定 IMPLEMENTED／EXECUTABLE／BEHAVIOR-VERIFIED（parity 列跟正式評估器完全一致）；數字對論文 **UNVERIFIED**，query 構造 **IMPLEMENTATION CHOICE**，Stage 2 屋數與 lr **IMPLEMENTATION CHOICE**，語料 45,692 對 48K **DEVIATION**。不用 PAPER-ALIGNED。
+5. **怎麼讀我們的 Table 1**：own 是本專案採用的定義（IMPLEMENTATION CHOICE，不能由上游示例證明作者也這樣評估）；weak own 是已測配置中同時符合「同一件」與「論文排序」的構造，但只在 Stage 2 頭上成立；partner 排序對、單模態格對不上。狀態：協定 IMPLEMENTED／EXECUTABLE／BEHAVIOR-VERIFIED（parity 列跟正式評估器完全一致）；數字對論文 **UNVERIFIED**，query 構造 **IMPLEMENTATION CHOICE**，Stage 2 屋數與 lr **IMPLEMENTATION CHOICE**，語料 45,692 對 48K **DEVIATION**。不用 PAPER-ALIGNED。
 6. **只剩作者能回答的**：(a) Table 1 的 query 文字與影像各是哪一份觀測；(b) gallery 是 20% 還是 48K；(c) Stage 1 頭為什麼 pc 只有 75（CLIP 有沒有微調、訓多久、gallery 塔是不是凍在 ULIP-2）；(d) 第二列的 ESSGNN 對單一資產收到什麼。
 
 ## 6. 可追溯

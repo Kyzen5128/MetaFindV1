@@ -39,7 +39,8 @@
 
 set -euo pipefail
 
-IDESIGN_REPO=${IDESIGN_REPO:-/home/kyzen/IDesign}
+METAFIND_SETUP_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+IDESIGN_REPO=${IDESIGN_REPO:-"$(dirname "$METAFIND_SETUP_REPO")/upstream/IDesign"}
 IDESIGN_COMMIT=7bc891c            # 釘住；I-Design repo 無 LICENSE，不 vendor 進本 repo
 PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/patches"
 # Roots come from metafind/paths.py, never spelled here. Six scripts used
@@ -59,10 +60,11 @@ if [ ! -f "$IDESIGN_REPO/IDesign.py" ]; then
 fi
 echo "==> I-Design at $IDESIGN_REPO ($(git -C "$IDESIGN_REPO" rev-parse --short HEAD))"
 
-# 我們對 I-Design 的三個 patch：
+# 我們對 I-Design 的四個 patch（01–03 保留既有差异）：
 #   01  把寫死的 "gpt-4" 模型名改成真實的 Qwen 名稱（純命名）
 #   02  佈局元素歸位、preposition 對齊 enum、丟棄懸空引用、物件去重（**改變行為**）
 #   03  修正迴圈加上上限、每輪換 cache_seed、耗盡時放棄場景（**改變行為**）
+#   04  四個 model filter 改讀 METAFIND_IDESIGN_MODEL，支援已決議的真實 Gemma 名稱
 #
 # 02 與 03 會改變產出的場景與完成率，不是格式調整。每個場景的 sidecar
 # 都會記下實際套用了哪些，避免日後被當成接近原版的 I-Design。
@@ -75,21 +77,10 @@ if [ "$ACTUAL_HEAD" != "$IDESIGN_COMMIT" ]; then
     exit 1
 fi
 
-# 套用時要能分辨「已經套過」與「套不上去」——先前兩者都印「略過」，
-# 於是一個壞掉的 patch 看起來和成功一模一樣。
-for patch in "$PATCH_DIR"/idesign-*.patch; do
-    [ -e "$patch" ] || continue
-    name=$(basename "$patch")
-    if git -C "$IDESIGN_REPO" apply --check "$patch" 2>/dev/null; then
-        git -C "$IDESIGN_REPO" apply "$patch"
-        echo "    套用 $name"
-    elif git -C "$IDESIGN_REPO" apply --reverse --check "$patch" 2>/dev/null; then
-        echo "    已套用 $name"
-    else
-        echo "    無法套用 $name —— 既非未套用亦非已套用，工作目錄狀態不明"
-        exit 1
-    fi
-done
+# 04 覆蓋 01 的模型行，必須核對累積終態，不能各自 reverse-check。
+# 只補完整前綴之後的 patch；完整鏈略過，受影響檔案的未知修改拒絕。
+${METAFIND_PYTHON:-python3} "$METAFIND_SETUP_REPO/tools/idesign_patches.py" apply \
+    --repo "$IDESIGN_REPO" --patch-dir "$PATCH_DIR"
 
 if ! conda env list | grep -qE '^IDesign\s'; then
     conda create -n IDesign python=3.10 -y -q
@@ -126,16 +117,16 @@ cat <<EOF
 
   conda activate $SERVE_PREFIX
   export HF_HOME=$DATA_ROOT/models/hf-cache
-  vllm serve Qwen/Qwen2.5-7B-Instruct \\
-      --served-model-name qwen2.5-7b-instruct \\
+  vllm serve /home/kyzen/metafind/metafind_out/gemma-4-12B-it \\
+      --served-model-name gemma-4-12B-it \\
       --max-model-len 16384 --gpu-memory-utilization 0.85 --port 8000
 
-  # 模型名從頭到尾都是 qwen2.5-7b-instruct：vLLM 這樣掛、patch 過的
-  # filter_dict 這樣找、OAI_CONFIG_LIST.json 這樣寫、sidecar 這樣記。
-  # 沒有別名，log 不會出現任何 gpt-4 字樣。
+  # 這是服務設定範例，尚未在此流程實跑；需服務環境支援此模型。
+  # wrapper 將同一個真實模型名傳到四個 filter、OAI config 與 sidecar。
 
 然後產生場景：
 
   conda activate IDesign
-  PYTHONPATH=$IDESIGN_REPO python tools/idesign_generate.py --n-scenes 2
+  python "$METAFIND_SETUP_REPO/tools/idesign_generate.py" \\
+      --idesign-repo "$IDESIGN_REPO" --model gemma-4-12B-it --n-scenes 2
 EOF

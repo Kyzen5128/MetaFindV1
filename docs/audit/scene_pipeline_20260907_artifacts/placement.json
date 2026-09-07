@@ -1,0 +1,1356 @@
+{
+  "schema": "metafind.scene_placement.v1",
+  "status": "frozen",
+  "sources": {
+    "composition": {
+      "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/actual_composition.json",
+      "sha256": "0e811986a7a200e79b741290d3a4e554ee5046b0fe9cc9642d400808cf4f2a8a",
+      "raw_json": "{\"schema\": \"metafind.scene_composition.v1\", \"status\": \"complete\", \"classification\": \"IMPLEMENTATION CHOICE\", \"mode\": \"iterative\", \"use_layout\": false, \"room_id\": \"scene_0007\", \"gallery_ids\": [\"A\", \"B\"], \"tie_policy\": \"stable_gallery_order\", \"adjacency_k\": 8, \"trace\": [{\"step\": 0, \"slot_id\": \"chair_2\", \"query_text\": \"A requested chair; not its retrieved annotation\", \"context\": {\"node_ids\": [], \"asset_ids\": [], \"positions\": [], \"support\": [], \"adjacency\": [], \"semantic_status\": \"not_used\", \"semantic_keys\": [], \"semantic_missing\": []}, \"query_embedding\": [3.0, 0.0], \"selected_asset_id\": \"A\", \"selected_node_text\": \"canonical retrieved A\", \"top5\": [{\"asset_id\": \"A\", \"score\": 1.0}, {\"asset_id\": \"B\", \"score\": 0.0}], \"lambda\": 0.0, \"fused_norm\": 3.0, \"layout_norm\": 0.0, \"lambda_layout_norm\": 0.0}, {\"step\": 1, \"slot_id\": \"table_1\", \"query_text\": \"B requested table\", \"context\": {\"node_ids\": [\"chair_2\"], \"asset_ids\": [\"A\"], \"positions\": [[1.0, 2.0, 0.5]], \"support\": [], \"adjacency\": [], \"semantic_status\": \"not_used\", \"semantic_keys\": [], \"semantic_missing\": []}, \"query_embedding\": [3.3333332538604736, 9.666666984558105], \"selected_asset_id\": \"B\", \"selected_node_text\": \"canonical retrieved B\", \"top5\": [{\"asset_id\": \"B\", \"score\": 0.9453729873253518}, {\"asset_id\": \"A\", \"score\": 0.32599066679207267}], \"lambda\": 0.0, \"fused_norm\": 10.225241661071777, \"layout_norm\": 0.0, \"lambda_layout_norm\": 0.0}], \"final_graph\": {\"nodes\": [{\"asset_id\": \"A\", \"slot\": {\"new_object_id\": \"chair_2\", \"position\": {\"x\": 1.0, \"y\": 2.0, \"z\": 0.5}, \"rotation\": {\"z_angle\": 0.0}, \"size_in_meters\": {\"length\": 1.0, \"width\": 1.0, \"height\": 1.0}, \"style\": \"original planned style\", \"material\": \"wood\", \"is_on_the_floor\": true, \"placement\": {\"objects_in_room\": [{\"object_id\": \"table_1\", \"preposition\": \"on\"}], \"room_layout_elements\": [{\"layout_element_id\": \"south_wall\", \"preposition\": \"on\"}]}}}, {\"asset_id\": \"B\", \"slot\": {\"new_object_id\": \"table_1\", \"position\": {\"x\": 3.0, \"y\": 2.0, \"z\": 0.5}, \"rotation\": {\"z_angle\": 0.0}, \"size_in_meters\": {\"length\": 1.0, \"width\": 1.0, \"height\": 1.0}, \"style\": \"original planned style\", \"material\": \"wood\", \"is_on_the_floor\": true, \"placement\": {\"objects_in_room\": [], \"room_layout_elements\": [{\"layout_element_id\": \"south_wall\", \"preposition\": \"on\"}]}}}], \"node_ids\": [\"chair_2\", \"table_1\"], \"asset_ids\": [\"A\", \"B\"], \"positions\": [[1.0, 2.0, 0.5], [3.0, 2.0, 0.5]], \"support\": [[0, 1]], \"adjacency\": [], \"semantic_status\": \"not_used\", \"semantic_keys\": [], \"semantic_missing\": []}, \"semantic_status\": \"not_used\", \"provenance\": {\"manifest_sha256\": \"6f8f5ce9b78d6c01259171eabe66fcba19ea62f96481d75d0525575aef0528f5\", \"manifest\": {\"schema\": \"metafind.scene_composition.v1\", \"status\": \"frozen\", \"model\": {\"config\": {\"dim\": 2, \"tower_sharing\": \"shared_backbone_separate_fusion\", \"essgnn\": null, \"query_fusion\": {\"dim\": 2, \"kind\": \"mean\", \"hidden\": 2048, \"n_heads\": 8, \"n_layers\": 2, \"zero_pad\": false, \"include_absent_slots\": false, \"dropout\": 0.0, \"prefusion_norm\": false, \"image_tokens\": 1}, \"gallery_fusion\": {\"dim\": 2, \"kind\": \"mean\", \"hidden\": 2048, \"n_heads\": 8, \"n_layers\": 2, \"zero_pad\": false, \"include_absent_slots\": false, \"dropout\": 0.0, \"prefusion_norm\": false, \"image_tokens\": 1}, \"use_layout\": false, \"init_lambda\": 1.0}, \"dtype\": \"float32\", \"weights\": {\"path\": \"model/query_tower.pt\", \"sha256\": \"0d977968151954ef7cfcc11c7db69d02659e4843e0fa272639922d59d781f72c\"}, \"provenance\": {\"scope\": \"query-model-only; no backbone or input encoding\", \"stage1_checkpoint\": {\"path\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/s1.pt\", \"sha256\": \"6e75482693c83ba50367884ceb47f75922abd4eb9bcc64ac1c96eae951c9b181\"}, \"stage2_checkpoint\": {\"path\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/s2.pt\", \"sha256\": \"89029f76e4b78393903e43baa8da04c7b9e90bb27cda379660ff8d57fdfb4143\"}, \"records\": [{\"path\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s1.json\", \"sha256\": \"3724b0d9c8a71149a53341bccbc7d943b6558717ae93f6b512780c9664c3b93e\", \"content\": {\"model_inputs\": {\"version\": 1, \"encoding\": {\"status\": \"resolved\", \"actual_clip_train_scope\": \"frozen\", \"missing_modality_representation\": \"learned_token\", \"image_aggregation\": \"mean\"}, \"training\": {\"fusion\": \"mean\", \"tower_sharing\": \"shared_backbone_separate_fusion\", \"train_scope\": \"fuser_only\", \"query_fusion_config\": {\"dim\": 2, \"kind\": \"mean\", \"hidden\": 2048, \"n_heads\": 8, \"n_layers\": 2, \"zero_pad\": false, \"include_absent_slots\": false, \"dropout\": 0.0, \"prefusion_norm\": false, \"image_tokens\": 1}, \"gallery_fusion_config\": {\"dim\": 2, \"kind\": \"mean\", \"hidden\": 2048, \"n_heads\": 8, \"n_layers\": 2, \"zero_pad\": false, \"include_absent_slots\": false, \"dropout\": 0.0, \"prefusion_norm\": false, \"image_tokens\": 1}}, \"hyperparameter_values\": {\"optimizer\": \"adamw\", \"learning_rate\": 0.0001, \"weight_decay\": 0.01, \"scheduler\": \"cosine\", \"batch_size\": 2, \"epochs\": 1, \"max_epochs\": 1, \"p_mask\": 0.3, \"decay_mask_tokens\": false, \"init_temperature\": 0.5, \"learnable_temperature\": false, \"max_logit_scale\": 100.0, \"betas\": [0.9, 0.999], \"eps\": 1e-08, \"warmup_epochs\": 0, \"lr_start\": 0.0001, \"lr_end\": 0.0, \"seed\": 17}, \"loss_values\": {\"learnable_temperature\": false, \"init_temperature\": 0.5, \"max_logit_scale\": 100.0}}, \"initializers\": {\"ulip2\": {\"uri\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/tiny_initializer.bin\", \"sha256\": \"6c078744875f733d2d0ac1b68a0a36ddb7416e1ff7be72d2b5d8554d2f556998\"}}, \"fixture\": \"untrained tiny model; no pretrained performance claim\", \"uri\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/s1.pt\", \"sha256\": \"6e75482693c83ba50367884ceb47f75922abd4eb9bcc64ac1c96eae951c9b181\"}}, {\"path\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s2.json\", \"sha256\": \"8991ab43d773ea501ca36d79781224926440811fe1a7f43bf8e31d4655f05f6f\", \"content\": {\"uri\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/s2.pt\", \"variant_id\": \"no_layout\", \"use_layout\": false, \"lambda_init\": null, \"stage1_checkpoint_sha256\": \"6e75482693c83ba50367884ceb47f75922abd4eb9bcc64ac1c96eae951c9b181\", \"stage1_model_inputs\": {\"version\": 1, \"encoding\": {\"status\": \"resolved\", \"actual_clip_train_scope\": \"frozen\", \"missing_modality_representation\": \"learned_token\", \"image_aggregation\": \"mean\"}, \"training\": {\"fusion\": \"mean\", \"tower_sharing\": \"shared_backbone_separate_fusion\", \"train_scope\": \"fuser_only\", \"query_fusion_config\": {\"dim\": 2, \"kind\": \"mean\", \"hidden\": 2048, \"n_heads\": 8, \"n_layers\": 2, \"zero_pad\": false, \"include_absent_slots\": false, \"dropout\": 0.0, \"prefusion_norm\": false, \"image_tokens\": 1}, \"gallery_fusion_config\": {\"dim\": 2, \"kind\": \"mean\", \"hidden\": 2048, \"n_heads\": 8, \"n_layers\": 2, \"zero_pad\": false, \"include_absent_slots\": false, \"dropout\": 0.0, \"prefusion_norm\": false, \"image_tokens\": 1}}, \"hyperparameter_values\": {\"optimizer\": \"adamw\", \"learning_rate\": 0.0001, \"weight_decay\": 0.01, \"scheduler\": \"cosine\", \"batch_size\": 2, \"epochs\": 1, \"max_epochs\": 1, \"p_mask\": 0.3, \"decay_mask_tokens\": false, \"init_temperature\": 0.5, \"learnable_temperature\": false, \"max_logit_scale\": 100.0, \"betas\": [0.9, 0.999], \"eps\": 1e-08, \"warmup_epochs\": 0, \"lr_start\": 0.0001, \"lr_end\": 0.0, \"seed\": 17}, \"loss_values\": {\"learnable_temperature\": false, \"init_temperature\": 0.5, \"max_logit_scale\": 100.0}}, \"stage2_protocol\": {\"asset_modalities\": [\"text\", \"image\"]}, \"sha256\": \"89029f76e4b78393903e43baa8da04c7b9e90bb27cda379660ff8d57fdfb4143\"}}], \"compose_source_sha256\": \"7e18defb3d60443ae3b46359d66917cc9c3bbde38bbcaeeb80ca541672d241fc\", \"torch_version\": \"2.12.1+cu132\"}}, \"inputs\": {\"path\": \"inputs.pt\", \"sha256\": \"4ceae74a2f421b30d9a3ed8b333fcf987d35b2522d07be7424db26c9944cf0fb\"}, \"provenance\": {\"request\": {\"schema\": \"metafind.scene_request.v1\", \"provenance\": {\"fixture\": \"two-slot CPU cross-module smoke; untrained model\", \"idesign_adapter\": {\"sources\": {\"scene\": {\"path\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/planner/scene_graph.json\", \"sha256\": \"4a929a13fd9874a43e271f92c1367aad1619b2376d6a158585d7c9fbed3c5479\", \"content\": [{\"new_object_id\": \"chair_2\", \"position\": {\"x\": 1.0, \"y\": 2.0, \"z\": 0.5}, \"rotation\": {\"z_angle\": 0.0}, \"size_in_meters\": {\"length\": 1.0, \"width\": 1.0, \"height\": 1.0}, \"style\": \"original planned style\", \"material\": \"wood\", \"is_on_the_floor\": true, \"placement\": {\"objects_in_room\": [{\"object_id\": \"table_1\", \"preposition\": \"on\"}], \"room_layout_elements\": [{\"layout_element_id\": \"south_wall\", \"preposition\": \"on\"}]}}, {\"new_object_id\": \"south_wall\", \"itemType\": \"wall\", \"position\": {\"x\": 2, \"y\": 0, \"z\": 1.5}, \"size_in_meters\": {\"length\": 4, \"width\": 0, \"height\": 3}, \"rotation\": {\"z_angle\": 0}}, {\"new_object_id\": \"table_1\", \"position\": {\"x\": 3.0, \"y\": 2.0, \"z\": 0.5}, \"rotation\": {\"z_angle\": 0.0}, \"size_in_meters\": {\"length\": 1.0, \"width\": 1.0, \"height\": 1.0}, \"style\": \"original planned style\", \"material\": \"wood\", \"is_on_the_floor\": true, \"placement\": {\"objects_in_room\": [], \"room_layout_elements\": [{\"layout_element_id\": \"south_wall\", \"preposition\": \"on\"}]}}, {\"new_object_id\": \"north_wall\", \"itemType\": \"wall\", \"position\": {\"x\": 2, \"y\": 5, \"z\": 1.5}, \"size_in_meters\": {\"length\": 4, \"width\": 0, \"height\": 3}, \"rotation\": {\"z_angle\": 180}}, {\"new_object_id\": \"east_wall\", \"itemType\": \"wall\", \"position\": {\"x\": 4, \"y\": 2.5, \"z\": 1.5}, \"size_in_meters\": {\"length\": 5, \"width\": 0, \"height\": 3}, \"rotation\": {\"z_angle\": 270}}, {\"new_object_id\": \"west_wall\", \"itemType\": \"wall\", \"position\": {\"x\": 0, \"y\": 2.5, \"z\": 1.5}, \"size_in_meters\": {\"length\": 5, \"width\": 0, \"height\": 3}, \"rotation\": {\"z_angle\": 90}}, {\"new_object_id\": \"middle of the room\", \"itemType\": \"floor\", \"position\": {\"x\": 2, \"y\": 2.5, \"z\": 0}, \"size_in_meters\": {\"length\": 4, \"width\": 5, \"height\": 0}, \"rotation\": {\"z_angle\": 0}}, {\"new_object_id\": \"ceiling\", \"itemType\": \"ceiling\", \"position\": {\"x\": 2, \"y\": 2.5, \"z\": 3}, \"size_in_meters\": {\"length\": 4, \"width\": 5, \"height\": 0}, \"rotation\": {\"z_angle\": 0}}]}, \"sidecar\": {\"path\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/planner/sidecar.json\", \"sha256\": \"64c101e2a1b443c52593f67f10afac047b3f9abc7ac984cf5899b7d702fc98b9\", \"content\": {\"scene_id\": \"scene_0007\", \"room_dimensions\": [4.0, 5.0, 3.0], \"prompt\": \"explicit fixture prompt\", \"n_objects_requested\": 2, \"planner_model\": \"fixture-no-LLM\", \"idesign_revision\": \"fixture\", \"scene_graph_sha256\": \"4a929a13fd9874a43e271f92c1367aad1619b2376d6a158585d7c9fbed3c5479\"}}, \"query_modalities\": {\"path\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/observations/queries.json\", \"sha256\": \"a9e761cd0798572ad47506454549f6c8d66a36a69e03da32aa45baba782a9bab\", \"content\": {\"table_1\": {\"text\": \"B requested table\", \"images\": [\"image.png\"], \"pointcloud\": \"pc.npz\"}, \"chair_2\": {\"text\": \"A requested chair; not its retrieved annotation\"}}}, \"base_request\": {\"path\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/config/base.json\", \"sha256\": \"74436c88154c4e16d0f74d8ce309262d31d1996cc4883bb7cb8e7cbd5ab21906\", \"content\": {\"schema\": \"metafind.scene_request.v1\", \"provenance\": {\"fixture\": \"two-slot CPU cross-module smoke; untrained model\"}, \"stage1_record\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s1.json\", \"stage2_record\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s2.json\", \"variant\": \"no_layout\", \"gallery_registry\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/gallery.json\", \"gallery_ids\": [\"A\", \"B\"], \"asset_texts\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/texts.json\", \"mode\": \"iterative\", \"use_layout\": false}}}, \"query_order\": [\"chair_2\", \"table_1\"], \"query_source\": \"explicit_caller_modalities\", \"initial_graph_rule\": \"fresh_room_no_preexisting_assets\", \"room_dimensions\": [4.0, 5.0, 3.0], \"room_priors\": {\"south_wall\": {\"new_object_id\": \"south_wall\", \"itemType\": \"wall\", \"position\": {\"x\": 2, \"y\": 0, \"z\": 1.5}, \"size_in_meters\": {\"length\": 4, \"width\": 0, \"height\": 3}, \"rotation\": {\"z_angle\": 0}}, \"north_wall\": {\"new_object_id\": \"north_wall\", \"itemType\": \"wall\", \"position\": {\"x\": 2, \"y\": 5, \"z\": 1.5}, \"size_in_meters\": {\"length\": 4, \"width\": 0, \"height\": 3}, \"rotation\": {\"z_angle\": 180}}, \"east_wall\": {\"new_object_id\": \"east_wall\", \"itemType\": \"wall\", \"position\": {\"x\": 4, \"y\": 2.5, \"z\": 1.5}, \"size_in_meters\": {\"length\": 5, \"width\": 0, \"height\": 3}, \"rotation\": {\"z_angle\": 270}}, \"west_wall\": {\"new_object_id\": \"west_wall\", \"itemType\": \"wall\", \"position\": {\"x\": 0, \"y\": 2.5, \"z\": 1.5}, \"size_in_meters\": {\"length\": 5, \"width\": 0, \"height\": 3}, \"rotation\": {\"z_angle\": 90}}, \"middle of the room\": {\"new_object_id\": \"middle of the room\", \"itemType\": \"floor\", \"position\": {\"x\": 2, \"y\": 2.5, \"z\": 0}, \"size_in_meters\": {\"length\": 4, \"width\": 5, \"height\": 0}, \"rotation\": {\"z_angle\": 0}}, \"ceiling\": {\"new_object_id\": \"ceiling\", \"itemType\": \"ceiling\", \"position\": {\"x\": 2, \"y\": 2.5, \"z\": 3}, \"size_in_meters\": {\"length\": 4, \"width\": 5, \"height\": 0}, \"rotation\": {\"z_angle\": 0}}}, \"object_count\": 2, \"room_prior_count\": 6, \"render_configuration\": \"not_provided_by_this_adapter\", \"source_sha256\": \"c8948ccff05ab144915e620a8287a9b033a52b15946138b10ea2dc2f9e59e60b\"}}, \"stage1_record\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s1.json\", \"stage2_record\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s2.json\", \"variant\": \"no_layout\", \"gallery_registry\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/gallery.json\", \"gallery_ids\": [\"A\", \"B\"], \"asset_texts\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/texts.json\", \"mode\": \"iterative\", \"use_layout\": false, \"initial_graph\": {\"room_id\": \"scene_0007\", \"nodes\": []}, \"queries\": [{\"slot\": {\"new_object_id\": \"chair_2\", \"position\": {\"x\": 1.0, \"y\": 2.0, \"z\": 0.5}, \"rotation\": {\"z_angle\": 0.0}, \"size_in_meters\": {\"length\": 1.0, \"width\": 1.0, \"height\": 1.0}, \"style\": \"original planned style\", \"material\": \"wood\", \"is_on_the_floor\": true, \"placement\": {\"objects_in_room\": [{\"object_id\": \"table_1\", \"preposition\": \"on\"}], \"room_layout_elements\": [{\"layout_element_id\": \"south_wall\", \"preposition\": \"on\"}]}}, \"text\": \"A requested chair; not its retrieved annotation\"}, {\"slot\": {\"new_object_id\": \"table_1\", \"position\": {\"x\": 3.0, \"y\": 2.0, \"z\": 0.5}, \"rotation\": {\"z_angle\": 0.0}, \"size_in_meters\": {\"length\": 1.0, \"width\": 1.0, \"height\": 1.0}, \"style\": \"original planned style\", \"material\": \"wood\", \"is_on_the_floor\": true, \"placement\": {\"objects_in_room\": [], \"room_layout_elements\": [{\"layout_element_id\": \"south_wall\", \"preposition\": \"on\"}]}}, \"text\": \"B requested table\", \"images\": [\"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/observations/image.png\"], \"pointcloud\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/observations/pc.npz\"}]}, \"sources\": {\"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/request.json\": \"84d2220a9afb371c0208ce5382a12f073c983a9da3cbb55282aa487fc3a2048c\", \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s1.json\": \"3724b0d9c8a71149a53341bccbc7d943b6558717ae93f6b512780c9664c3b93e\", \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s2.json\": \"8991ab43d773ea501ca36d79781224926440811fe1a7f43bf8e31d4655f05f6f\", \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/gallery.json\": \"eb2cb16e762345d6f9bea9372c17494e19dec5aacd7e7df05cfef78a56d1b754\", \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/gallery.npz\": \"20e730b9c335805fffd05c8f8d736dd604911b892409641b3f34b13c75bda623\", \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/texts.json\": \"e0ceee7a7abab3b493e6d8bc38b41bb67f5bd452fcec256a501ed8fe32a072a5\", \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/observations/image.png\": \"2faa3c102a725cf849a1b65be9c674c315bcb6bc046525451d3d7f6354ef0e06\", \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/observations/pc.npz\": \"dc184c7d1a68ffcc66fd0d562f6b83b2e9afc433d703297d55c2036af382b69e\"}, \"semantic_source\": {\"status\": \"not_used\", \"reason\": \"checkpoint_has_no_layout_branch\"}, \"gallery_record\": {\"uri\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/gallery.npz\", \"sha256\": \"20e730b9c335805fffd05c8f8d736dd604911b892409641b3f34b13c75bda623\", \"count\": 2, \"dim\": 2, \"stage1_checkpoint_sha256\": \"6e75482693c83ba50367884ceb47f75922abd4eb9bcc64ac1c96eae951c9b181\", \"gallery_encoder_sha256\": \"6d75ea7801dff295c3ec41d858028cec2cef707fcbb68498b59582d09031cb32\", \"fixture\": \"encoder identity helper substituted; not an actual ULIP hash\"}, \"encoding_device\": \"cpu\", \"query_image_rule\": \"mean_raw_explicit_views\", \"query_pc_rule\": \"caller_prepared_xyz_rgb_10000_no_resampling\", \"prepare_source_sha256\": \"7cc606cd44ee4c21074e349a1769fad21600102a77e649f915af2ee5ecf2f3c1\"}}, \"device\": \"cpu\", \"compose_source_sha256\": \"7e18defb3d60443ae3b46359d66917cc9c3bbde38bbcaeeb80ca541672d241fc\"}}",
+      "content": {
+        "schema": "metafind.scene_composition.v1",
+        "status": "complete",
+        "classification": "IMPLEMENTATION CHOICE",
+        "mode": "iterative",
+        "use_layout": false,
+        "room_id": "scene_0007",
+        "gallery_ids": [
+          "A",
+          "B"
+        ],
+        "tie_policy": "stable_gallery_order",
+        "adjacency_k": 8,
+        "trace": [
+          {
+            "step": 0,
+            "slot_id": "chair_2",
+            "query_text": "A requested chair; not its retrieved annotation",
+            "context": {
+              "node_ids": [],
+              "asset_ids": [],
+              "positions": [],
+              "support": [],
+              "adjacency": [],
+              "semantic_status": "not_used",
+              "semantic_keys": [],
+              "semantic_missing": []
+            },
+            "query_embedding": [
+              3.0,
+              0.0
+            ],
+            "selected_asset_id": "A",
+            "selected_node_text": "canonical retrieved A",
+            "top5": [
+              {
+                "asset_id": "A",
+                "score": 1.0
+              },
+              {
+                "asset_id": "B",
+                "score": 0.0
+              }
+            ],
+            "lambda": 0.0,
+            "fused_norm": 3.0,
+            "layout_norm": 0.0,
+            "lambda_layout_norm": 0.0
+          },
+          {
+            "step": 1,
+            "slot_id": "table_1",
+            "query_text": "B requested table",
+            "context": {
+              "node_ids": [
+                "chair_2"
+              ],
+              "asset_ids": [
+                "A"
+              ],
+              "positions": [
+                [
+                  1.0,
+                  2.0,
+                  0.5
+                ]
+              ],
+              "support": [],
+              "adjacency": [],
+              "semantic_status": "not_used",
+              "semantic_keys": [],
+              "semantic_missing": []
+            },
+            "query_embedding": [
+              3.3333332538604736,
+              9.666666984558105
+            ],
+            "selected_asset_id": "B",
+            "selected_node_text": "canonical retrieved B",
+            "top5": [
+              {
+                "asset_id": "B",
+                "score": 0.9453729873253518
+              },
+              {
+                "asset_id": "A",
+                "score": 0.32599066679207267
+              }
+            ],
+            "lambda": 0.0,
+            "fused_norm": 10.225241661071777,
+            "layout_norm": 0.0,
+            "lambda_layout_norm": 0.0
+          }
+        ],
+        "final_graph": {
+          "nodes": [
+            {
+              "asset_id": "A",
+              "slot": {
+                "new_object_id": "chair_2",
+                "position": {
+                  "x": 1.0,
+                  "y": 2.0,
+                  "z": 0.5
+                },
+                "rotation": {
+                  "z_angle": 0.0
+                },
+                "size_in_meters": {
+                  "length": 1.0,
+                  "width": 1.0,
+                  "height": 1.0
+                },
+                "style": "original planned style",
+                "material": "wood",
+                "is_on_the_floor": true,
+                "placement": {
+                  "objects_in_room": [
+                    {
+                      "object_id": "table_1",
+                      "preposition": "on"
+                    }
+                  ],
+                  "room_layout_elements": [
+                    {
+                      "layout_element_id": "south_wall",
+                      "preposition": "on"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "asset_id": "B",
+              "slot": {
+                "new_object_id": "table_1",
+                "position": {
+                  "x": 3.0,
+                  "y": 2.0,
+                  "z": 0.5
+                },
+                "rotation": {
+                  "z_angle": 0.0
+                },
+                "size_in_meters": {
+                  "length": 1.0,
+                  "width": 1.0,
+                  "height": 1.0
+                },
+                "style": "original planned style",
+                "material": "wood",
+                "is_on_the_floor": true,
+                "placement": {
+                  "objects_in_room": [],
+                  "room_layout_elements": [
+                    {
+                      "layout_element_id": "south_wall",
+                      "preposition": "on"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "node_ids": [
+            "chair_2",
+            "table_1"
+          ],
+          "asset_ids": [
+            "A",
+            "B"
+          ],
+          "positions": [
+            [
+              1.0,
+              2.0,
+              0.5
+            ],
+            [
+              3.0,
+              2.0,
+              0.5
+            ]
+          ],
+          "support": [
+            [
+              0,
+              1
+            ]
+          ],
+          "adjacency": [],
+          "semantic_status": "not_used",
+          "semantic_keys": [],
+          "semantic_missing": []
+        },
+        "semantic_status": "not_used",
+        "provenance": {
+          "manifest_sha256": "6f8f5ce9b78d6c01259171eabe66fcba19ea62f96481d75d0525575aef0528f5",
+          "manifest": {
+            "schema": "metafind.scene_composition.v1",
+            "status": "frozen",
+            "model": {
+              "config": {
+                "dim": 2,
+                "tower_sharing": "shared_backbone_separate_fusion",
+                "essgnn": null,
+                "query_fusion": {
+                  "dim": 2,
+                  "kind": "mean",
+                  "hidden": 2048,
+                  "n_heads": 8,
+                  "n_layers": 2,
+                  "zero_pad": false,
+                  "include_absent_slots": false,
+                  "dropout": 0.0,
+                  "prefusion_norm": false,
+                  "image_tokens": 1
+                },
+                "gallery_fusion": {
+                  "dim": 2,
+                  "kind": "mean",
+                  "hidden": 2048,
+                  "n_heads": 8,
+                  "n_layers": 2,
+                  "zero_pad": false,
+                  "include_absent_slots": false,
+                  "dropout": 0.0,
+                  "prefusion_norm": false,
+                  "image_tokens": 1
+                },
+                "use_layout": false,
+                "init_lambda": 1.0
+              },
+              "dtype": "float32",
+              "weights": {
+                "path": "model/query_tower.pt",
+                "sha256": "0d977968151954ef7cfcc11c7db69d02659e4843e0fa272639922d59d781f72c"
+              },
+              "provenance": {
+                "scope": "query-model-only; no backbone or input encoding",
+                "stage1_checkpoint": {
+                  "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/s1.pt",
+                  "sha256": "6e75482693c83ba50367884ceb47f75922abd4eb9bcc64ac1c96eae951c9b181"
+                },
+                "stage2_checkpoint": {
+                  "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/s2.pt",
+                  "sha256": "89029f76e4b78393903e43baa8da04c7b9e90bb27cda379660ff8d57fdfb4143"
+                },
+                "records": [
+                  {
+                    "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s1.json",
+                    "sha256": "3724b0d9c8a71149a53341bccbc7d943b6558717ae93f6b512780c9664c3b93e",
+                    "content": {
+                      "model_inputs": {
+                        "version": 1,
+                        "encoding": {
+                          "status": "resolved",
+                          "actual_clip_train_scope": "frozen",
+                          "missing_modality_representation": "learned_token",
+                          "image_aggregation": "mean"
+                        },
+                        "training": {
+                          "fusion": "mean",
+                          "tower_sharing": "shared_backbone_separate_fusion",
+                          "train_scope": "fuser_only",
+                          "query_fusion_config": {
+                            "dim": 2,
+                            "kind": "mean",
+                            "hidden": 2048,
+                            "n_heads": 8,
+                            "n_layers": 2,
+                            "zero_pad": false,
+                            "include_absent_slots": false,
+                            "dropout": 0.0,
+                            "prefusion_norm": false,
+                            "image_tokens": 1
+                          },
+                          "gallery_fusion_config": {
+                            "dim": 2,
+                            "kind": "mean",
+                            "hidden": 2048,
+                            "n_heads": 8,
+                            "n_layers": 2,
+                            "zero_pad": false,
+                            "include_absent_slots": false,
+                            "dropout": 0.0,
+                            "prefusion_norm": false,
+                            "image_tokens": 1
+                          }
+                        },
+                        "hyperparameter_values": {
+                          "optimizer": "adamw",
+                          "learning_rate": 0.0001,
+                          "weight_decay": 0.01,
+                          "scheduler": "cosine",
+                          "batch_size": 2,
+                          "epochs": 1,
+                          "max_epochs": 1,
+                          "p_mask": 0.3,
+                          "decay_mask_tokens": false,
+                          "init_temperature": 0.5,
+                          "learnable_temperature": false,
+                          "max_logit_scale": 100.0,
+                          "betas": [
+                            0.9,
+                            0.999
+                          ],
+                          "eps": 1e-08,
+                          "warmup_epochs": 0,
+                          "lr_start": 0.0001,
+                          "lr_end": 0.0,
+                          "seed": 17
+                        },
+                        "loss_values": {
+                          "learnable_temperature": false,
+                          "init_temperature": 0.5,
+                          "max_logit_scale": 100.0
+                        }
+                      },
+                      "initializers": {
+                        "ulip2": {
+                          "uri": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/tiny_initializer.bin",
+                          "sha256": "6c078744875f733d2d0ac1b68a0a36ddb7416e1ff7be72d2b5d8554d2f556998"
+                        }
+                      },
+                      "fixture": "untrained tiny model; no pretrained performance claim",
+                      "uri": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/s1.pt",
+                      "sha256": "6e75482693c83ba50367884ceb47f75922abd4eb9bcc64ac1c96eae951c9b181"
+                    }
+                  },
+                  {
+                    "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s2.json",
+                    "sha256": "8991ab43d773ea501ca36d79781224926440811fe1a7f43bf8e31d4655f05f6f",
+                    "content": {
+                      "uri": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/s2.pt",
+                      "variant_id": "no_layout",
+                      "use_layout": false,
+                      "lambda_init": null,
+                      "stage1_checkpoint_sha256": "6e75482693c83ba50367884ceb47f75922abd4eb9bcc64ac1c96eae951c9b181",
+                      "stage1_model_inputs": {
+                        "version": 1,
+                        "encoding": {
+                          "status": "resolved",
+                          "actual_clip_train_scope": "frozen",
+                          "missing_modality_representation": "learned_token",
+                          "image_aggregation": "mean"
+                        },
+                        "training": {
+                          "fusion": "mean",
+                          "tower_sharing": "shared_backbone_separate_fusion",
+                          "train_scope": "fuser_only",
+                          "query_fusion_config": {
+                            "dim": 2,
+                            "kind": "mean",
+                            "hidden": 2048,
+                            "n_heads": 8,
+                            "n_layers": 2,
+                            "zero_pad": false,
+                            "include_absent_slots": false,
+                            "dropout": 0.0,
+                            "prefusion_norm": false,
+                            "image_tokens": 1
+                          },
+                          "gallery_fusion_config": {
+                            "dim": 2,
+                            "kind": "mean",
+                            "hidden": 2048,
+                            "n_heads": 8,
+                            "n_layers": 2,
+                            "zero_pad": false,
+                            "include_absent_slots": false,
+                            "dropout": 0.0,
+                            "prefusion_norm": false,
+                            "image_tokens": 1
+                          }
+                        },
+                        "hyperparameter_values": {
+                          "optimizer": "adamw",
+                          "learning_rate": 0.0001,
+                          "weight_decay": 0.01,
+                          "scheduler": "cosine",
+                          "batch_size": 2,
+                          "epochs": 1,
+                          "max_epochs": 1,
+                          "p_mask": 0.3,
+                          "decay_mask_tokens": false,
+                          "init_temperature": 0.5,
+                          "learnable_temperature": false,
+                          "max_logit_scale": 100.0,
+                          "betas": [
+                            0.9,
+                            0.999
+                          ],
+                          "eps": 1e-08,
+                          "warmup_epochs": 0,
+                          "lr_start": 0.0001,
+                          "lr_end": 0.0,
+                          "seed": 17
+                        },
+                        "loss_values": {
+                          "learnable_temperature": false,
+                          "init_temperature": 0.5,
+                          "max_logit_scale": 100.0
+                        }
+                      },
+                      "stage2_protocol": {
+                        "asset_modalities": [
+                          "text",
+                          "image"
+                        ]
+                      },
+                      "sha256": "89029f76e4b78393903e43baa8da04c7b9e90bb27cda379660ff8d57fdfb4143"
+                    }
+                  }
+                ],
+                "compose_source_sha256": "7e18defb3d60443ae3b46359d66917cc9c3bbde38bbcaeeb80ca541672d241fc",
+                "torch_version": "2.12.1+cu132"
+              }
+            },
+            "inputs": {
+              "path": "inputs.pt",
+              "sha256": "4ceae74a2f421b30d9a3ed8b333fcf987d35b2522d07be7424db26c9944cf0fb"
+            },
+            "provenance": {
+              "request": {
+                "schema": "metafind.scene_request.v1",
+                "provenance": {
+                  "fixture": "two-slot CPU cross-module smoke; untrained model",
+                  "idesign_adapter": {
+                    "sources": {
+                      "scene": {
+                        "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/planner/scene_graph.json",
+                        "sha256": "4a929a13fd9874a43e271f92c1367aad1619b2376d6a158585d7c9fbed3c5479",
+                        "content": [
+                          {
+                            "new_object_id": "chair_2",
+                            "position": {
+                              "x": 1.0,
+                              "y": 2.0,
+                              "z": 0.5
+                            },
+                            "rotation": {
+                              "z_angle": 0.0
+                            },
+                            "size_in_meters": {
+                              "length": 1.0,
+                              "width": 1.0,
+                              "height": 1.0
+                            },
+                            "style": "original planned style",
+                            "material": "wood",
+                            "is_on_the_floor": true,
+                            "placement": {
+                              "objects_in_room": [
+                                {
+                                  "object_id": "table_1",
+                                  "preposition": "on"
+                                }
+                              ],
+                              "room_layout_elements": [
+                                {
+                                  "layout_element_id": "south_wall",
+                                  "preposition": "on"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "new_object_id": "south_wall",
+                            "itemType": "wall",
+                            "position": {
+                              "x": 2,
+                              "y": 0,
+                              "z": 1.5
+                            },
+                            "size_in_meters": {
+                              "length": 4,
+                              "width": 0,
+                              "height": 3
+                            },
+                            "rotation": {
+                              "z_angle": 0
+                            }
+                          },
+                          {
+                            "new_object_id": "table_1",
+                            "position": {
+                              "x": 3.0,
+                              "y": 2.0,
+                              "z": 0.5
+                            },
+                            "rotation": {
+                              "z_angle": 0.0
+                            },
+                            "size_in_meters": {
+                              "length": 1.0,
+                              "width": 1.0,
+                              "height": 1.0
+                            },
+                            "style": "original planned style",
+                            "material": "wood",
+                            "is_on_the_floor": true,
+                            "placement": {
+                              "objects_in_room": [],
+                              "room_layout_elements": [
+                                {
+                                  "layout_element_id": "south_wall",
+                                  "preposition": "on"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "new_object_id": "north_wall",
+                            "itemType": "wall",
+                            "position": {
+                              "x": 2,
+                              "y": 5,
+                              "z": 1.5
+                            },
+                            "size_in_meters": {
+                              "length": 4,
+                              "width": 0,
+                              "height": 3
+                            },
+                            "rotation": {
+                              "z_angle": 180
+                            }
+                          },
+                          {
+                            "new_object_id": "east_wall",
+                            "itemType": "wall",
+                            "position": {
+                              "x": 4,
+                              "y": 2.5,
+                              "z": 1.5
+                            },
+                            "size_in_meters": {
+                              "length": 5,
+                              "width": 0,
+                              "height": 3
+                            },
+                            "rotation": {
+                              "z_angle": 270
+                            }
+                          },
+                          {
+                            "new_object_id": "west_wall",
+                            "itemType": "wall",
+                            "position": {
+                              "x": 0,
+                              "y": 2.5,
+                              "z": 1.5
+                            },
+                            "size_in_meters": {
+                              "length": 5,
+                              "width": 0,
+                              "height": 3
+                            },
+                            "rotation": {
+                              "z_angle": 90
+                            }
+                          },
+                          {
+                            "new_object_id": "middle of the room",
+                            "itemType": "floor",
+                            "position": {
+                              "x": 2,
+                              "y": 2.5,
+                              "z": 0
+                            },
+                            "size_in_meters": {
+                              "length": 4,
+                              "width": 5,
+                              "height": 0
+                            },
+                            "rotation": {
+                              "z_angle": 0
+                            }
+                          },
+                          {
+                            "new_object_id": "ceiling",
+                            "itemType": "ceiling",
+                            "position": {
+                              "x": 2,
+                              "y": 2.5,
+                              "z": 3
+                            },
+                            "size_in_meters": {
+                              "length": 4,
+                              "width": 5,
+                              "height": 0
+                            },
+                            "rotation": {
+                              "z_angle": 0
+                            }
+                          }
+                        ]
+                      },
+                      "sidecar": {
+                        "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/planner/sidecar.json",
+                        "sha256": "64c101e2a1b443c52593f67f10afac047b3f9abc7ac984cf5899b7d702fc98b9",
+                        "content": {
+                          "scene_id": "scene_0007",
+                          "room_dimensions": [
+                            4.0,
+                            5.0,
+                            3.0
+                          ],
+                          "prompt": "explicit fixture prompt",
+                          "n_objects_requested": 2,
+                          "planner_model": "fixture-no-LLM",
+                          "idesign_revision": "fixture",
+                          "scene_graph_sha256": "4a929a13fd9874a43e271f92c1367aad1619b2376d6a158585d7c9fbed3c5479"
+                        }
+                      },
+                      "query_modalities": {
+                        "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/observations/queries.json",
+                        "sha256": "a9e761cd0798572ad47506454549f6c8d66a36a69e03da32aa45baba782a9bab",
+                        "content": {
+                          "table_1": {
+                            "text": "B requested table",
+                            "images": [
+                              "image.png"
+                            ],
+                            "pointcloud": "pc.npz"
+                          },
+                          "chair_2": {
+                            "text": "A requested chair; not its retrieved annotation"
+                          }
+                        }
+                      },
+                      "base_request": {
+                        "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/config/base.json",
+                        "sha256": "74436c88154c4e16d0f74d8ce309262d31d1996cc4883bb7cb8e7cbd5ab21906",
+                        "content": {
+                          "schema": "metafind.scene_request.v1",
+                          "provenance": {
+                            "fixture": "two-slot CPU cross-module smoke; untrained model"
+                          },
+                          "stage1_record": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s1.json",
+                          "stage2_record": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s2.json",
+                          "variant": "no_layout",
+                          "gallery_registry": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/gallery.json",
+                          "gallery_ids": [
+                            "A",
+                            "B"
+                          ],
+                          "asset_texts": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/texts.json",
+                          "mode": "iterative",
+                          "use_layout": false
+                        }
+                      }
+                    },
+                    "query_order": [
+                      "chair_2",
+                      "table_1"
+                    ],
+                    "query_source": "explicit_caller_modalities",
+                    "initial_graph_rule": "fresh_room_no_preexisting_assets",
+                    "room_dimensions": [
+                      4.0,
+                      5.0,
+                      3.0
+                    ],
+                    "room_priors": {
+                      "south_wall": {
+                        "new_object_id": "south_wall",
+                        "itemType": "wall",
+                        "position": {
+                          "x": 2,
+                          "y": 0,
+                          "z": 1.5
+                        },
+                        "size_in_meters": {
+                          "length": 4,
+                          "width": 0,
+                          "height": 3
+                        },
+                        "rotation": {
+                          "z_angle": 0
+                        }
+                      },
+                      "north_wall": {
+                        "new_object_id": "north_wall",
+                        "itemType": "wall",
+                        "position": {
+                          "x": 2,
+                          "y": 5,
+                          "z": 1.5
+                        },
+                        "size_in_meters": {
+                          "length": 4,
+                          "width": 0,
+                          "height": 3
+                        },
+                        "rotation": {
+                          "z_angle": 180
+                        }
+                      },
+                      "east_wall": {
+                        "new_object_id": "east_wall",
+                        "itemType": "wall",
+                        "position": {
+                          "x": 4,
+                          "y": 2.5,
+                          "z": 1.5
+                        },
+                        "size_in_meters": {
+                          "length": 5,
+                          "width": 0,
+                          "height": 3
+                        },
+                        "rotation": {
+                          "z_angle": 270
+                        }
+                      },
+                      "west_wall": {
+                        "new_object_id": "west_wall",
+                        "itemType": "wall",
+                        "position": {
+                          "x": 0,
+                          "y": 2.5,
+                          "z": 1.5
+                        },
+                        "size_in_meters": {
+                          "length": 5,
+                          "width": 0,
+                          "height": 3
+                        },
+                        "rotation": {
+                          "z_angle": 90
+                        }
+                      },
+                      "middle of the room": {
+                        "new_object_id": "middle of the room",
+                        "itemType": "floor",
+                        "position": {
+                          "x": 2,
+                          "y": 2.5,
+                          "z": 0
+                        },
+                        "size_in_meters": {
+                          "length": 4,
+                          "width": 5,
+                          "height": 0
+                        },
+                        "rotation": {
+                          "z_angle": 0
+                        }
+                      },
+                      "ceiling": {
+                        "new_object_id": "ceiling",
+                        "itemType": "ceiling",
+                        "position": {
+                          "x": 2,
+                          "y": 2.5,
+                          "z": 3
+                        },
+                        "size_in_meters": {
+                          "length": 4,
+                          "width": 5,
+                          "height": 0
+                        },
+                        "rotation": {
+                          "z_angle": 0
+                        }
+                      }
+                    },
+                    "object_count": 2,
+                    "room_prior_count": 6,
+                    "render_configuration": "not_provided_by_this_adapter",
+                    "source_sha256": "c8948ccff05ab144915e620a8287a9b033a52b15946138b10ea2dc2f9e59e60b"
+                  }
+                },
+                "stage1_record": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s1.json",
+                "stage2_record": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s2.json",
+                "variant": "no_layout",
+                "gallery_registry": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/gallery.json",
+                "gallery_ids": [
+                  "A",
+                  "B"
+                ],
+                "asset_texts": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/texts.json",
+                "mode": "iterative",
+                "use_layout": false,
+                "initial_graph": {
+                  "room_id": "scene_0007",
+                  "nodes": []
+                },
+                "queries": [
+                  {
+                    "slot": {
+                      "new_object_id": "chair_2",
+                      "position": {
+                        "x": 1.0,
+                        "y": 2.0,
+                        "z": 0.5
+                      },
+                      "rotation": {
+                        "z_angle": 0.0
+                      },
+                      "size_in_meters": {
+                        "length": 1.0,
+                        "width": 1.0,
+                        "height": 1.0
+                      },
+                      "style": "original planned style",
+                      "material": "wood",
+                      "is_on_the_floor": true,
+                      "placement": {
+                        "objects_in_room": [
+                          {
+                            "object_id": "table_1",
+                            "preposition": "on"
+                          }
+                        ],
+                        "room_layout_elements": [
+                          {
+                            "layout_element_id": "south_wall",
+                            "preposition": "on"
+                          }
+                        ]
+                      }
+                    },
+                    "text": "A requested chair; not its retrieved annotation"
+                  },
+                  {
+                    "slot": {
+                      "new_object_id": "table_1",
+                      "position": {
+                        "x": 3.0,
+                        "y": 2.0,
+                        "z": 0.5
+                      },
+                      "rotation": {
+                        "z_angle": 0.0
+                      },
+                      "size_in_meters": {
+                        "length": 1.0,
+                        "width": 1.0,
+                        "height": 1.0
+                      },
+                      "style": "original planned style",
+                      "material": "wood",
+                      "is_on_the_floor": true,
+                      "placement": {
+                        "objects_in_room": [],
+                        "room_layout_elements": [
+                          {
+                            "layout_element_id": "south_wall",
+                            "preposition": "on"
+                          }
+                        ]
+                      }
+                    },
+                    "text": "B requested table",
+                    "images": [
+                      "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/observations/image.png"
+                    ],
+                    "pointcloud": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/observations/pc.npz"
+                  }
+                ]
+              },
+              "sources": {
+                "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/request.json": "84d2220a9afb371c0208ce5382a12f073c983a9da3cbb55282aa487fc3a2048c",
+                "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s1.json": "3724b0d9c8a71149a53341bccbc7d943b6558717ae93f6b512780c9664c3b93e",
+                "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/s2.json": "8991ab43d773ea501ca36d79781224926440811fe1a7f43bf8e31d4655f05f6f",
+                "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/gallery.json": "eb2cb16e762345d6f9bea9372c17494e19dec5aacd7e7df05cfef78a56d1b754",
+                "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/gallery.npz": "20e730b9c335805fffd05c8f8d736dd604911b892409641b3f34b13c75bda623",
+                "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/records/texts.json": "e0ceee7a7abab3b493e6d8bc38b41bb67f5bd452fcec256a501ed8fe32a072a5",
+                "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/observations/image.png": "2faa3c102a725cf849a1b65be9c674c315bcb6bc046525451d3d7f6354ef0e06",
+                "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/observations/pc.npz": "dc184c7d1a68ffcc66fd0d562f6b83b2e9afc433d703297d55c2036af382b69e"
+              },
+              "semantic_source": {
+                "status": "not_used",
+                "reason": "checkpoint_has_no_layout_branch"
+              },
+              "gallery_record": {
+                "uri": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/gallery.npz",
+                "sha256": "20e730b9c335805fffd05c8f8d736dd604911b892409641b3f34b13c75bda623",
+                "count": 2,
+                "dim": 2,
+                "stage1_checkpoint_sha256": "6e75482693c83ba50367884ceb47f75922abd4eb9bcc64ac1c96eae951c9b181",
+                "gallery_encoder_sha256": "6d75ea7801dff295c3ec41d858028cec2cef707fcbb68498b59582d09031cb32",
+                "fixture": "encoder identity helper substituted; not an actual ULIP hash"
+              },
+              "encoding_device": "cpu",
+              "query_image_rule": "mean_raw_explicit_views",
+              "query_pc_rule": "caller_prepared_xyz_rgb_10000_no_resampling",
+              "prepare_source_sha256": "7cc606cd44ee4c21074e349a1769fad21600102a77e649f915af2ee5ecf2f3c1"
+            }
+          },
+          "device": "cpu",
+          "compose_source_sha256": "7e18defb3d60443ae3b46359d66917cc9c3bbde38bbcaeeb80ca541672d241fc"
+        }
+      }
+    },
+    "assets": {
+      "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/selected_assets.json",
+      "sha256": "9bf242a729c4a04a2bb4f80e490c7c39ae7b3b1b6242d12b75161d877be86ee2",
+      "raw_json": "{\"provenance\": {\"fixture\": \"static raw GLBs\"}, \"assets\": {\"A\": {\"mesh\": {\"path\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/raw.glb\", \"sha256\": \"65ae019d66062823752b49fa849657d923e6b8625c2fa135c05e3a36dbc92221\", \"frame\": \"raw_gltf_y_up\"}, \"annotation\": {\"path\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/A_annotation.json\", \"sha256\": \"026aaaa52a9421067df60f621a98c35776297c85b70f1c6fdd7d474709203b01\"}}, \"B\": {\"mesh\": {\"path\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/B.glb\", \"sha256\": \"4c328ed4a29f74ddef5c6e1d956689a6de033449e804aa6382c7af16464c309a\", \"frame\": \"raw_gltf_y_up\"}, \"annotation\": {\"path\": \"/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/B_annotation.json\", \"sha256\": \"38e9b7f99fae2bbe96166ae8df808383c388924fb5c7a5d27f00b3861dd0fb4d\"}}}}",
+      "content": {
+        "provenance": {
+          "fixture": "static raw GLBs"
+        },
+        "assets": {
+          "A": {
+            "mesh": {
+              "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/raw.glb",
+              "sha256": "65ae019d66062823752b49fa849657d923e6b8625c2fa135c05e3a36dbc92221",
+              "frame": "raw_gltf_y_up"
+            },
+            "annotation": {
+              "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/A_annotation.json",
+              "sha256": "026aaaa52a9421067df60f621a98c35776297c85b70f1c6fdd7d474709203b01"
+            }
+          },
+          "B": {
+            "mesh": {
+              "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/B.glb",
+              "sha256": "4c328ed4a29f74ddef5c6e1d956689a6de033449e804aa6382c7af16464c309a",
+              "frame": "raw_gltf_y_up"
+            },
+            "annotation": {
+              "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/B_annotation.json",
+              "sha256": "38e9b7f99fae2bbe96166ae8df808383c388924fb5c7a5d27f00b3861dd0fb4d"
+            }
+          }
+        }
+      }
+    },
+    "room": {
+      "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/actual_room.json",
+      "sha256": "0146c7c325485a510d8673f76d610cd96e8e0c50f829eb1110fde6a83b37ba40",
+      "raw_json": "{\"room_id\": \"scene_0007\", \"dimensions\": [4.0, 5.0, 3.0], \"provenance\": {\"sidecar_sha256\": \"64c101e2a1b443c52593f67f10afac047b3f9abc7ac984cf5899b7d702fc98b9\"}, \"surfaces\": [{\"id\": \"floor\", \"vertices\": [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [4.0, 5.0, 0.0], [0.0, 5.0, 0.0]], \"rgba\": [0.6, 0.6, 0.6, 1.0], \"roughness\": 0.7}]}",
+      "content": {
+        "room_id": "scene_0007",
+        "dimensions": [
+          4.0,
+          5.0,
+          3.0
+        ],
+        "provenance": {
+          "sidecar_sha256": "64c101e2a1b443c52593f67f10afac047b3f9abc7ac984cf5899b7d702fc98b9"
+        },
+        "surfaces": [
+          {
+            "id": "floor",
+            "vertices": [
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                4.0,
+                0.0,
+                0.0
+              ],
+              [
+                4.0,
+                5.0,
+                0.0
+              ],
+              [
+                0.0,
+                5.0,
+                0.0
+              ]
+            ],
+            "rgba": [
+              0.6,
+              0.6,
+              0.6,
+              1.0
+            ],
+            "roughness": 0.7
+          }
+        ]
+      }
+    },
+    "render": {
+      "path": "/tmp/metafind_continuation_20260907_cpu_final/test_raw_idesign_to_real_cpu_b0/actual_render.json",
+      "sha256": "09587074a1ad5e993449d16026e722c094b56ea3b74817a8ce2d31ba9e485937",
+      "raw_json": "{\"provenance\": {\"source\": \"test-only CPU render\"}, \"engine\": \"CYCLES\", \"device\": \"CPU\", \"threads\": 1, \"samples\": 2, \"seed\": 17, \"resolution\": [64, 64], \"transparent\": false, \"world\": {\"color\": [0.5, 0.5, 0.5], \"strength\": 0.2}, \"color_management\": {\"view_transform\": \"Standard\", \"look\": \"None\", \"exposure\": 0.0, \"gamma\": 1.0}, \"cameras\": [{\"id\": \"test-top\", \"matrix_world\": [[1.0, 0.0, 0.0, 2.0], [0.0, 1.0, 0.0, 2.5], [0.0, 0.0, 1.0, 7.0], [0.0, 0.0, 0.0, 1.0]], \"lens_mm\": 32.0, \"sensor_width_mm\": 36.0, \"clip_start\": 0.01, \"clip_end\": 100.0}], \"lights\": [{\"id\": \"test-area\", \"type\": \"AREA\", \"shape\": \"DISK\", \"matrix_world\": [[1.0, 0.0, 0.0, 2.0], [0.0, 1.0, 0.0, 2.5], [0.0, 0.0, 1.0, 7.0], [0.0, 0.0, 0.0, 1.0]], \"energy\": 600.0, \"color\": [1.0, 1.0, 1.0], \"size\": 5.0}]}",
+      "content": {
+        "provenance": {
+          "source": "test-only CPU render"
+        },
+        "engine": "CYCLES",
+        "device": "CPU",
+        "threads": 1,
+        "samples": 2,
+        "seed": 17,
+        "resolution": [
+          64,
+          64
+        ],
+        "transparent": false,
+        "world": {
+          "color": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "strength": 0.2
+        },
+        "color_management": {
+          "view_transform": "Standard",
+          "look": "None",
+          "exposure": 0.0,
+          "gamma": 1.0
+        },
+        "cameras": [
+          {
+            "id": "test-top",
+            "matrix_world": [
+              [
+                1.0,
+                0.0,
+                0.0,
+                2.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0,
+                2.5
+              ],
+              [
+                0.0,
+                0.0,
+                1.0,
+                7.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ],
+            "lens_mm": 32.0,
+            "sensor_width_mm": 36.0,
+            "clip_start": 0.01,
+            "clip_end": 100.0
+          }
+        ],
+        "lights": [
+          {
+            "id": "test-area",
+            "type": "AREA",
+            "shape": "DISK",
+            "matrix_world": [
+              [
+                1.0,
+                0.0,
+                0.0,
+                2.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0,
+                2.5
+              ],
+              [
+                0.0,
+                0.0,
+                1.0,
+                7.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ],
+            "energy": 600.0,
+            "color": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "size": 5.0
+          }
+        ]
+      }
+    }
+  },
+  "room": {
+    "room_id": "scene_0007",
+    "dimensions": [
+      4.0,
+      5.0,
+      3.0
+    ],
+    "provenance": {
+      "sidecar_sha256": "64c101e2a1b443c52593f67f10afac047b3f9abc7ac984cf5899b7d702fc98b9"
+    },
+    "surfaces": [
+      {
+        "id": "floor",
+        "vertices": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            4.0,
+            0.0,
+            0.0
+          ],
+          [
+            4.0,
+            5.0,
+            0.0
+          ],
+          [
+            0.0,
+            5.0,
+            0.0
+          ]
+        ],
+        "rgba": [
+          0.6,
+          0.6,
+          0.6,
+          1.0
+        ],
+        "roughness": 0.7
+      }
+    ]
+  },
+  "render": {
+    "provenance": {
+      "source": "test-only CPU render"
+    },
+    "engine": "CYCLES",
+    "device": "CPU",
+    "threads": 1,
+    "samples": 2,
+    "seed": 17,
+    "resolution": [
+      64,
+      64
+    ],
+    "transparent": false,
+    "world": {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "strength": 0.2
+    },
+    "color_management": {
+      "view_transform": "Standard",
+      "look": "None",
+      "exposure": 0.0,
+      "gamma": 1.0
+    },
+    "cameras": [
+      {
+        "id": "test-top",
+        "matrix_world": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            2.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            2.5
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            7.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "lens_mm": 32.0,
+        "sensor_width_mm": 36.0,
+        "clip_start": 0.01,
+        "clip_end": 100.0
+      }
+    ],
+    "lights": [
+      {
+        "id": "test-area",
+        "type": "AREA",
+        "shape": "DISK",
+        "matrix_world": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            2.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            2.5
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            7.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "energy": 600.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "size": 5.0
+      }
+    ]
+  },
+  "instances": [
+    {
+      "asset_id": "A",
+      "slot": {
+        "new_object_id": "chair_2",
+        "position": {
+          "x": 1.0,
+          "y": 2.0,
+          "z": 0.5
+        },
+        "rotation": {
+          "z_angle": 0.0
+        },
+        "size_in_meters": {
+          "length": 1.0,
+          "width": 1.0,
+          "height": 1.0
+        },
+        "style": "original planned style",
+        "material": "wood",
+        "is_on_the_floor": true,
+        "placement": {
+          "objects_in_room": [
+            {
+              "object_id": "table_1",
+              "preposition": "on"
+            }
+          ],
+          "room_layout_elements": [
+            {
+              "layout_element_id": "south_wall",
+              "preposition": "on"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "asset_id": "B",
+      "slot": {
+        "new_object_id": "table_1",
+        "position": {
+          "x": 3.0,
+          "y": 2.0,
+          "z": 0.5
+        },
+        "rotation": {
+          "z_angle": 0.0
+        },
+        "size_in_meters": {
+          "length": 1.0,
+          "width": 1.0,
+          "height": 1.0
+        },
+        "style": "original planned style",
+        "material": "wood",
+        "is_on_the_floor": true,
+        "placement": {
+          "objects_in_room": [],
+          "room_layout_elements": [
+            {
+              "layout_element_id": "south_wall",
+              "preposition": "on"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "assets": {
+    "A": {
+      "mesh": {
+        "path": "assets/00000.glb",
+        "sha256": "65ae019d66062823752b49fa849657d923e6b8625c2fa135c05e3a36dbc92221",
+        "frame": "raw_gltf_y_up"
+      },
+      "annotation": {
+        "path": "assets/00000.json",
+        "sha256": "026aaaa52a9421067df60f621a98c35776297c85b70f1c6fdd7d474709203b01"
+      }
+    },
+    "B": {
+      "mesh": {
+        "path": "assets/00001.glb",
+        "sha256": "4c328ed4a29f74ddef5c6e1d956689a6de033449e804aa6382c7af16464c309a",
+        "frame": "raw_gltf_y_up"
+      },
+      "annotation": {
+        "path": "assets/00001.json",
+        "sha256": "38e9b7f99fae2bbe96166ae8df808383c388924fb5c7a5d27f00b3861dd0fb4d"
+      }
+    }
+  },
+  "choices": {
+    "placement": "idesign_planned_bbox_per_axis_fit",
+    "anchor": "bbox_center",
+    "raw_mesh_yaw_offset_degrees": 180,
+    "scene_unit_scale_length": 1.0,
+    "imported_cameras_lights": "disabled",
+    "true_asset_front": "UNKNOWN"
+  },
+  "implementation": {
+    "placement_sha256": "f2c016eeb8ba3fe58c4f7fd05aea57f60c13f7ef43644001ddab1a46214f1def",
+    "blender_place_sha256": "4771a482ee7505e552d5fd3eabbb8b9e659f2e15afcad0944ccd10652ed70f9f"
+  }
+}

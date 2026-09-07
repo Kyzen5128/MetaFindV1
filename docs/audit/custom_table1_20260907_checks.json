@@ -1,0 +1,48 @@
+{
+  "date": "2026-09-07",
+  "scope": "Custom seven-modality same-UID evaluation implementation; no real corpus evaluation",
+  "code_revision": "87ccfbbf460cfd2bcc518f654e1b7d0fd3e506d8",
+  "source_files": {
+    "docs/CUSTOM_TABLE1_EVALUATION.md": "f02ad35d9127dcaa7d36a3bb9c722b6599f0d44e9e0d1a66b6c10d9d0c86ad00",
+    "metafind/eval/custom_models.py": "a94a02d282ba800dde56c678fe4f993296f2896be3cb106cdcb9930357ad65d0",
+    "metafind/eval/custom_protocol.py": "2f6d77d0db780a81ac35a65f17343d6e0c34bcdb5603b5a6c0d1e03cfcb4ce99",
+    "metafind/eval/custom_table1.py": "9d8d25309baed13489968723d67a22c1b83bb19c02efff349f16f7d567a1de43",
+    "tests/test_custom_models.py": "023aca4e79f6fe6f954a9ab79070813902665d4f196dbfd80c150dab37acc8a1",
+    "tests/test_custom_protocol.py": "65b86f4b98213a007163931e76a637c690bf2b252daeb6e399bbff0f5d899443",
+    "tests/test_custom_table1.py": "d270ddd9dc7a3c6e61bf136bdba3ae5086ff4667549526ae3830e2f856bc67ab"
+  },
+  "checks": {
+    "cpu_regression": {
+      "command": "/home/kyzen/miniconda3/envs/MetaFind/bin/python -m pytest tests -q --ignore=tests/test_cuda_smoke.py --ignore=tests/test_research_authority_guard.py",
+      "exit_code": 0,
+      "passed": 1236,
+      "warnings": 69,
+      "duration_seconds": 68.56,
+      "new_tests": {
+        "custom_protocol": 46,
+        "custom_models": 15,
+        "custom_table1": 37
+      },
+      "limitation": "Synthetic inputs, tiny actual fusion models, and substitute backbones; no production ULIP-2 inference.",
+      "notable_warning": "PytestUnhandledThreadExceptionWarning: multiprocessing QueueFeederThread cleanup raised bad file descriptor / semaphore released too many times; not fixed in this change."
+    },
+    "cli_help": {
+      "modules": [
+        "metafind.eval.custom_protocol",
+        "metafind.eval.custom_table1"
+      ],
+      "exit_code": 0
+    },
+    "new_file_whitespace": {
+      "checked_files": 7,
+      "issues": []
+    }
+  },
+  "not_executed": [
+    "GPU smoke tests",
+    "Claude-only research authority hook tests",
+    "Real corpus query preparation",
+    "Real ULIP-2/Stage1/Stage2 retrieval evaluation"
+  ],
+  "paper_claim": "IMPLEMENTATION CHOICE: custom evaluation; not an exact reproduction of author Table 1."
+}

@@ -1,0 +1,92 @@
+{
+  "schema": "metafind.status.v1",
+  "observed_at": "2026-09-07T17:37:49.666018+00:00",
+  "repo": "/home/kyzen/MetaFindV1",
+  "data": "/home/kyzen/metafind/metafind_data_paper",
+  "processes": {
+    "jobs": [
+      {
+        "pid": 2043427,
+        "kind": "module",
+        "target": "metafind.data.annotate_run",
+        "prompt_mode": "figure2_v10",
+        "writes_annotation_arm": false,
+        "cwd": "/home/kyzen/MetaFindV1",
+        "data": "/home/kyzen/metafind/metafind_data_paper",
+        "stdout": "pipe:[20815692]"
+      },
+      {
+        "pid": 2465870,
+        "kind": "chain",
+        "target": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage1_20260906.sh",
+        "cwd": "/home/kyzen/MetaFindV1",
+        "data": "/home/kyzen/metafind/metafind_data_paper",
+        "stdout": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage1_20260906.log"
+      },
+      {
+        "pid": 2494552,
+        "kind": "chain",
+        "target": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage2_20260906.sh",
+        "cwd": "/home/kyzen/MetaFindV1",
+        "data": "/home/kyzen/metafind/metafind_data_paper",
+        "stdout": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage2_20260906.log"
+      }
+    ],
+    "error": null,
+    "unavailable": 0
+  },
+  "annotations": {
+    "path": "/home/kyzen/metafind/metafind_data_paper/outputs/annotations",
+    "count": 23255,
+    "error": null,
+    "contracts": {
+      "metafind_annot_v10@f0c98e5540218047": 23255
+    },
+    "invalid_records": 0,
+    "prompt_mode": "figure2_v10",
+    "expected_contract": "metafind_annot_v10@f0c98e5540218047",
+    "matching_contract_records": 23255,
+    "scope": "Contract labels only; not producer completion or image-identity validation."
+  },
+  "render_index": {
+    "path": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/renders_index.jsonl",
+    "unique_uids": 46012,
+    "duplicate_rows": 0,
+    "error": null
+  },
+  "record_inventory": {
+    "pointclouds": {
+      "path": "/home/kyzen/metafind/metafind_data_paper/outputs/pointclouds",
+      "count": 46052,
+      "error": null
+    },
+    "renders": {
+      "path": "/home/kyzen/metafind/metafind_data_paper/outputs/renders",
+      "count": 46012,
+      "error": null
+    },
+    "embeddings": {
+      "path": "/home/kyzen/metafind/metafind_data_paper/outputs/embeddings",
+      "count": 0,
+      "error": null
+    },
+    "scene_graphs": {
+      "path": "/home/kyzen/metafind/metafind_data_paper/outputs/scene_graphs",
+      "count": 12000,
+      "error": null
+    },
+    "procthor_modalities": {
+      "path": "/home/kyzen/metafind/metafind_data_paper/outputs/procthor_modalities",
+      "count": 1467,
+      "error": null
+    }
+  },
+  "semantic_files_present": {
+    "sem_edge_cache.json": true,
+    "sem_edge_embeddings.npz": true,
+    "procthor_node_embeddings.json": true,
+    "procthor_node_embeddings.npz": true
+  },
+  "checkpoint_records_present": [],
+  "scope": "Read-only, non-atomic inventory. Presence does not establish completion, current inputs, gate success, or a runnable queue."
+}

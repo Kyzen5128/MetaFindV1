@@ -8,12 +8,14 @@
 > **最後更新 2026-08-17，距今已久，數字與狀態都不可信。**
 >
 > 現況請用：
-> - 進度數字 → `bash tools/status.sh`
+> - 實際程序／檔案盤點 → `bash tools/status.sh --data /absolute/path/to/data`；不指定時讀 `METAFIND_DATA` 或 repo 的 `data`。盤點不認證完成。
 > - 決策狀態 → `workflow/DECISION_LEDGER.md`
-> - 復現規格 → `docs/METAFIND_NOTEBOOK.md`
-> - 治理規則 → `docs/_rules_preamble.md`
+> - 程式入口與資料流 → [DATA_FLOW.md](DATA_FLOW.md)
+> - 新評估方式 → [CUSTOM_TABLE1_EVALUATION.md](CUSTOM_TABLE1_EVALUATION.md)
+> - 本次整理與驗證 → [CLEANUP_REPORT_20260907.md](CLEANUP_REPORT_20260907.md)
+> - 現行權威與保護路徑規則 → [AGENTS.md](../AGENTS.md)
 >
-> 本檔保留是因為 `workflow/MASTER.md` 仍引用它，**不是**因為內容仍然有效。
+> 本檔與 `workflow/MASTER.md` 均保留為歷史快照，**不代表現況**。
 > 不要拿這裡的任何數字做決定。
 
 **更新於 2026-08-17 · SHA `430afdd`**
@@ -222,8 +224,10 @@ arXiv TeX 原始檔  >  已發表 PDF  >  轉檔 Markdown
 
 - **場景理解只認得 93 種東西。** 1,467 個資產只有 93 種描述，74 個資產都叫
   「a side table」。**不能寫成「分辨了 1,467 個資產」。**
-- **論文裡沒有任何訓練超參數。** 層數、寬度、batch size、learning rate、
-  optimizer、epoch、溫度、OpenCLIP 版本 —— 全部沒有。
-  **任何數字都不能寫成「復現了論文的數字」。**
+- **2026-09-07 原文更正：**「沒有任何訓練超參數」的舊說法錯誤。
+  論文明確指定所有實驗溫度 **0.5**，並說明 Stage 2 scene dropout **30%**
+  （[§3.1–3.2 原文](paper/metafind_source/3experiments.tex)）。其他未指定設定須分別標記
+  UNKNOWN／IMPLEMENTATION CHOICE；不能把溫度一併列為未知，也不能以設定已核對
+  宣稱表格數值已復現。
 - **不能報告尺度穩健性。** 論文說要解決縮放問題，但它用的數學不含縮放。
 - **ESSGNN 架構是推論。** 論文兩個都寫了，沒說跑哪個。

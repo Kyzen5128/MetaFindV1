@@ -360,11 +360,12 @@ class ModalityFusion(nn.Module):
         if kind == "gated":
             logits = self.head(x).squeeze(-1)  # (B, 3)
             logits = logits.masked_fill(~active, torch.finfo(logits.dtype).min)
-            # Every slot inactive would softmax over all -inf and give NaN; fall
-            # back to uniform so the mask tokens are simply averaged.
+            # Keep the empty-row softmax finite, then apply the active weights
+            # below so excluded tokens cannot re-enter the result or gradient.
+            # As with mean/Transformer, a fully excluded row returns zero.
             dead = ~active.any(dim=-1, keepdim=True)
             logits = torch.where(dead, torch.zeros_like(logits), logits)
-            return (x * logits.softmax(dim=-1).unsqueeze(-1)).sum(dim=1)
+            return (x * logits.softmax(dim=-1).unsqueeze(-1) * w).sum(dim=1)
 
         # transformer. A row with no active slot would make every key padded,
         # which yields NaN from the attention softmax, so such rows attend

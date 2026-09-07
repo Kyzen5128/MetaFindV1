@@ -1,0 +1,605 @@
+{
+  "schema": "metafind.scene_placement.v1",
+  "status": "complete",
+  "manifest_sha256": "b9a664d1df643cd67e2bcfa68a9237a12e4555188cc7573e9706dffcd9ea594a",
+  "classification": "IMPLEMENTATION CHOICE",
+  "instances": [
+    {
+      "asset_id": "0002c6eafa154e8bb08ebafb715a8d46",
+      "slot_id": "diagnostic_slot_1",
+      "slot": {
+        "new_object_id": "diagnostic_slot_1",
+        "position": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 0.4
+        },
+        "rotation": {
+          "z_angle": 0.0
+        },
+        "size_in_meters": {
+          "length": 0.8,
+          "width": 0.8,
+          "height": 0.8
+        },
+        "placement": {
+          "objects_in_room": []
+        }
+      },
+      "root": "instance_00000",
+      "imported_objects": [
+        "Circle.001_14",
+        "Circle.002_15",
+        "Circle.003_16",
+        "Circle.004_17",
+        "Circle.005_18",
+        "Circle.006_19",
+        "Circle.007_20",
+        "Circle.008_22",
+        "Circle_13",
+        "GLTF_SceneRootNode",
+        "Object_11",
+        "Object_13",
+        "Object_15",
+        "Object_17",
+        "Object_19",
+        "Object_21",
+        "Object_23",
+        "Object_25",
+        "Object_27",
+        "Object_29",
+        "Object_31",
+        "Object_33",
+        "Object_35",
+        "Object_37",
+        "Object_39",
+        "Object_4",
+        "Object_40",
+        "Object_42",
+        "Object_5",
+        "Object_7",
+        "Object_9",
+        "Plane_21",
+        "Sketchfab_model",
+        "cake_4",
+        "root",
+        "strawberry.001_5",
+        "strawberry.002_6",
+        "strawberry.003_7",
+        "strawberry.004_8",
+        "strawberry.005_9",
+        "strawberry.006_10",
+        "strawberry.007_11",
+        "strawberry.008_12"
+      ],
+      "mesh_objects": [
+        "Object_11",
+        "Object_13",
+        "Object_15",
+        "Object_17",
+        "Object_19",
+        "Object_21",
+        "Object_23",
+        "Object_25",
+        "Object_27",
+        "Object_29",
+        "Object_31",
+        "Object_33",
+        "Object_35",
+        "Object_37",
+        "Object_39",
+        "Object_4",
+        "Object_40",
+        "Object_42",
+        "Object_5",
+        "Object_7",
+        "Object_9"
+      ],
+      "raw_blender_bbox": [
+        [
+          -1.4144765138626099,
+          -1.4144768714904785,
+          -0.058488719165325165
+        ],
+        [
+          1.4144765138626099,
+          1.4144768714904785,
+          1.1903361082077026
+        ]
+      ],
+      "scale_factors": [
+        0.2827901244163513,
+        0.28279006481170654,
+        0.6406022310256958
+      ],
+      "matrix_world": [
+        [
+          -0.2827901244163513,
+          -2.4722291769307958e-08,
+          0.0,
+          1.0
+        ],
+        [
+          2.4722297098378476e-08,
+          -0.28279006481170654,
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.6406022310256958,
+          0.037468016147613525
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "placed_local_bbox": [
+        [
+          -0.3999999463558197,
+          -0.3999999165534973,
+          -0.3999999761581421
+        ],
+        [
+          0.4000000059604645,
+          0.3999999761581421,
+          0.39999985694885254
+        ]
+      ],
+      "actual_bbox": [
+        [
+          0.6000000238418579,
+          0.6000000834465027,
+          2.2351741790771484e-08
+        ],
+        [
+          1.399999976158142,
+          1.399999976158142,
+          0.7999998927116394
+        ]
+      ],
+      "yaw_degrees": 180.0
+    },
+    {
+      "asset_id": "0002064ef02e46f9a10b4bff10bae805",
+      "slot_id": "diagnostic_slot_2",
+      "slot": {
+        "new_object_id": "diagnostic_slot_2",
+        "position": {
+          "x": 3.0,
+          "y": 1.0,
+          "z": 0.4
+        },
+        "rotation": {
+          "z_angle": 90.0
+        },
+        "size_in_meters": {
+          "length": 0.8,
+          "width": 0.8,
+          "height": 0.8
+        },
+        "placement": {
+          "objects_in_room": []
+        }
+      },
+      "root": "instance_00001",
+      "imported_objects": [
+        "Object_2",
+        "Object_3",
+        "Object_4.001",
+        "Sketchfab_model.001",
+        "model.obj.cleaner.materialmerger.gles"
+      ],
+      "mesh_objects": [
+        "Object_2",
+        "Object_3",
+        "Object_4.001"
+      ],
+      "raw_blender_bbox": [
+        [
+          -1.267408013343811,
+          -2.6319708824157715,
+          -0.2932562530040741
+        ],
+        [
+          2.5190770626068115,
+          0.8899552226066589,
+          3.043280601501465
+        ]
+      ],
+      "scale_factors": [
+        0.21127773821353912,
+        0.22714842855930328,
+        0.2397695630788803
+      ],
+      "matrix_world": [
+        [
+          1.5951025389426832e-08,
+          0.22714842855930328,
+          0.0,
+          3.197848081588745
+        ],
+        [
+          -0.21127773821353912,
+          1.7149229591950643e-08,
+          0.0,
+          1.1322249174118042
+        ],
+        [
+          0.0,
+          0.0,
+          0.2397695630788803,
+          0.07031393051147461
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "placed_local_bbox": [
+        [
+          -0.3999999463558197,
+          -0.3999998867511749,
+          -0.3999999165534973
+        ],
+        [
+          0.40000003576278687,
+          0.4000000059604645,
+          0.3999999463558197
+        ]
+      ],
+      "actual_bbox": [
+        [
+          2.6000001430511475,
+          0.5999999642372131,
+          9.699570568955096e-08
+        ],
+        [
+          3.3999998569488525,
+          1.399999976158142,
+          0.7999999523162842
+        ]
+      ],
+      "yaw_degrees": 270.0
+    },
+    {
+      "asset_id": "0002c6eafa154e8bb08ebafb715a8d46",
+      "slot_id": "diagnostic_slot_3",
+      "slot": {
+        "new_object_id": "diagnostic_slot_3",
+        "position": {
+          "x": 2.0,
+          "y": 3.0,
+          "z": 0.4
+        },
+        "rotation": {
+          "z_angle": 30.0
+        },
+        "size_in_meters": {
+          "length": 0.8,
+          "width": 0.8,
+          "height": 0.8
+        },
+        "placement": {
+          "objects_in_room": []
+        }
+      },
+      "root": "instance_00002",
+      "imported_objects": [
+        "Circle.001_14.001",
+        "Circle.002_15.001",
+        "Circle.003_16.001",
+        "Circle.004_17.001",
+        "Circle.005_18.001",
+        "Circle.006_19.001",
+        "Circle.007_20.001",
+        "Circle.008_22.001",
+        "Circle_13.001",
+        "GLTF_SceneRootNode.001",
+        "Object_11.001",
+        "Object_13.001",
+        "Object_15.001",
+        "Object_17.001",
+        "Object_19.001",
+        "Object_21.001",
+        "Object_23.001",
+        "Object_25.001",
+        "Object_27.001",
+        "Object_29.001",
+        "Object_31.001",
+        "Object_33.001",
+        "Object_35.001",
+        "Object_37.001",
+        "Object_39.001",
+        "Object_4.002",
+        "Object_40.001",
+        "Object_42.001",
+        "Object_5.001",
+        "Object_7.001",
+        "Object_9.001",
+        "Plane_21.001",
+        "Sketchfab_model.002",
+        "cake_4.001",
+        "root.001",
+        "strawberry.001_5.001",
+        "strawberry.002_6.001",
+        "strawberry.003_7.001",
+        "strawberry.004_8.001",
+        "strawberry.005_9.001",
+        "strawberry.006_10.001",
+        "strawberry.007_11.001",
+        "strawberry.008_12.001"
+      ],
+      "mesh_objects": [
+        "Object_11.001",
+        "Object_13.001",
+        "Object_15.001",
+        "Object_17.001",
+        "Object_19.001",
+        "Object_21.001",
+        "Object_23.001",
+        "Object_25.001",
+        "Object_27.001",
+        "Object_29.001",
+        "Object_31.001",
+        "Object_33.001",
+        "Object_35.001",
+        "Object_37.001",
+        "Object_39.001",
+        "Object_4.002",
+        "Object_40.001",
+        "Object_42.001",
+        "Object_5.001",
+        "Object_7.001",
+        "Object_9.001"
+      ],
+      "raw_blender_bbox": [
+        [
+          -1.4144765138626099,
+          -1.4144768714904785,
+          -0.058488719165325165
+        ],
+        [
+          1.4144765138626099,
+          1.4144768714904785,
+          1.1903361082077026
+        ]
+      ],
+      "scale_factors": [
+        0.2827901244163513,
+        0.28279006481170654,
+        0.6406022310256958
+      ],
+      "matrix_world": [
+        [
+          -0.24490346014499664,
+          0.1413949877023697,
+          0.0,
+          2.0
+        ],
+        [
+          -0.14139501750469208,
+          -0.24490341544151306,
+          0.0,
+          3.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.6406022310256958,
+          0.037468016147613525
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "placed_local_bbox": [
+        [
+          -0.40000009536743164,
+          -0.3999999463558197,
+          -0.3999999761581421
+        ],
+        [
+          0.39999985694885254,
+          0.3999999463558197,
+          0.39999985694885254
+        ]
+      ],
+      "actual_bbox": [
+        [
+          1.6002116203308105,
+          2.6002116203308105,
+          2.2351741790771484e-08
+        ],
+        [
+          2.3997883796691895,
+          3.3997883796691895,
+          0.7999998927116394
+        ]
+      ],
+      "yaw_degrees": 210.0
+    }
+  ],
+  "room": {
+    "room_id": "real-model-diagnostic-three-slots",
+    "dimensions": [
+      4.0,
+      4.0,
+      3.0
+    ],
+    "provenance": {
+      "classification": "IMPLEMENTATION CHOICE: three explicitly hand-declared diagnostic slots and room; not generated by IDesign, not the author's Table2 scene list.",
+      "candidate_selection": "same six fixed Objaverse UIDs used in the preceding custom evaluator, sorted; not selected by score",
+      "protocol": "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/protocol/protocol.json",
+      "protocol_sha256": "ac407520896b1f89e2bf9b3ed7ad92b43ed05a377a3523e281cd06a6fe412959"
+    },
+    "surfaces": [
+      {
+        "id": "floor",
+        "vertices": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            4.0,
+            0.0,
+            0.0
+          ],
+          [
+            4.0,
+            4.0,
+            0.0
+          ],
+          [
+            0.0,
+            4.0,
+            0.0
+          ]
+        ],
+        "rgba": [
+          0.65,
+          0.65,
+          0.65,
+          1.0
+        ],
+        "roughness": 0.7
+      }
+    ]
+  },
+  "render_config": {
+    "provenance": {
+      "classification": "IMPLEMENTATION CHOICE: three explicitly hand-declared diagnostic slots and room; not generated by IDesign, not the author's Table2 scene list.",
+      "candidate_selection": "same six fixed Objaverse UIDs used in the preceding custom evaluator, sorted; not selected by score",
+      "protocol": "/home/kyzen/MetaFindV1/output/validation/custom_table1_cpu_real_20260907/protocol/protocol.json",
+      "protocol_sha256": "ac407520896b1f89e2bf9b3ed7ad92b43ed05a377a3523e281cd06a6fe412959"
+    },
+    "engine": "CYCLES",
+    "device": "CPU",
+    "threads": 2,
+    "samples": 8,
+    "seed": 20260908,
+    "resolution": [
+      512,
+      512
+    ],
+    "transparent": false,
+    "world": {
+      "color": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "strength": 0.3
+    },
+    "color_management": {
+      "view_transform": "Standard",
+      "look": "None",
+      "exposure": 0.0,
+      "gamma": 1.0
+    },
+    "cameras": [
+      {
+        "id": "diagnostic-perspective",
+        "matrix_world": [
+          [
+            0.9138115486202572,
+            -0.19801948112473058,
+            0.354593765742349,
+            6.0
+          ],
+          [
+            0.4061384660534476,
+            0.44554383253064384,
+            -0.7978359729202853,
+            -7.0
+          ],
+          [
+            -0.0,
+            0.8730858940499486,
+            0.48756642789572985,
+            6.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "lens_mm": 42.0,
+        "sensor_width_mm": 36.0,
+        "clip_start": 0.01,
+        "clip_end": 100.0
+      }
+    ],
+    "lights": [
+      {
+        "id": "diagnostic-area",
+        "type": "AREA",
+        "shape": "DISK",
+        "matrix_world": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            2.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            2.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            6.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "energy": 600.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "size": 4.0
+      }
+    ]
+  },
+  "renders": [
+    {
+      "camera_id": "diagnostic-perspective",
+      "path": "view_000.png",
+      "sha256": "5553649625d3958893cf5db61368ada04388227db6d68ce32360bd6cd1de46dd"
+    }
+  ],
+  "blend": {
+    "path": "scene.blend",
+    "sha256": "180501c5c838076f654507751cc87026bea35270937201c5b115645dec04f127"
+  },
+  "blender_version": "4.2.1 LTS",
+  "blender_build_hash": "396f546c9d82",
+  "device": "CPU",
+  "implementation": {
+    "placement_sha256": "f2c016eeb8ba3fe58c4f7fd05aea57f60c13f7ef43644001ddab1a46214f1def",
+    "blender_place_sha256": "4771a482ee7505e552d5fd3eabbb8b9e659f2e15afcad0944ccd10652ed70f9f"
+  }
+}

@@ -1,0 +1,11 @@
+CLI ['/home/kyzen/miniconda3/envs/MetaFind/bin/python', '-m', 'metafind.models.resolve_stage2', '--decided-by', 'isolated CPU diagnostic; existing resolved decisions']
+Stage 2 protocols materialised by isolated CPU diagnostic; existing resolved decisions
+  positives      8 assets, identity mapping
+  modalities     ('text', 'image') (DL-104)
+  excluded       0 missing a declared modality
+  gallery_scope  procthor
+  sampling       object_instance, target removed = True, unique positive per batch = True
+  edges          neighbourhood_only, symmetric, missing -> learned_missing_token
+  architecture   d^2, 7 layers x 128, independent
+parent and protocols bound full df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532
+{"phase": "bind", "status": "complete", "seconds": 1.49263334274292}

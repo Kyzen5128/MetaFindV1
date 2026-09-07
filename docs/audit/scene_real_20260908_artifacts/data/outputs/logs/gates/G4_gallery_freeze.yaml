@@ -1,0 +1,115 @@
+code_dirty: true
+code_revision: 87ccfbbf460cfd2bcc518f654e1b7d0fd3e506d8
+criterion: "index width equals the checkpoint's embedding width AND index count equals\
+  \ len(admitted) AND no NaN and no zero vectors AND for each of 1000 sampled gallery\
+  \ vectors used as its own query,\n    sim(target) == max(sim) and the target is\
+  \ a member of the argmax\n    tie set\n    [CORRECTED from \"recall@1 == 1.0\",\
+  \ which is not tie-safe: two\n     identical embeddings let argmax return either\
+  \ id, so a correct index\n     can score below 1.0 and a broken one can reach it]"
+expected_uid_set_sha256: 7cff7e7eaeaad8bd6c467aa7622c5aac812064b5823e50fd5bc4f05eadcb62c2
+gallery_encoder_sha256: cc06dad05c92368b0ac4c7d91cd3d8562725d7a307bc0b6544157b948fe96d0f
+gate_class: G-CONTAM
+gate_id: G4_gallery_freeze
+index_sha256: 7e2f94854aa533b20a8b04f580a13a8e318af4ee542e1c10fe12e7e3ef3ec90a
+index_uri: /home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/gallery_index_df4e81fee9da89bc.npz
+inputs:
+  index_uri: /home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/gallery_index_df4e81fee9da89bc.npz
+  splits: /home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/splits.json
+  stage1_ckpt_record: /home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/checkpoints/actual_cpu_step/stage1_best_ckpt.json
+  staging_index: /home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/gallery_index_staging.json
+  staging_record_sha256: a545ba86d7b2d93fe02df019b5792d8dea705dc917397a9322d905bd70db6a31
+is_terminal: true
+observed:
+  checkpoint_embedding_dim: 1280
+  checkpoint_record_sha256: df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532
+  checkpoint_uri: /home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/checkpoints/actual_cpu_step/stage1_best.pt
+  checkpoint_weights_sha256_verified: true
+  collapse_note: 'This criterion cannot detect a collapsed index: every vector ties
+    for the maximum, so the target is in the argmax tie set. MEASURED 2026-08-30,
+    and the bound is the measurement, not a proof -- 120 trials over 3 shapes (d=8/ng=30,
+    d=1280/ng=999, d=1280/ng=4569), 0 of 120 failed. It is NOT analytically guaranteed:
+    retrieval.rank_of_target records identical GEMM columns differing by one ULP in
+    61 of 400 collapsed galleries, in a toy regime (small d, unnormalised). At that
+    rate a collapsed index could fail this criterion by ACCIDENT, which is not the
+    same as being detected. The [CORRECTED] change to validation_plan.yaml bought
+    tie-safety and paid in collapse-blindness. effective_rank is recorded for that
+    reason and is NOT a pass condition.'
+  corpus_note: The id and count clauses compare n11's OUTPUT against n11's own INPUT.
+    len(admitted) is derived from splits.json object train+test, which is the same
+    artifact gallery_index.main built its id list from, so a mismatch means an n11
+    bug -- a dropped, duplicated or misnamed row -- and NOT a wrong corpus. If splits.json
+    itself names the wrong assets, the index will agree with it and this gate will
+    PASS. G3_object_corpus is the gate that judges the corpus; this one judges the
+    encode.
+  duplicate_examples: []
+  embedding_health:
+    dim: 1280
+    effective_rank: 3.3011009743458484
+    effective_rank_centred: 4.907718374085341
+    per_dim_std_max: 0.03513519427736142
+    per_dim_std_median: 0.015144851592628579
+    per_dim_std_min: 0.0031319661430260354
+  expected_uid_set_sha256: 7cff7e7eaeaad8bd6c467aa7622c5aac812064b5823e50fd5bc4f05eadcb62c2
+  extra_examples: []
+  failures: []
+  gallery_encoder_sha256: cc06dad05c92368b0ac4c7d91cd3d8562725d7a307bc0b6544157b948fe96d0f
+  ids_are_sorted: true
+  ids_sorted_note: 'n11 (gallery_index.main) builds ids = sorted(train + test) and
+    appends vectors in that same loop, so a correct staging index has sorted ids.
+    Recorded because L2-GALLERY-SELF''s declared negative injection -- shuffle the
+    index id mapping -- does NOT fail the self-retrieval criterion: that criterion
+    scores each gallery row against itself, so shuffling ids against rows leaves the
+    arithmetic bit-identical. This is NOT a pass condition; sorted row order is n11''s
+    convention and the stated criterion does not mention it. Nothing inside the index
+    can detect a shuffle that leaves the ids sorted -- that needs a re-encode against
+    the checkpoint.'
+  index_dim: 1280
+  index_sha256_in_staging_record: 7e2f94854aa533b20a8b04f580a13a8e318af4ee542e1c10fe12e7e3ef3ec90a
+  index_sha256_match: true
+  index_sha256_on_disk: 7e2f94854aa533b20a8b04f580a13a8e318af4ee542e1c10fe12e7e3ef3ec90a
+  index_uid_set_sha256: 7cff7e7eaeaad8bd6c467aa7622c5aac812064b5823e50fd5bc4f05eadcb62c2
+  index_uri: /home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/gallery_index_df4e81fee9da89bc.npz
+  inf_examples: []
+  missing_examples: []
+  n_admitted_listed: 6
+  n_admitted_unique: 6
+  n_duplicate_index_ids: 0
+  n_extra_in_index: 0
+  n_index_ids: 6
+  n_inf_rows: 0
+  n_missing_from_index: 0
+  n_nan_rows: 0
+  n_test: 6
+  n_train: 0
+  n_unique_index_ids: 6
+  n_zero_norm_rows: 0
+  nan_examples: []
+  self_retrieval:
+    failed_examples: []
+    max_tie_count: 0
+    n_failed: 0
+    n_target_is_max: 6
+    n_with_ties: 0
+    n_zero_strictly_higher: 6
+    sample_seed: 20260816
+    sample_size: 6
+    sample_uid_sequence_sha256: 7cff7e7eaeaad8bd6c467aa7622c5aac812064b5823e50fd5bc4f05eadcb62c2
+  split_seed: 20260816
+  splits_admitted_total: 6
+  splits_path: /home/kyzen/MetaFindV1/output/validation/scene_cpu_real_20260908/data/outputs/splits.json
+  stage1_checkpoint_sha256_in_staging: df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532
+  staging_map_key: df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532
+  staging_record_count: 6
+  staging_record_dim: 1280
+  staging_record_sha256: a545ba86d7b2d93fe02df019b5792d8dea705dc917397a9322d905bd70db6a31
+  zero_norm_examples: []
+rc: 0
+record_kind: gate
+runtime_source_sha256: a57f49cd10bfd06fc2048be9972e17fc8793f838861cbc01dc6cff3409fc3d7e
+runtime_source_status: ok
+sample_uid_sequence_sha256: 7cff7e7eaeaad8bd6c467aa7622c5aac812064b5823e50fd5bc4f05eadcb62c2
+scope: gallery_index_staging[df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532]
+stage1_checkpoint_sha256: df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532
+staging_record_sha256: a545ba86d7b2d93fe02df019b5792d8dea705dc917397a9322d905bd70db6a31
+timestamp: 2026-09-08T01:11:36+0800
+verdict: PASS

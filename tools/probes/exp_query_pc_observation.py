@@ -103,7 +103,7 @@ def main() -> int:
             raise SystemExit(f"unknown policy {p!r}; have {POLICIES}")
 
     from metafind.train.stage1 import QueryPack
-    from tools.probes.exp_query_observation import load_tower
+    from metafind.eval.custom_models import load_fusion_tower
 
     sp = json.loads((paths.OUTPUTS / "splits.json").read_text())["object"]
     g_uids, q_uids = sorted(sp["train"]), sorted(sp["dev_val"])
@@ -176,7 +176,7 @@ def main() -> int:
     ck = torch.load(args.ckpt, map_location=args.device, weights_only=False)
     bb.model.load_state_dict(ck["backbone_trainable_state"], strict=False)
     bb.model.eval()
-    model = load_tower(Path(args.ckpt), args.device)
+    model = load_fusion_tower(Path(args.ckpt), args.device)
     print(f"\nP1 tower: prefusion_norm={getattr(model.query.cfg, 'prefusion_norm', '?')}"
           if hasattr(model, "query") and hasattr(model.query, "cfg") else "\nP1 tower loaded", flush=True)
     g_pc1 = encode_gallery_pc(bb, g_uids, tag="B")

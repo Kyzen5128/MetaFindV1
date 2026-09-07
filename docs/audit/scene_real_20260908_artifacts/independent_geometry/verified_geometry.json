@@ -1,0 +1,86 @@
+{
+  "status": "passed",
+  "classification": "Independent actual saved vertex geometry check, not visual quality or paper-scene validation",
+  "checker_sha256": "5faf04f4fa2dc5c737176fff5e3e2aac336d6324929d2ecdb80b0c8f286e0d2d",
+  "manifest_sha256": "b9a664d1df643cd67e2bcfa68a9237a12e4555188cc7573e9706dffcd9ea594a",
+  "blend_sha256": "180501c5c838076f654507751cc87026bea35270937201c5b115645dec04f127",
+  "oracle": "trimesh glTF hierarchy -> C(x,y,z)=(x,-z,y) -> actual vertex bbox center/peraxis fit -> Rz(slot_yaw+180) -> slot center; bidirectional nearest-vertex comparison",
+  "no_production_bounds_or_transform_imports": true,
+  "instances": [
+    {
+      "slot_id": "diagnostic_slot_1",
+      "asset_id": "0002c6eafa154e8bb08ebafb715a8d46",
+      "actual_vertex_count": 19379,
+      "source_vertex_count": 19379,
+      "slot_frame_center": [
+        0.0,
+        -2.9802322387695312e-08,
+        -4.246830942467028e-08
+      ],
+      "slot_frame_size": [
+        0.7999999523162842,
+        0.7999998927116394,
+        0.7999998703598976
+      ],
+      "expected_size": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "yaw_degrees": 180.0,
+      "max_actual_to_source_distance": 2.6449798909561083e-07,
+      "max_source_to_actual_distance": 2.6449798909561083e-07,
+      "absolute_tolerance": 1e-05
+    },
+    {
+      "slot_id": "diagnostic_slot_2",
+      "asset_id": "0002064ef02e46f9a10b4bff10bae805",
+      "actual_vertex_count": 98167,
+      "source_vertex_count": 98167,
+      "slot_frame_center": [
+        2.9802322387695312e-08,
+        0.0,
+        2.465599491241477e-08
+      ],
+      "slot_frame_size": [
+        0.800000011920929,
+        0.7999997138977051,
+        0.7999998553205785
+      ],
+      "expected_size": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "yaw_degrees": 270.0,
+      "max_actual_to_source_distance": 3.999968197042164e-07,
+      "max_source_to_actual_distance": 3.999968197042164e-07,
+      "absolute_tolerance": 3.0000000000000004e-05
+    },
+    {
+      "slot_id": "diagnostic_slot_3",
+      "asset_id": "0002c6eafa154e8bb08ebafb715a8d46",
+      "actual_vertex_count": 19379,
+      "source_vertex_count": 19379,
+      "slot_frame_center": [
+        -5.1619136576253055e-08,
+        -2.9802322387695312e-08,
+        -4.246830942467028e-08
+      ],
+      "slot_frame_size": [
+        0.80000014015305,
+        0.7999996516242964,
+        0.7999998703598976
+      ],
+      "expected_size": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "yaw_degrees": 210.0,
+      "max_actual_to_source_distance": 3.0288472011639794e-07,
+      "max_source_to_actual_distance": 3.0288472011639794e-07,
+      "absolute_tolerance": 3.0000000000000004e-05
+    }
+  ]
+}

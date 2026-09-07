@@ -101,6 +101,36 @@ def load_checkpoint_record(record_path: str | Path | None = None) -> dict:
 GALLERY_ENCODER_HASH_VERSION = 2
 
 
+def stage2_layout_settings(record: dict) -> tuple[bool, float | None]:
+    """Resolve the saved layout branch, including the approved no-layout arm."""
+    import math
+
+    initial = record.get("lambda_init")
+    use_layout = record.get("use_layout")
+    if "use_layout" not in record:
+        # Earlier Stage 2 writers already bound the variant and lambda to the
+        # weights; the no-layout arm deliberately saved lambda_init=None.
+        use_layout = not (record.get("variant_id") == "no_layout" and initial is None)
+    if not isinstance(use_layout, bool):
+        raise ValueError("Stage 2 use_layout must be boolean")
+    variant = record.get("variant_id")
+    if (variant == "full" and not use_layout) or (variant == "no_layout" and use_layout):
+        raise ValueError(f"Stage 2 variant {variant!r} disagrees with use_layout")
+    if not use_layout:
+        if initial is not None:
+            raise ValueError("Stage 2 without layout must have lambda_init=None")
+        return False, None
+    if not isinstance(initial, dict) or "init_lambda" not in initial:
+        raise ValueError("Stage 2 with layout requires lambda_init.init_lambda")
+    try:
+        value = float(initial["init_lambda"])
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Stage 2 init_lambda must be finite") from exc
+    if not math.isfinite(value):
+        raise ValueError("Stage 2 init_lambda must be finite")
+    return True, value
+
+
 def load_stage2_checkpoint_record(record_path, stage1_ckpt: dict,
                                   variant: str = "full", state_path=None, *,
                                   allow_legacy: bool = False) -> dict:
@@ -127,12 +157,20 @@ def load_stage2_checkpoint_record(record_path, stage1_ckpt: dict,
     if not isinstance(metadata, dict):
         if not allow_legacy or rec.get("input_identity"):
             raise ValueError("Stage 2 checkpoint lacks embedded metadata; explicit legacy replay required")
+        for key in ("gallery_source_status", "allow_legacy_gallery_index",
+                    "temperature_init", "use_layout", "semantic_source_status",
+                    "allow_legacy_semantic_inputs"):
+            if key in rec:
+                raise ValueError(f"Stage 2 record has unbound {key}")
     else:
         for key, value in metadata.items():
             if key not in rec or rec[key] != value:
                 raise ValueError(f"Stage 2 checkpoint and record disagree: {key}")
         for key in ("input_identity", "arch_protocol", "stage2_protocol", "graph_unit",
-                    "layout_input_dims", "stage1_checkpoint_sha256", "stage1_model_inputs", "lambda_init"):
+                    "layout_input_dims", "stage1_checkpoint_sha256", "stage1_model_inputs", "lambda_init",
+                    "gallery_source_status", "allow_legacy_gallery_index",
+                    "temperature_init", "use_layout", "semantic_source_status",
+                    "allow_legacy_semantic_inputs"):
             if key in rec and key not in metadata:
                 raise ValueError(f"Stage 2 record has unbound {key}")
     if "stage1_model_inputs" in rec:
@@ -148,6 +186,7 @@ def load_stage2_checkpoint_record(record_path, stage1_ckpt: dict,
                 raise ValueError("Stage 2 forward configuration differs from its Stage 1 parent")
         if train["tower_sharing"] != s2_train["tower_sharing"]:
             raise ValueError("Stage 2 tower sharing differs from its Stage 1 parent")
+    stage2_layout_settings(rec)
     return rec
 
 
@@ -279,7 +318,8 @@ def _write(path: Path, obj, dump=json.dump) -> None:
 
 
 def build_index(embeddings: np.ndarray, ids: list[str], out: Path,
-                extra: dict[str, np.ndarray] | None = None) -> dict:
+                extra: dict[str, np.ndarray] | None = None, *,
+                source_identity: dict | None = None) -> dict:
     """Write the vectors and return the record that describes them.
 
     ``extra`` holds further per-asset arrays stored beside ``embeddings`` in
@@ -293,15 +333,20 @@ def build_index(embeddings: np.ndarray, ids: list[str], out: Path,
     for k, v in arrays.items():
         if v.shape[0] != len(ids):
             raise ValueError(f"extra array {k!r} has {v.shape[0]} rows for {len(ids)} ids")
+    if source_identity is not None:
+        arrays["stage2_source_identity_sha256"] = np.array(_source_identity_digest(source_identity))
     np.savez_compressed(tmp, ids=np.array(ids),
                         embeddings=embeddings.astype(np.float32), **arrays)
     tmp.replace(out)
-    return {
+    record = {
         "uri": str(out),
         "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
         "dim": int(embeddings.shape[1]),
         "count": int(embeddings.shape[0]),
     }
+    if source_identity is not None:
+        record["source_identity"] = source_identity
+    return record
 
 
 INDEX_RECORD_FIELDS = ("uri", "sha256", "dim", "count",
@@ -372,7 +417,166 @@ def verified_index(record: dict, source: str, *, include_arrays: bool = False):
     return ids, embeddings
 
 
-def verified_stage2_index(record: dict, parent_sha: str, declared_modalities):
+def _source_identity_digest(identity: dict) -> str:
+    return hashlib.sha256(json.dumps(identity, sort_keys=True,
+                                     separators=(",", ":")).encode()).hexdigest()
+
+
+def _source_file_identity(path: Path) -> dict:
+    path = path.absolute()
+    with path.open("rb") as fh:
+        digest = hashlib.file_digest(fh, "sha256").hexdigest()
+    return {"uri": str(path), "sha256": digest}
+
+
+def verified_source_bytes(artifact: dict) -> bytes:
+    """Read exactly the source bytes whose digest the producer recorded."""
+    raw = Path(artifact["uri"]).read_bytes()
+    if hashlib.sha256(raw).hexdigest() != artifact["sha256"]:
+        raise ValueError(f"Stage 2 gallery source changed: {artifact['uri']}")
+    return raw
+
+
+def _missing_stage2_modalities(record: dict, declared) -> list[str]:
+    return [m for m in declared
+            if (m == "pc" and record.get("pointcloud_uri") is None)
+            or (m == "image" and not record.get("view_paths"))
+            or (m == "text" and not record.get("text"))]
+
+
+def capture_stage2_gallery_sources(declared_modalities, *, limit: int | None = None) -> dict:
+    """Snapshot selected JSONs and only the image/cloud files actually encoded.
+
+    [DL-103] Text comes from the canonical fitted metadata map, not the copy
+    made by n07b before captions and the text-template change. Validate its
+    construction against the metadata annotations without modifying either
+    source. Store the exact verified sentence that n11b will encode.
+    View order is significant.
+    Excluded records remain bound because they decide catalogue membership;
+    their unavailable modalities are never read. No scene inputs are needed.
+    """
+    declared = tuple(declared_modalities)
+    if not declared or len(set(declared)) != len(declared) or set(declared) - {"text", "image", "pc"}:
+        raise ValueError(f"invalid Stage 2 gallery modalities: {declared}")
+    if limit is not None and limit <= 0:
+        raise ValueError("Stage 2 gallery limit must be positive")
+    root = paths.PROCTHOR_MODALITIES.absolute()
+    selected = sorted(root.glob("*.json"))
+    if limit is not None:
+        selected = selected[:limit]
+    text_source, text_map, annotations = None, {}, {}
+    if "text" in declared:
+        from metafind.models.resolve_stage1 import serialize_fitted
+
+        text_source = {
+            "artifact": _source_file_identity(paths.OUTPUTS / "procthor_object_text.json"),
+            "annotation_artifact": _source_file_identity(
+                paths.OUTPUTS / "procthor_asset_annotations.json"),
+            "field": "text", "template": "v3_fit",
+            "serializer": "metafind.models.resolve_stage1.serialize_fitted",
+        }
+        text_map = json.loads(verified_source_bytes(text_source["artifact"]))
+        annotations = json.loads(verified_source_bytes(text_source["annotation_artifact"]))
+        if not isinstance(text_map, dict) or not isinstance(annotations, dict):
+            raise ValueError("Stage 2 canonical text and metadata annotations must be asset maps")
+    records, inputs, seen = [], {}, set()
+    # A shared view file need only be hashed once during a snapshot.
+    file_cache = {}
+    def file_identity(uri):
+        key = str(Path(uri).absolute())
+        if key not in file_cache:
+            file_cache[key] = _source_file_identity(Path(key))
+        return file_cache[key]
+
+    for path in selected:
+        identity = _source_file_identity(path)
+        rec = json.loads(verified_source_bytes(identity))
+        records.append(identity)
+        asset_id = str(rec["asset_id"])
+        if asset_id in seen:
+            raise ValueError(f"duplicate Stage 2 gallery asset_id: {asset_id}")
+        seen.add(asset_id)
+        if "text" in declared:
+            node_text = text_map.get(asset_id)
+            annotation = annotations.get(asset_id)
+            if not isinstance(node_text, dict) or not isinstance(annotation, dict):
+                raise ValueError(f"Stage 2 canonical text/annotation missing asset {asset_id!r}")
+            metadata_source = annotation.get("source")
+            if not isinstance(metadata_source, str) \
+                    or not metadata_source.startswith("procthor_metadata_v") \
+                    or not isinstance(node_text.get("source"), str) \
+                    or not node_text["source"].startswith(metadata_source + "@"):
+                raise ValueError(f"Stage 2 canonical text for {asset_id!r} lacks current "
+                                 "metadata provenance; run procthor_metadata_text first")
+            sentence = node_text.get("text")
+            if not isinstance(sentence, str) or not sentence.strip():
+                raise ValueError(f"Stage 2 canonical text is empty or invalid for {asset_id!r}")
+            if sentence != serialize_fitted(annotation):
+                raise ValueError(f"Stage 2 canonical text for {asset_id!r} is not the v3_fit "
+                                 "serialization of its metadata; re-run procthor_metadata_text")
+            rec["text"] = sentence
+        if _missing_stage2_modalities(rec, declared):
+            continue
+        source = {"record_uri": identity["uri"]}
+        if "text" in declared:
+            source["text"] = rec["text"]
+        if "image" in declared:
+            source["images"] = [file_identity(v) for v in rec["view_paths"]]
+        if "pc" in declared:
+            source["pointcloud"] = file_identity(rec["pointcloud_uri"])
+        inputs[asset_id] = source
+    return {"version": 2, "declared_modalities": list(declared),
+            "modality_records_root": str(root), "selection_limit": limit,
+            "modality_records": records, "encoded_inputs": inputs,
+            "text_source": text_source}
+
+
+def verify_stage2_gallery_sources(record: dict, arrays: dict | None = None, *,
+                                  allow_legacy: bool = False) -> str:
+    """Check current sources against producer evidence, never backfill old indexes.
+
+    The index embeds the identity digest so a fresh sidecar cannot promote old
+    vectors to a claim about newly captured inputs. Legacy acceptance is explicit
+    and reports incomplete provenance; any partial or mismatched evidence fails.
+    """
+    identity = record.get("source_identity")
+    embedded = None if arrays is None else arrays.get("stage2_source_identity_sha256")
+    if identity is None:
+        if embedded is not None or not allow_legacy:
+            raise ValueError("Stage 2 gallery has no bound source_identity; rebuild the index "
+                             "or explicitly allow legacy gallery compatibility")
+        return "legacy_unbound"
+    if isinstance(identity, dict) and identity.get("version") == 1:
+        raise ValueError("Stage 2 gallery source_identity version 1 binds renderer-sidecar "
+                         "text, not canonical v3_fit text; rebuild n11b. Legacy permission "
+                         "cannot reinterpret this index as version 2.")
+    if not isinstance(identity, dict) or identity.get("version") != 2:
+        raise ValueError("unsupported Stage 2 gallery source_identity")
+    if arrays is not None:
+        if embedded is None or np.asarray(embedded).shape != () \
+                or str(np.asarray(embedded).item()) != _source_identity_digest(identity):
+            raise ValueError("Stage 2 gallery source_identity is not bound to its index bytes")
+        # JSON object key order has no meaning. Row order remains bound by the
+        # index bytes, whereas this map identifies each row's asset membership.
+        if {str(asset) for asset in arrays["ids"].tolist()} != set(identity["encoded_inputs"]):
+            raise ValueError("Stage 2 gallery source identity disagrees with index asset IDs")
+    declared = record.get("modality_completeness", {}).get("declared_modalities")
+    if declared != identity["declared_modalities"]:
+        raise ValueError("Stage 2 gallery source modality declaration disagrees with its record")
+    if Path(identity["modality_records_root"]).resolve() != paths.PROCTHOR_MODALITIES.resolve():
+        raise ValueError("Stage 2 gallery current modality root differs from its recorded source")
+    try:
+        current = capture_stage2_gallery_sources(declared, limit=identity["selection_limit"])
+    except (OSError, ValueError, KeyError) as exc:
+        raise ValueError(f"Stage 2 gallery source bytes or membership changed; "
+                         f"rebuild the index: {exc}") from exc
+    if current != identity:
+        raise ValueError("Stage 2 gallery source bytes or membership changed; rebuild the index")
+    return "verified"
+
+
+def verified_stage2_index(record: dict, parent_sha: str, declared_modalities, *,
+                          allow_legacy_sources: bool = False):
     """Read one declared ProcTHOR gallery belonging to this Stage 1 parent."""
     if record.get("stage1_checkpoint_sha256") != parent_sha:
         raise ValueError("Stage 2 gallery belongs to a different Stage 1 checkpoint")
@@ -390,6 +594,7 @@ def verified_stage2_index(record: dict, parent_sha: str, declared_modalities):
             raise ValueError(f"Stage 2 gallery has nonfinite {name!r} vectors")
     if not np.isfinite(embeddings).all():
         raise ValueError("Stage 2 gallery has nonfinite embeddings")
+    verify_stage2_gallery_sources(record, arrays, allow_legacy=allow_legacy_sources)
     return ids, embeddings, arrays
 
 
@@ -696,9 +901,8 @@ def main() -> int:
             declared = tuple(s2_protocol["asset_modalities"])
             encoder_sha = gallery_encoder_sha256(backbone, model, include_buffers=True,
                                                  declared_modalities=declared)
-            mods = sorted(paths.PROCTHOR_MODALITIES.glob("*.json"))
-            if args.limit:
-                mods = mods[: args.limit]
+            source_identity = capture_stage2_gallery_sources(declared, limit=args.limit)
+            mods = source_identity["modality_records"]
             ids, vectors, excluded = [], [], []
             # The raw modality vectors are kept beside the fused gallery vector.
             # Stage 2 freezes the whole ULIP-2 backbone, so for every asset these
@@ -708,25 +912,28 @@ def main() -> int:
             # vector below, so a lookup returns exactly what the per-step encode
             # used to return.
             raw = {m: [] for m in declared}
-            for path in mods:
-                rec = json.loads(path.read_text())
-                gaps = [m for m in declared
-                        if (m == "pc" and rec.get("pointcloud_uri") is None)
-                        or (m == "image" and not rec.get("view_paths"))
-                        or (m == "text" and not rec.get("text"))]
+            for source_record in mods:
+                rec = json.loads(verified_source_bytes(source_record))
+                source = source_identity["encoded_inputs"].get(str(rec["asset_id"]))
+                # The snapshot already validated the canonical text and decided
+                # eligibility. n07b's historical text is not a current input.
+                gaps = _missing_stage2_modalities(rec, [m for m in declared if m != "text"])
                 if gaps:
                     excluded.append({"asset_id": rec["asset_id"], "missing": gaps,
                                      "reason": rec.get("pointcloud_missing_reason")
                                      if "pc" in gaps else None})
                     continue
+                if source is None:
+                    raise ValueError(f"Stage 2 source snapshot lacks asset {rec['asset_id']!r}")
                 with torch.no_grad():
                     embeds = {}
                     if "text" in declared:
-                        embeds["text"] = backbone.encode_text([rec["text"]])
+                        embeds["text"] = backbone.encode_text([source["text"]])
                     if "image" in declared:
                         view_vecs = backbone.encode_image(torch.stack([
-                            backbone.preprocess(Image.open(v).convert("RGB"))
-                            for v in rec["view_paths"]]))
+                            backbone.preprocess(Image.open(io.BytesIO(
+                                verified_source_bytes(v))).convert("RGB"))
+                            for v in source["images"]]))
                         embeds["image"] = view_vecs.mean(dim=0, keepdim=True)
                     if "pc" in declared:
                         # [P0-4] pc_norm happens INSIDE prepare_depth_shell: n07b
@@ -734,7 +941,8 @@ def main() -> int:
                         # stores unit-normalised ones, and the checkpoint was
                         # trained on the latter. The grey channel is there because
                         # the shell has no colour, not because grey is a measurement.
-                        cloud = np.load(rec["pointcloud_uri"])["xyz"].astype(np.float32)
+                        with np.load(io.BytesIO(verified_source_bytes(source["pointcloud"]))) as cloud_file:
+                            cloud = cloud_file["xyz"].astype(np.float32)
                         embeds["pc"] = backbone.encode_pc(torch.from_numpy(prepare_depth_shell(cloud)))
                     vectors.append(model.gallery(
                         embeds, declared=None if len(declared) == 3 else declared
@@ -745,10 +953,14 @@ def main() -> int:
                 if len(ids) % 200 == 0:
                     print(f"  [{len(ids):5d}/{len(mods)}]", flush=True)
 
+            # Refuse concurrent source replacement before publishing new vectors.
+            verify_stage2_gallery_sources({"source_identity": source_identity,
+                "modality_completeness": {"declared_modalities": list(declared)}})
             record = build_index(
                 np.stack(vectors), ids,
                 paths.OUTPUTS / f"stage2_gallery_{ckpt_record['sha256'][:16]}.npz",
-                extra={k: np.stack(v) for k, v in raw.items()})
+                extra={k: np.stack(v) for k, v in raw.items()},
+                source_identity=source_identity)
             record.update({
                 "asset_ids": ids,
                 # Names the extra arrays so a reader can tell an index that

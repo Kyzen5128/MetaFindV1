@@ -1,0 +1,385 @@
+{
+  "base_hyperparameter_sha256": "f686cd7556ab829d4ae2482249b19627f6ff96d0849124c30186f5e5e925144d",
+  "checkpoint_schema": 5,
+  "model_inputs": {
+    "version": 1,
+    "encoding": {
+      "status": "resolved",
+      "text_serialization": "metafind_attrs_v1@b1ac384839305720",
+      "text_serialization_family": "metafind_attrs_v1",
+      "text_serialization_contract": {
+        "family": "metafind_attrs_v1",
+        "template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+        "max_description_chars": 160,
+        "max_category_chars": 40,
+        "max_materials": 3,
+        "placement_phrases": {
+          "onCeiling": "typically mounted on a ceiling",
+          "onFloor": "typically placed on the floor",
+          "onFloor+onObject": "typically placed on the floor or on other objects",
+          "onObject": "typically placed on top of other objects",
+          "onWall": "typically mounted on a wall"
+        },
+        "no_placement_phrase": "with no typical placement"
+      },
+      "text_template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+      "text_serialization_probes": [
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, with no typical placement.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor or on other objects.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on top of other objects.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a wall.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall.",
+        "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall or on the floor or on top of other objects.",
+        "A very long category name a very long made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+        "LED made of metal, plastic, glass, roughly 1000 by 1 by 0 centimetres, typically placed on top of other objects."
+      ],
+      "image_aggregation": "mean",
+      "view_aggregation": {
+        "n_views": 12,
+        "selected_view_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "view_selection_policy": "all",
+        "pre_normalize_each_view": false,
+        "method": "mean",
+        "post_normalize": false,
+        "aggregation_version": 1
+      },
+      "paper_clip_train_scope": "frozen",
+      "paper_clip_train_scope_basis": "MetaFind does not state a per-module freeze scope for OpenCLIP anywhere. This reproduction follows ULIP-2's design because MetaFind explicitly builds on ULIP-2, ULIP-2 3.3 states 'We adopt the largest version of encoders from OpenCLIP (ViT-G/14) ... and freeze it during pre-training', and MetaFind never states that it changes that policy. The three sentences that read otherwise do not carry it: 2.6's 'Both query and gallery encoders are trained' describes the TOWERS, which train under a frozen CLIP because the point encoder, the projection and the fuser are all in the optimizer; 3.4's 'Fine-tuning the entire encoder outperformed training the fuser only' separates the full model from the fuser-only ablation, a separation the trainable point encoder already produces; and 2.4's 'gallery encoder is frozen after pretraining' versus 2.6's 'is trained' is the Stage 1 / Stage 2 boundary, not a Stage 1 contradiction. Reopen if MetaFind's code or its authors show an optimizer update reaching OpenCLIP's parameters.",
+      "paper_clip_train_scope_confidence": "moderate",
+      "actual_clip_train_scope": "frozen",
+      "missing_modality_representation": "learned_token",
+      "decided_by": "MASTER, under Kyzen's full delegation 2026-09-03 (fresh audit A5/C8)",
+      "decided_at": "2026-09-03T10:28:15.068564+00:00"
+    },
+    "training": {
+      "fusion": "transformer",
+      "tower_sharing": "shared_backbone_separate_fusion",
+      "train_scope": "point_encoder_and_fuser",
+      "prefusion_norm": true,
+      "query_fusion_config": {
+        "dim": 1280,
+        "kind": "transformer",
+        "hidden": 2048,
+        "n_heads": 8,
+        "n_layers": 2,
+        "zero_pad": false,
+        "include_absent_slots": true,
+        "dropout": 0.0,
+        "prefusion_norm": true,
+        "image_tokens": 1
+      },
+      "gallery_fusion_config": {
+        "dim": 1280,
+        "kind": "transformer",
+        "hidden": 2048,
+        "n_heads": 8,
+        "n_layers": 2,
+        "zero_pad": false,
+        "include_absent_slots": true,
+        "dropout": 0.0,
+        "prefusion_norm": true,
+        "image_tokens": 1
+      }
+    },
+    "hyperparameter_values": {
+      "optimizer": "adamw",
+      "decay_mask_tokens": false,
+      "learning_rate": 0.0005,
+      "weight_decay": 0.1,
+      "scheduler": "cosine",
+      "batch_size": 2,
+      "epochs": 1,
+      "max_epochs": 250,
+      "p_mask": 0.3,
+      "init_temperature": 0.5,
+      "learnable_temperature": false,
+      "max_logit_scale": 100.0,
+      "betas": [
+        0.9,
+        0.98
+      ],
+      "eps": 1e-08,
+      "warmup_epochs": 1,
+      "lr_start": 1e-06,
+      "lr_end": 1e-05,
+      "seed": 20260816
+    },
+    "loss_values": {
+      "learnable_temperature": false,
+      "init_temperature": 0.5,
+      "max_logit_scale": 100.0
+    }
+  },
+  "seed": 20260816,
+  "epoch": 0,
+  "run_id": "1788799026-2633378-b6c3ce",
+  "code_revision": "87ccfbbf460cfd2bcc518f654e1b7d0fd3e506d8",
+  "code_dirty": true,
+  "runtime_source_sha256": "3666ea2905feaef367673c8b67f0a472af11658c014a0a8fa742398d5bc9e19d",
+  "runtime_source_status": "ok",
+  "arm_config_hash": "3ef6fcdb7dd7b20e3298b9740f1db978003e98213e6a3b5273695dc19986a1dc",
+  "arm_config_version": 2,
+  "arm_config": {
+    "optimizer": "adamw",
+    "decay_mask_tokens": false,
+    "learning_rate": 0.0005,
+    "weight_decay": 0.1,
+    "scheduler": "cosine",
+    "batch_size": 2,
+    "epochs": 1,
+    "p_mask": 0.3,
+    "init_temperature": 0.5,
+    "learnable_temperature": false,
+    "max_logit_scale": 100.0,
+    "betas": [
+      0.9,
+      0.98
+    ],
+    "eps": 1e-08,
+    "warmup_epochs": 1,
+    "lr_start": 1e-06,
+    "lr_end": 1e-05,
+    "training.fusion": "transformer",
+    "training.tower_sharing": "shared_backbone_separate_fusion",
+    "training.allow_all_masked": true,
+    "training.similarity": "cosine",
+    "training.prefusion_norm": true,
+    "training.diagnostic_parent_protocol_sha256": "90e0456987315702facf47064a4af7f12c1a7b53ebece9bcd37186f15d2e5850",
+    "encoding.text_serialization": "metafind_attrs_v1@b1ac384839305720",
+    "encoding.text_serialization_family": "metafind_attrs_v1",
+    "encoding.text_serialization_contract": {
+      "family": "metafind_attrs_v1",
+      "template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+      "max_description_chars": 160,
+      "max_category_chars": 40,
+      "max_materials": 3,
+      "placement_phrases": {
+        "onCeiling": "typically mounted on a ceiling",
+        "onFloor": "typically placed on the floor",
+        "onFloor+onObject": "typically placed on the floor or on other objects",
+        "onObject": "typically placed on top of other objects",
+        "onWall": "typically mounted on a wall"
+      },
+      "no_placement_phrase": "with no typical placement"
+    },
+    "encoding.text_template": "{category} made of {materials}, roughly {width} by {length} by {height} centimetres, {placement}.",
+    "encoding.text_serialization_probes": [
+      "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, with no typical placement.",
+      "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling.",
+      "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+      "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor or on other objects.",
+      "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on top of other objects.",
+      "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a wall.",
+      "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall.",
+      "Led wall lamp made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically mounted on a ceiling or on a wall or on the floor or on top of other objects.",
+      "A very long category name a very long made of metal, plastic, glass, roughly 30 by 2.5 by 0.5 centimetres, typically placed on the floor.",
+      "LED made of metal, plastic, glass, roughly 1000 by 1 by 0 centimetres, typically placed on top of other objects."
+    ],
+    "encoding.image_aggregation": "mean",
+    "encoding.view_aggregation": {
+      "n_views": 12,
+      "selected_view_ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "view_selection_policy": "all",
+      "pre_normalize_each_view": false,
+      "method": "mean",
+      "post_normalize": false,
+      "aggregation_version": 1
+    },
+    "encoding.actual_clip_train_scope": "frozen",
+    "encoding.missing_modality_representation": "learned_token",
+    "lr_horizon": 1,
+    "phase": "dev",
+    "train_scope": "point_encoder_and_fuser",
+    "query_observation": "same_record",
+    "query_image_policy": "same_mean",
+    "query_pc_perturb": "none"
+  },
+  "repeat_index": null,
+  "argv": [
+    "--device",
+    "cpu",
+    "--epochs",
+    "1",
+    "--preload",
+    "--amp",
+    "off",
+    "--phase",
+    "dev",
+    "--selection-split",
+    "dev_val",
+    "--query-observation",
+    "same_record",
+    "--query-image-policy",
+    "same_mean",
+    "--train-scope",
+    "point_encoder_and_fuser",
+    "--out-dir",
+    "actual_cpu_step"
+  ],
+  "hardware": {
+    "device": "cpu",
+    "gpu": null,
+    "torch": "2.12.1+cu132",
+    "cuda": "13.2",
+    "tf32_matmul": false,
+    "cudnn_tf32": true
+  },
+  "lr_horizon": 1,
+  "epoch_count": 1,
+  "preload": true,
+  "num_workers": 0,
+  "query_construction": null,
+  "query_observation": "same_record",
+  "query_image_policy": "same_mean",
+  "query_pc_perturb": "none",
+  "amp": "off",
+  "query_partner": "none",
+  "query_text_override": null,
+  "query_text_override_sha256": null,
+  "prefusion_norm": true,
+  "image_tokens": 1,
+  "text_template": "attrs_v1",
+  "embeddings_dir": "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/embeddings",
+  "train_scope": "point_encoder_and_fuser",
+  "tower_sharing": "shared_backbone_separate_fusion",
+  "gallery_fusion": "transformer",
+  "freeze_gallery": false,
+  "trainable_only": true,
+  "tower_state_includes_frozen_gallery": false,
+  "n_params_saved": 80738946,
+  "n_params_by_section": {
+    "backbone_trainable_state": 33483394,
+    "tower_trainable_state": 47255552,
+    "loss_trainable_state": 0
+  },
+  "clip_train_scope": "frozen",
+  "inputs": {
+    "train_uid_sequence_sha256": "979dd860e96d9e3c0e41cff681e602ed707df5275c31973a3b6052ee65f5315c",
+    "train_uid_set_sha256": "979dd860e96d9e3c0e41cff681e602ed707df5275c31973a3b6052ee65f5315c",
+    "selection_uid_sequence_sha256": "24d30f3ae5511d8f44aaca237af23bcdc9f047bb7d3972e665b5bc87eb1ad8cb",
+    "selection_uid_set_sha256": "24d30f3ae5511d8f44aaca237af23bcdc9f047bb7d3972e665b5bc87eb1ad8cb",
+    "n_train": 2,
+    "n_selection": 2,
+    "train_content": {
+      "content_sha256": "ef37501ec2c9fcd478c19f259adb62668c181929900fcd81ae2e2ebf88b505cd",
+      "n_assets": 2,
+      "n_missing_pointcloud_sidecar": 0,
+      "n_missing_embedding_npz": 0,
+      "n_pointcloud_sidecar_mismatch": 0,
+      "pointcloud_digest_source": "sha256 of the .npz bytes; the n07 sidecar's claim is checked against it",
+      "embedding_digest_source": "sha256 of the .npz bytes"
+    },
+    "selection_content": {
+      "content_sha256": "e9c4222a13b09497bed77764eac365171ec95ce466d3aa95590f63fdda4472a1",
+      "n_assets": 2,
+      "n_missing_pointcloud_sidecar": 0,
+      "n_missing_embedding_npz": 0,
+      "n_pointcloud_sidecar_mismatch": 0,
+      "pointcloud_digest_source": "sha256 of the .npz bytes; the n07 sidecar's claim is checked against it",
+      "embedding_digest_source": "sha256 of the .npz bytes"
+    }
+  },
+  "initializers": {
+    "ulip2": {
+      "uri": "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/models/ulip2/ULIP-2/pretrained_models/ULIP-2-PointBERT-10k-xyzrgb-pc-vit_g-objaverse_shapenet-pretrained.pt",
+      "sha256": "a4b5ed9799d5841a1646e0fb7d24cb8dcdd3b3e6fab2e2575de2531f71274adb",
+      "size_bytes": 402018241
+    },
+    "open_clip": {
+      "model": "ViT-bigG-14",
+      "pretrained": "laion2b_s39b_b160k",
+      "package_version": "3.3.0",
+      "hf_repo": "laion/CLIP-ViT-bigG-14-laion2B-39B-b160k",
+      "hf_cache": "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/models/hf-cache/hub/models--laion--CLIP-ViT-bigG-14-laion2B-39B-b160k",
+      "hf_revision": "743c27bd53dfe508a0ade0f50698f99b39d03bec",
+      "weight_file": "open_clip_model.safetensors",
+      "weight_blob_sha256": "db71bd27925917762c506c1b8a08e191d236e5586b5cd99f77d11aced578ec34",
+      "weight_size_bytes": 10158382892
+    }
+  },
+  "uri": "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/checkpoints/actual_cpu_step/stage1_best.pt",
+  "sha256": "df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532",
+  "size_bytes": 323049588,
+  "selected_on": "dev_val mean_R@1, tie mean_R@5 [D-3]",
+  "selection_split": "dev_val",
+  "phase": "dev",
+  "limit": null,
+  "n_train": 2,
+  "n_dev_val": 2,
+  "pools_sha256": "c432bc53e93a12c1f72da2811a537f0b87a836f04cd1c90c2403765b065b5abf",
+  "dev_val": {
+    "text": {
+      "R@1": 0.5,
+      "R@5": 1.0,
+      "n_query": 2,
+      "n_gallery": 2
+    },
+    "image": {
+      "R@1": 0.5,
+      "R@5": 1.0,
+      "n_query": 2,
+      "n_gallery": 2
+    },
+    "pc": {
+      "R@1": 0.5,
+      "R@5": 1.0,
+      "n_query": 2,
+      "n_gallery": 2
+    },
+    "text+image": {
+      "R@1": 0.5,
+      "R@5": 1.0,
+      "n_query": 2,
+      "n_gallery": 2
+    },
+    "text+pc": {
+      "R@1": 0.5,
+      "R@5": 1.0,
+      "n_query": 2,
+      "n_gallery": 2
+    },
+    "image+pc": {
+      "R@1": 0.5,
+      "R@5": 1.0,
+      "n_query": 2,
+      "n_gallery": 2
+    },
+    "full": {
+      "R@1": 0.5,
+      "R@5": 1.0,
+      "n_query": 2,
+      "n_gallery": 2
+    },
+    "mean_R@1": 0.5,
+    "mean_R@5": 1.0,
+    "n_gallery": 2
+  }
+}

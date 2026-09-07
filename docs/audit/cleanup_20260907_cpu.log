@@ -1,0 +1,58 @@
+........................................................................ [  5%]
+........................................................................ [ 11%]
+........................................................................ [ 17%]
+........................................................................ [ 23%]
+........................................................................ [ 29%]
+........................................................................ [ 34%]
+........................................................................ [ 40%]
+........................................................................ [ 46%]
+........................................................................ [ 52%]
+........................................................................ [ 58%]
+........................................................................ [ 64%]
+........................................................................ [ 69%]
+........................................................................ [ 75%]
+........................................................................ [ 81%]
+........................................................................ [ 87%]
+........................................................................ [ 93%]
+........................................................................ [ 99%]
+...........                                                              [100%]
+=============================== warnings summary ===============================
+tests/eval/test_custom_models.py: 13 warnings
+tests/eval/test_eval_stage2_row.py: 1 warning
+tests/eval/test_retrieval_checkpoint_identity.py: 9 warnings
+tests/models/test_dual_tower.py: 16 warnings
+tests/models/test_fusion_losses.py: 6 warnings
+tests/models/test_image_tokens.py: 3 warnings
+tests/models/test_prefusion_norm.py: 3 warnings
+tests/train/test_model_recipe_restore.py: 5 warnings
+tests/train/test_stage2_input_identity.py: 1 warning
+tests/train/test_train_stage2.py: 2 warnings
+  /home/kyzen/MetaFindV1/metafind/models/fusion.py:202: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+    self.head = nn.TransformerEncoder(layer, num_layers=cfg.n_layers)
+
+tests/models/test_fusion_losses.py::test_perfect_alignment_drives_loss_down
+  /home/kyzen/MetaFindV1/tests/models/test_fusion_losses.py:242: UserWarning: tau deviates from the paper: MetaFind fixes it at 0.5 for all experiments (3experiments.tex:15), this run uses init_temperature=0.07 learnable=False. Record it as a DEVIATION if the results are compared with the paper's tables.
+    sharp = MetaFindContrastiveLoss(ContrastiveConfig(
+
+tests/models/test_fusion_losses.py::test_temperature_defaults_to_the_paper_and_is_learnable_when_asked
+  /home/kyzen/MetaFindV1/tests/models/test_fusion_losses.py:282: UserWarning: tau deviates from the paper: MetaFind fixes it at 0.5 for all experiments (3experiments.tex:15), this run uses init_temperature=0.5 learnable=True. Record it as a DEVIATION if the results are compared with the paper's tables.
+    learn = MetaFindContrastiveLoss(ContrastiveConfig(learnable_temperature=True))
+
+tests/models/test_fusion_losses.py::test_temperature_defaults_to_the_paper_and_is_learnable_when_asked
+  /home/kyzen/MetaFindV1/tests/models/test_fusion_losses.py:287: UserWarning: tau deviates from the paper: MetaFind fixes it at 0.5 for all experiments (3experiments.tex:15), this run uses init_temperature=0.07 learnable=False. Record it as a DEVIATION if the results are compared with the paper's tables.
+    clip_like = MetaFindContrastiveLoss(ContrastiveConfig(
+
+tests/models/test_grad_checkpointing.py::test_grad_checkpointing_changes_no_gradient
+  /home/kyzen/miniconda3/envs/MetaFind/lib/python3.11/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+    warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+
+tests/train/test_train_stage1.py::test_stage1_loss_is_query_to_gallery_only
+tests/train/test_train_stage1.py::test_the_loss_actually_computes_one_direction
+tests/train/test_train_stage1.py::test_the_trainer_uses_the_recorded_fusion_and_sharing
+tests/train/test_train_stage1.py::test_the_missing_modality_rule_comes_from_the_encoding_protocol[learned_token-False]
+tests/train/test_train_stage1.py::test_the_missing_modality_rule_comes_from_the_encoding_protocol[zero_pad-True]
+  /home/kyzen/MetaFindV1/metafind/train/stage1.py:2683: UserWarning: tau deviates from the paper: MetaFind fixes it at 0.5 for all experiments (3experiments.tex:15), this run uses init_temperature=0.07 learnable=True. Record it as a DEVIATION if the results are compared with the paper's tables.
+    loss = MetaFindContrastiveLoss(ContrastiveConfig(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1235 passed, 68 warnings in 26.83s

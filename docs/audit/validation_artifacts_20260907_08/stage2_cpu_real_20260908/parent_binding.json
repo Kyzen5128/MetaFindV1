@@ -1,0 +1,15 @@
+{
+  "source_record": {
+    "uri": "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/checkpoints/actual_cpu_step/stage1_best_ckpt.json",
+    "sha256": "eee0047726e91b2cb2d91af69c8b7d7605eec9d95eb5c3fe16150efb206d61f2"
+  },
+  "checkpoint": {
+    "uri": "/home/kyzen/MetaFindV1/output/validation/stage1_cpu_real_20260908/data/outputs/checkpoints/actual_cpu_step/stage1_best.pt",
+    "sha256": "df4e81fee9da89bcd802ddadb2a4048d2411bf169ca48b2077727b691da1d532"
+  },
+  "variant": "full",
+  "diagnostic_data_manifest": {
+    "uri": "/home/kyzen/MetaFindV1/output/validation/stage2_cpu_real_20260908/source_manifest.json",
+    "sha256": "519c1107dc354dbe8206fa536fe90b0033946131cb9e76589d50827d27d9805b"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "classification": "OBSERVED DATA / IMPLEMENTATION CHOICE: isolated genuine CPU trainer smoke; old attrs_v1 corpus, same_record, batch 2, one epoch. Not paper reproduction or meaningful retrieval quality.",
+  "train_uids": [
+    "000074a334c541878360457c672b6c2e",
+    "0000ecca9a234cae994be239f6fec552"
+  ],
+  "selection_uids": [
+    "0002064ef02e46f9a10b4bff10bae805",
+    "0002c6eafa154e8bb08ebafb715a8d46"
+  ],
+  "overrides": {
+    "batch_size": {
+      "from": 64,
+      "to": 2
+    },
+    "epochs": {
+      "from": 5,
+      "to": 1
+    }
+  },
+  "source_sha256": {
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/splits.json": "c03e898f74f612ceedf27090ad2175a507e6d0b2455faa873956e7059ce9c14b",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/000074a334c541878360457c672b6c2e.json": "f37197b1ff2ece2678cdef34fefb5f0e4408d8e3ee5de0ce18099aa33347babc",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/000074a334c541878360457c672b6c2e.npz": "d1233a8a61c996de6eaa19c84ab47799a5aecf52f3b053544ad8926fdaebd4fc",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0000ecca9a234cae994be239f6fec552.json": "6aca23a1780ed51f550cd319f3e649b069dbe98e7ebf7dd556a3c358b1a0d3ce",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0000ecca9a234cae994be239f6fec552.npz": "8680c1802af7c27b6aa4c0eef0f36ca04d144e5e89ba89f4b307daf2dff91654",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002064ef02e46f9a10b4bff10bae805.json": "25d345a896c1b69010db55a3b7bce945483c18155d104eb1dfd38ad880395081",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002064ef02e46f9a10b4bff10bae805.npz": "338d5cb020e207728ad52d284f7caa7ee49bc6f88d44e3c6f04b33c76d6def70",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002c6eafa154e8bb08ebafb715a8d46.json": "de71d6eec06b5b7cbeaa64bc83093de7e03ab328a51ac93c5f73eee1b42e3d77",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings/0002c6eafa154e8bb08ebafb715a8d46.npz": "d8287055bfc89c06672344ad1452b211cc8c6cd0757397ffdc4072e2379986b3",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/000074a334c541878360457c672b6c2e.json": "2d22841301b45c1ef20d5fcca2ca5c086afc0ce2b6fb17c024588c6ac4f571b4",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/000074a334c541878360457c672b6c2e.npz": "711a4160a97374f96808e3cd74050c9eee14aeea895149fba93b841625446bc0",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0000ecca9a234cae994be239f6fec552.json": "53c23be6c322dbe6b7a00f820c88ebdb63dbe3fe3d045e32368662748c261a1b",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0000ecca9a234cae994be239f6fec552.npz": "66c28cc457394f6fd04e48d083cadb932edf9a4e73fa9f43dcd5d4d90de33a29",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0002064ef02e46f9a10b4bff10bae805.json": "5a92c272877e8bff46483a561bc1be0f26b1e430be187c819aeac7a1e4ee72da",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0002064ef02e46f9a10b4bff10bae805.npz": "3896dc15408d693b1a6a709541a4b0a600dc2ee5d31d5ce29484af67dfe1a83c",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0002c6eafa154e8bb08ebafb715a8d46.json": "9b2fd2c2566172b3111a013718d6222ef7e1c5df8ce8af8060a295e96604cc24",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/pointclouds/0002c6eafa154e8bb08ebafb715a8d46.npz": "a3be0107e664255346d23651a79573bab32b79766808d6d8dff9ea4218ac5842",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/000074a334c541878360457c672b6c2e.json": "849adad9b717c2b086aae2ad33cc9c361c5cd71bcbfea9e19a0233dce1949a51",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/0000ecca9a234cae994be239f6fec552.json": "1487b7cebf3778be95843a8be68fc50c5806fe881a1ff52d2328d37799cea16a",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/0002064ef02e46f9a10b4bff10bae805.json": "cd3988904b9fa0f425161ae918f206073c61872be981c5e460705ff3ea43e62f",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/annotations/0002c6eafa154e8bb08ebafb715a8d46.json": "5619e7251bf7361deb478fbd2a062f4e0da8f08eb11459aefa7875fb4b8ba799",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/stage1_encoding_protocol.json": "da7e981fae759d56cba98d81df082474b6b573d124d668c80d35a8b86f940eb1",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/stage1_protocol.json": "90e0456987315702facf47064a4af7f12c1a7b53ebece9bcd37186f15d2e5850",
+    "/home/kyzen/metafind/metafind_data_attrs/outputs/stage1_hyperparameters.json": "9698dc5b23fe6530705849d4d2bb81ff0a5f79d3202e708932a8004998f1fd72"
+  },
+  "input_sha256": {
+    "outputs/annotations/000074a334c541878360457c672b6c2e.json": "849adad9b717c2b086aae2ad33cc9c361c5cd71bcbfea9e19a0233dce1949a51",
+    "outputs/annotations/0000ecca9a234cae994be239f6fec552.json": "1487b7cebf3778be95843a8be68fc50c5806fe881a1ff52d2328d37799cea16a",
+    "outputs/annotations/0002064ef02e46f9a10b4bff10bae805.json": "cd3988904b9fa0f425161ae918f206073c61872be981c5e460705ff3ea43e62f",
+    "outputs/annotations/0002c6eafa154e8bb08ebafb715a8d46.json": "5619e7251bf7361deb478fbd2a062f4e0da8f08eb11459aefa7875fb4b8ba799",
+    "outputs/embeddings/000074a334c541878360457c672b6c2e.json": "f37197b1ff2ece2678cdef34fefb5f0e4408d8e3ee5de0ce18099aa33347babc",
+    "outputs/embeddings/000074a334c541878360457c672b6c2e.npz": "d1233a8a61c996de6eaa19c84ab47799a5aecf52f3b053544ad8926fdaebd4fc",
+    "outputs/embeddings/0000ecca9a234cae994be239f6fec552.json": "6aca23a1780ed51f550cd319f3e649b069dbe98e7ebf7dd556a3c358b1a0d3ce",
+    "outputs/embeddings/0000ecca9a234cae994be239f6fec552.npz": "8680c1802af7c27b6aa4c0eef0f36ca04d144e5e89ba89f4b307daf2dff91654",
+    "outputs/embeddings/0002064ef02e46f9a10b4bff10bae805.json": "25d345a896c1b69010db55a3b7bce945483c18155d104eb1dfd38ad880395081",
+    "outputs/embeddings/0002064ef02e46f9a10b4bff10bae805.npz": "338d5cb020e207728ad52d284f7caa7ee49bc6f88d44e3c6f04b33c76d6def70",
+    "outputs/embeddings/0002c6eafa154e8bb08ebafb715a8d46.json": "de71d6eec06b5b7cbeaa64bc83093de7e03ab328a51ac93c5f73eee1b42e3d77",
+    "outputs/embeddings/0002c6eafa154e8bb08ebafb715a8d46.npz": "d8287055bfc89c06672344ad1452b211cc8c6cd0757397ffdc4072e2379986b3",
+    "outputs/pointclouds/000074a334c541878360457c672b6c2e.json": "2d22841301b45c1ef20d5fcca2ca5c086afc0ce2b6fb17c024588c6ac4f571b4",
+    "outputs/pointclouds/000074a334c541878360457c672b6c2e.npz": "711a4160a97374f96808e3cd74050c9eee14aeea895149fba93b841625446bc0",
+    "outputs/pointclouds/0000ecca9a234cae994be239f6fec552.json": "53c23be6c322dbe6b7a00f820c88ebdb63dbe3fe3d045e32368662748c261a1b",
+    "outputs/pointclouds/0000ecca9a234cae994be239f6fec552.npz": "66c28cc457394f6fd04e48d083cadb932edf9a4e73fa9f43dcd5d4d90de33a29",
+    "outputs/pointclouds/0002064ef02e46f9a10b4bff10bae805.json": "5a92c272877e8bff46483a561bc1be0f26b1e430be187c819aeac7a1e4ee72da",
+    "outputs/pointclouds/0002064ef02e46f9a10b4bff10bae805.npz": "3896dc15408d693b1a6a709541a4b0a600dc2ee5d31d5ce29484af67dfe1a83c",
+    "outputs/pointclouds/0002c6eafa154e8bb08ebafb715a8d46.json": "9b2fd2c2566172b3111a013718d6222ef7e1c5df8ce8af8060a295e96604cc24",
+    "outputs/pointclouds/0002c6eafa154e8bb08ebafb715a8d46.npz": "a3be0107e664255346d23651a79573bab32b79766808d6d8dff9ea4218ac5842",
+    "outputs/splits.json": "4f2d431842628253c40244350ada346dbf8518bf45c5ec562f7a758964a9db3f",
+    "outputs/stage1_encoding_protocol.json": "da7e981fae759d56cba98d81df082474b6b573d124d668c80d35a8b86f940eb1",
+    "outputs/stage1_hyperparameters.json": "73728d6109f880c1a31a58ff0ec23315f2fc10e4d9c2b0994353ec106b000e64",
+    "outputs/stage1_protocol.json": "3732af08c02bb46eef55803702280e4311d73c76b49d4be7ddbe8911c28d2bd3"
+  },
+  "model_location": "/home/kyzen/metafind/metafind_data/models"
+}
