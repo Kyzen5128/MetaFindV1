@@ -4,10 +4,6 @@ Run with the existing MetaFind Python environment. No model/data producers run h
 """
 from pathlib import Path
 import hashlib,json,math,re
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from matplotlib import font_manager
 from PIL import Image
 from pptx import Presentation
 from pptx.util import Inches,Pt
@@ -23,8 +19,8 @@ FONT='Noto Sans CJK TC'
 INK='183247';TEAL='137D88';ORANGE='CE663F';MUTED='657A88';BG='F5F7F8';PALE='E6F1F0';LINE='D9E2E7';WHITE='FFFFFF'
 COLORS=[INK,TEAL,ORANGE,'8E9FAA','8778A9']
 prs=Presentation();prs.slide_width=Inches(13.333333);prs.slide_height=Inches(7.5)
-prs.core_properties.title='MetaFind｜Table 1 評估與 Stage 2'
-prs.core_properties.subject='Notion 研究指南簡報；附逐頁講稿'
+prs.core_properties.title='MetaFind｜標註更新與評估計畫'
+prs.core_properties.subject='最新標註方法、完成時間與後續評估計畫；含逐頁講稿'
 prs.core_properties.author='MetaFindV1'
 prs.core_properties.keywords='MetaFind, Table 1, Stage 2, reproduction, 自訂評估'
 shape_boxes=[]
@@ -65,10 +61,10 @@ def line(slide,x1,y1,x2,y2,color=LINE,width=1.3):
     return sh
 
 def short_source(s):
-    v=s.get('sources',[])
-    if not v:return '來源：指定 Notion 頁面；完整來源見備忘稿'
-    first=clean(v[0]);first=re.sub(r'/home/kyzen/MetaFindV1/','',first)
-    return '來源：'+first[:116]
+    n=int(s['id'])
+    if n==5:return '進度快照：2026-09-08 04:12:30（台北）；ETA 為推估｜完整依據見備忘稿'
+    if n<6:return '來源：目前標註程式、實際資料與論文 Figure 2｜完整依據見備忘稿'
+    return '來源：論文 Table 1、目前自訂評估規格與程式｜完整依據見備忘稿'
 
 def base(s,n,total):
     sl=prs.slides.add_slide(prs.slide_layouts[6]);sl.background.fill.solid();sl.background.fill.fore_color.rgb=RGBColor.from_string(BG)
@@ -80,7 +76,6 @@ def base(s,n,total):
     box(sl,.6,6.47,12.1,.42,PALE,rounded=False)
     take=clean(s['takeaway']);text(sl,take,.75,6.50,11.8,.34,15 if len(take)>48 else 17,TEAL,True)
     footer=text(sl,short_source(s),.60,7.08,11.1,.20,8.2,MUTED)
-    footer.click_action.hyperlink.address=json.loads(Path(__file__).with_name('notion_provenance.json').read_text())['url']
     text(sl,f'{n:02d} / {total:02d}',11.78,7.05,.93,.26,11,MUTED,align=PP_ALIGN.RIGHT)
     return sl
 
@@ -116,177 +111,121 @@ def draw_table(sl,s):
             fill=INK if ri==0 else (WHITE if ri%2 else 'EBF0F3')
             box(sl,x,y,widths[ci],heights[ri],fill,rounded=False)
             raw=clean(value);size=s.get('_table_size',14 if count>=6 else 17)
-            if len(raw)>42:size=14
-            if len(raw)>72:size=12.5
+            if len(raw)>60:size=14
+            if len(raw)>90:size=12.5
             shape=text(sl,raw,x+.10,y+.06,widths[ci]-.2,heights[ri]-.1,size,WHITE if ri==0 else INK,ri==0 or ci==0)
             shape.text_frame.vertical_anchor=MSO_ANCHOR.MIDDLE
             x+=widths[ci]
         y+=heights[ri]
     if s.get('bullets') and not s.get('_no_table_bullets'):bullets(sl,s['bullets'][:2],.7,5.70,11.9,.31,14)
 
-def draw_chart(sl,s):
-    data=s['chart'];cats=data['categories'];series=data['series'];n=len(cats);m=len(series)
-    prop=font_manager.FontProperties(family=FONT)
-    plt.rcParams.update({'font.family':'sans-serif','font.sans-serif':[FONT],'axes.unicode_minus':False})
-    fig,ax=plt.subplots(figsize=(9.2,5.0),dpi=180);fig.patch.set_facecolor('#'+BG);ax.set_facecolor('#'+BG)
-    group=.78;bar=group/m
-    for j,ser in enumerate(series):
-        ys=[i-group/2+(j+.5)*bar for i in range(n)]
-        ax.barh(ys,ser['values'],height=bar*.86,label=clean(ser['name']),color='#'+COLORS[j%len(COLORS)])
-        for yy,v in zip(ys,ser['values']):
-            ax.text(v+1 if v<94 else v-1,yy,f'{v:.2f}',va='center',ha='left' if v<94 else 'right',fontsize=15.5,color='#'+INK if v<94 else '#'+WHITE)
-    ax.set_yticks(range(n),[clean(v) for v in cats],fontproperties=prop,fontsize=16)
-    ax.invert_yaxis();ax.set_xlim(0,105);ax.set_xticks([0,25,50,75,100]);ax.set_xlabel(data.get('unit','R@1 (%)'),fontsize=12)
-    ax.tick_params(axis='both',length=0,labelcolor='#'+MUTED);ax.grid(axis='x',color='#'+LINE,lw=.6);ax.set_axisbelow(True)
-    for sp in ax.spines.values():sp.set_visible(False)
-    ax.legend(loc='lower left',bbox_to_anchor=(0,1.01),ncol=min(m,2),frameon=False,prop={'family':FONT,'size':12.5})
-    fig.tight_layout(pad=1.4)
-    filename=f"slide_{int(s['id']):02d}_chart"
-    png=ASSETS/(filename+'.png');fig.savefig(png,facecolor=fig.get_facecolor(),bbox_inches='tight')
-    fig.savefig(ASSETS/(filename+'.pdf'),facecolor=fig.get_facecolor(),bbox_inches='tight');plt.close(fig)
-    iw,ih=Image.open(png).size;scale=min(8.1/iw,4.44/ih);pw,ph=iw*scale,ih*scale
-    sl.shapes.add_picture(str(png),Inches(.6+(8.1-pw)/2),Inches(1.78+(4.44-ph)/2),width=Inches(pw),height=Inches(ph))
-    box(sl,9.00,1.88,3.68,4.26,WHITE,LINE)
-    bullets(sl,s.get('bullets',[])[:4],9.20,2.08,3.26,.81,16)
-    note=data.get('note')
-    if note:text(sl,note,9.23,5.46,3.13,.63,10.5,MUTED)
 
-def draw_flow(sl,s):
-    data=s['flow'];steps=data['steps'];count=len(steps)
-    if count<=4:cols=count
-    else:cols=3 if count<=6 else 4
-    rows=math.ceil(count/cols);gap=.30;w=(12.1-gap*(cols-1))/cols;h=(s.get('_flow_height',4.18)-.40*(rows-1))/rows
-    for i,item in enumerate(steps):
-        if isinstance(item,str):item={'title':item,'detail':''}
-        col=i%cols;row=i//cols;x=.6+col*(w+gap);y=s.get('_flow_top',1.96)+row*(h+.40)
-        box(sl,x,y,w,h,WHITE,LINE)
-        if s.get('_flow_compact'):
-            text(sl,f'{i+1:02d}',x+.15,y+.12,.51,.35,16,TEAL,True)
-            text(sl,item['title'],x+.78,y+.12,w-.95,.58,16,INK,True)
-            if item.get('detail'):text(sl,item['detail'],x+.15,y+.82,w-.30,.51,13.5,MUTED)
-        else:
-            text(sl,f'{i+1:02d}',x+.15,y+.12,.56,.36,18,TEAL,True)
-            text(sl,item['title'],x+.15,y+.58,w-.30,.66,18 if w>=3 else 16,INK,True)
-            if item.get('detail'):text(sl,item['detail'],x+.15,y+1.23,w-.30,max(.44,h-1.31),14,MUTED)
-        if col<cols-1 and i<count-1:text(sl,'→',x+w+.02,y+.7,gap-.04,.42,20,TEAL,True,PP_ALIGN.CENTER)
-    if data.get('note'):text(sl,data['note'],.7,6.19,11.8,.24,11,MUTED)
+def picture(sl,name,x,y,w,h):
+    path=ASSETS/name
+    with Image.open(path) as im:iw,ih=im.size
+    scale=min(w/iw,h/ih);sw,sh=iw*scale,ih*scale
+    sl.shapes.add_picture(str(path),Inches(x+(w-sw)/2),Inches(y+(h-sh)/2),width=Inches(sw),height=Inches(sh))
+
+def table(sl,data,top=1.94,height=4.17,size=18,widths=None):
+    data={**data}
+    if widths:data['widths']=widths
+    draw_table(sl,{'id':'table','table':data,'_table_top':top,'_table_height':height,'_table_size':size})
+
+def card(sl,number,title,detail,x,y,w,h,dark=False):
+    box(sl,x,y,w,h,INK if dark else WHITE,None if dark else LINE)
+    text(sl,number,x+.2,y+.14,.7,.35,16,'8ED3CF' if dark else TEAL,True)
+    text(sl,title,x+.2,y+.61,w-.4,.76,22,WHITE if dark else INK,True)
+    text(sl,detail,x+.2,y+1.47,w-.4,h-1.58,17,'C6D8E1' if dark else MUTED)
 
 def cover(sl,s):
-    sl.background.fill.solid()
-    sl.background.fill.fore_color.rgb=RGBColor.from_string(INK)
-    # Cover has its own composition; no scientific scores are invented here.
-    text(sl,'METAFIND  /  REPRODUCTION BRIEF',.73,.59,11.8,.40,13,'67C5C4',True)
-    text(sl,'Table 1 評估\n與 Stage 2',.72,1.55,7.65,1.94,43,WHITE,True)
-    text(sl,'方法、證據與下一步',.75,3.79,7.6,.7,25,'C6D8E1')
-    text(sl,'同一 UID 的檢索比較\n場景條件下的 layout 驗證',.76,5.01,7.1,.94,20,'C6D8E1')
-    text(sl,'2026.09.08  ·  研究進度報告  ·  含逐頁備忘稿',.76,6.70,10.6,.35,12,'A9C2CD')
-    for i,letter in enumerate(['T','I','PC']):
-        box(sl,9.2,1.45+i*1.26,2.47,.85,'23495C',rounded=True)
-        text(sl,letter,9.44,1.56+i*1.26,1.98,.5,26,'8ED3CF',True,PP_ALIGN.CENTER)
-    line(sl,10.43,4.92,10.43,5.31,'67C5C4',2)
-    box(sl,8.72,5.32,3.45,.87,TEAL)
-    text(sl,'QUERY → GALLERY',8.96,5.56,2.98,.37,16,WHITE,True,PP_ALIGN.CENTER)
+    sl.background.fill.solid();sl.background.fill.fore_color.rgb=RGBColor.from_string(INK)
+    text(sl,'METAFIND  /  RESEARCH UPDATE',.73,.62,11.8,.4,13,'8ED3CF',True)
+    text(sl,'標註更新\n與評估計畫',.72,1.68,7.05,1.97,45,WHITE,True)
+    text(sl,'現在怎麼做，完成後怎麼驗證',.77,4.04,7.5,.65,24,'C6D8E1')
+    text(sl,'2026.09.08  ·  10 頁  ·  約 12–13 分鐘',.77,6.76,10.6,.3,12,'A9C2CD')
+    for i,(title,detail) in enumerate([('目前的標註','方法・資料卡・完成時間'),('接下來的評估','測試設計・差異・後續流程')]):
+        y=1.72+i*2.18;box(sl,8.66,y,3.91,1.83,'23495C')
+        text(sl,f'0{i+1}',8.89,y+.18,.55,.33,15,'8ED3CF',True)
+        text(sl,title,8.9,y+.67,3.42,.50,24,WHITE,True)
+        text(sl,detail,8.9,y+1.28,3.42,.29,12,'C6D8E1')
 
-def code_slide(sl,s):
-    code=s.get('code') or s.get('code_blocks') or s.get('commands')
-    if isinstance(code,list):code='\n\n'.join(v.get('code',str(v)) if isinstance(v,dict) else str(v) for v in code)
-    if isinstance(code,dict):code=code.get('text',code.get('code',str(code)))
-    if not code:
-        cards(sl,s);return
-    box(sl,.6,1.83,12.1,4.4,INK)
-    lines=str(code).splitlines();size=15 if len(lines)<=14 else 11.3
-    tb=text(sl,code,.86,2.01,11.6,4.0,size,'E3F0F4')
-    for p in tb.text_frame.paragraphs:
-        p.line_spacing=1.10
-        for r in p.runs:r.font.name='DejaVu Sans Mono'
-
-
-def formula(sl,s):
-    # An explicit example, never a data-dependent target-diagonal assumption.
-    example=s.get('formula') or s.get('example')
-    if not example:
-        cards(sl,s);return
-    if isinstance(example,dict):example='\n'.join(f'{k}: {v}' for k,v in example.items())
-    box(sl,.6,1.86,12.1,2.15,INK)
-    text(sl,example,.94,2.18,11.35,1.48,25,WHITE,True)
-    bullets(sl,s.get('bullets',[])[:3],.83,4.43,11.75,.59,20)
-
-
-
-def focused_layout(sl,s):
-    sid=int(s['id'])
-    if sid==3:
-        text(sl,'ULIP2＋本地 MEAN  /  STAGE 1  /  STAGE 2 — LAYOUT OFF',.71,1.85,11.7,.40,18,TEAL,True)
-        draw_table(sl,{**s,'_table_top':2.39,'_table_height':3.11,'_table_size':16,'_no_table_bullets':True})
-        text(sl,'T   I   PC   T＋I   T＋PC   I＋PC   FULL',.75,5.76,11.7,.40,21,INK,True)
-        text(sl,'每個 gallery 都是完整 T＋I＋PC；不同文字須經有效 token 檢查。',.76,6.15,11.7,.24,11.5,MUTED)
-    elif sid==4:
-        text(sl,'教學示例（非模型結果）',.73,1.86,11.7,.39,18,TEAL,True)
-        draw_table(sl,{**s,'_table_top':2.36,'_table_height':1.66,'_table_size':17,'_no_table_bullets':True})
-        text(sl,'rank = 1 + 更高分的非GT數 + 同分的非GT數',.77,4.34,11.7,.51,24,INK,True)
-        text(sl,s['formula'],.77,5.05,11.7,.46,21,TEAL,True)
-        text(sl,'以 float64 cosine 排名；小 gallery 的 R@5 可能缺乏鑑別力。',.77,5.77,11.7,.36,16,MUTED)
-    elif sid==7:
-        text(sl,'舊穩定 corpus 的部分 preflight：M = A + Q + E',.73,1.85,11.6,.36,18,TEAL,True)
-        values=[('A  admitted','45,692'),('Q  真實失敗','339'),('E  人工排除','21')]
-        for j,(label,value) in enumerate(values):
-            x=.62+j*4.12;box(sl,x,2.34,3.86,1.08,WHITE,LINE)
-            text(sl,label,x+.16,2.45,3.54,.29,13,MUTED)
-            text(sl,value,x+.16,2.82,3.54,.47,28,INK,True)
-        text(sl,'原始 M＝46,052；2% 只計 Q/M。Paper 在製資料仍 BLOCKED。',.75,3.67,11.7,.43,17,INK,True)
-        draw_table(sl,{**s,'_table_top':4.40,'_table_height':1.40,'_table_size':14,'_no_table_bullets':True})
-        text(sl,'本條 S1 使用整份 holdout 選模，已包含 test；G3 尚未接 live chain。',.77,6.00,11.7,.28,13,ORANGE,True)
-    elif sid==8:
-        box(sl,.6,1.83,12.1,.59,INK)
-        text(sl,'LR 5e-5   ·   1 epoch   ·   batch 64   ·   τ 0.5   ·   scene dropout 0.3',.81,1.94,11.7,.34,18,WHITE,True)
-        draw_flow(sl,{**s,'_flow_top':2.66,'_flow_height':3.25,'_flow_compact':True})
-    elif sid==9:
-        draw_table(sl,{**s,'_table_top':1.87,'_table_height':2.67,'_table_size':16,'_no_table_bullets':True})
-        box(sl,.6,4.91,5.88,1.10,INK);box(sl,6.77,4.91,5.93,1.10,TEAL)
-        text(sl,'1,805',.84,5.03,2.32,.49,31,WHITE,True)
-        text(sl,'CPU tests passed',3.03,5.22,3.23,.38,15,WHITE)
-        text(sl,'2,342',7.01,5.03,2.32,.49,31,WHITE,True)
-        text(sl,'graph checks',9.32,5.22,3.05,.38,15,WHITE)
-        text(sl,'Scene_scores 尚未執行 judge；Human 保持 INSUFFICIENT_EVIDENCE。',.75,6.16,11.7,.23,11.5,ORANGE,True)
-    else:
-        return False
-    return True
+def render(sl,s,n):
+    if n==2:
+        for i,st in enumerate(s['steps']):
+            x=.6+i*3.095;box(sl,x,1.89,2.82,1.58,WHITE,LINE)
+            text(sl,f'0{i+1}',x+.17,2.04,.45,.3,15,TEAL,True)
+            text(sl,st['title'],x+.17,2.48,2.48,.43,20,INK,True)
+            text(sl,st['detail'],x+.17,3.01,2.48,.32,12,MUTED)
+            if i<3:text(sl,'→',x+2.85,2.50,.24,.3,17,TEAL)
+        for i in range(3):picture(sl,f'annotation_view_{i+1:02d}.png',.6+i*2.47,3.77,2.23,2.23)
+        text(sl,'同一張椅子\n從不同角度看',8.36,4.10,3.9,1.12,27,INK,True)
+        text(sl,'示意選 3 張；實際輸入 11 張',8.36,5.50,3.95,.39,16,TEAL)
+    elif n==3:
+        table(sl,s['table'],top=1.93,height=3.58,size=18,widths=[1.05,1.6,2.35])
+        text(sl,'完整資料卡共 13 欄；尺寸、重量是模型估計，並非量測真值。',.76,5.90,11.65,.36,18,ORANGE,True)
+    elif n==4:
+        stages=[('檢查資料卡','缺欄、格式、尺寸與重量範圍'),('帶著錯誤重答','初次＋最多兩次修正'),('收錄或隔離','合格收錄；失敗保留原因')]
+        for i,(title,detail) in enumerate(stages):card(sl,f'0{i+1}',title,detail,.6+i*4.12,1.95,3.86,2.35)
+        table(sl,{'headers':['項目','論文','目前做法'],'rows':[['標註模型','GPT-4o','Gemma 4 12B・BF16'],['多視角輸入','11 張','11 張；提示與重試為本地選擇']]},top=4.62,height=1.53,size=16,widths=[1.1,1.2,2.5])
+    elif n==5:
+        p=json.loads((ROOT/'source/annotation_progress_snapshot.json').read_text());c=p['counts']
+        text(sl,f"{c['processed_percent_of_queue']:.2f}%",.67,1.93,5.45,.94,53,TEAL,True)
+        text(sl,f"本輪已處理 {c['processed_this_run_success_plus_failure']:,} / {c['scheduled_this_run']:,}",.72,3.04,7.0,.48,23,INK,True)
+        box(sl,.72,3.82,7.20,.26,LINE,rounded=False)
+        box(sl,.72,3.82,7.20*c['processed_percent_of_queue']/100,.26,TEAL,rounded=False)
+        for i,(label,value) in enumerate([('成功',c['successfully_written_this_run']),('失敗隔離',c['failed_this_run_unique_uids']),('待處理',c['remaining_scheduled'])]):
+            x=.72+i*2.52;text(sl,label,x,4.43,2.2,.35,16,MUTED);text(sl,f'{value:,}',x,5.00,2.2,.64,29,INK,True)
+        box(sl,8.55,1.96,4.14,4.10,INK)
+        text(sl,'預計完成本輪標註',8.83,2.27,3.57,.41,18,'8ED3CF',True)
+        text(sl,'9/9 上午',8.82,3.10,3.64,.85,34,WHITE,True)
+        text(sl,'規劃 09:00–12:00',8.84,4.14,3.61,.43,21,WHITE)
+        text(sl,'近期約 11.7–11.9 件／分鐘\n需持續運作且速度相近',8.84,5.00,3.55,.79,15,'C6D8E1')
+        text(sl,'只估標註處理；不含後續編碼、訓練與評估。',.76,6.12,11.65,.26,13,MUTED)
+    elif n==6:
+        methods=[('預訓練基準','ULIP2 特徵\n本地平均融合'),('Stage 1','學習物件表徵\n與多模態融合'),('Stage 2','場景訓練後的融合\n本評估不輸入場景資訊')]
+        for i,(title,detail) in enumerate(methods):card(sl,f'0{i+1}',title,detail,.6+i*4.12,1.93,3.86,2.78,dark=i==2)
+        text(sl,'7 種線索組合',.73,5.05,2.35,.34,18,TEAL,True)
+        text(sl,'T  /  I  /  PC  /  T＋I  /  T＋PC  /  I＋PC  /  全部',3.10,5.02,9.46,.50,22,INK,True)
+        text(sl,'T＝文字　I＝圖片　PC＝點雲',.73,5.80,5.50,.37,16,MUTED)
+        text(sl,'候選皆有 T＋I＋PC；三方法使用同一批資產',6.00,5.80,6.61,.37,16,TEAL,True)
+    elif n==7:
+        table(sl,s['table'],top=1.94,height=2.72,size=17,widths=[.65,1.25,2.3])
+        for i,(title,detail) in enumerate([('R@1：第一名就找對','像找商品編號：第一筆就是同一件資產'),('R@5：前五名有找到','看前五筆裡，是否包含同一件資產')]):
+            x=.6+i*6.19;box(sl,x,4.98,5.91,1.18,WHITE,LINE)
+            text(sl,title,x+.18,5.13,5.53,.38,21,TEAL,True)
+            text(sl,detail,x+.18,5.70,5.53,.31,15,MUTED)
+    elif n==8:table(sl,s['table'],top=1.90,height=4.32,size=16,widths=[1.02,1.62,2.68])
+    elif n==9:
+        points=[('固定查詢題目','鎖定物件清單\n準備第二份文字描述'),('固定模型版本','指定兩階段模型存檔\n保留版本與來源'),('固定候選與正解','共用候選物件庫\n以同一資產編號為正解'),('保留逐題紀錄','留下排名、缺漏與錯誤\n正式跑分尚待執行')]
+        for i,(title,detail) in enumerate(points):card(sl,f'0{i+1}',title,detail,.6+i*3.095,1.98,2.82,3.50)
+        text(sl,'先前小型驗證只檢查流程能否運作；正式結果仍待這一輪資料完成。',.75,5.87,11.91,.37,18,ORANGE,True)
+    elif n==10:
+        for i,st in enumerate(s['steps']):
+            x,y=.6+(i%3)*4.12,1.91+(i//3)*2.21
+            box(sl,x,y,3.86,1.98,INK if i==5 else WHITE,None if i==5 else LINE)
+            text(sl,f'0{i+1}',x+.16,y+.12,.48,.30,15,'8ED3CF' if i==5 else TEAL,True)
+            text(sl,st['title'],x+.16,y+.57,3.54,.44,20,WHITE if i==5 else INK,True)
+            text(sl,st['detail'],x+.16,y+1.14,3.54,.67,15,'C6D8E1' if i==5 else MUTED)
+            if i%3<2:text(sl,'→',x+3.88,y+.82,.23,.32,17,TEAL)
 
 def make():
-    obj=json.loads(CONTENT.read_text());slides=obj['slides'];total=len(slides)
-    manuscript=['# MetaFind：Table 1 評估與 Stage 2 — 逐頁講稿','',
-        '10 頁精簡版；此稿也寫入 PPT 每頁的「備忘稿」。完整命令附在講稿後方，不增加投影片頁數。',
-        '來源：'+json.loads(Path(__file__).with_name('notion_provenance.json').read_text())['url'],'']
+    obj=json.loads(CONTENT.read_text());slides=obj['slides'];assert len(slides)==10
+    manuscript=['# '+obj['meta']['title']+' — 逐頁講稿','','10 頁；約 12–13 分鐘。以下講稿逐頁寫入 PPT 備忘稿。最新完整資料的正式評估尚未執行。','']
     for n,s in enumerate(slides,1):
-        hint=s.get('layout_hint','cards')
-        if n==1 or hint=='cover':
-            sl=prs.slides.add_slide(prs.slide_layouts[6]);cover(sl,s)
-        else:
-            sl=base(s,n,total)
-            if focused_layout(sl,s):pass
-            elif s.get('chart'):draw_chart(sl,s)
-            elif s.get('table'):draw_table(sl,s)
-            elif s.get('flow'):draw_flow(sl,s)
-            elif hint=='code' or s.get('code') or s.get('commands'):code_slide(sl,s)
-            elif hint=='formula':formula(sl,s)
-            else:cards(sl,s)
-        sources='\n'.join(str(v) for v in s.get('sources',[]))
-        notes=f"第 {n:02d} 頁｜{s['title']}\n建議時間：{s.get('duration_seconds',70)} 秒\n\n{s['notes']}\n\n本頁重點：{s['takeaway']}\n\n來源與界線\n{sources}"
+        if n==1:sl=prs.slides.add_slide(prs.slide_layouts[6]);cover(sl,s)
+        else:sl=base(s,n,10);render(sl,s,n)
+        seconds=s.get('duration_seconds',75);sources='\n'.join(s['sources'])
+        notes=f"第 {n:02d} 頁｜{s['title']}\n建議時間：{seconds} 秒\n\n{s['notes']}\n\n本頁重點：{s['takeaway']}\n\n來源與界線\n{sources}"
         sl.notes_slide.notes_text_frame.text=notes
         for p in sl.notes_slide.notes_text_frame.paragraphs:
-            for r in p.runs:setfont(r,12,INK)
-        manuscript += [f"## {n:02d}｜{s['title']}",'',f"**建議時間：{s.get('duration_seconds',70)} 秒。**",'',s['notes'],'',f"**本頁重點：** {s['takeaway']}",'','來源：','']+['- '+str(v) for v in s.get('sources',[])]+['']
+            for r in p.runs:setfont(r,12)
+        manuscript += [f"## {n:02d}｜{s['title']}",'',f'**建議時間：{seconds} 秒。**','',s['notes'],'','**本頁重點：** '+s['takeaway'],'','來源：','']
+        manuscript += ['- '+v for v in s['sources']]+['']
     out=ROOT/'MetaFind_Table1_Stage2_含講稿.pptx';prs.save(out)
-    manuscript += ['# 操作附錄（不計入 10 頁投影片）','','以下保留 Notion 的命令模板。請先準備真實資料、UID 清單、外部描述與 checkpoint；文件中的 /path/to 是待指定路徑。本次簡報製作未執行這些訓練／評估命令。','']
-    source=Path(__file__).with_name('notion_source.md').read_text()
-    parts=re.split(r'(```bash\n[\s\S]*?\n```)',source)
-    for i,part in enumerate(parts):
-        if not part.startswith('```bash'):continue
-        headings=re.findall(r'^#{2,3} (.+)$',parts[i-1],re.M)
-        manuscript += ['## '+(headings[-1] if headings else '操作命令'),'',part,'']
     (ROOT/'逐頁講稿.md').write_text('\n'.join(manuscript).rstrip()+'\n')
     (ROOT/'source/layout_boxes.json').write_text(json.dumps(shape_boxes,ensure_ascii=False,indent=2)+'\n')
-    (ROOT/'source/build_record.json').write_text(json.dumps({'slides':total,'notes_slides':sum(bool(sl.notes_slide.notes_text_frame.text.strip()) for sl in prs.slides),'content_sha256':hashlib.sha256(CONTENT.read_bytes()).hexdigest(),'pptx_sha256':hashlib.sha256(out.read_bytes()).hexdigest(),'font':FONT,'size':'16:9','environment':'existing MetaFind python; python-pptx 1.0.2; matplotlib; no model producers'},ensure_ascii=False,indent=2)+'\n')
-    print(json.dumps({'pptx':str(out),'slides':total,'bytes':out.stat().st_size},ensure_ascii=False))
+    record={'slides':10,'notes_slides':10,'content_sha256':hashlib.sha256(CONTENT.read_bytes()).hexdigest(),'pptx_sha256':hashlib.sha256(out.read_bytes()).hexdigest(),'font':FONT,'size':'16:9','environment':'existing MetaFind Python; python-pptx 1.0.2; no model/data producers','images':'three unchanged actual renders of one annotated chair; source/source_manifest.json'}
+    (ROOT/'source/build_record.json').write_text(json.dumps(record,ensure_ascii=False,indent=2)+'\n')
+    print(json.dumps({'pptx':str(out),'slides':10,'bytes':out.stat().st_size},ensure_ascii=False))
 
 if __name__=='__main__':make()

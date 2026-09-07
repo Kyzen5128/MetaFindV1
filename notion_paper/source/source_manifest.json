@@ -1,0 +1,129 @@
+{
+  "schema": "metafind.presentation_sources.v2",
+  "source_commit": "929e7a6f49ed5044ad0abb2d96cb204129d6b8fb",
+  "as_of": "2026-09-08",
+  "scope": "User-requested revision about current annotation and planned evaluation; Notion snapshot retained only as historical background",
+  "files": [
+    {
+      "path": "assets/annotation_view_01.png",
+      "source_path": "/home/kyzen/metafind/metafind_data_paper/outputs/renders/8505977020be4fd194854ad3d9808222/view_07.png",
+      "sha256": "ad41fb43272af7a3b4ae049a987d70a4eb64f9f352bfefe7c157c37c86575c05",
+      "evidence_class": "OBSERVED DATA",
+      "transformation": "none; unchanged real render"
+    },
+    {
+      "path": "assets/annotation_view_02.png",
+      "source_path": "/home/kyzen/metafind/metafind_data_paper/outputs/renders/8505977020be4fd194854ad3d9808222/view_00.png",
+      "sha256": "0f63af235ef52c52a197de5aa025c16a681e5e3e1b50b0a678deba378ff928e4",
+      "evidence_class": "OBSERVED DATA",
+      "transformation": "none; unchanged real render"
+    },
+    {
+      "path": "assets/annotation_view_03.png",
+      "source_path": "/home/kyzen/metafind/metafind_data_paper/outputs/renders/8505977020be4fd194854ad3d9808222/view_03.png",
+      "sha256": "93885284e9e3ef6ce4ceae635b8bd2b5e5ff67ca97187bb4e32b4a4cfde53fc0",
+      "evidence_class": "OBSERVED DATA",
+      "transformation": "none; unchanged real render"
+    },
+    {
+      "path": "source/annotation_example.json",
+      "source_path": "/home/kyzen/metafind/metafind_data_paper/outputs/annotations/8505977020be4fd194854ad3d9808222.json",
+      "sha256": "1589a35de97c8eff710b68b7bab1427e850c749740fbe345737510c3e286729d",
+      "evidence_class": "OBSERVED DATA; dimensions and mass are model estimates"
+    },
+    {
+      "path": "source/annotation_progress_snapshot.json",
+      "source_path": "/home/kyzen/MetaFindV1/output/validation/ppt_annotation_eval_20260908/annotation_progress_041230.json",
+      "sha256": "f4d6f52b240c2b8c46d6064a164c974078f9d0ed32daa0bd7db5a93b3644331e",
+      "evidence_class": "OBSERVED DATA; ETA is INFERENCE"
+    }
+  ],
+  "referenced_files": [
+    {
+      "path": "/home/kyzen/metafind/metafind_data_paper/outputs/annotations/8505977020be4fd194854ad3d9808222.json",
+      "sha256": "1589a35de97c8eff710b68b7bab1427e850c749740fbe345737510c3e286729d"
+    },
+    {
+      "path": "docs/CUSTOM_TABLE1_EVALUATION.md",
+      "sha256": "795c388102709cf3b533a79e0d1d6e0aa67aec63b43719dabb81aa18e8ecf89e"
+    },
+    {
+      "path": "docs/DATA_FLOW.md",
+      "sha256": "ef78c62d35d2fd84ab80e5059b15fefe374afa446560ffa87aad0194b7b4af07"
+    },
+    {
+      "path": "docs/SCENE_SCORES.md",
+      "sha256": "c35b2a8ecf3fc321ed59356bb18714fd5a86657263e9539d3baf93379746f6ac"
+    },
+    {
+      "path": "docs/audit/validation_artifacts_20260907_08/custom_table1_cpu_new_stages_20260908/verification.json",
+      "sha256": "1522add458d4b4fdefc3028b84562966bae99dc714d4a556177df4413959e262"
+    },
+    {
+      "path": "docs/paper/metafind_source/2methdology.tex",
+      "sha256": "4504c177dd4b5a43630b197492712939037941c3dc6edec143742d3ab40a7d96"
+    },
+    {
+      "path": "docs/paper/metafind_source/3experiments.tex",
+      "sha256": "26a8e3102d46abda511c6cda131fb652c00c166b1619367b58816dc3299f99fd"
+    },
+    {
+      "path": "metafind/data/annotate_run.py",
+      "sha256": "8770b6d19536c60e7c8b43fcc0ef8dd4cf38e2e1d586f21f00c9bfacc70df7b8"
+    },
+    {
+      "path": "metafind/data/annotate_v10.py",
+      "sha256": "dfc63e0c9c4b30d2f56d27fb5468660e29f7fdf078e110e476c08d92af8152ee"
+    },
+    {
+      "path": "metafind/eval/custom_table1.py",
+      "sha256": "9d8d25309baed13489968723d67a22c1b83bb19c02efff349f16f7d567a1de43"
+    },
+    {
+      "path": "metafind/train/stage1.py",
+      "sha256": "8b7416abe7bb8c63d516dcb826864ead5355abb93a8d1943ecf1e16b11b64ba8"
+    },
+    {
+      "path": "output/validation/ppt_annotation_eval_20260908/annotation_progress_041230.json",
+      "sha256": "f4d6f52b240c2b8c46d6064a164c974078f9d0ed32daa0bd7db5a93b3644331e"
+    },
+    {
+      "path": "tools/chain_paper_stage1.sh",
+      "sha256": "0f14b536074703f8afdaf6c686b58519ac8ea170af97581b6e12b84c8f6c02d9"
+    },
+    {
+      "path": "tools/chain_paper_stage2.sh",
+      "sha256": "f90676478ba09bf73dc8b080daa596e9e2e892941cef48483d273fd9a4da90a7"
+    }
+  ],
+  "claim_classes": [
+    {
+      "claim": "Paper uses GPT-4o and eleven orthogonal views; Table 1 has seven query modality combinations and R@1/R@5.",
+      "class": "PAPER FACT"
+    },
+    {
+      "claim": "Current local pipeline uses Gemma 4 12B BF16, eleven separate image inputs, structured fields and up to three total answers.",
+      "class": "OBSERVED IMPLEMENTATION"
+    },
+    {
+      "claim": "Chair example and 2026-09-08 04:12:30 progress counts.",
+      "class": "OBSERVED DATA"
+    },
+    {
+      "claim": "September 9 morning completion window assuming continued similar throughput.",
+      "class": "INFERENCE"
+    },
+    {
+      "claim": "Local prompt/retry rules, normalized-mean baseline and two-observation protocol.",
+      "class": "IMPLEMENTATION CHOICE"
+    },
+    {
+      "claim": "Gemma replacing GPT-4o, current perspective rendering and frozen CLIP are disclosed differences.",
+      "class": "DEVIATION"
+    },
+    {
+      "claim": "Author complete query construction and exact gallery UID list; full scene evaluation details.",
+      "class": "UNKNOWN"
+    }
+  ]
+}

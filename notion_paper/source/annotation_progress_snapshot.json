@@ -1,0 +1,221 @@
+{
+  "schema": "metafind.annotation_progress_observation.v1",
+  "evidence_class": "OBSERVED DATA; ETA is INFERENCE",
+  "as_of_taipei": "2026-09-08T04:12:30.955796+08:00",
+  "scan_finished_taipei": "2026-09-08T04:12:31.947099+08:00",
+  "process": {
+    "pid": 2043427,
+    "start_ticks": "67087549",
+    "state": "R",
+    "parent_pid": 2043422,
+    "cpu_user_ticks": 26043404,
+    "cpu_system_ticks": 1302225,
+    "clock_ticks_per_second": 100,
+    "argv": [
+      "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+      "-m",
+      "metafind.data.annotate_run",
+      "--prompt-mode",
+      "figure2_v10"
+    ]
+  },
+  "r2_pipeline_children": [
+    {
+      "pid": 2043427,
+      "argv": [
+        "/home/kyzen/miniconda3/envs/MetaFind/bin/python",
+        "-m",
+        "metafind.data.annotate_run",
+        "--prompt-mode",
+        "figure2_v10"
+      ]
+    },
+    {
+      "pid": 2043428,
+      "argv": [
+        "tr",
+        "\\r",
+        "\\n"
+      ]
+    },
+    {
+      "pid": 2043429,
+      "argv": [
+        "grep",
+        "-vE",
+        "Loading weights|FutureWarning|warnings.warn"
+      ]
+    }
+  ],
+  "annotation_run_record": {
+    "stage": "n05_annotate",
+    "status": "RUNNING",
+    "started_at": 1788679452.5014396,
+    "ended_at": null,
+    "attempt": 1,
+    "rc": null,
+    "stdout_broken": false,
+    "code_revision": "fba507ffe0ce0330eb575fea782a88c249a517f1"
+  },
+  "run_started_taipei": "2026-09-06T15:24:12.501440+08:00",
+  "counts": {
+    "rendered_candidates": 46012,
+    "already_present_not_queued": 8,
+    "scheduled_this_run": 46004,
+    "successfully_written_this_run": 25063,
+    "failed_this_run_unique_uids": 26,
+    "failure_rows_this_run": 26,
+    "processed_this_run_success_plus_failure": 25089,
+    "remaining_scheduled": 20915,
+    "successful_jsons_on_disk_including_initial": 25071,
+    "processed_percent_of_queue": 54.536562038083645,
+    "success_percent_of_queue": 54.480045213459704,
+    "disk_success_percent_of_rendered_candidates": 54.48795966269668
+  },
+  "consistency_checks": {
+    "render_index_unique_matches_log": true,
+    "queue_reconstructed_from_render_index_minus_initial_index": true,
+    "processed_is_exact_sorted_queue_prefix": true,
+    "success_failure_overlap_count": 0,
+    "missing_initial_records": [],
+    "invalid_json_or_uid_count": 0,
+    "post_snapshot_records_excluded": [],
+    "queued_successes_predating_run": 0
+  },
+  "observed_annotation_contracts": {
+    "metafind_annot_v10@f0c98e5540218047": 25071
+  },
+  "current_failure_classes": {
+    "MODEL_RECOVERABLE": 26
+  },
+  "recent_throughput": [
+    {
+      "window_minutes": 15,
+      "successful_publications": 178,
+      "failed_assets": 0,
+      "processed_assets_per_minute": 11.866666666666667,
+      "projected_remaining_hours": 29.375,
+      "projected_finish_taipei": "2026-09-09T09:35:00.955796+08:00"
+    },
+    {
+      "window_minutes": 30,
+      "successful_publications": 356,
+      "failed_assets": 0,
+      "processed_assets_per_minute": 11.866666666666667,
+      "projected_remaining_hours": 29.375,
+      "projected_finish_taipei": "2026-09-09T09:35:00.955796+08:00"
+    },
+    {
+      "window_minutes": 60,
+      "successful_publications": 702,
+      "failed_assets": 0,
+      "processed_assets_per_minute": 11.7,
+      "projected_remaining_hours": 29.793447293447294,
+      "projected_finish_taipei": "2026-09-09T10:00:07.366052+08:00"
+    },
+    {
+      "window_minutes": 180,
+      "successful_publications": 2102,
+      "failed_assets": 2,
+      "processed_assets_per_minute": 11.688888888888888,
+      "projected_remaining_hours": 29.821768060836504,
+      "projected_finish_taipei": "2026-09-09T10:01:49.320815+08:00"
+    },
+    {
+      "window_minutes": 360,
+      "successful_publications": 4206,
+      "failed_assets": 5,
+      "processed_assets_per_minute": 11.697222222222223,
+      "projected_remaining_hours": 29.80052244122536,
+      "projected_finish_taipei": "2026-09-09T10:00:32.836584+08:00"
+    }
+  ],
+  "cumulative_processed_per_minute": 11.361189134729209,
+  "cumulative_rate_projected_finish_taipei": "2026-09-09T10:53:25.942956+08:00",
+  "eta_slide_guidance": {
+    "wording": "約 9/9 上午完成本輪標註處理；規劃區間 09:00–12:00（台北時間），非完成承諾。",
+    "assumptions": [
+      "Process continues without interruption.",
+      "Future per-asset runtime and failure/retry mix remain near observed recent/cumulative rates.",
+      "mtime records are actual producer publications, with no copying or timestamp rewriting during the sampled windows.",
+      "ETA covers annotation queue processing only, not Stage1/Stage2 training, evaluation, manual exclusion, or indexing overhead."
+    ],
+    "interval_is_statistical_confidence_interval": false
+  },
+  "last_successful_publications": [
+    {
+      "uid": "8c017871063047c288f57b28372eb50c",
+      "mtime_taipei": "2026-09-08T04:12:08.727184+08:00"
+    },
+    {
+      "uid": "8c02e208cd1e4e2688c1f70b55d4daad",
+      "mtime_taipei": "2026-09-08T04:12:13.934857+08:00"
+    },
+    {
+      "uid": "8c03afd455304b8bae71c44b7005e694",
+      "mtime_taipei": "2026-09-08T04:12:18.568243+08:00"
+    },
+    {
+      "uid": "8c057b309f9d4b5f9df4a12dd740b4d7",
+      "mtime_taipei": "2026-09-08T04:12:23.122042+08:00"
+    },
+    {
+      "uid": "8c06ef8699b6436f9d0878186d2b1772",
+      "mtime_taipei": "2026-09-08T04:12:28.042650+08:00"
+    }
+  ],
+  "annotation_inventory_digest": {
+    "method": "sha256 of sorted [uid, mtime_seconds, size_bytes] JSON tuples; records are not copied or fully quality-audited",
+    "sha256": "33c14c8bb75be3325f0aa6bba7b2507f40178b641b7780df0251fd88d2da604d"
+  },
+  "r2_log": {
+    "last_complete_progress": "[ 19700/46004] 11.3/min, 剩餘約 2335 分, quarantine 20",
+    "mtime_taipei": "2026-09-07T20:41:34.087007+08:00",
+    "has_current_done": false,
+    "source_rule": "annotate_run.py:1546-1551 increments done only after successful publication; counter excludes quarantined failures and the 8 pre-existing records.",
+    "staleness": "On-disk log is stale relative to sidecar publication; live pipeline includes buffered tr/grep. ETA is derived from sidecar mtime plus quarantine timestamps, not the stale log ETA."
+  },
+  "sources": {
+    "r2_log": {
+      "path": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/r2_annotate_v10.log",
+      "size_bytes": 12321,
+      "sha256": "98146260da3ac5092eec120c018c6e7ad5cdc2721f9e1434cc97ab9f1bef10a8",
+      "mtime_taipei": "2026-09-07T20:41:34.087007+08:00"
+    },
+    "run_progress": {
+      "path": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/run_progress.jsonl",
+      "size_bytes": 3747,
+      "sha256": "0c5ada037e8c303555da2885aabf840d08ad3e068a71b0682a851a5900944e51",
+      "mtime_taipei": "2026-09-06T16:20:28.119827+08:00"
+    },
+    "quarantine": {
+      "path": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/quarantine_n05_annotate.jsonl",
+      "size_bytes": 24631,
+      "sha256": "48cdd4ddac74e960067b7efdb55b04ce5af6d83d7e80be7ae4bf7eee00579351",
+      "mtime_taipei": "2026-09-08T02:48:28.230408+08:00"
+    },
+    "initial_annotation_index": {
+      "path": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/annotations_index.jsonl",
+      "size_bytes": 13945,
+      "sha256": "d496a3951590e4e43dd1fa352599600bd5a694f8d26003c69d848860073c3774",
+      "mtime_taipei": "2026-09-06T15:23:27.909350+08:00"
+    },
+    "render_index": {
+      "path": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/renders_index.jsonl",
+      "size_bytes": 156829059,
+      "sha256": "8840a8c6f8f2ea1c73ff0473dd2b58e849731ba1494929fecb679ca1d8a153ce",
+      "mtime_taipei": "2026-09-06T14:14:59.546215+08:00"
+    }
+  },
+  "producer_source": {
+    "path": "/home/kyzen/MetaFindV1/metafind/data/annotate_run.py",
+    "sha256": "8770b6d19536c60e7c8b43fcc0ef8dd4cf38e2e1d586f21f00c9bfacc70df7b8",
+    "scope": "Current source read only; process run code_revision is recorded separately in annotation_run_record."
+  },
+  "limitations": [
+    "Observation is time-bounded but not a filesystem transaction. Files newer than as_of are excluded and completed UID prefix is checked.",
+    "Successful means an atomic annotation JSON publication with matching UID and observed contract label; this observation does not independently revalidate all semantic annotation quality.",
+    "26 quarantined assets remain failures, not successful annotations; completion of the queue does not imply all assets succeeded.",
+    "No source, data, annotation, GPU state, or live process was modified."
+  ]
+}

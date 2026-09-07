@@ -1,49 +1,67 @@
 {
-  "schema": "metafind.presentation_delivery.v1",
+  "schema": "metafind.presentation_delivery.v2",
+  "title": "MetaFind｜標註更新與評估計畫",
   "slides": 10,
   "speaker_notes": 10,
-  "source_commit": "21a9b6338dfc6defa8ca5c445b16422eb670099b",
+  "source_commit": "929e7a6f49ed5044ad0abb2d96cb204129d6b8fb",
   "source_date": "2026-09-08",
+  "annotation_snapshot_taipei": "2026-09-08 04:12:30",
+  "formal_evaluation_status": "planned; latest full corpus not yet evaluated",
   "files": [
     {
       "path": "MetaFind_Table1_Stage2_含講稿.pdf",
-      "bytes": 538500,
-      "sha256": "47086f602babe1221501b146bd0b033774c556b34d248016b9a37fab8be3723a"
+      "bytes": 607993,
+      "sha256": "ba79443fbdcae506696777b255e049e17564fb7d3c2d36f40a707565ceae0092"
     },
     {
       "path": "MetaFind_Table1_Stage2_含講稿.pptx",
-      "bytes": 146906,
-      "sha256": "149d945a7a386a46284a208fa265715f41e2dfbef30f8b33b97f26e56f77cbfc"
+      "bytes": 419587,
+      "sha256": "1fc735647567a2a05990a3984929bd71472c109f31fb464e9fdf1758bbe23254"
     },
     {
       "path": "README.md",
-      "bytes": 3262,
-      "sha256": "fbe2d979804ccad541a409468b17dbd39fba51c4ffd91db9213e48f9d6c8c719"
+      "bytes": 4631,
+      "sha256": "e95186e678eb66972c7fe1f3f26687e869b0ecb3c146a57603bba42d8c216316"
     },
     {
-      "path": "assets/slide_05_chart.pdf",
-      "bytes": 17790,
-      "sha256": "4e45dde5c8e16878228416600f61e25d829e0ea7cee75bee8d343aa072bf3a47"
+      "path": "assets/annotation_view_01.png",
+      "bytes": 121028,
+      "sha256": "ad41fb43272af7a3b4ae049a987d70a4eb64f9f352bfefe7c157c37c86575c05"
     },
     {
-      "path": "assets/slide_05_chart.png",
-      "bytes": 70341,
-      "sha256": "3b4d2c7f5be5c5b1e64e40b5c8cf9bd67df5e308356db94f9fda079106c58e56"
+      "path": "assets/annotation_view_02.png",
+      "bytes": 107608,
+      "sha256": "0f63af235ef52c52a197de5aa025c16a681e5e3e1b50b0a678deba378ff928e4"
+    },
+    {
+      "path": "assets/annotation_view_03.png",
+      "bytes": 117126,
+      "sha256": "93885284e9e3ef6ce4ceae635b8bd2b5e5ff67ca97187bb4e32b4a4cfde53fc0"
+    },
+    {
+      "path": "source/annotation_example.json",
+      "bytes": 1650,
+      "sha256": "1589a35de97c8eff710b68b7bab1427e850c749740fbe345737510c3e286729d"
+    },
+    {
+      "path": "source/annotation_progress_snapshot.json",
+      "bytes": 8551,
+      "sha256": "f4d6f52b240c2b8c46d6064a164c974078f9d0ed32daa0bd7db5a93b3644331e"
     },
     {
       "path": "source/build_deck.py",
-      "bytes": 17056,
-      "sha256": "08890d83f07747210501f803d7d203dcd54ba6602e9c7b2a8f56112adbfec860"
+      "bytes": 14649,
+      "sha256": "500087ae96bdfdd40b9173d5ac4c9d4a79359aa8b2f1ad510b4d80d5e6664c91"
     },
     {
       "path": "source/build_record.json",
-      "bytes": 358,
-      "sha256": "9235773335f22091d7abcec299eda9313d3797a316cfc908619d6cc1ede7bd85"
+      "bytes": 449,
+      "sha256": "69b4caaf364a952558e4bc8bd6264a5442165c9ebf2f7374a84a1ce8e4962591"
     },
     {
       "path": "source/layout_boxes.json",
-      "bytes": 36444,
-      "sha256": "81923f0956ade5800c6663829b927428feafca29f9b950f9424a33b1ba2cc9c9"
+      "bytes": 31926,
+      "sha256": "3093f7ece306b7af12317426b875ffaf797b998e1714c3d04295797566ece22a"
     },
     {
       "path": "source/notion_provenance.json",
@@ -57,23 +75,28 @@
     },
     {
       "path": "source/ppt_content.json",
-      "bytes": 37635,
-      "sha256": "ab61295e122adc8cacebe17eebdaeada704632d9d9ee92c9a0e8269ee37c7b90"
+      "bytes": 24416,
+      "sha256": "75ffbbb295ae5bf9f16c87554152abc23313d5b902c6b003e32c2c2f2d50a050"
+    },
+    {
+      "path": "source/source_manifest.json",
+      "bytes": 5395,
+      "sha256": "45804a38fa62b7b8717a72ace29a0b24ba09c422ce8cf5b3557084b7c93f05fe"
     },
     {
       "path": "source/validation.json",
-      "bytes": 3115,
-      "sha256": "0d41f2202fff5b4862672bfdf08d0ac454f10d893dcca598483dd8a1c83d0886"
+      "bytes": 4320,
+      "sha256": "304fb77db1db250bbdf79728bf53c91e73778ce81dcc308c0bec75af0d3b43f4"
     },
     {
       "path": "總覽.png",
-      "bytes": 679433,
-      "sha256": "50cfad21fd14e6bd8e67ec3c2fe96249b0c94a60cd243df1cc318b66aa738bd0"
+      "bytes": 675721,
+      "sha256": "b91d1369bf131a1fd3c74985736c9c7e8b577771790b9b51a0370324036327b0"
     },
     {
       "path": "逐頁講稿.md",
-      "bytes": 23713,
-      "sha256": "e4780a625731736a1cd47606257431583d799f579b25665a7433c763692c9bfd"
+      "bytes": 15401,
+      "sha256": "1afb31baaea3a321b99816ec9757bae7c7db6ad3fc8b84664afd9a3ac3279a6d"
     }
   ]
 }

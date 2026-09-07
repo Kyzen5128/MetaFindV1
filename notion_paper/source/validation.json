@@ -1,127 +1,171 @@
 {
-  "pptx_sha256": "149d945a7a386a46284a208fa265715f41e2dfbef30f8b33b97f26e56f77cbfc",
-  "pdf_sha256": "47086f602babe1221501b146bd0b033774c556b34d248016b9a37fab8be3723a",
+  "pptx_sha256": "1fc735647567a2a05990a3984929bd71472c109f31fb464e9fdf1758bbe23254",
+  "pdf_sha256": "ba79443fbdcae506696777b255e049e17564fb7d3c2d36f40a707565ceae0092",
   "slides": 10,
   "notes_slides": 10,
-  "command_blocks_preserved": 8,
+  "command_appendix_removed": true,
   "notes_chinese_characters": [
-    443,
-    411,
-    518,
-    449,
-    536,
-    407,
-    539,
-    405,
-    363,
-    372
+    303,
+    339,
+    346,
+    334,
+    334,
+    352,
+    335,
+    318,
+    328,
+    355
   ],
   "checks": [
     {
       "slide": 1,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 261,
-      "notes_chinese_characters": 443
+      "pdf_text_characters": 316,
+      "notes_chinese_characters": 303
     },
     {
       "slide": 2,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 797,
-      "notes_chinese_characters": 411
+      "pdf_text_characters": 570,
+      "notes_chinese_characters": 339
     },
     {
       "slide": 3,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 1056,
-      "notes_chinese_characters": 518
+      "pdf_text_characters": 473,
+      "notes_chinese_characters": 346
     },
     {
       "slide": 4,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 753,
-      "notes_chinese_characters": 449
+      "pdf_text_characters": 543,
+      "notes_chinese_characters": 334
     },
     {
       "slide": 5,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 1553,
-      "notes_chinese_characters": 536
+      "pdf_text_characters": 671,
+      "notes_chinese_characters": 334
     },
     {
       "slide": 6,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 1062,
-      "notes_chinese_characters": 407
+      "pdf_text_characters": 567,
+      "notes_chinese_characters": 352
     },
     {
       "slide": 7,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 1043,
-      "notes_chinese_characters": 539
+      "pdf_text_characters": 441,
+      "notes_chinese_characters": 335
     },
     {
       "slide": 8,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 923,
-      "notes_chinese_characters": 405
+      "pdf_text_characters": 554,
+      "notes_chinese_characters": 318
     },
     {
       "slide": 9,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 911,
-      "notes_chinese_characters": 363
+      "pdf_text_characters": 428,
+      "notes_chinese_characters": 328
     },
     {
       "slide": 10,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 1277,
-      "notes_chinese_characters": 372
+      "pdf_text_characters": 843,
+      "notes_chinese_characters": 355
     }
   ],
   "missing_visible_text_boxes": [],
+  "cross_column_reading_order_checks": [
+    {
+      "slide": 1,
+      "text": "標註更新\n與評估計畫",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 6,
+      "text": "ULIP2 特徵\n本地平均融合",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 6,
+      "text": "學習物件表徵\n與多模態融合",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 6,
+      "text": "場景訓練後的融合\n本評估不輸入場景資訊",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 9,
+      "text": "鎖定物件清單\n準備第二份文字描述",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 9,
+      "text": "指定兩階段模型存檔\n保留版本與來源",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 9,
+      "text": "共用候選物件庫\n以同一資產編號為正解",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 9,
+      "text": "留下排名、缺漏與錯誤\n正式跑分尚待執行",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 10,
+      "text": "轉成向量、固定資料分組；另做資料預檢",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 10,
+      "text": "準備房間、物件與關係，訓練第二階段",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 10,
+      "text": "跑 42 組比較；另測場景資訊開啟／關閉",
+      "found_in_own_rectangle": true
+    }
+  ],
   "all_title_takeaway_text_found": true,
   "libreoffice_render": "success",
   "powerpoint_desktop_opened": false,
   "scope": "Actual LibreOffice PDF render and PPTX notes/XML read-back; visual inspection is separate.",
-  "non_contiguous_pdf_text_resolved": [
-    {
-      "slide": 1,
-      "text": "Table 1 評估\n與 Stage 2",
-      "box": [
-        0.72,
-        1.55,
-        7.65,
-        1.94
-      ],
-      "resolution": "Every original line is present; PDF reading order interleaves cover T/I/PC boxes between title lines. Cover visual inspection confirms both complete title lines."
-    }
-  ],
-  "visual_review": {
-    "reviewed_pages": [
-      1,
+  "visual_inspection": {
+    "contact_sheet_all_ten": true,
+    "full_resolution_pages": [
       2,
       3,
       4,
       5,
-      6,
-      7,
       8,
       9,
       10
     ],
-    "method": "all-slide contact sheet; root full-resolution pages 4 and 5; independent full-resolution pages 7, 8, 9",
-    "result": "no confirmed clipping or overlap",
-    "chart_fix": "High-value label 99.54 placed in white inside its bar and numerical labels enlarged; final slide 5 inspected."
+    "observed_layout_issues": [],
+    "review": "actual LibreOffice rendering inspected by root and annotation-method reviewer"
   },
-  "speaker_notes_match_source": true
+  "independent_content_review": {
+    "slides_2_to_5": "checked against annotation implementation, real example and frozen ETA evidence",
+    "slides_6_to_10": "checked against paper and evaluator; replaced renderer wording about scene score with no scene input"
+  }
 }

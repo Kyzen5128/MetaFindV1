@@ -1,9 +1,10 @@
 {
   "slides": 10,
   "notes_slides": 10,
-  "content_sha256": "ab61295e122adc8cacebe17eebdaeada704632d9d9ee92c9a0e8269ee37c7b90",
-  "pptx_sha256": "149d945a7a386a46284a208fa265715f41e2dfbef30f8b33b97f26e56f77cbfc",
+  "content_sha256": "75ffbbb295ae5bf9f16c87554152abc23313d5b902c6b003e32c2c2f2d50a050",
+  "pptx_sha256": "1fc735647567a2a05990a3984929bd71472c109f31fb464e9fdf1758bbe23254",
   "font": "Noto Sans CJK TC",
   "size": "16:9",
-  "environment": "existing MetaFind python; python-pptx 1.0.2; matplotlib; no model producers"
+  "environment": "existing MetaFind Python; python-pptx 1.0.2; no model/data producers",
+  "images": "three unchanged actual renders of one annotated chair; source/source_manifest.json"
 }
