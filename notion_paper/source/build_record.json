@@ -1,0 +1,9 @@
+{
+  "slides": 10,
+  "notes_slides": 10,
+  "content_sha256": "ab61295e122adc8cacebe17eebdaeada704632d9d9ee92c9a0e8269ee37c7b90",
+  "pptx_sha256": "149d945a7a386a46284a208fa265715f41e2dfbef30f8b33b97f26e56f77cbfc",
+  "font": "Noto Sans CJK TC",
+  "size": "16:9",
+  "environment": "existing MetaFind python; python-pptx 1.0.2; matplotlib; no model producers"
+}

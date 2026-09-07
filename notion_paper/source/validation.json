@@ -1,0 +1,127 @@
+{
+  "pptx_sha256": "149d945a7a386a46284a208fa265715f41e2dfbef30f8b33b97f26e56f77cbfc",
+  "pdf_sha256": "47086f602babe1221501b146bd0b033774c556b34d248016b9a37fab8be3723a",
+  "slides": 10,
+  "notes_slides": 10,
+  "command_blocks_preserved": 8,
+  "notes_chinese_characters": [
+    443,
+    411,
+    518,
+    449,
+    536,
+    407,
+    539,
+    405,
+    363,
+    372
+  ],
+  "checks": [
+    {
+      "slide": 1,
+      "title_found": true,
+      "takeaway_found": true,
+      "pdf_text_characters": 261,
+      "notes_chinese_characters": 443
+    },
+    {
+      "slide": 2,
+      "title_found": true,
+      "takeaway_found": true,
+      "pdf_text_characters": 797,
+      "notes_chinese_characters": 411
+    },
+    {
+      "slide": 3,
+      "title_found": true,
+      "takeaway_found": true,
+      "pdf_text_characters": 1056,
+      "notes_chinese_characters": 518
+    },
+    {
+      "slide": 4,
+      "title_found": true,
+      "takeaway_found": true,
+      "pdf_text_characters": 753,
+      "notes_chinese_characters": 449
+    },
+    {
+      "slide": 5,
+      "title_found": true,
+      "takeaway_found": true,
+      "pdf_text_characters": 1553,
+      "notes_chinese_characters": 536
+    },
+    {
+      "slide": 6,
+      "title_found": true,
+      "takeaway_found": true,
+      "pdf_text_characters": 1062,
+      "notes_chinese_characters": 407
+    },
+    {
+      "slide": 7,
+      "title_found": true,
+      "takeaway_found": true,
+      "pdf_text_characters": 1043,
+      "notes_chinese_characters": 539
+    },
+    {
+      "slide": 8,
+      "title_found": true,
+      "takeaway_found": true,
+      "pdf_text_characters": 923,
+      "notes_chinese_characters": 405
+    },
+    {
+      "slide": 9,
+      "title_found": true,
+      "takeaway_found": true,
+      "pdf_text_characters": 911,
+      "notes_chinese_characters": 363
+    },
+    {
+      "slide": 10,
+      "title_found": true,
+      "takeaway_found": true,
+      "pdf_text_characters": 1277,
+      "notes_chinese_characters": 372
+    }
+  ],
+  "missing_visible_text_boxes": [],
+  "all_title_takeaway_text_found": true,
+  "libreoffice_render": "success",
+  "powerpoint_desktop_opened": false,
+  "scope": "Actual LibreOffice PDF render and PPTX notes/XML read-back; visual inspection is separate.",
+  "non_contiguous_pdf_text_resolved": [
+    {
+      "slide": 1,
+      "text": "Table 1 評估\n與 Stage 2",
+      "box": [
+        0.72,
+        1.55,
+        7.65,
+        1.94
+      ],
+      "resolution": "Every original line is present; PDF reading order interleaves cover T/I/PC boxes between title lines. Cover visual inspection confirms both complete title lines."
+    }
+  ],
+  "visual_review": {
+    "reviewed_pages": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "method": "all-slide contact sheet; root full-resolution pages 4 and 5; independent full-resolution pages 7, 8, 9",
+    "result": "no confirmed clipping or overlap",
+    "chart_fix": "High-value label 99.54 placed in white inside its bar and numerical labels enlarged; final slide 5 inspected."
+  },
+  "speaker_notes_match_source": true
+}

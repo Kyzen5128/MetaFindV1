@@ -1,0 +1,79 @@
+{
+  "schema": "metafind.presentation_delivery.v1",
+  "slides": 10,
+  "speaker_notes": 10,
+  "source_commit": "21a9b6338dfc6defa8ca5c445b16422eb670099b",
+  "source_date": "2026-09-08",
+  "files": [
+    {
+      "path": "MetaFind_Table1_Stage2_含講稿.pdf",
+      "bytes": 538500,
+      "sha256": "47086f602babe1221501b146bd0b033774c556b34d248016b9a37fab8be3723a"
+    },
+    {
+      "path": "MetaFind_Table1_Stage2_含講稿.pptx",
+      "bytes": 146906,
+      "sha256": "149d945a7a386a46284a208fa265715f41e2dfbef30f8b33b97f26e56f77cbfc"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3262,
+      "sha256": "fbe2d979804ccad541a409468b17dbd39fba51c4ffd91db9213e48f9d6c8c719"
+    },
+    {
+      "path": "assets/slide_05_chart.pdf",
+      "bytes": 17790,
+      "sha256": "4e45dde5c8e16878228416600f61e25d829e0ea7cee75bee8d343aa072bf3a47"
+    },
+    {
+      "path": "assets/slide_05_chart.png",
+      "bytes": 70341,
+      "sha256": "3b4d2c7f5be5c5b1e64e40b5c8cf9bd67df5e308356db94f9fda079106c58e56"
+    },
+    {
+      "path": "source/build_deck.py",
+      "bytes": 17056,
+      "sha256": "08890d83f07747210501f803d7d203dcd54ba6602e9c7b2a8f56112adbfec860"
+    },
+    {
+      "path": "source/build_record.json",
+      "bytes": 358,
+      "sha256": "9235773335f22091d7abcec299eda9313d3797a316cfc908619d6cc1ede7bd85"
+    },
+    {
+      "path": "source/layout_boxes.json",
+      "bytes": 36444,
+      "sha256": "81923f0956ade5800c6663829b927428feafca29f9b950f9424a33b1ba2cc9c9"
+    },
+    {
+      "path": "source/notion_provenance.json",
+      "bytes": 391,
+      "sha256": "f8f0875f9f4abf8f3e46e9f135bac2ebfcb6eb17cccd76fa23d2b684bf70380d"
+    },
+    {
+      "path": "source/notion_source.md",
+      "bytes": 39779,
+      "sha256": "7b3c3449b108f38dcdc796a7374a3515df5e1398df9190745d3185c33d99a4d2"
+    },
+    {
+      "path": "source/ppt_content.json",
+      "bytes": 37635,
+      "sha256": "ab61295e122adc8cacebe17eebdaeada704632d9d9ee92c9a0e8269ee37c7b90"
+    },
+    {
+      "path": "source/validation.json",
+      "bytes": 3115,
+      "sha256": "0d41f2202fff5b4862672bfdf08d0ac454f10d893dcca598483dd8a1c83d0886"
+    },
+    {
+      "path": "總覽.png",
+      "bytes": 679433,
+      "sha256": "50cfad21fd14e6bd8e67ec3c2fe96249b0c94a60cd243df1cc318b66aa738bd0"
+    },
+    {
+      "path": "逐頁講稿.md",
+      "bytes": 23713,
+      "sha256": "e4780a625731736a1cd47606257431583d799f579b25665a7433c763692c9bfd"
+    }
+  ]
+}
