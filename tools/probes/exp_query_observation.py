@@ -49,22 +49,20 @@ CONDITIONS = {"text": ("text",), "image": ("image",),
 POLICIES = ("same_mean", "single_view", "held_out_view", "disjoint_views")
 
 
-def load_tower(ckpt_path: Path, device: str):
+def load_tower(ckpt_path: Path, device: str, record: dict | None = None):
     """The two fusion heads from a Stage 1 checkpoint. No backbone."""
-    from metafind.train.stage1 import build_model, load_protocols
+    from metafind.train.stage1 import (build_model, load_protocols,
+                                      load_stage1_model_config, effective_stage1_model_inputs,
+                                      load_stage1_tower_state)
 
-    encoding, training, hyperparameters = load_protocols()
+    record = load_stage1_model_config(ckpt_path, record)
+    encoding, training, hyperparameters = effective_stage1_model_inputs(record, *load_protocols())
     model, _loss = build_model(encoding, training, hyperparameters)
+    if training.get("freeze_gallery"):
+        model.freeze_gallery(True)
     model = model.to(device)
     ck = torch.load(ckpt_path, map_location=device, weights_only=False)
-    missing, unexpected = model.load_state_dict(ck["tower_trainable_state"],
-                                                strict=False)
-    trainable = {n for n, p in model.named_parameters() if p.requires_grad}
-    gap = trainable - set(ck["tower_trainable_state"])
-    if gap:
-        raise SystemExit(f"the checkpoint does not cover {sorted(gap)[:4]}")
-    if unexpected:
-        raise SystemExit(f"unexpected keys in the tower state: {unexpected[:4]}")
+    load_stage1_tower_state(model, ck["tower_trainable_state"])
     model.eval()
     return model
 

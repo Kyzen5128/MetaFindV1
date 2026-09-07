@@ -118,7 +118,9 @@ def test_a_different_seed_gives_a_different_order():
 
 def graph() -> dict:
     return {
-        "nodes": [{"index": i, "asset_id": f"A{i}", "position": [float(i), 0.0, 0.0]}
+        "graph_unit": "room",
+        "nodes": [{"index": i, "asset_id": f"A{i}", "room_id": "room|0",
+                   "position": [float(i), 0.0, 0.0]}
                   for i in range(4)],
         "sem_edge_ids": [[0, 1], [1, 2], [2, 3], [0, 3]],
     }
@@ -214,7 +216,9 @@ def test_edge_attr_rows_match_edge_count():
 def test_removing_every_neighbour_leaves_an_empty_edge_set_not_a_crash():
     g = {"nodes": [{"index": 0, "asset_id": "A0", "position": [0.0, 0.0, 0.0]},
                    {"index": 1, "asset_id": "A1", "position": [1.0, 0.0, 0.0]}],
-         "sem_edge_ids": [[0, 1]]}
+         "sem_edge_ids": [[0, 1]], "graph_unit": "room"}
+    for node in g["nodes"]:
+        node["room_id"] = "room|0"
     sem, text = data_bits()
     keep, _, edge_index, edge_attr, edge_missing = build_context_graph(g, 1, 4, sem, text)
     assert len(keep) == 1
@@ -357,8 +361,25 @@ def test_room_unit_graph_limits_the_context_to_the_targets_room():
 
 def test_legacy_house_graph_keeps_the_whole_house():
     sem, text = data_bits()
-    keep, *_ = build_context_graph(graph(), 2, 4, sem, text)
+    g = graph()
+    del g["graph_unit"]
+    keep, *_ = build_context_graph(g, 2, 4, sem, text, graph_unit="house")
     assert [n["index"] for n in keep] == [0, 1, 3]
+
+
+@pytest.mark.parametrize("actual", [None, "house", "invalid"])
+def test_room_protocol_refuses_non_room_graphs(actual):
+    g = graph()
+    g["graph_unit"] = actual
+    sem, text = data_bits()
+    with pytest.raises(ValueError, match="graph_unit"):
+        build_context_graph(g, 2, 4, sem, text)
+
+
+def test_house_protocol_does_not_reinterpret_room_sidecars():
+    sem, text = data_bits()
+    with pytest.raises(ValueError, match="graph_unit"):
+        build_context_graph(graph(), 2, 4, sem, text, graph_unit="house")
 
 
 # --- DL-104: declared ProcTHOR modalities (text + image, no point cloud) -------
@@ -441,6 +462,9 @@ def test_a_protocol_without_the_modality_declaration_is_refused(tmp_path, monkey
     monkeypatch.setattr(s2.paths, "OUTPUTS", tmp_path)
     write(r.STAGE2_DECISIONS)
     assert s2.load_stage2_protocols()[0]["asset_modalities"] == ["text", "image"]
+    write({k: v for k, v in r.STAGE2_DECISIONS.items() if k != "graph_unit"})
+    with pytest.raises(ValueError, match="graph_unit"):
+        s2.load_stage2_protocols()
     write({k: v for k, v in r.STAGE2_DECISIONS.items() if k != "asset_modalities"})
     with pytest.raises(ValueError, match="asset_modalities"):
         s2.load_stage2_protocols()

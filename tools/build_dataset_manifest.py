@@ -158,6 +158,23 @@ def _jsonl_index(path: Path) -> dict:
     return out
 
 
+def pointcloud_version_summary(records) -> dict:
+    """Describe recorded sampler versions without relabeling old artifacts."""
+    counts = collections.Counter()
+    for rec in records:
+        version = rec.get("sampler_version")
+        known = isinstance(version, int) and not isinstance(version, bool) and version > 0
+        counts[str(version) if known else "UNKNOWN"] += 1
+    if not counts or set(counts) == {"UNKNOWN"}:
+        label = "UNKNOWN"
+    elif len(counts) == 1:
+        label = f"sampler_version {next(iter(counts))}"
+    else:
+        label = "MIXED"
+    return {"preprocessing_version": label,
+            "sampler_version_counts": dict(sorted(counts.items()))}
+
+
 # ------------------------------------------------------------------ the build
 
 def build(out: Path, limit: int | None = None) -> dict:
@@ -473,10 +490,13 @@ def build(out: Path, limit: int | None = None) -> dict:
              "_per_view_present": "views (12,1280) is stored BESIDE the mean, so "
                                   "single-view, held-out-view and disjoint-subset "
                                   "arms need no re-encoding (§七)"},
-            {"name": "pointclouds", "path": str(paths.OUTPUTS / "pointclouds"),
-             "n": len(clouds), "arrays": {"xyz": "(10000,3) f4", "rgb": "(10000,3) f4"},
+            {"name": "pointclouds", "path": str(paths.POINTCLOUDS),
+             "n": n_clouds, "arrays": {"xyz": "(10000,3) f4", "rgb": "(10000,3) f4"},
              "encoder_name": None, "checkpoint_sha": None,
-             "preprocessing_version": "sampler_version 8",
+             **pointcloud_version_summary(cloud_rows),
+             "preprocessing_version_source": str(paths.LOGS / "pointclouds_index.jsonl"),
+             "_version_scope": "Index records for the UIDs included in pointclouds.jsonl; "
+                               "does not certify bytes or relabel them to the current sampler.",
              "valid_for_train_scope": ["point_encoder_and_fuser", "fuser_only",
                                        "full_encoder_finetune"],
              "_note": "raw geometry, not an encoder output, so no train scope "

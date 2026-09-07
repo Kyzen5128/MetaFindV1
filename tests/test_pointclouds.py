@@ -108,6 +108,31 @@ def test_flat_pbr_material_is_a_colour_not_a_failure():
     assert np.allclose(m.visual.vertex_colors[:, :3], [204, 200, 176])
 
 
+def test_dark_byte_base_factor_reaches_sampled_texture_colours(tmp_path):
+    """A real GLB round trip must not turn byte value 1 into unit white."""
+    m = _box()
+    m.visual = trimesh.visual.TextureVisuals(
+        uv=np.zeros((len(m.vertices), 2)),
+        material=trimesh.visual.material.PBRMaterial(
+            baseColorFactor=np.array([1, 1, 1, 255], dtype=np.uint8),
+            baseColorTexture=Image.new("RGB", (2, 2), (255, 255, 255))))
+    glb = tmp_path / "dark.glb"
+    m.export(glb)
+    _, rgb, _, source, _, _ = sample_mesh(glb, seed=5, n_points=64)
+    assert source == "texture"
+    np.testing.assert_allclose(rgb, 1 / 255, atol=1e-7)
+
+
+@pytest.mark.parametrize("factor, expected", [([1., .5, 0., 1.], [1., .5, 0.]),
+                                              ([1, 1, 1, 1], [1., 1., 1.])])
+def test_non_byte_unit_base_factor_stays_unit_scale(factor, expected):
+    from types import SimpleNamespace
+    from metafind.data.pointclouds import _base_colour_factor
+
+    vis = SimpleNamespace(material=SimpleNamespace(baseColorFactor=np.array(factor)))
+    np.testing.assert_array_equal(_base_colour_factor(vis), expected)
+
+
 def test_material_without_texture_or_factor_is_gltf_white():
     """glTF 2.0 defines baseColorFactor as [1,1,1,1] when absent.
 

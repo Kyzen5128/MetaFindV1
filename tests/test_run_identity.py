@@ -578,6 +578,10 @@ ARM_RECIPE_KEYS = {
     "betas", "eps", "warmup_epochs", "lr_start", "lr_end",
     # command line only -- the hole `config_hash` had
     "epochs", "lr_horizon", "phase", "train_scope",
+    # Observation choices change the training inputs even without a QueryPack.
+    # Persist all three explicitly so same-seed runs with different observations
+    # cannot be mistaken for repetitions of the same experimental treatment.
+    "query_observation", "query_image_policy", "query_pc_perturb",
     # stage1_protocol.json, whole, minus TRAINING_EXCLUDED
     "training.fusion", "training.tower_sharing", "training.similarity",
     "training.allow_all_masked",

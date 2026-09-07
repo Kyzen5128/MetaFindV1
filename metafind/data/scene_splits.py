@@ -47,7 +47,7 @@ import random
 from pathlib import Path
 
 from metafind import paths, runlog
-from metafind.data.semantic_edges import cache_key
+from metafind.data.semantic_edges import cache_key, relation_text_for
 
 NODE = "n09c_build_scene_splits"
 
@@ -98,7 +98,7 @@ def semantic_edge_coverage(house_ids: list[str], cache: dict, text_map: dict) ->
             if ti is None or tj is None:
                 missing += 1
                 continue
-            key = cache_key(ti["text"], tj["text"], cache["prompt_version"],
+            key = cache_key(relation_text_for(ti), relation_text_for(tj), cache["prompt_version"],
                             cache["llm_model"], cache["text_encoder_version"])
             entry = entries.get(key)
             if entry is None:

@@ -447,6 +447,8 @@ def main() -> int:
     ap.add_argument("--limit", type=int)
     args = ap.parse_args()
 
+    if args.limit is not None and args.limit <= 0:
+        ap.error("--limit must be positive")
     if args.split == "test":
         raise SystemExit("the test split is sealed; --split test is refused here")
     splits = json.loads((paths.OUTPUTS / "splits.json").read_text())["object"]
@@ -457,13 +459,14 @@ def main() -> int:
         uids = uids[: args.limit]
     print(f"{args.arm} arm, {args.split}, {len(uids):,} assets", flush=True)
 
-    shard = (build_pc(uids, args.split, args.workers) if args.arm == "pc"
-             else build_text(uids, args.split, args.device, args.batch))
     # A --limit run must not replace the full shard under the split's own tag:
     # it used to write the same array path and the same manifest tag, so a
     # ten-asset smoke overwrote a 31,931-row artifact. The limited run gets
     # its own tag and is never mistaken for coverage of the split.
-    shard["tag"] = f"{args.split}_limit{args.limit}" if args.limit else args.split
+    tag = f"{args.split}_limit{args.limit}" if args.limit else args.split
+    shard = (build_pc(uids, tag, args.workers) if args.arm == "pc"
+             else build_text(uids, tag, args.device, args.batch))
+    shard["tag"] = tag
     shard["n_assets"] = len(uids)
     merge(args.arm, shard)
     return 0

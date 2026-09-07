@@ -22,11 +22,39 @@ from metafind.data.semantic_edges import (
     cache_key,
     iter_pair_descriptions,
     parse_sentence,
+    relation_text_for,
     validate_sentence,
 )
 
 LLM = "Qwen/Qwen2.5-7B-Instruct"
 ENC = "clip-vit-b32-laion2b-s34b-b79k"
+
+
+@pytest.mark.parametrize("optional", [None, "", "  \n"])
+def test_blank_relation_text_falls_back_to_node_text(optional):
+    assert relation_text_for({"text": "a chair", "relation_text": optional}) == "a chair"
+
+
+def test_relation_producer_and_split_coverage_use_the_same_description(monkeypatch, tmp_path):
+    import json
+    from metafind.data import scene_splits, semantic_edges_run
+
+    graph = {"nodes": [{"asset_id": "a"}, {"asset_id": "b"}],
+             "sem_edge_ids": [[0, 1]]}
+    text_map = {"a": {"text": '{"category":"chair"}', "relation_text": " A chair. "},
+                "b": {"text": "A desk."}}
+    (tmp_path / "house.json").write_text(json.dumps(graph))
+    monkeypatch.setattr(scene_splits.paths, "SCENE_GRAPHS", tmp_path)
+    pairs = semantic_edges_run.collect_pairs(text_map)
+    expected = cache_key(" A chair. ", "A desk.", PROMPT_VERSION,
+                         semantic_edges_run.LLM_MODEL, semantic_edges_run.TEXT_ENCODER_VERSION)
+    assert set(pairs) == {expected}
+    assert list(iter_pair_descriptions(graph, text_map)) == [((0, 1), " A chair. ", "A desk.")]
+    cache = {"entries": {expected: {"degraded": False}},
+             "prompt_version": PROMPT_VERSION, "llm_model": semantic_edges_run.LLM_MODEL,
+             "text_encoder_version": semantic_edges_run.TEXT_ENCODER_VERSION}
+    coverage = scene_splits.semantic_edge_coverage(["house"], cache, text_map)
+    assert coverage == {"edges": 1, "degraded": 0, "uncached": 0, "covered_fraction": 1.0}
 
 
 def key(a: str, b: str, **over) -> str:

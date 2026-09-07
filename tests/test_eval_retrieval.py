@@ -206,6 +206,7 @@ def write_promoted(tmp_path, monkeypatch, uids, vectors, encoder_sha,
         np.asarray(vectors, dtype=np.float32), list(uids), tmp_path / "gi.npz")
     record["stage1_checkpoint_sha256"] = record_sha or key_sha
     record["gallery_encoder_sha256"] = encoder_sha
+    record["gallery_encoder_hash_version"] = gallery_index.GALLERY_ENCODER_HASH_VERSION
     if gate:
         record["gate_record_uri"] = str(tmp_path / "G4_gallery_freeze.yaml")
         record["gate_record_sha256"] = "d" * 64

@@ -536,7 +536,7 @@ def gallery_source_for(protocol: dict, untrained: bool) -> str:
 
 
 def gallery_from_promoted_index(name: str, gallery_uids: list[str], ckpt: dict,
-                                backbone, model) -> tuple[dict, np.ndarray]:
+                                backbone, model, *, allow_legacy: bool = False) -> tuple[dict, np.ndarray]:
     """A reported protocol's gallery: the bytes a gate verified. FAIL CLOSED.
 
     [DL-048] n15 re-encoded the gallery on every run and never opened
@@ -604,7 +604,7 @@ def gallery_from_promoted_index(name: str, gallery_uids: list[str], ckpt: dict,
     # `gallery_index.json` itself: two readers of one registry is how the two
     # halves drift apart.
     from metafind.train.gallery_index import (
-        gallery_encoder_sha256, load_promoted_index_for_checkpoint)
+        verify_gallery_encoder, load_promoted_index_for_checkpoint)
 
     sha = ckpt.get("sha256")
     if not sha:
@@ -666,16 +666,8 @@ def gallery_from_promoted_index(name: str, gallery_uids: list[str], ckpt: dict,
             "not written by promotion. Refusing: a reported Table 1 number "
             "must be able to name the verdict that cleared its gallery.")
 
-    live = gallery_encoder_sha256(
-        backbone, model,
-        include_buffers=bool(record.get("gallery_encoder_hash_includes_buffers")))
-    if live != record["gallery_encoder_sha256"]:
-        raise ValueError(
-            f"the gallery encoder loaded here hashes to {live[:16]}... but the "
-            f"index was built by {record['gallery_encoder_sha256'][:16]}.... "
-            "The vectors in the index are not the ones this model would "
-            "produce, and scoring against them would report a model that was "
-            "never measured.")
+    verify_gallery_encoder(record, backbone, model, parent_checkpoint=ckpt,
+                           allow_legacy=allow_legacy)
 
     # No duplicate-id check here, and no ids/rows length check: `verified_index`
     # raises on both, and its docstring says so. A second copy in this module is
@@ -1007,7 +999,7 @@ def apply_control(control: str, targets: np.ndarray, n_gallery: int,
 
 
 def load_stage2_over_stage1(record_path: str, stage1_ckpt: dict,
-                            variant: str = "full") -> dict:
+                            variant: str = "full", *, allow_legacy_inputs: bool = False) -> dict:
     """Read a Stage 2 record, refuse a wrong parent, build the tower it fits.
 
     The tower is built WITH the ESSGNN branch (`use_layout=True`) so the Stage 2
@@ -1016,38 +1008,37 @@ def load_stage2_over_stage1(record_path: str, stage1_ckpt: dict,
     describes for the w/ ESSGNN row. The loss module is the Stage 1 one, built
     only so `load_stage1_checkpoint` can restore its temperature buffer.
     """
-    from metafind.train.stage1 import build_model
+    from metafind.train.stage1 import (build_model, load_stage1_model_config,
+                                       effective_stage1_model_inputs)
     from metafind.train.stage1 import load_protocols as load_stage1_protocols
+    from metafind.train.gallery_index import load_stage2_checkpoint_record
     from metafind.train.stage2 import (Stage2Data, build_stage2_model,
                                        load_stage2_protocols)
 
-    rec = json.loads(Path(record_path).read_text())
-    # stage2.py writes variant_ckpts.json, one record per Table 3 variant id;
-    # a single-record file is accepted too.
-    if "uri" not in rec:
-        if variant not in rec:
-            raise SystemExit(f"{record_path} holds variants {sorted(rec)}; "
-                             f"{variant!r} is not among them")
-        rec = rec[variant]
+    try:
+        rec = load_stage2_checkpoint_record(record_path, stage1_ckpt, variant,
+                                            allow_legacy=allow_legacy_inputs)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     parent = rec.get("stage1_checkpoint_sha256")
-    if parent != stage1_ckpt.get("sha256"):
-        raise SystemExit(
-            f"{record_path} was fine-tuned from Stage 1 checkpoint "
-            f"{str(parent)[:16]} but --ckpt-record is {str(stage1_ckpt.get('sha256'))[:16]}. "
-            "The w/ ESSGNN row must lay the Stage 2 query weights over the towers "
-            "they were fine-tuned from; pass that checkpoint's record.")
-    for k in ("uri", "sha256", "lambda_init"):
-        if k not in rec:
-            raise SystemExit(f"{record_path} lacks {k!r}; not a Stage 2 record")
-    if hashlib.sha256(Path(rec["uri"]).read_bytes()).hexdigest() != rec["sha256"]:
-        raise SystemExit(f"{rec['uri']} does not match the sha256 in its record")
-    encoding, training, hyperparameters = load_stage1_protocols()
-    _stage2_proto, _edge_proto, arch_proto = load_stage2_protocols()
-    data = Stage2Data("cpu")               # only for node_dim / edge_dim
+    bound = load_stage1_model_config(stage1_ckpt["uri"], stage1_ckpt)
+    encoding, training, hyperparameters = effective_stage1_model_inputs(bound, *load_stage1_protocols())
+    arch_proto = rec.get("arch_protocol")
+    dims = rec.get("layout_input_dims")
+    if not arch_proto or not dims:
+        if not allow_legacy_inputs:
+            raise SystemExit("Stage 2 record lacks bound architecture/dimensions; "
+                             "legacy reconstruction requires --allow-legacy-stage2-inputs")
+        if not arch_proto:
+            _, _, arch_proto = load_stage2_protocols()
+        data = Stage2Data("cpu", graph_unit="house")
+        dims = {"node_feat_dim": data.node_dim, "edge_feat_dim": data.edge_dim}
     model = build_stage2_model(encoding, training, hyperparameters, arch_proto,
-                               node_feat_dim=data.node_dim, edge_feat_dim=data.edge_dim,
+                               **dims,
                                use_layout=True,
                                init_lambda=float(rec["lambda_init"]["init_lambda"]))
+    if training.get("freeze_gallery"):
+        model.freeze_gallery(True)
     _, loss_fn = build_model(encoding, training, hyperparameters)
     print(f"stage2 record {record_path}\n  variant {rec.get('variant_id')}  "
           f"parent {str(parent)[:16]}  lambda_0 {rec['lambda_init']['init_lambda']:.4f}  "
@@ -1055,22 +1046,38 @@ def load_stage2_over_stage1(record_path: str, stage1_ckpt: dict,
     return {"record": rec, "model": model, "loss_fn": loss_fn}
 
 
-def overlay_stage2_weights(model, rec: dict, device: str) -> None:
+def overlay_stage2_weights(model, rec: dict, device: str, *, fusion_only: bool = False) -> None:
     """Lay the Stage 2 trainable state over the Stage 1 towers, and check it
     covers what Stage 2 trains -- the query fusion, the ESSGNN, lambda."""
     import torch
-    state = torch.load(rec["uri"], map_location=device, weights_only=False)["trainable_state"]
-    missing, unexpected = model.load_state_dict(state, strict=False)
-    if unexpected:
-        raise SystemExit(f"Stage 2 state has keys the tower lacks: {sorted(unexpected)[:5]}")
+    import io
+    from metafind.train.gallery_index import verified_checkpoint_bytes
+    state = torch.load(io.BytesIO(verified_checkpoint_bytes(rec)), map_location=device,
+                       weights_only=False)["trainable_state"]
+    stray = {n for n in state if not n.startswith(("query.fusion.", "query.layout_encoder."))
+             and n != "query.layout_weight"}
+    if stray:
+        raise SystemExit(f"Stage 2 state attempts to replace non-query weights: {sorted(stray)[:5]}")
+    if fusion_only:
+        state = {k: v for k, v in state.items() if k.startswith("query.fusion.")}
     should = {n for n, _ in model.named_parameters()
               if n.startswith("query.fusion") or n.startswith("query.layout_encoder")
               or n == "query.layout_weight"}
+    if fusion_only:
+        should = {n for n in should if n.startswith("query.fusion.")}
+    masking = rec.get("query_modality_masking", "none")
+    declared = tuple(rec.get("stage2_protocol", {}).get("asset_modalities", ("text", "image", "pc")))
+    frozen_mask_tokens = masking == "none" and len(declared) == 3
     absent = {n for n in should if n not in state
-              and not n.endswith("fusion.mask_tokens")}   # frozen under masking=none
+              and not (frozen_mask_tokens and n.endswith("fusion.mask_tokens"))}
     if absent:
         raise SystemExit(f"Stage 2 state does not cover {sorted(absent)[:5]}; the "
                          "w/ ESSGNN row would be scored with Stage 1 query weights")
+    missing, unexpected = model.load_state_dict(state, strict=False)
+    if unexpected:
+        raise SystemExit(f"Stage 2 state has keys the tower lacks: {sorted(unexpected)[:5]}")
+    if fusion_only:
+        return
     lam = float(model.query.layout_weight.item())
     print(f"  Stage 2 query weights laid over the Stage 1 parent: {len(state)} tensors, "
           f"lambda {lam:.4f} (unused at evaluation: layout=None)", flush=True)
@@ -1104,7 +1111,7 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
                  query_pack=None,
                  exclude_uids: set | None = None,
                  observation=None, image_tokens: int = 1, partner=None, text_override=None,
-                 query_backbone=None) -> tuple[dict, list]:
+                 query_backbone=None, allow_legacy_gallery: bool = False) -> tuple[dict, list]:
     """One protocol, seven conditions. Returns (core result, per-query rows).
 
     The gallery's SOURCE is decided here, from the protocol's own fields, not by
@@ -1227,7 +1234,8 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
     norms: dict = {}          # filled by encode_pools; see text2shape_eval
     if source == "promoted_index":
         index_record, gallery = gallery_from_promoted_index(
-            name, gallery_uids, ckpt or {}, backbone, model)
+            name, gallery_uids, ckpt or {}, backbone, model,
+            allow_legacy=allow_legacy_gallery)
         # `None`, not `gallery_uids`: the gallery encoder is not called at all.
         queries, _ = encode_pools(backbone, model, query_uids, None,
                                   aggregation, device, batch_size, query_pack,
@@ -1368,6 +1376,10 @@ def run_protocol(name: str, protocol: dict, splits: dict, backbone, model,
         "gallery_index_sha256": index_record["sha256"] if index_record else None,
         "gallery_encoder_sha256": (index_record["gallery_encoder_sha256"]
                                    if index_record else None),
+        "gallery_encoder_hash_version": (index_record.get("gallery_encoder_hash_version", 1)
+                                          if index_record else None),
+        "legacy_gallery_compatibility": bool(index_record and
+            index_record.get("gallery_encoder_hash_version", 1) == 1),
         "stage1_checkpoint_sha256": (ckpt or {}).get("sha256"),
         "gate_record_uri": index_record["gate_record_uri"] if index_record else None,
         "gate_record_sha256": (index_record["gate_record_sha256"]
@@ -1448,6 +1460,11 @@ def main() -> int:
                          "parent's (frozen in Stage 2).")
     ap.add_argument("--stage2-variant", default="full",
                     help="which record to take from a variant_ckpts.json")
+    ap.add_argument("--allow-legacy-stage2-inputs", action="store_true",
+                    help="explicitly permit reconstruction of old Stage 2 records using current layout dimensions")
+    ap.add_argument("--allow-legacy-gallery-index", action="store_true",
+                    help="accept v1 gallery hashes after checking the parent configuration; "
+                         "v1 cannot prove the historical producer's forward flags")
     ap.add_argument("--exclude-degraded-renders", action="store_true",
                     help="drop the 253 admitted assets whose render sidecar "
                          "reports blank, dark or fewer-distinct-than-listed "
@@ -1489,7 +1506,8 @@ def main() -> int:
     from metafind.train.gallery_index import load_checkpoint_record
     from metafind.train.stage1 import (build_model, load_protocols as
                                        load_stage1_protocols,
-                                       load_stage1_checkpoint)
+                                       load_stage1_checkpoint, load_stage1_model_config,
+                                       effective_stage1_model_inputs, stage1_backbone_kwargs)
     from metafind.models.ulip_backbone import BackboneConfig, ULIPBackbone
 
     if runlog.runtime_source_status() != "ok":
@@ -1515,6 +1533,10 @@ def main() -> int:
     # supplied is written as null rather than invented, and `untrained: true`
     # plus `init_seed` say why.
     ckpt = {} if untrained else load_checkpoint_record(args.ckpt_record)
+    if not untrained:
+        ckpt = load_stage1_model_config(ckpt["uri"], ckpt)
+        encoding, training, hyperparameters = effective_stage1_model_inputs(
+            ckpt, encoding, training, hyperparameters)
     # [AUDIT 2026-09-03 E1] the query's observation is part of the
     # construction, and it follows the checkpoint unless overridden.
     from metafind.data.observation import Observation, ObservationProtocol
@@ -1598,13 +1620,14 @@ def main() -> int:
         # had trained. The scope the run actually used is on the record, so read
         # it. An untrained control has no record and keeps the default; nothing
         # is restored into it anyway.
-        scope = (ckpt or {}).get("train_scope", "point_encoder_and_fuser")
+        scope = training.get("train_scope", "point_encoder_and_fuser")
         backbone = ULIPBackbone(BackboneConfig(device=args.device,
-                                               train_scope=scope))
+                                               train_scope=scope,
+                                               **({} if untrained else stage1_backbone_kwargs(ckpt))))
         # [U-16 reading B, P13] from the RECORD: a checkpoint trained with two
         # point paths is restored into two; `load_stage1_checkpoint` refuses the
         # other combinations.
-        sharing = (ckpt or {}).get("tower_sharing", "shared_backbone_separate_fusion")
+        sharing = training.get("tower_sharing", "shared_backbone_separate_fusion")
         backbone_q = backbone.clone_point_path() if sharing == "fully_separate" else None
         if untrained:
             # Seeded HERE, immediately before `build_model`, because that call is
@@ -1620,7 +1643,8 @@ def main() -> int:
                 raise SystemExit("--stage2-ckpt-record needs a real Stage 1 parent, "
                                  "not --ckpt-record none")
             stage2 = load_stage2_over_stage1(args.stage2_ckpt_record, ckpt,
-                                             variant=args.stage2_variant)
+                                             variant=args.stage2_variant,
+                                             allow_legacy_inputs=args.allow_legacy_stage2_inputs)
             model, loss_fn = stage2["model"], stage2["loss_fn"]
             model.to(args.device)
             load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt["uri"]),
@@ -1629,10 +1653,8 @@ def main() -> int:
                                    query_backbone=backbone_q)
             overlay_stage2_weights(model, stage2["record"], args.device)
         else:
-            if (ckpt or {}).get("gallery_fusion"):
-                training = {**training, "gallery_fusion": ckpt["gallery_fusion"]}
             model, loss_fn = build_model(encoding, training, hyperparameters)
-            if (ckpt or {}).get("freeze_gallery"):
+            if training.get("freeze_gallery"):
                 model.freeze_gallery(True)    # the checkpoint has no gallery section; match its requires_grad set
             model.to(args.device)
             if not untrained:
@@ -1654,6 +1676,8 @@ def main() -> int:
             "query_pc_perturb": (args.query_pc_perturb
                                  or ckpt.get("query_pc_perturb") or "none"),
             "image_tokens": image_tokens,
+            "allow_legacy_stage2_inputs": args.allow_legacy_stage2_inputs,
+            "allow_legacy_gallery_index": args.allow_legacy_gallery_index,
             # None for the w/o ESSGNN row. For w/ ESSGNN: which Stage 2 run laid
             # its query-side weights over this Stage 1 parent, and with what
             # lambda -- the layout vector itself is never computed here.
@@ -1767,6 +1791,7 @@ def main() -> int:
                 encoding["image_aggregation"], args.device, args.batch_size,
                 args.control, args.seed, args.block, untrained, ckpt,
                 query_pack, exclude_uids, **_qb_kwargs(backbone_q),
+                allow_legacy_gallery=args.allow_legacy_gallery_index,
                 **_construction_kwargs(observation, image_tokens, partner, text_override))
             # From the protocol's FIELDS, never its name. See protocol_caveat:
             # the name lookup that used to be here gave any protocol the

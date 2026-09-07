@@ -6930,3 +6930,33 @@ Unverified until the Stage 2 chain runs (queued behind R2 and row 1): the n11b b
 | partner attrs / partner view / canonical | 4.0 | 1.5 | 100.0 | 1.9 | 99.9 | 99.7 | 97.9 (raw 76.9) |
 
 Prediction "text/image low teens, pc 70–80, fused between" holds only for the text cell (cat_size 16.8 vs the paper's 13.8). With the query cloud identical to the gallery cloud the pc margin is total, so fused stays ≥ 99.6 under every own-but-weak trio and even under partner text+image (mean 97.9). The hypothesis is refuted on our data; the lever is still the pc query's observation, not the gallery's composition or the pooling. Artifact: `output/look/exp_mean_pool_weak_trio_val_gallery_pc.json`; log `metafind_data/outputs/logs/probe_mean_pool_gallery_pc.log`.
+
+## DL-105 -- Codex code repair (2026-09-07 18:xx) reviewed and accepted with two changes; attribution and cosine probes recorded
+
+**Codex's change** (docs/CODE_REPAIR_REPORT_20260907.md, docs/audit/code_repair_20260907_checks.json; 24 files, +1,335/-279 on 785a2d9): checkpoint recipe restore + `arm_config_version 2` (stage1), gallery hash v2 (gallery_index), shared verification entry (run_retrieval, probes), Stage 2 input identity + graph-scope validation (stage2), `relation_text_for()` unifying the semantic-edge cache key across producer and readers, n06 rc semantics + retirement, `SAMPLER_VERSION 9` (uint8 baseColorFactor; corpus NOT resampled, the paper line reuses sampler-8 clouds), fully-separate+pc refusal, chain scripts with pipefail. Codex also killed my two waiting chain shells and relaunched them under the reviewed scripts (PIDs 2465870 / 2465873); annotation untouched.
+
+**Review** (ULIP2 reviewer: MAJOR 2, MINOR 4, INFO 7; ESSGNN reviewer: PASS, MINOR 3, INFO 7; both read-only, no git). Dispositions:
+- ULIP2 MAJOR 1 / ESSGNN MINOR 2-3 (chain root and stderr from the environment): checked `/proc/<pid>/environ` and fds -- `METAFIND_DATA=/home/kyzen/metafind/metafind_data_paper`, both fds on the chain log. Downgraded to INFO.
+- ULIP2 MAJOR 2 (n06 renamed every scheduled embedding up front, leaving a populated corpus unreadable for the run and permanently on an init failure): FIXED -- retirement is per asset, the served pair is retired at the write (`encode_text_image.py`) and on that asset's failure path; `.part` files are never retired at the write. Codex's test rewritten to the per-asset semantics (`test_resource_failure_halts_and_leaves_unreached_assets_servable`).
+- ULIP2 MINOR 5 (snapshot stores artifact hyperparameters, not effective): NOT A DEFECT -- `values = hyperparameters["values"]` is the same dict object that `--lr` mutates (`stage1.py:2664,2906`), so the snapshot carries the effective value.
+- ULIP2 MINOR 6 (sampler 9 forces a full n03 resample next time n03 runs): accepted; the paper line never runs n03; recorded.
+- ESSGNN MINOR 1 (chain step 7, the ProcTHOR probe, now aborted the row and blocked Table 1): CHANGED BACK to non-fatal (`FAILED step 7 (probe); Table 1 steps continue`) in `tools/chain_paper_stage2.sh` and the launcher; the Stage 2 waiter was stopped and restarted (new PID 2494552, logged in the chain log). Table 1 is the deliverable; a probe refusal must not cost it.
+- ULIP2 INFO 10: `--fields-text-cache` now defaults off, so the two `fields(attrs cache)` rows leave the default Table 1 probe plan -- correct for the paper line (those rows read another corpus). Attribution rows A-F unchanged for `shared_backbone_separate_fusion` checkpoints.
+- Everything else INFO. CPU suite on the final tree: 1,136 passed (renders / cuda / procthor_modalities files excluded, GPU-bound).
+
+**Attribution probe** (`tools/probes/exp_type_level_query.py --attribution`, P1s head, val 4,569 vs 4,569, R@1 %; `output/look/exp_attribution_P1s_val.json`):
+
+| row | text | image | pc | T+I | T+PC | I+PC | full |
+|---|---|---|---|---|---|---|---|
+| A own text + own 12-view mean + own cloud | 33.8 | 86.3 | 97.9 | 93.8 | 99.7 | 98.6 | 99.8 |
+| B partner text only | 5.5 | 86.3 | 97.9 | 59.0 | 94.4 | 98.6 | 95.6 |
+| C partner image only | 33.8 | 0.6 | 97.9 | 6.0 | 99.7 | 96.3 | 99.1 |
+| D partner cloud only | 33.8 | 86.3 | 0.1 | 93.8 | 0.2 | 0.2 | 0.7 |
+| E partner text + image | 5.5 | 0.6 | 97.9 | 0.6 | 94.4 | 96.3 | 86.0 |
+| F all three partner | 5.5 | 0.6 | 0.1 | 0.6 | 0.0 | 0.0 | 0.0 |
+
+Delta_T = 4.2, Delta_I = 0.7, Delta_P = 99.1 on the `full` cell. OBSERVED CAUSAL RESULT: the near-100 fused score is carried by the query cloud being the gallery cloud; text and image add 4 and 1 points. (Partner = same-LVIS-category asset, `Random(uid_seed+11)`.)
+
+**Cosine statistics** (row A, same run; `cosine_stats` in the probe): pc query pos 0.985, mean negative 0.001, hardest negative 0.931, margin 0.054 (p10 0.007); full: pos 0.998, hard 0.939, margin 0.059; text-only: pos 0.904, hard 0.936, margin -0.032. InfoNCE at tau 0.5 with 63 random negatives = 2.37, matching the training plateau (2.40-2.48). CORRECTION of my 2026-09-07 claim that tau fixes a loss floor near 2.4: the floor for cosine in [-1,1] is log(1+63e^-4) = 0.77; the plateau is the state "positives ~1, random negatives ~0, hardest negatives ~0.93", not a bound (Kyzen's correction, verified).
+
+**pc-only-gallery and JSON-text probes**: see the previous entry and the next (JSON-text probe running, `output/look/exp_json_text_query_val.json`).

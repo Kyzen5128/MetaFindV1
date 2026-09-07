@@ -812,3 +812,123 @@ def test_aggregate_refuses_a_block_it_cannot_honour():
     # `None` keeps the old two-argument behaviour, so every existing caller and
     # every probe is unaffected.
     assert np.allclose(aggregate(v, "mean", None), v.mean(axis=0))
+
+
+@pytest.fixture
+def encode_run(monkeypatch, tmp_path):
+    """Exercise main's filesystem path with a tiny CPU encoder."""
+    import metafind.data.encode_text_image as m
+
+    ann_dir, emb_dir = tmp_path / "ann", tmp_path / "emb"
+    ann_dir.mkdir()
+    emb_dir.mkdir()
+    monkeypatch.setattr(m.paths, "LOGS", tmp_path)
+    monkeypatch.setattr(m.paths, "ANNOTATIONS", ann_dir)
+    monkeypatch.setattr(m.paths, "EMBEDDINGS", emb_dir)
+    monkeypatch.setattr(m, "load_protocol", lambda: protocol())
+    monkeypatch.setattr(m, "ulip2_ckpt_sha", lambda: "checkpoint")
+    monkeypatch.setattr(m, "serialize_annotation", lambda a: a["description"])
+    monkeypatch.setattr(m, "refuse_if_overlong", lambda text: 10)
+    monkeypatch.setattr(m, "TRUNCATE_OVERLONG", False)
+    monkeypatch.setattr(m.runlog, "cost_ledger", lambda **kw: None)
+    quarantine = []
+    monkeypatch.setattr(m.runlog, "quarantine", lambda node, rows: quarantine.extend(rows))
+    monkeypatch.setattr("sys.argv", ["encode_text_image"])
+
+    class Encoder:
+        def encode_text(self, text):
+            return np.ones(1280, dtype=np.float32)
+
+        def encode_views(self, views):
+            return np.ones((12, 1280), dtype=np.float32)
+
+    monkeypatch.setattr(m, "Encoder", Encoder)
+
+    def prepare(uids):
+        renders = []
+        for uid in uids:
+            rec = {**_render_rec(uid, uid), "view_paths": ["unused"] * 12}
+            renders.append(rec)
+            (ann_dir / f"{uid}.json").write_text(json.dumps(
+                {"description": uid, "image_identity": m.image_identity(rec)}))
+            (emb_dir / f"{uid}.npz").write_bytes(b"previous embedding")
+            (emb_dir / f"{uid}.json").write_text('{"text":"previous text"}')
+        (tmp_path / "renders_index.jsonl").write_text(
+            "\n".join(json.dumps(r) for r in renders) + "\n")
+
+    return m, prepare, quarantine, emb_dir
+
+
+@pytest.mark.parametrize("uids", [["bad"], ["bad", "good"]])
+def test_encode_failure_never_reports_success_or_serves_previous_cache(encode_run, monkeypatch, uids):
+    m, prepare, quarantine, emb_dir = encode_run
+    prepare(uids)
+
+    def token_gate(text):
+        if text == "bad":
+            raise ValueError("text is overlong")
+        return 10
+
+    monkeypatch.setattr(m, "refuse_if_overlong", token_gate)
+    assert m.main() == 3
+    assert quarantine[0]["failure_class"] == "DETERMINISTIC_INPUT"
+    assert not (emb_dir / "bad.npz").exists()
+    assert not (emb_dir / "bad.json").exists()
+    assert (emb_dir / "bad.npz.stale").read_bytes() == b"previous embedding"
+    if "good" in uids:
+        assert m.is_complete("good", "good", m.image_identity(_render_rec("good", "good")))
+    progress = [json.loads(line) for line in (m.paths.LOGS / "run_progress.jsonl").read_text().splitlines()]
+    assert progress[-1]["status"] == "FAILED" and progress[-1]["rc"] == 3
+
+
+@pytest.mark.parametrize("initialization", [False, True])
+def test_resource_failure_halts_and_leaves_unreached_assets_servable(encode_run, monkeypatch, initialization):
+    """[ULIP2 REVIEWER MAJOR 2, 2026-09-07] Retirement is per asset, at the write or on
+    that asset's failure. A RESOURCE halt must not have renamed the whole schedule up
+    front: the asset that failed is retired as evidence, the one never reached keeps
+    its previous pair (still incomplete by version, so a re-run picks it up), and an
+    encoder that never initialised touches nothing."""
+    m, prepare, quarantine, emb_dir = encode_run
+    prepare(["a", "b"])
+
+    def oom(*args):
+        raise RuntimeError("CUDA out of memory")
+
+    if initialization:
+        monkeypatch.setattr(m, "Encoder", oom)
+    else:
+        monkeypatch.setattr(m.Encoder, "encode_text", oom)
+    assert m.main() == 3
+    assert len(quarantine) == 1 and quarantine[0]["failure_class"] == "RESOURCE"
+    if initialization:
+        touched, kept = [], ["a", "b"]
+    else:
+        touched, kept = ["a"], ["b"]
+    for uid in touched:
+        assert not (emb_dir / f"{uid}.npz").exists()
+        assert (emb_dir / f"{uid}.npz.stale").read_bytes() == b"previous embedding"
+    for uid in kept:
+        assert (emb_dir / f"{uid}.npz").read_bytes() == b"previous embedding"
+        assert not (emb_dir / f"{uid}.npz.stale").exists()
+
+
+def test_sidecar_write_failure_retires_new_npz_and_preserves_old_evidence(encode_run, monkeypatch):
+    import errno
+    from pathlib import Path
+    m, prepare, quarantine, emb_dir = encode_run
+    prepare(["bad"])
+    real_open = Path.open
+
+    def fail_sidecar(path, *args, **kwargs):
+        if path == emb_dir / "bad.json.part":
+            raise OSError(errno.ENOSPC, "disk full")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", fail_sidecar)
+    assert m.main() == 3
+    assert quarantine[0]["failure_class"] == "RESOURCE"
+    assert not (emb_dir / "bad.npz").exists()
+    assert not (emb_dir / "bad.json").exists()
+    assert (emb_dir / "bad.npz.stale").read_bytes() == b"previous embedding"
+    with np.load(emb_dir / "bad.npz.stale.2") as new:
+        assert new["text"].shape == (1280,)

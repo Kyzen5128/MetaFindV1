@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from metafind import paths
+from metafind import paths, runlog
 from metafind.data.pointclouds import uid_seed
 from metafind.eval.retrieval import (QUERY_CONDITIONS, condition_mask,
                                      normalize_for_scoring, recall_at_k)
@@ -38,6 +38,58 @@ TEMPLATES = {
 }
 
 
+def optional_fields_text(cache_path, uids: list[str]):
+    """An optional diagnostic row cannot change the primary query population."""
+    if cache_path is None:
+        return None, None
+    root = Path(cache_path)
+    missing = [u for u in uids if not (root / f"{u}.npz").is_file()]
+    if missing:
+        return None, {"reason": "incomplete fields-text-cache", "uri": str(root),
+                      "missing_count": len(missing), "missing_examples": missing[:5]}
+    try:
+        vectors = np.stack([np.load(root / f"{u}.npz", allow_pickle=False)["text"].astype(np.float32)
+                            for u in uids])
+        if vectors.ndim != 2 or not np.isfinite(vectors).all():
+            raise ValueError("text vectors must be a finite 2-D array")
+    except (KeyError, ValueError, OSError) as exc:
+        return None, {"reason": str(exc), "uri": str(root)}
+    return vectors, None
+
+
+def cosine_stats(S: np.ndarray, targets: np.ndarray, tau: float = 0.5, batch: int = 64, seed: int = 0) -> dict:
+    """What the InfoNCE loss is made of, on the FULL cosine matrix S (queries x gallery).
+
+    pos      mean cos(q_i, g_target(i))
+    neg_mean mean cos(q_i, g_j), j != target
+    hard_neg mean over queries of max_{j != target} cos(q_i, g_j)
+    margin   mean of pos - hard_neg;  margin_pos_frac = fraction with margin > 0 (= R@1)
+    loss_full     mean -log softmax at tau over the WHOLE gallery as negatives
+    loss_batch64  the same with 63 random negatives per query (the training batch shape), one draw
+    (Kyzen 2026-09-07: the plateau at ~2.4 needs these, not a floor argument.)"""
+    n, m = S.shape
+    rows = np.arange(n)
+    pos = S[rows, targets]
+    S_neg = S.copy(); S_neg[rows, targets] = -np.inf
+    hard = S_neg.max(1)
+    neg_mean = (S.sum(1) - pos) / (m - 1)
+    margin = pos - hard
+    z = S / tau
+    lse_full = np.logaddexp.reduce(z, axis=1)
+    loss_full = float(np.mean(lse_full - pos / tau))
+    rng = np.random.default_rng(seed)
+    losses = []
+    for i in range(n):
+        cand = rng.choice(m - 1, size=batch - 1, replace=False)
+        cand = cand + (cand >= targets[i])          # skip the target column
+        zi = np.concatenate([[z[i, targets[i]]], z[i, cand]])
+        losses.append(float(np.logaddexp.reduce(zi) - zi[0]))
+    return {"pos": float(pos.mean()), "neg_mean": float(neg_mean.mean()), "hard_neg": float(hard.mean()),
+            "margin": float(margin.mean()), "margin_pos_frac": float((margin > 0).mean()),
+            "pos_p10": float(np.percentile(pos, 10)), "margin_p10": float(np.percentile(margin, 10)),
+            "loss_full": loss_full, "loss_batch64": float(np.mean(losses)), "tau": tau, "n": int(n), "m": int(m)}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--ckpt", default="/home/kyzen/metafind/metafind_data_attrs/outputs/checkpoints/pilotP1_attrs_singleview_prefnorm_20260903/stage1_best.pt")
@@ -47,22 +99,47 @@ def main() -> int:
                     help="splits.json key for the query set (dev_val = val). `holdout` (val+test, 9,138) is the "
                          "20%% Kyzen's diagram reports on; every read of it is recorded in the ledger.")
     ap.add_argument("--out", default="output/look/exp_type_level_query.json")
-    ap.add_argument("--fields-text-cache", default="/home/kyzen/metafind/metafind_data_attrs/outputs/embeddings",
-                    help="embeddings dir whose `text` is the FIELDS form-fill (attrs_v1); used as a q_text variant")
+    ap.add_argument("--fields-text-cache", default=None,
+                    help="explicit optional FIELDS text cache; incomplete coverage skips this row and is recorded")
     ap.add_argument("--no-sketchfab", action="store_true")
     ap.add_argument("--pc-policies", default="canonical",
                     help="comma list from exp_query_pc_observation.POLICIES; `canonical` = the gallery's own "
                          "cloud, the rest are a SECOND surface sample of the same mesh (QueryPack) perturbed "
                          "by metafind.data.observation.perturb_cloud. Non-canonical policies score a focused "
                          "row subset (2026-09-06 weak-trio test).")
+    ap.add_argument("--attribution", action="store_true",
+                    help="single-modality replacement attribution (Kyzen 2026-09-07): rows A own/own/own, "
+                         "B partner text only, C partner image only, D partner pc only, E partner text+image, "
+                         "F all partner; text = attrs sentence, image = 12-view mean, pc = canonical cloud")
     ap.add_argument("--stage2-state", default=None,
                     help="a Stage 2 `stage2_full.pt` whose parent is --ckpt: its trained `query.fusion.*` "
                          "weights replace the Stage 1 query fusion (the gallery tower is frozen in Stage 2, "
                          "so the gallery stays Stage 1's). Layout branch not loaded: Objaverse assets have no "
                          "scene, so this is the Table 1 'w/ ESSGNN' shared head with the layout term absent.")
+    ap.add_argument("--stage2-record", default=None,
+                    help="record identifying --stage2-state (default: sibling variant_ckpts.json)")
+    ap.add_argument("--stage2-variant", default="full")
+    ap.add_argument("--allow-legacy-stage2-inputs", action="store_true",
+                    help="explicitly permit old Stage 2 state with no embedded model metadata")
     args = ap.parse_args()
     policies = args.pc_policies.split(",")
-    from tools.probes.exp_query_observation import load_tower
+    from metafind.train.stage1 import (build_model, load_protocols, load_stage1_checkpoint,
+                                      load_stage1_model_config, effective_stage1_model_inputs,
+                                      stage1_backbone_kwargs)
+    from metafind.train.gallery_index import load_stage2_checkpoint_record
+    from metafind.eval.run_retrieval import overlay_stage2_weights
+    ckpt_record = load_stage1_model_config(args.ckpt)
+    encoding, training, hyper = effective_stage1_model_inputs(ckpt_record, *load_protocols())
+    if int(training["image_tokens"]) != 1:
+        raise SystemExit("this single-vector observation probe requires image_tokens=1")
+    s2_record = None
+    if args.stage2_state:
+        rec_path = args.stage2_record or Path(args.stage2_state).with_name("variant_ckpts.json")
+        s2_record = load_stage2_checkpoint_record(rec_path, ckpt_record, args.stage2_variant,
+                                                state_path=args.stage2_state,
+                                                allow_legacy=args.allow_legacy_stage2_inputs)
+    elif args.stage2_record:
+        raise SystemExit("--stage2-record requires --stage2-state")
 
     sp = json.loads((paths.OUTPUTS / "splits.json").read_text())["object"]
     g_uids, q_uids = sorted(sp[args.gallery_split]), sorted(sp[args.query_split])
@@ -83,30 +160,20 @@ def main() -> int:
     def emb(u, key):
         return np.load(paths.EMBEDDINGS / f"{u}.npz")[key].astype(np.float32)
 
-    bb = ULIPBackbone(BackboneConfig(device=args.device, train_scope="pointbert_and_fuser"))
-    ck = torch.load(args.ckpt, map_location=args.device, weights_only=False)
-    bb.model.load_state_dict(ck["backbone_trainable_state"], strict=False); bb.model.eval()
-    model = load_tower(Path(args.ckpt), args.device)
-    if args.stage2_state:
-        import hashlib
-        s2 = torch.load(args.stage2_state, map_location=args.device, weights_only=False)
-        rec = Path(args.stage2_state).with_name("variant_ckpts.json")
-        if rec.exists():
-            parent = json.loads(rec.read_text())["full"]["stage1_checkpoint_sha256"]
-            mine = hashlib.sha256(Path(args.ckpt).read_bytes()).hexdigest()
-            if parent != mine:
-                raise SystemExit(f"{rec} descends from {parent[:12]}, not from --ckpt ({mine[:12]})")
-        fusion_keys = {k for k, _ in model.named_parameters() if k.startswith("query.fusion.")}
-        s2_fusion = {k: v for k, v in s2["trainable_state"].items() if k.startswith("query.fusion.")}
-        gap = fusion_keys - set(s2_fusion) - {k for k in fusion_keys if k.endswith("fusion.mask_tokens")}
-        if gap or (set(s2_fusion) - fusion_keys):
-            raise SystemExit(f"Stage 2 state does not match the query fusion: missing {sorted(gap)[:3]}, "
-                             f"stray {sorted(set(s2_fusion) - fusion_keys)[:3]}")
-        model.load_state_dict(s2_fusion, strict=False)
-        model.eval()
-        s2_has_tokens = any(k.endswith("fusion.mask_tokens") for k in s2_fusion)
-        print(f"  Stage 2 query fusion loaded: {len(s2_fusion)} tensors from {args.stage2_state}"
-              f" (mask tokens: {'from Stage 2' if s2_has_tokens else 'kept from Stage 1'})", flush=True)
+    bb = ULIPBackbone(BackboneConfig(device=args.device, train_scope=training["train_scope"],
+                                   **stage1_backbone_kwargs(ckpt_record)))
+    bb_q = bb.clone_point_path() if training["tower_sharing"] == "fully_separate" else None
+    model, loss = build_model(encoding, training, hyper)
+    if training["freeze_gallery"]:
+        model.freeze_gallery(True)
+    load_stage1_checkpoint(bb, model, loss, Path(args.ckpt), query_backbone=bb_q)
+    bb.set_train_scope("fuser_only")
+    if bb_q is not None:
+        bb_q.set_train_scope("fuser_only")
+    model.to(args.device).eval()
+    if s2_record is not None:
+        overlay_stage2_weights(model, s2_record, args.device, fusion_only=True)
+        print(f"  verified Stage 2 query fusion loaded from {s2_record['uri']}", flush=True)
     dev = args.device
 
     with torch.no_grad():
@@ -125,9 +192,11 @@ def main() -> int:
             variants["sketchfab_name_size"] = [f"{meta[u]['name']} {{size: {size_of(u)}}}" for u in q_uids]
             variants["sketchfab_name_tags"] = [", ".join([meta[u]["name"]] + list(meta[u].get("tags") or [])[:5]) for u in q_uids]
             variants["sketchfab_desc_or_name"] = [(meta[u].get("desc") or meta[u]["name"])[:300] for u in q_uids]
-        fc = Path(args.fields_text_cache)
-        if fc.exists() and fc != paths.EMBEDDINGS:
-            texts["fields(attrs cache)"] = np.stack([np.load(fc / f"{u}.npz")["text"].astype(np.float32) for u in q_uids])
+        fields, fields_skipped = optional_fields_text(args.fields_text_cache, q_uids)
+        if fields is not None:
+            texts["fields(attrs cache)"] = fields
+        if fields_skipped:
+            print(f"  fields(attrs cache) skipped: {fields_skipped}", flush=True)
         for name, sents in variants.items():
             print(f"  {name} e.g. {sents[0]!r}", flush=True)
             vecs = []
@@ -174,7 +243,24 @@ def main() -> int:
             G.append(model.gallery({"text": torch.from_numpy(g_text[s]).to(dev), "image": torch.from_numpy(g_img[s]).to(dev),
                                     "pc": torch.from_numpy(g_pc[s]).to(dev)}).float().cpu())
         G = normalize_for_scoring(torch.cat(G).numpy())
-        q_pcs = {"canonical": g_pc[targets]}
+        query_pc = g_pc
+        if bb_q is not None:
+            from tools.probes.exp_query_pc_observation import encode_clouds
+            encoded = []
+            for start in range(0, len(g_uids), 48):
+                clouds = []
+                for uid in g_uids[start:start + 48]:
+                    with np.load(paths.POINTCLOUDS / f"{uid}.npz") as cloud:
+                        clouds.append(np.concatenate([cloud["xyz"], cloud["rgb"]], 1).astype(np.float32))
+                encoded.append(encode_clouds(bb_q, clouds))
+            query_pc = np.concatenate(encoded)
+        q_pcs = {"canonical": query_pc[targets]}
+        # Table 1 row 1 as evaluated (DL-102): same_record text + same_mean image (the 12-view mean the
+        # gallery itself used) + canonical cloud.
+        images["own mean"] = g_img[targets]
+        p_idx = np.array([where[partner[u]] for u in q_uids])
+        images["partner mean"] = g_img[p_idx]
+        q_pcs["partner"] = query_pc[p_idx]
         if [p for p in policies if p != "canonical"]:
             from metafind.train.stage1 import QueryPack
             from tools.probes.exp_query_pc_observation import perturb, encode_clouds
@@ -192,11 +278,12 @@ def main() -> int:
                 for u in q_uids:
                     v = np.asarray(pack.vector("pc", u), dtype=np.float32)
                     clouds.append(perturb(v[:, :3], v[:, 3:6], pol, uid_seed(u) + 7))
-                q_pcs[pol] = encode_clouds(bb, clouds)
+                q_pcs[pol] = encode_clouds(bb_q or bb, clouds)
                 cos = float((normalize_for_scoring(q_pcs[pol]) * normalize_for_scoring(g_pc[targets])).sum(1).mean())
                 print(f"  query pc policy {pol}: paired cos to the gallery cloud {cos:.3f}", flush=True)
 
-        combos = [("own(attrs)", "own view", "parity: P1 as evaluated"),
+        combos = [("own(attrs)", "own mean", "Table 1 row 1 construction (same_record, same_mean)"),
+                  ("own(attrs)", "own view", "parity: P1 as evaluated"),
                   ("partner(attrs)", "partner view", "parity: 5i (partner text+image)"),
                   ("cat_size", "partner view", "Figure-1 text of the TARGET + reference view")]
         for tn in ("fields(attrs cache)", "cat_only", "sketchfab_name", "sketchfab_name_size", "sketchfab_name_tags", "sketchfab_desc_or_name"):
@@ -210,18 +297,36 @@ def main() -> int:
                        ("u2 msft caption", "thumbnail(own)", "Azure caption + own thumbnail"),
                        ("cat_size", "thumbnail(own)", "Figure-1 fields + own thumbnail")]
         focus = [c for c in combos if c[0] in ("own(attrs)", "partner(attrs)", "cat_size", "u2 name", "u2 blip caption")
-                 and c[1] in ("own view", "partner view", "thumbnail(own)")
+                 and c[1] in ("own view", "own mean", "partner view", "thumbnail(own)")
                  and not (c[0] == "own(attrs)" and c[1] == "partner view")
                  and not (c[0] == "partner(attrs)" and c[1] != "partner view")
                  and not (c[0] == "cat_size" and c[1] == "partner view")]
         out = {"n_query": len(q_uids), "n_gallery": len(g_uids), "query_split": args.query_split,
                "gallery_split": args.gallery_split, "paper": PAPER, "pc_policies": policies,
-               "ckpt": args.ckpt, "stage2_state": args.stage2_state, "rows": {}}
+               "ckpt": args.ckpt, "checkpoint_sha256": ckpt_record["sha256"],
+               "stage2_state": args.stage2_state,
+               "stage2_sha256": s2_record["sha256"] if s2_record else None,
+               "allow_legacy_stage2_inputs": args.allow_legacy_stage2_inputs,
+               "effective_model_inputs": {"encoding": encoding, "training": training},
+               "runtime_source_sha256": runlog.runtime_source_sha256(),
+               "runtime_source_status": runlog.runtime_source_status(),
+               "fields_text_cache": args.fields_text_cache,
+               "skipped_variants": {"fields(attrs cache)": fields_skipped} if fields_skipped else {},
+               "rows": {}}
         print(f"\n{'query (text | image | pc)':<50}" + "".join(f"{c:>9}" for c in QUERY_CONDITIONS))
         print(f"{'paper w/o ESSGNN':<50}" + "".join(f"{PAPER[c]:>9.1f}" for c in QUERY_CONDITIONS))
-        for pol in policies:
+        if args.attribution:
+            plan = [("own(attrs)", "own mean", "canonical", "A  own text + own image + own pc"),
+                    ("partner(attrs)", "own mean", "canonical", "B  partner TEXT only"),
+                    ("own(attrs)", "partner mean", "canonical", "C  partner IMAGE only"),
+                    ("own(attrs)", "own mean", "partner", "D  partner PC only"),
+                    ("partner(attrs)", "partner mean", "canonical", "E  partner text + image"),
+                    ("partner(attrs)", "partner mean", "partner", "F  all three partner (sanity)")]
+        else:
+            plan = [(t, i, pol, lab) for pol in policies for t, i, lab in (combos if pol == "canonical" else focus)]
+        for tname, iname, pol, label in plan:
             q_pc = q_pcs[pol]
-            for tname, iname, label in (combos if pol == "canonical" else focus):
+            if True:
                 cells = {}
                 for cond in QUERY_CONDITIONS:
                     Q = []
@@ -230,10 +335,16 @@ def main() -> int:
                         e = {"text": torch.from_numpy(texts[tname][s]).to(dev), "image": torch.from_numpy(images[iname][s]).to(dev),
                              "pc": torch.from_numpy(q_pc[s]).to(dev)}
                         Q.append(model.query(e, present=condition_mask(cond, e["pc"].shape[0]).to(dev)).float().cpu())
-                    cells[cond] = recall_at_k(normalize_for_scoring(torch.cat(Q).numpy()) @ G.T, targets)
+                    S = normalize_for_scoring(torch.cat(Q).numpy()) @ G.T
+                    cells[cond] = recall_at_k(S, targets)
+                    cells[cond]["cos_stats"] = cosine_stats(S, targets, tau=0.5, batch=64, seed=20260907)
                 key = f"{tname} | {iname}" + ("" if pol == "canonical" else f" | pc={pol}")
                 out["rows"][key] = {"label": label, "pc_policy": pol, "cells": cells}
                 print(f"{key:<50}" + "".join(f"{cells[c]['R@1']*100:>9.1f}" for c in QUERY_CONDITIONS) + f"   {label}", flush=True)
+                for c in QUERY_CONDITIONS:
+                    cs = cells[c]["cos_stats"]
+                    print(f"    cos {c:<10} pos {cs['pos']:.3f}  neg {cs['neg_mean']:.3f}  hard {cs['hard_neg']:.3f}  "
+                          f"margin {cs['margin']:.3f} (p10 {cs['margin_p10']:.3f})  loss full {cs['loss_full']:.2f}  b64 {cs['loss_batch64']:.2f}", flush=True)
     Path(args.out).write_text(json.dumps(out, indent=1))
     print(f"-> {args.out}")
     return 0

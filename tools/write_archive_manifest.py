@@ -12,8 +12,12 @@ import argparse
 import datetime
 import pathlib
 import subprocess
+import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO))
+from tools.build_dataset_manifest import _jsonl_index, pointcloud_version_summary  # noqa: E402
+
 PAPER_LINE = "docs/paper/metafind_" + "source/2methdology.tex:28"
 
 
@@ -28,6 +32,9 @@ def du(p: pathlib.Path) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("archive")
+    ap.add_argument("--pointcloud-index", type=pathlib.Path,
+                    help="index for the point clouds described as not archived; "
+                         "without one their sampler version is UNKNOWN")
     args = ap.parse_args()
     A = pathlib.Path(args.archive)
     rev = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
@@ -52,6 +59,11 @@ def main() -> int:
         rows.append(f"| `checkpoints/` (rest) | | {', '.join(others)} |")
 
     body = "\n".join(rows)
+    pc_summary = pointcloud_version_summary(
+        _jsonl_index(args.pointcloud_index).values() if args.pointcloud_index else [])
+    pc_evidence = (f"index `{args.pointcloud_index}`; recorded counts "
+                   f"{pc_summary['sampler_version_counts']}" if args.pointcloud_index
+                   else "no point-cloud index supplied")
     text = f"""# ARCHIVED {datetime.date.today()} -- everything produced before the eleven-view corpus
 
 Moved here, not deleted. Repo at the time of the move: `{rev}`.
@@ -75,9 +87,9 @@ expensive and because the ledger's diagnoses and retractions point at it.
 
 ## What was deliberately NOT archived
 
-* `pointclouds/` -- 10,000 xyz+rgb points per asset, sampler_version 8. Point
-  clouds do not depend on the camera layout; the eleven-view corpus reuses
-  them unchanged.
+* `pointclouds/` -- sampler version: {pc_summary['preprocessing_version']}
+  ({pc_evidence}). Point clouds do not depend on the camera layout. This
+  archive note does not certify their compatibility with a newer sampler.
 * `splits.json`, `scene_splits.json` -- uid-level, seed 20260816, unchanged.
 * `scene_graphs/` -- ProcTHOR geometry and edges, independent of rendering.
 * `renders/`, `embeddings/`, `annotations/`, `procthor_modalities/`, the two

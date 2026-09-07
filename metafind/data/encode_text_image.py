@@ -36,6 +36,7 @@ than inferred from a config file later.
 from __future__ import annotations
 
 import argparse
+import errno
 import functools
 import hashlib
 import json
@@ -177,6 +178,32 @@ def _retire(art: Path) -> Path:
         target = art.with_suffix(f"{art.suffix}.stale.{n}")
     art.replace(target)
     return target
+
+
+def _retire_embedding(uid: str) -> None:
+    """Keep superseded/failed output as evidence, outside downstream paths."""
+    for art in (paths.EMBEDDINGS / f"{uid}.npz", sidecar_path(uid),
+                paths.EMBEDDINGS / f"{uid}.part.npz",
+                sidecar_path(uid).with_suffix(".json.part")):
+        if art.exists():
+            _retire(art)
+
+
+def failure_class(exc: Exception, phase: str) -> str:
+    """Distinguish input rejection from exhausted resources and runtime faults."""
+    if (isinstance(exc, MemoryError)
+            or type(exc).__name__ == "OutOfMemoryError"
+            or "out of memory" in str(exc).lower()
+            or isinstance(exc, OSError) and exc.errno in
+            (errno.ENOMEM, errno.ENOSPC, errno.EDQUOT)):
+        return "RESOURCE"
+    if (isinstance(exc, FileNotFoundError) and phase != "write"
+            or type(exc).__name__ == "UnidentifiedImageError"
+            or phase == "input" and isinstance(exc, (ValueError, KeyError, TypeError))):
+        return "DETERMINISTIC_INPUT"
+    if isinstance(exc, OSError):
+        return "TRANSIENT"
+    return "CONTRACT_VIOLATION"
 
 
 def is_complete(uid: str, expected_text: str, image_id: str,
@@ -586,11 +613,30 @@ def main() -> int:
         # that: the corpus is complete.
         return 0
 
-    enc = Encoder()
-    done, overlong, started = 0, 0, time.time()
-    with runlog.run_progress(NODE):
+    # [ULIP2 REVIEWER MAJOR 2, 2026-09-07] An up-front `for path in todo:
+    # _retire_embedding(...)` stood here and renamed EVERY scheduled embedding
+    # before the encoder was even built, so a run in a populated root left the
+    # whole corpus unreadable for the run's duration -- and permanently if the
+    # run died at encoder init. Retirement now happens per asset, at the write
+    # (below) and on the failure path, which keeps the evidence without the
+    # availability window.
+    done, failed, overlong, started = 0, 0, 0, time.time()
+    with runlog.run_progress(NODE) as progress:
+        try:
+            enc = Encoder()
+        except Exception as exc:
+            runlog.quarantine(NODE, [{
+                "uid": None, "phase": "encoder_initialization",
+                "failure_class": failure_class(exc, "initialization"),
+                "exception_type": type(exc).__name__,
+                "exception_msg": str(exc)[:400],
+                "traceback": traceback.format_exc()[-1500:],
+            }])
+            progress.rc = 3
+            return 3
         for path in todo:
             uid = path.stem
+            phase = "input"
             try:
                 annotation = json.loads(path.read_text())
                 text = serialize_annotation(annotation)
@@ -609,68 +655,81 @@ def main() -> int:
                     truncated = True
                     overlong += 1          # counted, reported as truncated below
 
+                phase = "encode"
                 text_vec = enc.encode_text(text)
                 view_vecs = enc.encode_views(renders[uid]["view_paths"])
                 pooled = aggregate(view_vecs, protocol["image_aggregation"],
                                    protocol.get("view_aggregation"))
 
+                phase = "write"
                 npz = paths.EMBEDDINGS / f"{uid}.npz"
                 tmp = paths.EMBEDDINGS / f"{uid}.part.npz"
                 np.savez_compressed(tmp,
                                     text=text_vec.astype(np.float16),
                                     views=view_vecs.astype(np.float16),
                                     image=pooled.astype(np.float16))
+                # retire the previous pair (evidence) only now that a replacement
+                # exists; the .part files are the replacement itself, so only the
+                # served pair moves
+                for art in (npz, sidecar_path(uid)):
+                    if art.exists():
+                        _retire(art)
                 tmp.replace(npz)
-            except Exception as exc:  # noqa: BLE001 -- one asset must not stop the run
+                rec = {
+                    "uid": uid,
+                    "encoder_version": ENCODER_VERSION,
+                    "ulip2_ckpt_sha": ulip2_ckpt_sha(),
+                    "embedding_uri": str(npz),
+                    "text": text,
+                    "text_tokens": n_tokens,
+                    "text_truncated": truncated,
+                    "n_views": int(view_vecs.shape[0]),
+                    "aggregation": protocol["image_aggregation"],
+                    "embedding_dim": int(text_vec.shape[0]),
+                    "text_serialization": protocol["text_serialization"],
+                    "clip_train_scope": protocol["actual_clip_train_scope"],
+                    "image_identity": image_identity(renders[uid]),
+                    "view_io_version": VIEW_IO_VERSION,
+                    "renderer_version": renders[uid].get("renderer_version"),
+                }
+                sc = sidecar_path(uid)
+                tmp = sc.with_suffix(".json.part")
+                with tmp.open("w") as fh:
+                    json.dump(rec, fh, ensure_ascii=False)
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                tmp.replace(sc)
+            except Exception as exc:  # noqa: BLE001 -- record failure before returning nonzero
+                failed += 1
+                cls = failure_class(exc, phase)
+                _retire_embedding(uid)
                 runlog.quarantine(NODE, [{
                     "uid": uid,
-                    "failure_class": "DETERMINISTIC_INPUT",
+                    "phase": phase,
+                    "failure_class": cls,
                     "exception_type": type(exc).__name__,
                     "exception_msg": str(exc)[:400],
                     "traceback": traceback.format_exc()[-1500:],
                 }])
+                if cls in ("RESOURCE", "CONTRACT_VIOLATION"):
+                    break
                 continue
-
-            rec = {
-                "uid": uid,
-                "encoder_version": ENCODER_VERSION,
-                "ulip2_ckpt_sha": ulip2_ckpt_sha(),
-                "embedding_uri": str(npz),
-                "text": text,
-                "text_tokens": n_tokens,
-                "text_truncated": truncated,
-                "n_views": int(view_vecs.shape[0]),
-                "aggregation": protocol["image_aggregation"],
-                "embedding_dim": int(text_vec.shape[0]),
-                "text_serialization": protocol["text_serialization"],
-                "clip_train_scope": protocol["actual_clip_train_scope"],
-                # What these image vectors were taken from. See `image_identity`.
-                "image_identity": image_identity(renders[uid]),
-                "view_io_version": VIEW_IO_VERSION,
-                "renderer_version": renders[uid].get("renderer_version"),
-            }
-            sc = sidecar_path(uid)
-            tmp = sc.with_suffix(".json.part")
-            with tmp.open("w") as fh:
-                json.dump(rec, fh, ensure_ascii=False)
-                fh.flush()
-                os.fsync(fh.fileno())
-            tmp.replace(sc)
             done += 1
             if done % 500 == 0:
                 rate = done / max(time.time() - started, 1e-9) * 60
                 print(f"  [{done:6d}/{len(todo)}] {rate:.0f}/min, "
                       f"over-length text {overlong}", flush=True)
+        progress.rc = 3 if failed else 0
 
     runlog.cost_ledger(wallclock_s=round(time.time() - started, 1),
                        # [FIXED 2026-08-24] Was `done * 11`; the live artifact
                        # carries 12 views. Read it off the renderer rather than
                        # restating a literal that a version bump can strand.
                        assets_encoded=done, views_encoded=done * LIVE_N_VIEWS)
-    print(f"\n{done:,} encoded, {overlong:,} "
+    print(f"\n{done:,} encoded, {failed:,} failed, {overlong:,} "
           + ("TRUNCATED at" if TRUNCATE_OVERLONG else "REFUSED for exceeding ") + " "
           f"{TEXT_CONTEXT_LENGTH} true tokens -> {paths.EMBEDDINGS}")
-    return 0
+    return progress.rc
 
 
 if __name__ == "__main__":

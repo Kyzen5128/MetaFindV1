@@ -148,6 +148,7 @@ def load_stage2_protocols() -> tuple[dict, dict, dict]:
     stage2 = read("stage2_protocol.json", "n09b_resolve_stage2_protocol")
     edge = read("essgnn_edge_protocol.json", "n09b_resolve_stage2_protocol")
     arch = read("essgnn_arch_protocol.json", "n09b_resolve_stage2_protocol")
+    validate_graph_unit(stage2.get("graph_unit"))
 
     # These decisions are implemented as fixed code in this module and in
     # build_context_graph / ESSGNN, not read from the protocol at run time.
@@ -212,7 +213,116 @@ def load_stage2_protocols() -> tuple[dict, dict, dict]:
     return stage2, edge, arch
 
 
-def enumerate_samples(train_houses: list[str], eligible: set[str]) -> list[tuple[str, int, str]]:
+def validate_graph_unit(graph_unit: str) -> None:
+    if graph_unit not in ("room", "house"):
+        raise ValueError(f"Stage 2 requires an explicit graph_unit of 'room' or "
+                         f"'house', got {graph_unit!r}")
+
+
+def validate_graph_scope(graph: dict, graph_unit: str, label: str = "graph") -> None:
+    """Legacy sidecars are usable only under an explicitly selected house scope."""
+    validate_graph_unit(graph_unit)
+    actual = graph.get("graph_unit")
+    legacy_house = (actual is None and graph.get("builder_version", 1) == 1)
+    if actual != graph_unit and not (graph_unit == "house" and legacy_house):
+        raise ValueError(f"{label} graph_unit={actual!r} disagrees with Stage 2 "
+                         f"graph_unit={graph_unit!r}; rebuild the graph inputs or "
+                         "explicitly select the legacy house protocol")
+
+
+_STAGE2_INPUT_FILES = {
+    "stage2": "stage2_protocol.json", "edge": "essgnn_edge_protocol.json",
+    "arch": "essgnn_arch_protocol.json", "scene_splits": "scene_splits.json",
+    "positive_map": "stage2_positive_map.json", "object_text": "procthor_object_text.json",
+    "node_record": "procthor_node_embeddings.json", "semantic_cache": "sem_edge_cache.json",
+    "semantic_embeddings": "sem_edge_embeddings.npz", "gallery_record": "stage2_gallery_index.json",
+}
+
+
+def capture_stage2_input_identity(stage2: dict, edge: dict, arch: dict,
+                                  train_houses: list[str]) -> dict:
+    """Bind the input bytes before loading arrays; verify again after loading.
+
+    Paths identify replay sources, while digests detect replacements at the same
+    paths. Ordered house IDs preserve the split prefix selected by --limit-houses.
+    Protocol snapshots allow consumers to reconstruct the run without substituting
+    whatever protocols happen to be in their current environment.
+    """
+    def identity(path):
+        path = Path(path).absolute()
+        return {"uri": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+
+    protocol_names = {"stage2": "stage2_protocol.json",
+                      "edge": "essgnn_edge_protocol.json",
+                      "arch": "essgnn_arch_protocol.json"}
+    protocols = {"stage2": stage2, "edge": edge, "arch": arch}
+    for name, filename in protocol_names.items():
+        if json.loads((paths.OUTPUTS / filename).read_text()) != protocols[name]:
+            raise ValueError(f"{filename} changed after the protocol was loaded")
+    files = {name: paths.OUTPUTS / filename for name, filename in _STAGE2_INPUT_FILES.items()}
+    node = json.loads(files["node_record"].read_text())
+    files["node_embeddings"] = Path(node["uri"])
+    split_houses = json.loads(files["scene_splits"].read_text())["train_houses"]
+    if list(train_houses) != split_houses[:len(train_houses)]:
+        raise ValueError("scene_splits changed after the training house prefix was selected")
+    return {"version": 1, "graph_unit": stage2["graph_unit"],
+            "train_houses": list(train_houses),
+            "protocols": json.loads(json.dumps(protocols)),
+            "artifacts": {name: identity(path) for name, path in files.items()},
+            "graphs": {house: identity(paths.SCENE_GRAPHS / f"{house}.json")
+                       for house in train_houses},
+            "modality_records_root": str(paths.PROCTHOR_MODALITIES.absolute()),
+            "modality_records": {path.stem: identity(path)
+                                 for path in sorted(paths.PROCTHOR_MODALITIES.glob("*.json"))}}
+
+
+def verify_stage2_input_identity(record: dict, *, current_inputs: bool = False) -> dict:
+    """Validate a new Stage 2 record's replay inputs; legacy records must opt out.
+
+    This is also called between loading the training inputs and the first forward,
+    so a concurrently rewritten cache cannot be saved under a stale identity.
+    """
+    identity = record.get("input_identity")
+    if not isinstance(identity, dict) or identity.get("version") != 1:
+        raise ValueError("Stage 2 checkpoint has no supported input_identity; "
+                         "legacy replay must be selected explicitly")
+    validate_graph_unit(identity.get("graph_unit"))
+    if current_inputs:
+        # Stage2Data reads paths.OUTPUTS, not the archived paths in this record.
+        # Verifying an intact old data root must not authorize loading a new one.
+        expected = {name: paths.OUTPUTS / filename
+                    for name, filename in _STAGE2_INPUT_FILES.items()}
+        expected["node_embeddings"] = Path(json.loads(
+            (paths.OUTPUTS / "procthor_node_embeddings.json").read_text())["uri"])
+        for name, path in expected.items():
+            if Path(identity["artifacts"][name]["uri"]).resolve() != path.resolve():
+                raise ValueError(f"Stage 2 current input path differs from its record: {name}")
+        for house, artifact in identity["graphs"].items():
+            if Path(artifact["uri"]).resolve() != (paths.SCENE_GRAPHS / f"{house}.json").resolve():
+                raise ValueError(f"Stage 2 current graph path differs from its record: {house}")
+        if Path(identity["modality_records_root"]).resolve() != paths.PROCTHOR_MODALITIES.resolve():
+            raise ValueError("Stage 2 current modality record root differs from its record")
+    if set(identity["graphs"]) != set(identity["train_houses"]):
+        raise ValueError("Stage 2 input_identity does not cover its train_houses")
+    current_modalities = {path.stem for path in
+                          Path(identity["modality_records_root"]).glob("*.json")}
+    if current_modalities != set(identity["modality_records"]):
+        raise ValueError("Stage 2 modality record membership changed since it was recorded")
+    for group in ("artifacts", "graphs", "modality_records"):
+        for name, artifact in identity[group].items():
+            verify_recorded_artifact(artifact, f"Stage 2 {group}/{name}",
+                                     "Restore the recorded input bytes before replay.")
+    for name, protocol in identity["protocols"].items():
+        path = Path(identity["artifacts"][name]["uri"])
+        if json.loads(path.read_text()) != protocol:
+            raise ValueError(f"Stage 2 {name} protocol snapshot disagrees with its artifact")
+    if identity["protocols"]["stage2"]["graph_unit"] != identity["graph_unit"]:
+        raise ValueError("Stage 2 input_identity graph_unit disagrees with its protocol")
+    return identity
+
+
+def enumerate_samples(train_houses: list[str], eligible: set[str], *,
+                      graph_unit: str = "room") -> list[tuple[str, int, str]]:
     """[U-08d] Every eligible instance of every train house, enumerated ONCE.
 
     Returns ``(house_id, node_index, asset_id)``. The enumeration is written
@@ -223,9 +333,8 @@ def enumerate_samples(train_houses: list[str], eligible: set[str]) -> list[tuple
     samples = []
     for house_id in train_houses:
         path = paths.SCENE_GRAPHS / f"{house_id}.json"
-        if not path.exists():
-            continue
         graph = json.loads(path.read_text())
+        validate_graph_scope(graph, graph_unit, str(path))
         for node in graph["nodes"]:
             asset_id = str(node["asset_id"])
             if asset_id in eligible:
@@ -291,7 +400,7 @@ def unique_positive_batches(samples: list[tuple[str, int, str]], batch_size: int
 
 
 def build_context_graph(graph: dict, target_index: int, edge_dim: int,
-                        sem_cache: dict, text_map: dict):
+                        sem_cache: dict, text_map: dict, *, graph_unit: str = "room"):
     """[U-08d] The house graph MINUS the target.
 
     Node indices are remapped because ESSGNN indexes edges positionally; leaving
@@ -312,9 +421,9 @@ def build_context_graph(graph: dict, target_index: int, edge_dim: int,
     # [DL-103, scene_graphs BUILDER_VERSION 2] Under a room-unit graph the context is the
     # target's ROOM minus the target (paper: room-level scenes). A target whose room could
     # not be parsed gets no context, which encode_query treats as layout absent. Legacy
-    # house-unit graphs (builder_version 1, no `graph_unit`) keep the whole house, so
-    # earlier checkpoints and probes evaluate exactly as before.
-    if graph.get("graph_unit") == "room":
+    # house-unit graphs require an explicitly selected house protocol.
+    validate_graph_scope(graph, graph_unit)
+    if graph_unit == "room":
         room = graph["nodes"][target_index].get("room_id")
         keep = [n for n in graph["nodes"]
                 if n["index"] != target_index and room is not None and n.get("room_id") == room]
@@ -481,7 +590,8 @@ def encode_query(model, graph: dict, target_index: int, asset_id: str,
     # raises on a tower built without the branch.
     if not drop_layout and model.query.layout_encoder is not None:
         keep, pos, edge_index, edge_attr, edge_missing = build_context_graph(
-            graph, target_index, data.edge_dim, data.sem_cache, data.text_map)
+            graph, target_index, data.edge_dim, data.sem_cache, data.text_map,
+            graph_unit=data.graph_unit)
         # [P1] `keep` alone, NOT `keep and edges > 0`. A context of one object,
         # or of several with no cached relation between them, is still a
         # context: with E=0 every message sum is empty, the layers reduce to the
@@ -517,8 +627,12 @@ class Stage2Data:
     found them, not the interpreter.
     """
 
-    def __init__(self, device: str) -> None:
+    def __init__(self, device: str, *, graph_unit: str = "room") -> None:
         import numpy as np
+        from metafind.data.semantic_edges import relation_text_for
+
+        validate_graph_unit(graph_unit)
+        self.graph_unit = graph_unit
 
         # Filled by main from the Stage 2 gallery index: asset_id -> the frozen
         # backbone's text / image / pc vectors. See load_asset_modality_vectors.
@@ -576,7 +690,9 @@ class Stage2Data:
             self.sem_cache[key] = vecs[row]
 
         text = json.loads((paths.OUTPUTS / "procthor_object_text.json").read_text())
-        self.text_map = {a: rec["text"] for a, rec in text.items()}
+        # Relation cache descriptions and node-encoder text are separate inputs.
+        # Node vectors above retain rec["text"]; cache lookup follows its producer.
+        self.text_map = {a: relation_text_for(rec) for a, rec in text.items()}
         self.text_map["_meta"] = {
             "prompt_version": cache["prompt_version"],
             "llm_model": cache["llm_model"],
@@ -692,9 +808,13 @@ class Stage2Data:
                 "run's own load, above.")
 
     def graphs_for(self, house_ids) -> dict:
-        return {h: json.loads((paths.SCENE_GRAPHS / f"{h}.json").read_text())
-                for h in house_ids
-                if (paths.SCENE_GRAPHS / f"{h}.json").exists()}
+        graphs = {}
+        for house in house_ids:
+            path = paths.SCENE_GRAPHS / f"{house}.json"
+            graph = json.loads(path.read_text())
+            validate_graph_scope(graph, self.graph_unit, str(path))
+            graphs[house] = graph
+        return graphs
 
 
 def load_asset_modality_vectors(gallery_index, declared=("text", "image", "pc"),
@@ -713,7 +833,7 @@ def load_asset_modality_vectors(gallery_index, declared=("text", "image", "pc"),
     (rebuild the index) instead of hiding a days-long slowdown.
     """
     declared = tuple(declared)
-    missing = [k for k in declared if k not in gallery_index.files]
+    missing = [k for k in declared if k not in gallery_index]
     if missing:
         raise ValueError(
             f"the Stage 2 gallery index has no raw modality arrays {missing}. "
@@ -730,6 +850,19 @@ def trainable_state_dict(model) -> dict:
     Stage 2 has ELEVEN variants, so a whole-state_dict save is 112 GB."""
     return {name: p.detach().cpu()
             for name, p in model.named_parameters() if p.requires_grad}
+
+
+def stage2_checkpoint_payload(model, loss_fn, record: dict) -> dict:
+    """Bind reconstruction and input provenance to the checkpoint's own bytes."""
+    # The checkpoint may be archived without changing its bytes. Its location
+    # and the digest/size of the finished payload belong only in the sidecar.
+    metadata = {key: value for key, value in record.items()
+                if key not in {"uri", "sha256", "size_bytes"}}
+    return {"trainable_state": trainable_state_dict(model),
+            "loss_trainable_state": trainable_state_dict(loss_fn),
+            "trainer_version": TRAINER_VERSION,
+            "variant": record["variant_id"],
+            "metadata": json.loads(json.dumps(metadata))}
 
 
 def freeze_for_stage2(model, backbone, query_modality_masking: str = "none",
@@ -822,11 +955,12 @@ def load_variant(variant_id: str, ckpt_record: dict, *, training: dict | None = 
             "wrong label on a real result.")
 
     # Stage 1 fields: verify, do not apply.
-    if variant["train_scope"] and variant["train_scope"] != ckpt_record["train_scope"]:
+    parent_scope = (training or {}).get("train_scope", ckpt_record.get("train_scope"))
+    if variant["train_scope"] and variant["train_scope"] != parent_scope:
         raise ValueError(
             f"variant {variant_id!r} needs a Stage 1 checkpoint trained with "
             f"train_scope={variant['train_scope']!r}, but stage1_ckpt records "
-            f"{ckpt_record['train_scope']!r}. Re-run n10 for this variant.")
+            f"{parent_scope!r}. Re-run n10 for this variant.")
     # The other three Stage 1 fields were named in the docstring as checked
     # and were not: a `fusion_mean` run built the transformer fusion from the
     # Stage 1 protocol, restored the transformer checkpoint, trained, and
@@ -874,10 +1008,9 @@ def build_stage2_model(encoding: dict, training: dict, hyperparameters: dict,
     """
     from metafind.models.dual_tower import DualTowerConfig, MetaFindDualTower
     from metafind.models.essgnn import ESSGNNConfig
-    from metafind.models.fusion import FusionConfig
     from metafind.models.ulip_backbone import EMBED_DIM
+    from metafind.train.stage1 import fusion_config_for
 
-    zero_pad = encoding["missing_modality_representation"] == "zero_pad"
     # [BUG FIX 2026-09-04] The Stage 2 tower must be the Stage 1 tower plus the
     # layout branch -- same FusionConfig, or the Stage 1 weights are loaded into
     # a fusion that pre-processes its inputs differently. This built
@@ -889,9 +1022,8 @@ def build_stage2_model(encoding: dict, training: dict, hyperparameters: dict,
     # path, which calls this builder, scored that head the same wrong way
     # (protocol C pc-only 17.0 against the parent's 86.1). Mirror
     # stage1.build_model exactly.
-    fusion = FusionConfig(kind=training["fusion"], dim=EMBED_DIM, zero_pad=zero_pad,
-                          prefusion_norm=bool(training.get("prefusion_norm", False)),
-                          image_tokens=int(training.get("image_tokens", 1)))
+    fusion = fusion_config_for(encoding, training)
+    gallery_fusion = fusion_config_for(encoding, training, gallery=True)
     essgnn = ESSGNNConfig.from_protocol(
         arch_proto,
         # MEASURED from n08's artifacts, NOT read from a protocol. An earlier
@@ -911,7 +1043,7 @@ def build_stage2_model(encoding: dict, training: dict, hyperparameters: dict,
     )
     return MetaFindDualTower(DualTowerConfig(
         dim=EMBED_DIM, tower_sharing=training["tower_sharing"],
-        query_fusion=fusion, gallery_fusion=fusion,
+        query_fusion=fusion, gallery_fusion=gallery_fusion,
         # [Table 3] "w/o Layout Context" is this flag. It is the one ablation
         # field Stage 2 owns; the rest were fixed when n10 trained the towers.
         use_layout=use_layout, essgnn=essgnn if use_layout else None,
@@ -930,6 +1062,9 @@ def main() -> int:
     ap.add_argument("--stage1-ckpt-record", default=None,
                     help="Stage 1 checkpoint record to initialise from. "
                          "Defaults to the canonical stage1_ckpt.json.")
+    ap.add_argument("--allow-legacy-gallery-index", action="store_true",
+                    help="explicitly accept a v1 encoder hash after checking the "
+                         "parent configuration; v1 cannot prove producer forward flags")
     # Stage 2's training recipe (optimizer, learning rate, weight decay, batch
     # size, epochs, seed, temperature, scene dropout) used to be read from the
     # STAGE 1 hyperparameter artifact without anyone saying so: the paper gives
@@ -963,10 +1098,12 @@ def main() -> int:
     # Found by MASTER, confirmed here by grep: two hits for the name in this
     # file, both at the call site, zero in any import.
     from metafind.train.stage1 import (
-        build_model, load_protocols, load_stage1_checkpoint)
+        effective_stage1_model_inputs, load_protocols, load_stage1_checkpoint,
+        load_stage1_model_config, model_input_snapshot, stage1_backbone_kwargs)
     from metafind.models.losses import ContrastiveConfig, MetaFindContrastiveLoss
     from metafind.models.ulip_backbone import (
         BackboneConfig, ULIPBackbone, prepare_depth_shell)
+    from metafind.train.gallery_index import verified_stage2_index, verify_gallery_encoder
 
     # Stage 1's encoding and training protocols still decide the fusion
     # architecture Stage 2 restores into; only the RECIPE comes from the file
@@ -1008,6 +1145,12 @@ def main() -> int:
           + ("  (this is the STAGE 1 artifact: Stage 2 recipe not yet decided, "
              "inheriting Stage 1's values)" if hp_is_stage1 else ""), flush=True)
 
+    scene_splits = json.loads((paths.OUTPUTS / "scene_splits.json").read_text())
+    train_houses = scene_splits["train_houses"]
+    if args.limit_houses:
+        train_houses = train_houses[: args.limit_houses]
+    input_identity = capture_stage2_input_identity(stage2, edge_proto, arch_proto, train_houses)
+
     positive_map = json.loads((paths.OUTPUTS / "stage2_positive_map.json").read_text())
     index_record = json.loads((paths.OUTPUTS / "stage2_gallery_index.json").read_text())
     # [CODEX MAJOR 2026-08-30] See gallery_index.load_checkpoint_record: a
@@ -1015,6 +1158,9 @@ def main() -> int:
     # being copied over the canonical name.
     ckpt = json.loads(Path(getattr(args, "stage1_ckpt_record", None)
                            or paths.CHECKPOINTS / "stage1_ckpt.json").read_text())
+    ckpt = load_stage1_model_config(ckpt["uri"], ckpt)
+    encoding, training, _stage1_hyperparameters = effective_stage1_model_inputs(
+        ckpt, encoding, training, _stage1_hyperparameters)
 
     # [G6] The index must come from the checkpoint this run loads. Comparing
     # here as well as at the gate: a gate verdict is a record of the past, and
@@ -1040,6 +1186,10 @@ def main() -> int:
     # pc-absent query against pc-bearing gallery vectors. An index written before
     # the field is read as all three.
     asset_modalities = tuple(stage2["asset_modalities"])
+    if training["tower_sharing"] == "fully_separate" and "pc" in asset_modalities:
+        raise ValueError("Stage 2 gallery caches do not contain the separate query "
+                         "point path; fully_separate Stage 2 requires cached query "
+                         "point vectors before point-cloud modalities can be used")
     index_declared = tuple(index_record.get("modality_completeness", {})
                            .get("declared_modalities", ["text", "image", "pc"]))
     if index_declared != asset_modalities:
@@ -1058,35 +1208,34 @@ def main() -> int:
     # the record was written still loaded, while the record went on claiming the
     # old digest AND the producer checkpoint -- so the linkage check above would
     # pass over bytes neither of them describes.
-    index_path = verify_recorded_artifact(
-        index_record, "gallery index", "Rebuild the index (n11).")
+    gallery_ids, gallery_embeddings, gallery_index = verified_stage2_index(
+        index_record, ckpt["sha256"], asset_modalities)
+    id_to_row = {a: i for i, a in enumerate(gallery_ids)}
+    gallery_vecs = torch.from_numpy(gallery_embeddings).to(args.device)
 
-    gallery_index = np.load(index_path)
-    id_to_row = {a: i for i, a in enumerate(gallery_index["ids"].tolist())}
-    gallery_vecs = torch.from_numpy(gallery_index["embeddings"]).to(args.device)
-
-    scene_splits = json.loads((paths.OUTPUTS / "scene_splits.json").read_text())
-    train_houses = scene_splits["train_houses"]
-    if args.limit_houses:
-        train_houses = train_houses[: args.limit_houses]
-
-    data = Stage2Data(args.device)
+    data = Stage2Data(args.device, graph_unit=stage2["graph_unit"])
     data.asset_vectors = load_asset_modality_vectors(gallery_index, asset_modalities)
     eligible = set(positive_map) & set(id_to_row) & set(data.modalities)
-    samples = enumerate_samples(train_houses, eligible)
+    samples = enumerate_samples(train_houses, eligible, graph_unit=stage2["graph_unit"])
     if not samples:
         print("no eligible sample; check stage2_positive_map and the gallery index",
               flush=True)
         return 2
 
+    graphs = data.graphs_for({h for h, _, _ in samples})
+    verify_stage2_input_identity({"input_identity": input_identity}, current_inputs=True)
+
     seed = values["seed"]
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
 
-    # [P0-1] point_encoder_and_fuser so the checkpoint's fine-tuned PointBERT
-    # has somewhere to land; freeze_for_stage2 turns it off afterwards.
+    # Restore the parent's actual trainable subset. A fuser-only checkpoint has
+    # no fine-tuned point state; requiring it would reject a valid parent.
     backbone = ULIPBackbone(BackboneConfig(device=args.device,
-                                           train_scope="point_encoder_and_fuser"))
+                                           train_scope=training["train_scope"],
+                                           **stage1_backbone_kwargs(ckpt)))
+    backbone_q = (backbone.clone_point_path()
+                  if training["tower_sharing"] == "fully_separate" else None)
     # [P0-3] build_stage2_model, NOT Stage 1's build_model. Stage 1 builds with
     # use_layout=False -- correct there, since 2.6 puts ESSGNN in Stage 2 -- so
     # reusing it here left query.layout_encoder as None while encode_query below
@@ -1116,6 +1265,8 @@ def main() -> int:
         learnable_temperature=values["learnable_temperature"],
         init_temperature=values["init_temperature"],
         max_logit_scale=values["max_logit_scale"]))
+    if training["freeze_gallery"]:
+        model.freeze_gallery(True)
 
     # Restore into all three, INCLUDING loss_fn: Stage 1's learned temperature
     # carries into Stage 2 as its initialisation. The paper says nothing about
@@ -1142,11 +1293,19 @@ def main() -> int:
                            # disagreed in review -- they are different tests of
                            # the same name and only one of them was wrong.
                            new_prefixes=("query.layout_encoder",
-                                         "query.layout_weight"))
+                                         "query.layout_weight"),
+                           query_backbone=backbone_q)
     model.to(args.device)
     loss_fn.to(args.device)
     grads = freeze_for_stage2(model, backbone, query_modality_masking=query_masking,
                               asset_modalities=asset_modalities)
+    if backbone_q is not None:
+        backbone_q.set_train_scope("fuser_only")
+        if not backbone_q.is_frozen():
+            raise RuntimeError("the restored query point backbone is not frozen in Stage 2")
+    verify_gallery_encoder(index_record, backbone, model, parent_checkpoint=ckpt,
+                           allow_legacy=args.allow_legacy_gallery_index,
+                           declared_modalities=asset_modalities)
 
     # Same optimizer construction as Stage 1: ULIP's rule puts biases, norms
     # and every 0-/1-D tensor (that includes Eq. 6's lambda and the missing-
@@ -1179,8 +1338,6 @@ def main() -> int:
             "query_modality_masking none: the rows never selected (text, image) "
             "have an exactly-zero gradient and would only shrink. Set it false "
             "in the Stage 2 hyperparameters or mask those modalities too.")
-
-    graphs = data.graphs_for({h for h, _, _ in samples})
 
     # Eq. 6's lambda_0, derived AFTER the checkpoint is restored and BEFORE the
     # first optimizer step, so the norm it is a tenth of is this run's own.
@@ -1322,9 +1479,22 @@ def main() -> int:
                 # What this run actually trained with, so a later reader does
                 # not have to guess which artifact supplied the recipe.
                 "stage1_checkpoint_sha256": ckpt["sha256"],
+                "stage1_checkpoint_uri": str(ckpt["uri"]),
+                "stage1_model_inputs": model_input_snapshot(
+                    encoding, training, _stage1_hyperparameters, model),
                 "gallery_index_sha256": index_record["sha256"],
+                "allow_legacy_gallery_index": args.allow_legacy_gallery_index,
+                "layout_input_dims": {"node_feat_dim": data.node_dim,
+                                      "edge_feat_dim": data.edge_dim},
+                "graph_unit": stage2["graph_unit"],
+                "stage2_protocol": input_identity["protocols"]["stage2"],
+                "edge_protocol": input_identity["protocols"]["edge"],
+                "input_identity": input_identity,
+                "samples_sha256": hashlib.sha256(
+                    json.dumps(samples, separators=(",", ":")).encode()).hexdigest(),
                 "hyperparameters_uri": str(hp_path),
                 "hyperparameters_sha256": hp_sha256,
+                "hyperparameters": hyperparameters,
                 "hyperparameters_are_stage1_artifact": hp_is_stage1,
                 "effective_values": {
                     "learning_rate": values["learning_rate"],
@@ -1360,12 +1530,6 @@ def main() -> int:
         # loss_fn.parameters() -- and saving only `model` trained it all run and
         # then dropped it. Nothing errors; the file is simply missing a tensor
         # that moved.
-        torch.save({"trainable_state": trainable_state_dict(model),
-                    "loss_trainable_state": trainable_state_dict(loss_fn),
-                    "trainer_version": TRAINER_VERSION,
-                    "variant": args.variant}, record["uri"])
-        record["sha256"] = hashlib.sha256(Path(record["uri"]).read_bytes()).hexdigest()
-        record["size_bytes"] = Path(record["uri"]).stat().st_size
         record["arch_protocol"] = {k: arch_proto[k] for k in sorted(arch_proto)
                                    if not k.startswith("decided")}
         # [AUDIT 2026-09-04 D-2] h0_mode, coords_agg, edge_proj_dim and
@@ -1377,6 +1541,9 @@ def main() -> int:
         record["code_revision"] = runlog.code_revision()
         record["code_dirty"] = runlog.code_dirty()
         record["steps"] = step
+        torch.save(stage2_checkpoint_payload(model, loss_fn, record), record["uri"])
+        record["sha256"] = hashlib.sha256(Path(record["uri"]).read_bytes()).hexdigest()
+        record["size_bytes"] = Path(record["uri"]).stat().st_size
         # The record used to be built, printed and dropped: a stage2_<variant>.pt
         # existed on disk with nothing saying which checkpoint, index, recipe,
         # seed or arch protocol produced it. Written per variant, merged into

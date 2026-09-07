@@ -45,7 +45,7 @@ import math
 import os
 import random
 import time
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -1755,6 +1755,11 @@ def arm_config_hash(values: dict, training: dict, encoding: dict,
     # recorded before the key existed as well as for new ones.
     if query_construction:
         resolved["query_construction"] = query_construction
+    # These affect the observations consumed by training even without a pack.
+    # Keep explicit values (including defaults) in new experiment identities.
+    resolved["query_observation"] = training.get("_query_observation", "same_record")
+    resolved["query_image_policy"] = training.get("_query_image_policy", "same_mean")
+    resolved["query_pc_perturb"] = training.get("_query_pc_perturb", "none")
     blob = json.dumps(resolved, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode()).hexdigest(), resolved
 
@@ -2136,6 +2141,12 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         "tower_trainable_state": trainable_state_dict(model),
         "loss_trainable_state": trainable_state_dict(loss_fn),
     }
+    if training.get("freeze_gallery"):
+        # A frozen randomly initialized fuser cannot be reconstructed from the
+        # pretrained backbone. Save its state even though it has no optimizer.
+        sections["tower_trainable_state"].update({
+            f"gallery.{name}": value.detach().cpu().clone()
+            for name, value in model.gallery.state_dict().items()})
     if query_backbone is not None:
         # [P13] the query tower's own point path; absent = one shared path
         sections["query_backbone_trainable_state"] = trainable_state_dict(query_backbone.model)
@@ -2157,7 +2168,8 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         # by side invited a reader to treat one of them as the experiment's
         # identity, which neither is -- `arm_config_hash` below is.
         "base_hyperparameter_sha256": training["hyperparameter_config_hash"],
-        "checkpoint_schema": 4,
+        "checkpoint_schema": 5,
+        "model_inputs": model_input_snapshot(encoding, training, hyperparameters, model),
         "seed": seed,
         "epoch": epoch,
         # [ULIP2 ENGINEER 2026-08-29, approved by MASTER as a bug fix] This
@@ -2183,6 +2195,7 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         # after --lr / --epochs / --lr-horizon. Resolved values stored beside
         # the digest so the run is readable without recomputing it.
         "arm_config_hash": training["_arm_config_hash"],
+        "arm_config_version": 2,
         "arm_config": training["_arm_config"],
         # [CODEX MAJOR 2026-08-30] R-33's run record asked for these and the
         # first version shipped without them. `repeat_index` is what makes two
@@ -2233,7 +2246,8 @@ def save_checkpoint(backbone, model, loss_fn, hyperparameters: dict,
         "tower_sharing": training.get("tower_sharing", "shared_backbone_separate_fusion"),
         "gallery_fusion": training.get("gallery_fusion") or training.get("fusion"),
         "freeze_gallery": bool(training.get("freeze_gallery", False)),
-        "trainable_only": True,
+        "trainable_only": not bool(training.get("freeze_gallery", False)),
+        "tower_state_includes_frozen_gallery": bool(training.get("freeze_gallery", False)),
         "n_params_saved": int(n_params),
         "n_params_by_section": {k: int(sum(v.numel() for v in s.values()))
                                 for k, s in sections.items()},
@@ -2324,6 +2338,25 @@ def assert_checkpoint_covers_optimizer(backbone, model, loss_fn, sections: dict,
             f"module the checkpoint serialises {CKPT_SECTIONS}")
 
 
+def load_stage1_tower_state(model, state: dict, *, new_prefixes: tuple[str, ...] = ()) -> None:
+    """Restore the tower, including any frozen fuser that cannot be reinitialized."""
+    _, unexpected = model.load_state_dict(state, strict=False)
+    if unexpected:
+        raise ValueError(f"tower_trainable_state holds unexpected keys: {sorted(unexpected)[:5]}")
+    expected = {name for name, p in model.named_parameters() if p.requires_grad}
+    owners = _submodules_with_trainable_params(model)
+    expected |= {name for name, _ in model.named_buffers() if _owner(name) in owners}
+    gallery = getattr(model, "gallery", None)
+    if gallery is not None and not any(p.requires_grad for p in gallery.parameters()):
+        if gallery.fusion.cfg.kind != "mean":
+            expected |= {f"gallery.{name}" for name in gallery.state_dict()}
+    missing = {name for name in expected - set(state)
+               if not new_prefixes or not name.startswith(new_prefixes)}
+    if missing:
+        raise ValueError(f"tower_trainable_state does not cover {len(missing)} required "
+                         f"parameter(s), e.g. {sorted(missing)[:5]}")
+
+
 def load_stage1_checkpoint(backbone, model, loss_fn, path=None,
                            new_prefixes: tuple[str, ...] = (),
                            query_backbone=None) -> dict:
@@ -2352,6 +2385,21 @@ def load_stage1_checkpoint(backbone, model, loss_fn, path=None,
             "silently dropped the fine-tuned point encoder; they cannot be "
             "upgraded, only retrained.")
 
+    metadata = ckpt.get("metadata")
+    if isinstance(metadata, dict):
+        validate_stage1_forward_config(model, metadata)
+        backbone_config = getattr(backbone, "cfg", None)
+        if backbone_config is not None and hasattr(backbone_config, "checkpoint"):
+            source = (metadata.get("initializers") or {}).get("ulip2") or {}
+            expected_sha = source.get("sha256")
+            if not expected_sha:
+                raise ValueError("Stage 1 checkpoint lacks its backbone initializer sha256")
+            with Path(backbone_config.checkpoint).open("rb") as fh:
+                actual_sha = hashlib.file_digest(fh, "sha256").hexdigest()
+            if actual_sha != expected_sha:
+                raise ValueError("loaded backbone initializer differs from Stage 1; "
+                                 "construct it with stage1_backbone_kwargs(record)")
+
     # [P13] a checkpoint trained with two point paths must be restored into
     # two, and one trained with one must not be handed a second: either
     # mismatch would score a tower the run never trained.
@@ -2368,6 +2416,9 @@ def load_stage1_checkpoint(backbone, model, loss_fn, path=None,
         pairs.append(("query_backbone_trainable_state", query_backbone.model))
     for section, module in pairs:
         state = ckpt[section]
+        if section == "tower_trainable_state":
+            load_stage1_tower_state(model, state, new_prefixes=new_prefixes)
+            continue
         _, unexpected = module.load_state_dict(state, strict=False)
         if unexpected:
             raise ValueError(f"{section} holds keys {module} does not have: "
@@ -2392,10 +2443,221 @@ def load_stage1_checkpoint(backbone, model, loss_fn, path=None,
     return ckpt
 
 
+def fusion_config_for(encoding: dict, training: dict, *, gallery: bool = False):
+    """Resolve the forward configuration without allocating model weights."""
+    from metafind.models.fusion import FusionConfig
+    from metafind.models.ulip_backbone import EMBED_DIM
+
+    config_key = "gallery_fusion_config" if gallery else "query_fusion_config"
+    if config_key in training:
+        return FusionConfig(**training[config_key])
+    kind = (training.get("gallery_fusion") or training["fusion"]
+            if gallery else training["fusion"])
+    return FusionConfig(
+        kind=kind, dim=EMBED_DIM,
+        zero_pad=encoding["missing_modality_representation"] == "zero_pad",
+        prefusion_norm=bool(training.get("prefusion_norm", False)),
+        image_tokens=int(training.get("image_tokens", 1)))
+
+
+def model_input_snapshot(encoding: dict, training: dict, hyperparameters: dict,
+                         model) -> dict:
+    """Persist values that affect reconstruction, including parameter-free flags."""
+    selected = {k: copy.deepcopy(training[k]) for k in (
+        "fusion", "tower_sharing", "train_scope", "gallery_fusion",
+        "freeze_gallery", "prefusion_norm", "image_tokens") if k in training}
+    # Read the actual module configurations, rather than a second set of defaults.
+    for side in ("query", "gallery"):
+        fusion = getattr(getattr(model, side, None), "fusion", None)
+        if fusion is not None and hasattr(fusion, "cfg"):
+            selected[f"{side}_fusion_config"] = asdict(fusion.cfg)
+    return {"version": 1, "encoding": copy.deepcopy(encoding),
+            "training": selected,
+            "hyperparameter_values": copy.deepcopy(hyperparameters.get("values", {})),
+            "loss_values": {k: hyperparameters.get("values", {})[k]
+                            for k in ("learnable_temperature", "init_temperature",
+                                      "max_logit_scale")
+                            if k in hyperparameters.get("values", {})}}
+
+
+def validate_stage1_forward_config(model, record: dict) -> None:
+    """Make older direct loader callers fail clearly on silent protocol drift."""
+    if not hasattr(getattr(model, "query", None), "fusion"):
+        return
+    encoding, training, _ = effective_stage1_model_inputs(
+        record, {}, {}, {"values": {}})
+    for side in ("query", "gallery"):
+        expected = fusion_config_for(encoding, training, gallery=side == "gallery")
+        actual = getattr(model, side).fusion.cfg
+        if asdict(actual) != asdict(expected):
+            raise ValueError(f"{side} fusion configuration differs from Stage 1; "
+                             "construct it with effective_stage1_model_inputs(record, ...)")
+
+
+def effective_stage1_model_inputs(record: dict, encoding: dict, training: dict,
+                                  hyperparameters: dict) -> tuple[dict, dict, dict]:
+    """Restore a checkpoint's recipe; current protocols cannot redefine its model.
+
+    Legacy records bind the effective values in ``arm_config``. Their omitted
+    optional flags use the historical code defaults, never today's protocol.
+    Missing core architecture information is an error, not an inferred recipe.
+    """
+    enc, tr, hp = map(copy.deepcopy, (encoding, training, hyperparameters))
+    snapshot = record.get("model_inputs")
+    arm = record.get("arm_config") or {}
+    # Variant compatibility (e.g. p_mask) also belongs to the parent recipe.
+    for field in hp.get("values", {}):
+        if field in arm:
+            hp["values"][field] = copy.deepcopy(arm[field])
+    if snapshot is not None:
+        if snapshot.get("version") != 1:
+            raise ValueError("unsupported Stage 1 model_inputs version")
+        bound_e = copy.deepcopy(snapshot["encoding"])
+        bound_t = copy.deepcopy(snapshot["training"])
+        bound_loss = snapshot["loss_values"]
+        hp.setdefault("values", {}).update(snapshot.get("hyperparameter_values", {}))
+    else:
+        arm = record.get("arm_config")
+        if not isinstance(arm, dict):
+            raise ValueError("Stage 1 checkpoint has no bound model_inputs or arm_config")
+        bound_e = {k[len("encoding."):]: v for k, v in arm.items()
+                   if k.startswith("encoding.")}
+        bound_t = {k[len("training."):]: v for k, v in arm.items()
+                   if k.startswith("training.")}
+        bound_loss = {k: arm[k] for k in (
+            "learnable_temperature", "init_temperature", "max_logit_scale") if k in arm}
+        bound_t.setdefault("train_scope", arm.get(
+            "train_scope", record.get("train_scope", "point_encoder_and_fuser")))
+    for key, default in (("prefusion_norm", False), ("image_tokens", 1),
+                         ("freeze_gallery", False),
+                         ("train_scope", "point_encoder_and_fuser")):
+        bound_t.setdefault(key, record.get(key, default))
+    for key in ("tower_sharing", "gallery_fusion"):
+        if key not in bound_t and key in record:
+            bound_t[key] = record[key]
+    bound_t.setdefault("gallery_fusion", bound_t.get("fusion"))
+    if "actual_clip_train_scope" not in bound_e and "clip_train_scope" in record:
+        bound_e["actual_clip_train_scope"] = record["clip_train_scope"]
+    for key in ("fusion", "tower_sharing", "train_scope", "prefusion_norm",
+                "image_tokens", "freeze_gallery", "gallery_fusion"):
+        if key in record and record[key] != bound_t.get(key):
+            raise ValueError(f"Stage 1 record disagrees with its bound {key}")
+    if ("clip_train_scope" in record and record["clip_train_scope"] !=
+            bound_e.get("actual_clip_train_scope")):
+        raise ValueError("Stage 1 record disagrees with its bound clip_train_scope")
+    for group, fields in ((bound_e, ("missing_modality_representation",
+                                    "actual_clip_train_scope")),
+                          (bound_t, ("fusion", "tower_sharing", "train_scope")),
+                          (bound_loss, ("learnable_temperature", "init_temperature",
+                                        "max_logit_scale"))):
+        missing = [key for key in fields if key not in group or group[key] is None]
+        if missing:
+            raise ValueError(f"Stage 1 checkpoint lacks bound model settings: {missing}")
+    # Remove persisted-config overrides from the caller before applying the bound ones.
+    for key in ("query_fusion_config", "gallery_fusion_config"):
+        tr.pop(key, None)
+    enc.update(bound_e)
+    tr.update(bound_t)
+    hp.setdefault("values", {}).update(bound_loss)
+    return enc, tr, hp
+
+
+def load_stage1_model_config(checkpoint_path, record: dict | None = None) -> dict:
+    """Read embedded metadata and bind an optional sidecar to the actual bytes."""
+    import torch
+
+    path = Path(checkpoint_path)
+    with path.open("rb") as fh:
+        actual = hashlib.file_digest(fh, "sha256").hexdigest()
+    if record is not None:
+        if not record.get("sha256") or record["sha256"] != actual:
+            raise ValueError(f"{path} hashes to {actual}, not the Stage 1 record's sha256")
+    ckpt = torch.load(path, map_location="cpu", weights_only=False, mmap=True)
+    metadata = ckpt.get("metadata")
+    if not isinstance(metadata, dict):
+        raise ValueError(f"{path} lacks embedded Stage 1 model metadata")
+    if record is not None:
+        # Data-root migrations update sidecar locations without changing model
+        # bytes. Permit only these location fields; initializer digests and all
+        # effective settings must still agree with the embedded metadata.
+        metadata = copy.deepcopy(metadata)
+        for location in (("embeddings_dir",), ("initializers", "ulip2", "uri"),
+                         ("initializers", "open_clip", "hf_cache")):
+            embedded_parent, sidecar_parent = metadata, record
+            for part in location[:-1]:
+                embedded_parent = embedded_parent.get(part, {})
+                sidecar_parent = sidecar_parent.get(part, {})
+            leaf = location[-1]
+            if leaf in embedded_parent and leaf in sidecar_parent:
+                embedded_parent[leaf] = sidecar_parent[leaf]
+        for key, value in metadata.items():
+            if key in record and record[key] != value:
+                raise ValueError(f"Stage 1 record and checkpoint metadata disagree: {key}")
+    return {**(record or {}), **metadata, "uri": str(path), "sha256": actual}
+
+
+def stage1_backbone_kwargs(record: dict) -> dict:
+    """Locate and verify the pretrained weights required by a partial checkpoint.
+
+    Frozen backbone tensors are omitted from Stage 1 checkpoints. Rebuilding
+    them from a different initializer silently changes the model, particularly
+    for fuser-only arms. A moved default file is accepted only by matching bytes.
+    """
+    from metafind.models.ulip_backbone import BackboneConfig
+
+    initializers = record.get("initializers") or {}
+    source = initializers.get("ulip2") or {}
+    if not source.get("uri") or not source.get("sha256"):
+        raise ValueError("Stage 1 checkpoint lacks a verified ULIP-2 initializer identity")
+    requested = Path(source["uri"])
+    candidates = [requested]
+    default = Path(BackboneConfig().checkpoint)
+    if default != requested:
+        candidates.append(default)
+    chosen = None
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        with candidate.open("rb") as fh:
+            actual = hashlib.file_digest(fh, "sha256").hexdigest()
+        if actual == source["sha256"]:
+            chosen = candidate
+            break
+    if chosen is None:
+        raise ValueError(f"cannot restore Stage 1 ULIP-2 initializer {requested}: "
+                         f"no available file matches {source['sha256']}")
+    clip = initializers.get("open_clip") or {}
+    expected_clip = clip.get("weight_blob_sha256")
+    if expected_clip:
+        current = _open_clip_weight_identity()
+        if current.get("weight_blob_sha256") != expected_clip:
+            raise ValueError("OpenCLIP initializer differs from the Stage 1 checkpoint; "
+                             "restore its recorded cache snapshot before evaluation")
+    return {"checkpoint": chosen}
+
+
+def validate_frozen_gallery_scope(training: dict) -> None:
+    """A shared trainable backbone cannot represent a frozen gallery encoder."""
+    if training.get("freeze_gallery") and training.get(
+            "train_scope", "point_encoder_and_fuser") != "fuser_only":
+        raise UnsupportedProtocol(
+            "--freeze-gallery requires --train-scope fuser_only: the gallery's "
+            "point backbone would otherwise still change. A separate frozen "
+            "gallery backbone requires an explicitly implemented training scope.")
+
+
+def seed_training(seed: int) -> None:
+    """Seed main-process observations as well as tensor/worker RNGs."""
+    import torch
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+
 def build_model(encoding: dict, training: dict, hyperparameters: dict):
     import torch
     from metafind.models.dual_tower import DualTowerConfig, MetaFindDualTower
-    from metafind.models.fusion import FusionConfig
     from metafind.models.losses import ContrastiveConfig, MetaFindContrastiveLoss
     from metafind.models.ulip_backbone import EMBED_DIM
 
@@ -2404,20 +2666,12 @@ def build_model(encoding: dict, training: dict, hyperparameters: dict):
     # learned token. FusionConfig expresses that as `zero_pad`, so the mapping
     # is made here rather than letting a dataclass default decide -- Table 3's
     # "Padding missing modalities with 0" is the row that sets it True.
-    zero_pad = encoding["missing_modality_representation"] == "zero_pad"
-    fusion = FusionConfig(kind=training["fusion"], dim=EMBED_DIM, zero_pad=zero_pad,
-                          # absent in protocols written before 2026-09-03
-                          prefusion_norm=bool(training.get("prefusion_norm", False)),
-                          image_tokens=int(training.get("image_tokens", 1)))
+    fusion = fusion_config_for(encoding, training)
     # [KYZEN 2026-09-05 「去測測看」] gallery_fusion may differ from the query's:
     # sec. 2.4 "gallery encoder is modality-complete and frozen after pretraining"
     # + Fig. 1 "pre-encoded independently by ULIP-2" read as gallery = frozen mean
     # of the ULIP-2 vectors, only the query tower trained.
-    gkind = training.get("gallery_fusion") or training["fusion"]
-    gallery_fusion = fusion if gkind == training["fusion"] else FusionConfig(
-        kind=gkind, dim=EMBED_DIM, zero_pad=zero_pad,
-        prefusion_norm=bool(training.get("prefusion_norm", False)),
-        image_tokens=int(training.get("image_tokens", 1)))
+    gallery_fusion = fusion_config_for(encoding, training, gallery=True)
     model = MetaFindDualTower(DualTowerConfig(
         dim=EMBED_DIM, tower_sharing=training["tower_sharing"],
         query_fusion=fusion, gallery_fusion=gallery_fusion,
@@ -2814,7 +3068,7 @@ def main() -> int:
         dev_val_uids = dev_val_uids[: args.limit]
 
     seed = values["seed"]
-    torch.manual_seed(seed)
+    seed_training(seed)
     generator = torch.Generator(device="cpu").manual_seed(seed)
 
     # [MEASURED 2026-08-29] `batch_size: 64` does not fit on this card without
@@ -2833,6 +3087,7 @@ def main() -> int:
     # all three scopes; nothing downstream needs a branch because
     # `named_trainable_parameters()` and `trainable_state_dict()` both key off
     # `requires_grad`, so the optimizer and the checkpoint follow automatically.
+    validate_frozen_gallery_scope(training)
     scope = training.get("train_scope", "point_encoder_and_fuser")
     _bb_kwargs = {"checkpoint": Path(args.backbone_ckpt)} if args.backbone_ckpt else {}
     backbone = ULIPBackbone(BackboneConfig(device=args.device,

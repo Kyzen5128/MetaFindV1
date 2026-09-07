@@ -69,6 +69,7 @@ from metafind.data.semantic_edges import (  # noqa: E402
     build_repair_prompt,
     cache_key,
     parse_sentence,
+    relation_text_for,
     validate_sentence,
 )
 
@@ -174,7 +175,7 @@ def collect_pairs(text_map: dict, limit: int | None = None) -> dict[str, tuple[s
                 continue
             # [DL-103 R6] the relation prompt reads the sentence form when the map carries one
             # (`relation_text`, tools/procthor_metadata_text.py); the encoder text stays `text`.
-            a, b = sorted((ti.get("relation_text") or ti["text"], tj.get("relation_text") or tj["text"]))
+            a, b = sorted((relation_text_for(ti), relation_text_for(tj)))
             pairs.setdefault(
                 cache_key(a, b, PROMPT_VERSION, LLM_MODEL, TEXT_ENCODER_VERSION),
                 (a, b),

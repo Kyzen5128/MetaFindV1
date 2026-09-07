@@ -234,7 +234,9 @@ class ModalityFusion(nn.Module):
                     if bool(keep.any()):
                         raise ValueError("image marked present but no image "
                                          "embedding was passed")
-                    e = self.mask_tokens[1].expand(b, K, -1)
+                    fill = (torch.zeros_like(self.mask_tokens[1]) if self.cfg.zero_pad
+                            else self.mask_tokens[1])
+                    e = fill.expand(b, K, -1)
                     vkeep = torch.zeros(b, K, dtype=torch.bool, device=present.device)
                 else:
                     if e.dim() != 3 or e.size(1) != K:

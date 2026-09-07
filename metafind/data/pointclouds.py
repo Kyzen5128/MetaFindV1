@@ -102,7 +102,9 @@ N_POINTS = 10_000
 # Changes the rgb channel of the `texture` class, 23,675 of 46,052 assets;
 # `flat`, `gltf_default` and `fallback_grey` are uniform per part and are
 # therefore arithmetically unchanged.
-SAMPLER_VERSION = 8
+# 9: preserve baseColorFactor's dtype: uint8 RGB values 0/1 are byte-scale,
+# not unit-scale white. Version 8 caches require revalidation before reuse.
+SAMPLER_VERSION = 9
 RGB_SCALE = "unit"  # [0, 1]; see the module docstring
 DEFAULT_GREY = 0.4  # ULIP's stand-in for a dataset with no colour channel at all
 # The base colour of a PBR material carrying neither a texture nor an explicit
@@ -479,11 +481,12 @@ def _base_colour_factor(vis) -> np.ndarray | None:
     factor = getattr(getattr(vis, "material", None), "baseColorFactor", None)
     if factor is None:
         return None
-    f = np.asarray(factor, dtype=np.float64).ravel()[:3]
+    raw = np.asarray(factor)
+    f = raw.astype(np.float64).ravel()[:3]
     if f.size != 3:
         return None
     # glTF stores it in [0, 1]; trimesh sometimes surfaces it as uint8 [0, 255].
-    if f.max() > 1.0:
+    if raw.dtype == np.uint8 or f.max() > 1.0:
         f = f / 255.0
     return np.clip(f, 0.0, 1.0)
 

@@ -8,6 +8,7 @@ produce a plausible-looking number under the wrong label.
 from __future__ import annotations
 
 import json
+import hashlib
 
 import pytest
 
@@ -45,11 +46,12 @@ def test_overlay_refuses_a_state_that_skips_the_query_fusion():
                                               query_fusion=f, gallery_fusion=f,
                                               use_layout=False))
     # a state carrying only lambda-shaped junk: no query.fusion keys
-    state = {"gallery.fusion.mask_tokens": torch.zeros(3, 8)}
+    state = {}
     import tempfile, os
     with tempfile.TemporaryDirectory() as d:
         p = os.path.join(d, "s2.pt")
         torch.save({"trainable_state": state}, p)
         with pytest.raises(SystemExit) as e:
-            rr.overlay_stage2_weights(model, {"uri": p}, "cpu")
+            rr.overlay_stage2_weights(model, {"uri": p, "sha256": hashlib.sha256(
+                open(p, "rb").read()).hexdigest()}, "cpu")
     assert "does not cover" in str(e.value)

@@ -75,6 +75,7 @@ __all__ = [
     "cache_key",
     "iter_pair_descriptions",
     "parse_sentence",
+    "relation_text_for",
     "validate_sentence",
 ]
 
@@ -122,6 +123,17 @@ class SemanticEdgeError(Exception):
     """A rejected relation sentence, carrying the message the repair prompt needs."""
 
 
+def relation_text_for(record: dict) -> str:
+    """The relation prompt's description, distinct from the node encoder text.
+
+    DL-103 records may carry JSON in ``text`` and a sentence in
+    ``relation_text``. Preserve the selected string exactly because its bytes
+    also identify the cached edge; blank optional sentences fall back to text.
+    """
+    relation = record.get("relation_text")
+    return relation if isinstance(relation, str) and relation.strip() else record["text"]
+
+
 def cache_key(desc_i: str, desc_j: str, prompt_version: int, llm_model: str,
               text_encoder_version: str) -> str:
     """[L1-SEMEDGE-KEY] sha256 over both descriptions and all three versions.
@@ -150,7 +162,7 @@ def iter_pair_descriptions(graph: dict, text_map: dict) -> Iterator[tuple[tuple[
         ti, tj = text_map.get(ai), text_map.get(aj)
         if ti is None or tj is None:
             raise KeyError(f"no object text for {ai if ti is None else aj}")
-        yield (i, j), ti["text"], tj["text"]
+        yield (i, j), relation_text_for(ti), relation_text_for(tj)
 
 
 def build_relation_prompt(desc_i: str, desc_j: str) -> str:

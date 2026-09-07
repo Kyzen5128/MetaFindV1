@@ -1,0 +1,97 @@
+{
+  "checked_at": "2026-09-07T10:51:21.727171+00:00",
+  "base_revision": "785a2d99f0a8917244ea5cdf172315157c625072",
+  "scope": "code repair; no corpus regeneration, GPU training, or Table 1 reevaluation",
+  "pytest_command": "PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 OMP_NUM_THREADS=1 /home/kyzen/miniconda3/envs/MetaFind/bin/python -m pytest -q -p no:cacheprovider --basetemp=/tmp/metafind-final-cpu-suite2 --ignore=tests/test_cuda_smoke.py --ignore=tests/test_research_authority_guard.py tests",
+  "pytest_summary": "1138 passed, 56 warnings in 34.17s",
+  "pytest_log": "/tmp/metafind-final-cpu-suite2.log",
+  "pytest_log_sha256": "b87eb12490c3b5db547fa693c0c69aacfdc9676f4bd2b3199fa9a8d8d61df46b",
+  "pytest_warning_limits": [
+    "Expected Transformer configuration and deliberately non-paper temperature warnings",
+    "Intermittent QueueFeederThread teardown warning; separate relevant module runs did not reproduce it; cause not proven"
+  ],
+  "excluded_tests": {
+    "tests/test_cuda_smoke.py": "avoid competing with active annotation GPU job",
+    "tests/test_research_authority_guard.py": "Claude-only hook unrelated to the implementation changes"
+  },
+  "real_checkpoint_restore": {
+    "stage1_checkpoint_sha256": "074f8d98e33a4faccb7147fa78369277be60b2c8da50849b2f7d46219db08f48",
+    "epoch": 9,
+    "initializer_path": "/home/kyzen/metafind/metafind_data_attrs/models/ulip2/ULIP-2/pretrained_models/ULIP-2-PointBERT-10k-xyzrgb-pc-vit_g-objaverse_shapenet-pretrained.pt",
+    "restored_prefusion_norm": true,
+    "restored_gallery_fusion": "transformer",
+    "restored_image_tokens": 1,
+    "seven_condition_max_abs_errors": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "scope": "CPU fusion reconstruction using actual P1s checkpoint and synthetic inputs; no retrieval or GPU run"
+  },
+  "queue_status": [
+    {
+      "stage": 1,
+      "pid": 2465870,
+      "source": "/home/kyzen/MetaFindV1/tools/chain_paper_stage1.sh",
+      "launcher": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage1_20260906.sh",
+      "sha256": "9691aafa0c47dd72ef3ce3b566009ccc429dd986f65376cc5bc18e6cbf0b1152",
+      "log": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage1_20260906.log"
+    },
+    {
+      "stage": 2,
+      "pid": 2465873,
+      "source": "/home/kyzen/MetaFindV1/tools/chain_paper_stage2.sh",
+      "launcher": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage2_20260906.sh",
+      "sha256": "3912e80c6efc8dc8d4b504be25f1289e42a1d9f8d6281cd7b71b4f951cb5cdca",
+      "log": "/home/kyzen/metafind/metafind_data_paper/outputs/logs/chain_paper_stage2_20260906.log"
+    }
+  ],
+  "preserved_user_changes": {
+    "tools/probes/exp_json_text_query.py": "byte-identical to initial snapshot",
+    "tools/probes/exp_type_level_query.py": "original attribution/own-mean additions retained; partner point source now uses the query point backbone"
+  },
+  "file_sha256": {
+    "metafind/data/encode_text_image.py": "e43e232f83c8b61f1906ace5957e7d920efed3fa0442fbfa5a6da651b7e9181a",
+    "metafind/data/pointclouds.py": "afa0c9c94de23ca38733c4562b6e1588d55cdd276b5802afbdb1ee38f0a6db61",
+    "metafind/data/scene_splits.py": "9bdeb805cc7e2a4c2e95221c4332cc7d1ddaf5574dca58d6048fec288c874805",
+    "metafind/data/semantic_edges.py": "da4ed38977faca6f494a22b51129118bd06e0f4da38538146985d3f0c5a4409e",
+    "metafind/data/semantic_edges_run.py": "68b2454397480c5455c0053547d45ce8c777ee4308d2c9c21579083221051d15",
+    "metafind/eval/run_retrieval.py": "2b8e8cf0de79be6e567c1cbbfdb90f4050196676250a47c505fb8a3d01003a58",
+    "metafind/models/fusion.py": "05a155d7157a65dcf435b40d795a204205a54da2907638bdc72ee3e8bb099e15",
+    "metafind/train/gallery_index.py": "ac9fec60e2d7da12240f1a29c6529675a012fb0dac08aee3b6ab2c4356dfb2f0",
+    "metafind/train/stage1.py": "8e8dcc3cf08c013f26327eeafe3eccd3a367f80464e8d703a819e4594d8c6257",
+    "metafind/train/stage2.py": "6e4d4b0d6429d070c0a61cbd69a2ed4c4a4fb36f3703d46e74b82fc57b361c96",
+    "tests/test_encode_text_image.py": "7d2f9d40875b15c258d3599ba7033d91923b6b13192233341e550502cf46875e",
+    "tests/test_eval_retrieval.py": "9d09d52499bfa4591295545731232ece46b9dde325c842d9a89fe1a2909b5b67",
+    "tests/test_eval_stage2_row.py": "781441fa1e993f2e22ef1505fbc94b92c232bae056172e55e1d22e8d9fe4eb38",
+    "tests/test_pointclouds.py": "623a3548bec70e485c8f760a8eb16c624e8f8ff79aed4d4d6510e420fb04fafe",
+    "tests/test_run_identity.py": "e6d9e399abb2b0ab75f801b24b858291cf683f0a85f1d2533bc63cd5d6e12d33",
+    "tests/test_semantic_edges.py": "40b836b3c258f632c916312c7a5828c4772d4ad76cb0ddf5fab82b85c989c6cb",
+    "tests/test_train_stage2.py": "ea27cb859ce0cc21608b29be201bbce3494183803cd4dc51b8df4949438f4981",
+    "tools/build_dataset_manifest.py": "67f3951275b901da675aac6443b61ba91cb597b5d376df856e014d4d000867fe",
+    "tools/make_query_pack.py": "c5799fdf7547d3117a04ac979eafffe917358c253d0715e389226f3437c9ad07",
+    "tools/materialize_split_dirs.py": "a973626f6af378914776e91f6416d0ad879fbd8a850791836eb684981f37e273",
+    "tools/probes/exp_query_observation.py": "68028cf68a9e639186db958168e6e50c67e510dccbfe6b787fc06784ce04a418",
+    "tools/probes/exp_type_level_query.py": "c0dd5e8e689573ace2d14d2df05915ea3b9c11bdee8ce901856cdc31a2dcaf76",
+    "tools/probes/stage2_procthor_retrieval.py": "9c6acd06d04887257ecbcd71e9d71caa8c5324135aae91130c43f976f928319d",
+    "tools/write_archive_manifest.py": "7d99c9b5fb05918d6f32a3bebf3f459cf9b9cad3121a78df9e21ad2aab3df1e5",
+    "tests/test_data_tools.py": "c272c033798b1dd9e69679461e364f5e223c066e4bf083c21b89da374fb1e676",
+    "tests/test_model_recipe_restore.py": "0a1d7c1766925f213bfced3f672f85a4718bbc69de5ff4284779d34c4fec1a80",
+    "tests/test_paper_chain_failure.py": "cfcb934c7964dae3dadbbd79da588c10ee3d6878665191fceb1968459c15fbb7",
+    "tests/test_retrieval_checkpoint_identity.py": "0d1f28317cbd0af5e8553804f2829fb3ce11d03df4df892fcf19da4556db2b6c",
+    "tests/test_stage2_input_identity.py": "fa74172f197ba1c015ef96b70d481e9ab28842ff0fdd72d49233c80c5c0bd795",
+    "tools/chain_paper_stage1.sh": "9691aafa0c47dd72ef3ce3b566009ccc429dd986f65376cc5bc18e6cbf0b1152",
+    "tools/chain_paper_stage2.sh": "3912e80c6efc8dc8d4b504be25f1289e42a1d9f8d6281cd7b71b4f951cb5cdca",
+    "tools/probes/exp_json_text_query.py": "0503a227866f315941b072fa2487483a41c88e668b3c12f2e0e2a5956cb8e3eb"
+  },
+  "not_claimed": [
+    "all legacy checkpoints replayable",
+    "paper research ambiguities resolved",
+    "Table 1 scores reproduced",
+    "old sampler v8 caches corrected"
+  ]
+}

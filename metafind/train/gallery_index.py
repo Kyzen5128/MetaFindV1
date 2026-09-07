@@ -47,6 +47,7 @@ import io
 import json
 import os
 import time
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 
 import numpy as np
@@ -97,7 +98,92 @@ def load_checkpoint_record(record_path: str | Path | None = None) -> dict:
     return record
 
 
-def gallery_encoder_sha256(backbone, model, include_buffers: bool = False) -> str:
+GALLERY_ENCODER_HASH_VERSION = 2
+
+
+def load_stage2_checkpoint_record(record_path, stage1_ckpt: dict,
+                                  variant: str = "full", state_path=None, *,
+                                  allow_legacy: bool = False) -> dict:
+    """Verify ancestry and the actual Stage 2 bytes before constructing a head."""
+    record_path = Path(record_path)
+    rec = json.loads(record_path.read_text())
+    if "uri" not in rec:
+        if variant not in rec:
+            raise ValueError(f"{record_path} holds no variant {variant!r}")
+        rec = rec[variant]
+    parent = rec.get("stage1_checkpoint_sha256")
+    if parent != stage1_ckpt.get("sha256") or not parent:
+        raise ValueError(f"{record_path} was fine-tuned from Stage 1 checkpoint "
+                         f"{parent}, not {stage1_ckpt.get('sha256')}")
+    for key in ("uri", "sha256", "lambda_init"):
+        if key not in rec:
+            raise ValueError(f"{record_path} lacks {key!r}; not a Stage 2 record")
+    if state_path is not None and Path(state_path).resolve() != Path(rec["uri"]).resolve():
+        raise ValueError(f"{record_path} names {rec['uri']}, not --stage2-state {state_path}")
+    import torch
+    raw = verified_checkpoint_bytes(rec)
+    payload = torch.load(io.BytesIO(raw), map_location="cpu", weights_only=False)
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        if not allow_legacy or rec.get("input_identity"):
+            raise ValueError("Stage 2 checkpoint lacks embedded metadata; explicit legacy replay required")
+    else:
+        for key, value in metadata.items():
+            if key not in rec or rec[key] != value:
+                raise ValueError(f"Stage 2 checkpoint and record disagree: {key}")
+        for key in ("input_identity", "arch_protocol", "stage2_protocol", "graph_unit",
+                    "layout_input_dims", "stage1_checkpoint_sha256", "stage1_model_inputs", "lambda_init"):
+            if key in rec and key not in metadata:
+                raise ValueError(f"Stage 2 record has unbound {key}")
+    if "stage1_model_inputs" in rec:
+        from metafind.train.stage1 import (effective_stage1_model_inputs, fusion_config_for,
+                                          load_stage1_model_config)
+        bound_parent = load_stage1_model_config(stage1_ckpt["uri"], stage1_ckpt)
+        enc, train, _ = effective_stage1_model_inputs(bound_parent, {}, {}, {})
+        s2_enc, s2_train, _ = effective_stage1_model_inputs(
+            {"model_inputs": rec["stage1_model_inputs"]}, {}, {}, {})
+        for gallery in (False, True):
+            if asdict(fusion_config_for(enc, train, gallery=gallery)) != asdict(
+                    fusion_config_for(s2_enc, s2_train, gallery=gallery)):
+                raise ValueError("Stage 2 forward configuration differs from its Stage 1 parent")
+        if train["tower_sharing"] != s2_train["tower_sharing"]:
+            raise ValueError("Stage 2 tower sharing differs from its Stage 1 parent")
+    return rec
+
+
+def verified_checkpoint_bytes(record: dict) -> bytes:
+    """Return the bytes hashed, so an overlay never reopens unverified state."""
+    if not record.get("uri") or not record.get("sha256"):
+        raise ValueError("checkpoint record requires uri and sha256")
+    raw = Path(record["uri"]).read_bytes()
+    if hashlib.sha256(raw).hexdigest() != record["sha256"]:
+        raise ValueError(f"{record['uri']} does not match the sha256 in its record")
+    return raw
+
+
+def gallery_forward_config(backbone, model, declared_modalities=None) -> dict:
+    """Forward choices absent from state_dict, excluding the query tower.
+
+    Stage 2 legitimately changes query fusion without changing the gallery.
+    Conversely, prefusion_norm and zero_pad can change a gallery vector with
+    every parameter byte unchanged, so those belong to its identity.
+    """
+    fusion = getattr(model.gallery, "fusion", None)
+    cfg = getattr(fusion, "cfg", None)
+    backbone_cfg = getattr(backbone, "cfg", None)
+    return {
+        "gallery_class": type(model.gallery).__qualname__,
+        "fusion": asdict(cfg) if is_dataclass(cfg) else None,
+        "backbone_class": type(backbone.model).__qualname__,
+        "backbone_dtype": str(getattr(backbone_cfg, "dtype", "unspecified")),
+        "declared_modalities": list(("text", "image", "pc")
+                                    if declared_modalities is None else declared_modalities),
+    }
+
+
+def gallery_encoder_sha256(backbone, model, include_buffers: bool = False,
+                           *, hash_version: int = GALLERY_ENCODER_HASH_VERSION,
+                           declared_modalities=None) -> str:
     """A digest over EVERYTHING that produces a gallery embedding.
 
     ``include_buffers`` adds the registered buffers -- PointBERT's BatchNorm
@@ -126,7 +212,13 @@ def gallery_encoder_sha256(backbone, model, include_buffers: bool = False) -> st
     reordered would report drift that did not happen -- worse than no hash,
     because it teaches everyone to ignore it.
     """
+    if hash_version not in (1, GALLERY_ENCODER_HASH_VERSION):
+        raise ValueError(f"unsupported gallery encoder hash version {hash_version}")
     h = hashlib.sha256()
+    if hash_version == GALLERY_ENCODER_HASH_VERSION:
+        h.update(b"metafind-gallery-encoder-v2\0")
+        h.update(json.dumps(gallery_forward_config(backbone, model, declared_modalities),
+                            sort_keys=True, separators=(",", ":")).encode())
     for tag, module in (("backbone", backbone.model), ("gallery", model.gallery)):
         for name, p in sorted(module.named_parameters()):
             h.update(f"{tag}.{name}".encode())
@@ -136,6 +228,38 @@ def gallery_encoder_sha256(backbone, model, include_buffers: bool = False) -> st
                 h.update(f"{tag}.buffer.{name}".encode())
                 h.update(b.detach().cpu().numpy().tobytes())
     return h.hexdigest()
+
+
+def verify_gallery_encoder(record: dict, backbone, model, *,
+                           parent_checkpoint: dict | None = None,
+                           allow_legacy: bool = False, declared_modalities=None) -> str:
+    """Verify v2 identity, or explicitly validate legacy parent configuration.
+
+    A v1 record never proves which parameter-free forward flags its producer
+    used. Compatibility is therefore an explicit, recorded caller choice.
+    """
+    version = record.get("gallery_encoder_hash_version", 1)
+    if version == 1:
+        if not allow_legacy:
+            raise ValueError("legacy gallery encoder hash v1 lacks forward configuration; "
+                             "rebuild the index or explicitly allow legacy compatibility")
+        if parent_checkpoint is None:
+            raise ValueError("legacy gallery compatibility requires its parent checkpoint")
+        from metafind.train.stage1 import (load_stage1_model_config, load_protocols,
+                                          effective_stage1_model_inputs, fusion_config_for)
+        parent = load_stage1_model_config(parent_checkpoint["uri"], parent_checkpoint)
+        enc, train, _ = effective_stage1_model_inputs(parent, *load_protocols())
+        expected = asdict(fusion_config_for(enc, train, gallery=True))
+        actual = gallery_forward_config(backbone, model, declared_modalities)["fusion"]
+        if actual != expected:
+            raise ValueError("legacy gallery runtime forward configuration differs from parent checkpoint")
+    live = gallery_encoder_sha256(
+        backbone, model, include_buffers=bool(record.get("gallery_encoder_hash_includes_buffers")),
+        hash_version=version, declared_modalities=declared_modalities)
+    if live != record["gallery_encoder_sha256"]:
+        raise ValueError(f"gallery encoder loaded here hashes to {live[:16]} but index was built by "
+                         f"{record['gallery_encoder_sha256'][:16]}; gallery identity mismatch")
+    return live
 
 
 def _write(path: Path, obj, dump=json.dump) -> None:
@@ -196,7 +320,7 @@ class IndexUnreadable(ValueError):
     """
 
 
-def verified_index(record: dict, source: str) -> tuple[list[str], np.ndarray]:
+def verified_index(record: dict, source: str, *, include_arrays: bool = False):
     """Hash the bytes, then read THOSE bytes. Both halves, one call.
 
     Splitting them -- verify here, open there -- is two separate opens of one
@@ -229,9 +353,10 @@ def verified_index(record: dict, source: str) -> tuple[list[str], np.ndarray]:
             f"{record['sha256'][:16]}.... These are not the verified vectors.")
 
     try:
-        npz = np.load(io.BytesIO(raw))
-        ids = [str(x) for x in npz["ids"]]
-        embeddings = npz["embeddings"]
+        with np.load(io.BytesIO(raw), allow_pickle=False) as npz:
+            ids = [str(x) for x in npz["ids"]]
+            embeddings = npz["embeddings"]
+            arrays = {k: npz[k] for k in npz.files} if include_arrays else None
     except Exception as exc:  # noqa: BLE001 -- any read failure is unreadable
         raise IndexUnreadable(f"{uri} cannot be read as an index: {exc}") from exc
     if embeddings.ndim != 2:
@@ -242,7 +367,30 @@ def verified_index(record: dict, source: str) -> tuple[list[str], np.ndarray]:
     if (embeddings.shape[0], embeddings.shape[1]) != (record["count"], record["dim"]):
         raise ValueError(f"{uri} is {embeddings.shape} but {source} records "
                          f"count={record['count']} dim={record['dim']}")
+    if include_arrays:
+        return ids, embeddings, arrays
     return ids, embeddings
+
+
+def verified_stage2_index(record: dict, parent_sha: str, declared_modalities):
+    """Read one declared ProcTHOR gallery belonging to this Stage 1 parent."""
+    if record.get("stage1_checkpoint_sha256") != parent_sha:
+        raise ValueError("Stage 2 gallery belongs to a different Stage 1 checkpoint")
+    declared = tuple(declared_modalities)
+    recorded = tuple(record.get("modality_completeness", {}).get("declared_modalities", ()))
+    if not declared or declared != recorded:
+        raise ValueError(f"Stage 2 gallery modality declaration {recorded} != {declared}")
+    ids, embeddings, arrays = verified_index(record, "Stage 2 gallery", include_arrays=True)
+    if len(set(ids)) != len(ids):
+        raise ValueError("Stage 2 gallery has duplicate asset IDs")
+    for name in declared:
+        if name not in arrays or arrays[name].shape != embeddings.shape:
+            raise ValueError(f"Stage 2 gallery lacks aligned raw {name!r} vectors")
+        if not np.isfinite(arrays[name]).all():
+            raise ValueError(f"Stage 2 gallery has nonfinite {name!r} vectors")
+    if not np.isfinite(embeddings).all():
+        raise ValueError("Stage 2 gallery has nonfinite embeddings")
+    return ids, embeddings, arrays
 
 
 def load_promoted_index_for_checkpoint(
@@ -445,28 +593,27 @@ def main() -> int:
 
     import torch
     from metafind.train.stage1 import (
-        build_model, load_protocols, load_stage1_checkpoint)
+        build_model, load_protocols, load_stage1_checkpoint,
+        load_stage1_model_config, effective_stage1_model_inputs, stage1_backbone_kwargs)
     from metafind.models.ulip_backbone import (
         BackboneConfig, ULIPBackbone, prepare_depth_shell)
 
-    encoding, training, hyperparameters = load_protocols()
     ckpt_record = load_checkpoint_record(args.stage1_ckpt_record)
-
-    # train_scope="point_encoder_and_fuser", NOT "fuser_only": the scope decides
-    # which parameters carry requires_grad, and load_stage1_checkpoint checks the
-    # backbone section against exactly that set. Building with "fuser_only" here
-    # would freeze the point encoder before restoring it, so Stage 1's
-    # fine-tuned PointBERT would be declared "not expected" and dropped -- the
-    # original bug, moved one line down. Freezing for inference happens after
-    # the restore, via freeze_gallery / eval.
+    ckpt_record = load_stage1_model_config(ckpt_record["uri"], ckpt_record)
+    encoding, training, hyperparameters = effective_stage1_model_inputs(
+        ckpt_record, *load_protocols())
+    # Match checkpoint coverage before restoring; freeze only after loading.
     backbone = ULIPBackbone(BackboneConfig(device=args.device,
-                                           train_scope="point_encoder_and_fuser"))
-    if ckpt_record.get("gallery_fusion"):
-        training = {**training, "gallery_fusion": ckpt_record["gallery_fusion"]}
+                                           train_scope=training["train_scope"],
+                                           **stage1_backbone_kwargs(ckpt_record)))
+    query_backbone = (backbone.clone_point_path()
+                      if training["tower_sharing"] == "fully_separate" else None)
     model, loss_fn = build_model(encoding, training, hyperparameters)
-    if ckpt_record.get("freeze_gallery"):
+    if training.get("freeze_gallery"):
         model.freeze_gallery(True)            # match the checkpoint's requires_grad set before loading
-    load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt_record["uri"]))
+    load_stage1_checkpoint(backbone, model, loss_fn, Path(ckpt_record["uri"]),
+                           query_backbone=query_backbone)
+    del query_backbone  # an index never evaluates the query point path
     # Restore first, THEN freeze. The checkpoint's point-encoder section can only
     # land in a backbone whose point encoder is trainable, but the index must be
     # built with it frozen and in eval: ULIP-2's PointBERT config sets
@@ -515,6 +662,8 @@ def main() -> int:
                 np.stack(vectors), ids,
                 paths.OUTPUTS / f"gallery_index_{ckpt_record['sha256'][:16]}.npz")
             record["gallery_encoder_sha256"] = encoder_sha
+            record["gallery_encoder_hash_version"] = GALLERY_ENCODER_HASH_VERSION
+            record["gallery_forward_config"] = gallery_forward_config(backbone, model)
             record["gallery_encoder_hash_includes_buffers"] = True
             # [CODEX MAJOR 2026-08-30] Stated in the record, not only in the
             # dict key: Stage 2 reads the record, and a key is not a field.
@@ -545,6 +694,8 @@ def main() -> int:
                                  "`asset_modalities`; it predates DL-104. Re-run n09b "
                                  "(resolve_stage2) before building the Stage 2 index.")
             declared = tuple(s2_protocol["asset_modalities"])
+            encoder_sha = gallery_encoder_sha256(backbone, model, include_buffers=True,
+                                                 declared_modalities=declared)
             mods = sorted(paths.PROCTHOR_MODALITIES.glob("*.json"))
             if args.limit:
                 mods = mods[: args.limit]
@@ -607,6 +758,8 @@ def main() -> int:
                 "embedding_dim": record["dim"],
                 "n_assets": record["count"],
                 "gallery_encoder_sha256": encoder_sha,
+                "gallery_encoder_hash_version": GALLERY_ENCODER_HASH_VERSION,
+                "gallery_forward_config": gallery_forward_config(backbone, model, declared),
                 "gallery_encoder_hash_includes_buffers": True,
                 "modality_completeness": {
                     "declared_modalities": list(declared),
