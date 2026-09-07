@@ -1,11 +1,12 @@
 # 文件入口
 
-2026-09-08 整理：根層只保留 9 份操作指南。舊報告、閱讀筆記與計畫集中在 [history/](history/README.md)，不再與現行操作文件混列。
+2026-09-08 整理：根層保留現行操作指南。主評估改為真實需求與多個可接受答案；原 same-UID 七模態流程保留為診斷。舊報告、閱讀筆記與計畫集中在 [history/](history/README.md)，不再與現行操作文件混列。
 
 | 要做的事 | 文件 |
 |---|---|
 | 理解資料來源、交接與 cache 更新 | [DATA_FLOW](DATA_FLOW.md) |
-| 固定 query/gallery 的七模態 Table 1 自訂評估 | [CUSTOM_TABLE1_EVALUATION](CUSTOM_TABLE1_EVALUATION.md) |
+| 主評估：需求、逐條件多正解、Hit／Recall；ULIP-2 草稿到人工審核 | [INTENT_RETRIEVAL_EVALUATION](INTENT_RETRIEVAL_EVALUATION.md) |
+| 診斷：固定 query/gallery UID 的兩觀測、三方法、七模態 42 組 | [CUSTOM_TABLE1_EVALUATION](CUSTOM_TABLE1_EVALUATION.md) |
 | I-Design 輸出轉成明示場景查詢 | [IDesign_INPUTS](IDesign_INPUTS.md) |
 | 原始 T/I/PC 與 checkpoint 編成可重播 bundle | [RAW_SCENE_INPUTS](RAW_SCENE_INPUTS.md) |
 | 逐步檢索、加入資產、更新圖 | [SCENE_COMPOSITION](SCENE_COMPOSITION.md) |

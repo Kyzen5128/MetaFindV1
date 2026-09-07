@@ -1,0 +1,124 @@
+{
+  "schema": "metafind.ulip2_intent_query_draft.v1",
+  "status": "needs_relevance_review",
+  "caption_field": "blip_caption",
+  "include_pointcloud": true,
+  "requested_uids": [
+    "8505977020be4fd194854ad3d9808222"
+  ],
+  "records": [
+    {
+      "id": "ulip2-8505977020be4fd194854ad3d9808222",
+      "query_id": "ulip2-8505977020be4fd194854ad3d9808222",
+      "source_uid": "8505977020be4fd194854ad3d9808222",
+      "status": "needs_relevance_review",
+      "text": "a chair with a pink cushion and a wooden frame",
+      "conditions": [
+        "text",
+        "pc",
+        "text+pc"
+      ],
+      "provenance": {
+        "source": "ULIP-2 Objaverse-LVIS shard",
+        "creator": "upstream blip_caption",
+        "method": "raw field extraction; no generation, embeddings, or relevance inference",
+        "metadata_entry": {
+          "u": "8505977020be4fd194854ad3d9808222",
+          "glb": "glbs/000-145/8505977020be4fd194854ad3d9808222.glb",
+          "shard": "000-145"
+        },
+        "archive": {
+          "requested_path": "/mnt/data1/kyzen/datasets/ulip2_objaverse_lvis/ULIP-2/objaverse_lvis/000-145.tar.gz",
+          "path": "/mnt/data1/kyzen/datasets/ulip2_objaverse_lvis/ULIP-2/objaverse_lvis/000-145.tar.gz",
+          "stat": {
+            "device": 2049,
+            "inode": 116404442,
+            "size_bytes": 1161032159,
+            "mtime_ns": 1788237984722480104,
+            "ctime_ns": 1788237991753265099
+          }
+        },
+        "member": {
+          "name": "000-145/8505977020be4fd194854ad3d9808222.npy",
+          "size_bytes": 301859,
+          "sha256": "27c3528e7a8dec6389e0b53b28136d352787f6aca996dcd16f55317bce069c43",
+          "tar_offset_data": 705040384
+        },
+        "upstream_generator_checkpoint": "UNKNOWN",
+        "caption": {
+          "field": "blip_caption",
+          "selection": "raw_string",
+          "utf8_sha256": "e12013f29cae4d5ec334184aa3241d9dc943fea50a37f6da045949d262c83768"
+        },
+        "record_identity": {
+          "dataset": "Objaverse",
+          "group": "000-145",
+          "id": "8505977020be4fd194854ad3d9808222"
+        },
+        "pointcloud": {
+          "path": "/home/kyzen/MetaFindV1/output/validation/intent_retrieval_20260908/ulip2_chair_draft/pointclouds/8505977020be4fd194854ad3d9808222.npy",
+          "sha256": "9798e43b17ef426e6818742a8799e421bd11ab461f0efc7ea57f902e842486a8",
+          "shape": [
+            10000,
+            6
+          ],
+          "dtype": "float32",
+          "transform": "concatenate xyz/rgb and cast float32; no sampling or normalization"
+        }
+      },
+      "pointcloud": "/home/kyzen/MetaFindV1/output/validation/intent_retrieval_20260908/ulip2_chair_draft/pointclouds/8505977020be4fd194854ad3d9808222.npy"
+    }
+  ],
+  "failures": [],
+  "sources": {
+    "asset_uids": {
+      "requested_path": "/home/kyzen/MetaFindV1/output/validation/intent_retrieval_20260908/chair_uids.json",
+      "path": "/home/kyzen/MetaFindV1/output/validation/intent_retrieval_20260908/chair_uids.json",
+      "stat": {
+        "device": 66306,
+        "inode": 44695683,
+        "size_bytes": 37,
+        "mtime_ns": 1788815110697066186,
+        "ctime_ns": 1788815110697066186
+      },
+      "sha256": "78cb04a5c87c7e02daadd86f596d317c3508e206ef42ead505f738d84b0b255e"
+    },
+    "metadata": {
+      "requested_path": "/home/kyzen/upstream/openshape-objaverse-embeddings/objaverse_meta.json",
+      "path": "/home/kyzen/upstream/openshape-objaverse-embeddings/objaverse_meta.json",
+      "stat": {
+        "device": 66306,
+        "inode": 27953932,
+        "size_bytes": 443180026,
+        "mtime_ns": 1788502655595928685,
+        "ctime_ns": 1788502655709307264
+      },
+      "sha256": "f0ac8d2c48b15d7722f1687f6b36a863b529578177bf99268de6c11bf10b96bd"
+    },
+    "shards_directory": "/mnt/data1/kyzen/datasets/ulip2_objaverse_lvis/ULIP-2/objaverse_lvis",
+    "archives": {
+      "000-145": {
+        "requested_path": "/mnt/data1/kyzen/datasets/ulip2_objaverse_lvis/ULIP-2/objaverse_lvis/000-145.tar.gz",
+        "path": "/mnt/data1/kyzen/datasets/ulip2_objaverse_lvis/ULIP-2/objaverse_lvis/000-145.tar.gz",
+        "stat": {
+          "device": 2049,
+          "inode": 116404442,
+          "size_bytes": 1161032159,
+          "mtime_ns": 1788237984722480104,
+          "ctime_ns": 1788237991753265099
+        }
+      }
+    },
+    "adapter": {
+      "path": "/home/kyzen/MetaFindV1/tools/prepare_ulip2_intent_queries.py",
+      "sha256": "d56f505247e7bf7f1663792f906df6709459a1fa12a29bbf6529c0d844c69bb4"
+    }
+  },
+  "limitations": [
+    "No qrels or judgments: the source UID is provenance, not an automatic positive.",
+    "Human review must define the intent and judge every gallery asset for each condition.",
+    "image_feat and thumbnail_feat are not raw images; image conditions are unavailable.",
+    "Caption generator checkpoint identity is unknown; captions are preserved as supplied.",
+    "Archives are bound by path/stat and consumed member SHA256, not a whole-archive digest."
+  ]
+}

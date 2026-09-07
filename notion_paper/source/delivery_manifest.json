@@ -3,25 +3,25 @@
   "title": "MetaFind｜標註更新與評估計畫",
   "slides": 10,
   "speaker_notes": 10,
-  "source_commit": "929e7a6f49ed5044ad0abb2d96cb204129d6b8fb",
+  "source_commit": "5c99e39e339fdfafb0aa13eccec557593cda51b3",
   "source_date": "2026-09-08",
   "annotation_snapshot_taipei": "2026-09-08 04:12:30",
-  "formal_evaluation_status": "planned; latest full corpus not yet evaluated",
+  "formal_evaluation_status": "pending real intent query curation and condition-specific complete relevance review; no formal model results",
   "files": [
     {
       "path": "MetaFind_Table1_Stage2_含講稿.pdf",
-      "bytes": 607993,
-      "sha256": "ba79443fbdcae506696777b255e049e17564fb7d3c2d36f40a707565ceae0092"
+      "bytes": 602845,
+      "sha256": "b668d50c1ef8ed6ef96a35f1a9a1902f1656c812ac4c6e0d38c7d0e893f69155"
     },
     {
       "path": "MetaFind_Table1_Stage2_含講稿.pptx",
-      "bytes": 419587,
-      "sha256": "1fc735647567a2a05990a3984929bd71472c109f31fb464e9fdf1758bbe23254"
+      "bytes": 419322,
+      "sha256": "be15f10d5607cbbffc150d6d5632132162c53904437d334533015f992b4bd0fa"
     },
     {
       "path": "README.md",
-      "bytes": 4631,
-      "sha256": "e95186e678eb66972c7fe1f3f26687e869b0ecb3c146a57603bba42d8c216316"
+      "bytes": 5486,
+      "sha256": "2852769445042ef8fb8dcdfa26b7849b637c9d8a8c49afc4b0afa5ac63b9c81c"
     },
     {
       "path": "assets/annotation_view_01.png",
@@ -50,18 +50,18 @@
     },
     {
       "path": "source/build_deck.py",
-      "bytes": 14649,
-      "sha256": "500087ae96bdfdd40b9173d5ac4c9d4a79359aa8b2f1ad510b4d80d5e6664c91"
+      "bytes": 14874,
+      "sha256": "eb9e5ec828f5c74554ec259afcc1108c364ea589d34211870e7c14fccff824bb"
     },
     {
       "path": "source/build_record.json",
       "bytes": 449,
-      "sha256": "69b4caaf364a952558e4bc8bd6264a5442165c9ebf2f7374a84a1ce8e4962591"
+      "sha256": "45663cae7973a76c6ec3fedcc5597db71ab4398924282cbf3cdcfc4d3f8f2be3"
     },
     {
       "path": "source/layout_boxes.json",
-      "bytes": 31926,
-      "sha256": "3093f7ece306b7af12317426b875ffaf797b998e1714c3d04295797566ece22a"
+      "bytes": 31960,
+      "sha256": "738a8cc94226bd185a7954acaa85713f6f347da3f68cc002183b70044a853a38"
     },
     {
       "path": "source/notion_provenance.json",
@@ -75,28 +75,29 @@
     },
     {
       "path": "source/ppt_content.json",
-      "bytes": 24416,
-      "sha256": "75ffbbb295ae5bf9f16c87554152abc23313d5b902c6b003e32c2c2f2d50a050"
+      "bytes": 23942,
+      "sha256": "c510fcf06a5e0fc5dc1ae26f5f427dfc01018b7eaa1a2abfcecb87bcaa4f2112"
     },
     {
       "path": "source/source_manifest.json",
-      "bytes": 5395,
-      "sha256": "45804a38fa62b7b8717a72ace29a0b24ba09c422ce8cf5b3557084b7c93f05fe"
+      "bytes": 6557,
+      "sha256": "a63450e77baf350b79273642c0cdc5b488ac0a4734fd7b6bfff9eb0fbb809f92"
     },
     {
       "path": "source/validation.json",
-      "bytes": 4320,
-      "sha256": "304fb77db1db250bbdf79728bf53c91e73778ce81dcc308c0bec75af0d3b43f4"
+      "bytes": 4257,
+      "sha256": "1da819a21ded6f16c3259fd2f339946e41687f38ee2a16ba275a0ddd3893e550"
     },
     {
       "path": "總覽.png",
-      "bytes": 675721,
-      "sha256": "b91d1369bf131a1fd3c74985736c9c7e8b577771790b9b51a0370324036327b0"
+      "bytes": 734733,
+      "sha256": "b1be714ac915a41a3044e301ff4770eb9f26ad17c08147872648455bd85a3be9"
     },
     {
       "path": "逐頁講稿.md",
-      "bytes": 15401,
-      "sha256": "1afb31baaea3a321b99816ec9757bae7c7db6ad3fc8b84664afd9a3ac3279a6d"
+      "bytes": 14277,
+      "sha256": "683b60bb74e64071c1b060445cf38929ccf1dadf98732c8f66c42eee793ac025"
     }
-  ]
+  ],
+  "source_commit_role": "base before revision; file hashes describe delivered revision"
 }

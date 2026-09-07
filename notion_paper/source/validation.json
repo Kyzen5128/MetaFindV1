@@ -1,20 +1,20 @@
 {
-  "pptx_sha256": "1fc735647567a2a05990a3984929bd71472c109f31fb464e9fdf1758bbe23254",
-  "pdf_sha256": "ba79443fbdcae506696777b255e049e17564fb7d3c2d36f40a707565ceae0092",
+  "pptx_sha256": "be15f10d5607cbbffc150d6d5632132162c53904437d334533015f992b4bd0fa",
+  "pdf_sha256": "b668d50c1ef8ed6ef96a35f1a9a1902f1656c812ac4c6e0d38c7d0e893f69155",
   "slides": 10,
   "notes_slides": 10,
   "command_appendix_removed": true,
   "notes_chinese_characters": [
-    303,
+    304,
     339,
     346,
     334,
     334,
-    352,
-    335,
-    318,
-    328,
-    355
+    280,
+    273,
+    272,
+    323,
+    285
   ],
   "checks": [
     {
@@ -22,7 +22,7 @@
       "title_found": true,
       "takeaway_found": true,
       "pdf_text_characters": 316,
-      "notes_chinese_characters": 303
+      "notes_chinese_characters": 304
     },
     {
       "slide": 2,
@@ -56,36 +56,36 @@
       "slide": 6,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 567,
-      "notes_chinese_characters": 352
+      "pdf_text_characters": 599,
+      "notes_chinese_characters": 280
     },
     {
       "slide": 7,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 441,
-      "notes_chinese_characters": 335
+      "pdf_text_characters": 600,
+      "notes_chinese_characters": 273
     },
     {
       "slide": 8,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 554,
-      "notes_chinese_characters": 318
+      "pdf_text_characters": 739,
+      "notes_chinese_characters": 272
     },
     {
       "slide": 9,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 428,
-      "notes_chinese_characters": 328
+      "pdf_text_characters": 618,
+      "notes_chinese_characters": 323
     },
     {
       "slide": 10,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 843,
-      "notes_chinese_characters": 355
+      "pdf_text_characters": 955,
+      "notes_chinese_characters": 285
     }
   ],
   "missing_visible_text_boxes": [],
@@ -111,38 +111,43 @@
       "found_in_own_rectangle": true
     },
     {
-      "slide": 9,
-      "text": "鎖定物件清單\n準備第二份文字描述",
+      "slide": 8,
+      "text": "論文稱 R@1／R@5；完整標註規則未知",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 8,
+      "text": "論文說 query／gallery 使用相同 PC embedding",
       "found_in_own_rectangle": true
     },
     {
       "slide": 9,
-      "text": "指定兩階段模型存檔\n保留版本與來源",
+      "text": "ULIP-2 描述可作草稿\n記錄原始文字、照片與點雲",
       "found_in_own_rectangle": true
     },
     {
       "slide": 9,
-      "text": "共用候選物件庫\n以同一資產編號為正解",
+      "text": "逐條件審完全部候選\n來源 UID 不自動當正解",
       "found_in_own_rectangle": true
     },
     {
       "slide": 9,
-      "text": "留下排名、缺漏與錯誤\n正式跑分尚待執行",
+      "text": "固定題目、答案與候選池\n核對 Stage 1／2 版本",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 9,
+      "text": "主報 Hit，另報 Recall\n未審完的資料不跑正式分數",
       "found_in_own_rectangle": true
     },
     {
       "slide": 10,
-      "text": "轉成向量、固定資料分組；另做資料預檢",
+      "text": "每條件完整 0／1 正解；先於模型排名",
       "found_in_own_rectangle": true
     },
     {
       "slide": 10,
-      "text": "準備房間、物件與關係，訓練第二階段",
-      "found_in_own_rectangle": true
-    },
-    {
-      "slide": 10,
-      "text": "跑 42 組比較；另測場景資訊開啟／關閉",
+      "text": "Hit@1／Hit@5；另列 Recall 與舊診斷",
       "found_in_own_rectangle": true
     }
   ],
@@ -151,21 +156,9 @@
   "powerpoint_desktop_opened": false,
   "scope": "Actual LibreOffice PDF render and PPTX notes/XML read-back; visual inspection is separate.",
   "visual_inspection": {
-    "contact_sheet_all_ten": true,
-    "full_resolution_pages": [
-      2,
-      3,
-      4,
-      5,
-      8,
-      9,
-      10
-    ],
-    "observed_layout_issues": [],
-    "review": "actual LibreOffice rendering inspected by root and annotation-method reviewer"
-  },
-  "independent_content_review": {
-    "slides_2_to_5": "checked against annotation implementation, real example and frozen ETA evidence",
-    "slides_6_to_10": "checked against paper and evaluator; replaced renderer wording about scene score with no scene input"
+    "scope": "actual PDF contact sheet, all ten slides; evaluation slides 6–10 checked for table and card fit",
+    "result": "readable; no observed text overlap or clipping",
+    "method": "assistant image inspection",
+    "visible_slides_unchanged_after_inspection": "only notes source line reference updated"
   }
 }

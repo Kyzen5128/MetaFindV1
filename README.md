@@ -9,7 +9,8 @@
 |---|---|
 | 資料從哪裡來、產物給誰讀、更新後哪些 cache 需重新核對 | [資料流與產物交接](docs/DATA_FLOW.md) |
 | 本 checkout 的實際程序、指定 corpus 的檔案盤點 | `bash tools/status.sh --data /absolute/path/to/data`；加 `--json` 保存快照 |
-| 同一觀測／不同觀測的七模態檢索；mean、Stage 1、Stage 2-off | [自訂評估規格與命令](docs/CUSTOM_TABLE1_EVALUATION.md) |
+| 主評估：真實家具需求、多個可接受候選與 Hit／Recall | [需求檢索評估規格與命令](docs/INTENT_RETRIEVAL_EVALUATION.md) |
+| 診斷：同一／不同觀測的 42 組 same-UID 檢索 | [舊自訂評估規格與命令](docs/CUSTOM_TABLE1_EVALUATION.md) |
 | 從論文到訓練／評估的審查、修正及未完成項目 | [最新批准集合與等待鏈審查](docs/audit/REPRODUCTION_GATE_CHAIN_REVIEW_20260908.md)、[資料邊界與評分交接](docs/audit/REPRODUCTION_CORPUS_REVIEW_20260908.md)、[真實場景驗證](docs/history/REPRODUCTION_SCENE_REVIEW_20260908.md)、[真實訓練審查](docs/history/REPRODUCTION_TRAINING_REVIEW_20260908.md) |
 | Algorithm 1 的逐步取回／圖更新，與完整 Table 2 的界線 | [場景檢索核心](docs/SCENE_COMPOSITION.md) |
 | I-Design → 原始查詢 → 檢索 → 實際 GLB 放置／渲染 | [planner 輸入](docs/IDesign_INPUTS.md)、[原始查詢交接](docs/RAW_SCENE_INPUTS.md)、[Blender 放置](docs/SCENE_PLACEMENT.md) |
@@ -20,7 +21,7 @@
 | 論文逐條公式與證據 | [原始公式清單](docs/audit/A_FORMULA_INVENTORY.md)、[本輪公式／梯度審查](docs/audit/formula_review_20260907.md)，回查 [paper source](docs/paper/metafind_source/) |
 | 衍生規格、gate 與已記錄決策 | [graph 文件導覽](docs/graph/README.md)、[Decision Ledger](workflow/DECISION_LEDGER.md) |
 
-自訂評估是 **IMPLEMENTATION CHOICE**：固定同一批 query/gallery UID，比較觀測構法。它不補定作者未交代的 Table 1 query 細節，也不把其分數標成論文復現結果。歷史 `TABLE1_REPORT_*`、`NOTE_*`、audit 與 handoff 須連同原始 artifact、實驗配置及後續更正閱讀。
+主評估是使用者於 2026-09-08 批准的 **IMPLEMENTATION CHOICE**：需求編號獨立於資產 UID，依每個可見模態條件審核固定候選池，允許多個正解，主要報 Hit@1／Hit@5，另報真正 Recall。ULIP-2 原始描述可作待審核草稿；真實需求與完整 qrels 仍待建立，正式評估尚未執行。原 42 組同資產／兩觀測流程保留為診斷，兩者都不補定作者未公開的 Table 1 完整協定。歷史 `TABLE1_REPORT_*`、`NOTE_*`、audit 與 handoff 須連同原始 artifact、實驗配置及後續更正閱讀。
 
 ## 環境與資料位置
 
@@ -66,7 +67,7 @@ metafind/
   data/       GLB／點雲／render／annotation、文字與影像 cache、splits、場景圖
   models/     ULIP-2 封裝、fusion、DualTower、ESSGNN、protocol 解析
   train/      Stage 1、Stage 2、gallery index 建立與 promotion
-  eval/       retrieval、diagnostics、自訂觀測 protocol 與七模態評估
+  eval/       多正解需求檢索、same-UID 觀測診斷、既有 retrieval 與場景分數交接
   scene/      planner／原始查詢交接、逐步場景檢索、語義準備、GLB 放置與 CPU 渲染
   gates/      明訂的驗證與 promotion gate
   compat/     上游 runtime 相容修補

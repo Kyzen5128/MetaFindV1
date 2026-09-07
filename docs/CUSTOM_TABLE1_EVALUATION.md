@@ -1,7 +1,11 @@
 # 自訂七模態檢索評估
 
+**2026-09-08 定位更新：本頁保留為 same-UID 辨識診斷；三模型齊備時是兩觀測 × 三方法 × 七模態的 42 組。** 主評估已改為[家具需求、多個可接受答案的 intent retrieval](INTENT_RETRIEVAL_EVALUATION.md)，採逐條件人工 qrels、Hit@1／Hit@5 及輔助真正 Recall。本頁的舊協定、命令與歷史驗證保留，不把它們改寫成新需求評估的結果。
+
 本流程以固定物件清單評估「能否找回同一個 3D 資產」，輸出兩張七欄表。
 它沿用 MetaFind 的七種 query 條件與 R@1／R@5，但 **不宣稱已恢復作者 Table 1 未公開的完整評估設定**。
+
+已知 baseline 差異：論文 [3experiments.tex 第 24 行](paper/metafind_source/3experiments.tex#L24) 說明其他模型 P-only 的 query／gallery 使用相同 embedding；本地 mean baseline 的 query=P，但 gallery 始終融合完整 T/I/P，兩側不是同一向量。不能把這一欄當成作者 PC-only baseline 的相同設定；作者其餘 gallery／正規化細節仍未完整公開。
 
 ## 依據與範圍
 

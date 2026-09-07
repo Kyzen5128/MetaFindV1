@@ -10,7 +10,7 @@
 | **PAPER FACT** | Stage 1 使用完整 T/I/P gallery 與可缺模態 query；Stage 2 加入 layout、更新 query fusion 與 ESSGNN、凍結 gallery；推論預先計算 gallery。 | [MetaFind §2.4、§2.6、§2.7](paper/metafind_source/2methdology.tex) |
 | **PAPER FACT** | Table 1 報七種 query 組合的 R@1／R@5；baseline 額外加 mean pooling；Objaverse 評估關閉 layout。 | [MetaFind §3.1–3.2、Table 1](paper/metafind_source/3experiments.tex) |
 | **OBSERVED IMPLEMENTATION** | 以下模組、檔名、資料形狀與檢查是本 repo 的實際路徑。 | 各列連結的 producer／consumer |
-| **IMPLEMENTATION CHOICE** | 本地標註模型、文字序列化、視角平均、實際訓練範圍、ProcTHOR 可用模態、切分／選模規則與自訂觀測分離。 | encoding/training protocols、checkpoint 與 run provenance |
+| **IMPLEMENTATION CHOICE** | 本地標註模型、文字序列化、視角平均、實際訓練範圍、ProcTHOR 可用模態、切分／選模規則、自訂觀測診斷，以及使用者批准的多正解需求評估。 | encoding/training protocols、checkpoint、run provenance 與 [需求評估規格](INTENT_RETRIEVAL_EVALUATION.md) |
 | **UNKNOWN** | 作者 Table 1 使用的具體 query 觀測、候選 UID 清單，以及 baseline 融合的完整細節。 | 現有 paper source 未完整指定；不能由本地分數反推補成事實。 |
 
 [paper source](paper/metafind_source/) 是內容權威；[graph specifications](graph/README.md)、[audit](audit/A_FORMULA_INVENTORY.md)、[決策紀錄](../workflow/DECISION_LEDGER.md) 是衍生規格／工作紀錄。程式、測試及歷史報告各自提供實作或驗證證據，不能改寫論文。
@@ -161,9 +161,38 @@ Stage2Data 對 node／modern edge NPZ 直接消費 `verified_source_bytes()` 回
 
 Stage 2 還原時也分開父 loss 與子 loss：fixed tau 使用自身 recipe；learnable tau 保留父 raw scale 初始化選擇。checkpoint `temperature_init` 記 requested／raw／effective／source，訓練 log 使用該次 forward 的有效 tau，包含 clamp。真 `no_layout` checkpoint 可進 retrieval／probe／composition，但不假列 layout-on 結果。
 
-## 7. 新自訂評估是獨立分支
+## 7. 主需求評估、舊同資產診斷與場景分支
 
-完整操作規格見 [CUSTOM_TABLE1_EVALUATION.md](CUSTOM_TABLE1_EVALUATION.md)。它讀 canonical sources 與已選 checkpoint，另建新目錄，不覆寫訓練 protocol 或 promoted index。
+### 主評估：需求與多個可接受答案
+
+完整格式與命令見 [INTENT_RETRIEVAL_EVALUATION.md](INTENT_RETRIEVAL_EVALUATION.md)。這是使用者於 2026-09-08 批准的本地評估選擇，真實需求題庫與完整人工 qrels 仍待建立，正式結果尚未產生；不是作者未公開的 Table 1 協定。
+
+```mermaid
+flowchart LR
+  RAW[ULIP-2 原始 caption 與可選 xyzrgb] --> DRAFT[prepare_ulip2_intent_queries 待審核草稿]
+  DRAFT --> REVIEW[人工確認需求與參考來源]
+  NEED[另行撰寫的真實需求與原始參考] --> REVIEW
+  POOL[預先固定的完整候選 UID 清單] --> LABEL[依每個可見條件審核全候選 qrels]
+  REVIEW --> LABEL
+  LABEL --> PREP[intent_protocol 凍結 spec 與來源]
+  CAN[canonical cache 與 encoding protocol] --> PREP
+  PREP --> CHECK[intent_retrieval --check-only]
+  CK[Stage 1 與可選 Stage 2 records] --> CHECK
+  CHECK --> RUN[另行載入模型並排名]
+  RUN --> OUT[Hit / Recall / 逐題排名 / 分母 / provenance]
+```
+
+- [ULIP-2 草稿抽取](../tools/prepare_ulip2_intent_queries.py) 依 metadata 的 UID／shard 對應讀指定 caption，另可保存 raw float32 xyzrgb。產物 `draft_queries.json` 固定為 `needs_relevance_review`；沒有 qrels／judgments，來源 UID 不是自動正例，不能直接送入正式 prepare。圖片特徵不是 raw image；參考照片需另有來源。
+- [intent_protocol](../metafind/eval/intent_protocol.py) 讀人工完成的 spec：獨立 `query_id`、原始文字／照片／點雲、實際支持的模態條件及逐條件 qrels。每題、每個條件必須審核固定候選池全部 UID，至少一個正例；未審候選不能補成零。僅發布 `protocol.json`，綁定 spec、原始參考與 canonical 資料 bytes，不生成題目、答案或模型向量。
+- [intent_retrieval](../metafind/eval/intent_retrieval.py) 比較官方預訓練 ULIP-2＋本地 mean、Stage 1、可選 Stage 2-off。候選始終完整 T/I/P，預先編碼；Stage 2 沿用 Stage 1 候選向量。Query 只讀明示的原始線索，不從 qrels 補入資料；有輸入的條件才評估，各條件固定題目與分母，不承諾 42 組。
+- 主指標 Hit@1／Hit@5 表示前 k 名至少有一個可接受候選；輔助真正 Recall@k 的分母是該題、該條件在固定池中的全部正例。float64 cosine 由高到低，同分以 UID 字典序由小到大；這與舊 same-UID 診斷的同分規則分開記錄。
+- 題目、判準、qrels 與候選池須在模型排名前封存。完整審核可以先用小池，但不能看結果後縮池，也不能直接和論文大池分數比較。Gemma 估計尺寸／材質不能冒充實測 GT；來源 hash 也不認證人工判斷正確或審核者未曾看過排名。`--check-only` 不產分數、不執行完整模型 forward，結果仍不自動認證獨立測試。
+
+新主評估另建輸出目錄，不覆寫訓練 protocol、promoted index 或舊診斷。ULIP-2 的原始描述作題目草稿，不會使其 source UID 自動成為唯一正解；另做官方 caption same-UID 檢索仍屬下一節診斷。
+
+### 舊診斷：同一資產、兩種觀測
+
+保留的操作規格見 [CUSTOM_TABLE1_EVALUATION.md](CUSTOM_TABLE1_EVALUATION.md)。三模型齊備時，兩觀測 × 三方法 × 七模態共 42 組。它讀 canonical sources 與已選 checkpoint，另建新目錄，不覆寫訓練 protocol 或 promoted index。
 
 ```mermaid
 flowchart LR
@@ -237,7 +266,8 @@ flowchart LR
 | Stage 1 checkpoint／Objaverse index | checkpoint bytes 與綁定的 forward configuration、初始化與 tower state；index 的 encoder hash、UID pool、staging／promotion record。資料改變不會自動更新既有權重或 index。 |
 | ProcTHOR node／edge cache 與 gallery | canonical `object_text.text`／`relation_text`、metadata annotations 的序列化、關係 key 與 row mapping、宣告模態及 source hashes；不得以 renderer 舊 text 取代新 canonical query/gallery text。 |
 | Stage 2 checkpoint | parent Stage 1 與 ProcTHOR index 身分、protocol、graph scope、samples 與輸入 hashes；換 parent 或 corpus 後不得只換 record 路徑。 |
-| 自訂 `protocol.json` | `load_protocol(..., verify=True)` 全量驗來源與輸出 hashes；runner 再核 checkpoint／cache 相容性與有效 token。檔名相同或 `--check-only` 成功不代表正式模型評估完成。 |
+| 同資產診斷 `protocol.json` | `custom_protocol.load_protocol(..., verify=True)` 全量驗來源與輸出 hashes；runner 再核 checkpoint／cache 相容性與有效 token 差異。檔名相同或 `--check-only` 成功不代表正式模型評估完成。 |
+| 主需求評估 `protocol.json` | `intent_protocol.load_protocol(..., verify=True)` 核對 spec、逐條件 qrels coverage、原始參考及 canonical 來源 bytes；runner 再核 checkpoint／cache 相容性。人工語意判斷與事先封存流程需另有審核紀錄，不由 hash 認證。 |
 
 實作／CPU 測試的近期範圍見 [CODE_REPAIR_REPORT_20260907.md](history/CODE_REPAIR_REPORT_20260907.md) 與 [自訂評估驗證](CUSTOM_TABLE1_EVALUATION.md#產物與可驗證範圍)。歷史 `TABLE1_REPORT_*`、`NOTE_*` 與 handoff 記錄當時的觀測或推論；引用前需核對其原始 artifact、設定及後續更正。
 

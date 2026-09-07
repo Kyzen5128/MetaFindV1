@@ -64,7 +64,7 @@ def short_source(s):
     n=int(s['id'])
     if n==5:return '進度快照：2026-09-08 04:12:30（台北）；ETA 為推估｜完整依據見備忘稿'
     if n<6:return '來源：目前標註程式、實際資料與論文 Figure 2｜完整依據見備忘稿'
-    return '來源：論文 Table 1、目前自訂評估規格與程式｜完整依據見備忘稿'
+    return '來源：論文 Table 1 與本地需求檢索規格；正式評估尚待執行｜完整依據見備忘稿'
 
 def base(s,n,total):
     sl=prs.slides.add_slide(prs.slide_layouts[6]);sl.background.fill.solid();sl.background.fill.fore_color.rgb=RGBColor.from_string(BG)
@@ -184,21 +184,22 @@ def render(sl,s,n):
     elif n==6:
         methods=[('預訓練基準','ULIP2 特徵\n本地平均融合'),('Stage 1','學習物件表徵\n與多模態融合'),('Stage 2','場景訓練後的融合\n本評估不輸入場景資訊')]
         for i,(title,detail) in enumerate(methods):card(sl,f'0{i+1}',title,detail,.6+i*4.12,1.93,3.86,2.78,dark=i==2)
-        text(sl,'7 種線索組合',.73,5.05,2.35,.34,18,TEAL,True)
+        text(sl,'依輸入安排條件',.73,5.05,2.35,.34,18,TEAL,True)
         text(sl,'T  /  I  /  PC  /  T＋I  /  T＋PC  /  I＋PC  /  全部',3.10,5.02,9.46,.50,22,INK,True)
-        text(sl,'T＝文字　I＝圖片　PC＝點雲',.73,5.80,5.50,.37,16,MUTED)
+        text(sl,'T＝文字　I＝圖片　PC＝點雲；逐條件記錄題數',.73,5.80,5.50,.42,15,MUTED)
         text(sl,'候選皆有 T＋I＋PC；三方法使用同一批資產',6.00,5.80,6.61,.37,16,TEAL,True)
     elif n==7:
-        table(sl,s['table'],top=1.94,height=2.72,size=17,widths=[.65,1.25,2.3])
-        for i,(title,detail) in enumerate([('R@1：第一名就找對','像找商品編號：第一筆就是同一件資產'),('R@5：前五名有找到','看前五筆裡，是否包含同一件資產')]):
-            x=.6+i*6.19;box(sl,x,4.98,5.91,1.18,WHITE,LINE)
-            text(sl,title,x+.18,5.13,5.53,.38,21,TEAL,True)
-            text(sl,detail,x+.18,5.70,5.53,.31,15,MUTED)
+        text(sl,'需求：找一張適合小餐桌、木質外觀的餐椅。',.73,1.89,11.93,.48,23,TEAL,True)
+        table(sl,s['table'],top=2.60,height=2.40,size=17,widths=[2.3,2.7])
+        for i,(title,detail) in enumerate([('Hit：有沒有找到合適的','前五名只要有一個合適選項，就算命中。'),('Recall：合適的找回多少','有三個合適選項，找到一個＝找回三分之一。')]):
+            x=.6+i*6.19;box(sl,x,5.26,5.91,.98,WHITE,LINE)
+            text(sl,title,x+.18,5.36,5.53,.34,20,TEAL,True)
+            text(sl,detail,x+.18,5.89,5.53,.27,14,MUTED)
     elif n==8:table(sl,s['table'],top=1.90,height=4.32,size=16,widths=[1.02,1.62,2.68])
     elif n==9:
-        points=[('固定查詢題目','鎖定物件清單\n準備第二份文字描述'),('固定模型版本','指定兩階段模型存檔\n保留版本與來源'),('固定候選與正解','共用候選物件庫\n以同一資產編號為正解'),('保留逐題紀錄','留下排名、缺漏與錯誤\n正式跑分尚待執行')]
+        points=[('準備需求與參考','ULIP-2 描述可作草稿\n記錄原始文字、照片與點雲'),('先審核合適答案','逐條件審完全部候選\n來源 UID 不自動當正解'),('凍結資料與模型','固定題目、答案與候選池\n核對 Stage 1／2 版本'),('記錄逐題結果','主報 Hit，另報 Recall\n未審完的資料不跑正式分數')]
         for i,(title,detail) in enumerate(points):card(sl,f'0{i+1}',title,detail,.6+i*3.095,1.98,2.82,3.50)
-        text(sl,'先前小型驗證只檢查流程能否運作；正式結果仍待這一輪資料完成。',.75,5.87,11.91,.37,18,ORANGE,True)
+        text(sl,'先完成並封存審核，再看模型排名；缺少標籤不能直接算不相關。',.75,5.87,11.91,.37,18,ORANGE,True)
     elif n==10:
         for i,st in enumerate(s['steps']):
             x,y=.6+(i%3)*4.12,1.91+(i//3)*2.21
