@@ -3,25 +3,25 @@
   "title": "MetaFind｜標註更新與評估計畫",
   "slides": 10,
   "speaker_notes": 10,
-  "source_commit": "5c99e39e339fdfafb0aa13eccec557593cda51b3",
+  "source_commit": "12f26ff1818629f5fab0579d3381d0053605be72",
   "source_date": "2026-09-08",
   "annotation_snapshot_taipei": "2026-09-08 04:12:30",
-  "formal_evaluation_status": "pending real intent query curation and condition-specific complete relevance review; no formal model results",
+  "formal_evaluation_status": "planned single-target UID retrieval with R@1/R@5; no formal full-corpus evaluation; illustrative scores only",
   "files": [
     {
       "path": "MetaFind_Table1_Stage2_含講稿.pdf",
-      "bytes": 602845,
-      "sha256": "b668d50c1ef8ed6ef96a35f1a9a1902f1656c812ac4c6e0d38c7d0e893f69155"
+      "bytes": 586826,
+      "sha256": "083457cfd07f3b081b4c81ca3d0728f864650944d467129b337de0bd266e1e38"
     },
     {
       "path": "MetaFind_Table1_Stage2_含講稿.pptx",
-      "bytes": 419322,
-      "sha256": "be15f10d5607cbbffc150d6d5632132162c53904437d334533015f992b4bd0fa"
+      "bytes": 419756,
+      "sha256": "efe6421865bbd1471afb71db513c768bf8bfc8e4f4278429e86a0c07bea98a6a"
     },
     {
       "path": "README.md",
-      "bytes": 5486,
-      "sha256": "2852769445042ef8fb8dcdfa26b7849b637c9d8a8c49afc4b0afa5ac63b9c81c"
+      "bytes": 5995,
+      "sha256": "0735a98ab33d05116ccba4bc5c8995e924d1fe2b0e85b06bd9231cec94b045e5"
     },
     {
       "path": "assets/annotation_view_01.png",
@@ -50,18 +50,18 @@
     },
     {
       "path": "source/build_deck.py",
-      "bytes": 14874,
-      "sha256": "eb9e5ec828f5c74554ec259afcc1108c364ea589d34211870e7c14fccff824bb"
+      "bytes": 15945,
+      "sha256": "64bbea92a51413a062154db0f203b20aec1274b8c79e899855dc9c2a978623d3"
     },
     {
       "path": "source/build_record.json",
       "bytes": 449,
-      "sha256": "45663cae7973a76c6ec3fedcc5597db71ab4398924282cbf3cdcfc4d3f8f2be3"
+      "sha256": "770c9aed3ea49f14812cedc6d43aacd04955adc9afbf2d7996ed1268cf47ccaf"
     },
     {
       "path": "source/layout_boxes.json",
-      "bytes": 31960,
-      "sha256": "738a8cc94226bd185a7954acaa85713f6f347da3f68cc002183b70044a853a38"
+      "bytes": 31711,
+      "sha256": "139490badd4a86a2551a4171c6752adcbcec3cc9dd1acda3448c647e9cf303bc"
     },
     {
       "path": "source/notion_provenance.json",
@@ -75,28 +75,33 @@
     },
     {
       "path": "source/ppt_content.json",
-      "bytes": 23942,
-      "sha256": "c510fcf06a5e0fc5dc1ae26f5f427dfc01018b7eaa1a2abfcecb87bcaa4f2112"
+      "bytes": 23539,
+      "sha256": "6f9a06fbf2230df1d091c9b2cf6a2b8f9fe815ea3d3b936892c538a1af09f270"
     },
     {
       "path": "source/source_manifest.json",
-      "bytes": 6557,
-      "sha256": "a63450e77baf350b79273642c0cdc5b488ac0a4734fd7b6bfff9eb0fbb809f92"
+      "bytes": 6298,
+      "sha256": "0e07c4be82a72c6205bf57834f6738bdfb918bd3793182cda3a8a6e374764607"
+    },
+    {
+      "path": "source/ulip2_sillita_example.json",
+      "bytes": 5004,
+      "sha256": "3c5b8c2a993d98230603d53f296123c4e0345411f5122d793a8d9655eebc0c13"
     },
     {
       "path": "source/validation.json",
-      "bytes": 4257,
-      "sha256": "1da819a21ded6f16c3259fd2f339946e41687f38ee2a16ba275a0ddd3893e550"
+      "bytes": 5048,
+      "sha256": "121f33c733b3f6c4cb17b9280e99778c5d9a1a33e2f8cd8d72345e10237f72e7"
     },
     {
       "path": "總覽.png",
-      "bytes": 734733,
-      "sha256": "b1be714ac915a41a3044e301ff4770eb9f26ad17c08147872648455bd85a3be9"
+      "bytes": 724553,
+      "sha256": "a650e9dacdebeef5c1a4797a6ecb1348c1d4b9504977ec5332e2052972f74c16"
     },
     {
       "path": "逐頁講稿.md",
-      "bytes": 14277,
-      "sha256": "683b60bb74e64071c1b060445cf38929ccf1dadf98732c8f66c42eee793ac025"
+      "bytes": 14997,
+      "sha256": "7a9bd9eb3459c96a6ead03a381c43c2debde40fe2e1a59bdf5485c111ece6ed2"
     }
   ],
   "source_commit_role": "base before revision; file hashes describe delivered revision"

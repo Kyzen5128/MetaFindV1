@@ -1,0 +1,263 @@
+{
+  "evidence_class": "OBSERVED DATA",
+  "source": {
+    "archive": "/mnt/data1/kyzen/datasets/ulip2_objaverse_lvis/ULIP-2/objaverse_lvis/000-145.tar.gz",
+    "member": "000-145/8505977020be4fd194854ad3d9808222.npy",
+    "sha256": "27c3528e7a8dec6389e0b53b28136d352787f6aca996dcd16f55317bce069c43",
+    "field_count": 15,
+    "export": "record.npy is unchanged member bytes; record.json serializes all array values as lists"
+  },
+  "field_count": 15,
+  "record": {
+    "dataset": "Objaverse",
+    "group": "000-145",
+    "id": "8505977020be4fd194854ad3d9808222",
+    "text": [
+      "Sillita Roja"
+    ],
+    "text_feat": [
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        },
+        "prompt_avg": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      }
+    ],
+    "blip_caption": "a chair with a pink cushion and a wooden frame",
+    "blip_caption_feat": {
+      "original": {
+        "shape": [
+          1,
+          1280
+        ],
+        "dtype": "float32"
+      },
+      "prompt_avg": {
+        "shape": [
+          1,
+          1280
+        ],
+        "dtype": "float32"
+      }
+    },
+    "msft_caption": "a chair with a red cushion",
+    "msft_caption_feat": {
+      "original": {
+        "shape": [
+          1,
+          1280
+        ],
+        "dtype": "float32"
+      },
+      "prompt_avg": {
+        "shape": [
+          1,
+          1280
+        ],
+        "dtype": "float32"
+      }
+    },
+    "thumbnail_feat": {
+      "shape": [
+        1280
+      ],
+      "dtype": "float32"
+    },
+    "retrieval_text": [
+      "3D model SANDALYE",
+      "3D simple chair model; 3D simple chair model",
+      "3d simple chair model",
+      "3ds max chair",
+      "Chair (23, Natural)",
+      "Chair by TheBne",
+      "High Poly Chair 3D Model",
+      "Laleggera sedia",
+      "Silla en color.png Download free GCODE file Miniature chair • 3D printing model, JoWrTeR",
+      "Synergy Chair (Metal)",
+      "WOODEN CHAIR",
+      "Wooden Chair",
+      "WoodenChair",
+      "blue chair with infinite background",
+      "cob_gazebo_objects/chair_ikea_borje.png",
+      "wooden chair 3D model"
+    ],
+    "retrieval_text_feat": [
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      },
+      {
+        "original": {
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      }
+    ],
+    "xyz": {
+      "shape": [
+        10000,
+        3
+      ],
+      "dtype": "float16"
+    },
+    "rgb": {
+      "shape": [
+        10000,
+        3
+      ],
+      "dtype": "float16"
+    },
+    "image_feat": {
+      "shape": [
+        12,
+        1280
+      ],
+      "dtype": "float32"
+    }
+  },
+  "image_note": "Deck illustration is the existing local render of the same UID, not an image contained in this shard."
+}

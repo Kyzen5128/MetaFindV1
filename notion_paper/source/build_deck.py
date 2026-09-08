@@ -64,7 +64,8 @@ def short_source(s):
     n=int(s['id'])
     if n==5:return '進度快照：2026-09-08 04:12:30（台北）；ETA 為推估｜完整依據見備忘稿'
     if n<6:return '來源：目前標註程式、實際資料與論文 Figure 2｜完整依據見備忘稿'
-    return '來源：論文 Table 1 與本地需求檢索規格；正式評估尚待執行｜完整依據見備忘稿'
+    if n==6:return '來源：ULIP-2 實際 NPY；插圖為本地同 UID 渲染｜完整欄位與來源見備忘稿'
+    return '來源：論文 Table 1 與本地同資產評估規則；正式評估尚待執行｜完整依據見備忘稿'
 
 def base(s,n,total):
     sl=prs.slides.add_slide(prs.slide_layouts[6]);sl.background.fill.solid();sl.background.fill.fore_color.rgb=RGBColor.from_string(BG)
@@ -182,24 +183,50 @@ def render(sl,s,n):
         text(sl,'近期約 11.7–11.9 件／分鐘\n需持續運作且速度相近',8.84,5.00,3.55,.79,15,'C6D8E1')
         text(sl,'只估標註處理；不含後續編碼、訓練與評估。',.76,6.12,11.65,.26,13,MUTED)
     elif n==6:
-        methods=[('預訓練基準','ULIP2 特徵\n本地平均融合'),('Stage 1','學習物件表徵\n與多模態融合'),('Stage 2','場景訓練後的融合\n本評估不輸入場景資訊')]
-        for i,(title,detail) in enumerate(methods):card(sl,f'0{i+1}',title,detail,.6+i*4.12,1.93,3.86,2.78,dark=i==2)
-        text(sl,'依輸入安排條件',.73,5.05,2.35,.34,18,TEAL,True)
-        text(sl,'T  /  I  /  PC  /  T＋I  /  T＋PC  /  I＋PC  /  全部',3.10,5.02,9.46,.50,22,INK,True)
-        text(sl,'T＝文字　I＝圖片　PC＝點雲；逐條件記錄題數',.73,5.80,5.50,.42,15,MUTED)
-        text(sl,'候選皆有 T＋I＋PC；三方法使用同一批資產',6.00,5.80,6.61,.37,16,TEAL,True)
+        raw=json.loads((ROOT/s['example_source']).read_text())['record']
+        box(sl,.6,1.89,3.05,4.18,WHITE,LINE)
+        text(sl,raw['text'][0],.79,2.05,2.65,.43,23,INK,True)
+        text(sl,'Objaverse · 15 個欄位',.79,2.58,2.65,.29,12,TEAL)
+        picture(sl,'annotation_view_01.png',.82,2.98,2.60,2.34)
+        text(sl,'同 UID 的本地渲染圖',.79,5.45,2.65,.29,12,MUTED)
+        text(sl,'UID：85059770…',.79,5.82,2.65,.23,11,MUTED)
+        for i,(label,field,translation) in enumerate([
+            ('BLIP 原始描述','blip_caption','粉紅坐墊、木框的椅子'),
+            ('MSFT 原始描述','msft_caption','紅色坐墊的椅子')]):
+            y=1.89+i*1.26;box(sl,3.91,y,8.79,1.13,WHITE,LINE)
+            text(sl,label,4.11,y+.08,8.34,.27,12,TEAL,True)
+            text(sl,raw[field],4.11,y+.40,8.34,.37,19,INK,True)
+            text(sl,translation,4.11,y+.84,8.34,.25,13,MUTED)
+        for i,(label,detail) in enumerate([
+            ('原始點資料','xyz / rgb\n各 10000 × 3'),
+            ('圖片特徵','image_feat：12 × 1280\nthumbnail_feat：1280'),
+            ('文字與特徵','名稱／BLIP／MSFT 向量\n另有 16 段 retrieval_text')]):
+            x=3.91+i*2.97;box(sl,x,4.54,2.85,1.53,PALE)
+            text(sl,label,x+.14,4.70,2.57,.30,16,TEAL,True)
+            text(sl,detail,x+.14,5.18,2.57,.71,13.5,INK)
+        text(sl,'這筆沒有原始圖片、GLB、尺寸或重量；完整 15 欄保留於來源檔。',.74,6.14,11.9,.26,13,ORANGE)
     elif n==7:
-        text(sl,'需求：找一張適合小餐桌、木質外觀的餐椅。',.73,1.89,11.93,.48,23,TEAL,True)
-        table(sl,s['table'],top=2.60,height=2.40,size=17,widths=[2.3,2.7])
-        for i,(title,detail) in enumerate([('Hit：有沒有找到合適的','前五名只要有一個合適選項，就算命中。'),('Recall：合適的找回多少','有三個合適選項，找到一個＝找回三分之一。')]):
-            x=.6+i*6.19;box(sl,x,5.26,5.91,.98,WHITE,LINE)
-            text(sl,title,x+.18,5.36,5.53,.34,20,TEAL,True)
-            text(sl,detail,x+.18,5.89,5.53,.27,14,MUTED)
-    elif n==8:table(sl,s['table'],top=1.90,height=4.32,size=16,widths=[1.02,1.62,2.68])
+        for i,st in enumerate(s['steps']):
+            card(sl,f'0{i+1}',st['title'],st['detail'],.6+i*4.12,1.94,3.86,2.89,dark=i==2)
+        text(sl,'比較模型',.75,5.12,1.38,.37,17,TEAL,True)
+        text(sl,'ULIP-2＋平均融合　／　Stage 1　／　Stage 2-off',2.22,5.09,10.35,.44,21,INK,True)
+        text(sl,'七種條件',.75,5.86,1.38,.33,17,TEAL,True)
+        text(sl,'T　I　P　T＋I　T＋P　I＋P　全部',2.22,5.85,10.35,.36,20,INK)
+    elif n==8:
+        example=s['metric_example'];count=example['queries']
+        text(sl,f'教學示意：{count} 道 query，每題對應 1 個目標 UID',.76,1.97,11.81,.46,23,TEAL,True)
+        for i,(name,hits,detail) in enumerate([
+            ('R@1',example['top1_successes'],'第一名就是目標物件'),
+            ('R@5',example['top5_successes'],'前五名包含目標物件')]):
+            x=.6+i*6.19;box(sl,x,2.72,5.91,2.50,WHITE,LINE)
+            text(sl,name,x+.23,2.94,5.45,.48,27,TEAL,True)
+            text(sl,f'{100*hits/count:g}%',x+.22,3.55,2.44,.80,45,INK,True)
+            text(sl,f'{hits} ÷ {count}',x+3.02,3.77,2.43,.39,24,MUTED)
+            text(sl,detail,x+.23,4.63,5.45,.35,20,INK)
+        text(sl,'R@5 的成功題目，包含已在第一名找對的題目。',.77,5.56,11.75,.36,19,INK)
+        text(sl,'30%／65% 僅用來說明計算，並非模型實驗結果。',.77,6.08,11.75,.27,14,ORANGE)
     elif n==9:
-        points=[('準備需求與參考','ULIP-2 描述可作草稿\n記錄原始文字、照片與點雲'),('先審核合適答案','逐條件審完全部候選\n來源 UID 不自動當正解'),('凍結資料與模型','固定題目、答案與候選池\n核對 Stage 1／2 版本'),('記錄逐題結果','主報 Hit，另報 Recall\n未審完的資料不跑正式分數')]
-        for i,(title,detail) in enumerate(points):card(sl,f'0{i+1}',title,detail,.6+i*3.095,1.98,2.82,3.50)
-        text(sl,'先完成並封存審核，再看模型排名；缺少標籤不能直接算不相關。',.75,5.87,11.91,.37,18,ORANGE,True)
+        table(sl,s['table'],top=1.90,height=4.32,size=16,widths=[1.04,1.68,2.60])
     elif n==10:
         for i,st in enumerate(s['steps']):
             x,y=.6+(i%3)*4.12,1.91+(i//3)*2.21

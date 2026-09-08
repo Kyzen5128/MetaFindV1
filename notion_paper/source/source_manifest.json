@@ -1,8 +1,8 @@
 {
   "schema": "metafind.presentation_sources.v2",
-  "source_commit": "5c99e39e339fdfafb0aa13eccec557593cda51b3",
+  "source_commit": "12f26ff1818629f5fab0579d3381d0053605be72",
   "as_of": "2026-09-08",
-  "scope": "Current annotation plus user-approved independent intent retrieval; ULIP-2 descriptions are drafts requiring reviewed multi-positive labels. Original Notion snapshot remains historical.",
+  "scope": "PPT revision requested by user: add real Sillita Roja dataset record and restore R@1/R@5 naming for single-target UID retrieval; independent multi-positive intent prototype is outside this reported plan.",
   "files": [
     {
       "path": "assets/annotation_view_01.png",
@@ -36,6 +36,14 @@
       "source_path": "/home/kyzen/MetaFindV1/output/validation/ppt_annotation_eval_20260908/annotation_progress_041230.json",
       "sha256": "f4d6f52b240c2b8c46d6064a164c974078f9d0ed32daa0bd7db5a93b3644331e",
       "evidence_class": "OBSERVED DATA; ETA is INFERENCE"
+    },
+    {
+      "path": "source/ulip2_sillita_example.json",
+      "source_path": "/home/kyzen/MetaFindV1/output/inspection/ulip2_one_object_85059770/record.npy",
+      "source_sha256": "27c3528e7a8dec6389e0b53b28136d352787f6aca996dcd16f55317bce069c43",
+      "sha256": "3c5b8c2a993d98230603d53f296123c4e0345411f5122d793a8d9655eebc0c13",
+      "evidence_class": "OBSERVED DATA",
+      "transformation": "safe NumPy decoding; retain all 15 fields and exact strings; numeric arrays represented by shape/dtype"
     }
   ],
   "referenced_files": [
@@ -48,20 +56,8 @@
       "sha256": "84fda1f1808c50baf555de417115bc6f04eec7d5b4d287738ac64d11caf3cdf9"
     },
     {
-      "path": "docs/DATA_FLOW.md",
-      "sha256": "e703e3e610fe70fb22840a8a0447f3dd1aeabf366e532c19e0eeadbc1a5f012d"
-    },
-    {
-      "path": "docs/INTENT_RETRIEVAL_EVALUATION.md",
-      "sha256": "873c918f6e9fbba3baa3ffc0b7d43cc1fcfd226455fe4495bf7b5596478576db"
-    },
-    {
       "path": "docs/SCENE_SCORES.md",
       "sha256": "c35b2a8ecf3fc321ed59356bb18714fd5a86657263e9539d3baf93379746f6ac"
-    },
-    {
-      "path": "docs/audit/INTENT_RETRIEVAL_UPDATE_20260908.md",
-      "sha256": "e8170670bd60ce72bbbbf2958ee0c820e8de2554da18b4d07b641e9f3c59f2d5"
     },
     {
       "path": "docs/paper/metafind_source/2methdology.tex",
@@ -80,24 +76,16 @@
       "sha256": "dfc63e0c9c4b30d2f56d27fb5468660e29f7fdf078e110e476c08d92af8152ee"
     },
     {
-      "path": "metafind/eval/custom_models.py",
-      "sha256": "e2ab4fd914c166d9810779a3dfc34fd430373a657e278beb9c1b18339f01ca7a"
-    },
-    {
-      "path": "metafind/eval/custom_table1.py",
-      "sha256": "9d8d25309baed13489968723d67a22c1b83bb19c02efff349f16f7d567a1de43"
-    },
-    {
       "path": "metafind/eval/intent_metrics.py",
       "sha256": "dca189458a0d47500731721fd8dc305c8833d43730b845f5feb1af29f04967f1"
     },
     {
-      "path": "metafind/eval/intent_protocol.py",
-      "sha256": "cf6dc291ec3a1472131bf1e31f9d84abab4d5e29f6f06816b0087279f030bdb2"
+      "path": "notion_paper/source/annotation_example.json",
+      "sha256": "1589a35de97c8eff710b68b7bab1427e850c749740fbe345737510c3e286729d"
     },
     {
-      "path": "metafind/eval/intent_retrieval.py",
-      "sha256": "cd17a0567f6291d4136541bb20496d5c4ef51eff4d6c9cfe593d901532444aff"
+      "path": "notion_paper/source/ulip2_sillita_example.json",
+      "sha256": "3c5b8c2a993d98230603d53f296123c4e0345411f5122d793a8d9655eebc0c13"
     },
     {
       "path": "output/validation/ppt_annotation_eval_20260908/annotation_progress_041230.json",
@@ -110,10 +98,6 @@
     {
       "path": "tools/chain_paper_stage2.sh",
       "sha256": "f90676478ba09bf73dc8b080daa596e9e2e892941cef48483d273fd9a4da90a7"
-    },
-    {
-      "path": "tools/prepare_ulip2_intent_queries.py",
-      "sha256": "d56f505247e7bf7f1663792f906df6709459a1fa12a29bbf6529c0d844c69bb4"
     }
   ],
   "claim_classes": [
@@ -134,7 +118,7 @@
       "class": "INFERENCE"
     },
     {
-      "claim": "Local prompt/retry, normalized mean, independent intent queries, condition-specific complete binary relevance judgments, main Hit and auxiliary true Recall; old two-observation scheme remains a separate diagnostic.",
+      "claim": "Single target asset UID per query; alternate captions and observations; fixed query/gallery lists; normalized mean baseline. R@k is the percentage of queries whose target is in top k.",
       "class": "IMPLEMENTATION CHOICE"
     },
     {
@@ -146,7 +130,7 @@
       "class": "UNKNOWN"
     },
     {
-      "claim": "One real ULIP-2 chair caption and raw XYZRGB successfully extracted; no relevance labels generated.",
+      "claim": "Sillita Roja raw NPY has 15 fields, exact BLIP and MSFT captions, raw XYZ/RGB and precomputed features. Slide illustration is an unchanged local render of the same UID, not an image from the shard.",
       "class": "OBSERVED DATA"
     }
   ],

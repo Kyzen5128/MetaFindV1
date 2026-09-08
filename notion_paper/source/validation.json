@@ -1,20 +1,20 @@
 {
-  "pptx_sha256": "be15f10d5607cbbffc150d6d5632132162c53904437d334533015f992b4bd0fa",
-  "pdf_sha256": "b668d50c1ef8ed6ef96a35f1a9a1902f1656c812ac4c6e0d38c7d0e893f69155",
+  "pptx_sha256": "efe6421865bbd1471afb71db513c768bf8bfc8e4f4278429e86a0c07bea98a6a",
+  "pdf_sha256": "083457cfd07f3b081b4c81ca3d0728f864650944d467129b337de0bd266e1e38",
   "slides": 10,
   "notes_slides": 10,
   "command_appendix_removed": true,
   "notes_chinese_characters": [
-    304,
+    308,
     339,
     346,
     334,
     334,
-    280,
-    273,
-    272,
-    323,
-    285
+    293,
+    294,
+    295,
+    303,
+    302
   ],
   "checks": [
     {
@@ -22,7 +22,7 @@
       "title_found": true,
       "takeaway_found": true,
       "pdf_text_characters": 316,
-      "notes_chinese_characters": 304
+      "notes_chinese_characters": 308
     },
     {
       "slide": 2,
@@ -56,36 +56,36 @@
       "slide": 6,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 599,
-      "notes_chinese_characters": 280
+      "pdf_text_characters": 937,
+      "notes_chinese_characters": 293
     },
     {
       "slide": 7,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 600,
-      "notes_chinese_characters": 273
+      "pdf_text_characters": 716,
+      "notes_chinese_characters": 294
     },
     {
       "slide": 8,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 739,
-      "notes_chinese_characters": 272
+      "pdf_text_characters": 416,
+      "notes_chinese_characters": 295
     },
     {
       "slide": 9,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 618,
-      "notes_chinese_characters": 323
+      "pdf_text_characters": 755,
+      "notes_chinese_characters": 303
     },
     {
       "slide": 10,
       "title_found": true,
       "takeaway_found": true,
-      "pdf_text_characters": 955,
-      "notes_chinese_characters": 285
+      "pdf_text_characters": 988,
+      "notes_chinese_characters": 302
     }
   ],
   "missing_visible_text_boxes": [],
@@ -97,57 +97,72 @@
     },
     {
       "slide": 6,
-      "text": "ULIP2 特徵\n本地平均融合",
+      "text": "xyz / rgb\n各 10000 × 3",
       "found_in_own_rectangle": true
     },
     {
       "slide": 6,
-      "text": "學習物件表徵\n與多模態融合",
+      "text": "image_feat：12 × 1280\nthumbnail_feat：1280",
       "found_in_own_rectangle": true
     },
     {
       "slide": 6,
-      "text": "場景訓練後的融合\n本評估不輸入場景資訊",
+      "text": "名稱／BLIP／MSFT 向量\n另有 16 段 retrieval_text",
       "found_in_own_rectangle": true
     },
     {
-      "slide": 8,
-      "text": "論文稱 R@1／R@5；完整標註規則未知",
+      "slide": 7,
+      "text": "T：ULIP-2 另一份描述\nI：保留的一個視角\nP：同資產重新取樣點雲",
       "found_in_own_rectangle": true
     },
     {
-      "slide": 8,
-      "text": "論文說 query／gallery 使用相同 PC embedding",
+      "slide": 7,
+      "text": "每件皆有文字、圖像與點雲\n各模型預先編碼\n查詢時使用同一候選清單",
       "found_in_own_rectangle": true
     },
     {
-      "slide": 9,
-      "text": "ULIP-2 描述可作草稿\n記錄原始文字、照片與點雲",
-      "found_in_own_rectangle": true
-    },
-    {
-      "slide": 9,
-      "text": "逐條件審完全部候選\n來源 UID 不自動當正解",
+      "slide": 7,
+      "text": "計算查詢與候選的相似度\n由高到低排列\n檢查對應物件排在第幾名",
       "found_in_own_rectangle": true
     },
     {
       "slide": 9,
-      "text": "固定題目、答案與候選池\n核對 Stage 1／2 版本",
+      "text": "論文說 query／gallery 的 PC 向量相同",
       "found_in_own_rectangle": true
     },
     {
       "slide": 9,
-      "text": "主報 Hit，另報 Recall\n未審完的資料不跑正式分數",
+      "text": "資料集約 48K；候選規模／清單未公開",
       "found_in_own_rectangle": true
     },
     {
       "slide": 10,
-      "text": "每條件完整 0／1 正解；先於模型排名",
+      "text": "分清有效資產、處理失敗\n與已批准的人工排除",
       "found_in_own_rectangle": true
     },
     {
       "slide": 10,
-      "text": "Hit@1／Hit@5；另列 Recall 與舊診斷",
+      "text": "建立文字／圖像特徵\n固定分組並做資料預檢",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 10,
+      "text": "Stage 1 → 候選庫\nStage 2 → 固定父子版本",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 10,
+      "text": "抽取並核對 BLIP／MSFT\n安排保留視角與重採樣點雲",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 10,
+      "text": "固定 query／gallery 清單\n每題配對一個目標 UID",
+      "found_in_own_rectangle": true
+    },
+    {
+      "slide": 10,
+      "text": "列 R@1／R@5 與逐題排名\n揭露分母、缺失和實驗設定",
       "found_in_own_rectangle": true
     }
   ],
@@ -156,9 +171,17 @@
   "powerpoint_desktop_opened": false,
   "scope": "Actual LibreOffice PDF render and PPTX notes/XML read-back; visual inspection is separate.",
   "visual_inspection": {
-    "scope": "actual PDF contact sheet, all ten slides; evaluation slides 6–10 checked for table and card fit",
-    "result": "readable; no observed text overlap or clipping",
-    "method": "assistant image inspection",
-    "visible_slides_unchanged_after_inspection": "only notes source line reference updated"
+    "result": "pass",
+    "scope": "actual ten-page PDF contact sheet; no observed text overlap or clipping; only speaker-note wording changed after visual inspection"
+  },
+  "content_checks": {
+    "annotation_slides_2_to_5_unchanged": true,
+    "single_target_UID_R_at_k": true,
+    "no_Hit_or_auxiliary_Recall_in_visible_slides": true,
+    "sample_fields": 15,
+    "raw_NPY_hash_verified": true,
+    "both_original_captions_visible": true,
+    "illustrative_metrics_100_queries_30_and_65_successes": true,
+    "evaluation_code_modified": false
   }
 }
